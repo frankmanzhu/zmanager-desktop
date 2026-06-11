@@ -13,10 +13,20 @@ pub struct HealthcheckResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectIntegrationContract {
+    pub platform: &'static str,
+    pub explorer_integration_enabled: bool,
+    pub desktop_actions_enabled: bool,
+    pub associated_extensions: &'static [&'static str],
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectContract {
     pub commands: &'static [&'static str],
     pub platform_strategy: &'static str,
     pub core_dependency: &'static str,
+    pub platform_integration: ProjectIntegrationContract,
 }
 
 #[derive(Debug, Serialize)]

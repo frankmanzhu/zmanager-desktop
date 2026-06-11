@@ -5,6 +5,13 @@ import {
   APP_TITLE,
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
+  BROWSE_ACTION_PASSWORD_INVALID,
+  BROWSE_ACTION_PASSWORD_REQUIRED,
+  BROWSE_STATUS_EMPTY,
+  BROWSE_STATUS_IDLE,
+  BROWSE_STATUS_LOADING,
+  BROWSE_STATUS_UNKNOWN,
+  BROWSE_STATUS_READY,
   JOB_POLL_INTERVAL_MS,
 } from "./app/constants";
 import {
@@ -66,7 +73,7 @@ app.innerHTML = `
         <div class="panel-header">
           <div>
             <h2>Archive Browser</h2>
-            <p id="browse-meta">Open an archive to list entries through zmanager-core.</p>
+            <p id="browse-meta">${BROWSE_STATUS_READY}</p>
           </div>
           <div class="browse-controls">
             <label class="field-inline">
@@ -93,7 +100,7 @@ app.innerHTML = `
           </div>
         </div>
 
-        <p id="browse-message" class="status status-idle">No archive selected.</p>
+        <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
 
         <div class="table-shell">
           <table>
@@ -111,7 +118,7 @@ app.innerHTML = `
             </thead>
             <tbody id="entry-table-body">
               <tr>
-                <td colspan="6" class="empty">Choose an archive to begin.</td>
+                <td colspan="6" class="empty">${BROWSE_STATUS_EMPTY}</td>
               </tr>
             </tbody>
           </table>
@@ -356,7 +363,7 @@ jobsTabOpenButton.addEventListener("click", () => {
 
 function formatBytes(value?: number): string {
   if (typeof value !== "number") {
-    return "—";
+    return "-";
   }
 
   if (value < 1024) {
@@ -449,6 +456,12 @@ function promptForArchivePassword(promptMessage: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function getArchivePasswordPrompt(commandCode: string): string {
+  return commandCode === COMMAND_PASSWORD_REQUIRED
+    ? BROWSE_ACTION_PASSWORD_REQUIRED
+    : BROWSE_ACTION_PASSWORD_INVALID;
+}
+
 function sortedEntries(): ArchiveEntryDto[] {
   const query = searchInput.value.trim().toLowerCase();
   const filtered = query
@@ -491,19 +504,19 @@ function sortedEntries(): ArchiveEntryDto[] {
 
 function updateMeta() {
   if (!currentArchivePath) {
-    metaElement.textContent = "Open an archive to list entries through zmanager-core.";
+    metaElement.textContent = BROWSE_STATUS_READY;
     return;
   }
 
   const count = browseEntries.length;
-  metaElement.textContent = `${currentArchivePath} • ${count} entries`;
+  metaElement.textContent = `${currentArchivePath} - ${count} entries`;
 }
 
 function renderBrowseRows() {
   if (browseState === "loading") {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty">Loading archive entries…</td>
+        <td colspan="6" class="empty">${BROWSE_STATUS_LOADING}</td>
       </tr>
     `;
     return;
@@ -514,7 +527,7 @@ function renderBrowseRows() {
   if (browseState === "error") {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty">${browseError || "Failed to load archive."}</td>
+        <td colspan="6" class="empty">${browseError || BROWSE_STATUS_UNKNOWN}</td>
       </tr>
     `;
     return;
@@ -523,7 +536,7 @@ function renderBrowseRows() {
   if (!currentArchivePath) {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty">Choose an archive to begin.</td>
+        <td colspan="6" class="empty">${BROWSE_STATUS_EMPTY}</td>
       </tr>
     `;
     return;
@@ -556,7 +569,7 @@ function renderBrowseRows() {
           <td>${escapeHtml(entry.kind)}</td>
           <td>${formatBytes(entry.size)}</td>
           <td>${formatBytes(entry.compressedSize)}</td>
-          <td>${escapeHtml(entry.modified ?? "—")}</td>
+          <td>${escapeHtml(entry.modified ?? "-")}</td>
         </tr>
       `,
     )
@@ -579,7 +592,7 @@ function setCreatePlanState(state: CreateState, statusMessage = "") {
 
   switch (state) {
     case "loading":
-      createPlanStatus.textContent = "Plan status: loading…";
+      createPlanStatus.textContent = "Plan status: loading...";
       createPlanStatus.className = "status status-loading";
       break;
     case "error":
@@ -613,8 +626,8 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
 
   return `
     <div class="plan-grid">
-      <p><strong>Included:</strong> ${plan.includedCount} entries • ${formatBytes(plan.totalBytes)}</p>
-      <p><strong>Excluded:</strong> ${plan.excludedCount} entries • ${formatBytes(plan.excludedBytes)}</p>
+      <p><strong>Included:</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
+      <p><strong>Excluded:</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
       <p><strong>Warnings:</strong> ${plan.warnings.length}</p>
     </div>
     <div class="plan-list">
@@ -681,8 +694,8 @@ function renderJobs() {
         <article class="job-card">
           <div class="job-header">
             <div>
-              <p class="job-title">${escapeHtml(formatJobKind(snapshot.kind))} • ${escapeHtml(snapshot.jobId)}</p>
-              <p class="job-subtitle">${snapshot.status.toUpperCase()} • ${escapeHtml(snapshot.createdAt)}</p>
+              <p class="job-title">${escapeHtml(formatJobKind(snapshot.kind))} - ${escapeHtml(snapshot.jobId)}</p>
+              <p class="job-subtitle">${snapshot.status.toUpperCase()} - ${escapeHtml(snapshot.createdAt)}</p>
             </div>
             <div class="job-actions">
               ${snapshot.status === "queued" || snapshot.status === "running"
@@ -700,15 +713,15 @@ function renderJobs() {
                       (event) => `
                     <li>
                       <strong>${escapeHtml(event.eventType)}</strong>
-                      ${event.path ? ` · ${escapeHtml(event.path)}` : ""}
-                      ${typeof event.bytes === "number" ? ` · ${formatBytes(event.bytes)}` : ""}
-                      ${typeof event.entries === "number" ? ` · ${event.entries} entries` : ""}
-                      ${event.message ? ` · ${escapeHtml(event.message)}` : ""}
+                      ${event.path ? ` - ${escapeHtml(event.path)}` : ""}
+                      ${typeof event.bytes === "number" ? ` - ${formatBytes(event.bytes)}` : ""}
+                      ${typeof event.entries === "number" ? ` - ${event.entries} entries` : ""}
+                      ${event.message ? ` - ${escapeHtml(event.message)}` : ""}
                     </li>
                   `,
                     )
                     .join("")
-                : "<li class=empty>Waiting for updates…</li>"
+                : "<li class=empty>Waiting for updates...</li>"
             }
           </ul>
           <div class="job-summary">
@@ -784,7 +797,7 @@ async function loadArchive(request: ListArchiveRequest) {
       ...(password ? { password } : {}),
     };
 
-    setBrowseState("loading", "Loading archive entries…");
+    setBrowseState("loading", BROWSE_STATUS_LOADING);
     renderBrowse();
 
     try {
@@ -824,10 +837,7 @@ async function loadArchive(request: ListArchiveRequest) {
         return;
       }
 
-      const promptMessage =
-        commandError.code === COMMAND_PASSWORD_REQUIRED
-          ? "This archive is password-protected. Enter a password to continue."
-          : "Invalid password. Enter the archive password again.";
+      const promptMessage = getArchivePasswordPrompt(commandError.code);
       const nextPassword = promptForArchivePassword(promptMessage);
       if (!nextPassword) {
         setBrowseState("error", commandError.message);
@@ -852,7 +862,7 @@ async function runPlan() {
     followSymlinks: false,
   };
 
-  setCreatePlanState("loading", "Planning selected sources…");
+  setCreatePlanState("loading", "Planning selected sources...");
 
   try {
     const result = await runPlanCreate(request);
@@ -1005,10 +1015,7 @@ async function onTestArchive() {
         commandError.code === COMMAND_PASSWORD_REQUIRED ||
         commandError.code === COMMAND_INVALID_PASSWORD
       ) {
-        const promptMessage =
-          commandError.code === COMMAND_PASSWORD_REQUIRED
-            ? "This archive is password-protected. Enter password to continue."
-            : "Invalid password. Enter the archive password again.";
+        const promptMessage = getArchivePasswordPrompt(commandError.code);
         const nextPassword = promptForArchivePassword(promptMessage);
         if (!nextPassword) {
           setBrowseState("error", commandError.message);
@@ -1091,10 +1098,7 @@ async function startExtract(destinationMode: "archive" | "selection") {
           commandError?.code === COMMAND_PASSWORD_REQUIRED ||
           commandError?.code === COMMAND_INVALID_PASSWORD
         ) {
-          const promptMessage =
-            commandError.code === COMMAND_PASSWORD_REQUIRED
-              ? "This archive is password-protected. Enter a password to continue."
-              : "Invalid password. Enter the archive password again.";
+          const promptMessage = getArchivePasswordPrompt(commandError.code);
           const nextPassword = promptForArchivePassword(promptMessage);
           if (!nextPassword) {
             setBrowseState("error", commandError.message);
@@ -1146,10 +1150,7 @@ async function startExtract(destinationMode: "archive" | "selection") {
         commandError?.code === COMMAND_PASSWORD_REQUIRED ||
         commandError?.code === COMMAND_INVALID_PASSWORD
       ) {
-        const promptMessage =
-          commandError.code === COMMAND_PASSWORD_REQUIRED
-            ? "This archive is password-protected. Enter a password to continue."
-            : "Invalid password. Enter the archive password again.";
+        const promptMessage = getArchivePasswordPrompt(commandError.code);
         const nextPassword = promptForArchivePassword(promptMessage);
         if (!nextPassword) {
           setBrowseState("error", commandError.message);
@@ -1199,10 +1200,7 @@ async function onPreviewSelectedEntry() {
         commandError?.code === COMMAND_PASSWORD_REQUIRED ||
         commandError?.code === COMMAND_INVALID_PASSWORD
       ) {
-        const promptMessage =
-          commandError.code === COMMAND_PASSWORD_REQUIRED
-            ? "This archive is password-protected. Enter a password to continue."
-            : "Invalid password. Enter the archive password again.";
+        const promptMessage = getArchivePasswordPrompt(commandError.code);
         const nextPassword = promptForArchivePassword(promptMessage);
         if (!nextPassword) {
           setBrowseState("error", commandError.message);
@@ -1492,6 +1490,10 @@ async function loadBootstrapState() {
         <h3>Command Contract</h3>
         <p>${escapeHtml(contract.platformStrategy)}</p>
         <p><strong>Core:</strong> ${escapeHtml(contract.coreDependency)}</p>
+        <p><strong>Platform:</strong> ${escapeHtml(contract.platformIntegration.platform)}</p>
+        <p><strong>Explorer integration:</strong> ${contract.platformIntegration.explorerIntegrationEnabled ? "enabled" : "disabled"}</p>
+        <p><strong>Desktop actions:</strong> ${contract.platformIntegration.desktopActionsEnabled ? "enabled" : "disabled"}</p>
+        <p><strong>Associated archive extensions:</strong> ${escapeHtml(contract.platformIntegration.associatedExtensions.join(", "))}</p>
         <ul>
           ${contract.commands.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}
         </ul>
@@ -1526,7 +1528,7 @@ app.addEventListener("keydown", (event) => {
 
 renderCreateSources();
 setCreatePlanState("idle");
-setBrowseState("idle", "No archive selected.");
+setBrowseState("idle", BROWSE_STATUS_IDLE);
 renderBrowse();
 renderJobs();
 loadBootstrapState();

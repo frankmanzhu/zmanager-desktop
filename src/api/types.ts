@@ -11,6 +11,12 @@ export type ProjectContract = {
   commands: string[];
   platformStrategy: string;
   coreDependency: string;
+  platformIntegration: {
+    platform: string;
+    explorerIntegrationEnabled: boolean;
+    desktopActionsEnabled: boolean;
+    associatedExtensions: string[];
+  };
 };
 
 export type CommandErrorDto = {

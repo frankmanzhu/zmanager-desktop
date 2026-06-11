@@ -8,6 +8,7 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
+        ProjectContract, ProjectIntegrationContract,
         EntryExtractResponse, ExtractEntryRequest, ListArchiveRequest, PreviewEntryRequest,
         PreviewEntryResponse, PollJobEventsRequest, PlanCreateRequest, StartCreateRequest,
         StartExtractRequest, TestArchiveRequest,
@@ -54,10 +55,18 @@ pub fn healthcheck() -> crate::dto::HealthcheckResponse {
 
 #[tauri::command]
 pub fn project_contract() -> crate::dto::ProjectContract {
-    crate::dto::ProjectContract {
+    let integration = crate::platform::integration_profile();
+
+    ProjectContract {
         commands: constants::PLANNED_COMMANDS,
         platform_strategy: constants::PLATFORM_STRATEGY,
         core_dependency: constants::CORE_DEPENDENCY,
+        platform_integration: ProjectIntegrationContract {
+            platform: integration.platform,
+            explorer_integration_enabled: integration.explorer_integration_enabled,
+            desktop_actions_enabled: integration.desktop_actions_enabled,
+            associated_extensions: integration.associated_extensions,
+        },
     }
 }
 
@@ -1044,7 +1053,7 @@ fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandEr
     Ok(value)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum ArchiveFamily {
     Zip,
     TarZst,
@@ -1103,6 +1112,7 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
 mod tests {
     use super::*;
     use std::env;
+    use std::io::Error;
 
     #[test]
     fn list_archive_rejects_empty_path() {
@@ -1143,5 +1153,131 @@ mod tests {
 
         assert!(!error.message.contains(password));
         assert!(!error.hint.as_ref().is_some_and(|value| value.contains(password)));
+    }
+
+    #[test]
+    fn mapping_password_required_is_distinct_from_invalid_password() {
+        let password_required = map_zip_error(ZipBackendError::PasswordRequired);
+        let invalid_password = map_zip_error(ZipBackendError::InvalidPassword);
+
+        assert_eq!(
+            password_required.code,
+            crate::constants::COMMAND_ERROR_PASSWORD_REQUIRED
+        );
+        assert_eq!(
+            invalid_password.code,
+            crate::constants::COMMAND_ERROR_INVALID_PASSWORD
+        );
+        assert_ne!(password_required.code, invalid_password.code);
+    }
+
+    #[test]
+    fn mapping_safety_errors_to_unsafe_archive() {
+        let safety_error = map_zip_error(ZipBackendError::Safety("blocked".to_string()));
+
+        assert_eq!(
+            safety_error.code,
+            crate::constants::COMMAND_ERROR_UNSAFE_ARCHIVE
+        );
+    }
+
+    #[test]
+    fn normalize_non_empty_paths_trims_and_rejects_empty_values() {
+        let normalized = normalize_non_empty_paths(&[
+            "  C:/tmp/src ".to_string(),
+            "   ".to_string(),
+            "".to_string(),
+            "C:/tmp/dest".to_string(),
+        ])
+        .expect("non-empty paths should parse");
+
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(
+            normalized[0].to_string_lossy(),
+            "C:/tmp/src".to_string()
+        );
+        assert_eq!(
+            normalized[1].to_string_lossy(),
+            "C:/tmp/dest".to_string()
+        );
+    }
+
+    #[test]
+    fn normalize_non_empty_paths_rejects_only_blank_paths() {
+        let result = normalize_non_empty_paths(&["".to_string(), "   ".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn detect_archive_family_is_case_insensitive_and_handles_windows_drive() {
+        assert_eq!(detect_archive_family(r"C:\\Users\\me\\archive.ZIP"), ArchiveFamily::Zip);
+        assert_eq!(
+            detect_archive_family(r"D:\\archives\\report.TAR.ZST"),
+            ArchiveFamily::TarZst
+        );
+        assert_eq!(
+            detect_archive_family(r"\\\\server\\share\\bundle.TZAP"),
+            ArchiveFamily::Tzap
+        );
+    }
+
+    #[test]
+    fn detect_archive_family_supports_tar_zst_double_extension_and_plain_tar() {
+        assert_eq!(detect_archive_family("/tmp/archive.tar.zst"), ArchiveFamily::TarZst);
+    }
+
+    #[test]
+    fn ensure_non_empty_path_trims_whitespace() {
+        assert_eq!(
+            ensure_non_empty_path("  C:/tmp/archive.zip  ".to_string(), "archivePath")
+                .expect("path should trim to valid value"),
+            "C:/tmp/archive.zip"
+        );
+
+        assert!(
+            ensure_non_empty_path("   ".to_string(), "archivePath").is_err(),
+            "blank path should not pass",
+        );
+    }
+
+    #[test]
+    fn normalize_non_empty_paths_accepts_windows_and_long_paths() {
+        let very_long_leaf = format!("{}{}",
+            "nested/",
+            "a".repeat(1024),
+        );
+        let win_like = format!("C:\\tmp\\{very_long_leaf}.zip");
+
+        let normalized = normalize_non_empty_paths(&[
+            r"  C:\tmp\my archive.zip  ".to_string(),
+            win_like.clone(),
+        ])
+        .expect("windows-like and long-like paths should normalize");
+
+        assert_eq!(normalized[0].to_string_lossy(), "C:\\tmp\\my archive.zip");
+        assert_eq!(normalized[1].to_string_lossy(), win_like);
+        assert_eq!(normalized.len(), 2);
+    }
+
+    #[test]
+    fn map_io_error_preserves_retryability_for_non_retryable_cases() {
+        let denied = map_io_error(
+            "C:/restricted/path".to_string(),
+            Error::new(io::ErrorKind::PermissionDenied, "forbidden"),
+        );
+        assert_eq!(denied.code, constants::COMMAND_ERROR_IO_ERROR);
+        assert!(!denied.retryable);
+    }
+
+    #[test]
+    fn detect_archive_family_handles_windows_backslashes_and_collision_cases() {
+        assert_eq!(
+            detect_archive_family(r"C:\temp\ARCHIVE.ZIp"),
+            ArchiveFamily::Zip
+        );
+        assert_eq!(
+            detect_archive_family(r"D:\\WORK\\report.TAR.ZST"),
+            ArchiveFamily::TarZst
+        );
     }
 }

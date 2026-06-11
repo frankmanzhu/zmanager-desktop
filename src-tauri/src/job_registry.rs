@@ -319,6 +319,99 @@ impl Drop for JobRegistry {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn job_poll_drains_events_exactly_once() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipCreate);
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::Started {
+                kind: zmanager_core::jobs::JobKind::ZipCreate,
+                total_bytes: None,
+            },
+        );
+
+        let first_poll = registry
+            .poll_events(&response.job_id)
+            .expect("poll should return a snapshot");
+        assert_eq!(first_poll.events.len(), 1);
+        assert!(matches!(first_poll.events[0].event_type, JobEventKindDto::Started));
+        assert!(matches!(first_poll.status, JobStatusDto::Running));
+
+        let second_poll = registry
+            .poll_events(&response.job_id)
+            .expect("poll should continue returning snapshots");
+        assert_eq!(second_poll.events.len(), 0);
+        assert!(matches!(second_poll.status, JobStatusDto::Running));
+    }
+
+    #[test]
+    fn fake_job_records_started() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipCreate);
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::Started {
+                kind: zmanager_core::jobs::JobKind::ZipCreate,
+                total_bytes: Some(1024),
+            },
+        );
+
+        let snapshot = registry
+            .snapshot(&response.job_id)
+            .expect("job should exist after create");
+
+        assert!(matches!(snapshot.status, JobStatusDto::Running));
+        assert_eq!(snapshot.events.len(), 1);
+        assert!(matches!(snapshot.events[0].event_type, JobEventKindDto::Started));
+        assert_eq!(snapshot.events[0].job_kind, Some(JobKindDto::ZipCreate));
+    }
+
+    #[test]
+    fn cancel_request_marks_token() {
+        let registry = JobRegistry::new();
+        let (response, token) = registry.create_job(JobKindDto::ZipExtract);
+
+        let cancel_response = registry
+            .request_cancel(&response.job_id)
+            .expect("cancel should target an existing job");
+
+        assert!(matches!(cancel_response.status, JobStatusDto::Queued));
+        assert!(
+            token.is_cancelled(),
+            "cancel request should set the job cancellation token"
+        );
+    }
+
+    #[test]
+    fn dismiss_job_only_removes_terminal_jobs() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipCreate);
+
+        assert!(
+            registry.remove_job_if_terminal(&response.job_id).is_none(),
+            "non-terminal jobs should stay in registry"
+        );
+
+        registry.emit_direct_event(
+            &response.job_id,
+            JobEventDto::new(JobEventKindDto::Completed),
+        );
+
+        let removed = registry
+            .remove_job_if_terminal(&response.job_id)
+            .expect("terminal job should be removable");
+        assert!(matches!(removed, JobKindDto::ZipCreate));
+        assert!(registry.snapshot(&response.job_id).is_none());
+    }
+}
+
 pub struct JobEventCollector {
     registry: JobRegistry,
     job_id: String,
