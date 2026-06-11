@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-TAG="${1:-v1.0.1}"
+TAG="${1:-v1.0.3}"
 REPO="${2:-https://github.com/frankmanzhu/zmanager}"
 CARGO_FILE="${3:-src-tauri/Cargo.toml}"
 
@@ -14,4 +14,3 @@ fi
 
 perl -0pi -e "$pattern" "$CARGO_FILE"
 echo "Pinned zmanager-core to $REPO with tag $TAG in $CARGO_FILE"
-

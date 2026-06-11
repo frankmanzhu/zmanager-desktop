@@ -49,10 +49,12 @@ import type {
   CreatePlanResponse,
   CreateState,
   HealthcheckResponse,
+  JobEventDto,
   JobKind,
   JobState,
   ProjectContract,
   StartCreateRequest,
+  StartExtractRequest,
   StartJobResponseDto,
 } from "./api/types";
 import { ListArchiveRequest, PlanCreateRequest } from "./api/types";
@@ -71,6 +73,18 @@ type BrowserRow =
       entry: ArchiveEntryDto;
     };
 type ExtractMode = "archive" | "selection";
+type JobRetryContext =
+  | {
+      retryKind: "extractArchive";
+      archivePath: string;
+      destinationPath: string;
+      overwrite: StartExtractRequest["overwrite"];
+      stripComponents: number;
+    }
+  | {
+      retryKind: "testArchive";
+      archivePath: string;
+    };
 type ArchiveFixture = {
   archivePath: string;
   entries: ArchiveEntryDto[];
@@ -96,6 +110,21 @@ if (!app) {
   throw new Error("missing app root");
 }
 const appRoot = app;
+
+function toolbarIcon(name: "open" | "new" | "add" | "extract" | "test" | "preview" | "info" | "jobs"): string {
+  const paths = {
+    open: '<path d="M3 6.5h4.2l1.3 1.5H13v6H3z" /><path d="M3 6.5V4h3.8l1.3 1.5H13V8" />',
+    new: '<path d="M7.5 3v9" /><path d="M3 7.5h9" /><path d="M13.5 5v9H4.5" />',
+    add: '<path d="M3 5.5h4.2L8.5 7H13v6H3z" /><path d="M8 8.5v3" /><path d="M6.5 10h3" />',
+    extract: '<path d="M7.5 3v7" /><path d="M4.5 7.5l3 3 3-3" /><path d="M3 13h9" />',
+    test: '<path d="M3.5 8l2.5 2.5 5.5-6" /><path d="M13 8a5.5 5.5 0 1 1-2-4.2" />',
+    preview: '<path d="M2.5 8s2-3.5 5-3.5 5 3.5 5 3.5-2 3.5-5 3.5-5-3.5-5-3.5z" /><path d="M7.5 6.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
+    info: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M7.5 7v3" /><path d="M7.5 5h.01" />',
+    jobs: '<path d="M3 4.5h9" /><path d="M3 7.5h9" /><path d="M3 10.5h6" />',
+  } satisfies Record<typeof name, string>;
+
+  return `<svg class="tool-icon" aria-hidden="true" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
+}
 
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
@@ -146,20 +175,20 @@ appRoot.innerHTML = `
 
     <header class="command-toolbar" role="toolbar" aria-label="Archive actions">
       <div class="toolbar-group">
-        <button id="open-archive" class="tool-button" type="button" aria-keyshortcuts="Control+O">Open</button>
-        <button id="new-archive" class="tool-button" type="button" aria-keyshortcuts="Control+N">New</button>
-        <button id="add-archive" class="tool-button" type="button" disabled title="Adding to an existing archive is not supported yet">Add</button>
+        <button id="open-archive" class="tool-button" type="button" aria-keyshortcuts="Control+O">${toolbarIcon("open")}<span>Open</span></button>
+        <button id="new-archive" class="tool-button" type="button" aria-keyshortcuts="Control+N">${toolbarIcon("new")}<span>New</span></button>
+        <button id="add-archive" class="tool-button" type="button" disabled title="Adding to an existing archive is not supported yet">${toolbarIcon("add")}<span>Add</span></button>
       </div>
       <div class="toolbar-separator" aria-hidden="true"></div>
       <div class="toolbar-group">
-        <button id="extract-toolbar" class="tool-button" type="button" disabled>Extract</button>
-        <button id="test-archive" class="tool-button" type="button" disabled>Test</button>
-        <button id="preview-selected" class="tool-button" type="button" disabled>Preview</button>
-        <button id="info-toolbar" class="tool-button" type="button" disabled>Info</button>
+        <button id="extract-toolbar" class="tool-button" type="button" disabled>${toolbarIcon("extract")}<span>Extract</span></button>
+        <button id="test-archive" class="tool-button" type="button" disabled>${toolbarIcon("test")}<span>Test</span></button>
+        <button id="preview-selected" class="tool-button" type="button" disabled>${toolbarIcon("preview")}<span>Preview</span></button>
+        <button id="info-toolbar" class="tool-button" type="button" disabled>${toolbarIcon("info")}<span>Info</span></button>
       </div>
       <div class="toolbar-spacer"></div>
       <p id="workspace-status" class="workspace-status">Ready</p>
-      <button id="jobs-drawer-open" class="tool-button" type="button">Jobs</button>
+      <button id="jobs-drawer-open" class="tool-button" type="button">${toolbarIcon("jobs")}<span>Jobs</span></button>
     </header>
 
     <section class="path-bar" aria-label="Archive location">
@@ -510,8 +539,12 @@ let createPlanState: CreateState = "idle";
 let currentPlan: CreatePlanResponse | null = null;
 let currentPlanError = "";
 let planDebounce: number | null = null;
+let createPlanRevision = 0;
+let createSubmissionInFlight = false;
 
 const jobs = new Map<string, JobState>();
+const jobRetryContexts = new Map<string, JobRetryContext>();
+const promptedPasswordRetryJobs = new Set<string>();
 let pollTimer: number | null = null;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
@@ -765,6 +798,32 @@ function getArchivePasswordPrompt(commandCode: string): string {
   return commandCode === COMMAND_PASSWORD_REQUIRED
     ? BROWSE_ACTION_PASSWORD_REQUIRED
     : BROWSE_ACTION_PASSWORD_INVALID;
+}
+
+function isPasswordErrorCode(code?: string | null): boolean {
+  return code === COMMAND_PASSWORD_REQUIRED || code === COMMAND_INVALID_PASSWORD;
+}
+
+function formatEventCode(code: string): string {
+  return code
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getLatestPasswordFailureEvent(state: JobState): JobEventDto | null {
+  for (let index = state.events.length - 1; index >= 0; index -= 1) {
+    const event = state.events[index];
+    if (event.eventType === "failed" && isPasswordErrorCode(event.code)) {
+      return event;
+    }
+  }
+
+  return null;
+}
+
+function canRetryJobWithPassword(jobId: string, state: JobState): boolean {
+  return Boolean(jobRetryContexts.has(jobId) && getLatestPasswordFailureEvent(state));
 }
 
 function updateCommandState() {
@@ -1067,8 +1126,13 @@ function setCreatePlanState(state: CreateState, statusMessage = "") {
   }
 
   runPlanButton.disabled = createSources.length === 0 || state === "loading";
+  const hasReadyPlan = state === "ready" && currentPlan !== null;
   startCreateButton.disabled =
-    createSources.length === 0 || createDestinationInput.value.trim().length === 0 || state === "loading";
+    createSubmissionInFlight ||
+    createSources.length === 0 ||
+    createDestinationInput.value.trim().length === 0 ||
+    state === "loading" ||
+    !hasReadyPlan;
 }
 
 function formatPlanSummary(plan: CreatePlanResponse): string {
@@ -1170,6 +1234,7 @@ function renderJobs() {
       const snapshot = state.snapshot;
       const summary = snapshot.terminalSummary;
       const recentEvents = state.events.slice(-12);
+      const canRetryPassword = canRetryJobWithPassword(snapshot.jobId, state);
       return `
         <article class="job-card">
           <div class="job-header">
@@ -1182,6 +1247,7 @@ function renderJobs() {
                 ? `<button type="button" data-cancel="${escapeHtml(snapshot.jobId)}">Cancel</button>`
                 : ""
               }
+              ${canRetryPassword ? `<button type="button" data-retry-password="${escapeHtml(snapshot.jobId)}">Retry Password</button>` : ""}
               ${snapshot.canDismiss ? `<button type="button" data-dismiss="${escapeHtml(snapshot.jobId)}">Dismiss</button>` : ""}
             </div>
           </div>
@@ -1196,7 +1262,9 @@ function renderJobs() {
                       ${event.path ? ` - ${escapeHtml(event.path)}` : ""}
                       ${typeof event.bytes === "number" ? ` - ${formatBytes(event.bytes)}` : ""}
                       ${typeof event.entries === "number" ? ` - ${event.entries} entries` : ""}
+                      ${event.code ? ` - ${escapeHtml(formatEventCode(event.code))}` : ""}
                       ${event.message ? ` - ${escapeHtml(event.message)}` : ""}
+                      ${event.hint ? ` - ${escapeHtml(event.hint)}` : ""}
                     </li>
                   `,
                     )
@@ -1234,8 +1302,10 @@ function renderJobs() {
 function queuePlanRun() {
   if (planDebounce !== null) {
     clearTimeout(planDebounce);
+    planDebounce = null;
   }
 
+  const revision = ++createPlanRevision;
   if (createSources.length === 0) {
     currentPlan = null;
     setCreatePlanState("idle");
@@ -1243,8 +1313,13 @@ function queuePlanRun() {
     return;
   }
 
+  currentPlan = null;
+  setCreatePlanState("loading", "Planning selected sources...");
+  createPlanSummary.innerHTML = "<p>Planning selected sources...</p>";
+
   planDebounce = window.setTimeout(() => {
-    void runPlan();
+    planDebounce = null;
+    void runPlan(revision);
   }, 350);
 }
 
@@ -1281,9 +1356,90 @@ function toNumberOrUndefined(value: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : Math.trunc(parsed);
 }
 
-function closeOpenMenus() {
+function closeOpenMenus(exceptMenu?: HTMLDetailsElement) {
   for (const menu of document.querySelectorAll<HTMLDetailsElement>(".menu[open]")) {
+    if (menu === exceptMenu) {
+      continue;
+    }
     menu.open = false;
+  }
+}
+
+function hasOpenMenu(): boolean {
+  return document.querySelector(".menu[open]") !== null;
+}
+
+function openMenu(menu: HTMLDetailsElement) {
+  closeOpenMenus(menu);
+  menu.open = true;
+}
+
+function bindMenuBehavior() {
+  const menus = Array.from(document.querySelectorAll<HTMLDetailsElement>(".menu"));
+
+  function focusAdjacentMenu(currentMenu: HTMLDetailsElement, offset: -1 | 1) {
+    const index = menus.indexOf(currentMenu);
+    if (index === -1) {
+      return;
+    }
+
+    const nextMenu = menus[(index + offset + menus.length) % menus.length];
+    openMenu(nextMenu);
+    nextMenu.querySelector<HTMLElement>("summary")?.focus();
+  }
+
+  for (const menu of menus) {
+    const summary = menu.querySelector<HTMLElement>("summary");
+    if (!summary) {
+      continue;
+    }
+
+    menu.addEventListener("pointerenter", () => openMenu(menu));
+    menu.addEventListener("focusin", () => openMenu(menu));
+
+    menu.addEventListener("pointerleave", () => {
+      if (!menu.matches(":focus-within")) {
+        menu.open = false;
+      }
+    });
+
+    summary.addEventListener("click", (event) => {
+      event.preventDefault();
+      openMenu(menu);
+    });
+
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        menu.open = false;
+        summary.focus();
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        focusAdjacentMenu(menu, 1);
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        focusAdjacentMenu(menu, -1);
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        openMenu(menu);
+        menu.querySelector<HTMLButtonElement>(".menu-popover button:not(:disabled)")?.focus();
+      }
+    });
+
+    menu.addEventListener("toggle", () => {
+      if (menu.open) {
+        closeOpenMenus(menu);
+      }
+    });
   }
 }
 
@@ -1739,7 +1895,7 @@ function loadLocalDevFixtureFromUrl() {
   });
 }
 
-async function runPlan() {
+async function runPlan(revision = ++createPlanRevision) {
   const request: PlanCreateRequest = {
     sources: [...createSources],
     cleanSource: createCleanSourceCheckbox.checked,
@@ -1750,15 +1906,31 @@ async function runPlan() {
     followSymlinks: false,
   };
 
+  if (planDebounce !== null) {
+    clearTimeout(planDebounce);
+    planDebounce = null;
+  }
+
+  currentPlan = null;
   setCreatePlanState("loading", "Planning selected sources...");
+  createPlanSummary.innerHTML = "<p>Planning selected sources...</p>";
 
   try {
     const result = await runPlanCreate(request);
+
+    if (revision !== createPlanRevision) {
+      return;
+    }
 
     currentPlan = result;
     createPlanSummary.innerHTML = formatPlanSummary(result);
     setCreatePlanState("ready", "Plan generated.");
   } catch (error) {
+    if (revision !== createPlanRevision) {
+      return;
+    }
+
+    currentPlan = null;
     const commandError = asCommandError(error);
     const message = commandError?.message ?? "Could not create archive plan.";
     setCreatePlanState("error", message);
@@ -1778,7 +1950,7 @@ function addSources(paths: string[]) {
   queuePlanRun();
 }
 
-function addJobState(response: StartJobResponseDto) {
+function addJobState(response: StartJobResponseDto, retryContext?: JobRetryContext) {
   jobs.set(response.jobId, {
     snapshot: {
       jobId: response.jobId,
@@ -1791,9 +1963,73 @@ function addJobState(response: StartJobResponseDto) {
     },
     events: [],
   });
+
+  if (retryContext) {
+    jobRetryContexts.set(response.jobId, retryContext);
+  }
+
   schedulePolling();
   renderJobs();
   openJobDrawer();
+}
+
+async function startPasswordRetryJob(context: JobRetryContext, password: string) {
+  if (context.retryKind === "testArchive") {
+    return runTestArchive({
+      archivePath: context.archivePath,
+      password,
+    });
+  }
+
+  return runStartExtract({
+    archivePath: context.archivePath,
+    destinationPath: context.destinationPath,
+    overwrite: context.overwrite,
+    stripComponents: context.stripComponents,
+    password,
+  });
+}
+
+async function retryJobWithPasswordPrompt(jobId: string) {
+  const state = jobs.get(jobId);
+  const context = jobRetryContexts.get(jobId);
+  if (!state || !context) {
+    setOperationalStatus("Retry is unavailable for this job.");
+    return;
+  }
+
+  const failure = getLatestPasswordFailureEvent(state);
+  if (!failure?.code) {
+    setOperationalStatus("Retry is unavailable for this job.");
+    return;
+  }
+
+  const password = promptForArchivePassword(getArchivePasswordPrompt(failure.code));
+  if (!password) {
+    setOperationalStatus("Password retry cancelled.");
+    return;
+  }
+
+  try {
+    const response = await startPasswordRetryJob(context, password);
+    addJobState(response, context);
+    setOperationalStatus("Password retry started.");
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? "Unable to start password retry.");
+  }
+}
+
+async function maybePromptForJobPasswordRetry(jobId: string, state: JobState) {
+  if (
+    promptedPasswordRetryJobs.has(jobId) ||
+    !canRetryJobWithPassword(jobId, state)
+  ) {
+    return;
+  }
+
+  promptedPasswordRetryJobs.add(jobId);
+  await retryJobWithPasswordPrompt(jobId);
 }
 
 async function pollJobs() {
@@ -1819,10 +2055,17 @@ async function pollJobs() {
           },
           events: mergedEvents,
         });
+
+        const updated = jobs.get(jobId);
+        if (updated) {
+          await maybePromptForJobPasswordRetry(jobId, updated);
+        }
       } catch (error) {
         const commandError = asCommandError(error);
         if (commandError?.code === "not_found") {
           jobs.delete(jobId);
+          jobRetryContexts.delete(jobId);
+          promptedPasswordRetryJobs.delete(jobId);
         }
       }
     }),
@@ -1883,7 +2126,10 @@ async function onTestArchive() {
         archivePath: currentArchivePath,
         ...(password ? { password } : {}),
       });
-      addJobState(response);
+      addJobState(response, {
+        retryKind: "testArchive",
+        archivePath: currentArchivePath,
+      });
       return;
     } catch (error) {
       const commandError = asCommandError(error);
@@ -1965,7 +2211,13 @@ async function startExtract(destinationMode: ExtractMode) {
           ...(password ? { password } : {}),
         });
         closeModal(extractDialog);
-        addJobState(response);
+        addJobState(response, {
+          retryKind: "extractArchive",
+          archivePath: currentArchivePath,
+          destinationPath: destination,
+          overwrite,
+          stripComponents,
+        });
         return;
       } catch (error) {
         const commandError = asCommandError(error);
@@ -2137,6 +2389,10 @@ async function onSelectCreateDestination() {
 }
 
 async function runCreate() {
+  if (createSubmissionInFlight) {
+    return;
+  }
+
   if (!createSources.length) {
     return;
   }
@@ -2147,6 +2403,11 @@ async function runCreate() {
     return;
   }
 
+  if (createPlanState !== "ready" || currentPlan === null) {
+    setCreatePlanState("error", "Refresh the plan before creating.");
+    return;
+  }
+
   const format = createFormatSelect.value as StartCreateRequest["format"];
   const cleanSource = createCleanSourceCheckbox.checked;
   const replaceExisting = createReplaceExistingCheckbox.checked;
@@ -2154,6 +2415,9 @@ async function runCreate() {
   const passwordValue = createPasswordInput.value.trim();
   const compressionLevel = parseNonNegativeInteger(createCompressionInput.value);
   const volumeSize = parseNonNegativeInteger(createVolumeInput.value);
+
+  createSubmissionInFlight = true;
+  setCreatePlanState(createPlanState, currentPlanError);
 
   try {
     const request: StartCreateRequest = {
@@ -2176,6 +2440,9 @@ async function runCreate() {
   } catch (error) {
     const commandError = asCommandError(error);
     setCreatePlanState("error", commandError?.message ?? "Unable to start create job.");
+  } finally {
+    createSubmissionInFlight = false;
+    setCreatePlanState(createPlanState, currentPlanError);
   }
 }
 
@@ -2195,6 +2462,8 @@ async function onDismissJob(jobId: string) {
   try {
     await dismissJobCommand({ jobId });
     jobs.delete(jobId);
+    jobRetryContexts.delete(jobId);
+    promptedPasswordRetryJobs.delete(jobId);
     renderJobs();
     if (jobs.size === 0) {
       stopPolling();
@@ -2267,6 +2536,11 @@ function handleShortcut(event: KeyboardEvent) {
   }
 
   if (event.key === "Escape") {
+    if (hasOpenMenu()) {
+      closeOpenMenus();
+      return;
+    }
+
     hideContextMenu();
     if (!extractDialog.hidden) closeModal(extractDialog);
     else if (!createDialog.hidden) closeModal(createDialog);
@@ -2350,7 +2624,7 @@ function bindActions() {
     menuRefreshButton,
     menuAboutButton,
   ]) {
-    button.addEventListener("click", closeOpenMenus);
+    button.addEventListener("click", () => closeOpenMenus());
   }
 
   searchInput.addEventListener("input", () => {
@@ -2650,11 +2924,19 @@ function bindActions() {
   }
 
   jobsListElement.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const cancelId = target.dataset.cancel;
-    const dismissId = target.dataset.dismiss;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const actionButton = target?.closest<HTMLButtonElement>(
+      "[data-cancel], [data-retry-password], [data-dismiss]",
+    );
+    const cancelId = actionButton?.dataset.cancel;
+    const retryPasswordId = actionButton?.dataset.retryPassword;
+    const dismissId = actionButton?.dataset.dismiss;
     if (cancelId) {
       void onCancelJob(cancelId);
+      return;
+    }
+    if (retryPasswordId) {
+      void retryJobWithPasswordPrompt(retryPasswordId);
       return;
     }
     if (dismissId) {
@@ -2695,6 +2977,7 @@ function bindActions() {
   appRoot.addEventListener("keydown", handleShortcut);
 }
 
+bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
 renderCreateSources();

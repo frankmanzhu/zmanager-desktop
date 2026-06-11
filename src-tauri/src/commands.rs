@@ -309,16 +309,7 @@ fn start_create_internal(
             Err(error) => {
                 registry_for_thread.emit_direct_event(
                     &job_id,
-                    JobEventDto {
-                        event_type: JobEventKindDto::Failed,
-                        job_kind: Some(kind_for_thread),
-                        path: None,
-                        bytes: None,
-                        total_bytes: None,
-                        total_bytes_processed: None,
-                        entries: None,
-                        message: Some(error.message),
-                    },
+                    JobEventDto::failed_from_command_error(kind_for_thread, error),
                 );
             }
         }
@@ -435,16 +426,7 @@ fn start_extract_internal(
             Err(error) => {
                 registry_for_thread.emit_direct_event(
                     &job_id,
-                    JobEventDto {
-                        event_type: JobEventKindDto::Failed,
-                        job_kind: Some(kind),
-                        path: None,
-                        bytes: None,
-                        total_bytes: None,
-                        total_bytes_processed: None,
-                        entries: None,
-                        message: Some(error.message),
-                    },
+                    JobEventDto::failed_from_command_error(kind, error),
                 );
             }
         }
@@ -537,6 +519,10 @@ fn start_test_archive_internal(
             JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: Some(JobKindDto::TestArchive),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
                 path: None,
                 bytes: None,
                 total_bytes: None,
@@ -583,6 +569,10 @@ fn start_test_archive_internal(
                     JobEventDto {
                         event_type: JobEventKindDto::Completed,
                         job_kind: Some(JobKindDto::TestArchive),
+                        code: None,
+                        hint: None,
+                        severity: None,
+                        retryable: None,
                         path: None,
                         bytes: Some(written_bytes),
                         total_bytes: None,
@@ -595,16 +585,7 @@ fn start_test_archive_internal(
             Err(error) => {
                 registry_for_thread.emit_direct_event(
                     &job_id,
-                    JobEventDto {
-                        event_type: JobEventKindDto::Failed,
-                        job_kind: Some(JobKindDto::TestArchive),
-                        path: None,
-                        bytes: None,
-                        total_bytes: None,
-                        total_bytes_processed: None,
-                        entries: None,
-                        message: Some(error.message),
-                    },
+                    JobEventDto::failed_from_command_error(JobKindDto::TestArchive, error),
                 );
             }
         }

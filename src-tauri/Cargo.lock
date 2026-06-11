@@ -1034,7 +1034,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1245,7 +1245,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3424,7 +3424,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4330,7 +4330,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5196,7 +5196,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6021,8 +6021,8 @@ checksum = "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"
 
 [[package]]
 name = "zmanager-core"
-version = "1.0.1"
-source = "git+https://github.com/frankmanzhu/zmanager?rev=a771bb646680710cad0e1d169daf6025f5d15e05#a771bb646680710cad0e1d169daf6025f5d15e05"
+version = "1.0.3"
+source = "git+https://github.com/frankmanzhu/zmanager?tag=v1.0.3#9fa4629e0a7fd2c464e45ef8bb5c9d1185f7aa41"
 dependencies = [
  "brotli",
  "bzip2",
@@ -6058,8 +6058,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive"
-version = "1.0.1"
-source = "git+https://github.com/frankmanzhu/zmanager?rev=a771bb646680710cad0e1d169daf6025f5d15e05#a771bb646680710cad0e1d169daf6025f5d15e05"
+version = "1.0.3"
+source = "git+https://github.com/frankmanzhu/zmanager?tag=v1.0.3#9fa4629e0a7fd2c464e45ef8bb5c9d1185f7aa41"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6067,8 +6067,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive-sys"
-version = "1.0.1"
-source = "git+https://github.com/frankmanzhu/zmanager?rev=a771bb646680710cad0e1d169daf6025f5d15e05#a771bb646680710cad0e1d169daf6025f5d15e05"
+version = "1.0.3"
+source = "git+https://github.com/frankmanzhu/zmanager?tag=v1.0.3#9fa4629e0a7fd2c464e45ef8bb5c9d1185f7aa41"
 dependencies = [
  "cmake",
  "libc",
@@ -6077,8 +6077,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-unrar"
-version = "1.0.1"
-source = "git+https://github.com/frankmanzhu/zmanager?rev=a771bb646680710cad0e1d169daf6025f5d15e05#a771bb646680710cad0e1d169daf6025f5d15e05"
+version = "1.0.3"
+source = "git+https://github.com/frankmanzhu/zmanager?tag=v1.0.3#9fa4629e0a7fd2c464e45ef8bb5c9d1185f7aa41"
 dependencies = [
  "cc",
  "zeroize",

@@ -167,6 +167,10 @@ export type JobEventDto = {
     | "failed"
     | "cancelled";
   jobKind?: JobKind;
+  code?: string;
+  hint?: string | null;
+  severity?: "info" | "warning" | "error";
+  retryable?: boolean | null;
   path?: string;
   bytes?: number;
   totalBytes?: number;

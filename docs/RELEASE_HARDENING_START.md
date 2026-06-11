@@ -41,7 +41,7 @@ Use this when release hardening is completed and deterministic fixture coverage 
 - `scripts/pin-zmanager-core-release.ps1` and `scripts/pin-zmanager-core-release.sh`:
   - Replace local `path = "../../ZManager/cli/crates/zmanager-core"` with a pinned git tag dependency for release packaging.
   - Default repository target: `https://github.com/frankmanzhu/zmanager`.
-  - Default tag fallback: `v1.0.1`.
+  - Default tag fallback: `v1.0.3`.
 
 ## Release platform smoke-test outcomes
 

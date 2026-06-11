@@ -43,6 +43,22 @@ cargo test
 
 On ARM64 Windows/MSVC development machines, `cargo check` and `cargo test` may need the same native dependency environment as the Windows CI script. Use the ARM64 vcpkg triplet and put Strawberry Perl on `PATH` before running Cargo:
 
+The helper script form is:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-arm64-static.ps1
+```
+
+The build script prefers an installed Node.js under `C:\Program Files\nodejs`, falls back to PATH/Codex runtime Node, and accepts `-NodePath C:\path\to\node.exe` if the shell exposes the wrong Node executable.
+
+For other commands, use the environment helper with `-Run`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-arm64-static-env.ps1 -Run "cargo test"
+```
+
+Or set it up manually:
+
 ```powershell
 $triplet = "arm64-windows-static-md"
 $env:VCPKG_INSTALLATION_ROOT = "C:\vcpkg"

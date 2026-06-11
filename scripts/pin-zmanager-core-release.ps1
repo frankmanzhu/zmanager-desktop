@@ -1,5 +1,5 @@
 param(
-    [string]$Tag = "v1.0.1",
+    [string]$Tag = "v1.0.3",
     [string]$Repo = "https://github.com/frankmanzhu/zmanager",
     [string]$CargoFile = "src-tauri/Cargo.toml"
 )
@@ -20,4 +20,3 @@ $updated = [System.Text.RegularExpressions.Regex]::Replace($content, $pattern, $
 Set-Content -Path $CargoFile -Value $updated -Encoding UTF8
 
 Write-Host "Pinned zmanager-core to $Repo with tag $Tag in $CargoFile"
-

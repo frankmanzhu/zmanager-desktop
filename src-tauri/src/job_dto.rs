@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::error::{CommandErrorDto, ErrorSeverityDto};
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobStatusDto {
@@ -50,6 +52,10 @@ pub enum JobEventKindDto {
 pub struct JobEventDto {
     pub event_type: JobEventKindDto,
     pub job_kind: Option<JobKindDto>,
+    pub code: Option<&'static str>,
+    pub hint: Option<String>,
+    pub severity: Option<ErrorSeverityDto>,
+    pub retryable: Option<bool>,
     pub path: Option<String>,
     pub bytes: Option<u64>,
     pub total_bytes: Option<u64>,
@@ -59,10 +65,34 @@ pub struct JobEventDto {
 }
 
 impl JobEventDto {
+    pub fn failed_from_command_error(job_kind: JobKindDto, error: CommandErrorDto) -> Self {
+        Self {
+            event_type: JobEventKindDto::Failed,
+            job_kind: Some(job_kind),
+            code: Some(error.code),
+            hint: error.hint,
+            severity: Some(error.severity),
+            retryable: Some(error.retryable),
+            path: None,
+            bytes: None,
+            total_bytes: None,
+            total_bytes_processed: None,
+            entries: None,
+            message: Some(error.message),
+        }
+    }
+}
+
+#[cfg(test)]
+impl JobEventDto {
     pub fn new(event_type: JobEventKindDto) -> Self {
         Self {
             event_type,
             job_kind: None,
+            code: None,
+            hint: None,
+            severity: None,
+            retryable: None,
             path: None,
             bytes: None,
             total_bytes: None,
