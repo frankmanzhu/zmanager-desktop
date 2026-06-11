@@ -1,5 +1,5 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { open as openWithOpener } from "@tauri-apps/plugin-opener";
+import { openPath as openWithOpener } from "@tauri-apps/plugin-opener";
 import "./styles.css";
 import {
   APP_TITLE,
@@ -238,92 +238,49 @@ const contractElement = document.querySelector<HTMLDivElement>("#contract");
 const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
 const panels = Array.from(document.querySelectorAll<HTMLElement>(".panel"));
 
-const openArchiveButton = document.querySelector<HTMLButtonElement>("#open-archive");
-const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archive");
-const jobsTabOpenButton = document.querySelector<HTMLButtonElement>("#jobs-tab-open");
-const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive");
+const openArchiveButton = document.querySelector<HTMLButtonElement>("#open-archive")!;
+const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archive")!;
+const jobsTabOpenButton = document.querySelector<HTMLButtonElement>("#jobs-tab-open")!;
+const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 
-const searchInput = document.querySelector<HTMLInputElement>("#search-entries");
-const messageElement = document.querySelector<HTMLDivElement>("#browse-message");
-const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body");
-const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta");
+const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
+const messageElement = document.querySelector<HTMLDivElement>("#browse-message")!;
+const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
+const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 const sortHeaders = Array.from(
   document.querySelectorAll<HTMLElement>("#browse-panel [data-sort-key]"),
 );
 
-const selectAllInput = document.querySelector<HTMLInputElement>("#select-all");
-const extractSelectedButton = document.querySelector<HTMLButtonElement>("#extract-selected");
-const extractAllButton = document.querySelector<HTMLButtonElement>("#extract-all");
-const previewSelectedButton = document.querySelector<HTMLButtonElement>("#preview-selected");
-const extractDestinationInput = document.querySelector<HTMLInputElement>("#extract-destination");
-const browseExtractDestinationButton = document.querySelector<HTMLButtonElement>("#browse-extract-destination");
-const browsePasswordInput = document.querySelector<HTMLInputElement>("#browse-password");
-const browseOverwriteSelect = document.querySelector<HTMLSelectElement>("#browse-overwrite");
-const browseStripInput = document.querySelector<HTMLInputElement>("#browse-strip-components");
+const selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
+const extractSelectedButton = document.querySelector<HTMLButtonElement>("#extract-selected")!;
+const extractAllButton = document.querySelector<HTMLButtonElement>("#extract-all")!;
+const previewSelectedButton = document.querySelector<HTMLButtonElement>("#preview-selected")!;
+const extractDestinationInput = document.querySelector<HTMLInputElement>("#extract-destination")!;
+const browseExtractDestinationButton = document.querySelector<HTMLButtonElement>("#browse-extract-destination")!;
+const browsePasswordInput = document.querySelector<HTMLInputElement>("#browse-password")!;
+const browseOverwriteSelect = document.querySelector<HTMLSelectElement>("#browse-overwrite")!;
+const browseStripInput = document.querySelector<HTMLInputElement>("#browse-strip-components")!;
 
-const addSourceFilesButton = document.querySelector<HTMLButtonElement>("#add-source-files");
-const addSourceFoldersButton = document.querySelector<HTMLButtonElement>("#add-source-folders");
-const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources");
-const sourceListElement = document.querySelector<HTMLUListElement>("#source-list");
-const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format");
-const createDestinationInput = document.querySelector<HTMLInputElement>("#create-destination");
-const browseCreateDestinationButton = document.querySelector<HTMLButtonElement>("#browse-create-destination");
-const createCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#create-clean-source");
-const createPreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#create-preserve-metadata");
-const createReplaceExistingCheckbox = document.querySelector<HTMLInputElement>("#create-replace-existing");
-const createRespectGitignoreCheckbox = document.querySelector<HTMLInputElement>("#create-respect-gitignore");
-const createPasswordInput = document.querySelector<HTMLInputElement>("#create-password");
-const createCompressionInput = document.querySelector<HTMLInputElement>("#create-compression");
-const createVolumeInput = document.querySelector<HTMLInputElement>("#create-volume");
-const runPlanButton = document.querySelector<HTMLButtonElement>("#run-plan");
-const createPlanStatus = document.querySelector<HTMLParagraphElement>("#create-plan-status");
-const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary");
-const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create");
-
-const jobsListElement = document.querySelector<HTMLDivElement>("#jobs-list");
-const refreshJobsButton = document.querySelector<HTMLButtonElement>("#refresh-jobs");
-
-if (
-  !openArchiveButton ||
-  !testArchiveButton ||
-  !jobsTabOpenButton ||
-  !refreshArchiveButton ||
-  !searchInput ||
-  !messageElement ||
-  !tableBody ||
-  !metaElement ||
-  !selectAllInput ||
-  !extractSelectedButton ||
-  !extractAllButton ||
-  !previewSelectedButton ||
-  !extractDestinationInput ||
-  !browseExtractDestinationButton ||
-  !browsePasswordInput ||
-  !browseOverwriteSelect ||
-  !browseStripInput ||
-  !addSourceFilesButton ||
-  !addSourceFoldersButton ||
-  !clearSourcesButton ||
-  !sourceListElement ||
-  !createFormatSelect ||
-  !createDestinationInput ||
-  !browseCreateDestinationButton ||
-  !createCleanSourceCheckbox ||
-  !createPreserveMetadataCheckbox ||
-  !createReplaceExistingCheckbox ||
-  !createRespectGitignoreCheckbox ||
-  !createPasswordInput ||
-  !createCompressionInput ||
-  !createVolumeInput ||
-  !runPlanButton ||
-  !createPlanStatus ||
-  !createPlanSummary ||
-  !startCreateButton ||
-  !jobsListElement ||
-  !refreshJobsButton
-) {
-  throw new Error("required workspace nodes missing");
-}
+const addSourceFilesButton = document.querySelector<HTMLButtonElement>("#add-source-files")!;
+const addSourceFoldersButton = document.querySelector<HTMLButtonElement>("#add-source-folders")!;
+const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
+const sourceListElement = document.querySelector<HTMLUListElement>("#source-list")!;
+const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format")!;
+const createDestinationInput = document.querySelector<HTMLInputElement>("#create-destination")!;
+const browseCreateDestinationButton = document.querySelector<HTMLButtonElement>("#browse-create-destination")!;
+const createCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#create-clean-source")!;
+const createPreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#create-preserve-metadata")!;
+const createReplaceExistingCheckbox = document.querySelector<HTMLInputElement>("#create-replace-existing")!;
+const createRespectGitignoreCheckbox = document.querySelector<HTMLInputElement>("#create-respect-gitignore")!;
+const createPasswordInput = document.querySelector<HTMLInputElement>("#create-password")!;
+const createCompressionInput = document.querySelector<HTMLInputElement>("#create-compression")!;
+const createVolumeInput = document.querySelector<HTMLInputElement>("#create-volume")!;
+const runPlanButton = document.querySelector<HTMLButtonElement>("#run-plan")!;
+const createPlanStatus = document.querySelector<HTMLParagraphElement>("#create-plan-status")!;
+const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary")!;
+const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create")!;
+const jobsListElement = document.querySelector<HTMLDivElement>("#jobs-list")!;
+const refreshJobsButton = document.querySelector<HTMLButtonElement>("#refresh-jobs")!;
 
 let currentArchivePath = "";
 let browseState: BrowseState = "idle";
@@ -1268,9 +1225,7 @@ async function runCreate() {
       ...(volumeSize !== undefined ? { volumeSize } : {}),
     };
 
-    const response = await runStartCreate({
-      request,
-    });
+    const response = await runStartCreate(request);
 
     createPasswordInput.value = "";
     addJobState(response);
