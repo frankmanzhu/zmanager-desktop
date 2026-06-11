@@ -128,6 +128,12 @@ button:disabled {
   font-size: 18px;
 }
 
+.field-inline {
+  display: grid;
+  gap: 6px;
+  color: #344039;
+}
+
 .search,
 select {
   border: 1px solid #abb5ae;
@@ -136,6 +142,197 @@ select {
   padding: 0 10px;
   background: #ffffff;
   color: #17211b;
+}
+
+.browse-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.browse-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.destination-field {
+  display: grid;
+  gap: 6px;
+  min-width: 280px;
+}
+
+.source-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.list-box {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #c9c7bf;
+  background: #ffffff;
+  min-height: 140px;
+  display: grid;
+  gap: 0;
+}
+
+.list-box li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid #ece8df;
+  padding: 8px 10px;
+}
+
+.list-box li:last-child {
+  border-bottom: 0;
+}
+
+.summary-card {
+  margin-top: 12px;
+  border: 1px solid #c9c7bf;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.plan-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.plan-list ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.jobs-list {
+  display: grid;
+  gap: 12px;
+}
+
+.job-card {
+  border: 1px solid #c9c7bf;
+  background: #ffffff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.job-title {
+  margin: 0;
+  color: #344039;
+  font-weight: 650;
+}
+
+.job-subtitle {
+  margin: 4px 0 0;
+  color: #59645c;
+}
+
+.job-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.job-empty {
+  border: 1px dashed #c9c7bf;
+  padding: 12px;
+  color: #59645c;
+  background: #f8f6f0;
+}
+
+.job-empty strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid #ece8df;
+  max-height: 144px;
+  overflow: auto;
+}
+
+.event-list li {
+  padding: 6px 0;
+  border-bottom: 1px dashed #ece8df;
+  color: #344039;
+  font-size: 14px;
+}
+
+.job-summary {
+  margin: 0;
+}
+
+.job-summary p {
+  margin: 4px 0;
+}
+
+.search-wrap {
+  margin: 0;
+}
+
+#browse-message {
+  margin-bottom: 10px;
+}
+
+.status {
+  border: 1px solid #c9c7bf;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #f6f4ee;
+  color: #344039;
+}
+
+.status-loading {
+  border-color: #8ea8e8;
+  background: #f0f4ff;
+  color: #29407a;
+}
+
+.status-error {
+  border-color: #b05a5a;
+  background: #fff4f4;
+  color: #7c1e1e;
+}
+
+.status-empty {
+  border-color: #c9c7bf;
+  background: #f9f8f2;
+  color: #59645c;
+}
+
+.status-loaded {
+  border-color: #c9c7bf;
+  background: #f6f4ee;
+  color: #344039;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .table-shell {
@@ -165,6 +362,14 @@ th {
   font-weight: 650;
 }
 
+th[data-sort-key] {
+  cursor: pointer;
+}
+
+th[data-sort-key]:hover {
+  background: #ece8df;
+}
+
 .empty {
   color: #6a756d;
   text-align: center;
@@ -183,6 +388,17 @@ th {
   display: grid;
   gap: 6px;
   color: #344039;
+}
+
+.toggle-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.toggle-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .checkbox-row {
@@ -253,4 +469,3 @@ progress {
     width: 100%;
   }
 }
-
