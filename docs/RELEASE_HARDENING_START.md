@@ -47,6 +47,9 @@ Use this when release hardening is completed and deterministic fixture coverage 
 
 - Track final smoke-test evidence in `docs/platform-smoke-test-results.md`.
 - Each run entry should include installer artifact, install version, evidence of launch, archive open, and completed extract with cleanup.
+- Capture matrix rows with:
+  - PowerShell: `.\scripts\append-platform-smoke-test-result.ps1 -Platform "Windows 11" -OS "Windows 11" -Artifact "<artifact>" -InstallStep "<artifact-or-run command>"`
+  - Bash: `./scripts/append-platform-smoke-test-result.sh "Ubuntu 22.04" "Ubuntu 22.04" "<artifact>" "<artifact-or-run command>"`
 
 ### Release audit/runbook (seeded for slice 11)
 
