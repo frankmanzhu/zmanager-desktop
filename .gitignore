@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+src-tauri/gen/
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.tmp
+.vite.pid
