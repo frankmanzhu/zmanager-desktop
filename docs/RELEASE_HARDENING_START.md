@@ -12,9 +12,9 @@ This file tracks the initial hardening work from Slice 11.
 - [x] Add command-boundary tests for path normalization trimming/whitespace and permission error mapping.
 - [x] Add command-boundary tests for real create/extract lifecycle behavior (using fixtures).
 - [x] Add Windows and Linux path edge-case tests (reserved names, long path handling, permissions, and case collision behavior against real FS semantics).
-- [ ] Add fixture sync from public core repository for deterministic archive test coverage.
-- [ ] Add dependency/license audit steps for frontend and Rust dependencies.
-- [ ] Pin `zmanager-core` for release (tag or vendored submodule) and document expected resolution path.
+- [x] Add fixture sync from public core repository for deterministic archive test coverage.
+- [x] Add dependency/license audit steps for frontend and Rust dependencies.
+- [x] Pin `zmanager-core` for release (tag or vendored submodule) and document expected resolution path.
 - [x] Review and tighten Tauri security policy before release.
 - [x] Add crash-safe cleanup for preview directories and partial outputs.
 - [ ] Capture platform smoke-test matrix outcomes (Windows + Linux install/launch/open tests).
@@ -23,6 +23,7 @@ This file tracks the initial hardening work from Slice 11.
 
 Use this when release hardening is completed and deterministic fixture coverage is required:
 
+- `scripts/sync-core-fixtures.ps1` (Windows) and `scripts/sync-core-fixtures.sh` (Unix) copy fixtures into `docs/fixtures`.
 - If `../ZManager` exists, sync selected deterministic fixtures into `docs/fixtures`:
   - `pwsh`:
     - `if (Test-Path ..\\ZManager\\cli\\tests\\fixtures) { Copy-Item -Recurse -Force ..\\ZManager\\cli\\tests\\fixtures -Destination docs\\fixtures }`
@@ -30,6 +31,22 @@ Use this when release hardening is completed and deterministic fixture coverage 
     - `if [ -d ../ZManager/cli/tests/fixtures ]; then mkdir -p docs/fixtures && cp -R ../ZManager/cli/tests/fixtures/. docs/fixtures/; fi`
 - Record fixture source tag/commit in each PR where fixtures are added.
 - Add fixture refresh notes into release PR checklist.
+- Release note: if fixture sync is not possible in the current environment, document the skip reason and keep `docs/fixtures` in repo-sync state for future runs.
+
+## Release dependency hardening helpers
+
+- `scripts/run-dependency-audits.ps1` and `scripts/run-dependency-audits.sh`:
+  - Run frontend and Rust dependency audits in one command.
+  - Emit Markdown output under `docs/reports/` for archival.
+- `scripts/pin-zmanager-core-release.ps1` and `scripts/pin-zmanager-core-release.sh`:
+  - Replace local `path = "../../ZManager/cli/crates/zmanager-core"` with a pinned git tag dependency for release packaging.
+  - Default repository target: `https://github.com/frankmanzhu/zmanager`.
+  - Default tag fallback: `v1.0.1`.
+
+## Release platform smoke-test outcomes
+
+- Track final smoke-test evidence in `docs/platform-smoke-test-results.md`.
+- Each run entry should include installer artifact, install version, evidence of launch, archive open, and completed extract with cleanup.
 
 ### Release audit/runbook (seeded for slice 11)
 
