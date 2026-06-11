@@ -8,14 +8,7 @@ pub const PLATFORM_NAME: &str = "linux";
 pub const DESKTOP_ACTIONS_ENABLED: bool = false;
 
 /// Reserved MIME-like extension mapping to support future `.desktop` and MIME metadata.
-pub const DESKTOP_ASSOCIATED_EXTENSIONS: &[&str] = &[
-    "zip",
-    "7z",
-    "rar",
-    "tar",
-    "tzst",
-    "tzap",
-];
+pub const DESKTOP_ASSOCIATED_EXTENSIONS: &[&str] = &["zip", "7z", "rar", "tar", "tzst", "tzap"];
 
 pub fn is_desktop_actions_enabled() -> bool {
     DESKTOP_ACTIONS_ENABLED

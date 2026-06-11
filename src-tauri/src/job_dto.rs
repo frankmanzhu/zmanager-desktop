@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobStatusDto {
     Queued,
@@ -12,18 +12,11 @@ pub enum JobStatusDto {
 
 impl JobStatusDto {
     pub const fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Cancelled,
-        )
-    }
-
-    pub const fn is_running(&self) -> bool {
-        matches!(self, Self::Queued | Self::Running)
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled,)
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobKindDto {
     ZipCreate,
@@ -39,7 +32,7 @@ pub enum JobKindDto {
     TestArchive,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobEventKindDto {
     Started,

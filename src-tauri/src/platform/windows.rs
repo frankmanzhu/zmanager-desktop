@@ -5,14 +5,7 @@ pub const PLATFORM_NAME: &str = "windows";
 pub const EXPLORER_ACTIONS_ENABLED: bool = false;
 
 /// Archive extensions that map to Windows shell associations when enabled.
-pub const EXPLORER_ASSOCIATED_EXTENSIONS: &[&str] = &[
-    "zip",
-    "7z",
-    "rar",
-    "tar",
-    "tzst",
-    "tzap",
-];
+pub const EXPLORER_ASSOCIATED_EXTENSIONS: &[&str] = &["zip", "7z", "rar", "tar", "tzst", "tzap"];
 
 pub fn is_explorer_integration_enabled() -> bool {
     EXPLORER_ACTIONS_ENABLED

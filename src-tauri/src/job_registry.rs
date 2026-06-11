@@ -9,7 +9,7 @@ use crate::job_dto::{
     CancelJobResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobRecordSnapshot,
     JobStatusDto, JobTerminalSummaryDto, PollJobEventsResponseDto, StartJobResponseDto,
 };
-use zmanager_core::{jobs::JobEventSink, jobs::JobEvent, jobs::JobKind, jobs::CancellationToken};
+use zmanager_core::{jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind};
 
 const MAX_EVENTS_TO_KEEP: usize = 256;
 
@@ -94,16 +94,13 @@ impl JobRegistry {
 
     pub fn snapshot(&self, job_id: &str) -> Option<JobRecordSnapshot> {
         self.with_lock(|state| {
-            state
-                .jobs
-                .get(job_id)
-                .map(|record| JobRecordSnapshot {
-                    kind: record.kind,
-                    created_at: record.created_at.clone(),
-                    status: record.status,
-                    events: record.events.iter().cloned().collect(),
-                    terminal_summary: record.terminal_summary.clone(),
-                })
+            state.jobs.get(job_id).map(|record| JobRecordSnapshot {
+                kind: record.kind,
+                created_at: record.created_at.clone(),
+                status: record.status,
+                events: record.events.iter().cloned().collect(),
+                terminal_summary: record.terminal_summary.clone(),
+            })
         })
     }
 
@@ -147,7 +144,10 @@ impl JobRegistry {
         };
 
         let event_dto = match &event {
-            JobEvent::Started { kind: _, total_bytes } => JobEventDto {
+            JobEvent::Started {
+                kind: _,
+                total_bytes,
+            } => JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: mapped_kind.map(JobKindDto::from),
                 path: None,
@@ -366,7 +366,10 @@ mod tests {
             .poll_events(&response.job_id)
             .expect("poll should return a snapshot");
         assert_eq!(first_poll.events.len(), 1);
-        assert!(matches!(first_poll.events[0].event_type, JobEventKindDto::Started));
+        assert!(matches!(
+            first_poll.events[0].event_type,
+            JobEventKindDto::Started
+        ));
         assert!(matches!(first_poll.status, JobStatusDto::Running));
 
         let second_poll = registry
@@ -395,7 +398,10 @@ mod tests {
 
         assert!(matches!(snapshot.status, JobStatusDto::Running));
         assert_eq!(snapshot.events.len(), 1);
-        assert!(matches!(snapshot.events[0].event_type, JobEventKindDto::Started));
+        assert!(matches!(
+            snapshot.events[0].event_type,
+            JobEventKindDto::Started
+        ));
         assert_eq!(snapshot.events[0].job_kind, Some(JobKindDto::ZipCreate));
     }
 
@@ -446,7 +452,10 @@ mod tests {
 
         fs::create_dir_all(&first).expect("first preview root should be created");
         registry.replace_preview_root(first.clone());
-        assert!(first.exists(), "first preview root should exist after registration");
+        assert!(
+            first.exists(),
+            "first preview root should exist after registration"
+        );
 
         fs::create_dir_all(&second).expect("second preview root should be created");
         registry.replace_preview_root(second.clone());
@@ -455,7 +464,10 @@ mod tests {
         assert!(second.exists(), "current preview root should remain");
 
         registry.cleanup_preview_roots();
-        assert!(!second.exists(), "cleanup should remove remaining preview root");
+        assert!(
+            !second.exists(),
+            "cleanup should remove remaining preview root"
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }

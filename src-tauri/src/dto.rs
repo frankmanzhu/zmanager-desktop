@@ -167,14 +167,6 @@ pub struct PreviewEntryResponse {
     pub written_bytes: u64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TestArchiveResponse {
-    pub tested_entries: usize,
-    pub skipped_entries: usize,
-    pub tested_bytes: u64,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TestArchiveRequest {

@@ -8,30 +8,32 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        ProjectContract, ProjectIntegrationContract,
-        EntryExtractResponse, ExtractEntryRequest, ListArchiveRequest, PreviewEntryRequest,
-        PreviewEntryResponse, PollJobEventsRequest, PlanCreateRequest, StartCreateRequest,
-        StartExtractRequest, TestArchiveRequest,
+        EntryExtractResponse, ExtractEntryRequest, PlanCreateRequest, PollJobEventsRequest,
+        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        StartCreateRequest, StartExtractRequest, TestArchiveRequest,
     },
     error::CommandErrorDto,
     job_dto::{
-        JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto,
-        PollJobEventsResponseDto, StartJobResponseDto,
+        JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
+        StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry},
 };
 use zmanager_core::archive_browser::{
-    self, ArchiveBrowserError, BrowserEntry, BrowserExtractOptions, BrowserListOptions,
+    self, ArchiveBrowserError, BrowserExtractOptions, BrowserListOptions,
 };
 use zmanager_core::jobs::{
     run_7z_create_job_from_sources_with_plan_options, run_7z_extract_job_with_password_and_policy,
-    run_libarchive_extract_job_with_password_and_policy, run_rar_extract_job_with_password_and_policy,
-    run_tzap_create_job_from_sources_with_plan_options, run_tzap_extract_job_with_password_and_policy,
+    run_libarchive_extract_job_with_password_and_policy,
+    run_rar_extract_job_with_password_and_policy,
     run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
-    run_zip_create_job_from_sources_with_plan_options, run_zip_extract_job_with_password_and_policy,
+    run_tzap_create_job_from_sources_with_plan_options,
+    run_tzap_extract_job_with_password_and_policy,
+    run_zip_create_job_from_sources_with_plan_options,
+    run_zip_extract_job_with_password_and_policy,
 };
-use zmanager_core::libarchive_backend::{self, LibarchiveError};
-use zmanager_core::manifest::{plan_archives, PlanError, PlanOptions};
+use zmanager_core::libarchive_backend::LibarchiveError;
+use zmanager_core::manifest::{PlanError, PlanOptions, plan_archives};
 use zmanager_core::rar_backend::RarBackendError;
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
@@ -209,7 +211,7 @@ fn start_create_internal(
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match format {
             crate::dto::ArchiveFormatDto::Zip => {
-                let mut create_options = ZipCreateOptions {
+                let create_options = ZipCreateOptions {
                     compression: zmanager_core::zip_backend::ZipCompression::default(),
                     level: compression_level.map(i64::from),
                     preserve_metadata,
@@ -250,11 +252,10 @@ fn start_create_internal(
                 .map_err(map_tar_zst_error)
             }
             crate::dto::ArchiveFormatDto::Tzap => {
-                let key_source =
-                    password
-                        .as_deref()
-                        .map(SecretString::from)
-                        .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
+                let key_source = password
+                    .as_deref()
+                    .map(SecretString::from)
+                    .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
                 let create_options = TzapCreateOptions {
                     key_source,
                     level: compression_level
@@ -511,11 +512,18 @@ pub fn test_archive(
     request: TestArchiveRequest,
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_test_archive_internal(request, &registry)
+}
+
+fn start_test_archive_internal(
+    request: TestArchiveRequest,
+    registry: &JobRegistry,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let family = detect_archive_family(&archive_path);
 
-    let (response, token) = registry.create_job(JobKindDto::TestArchive);
-    let registry_for_thread = registry.inner().clone();
+    let (response, _token) = registry.create_job(JobKindDto::TestArchive);
+    let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
     let password = request
@@ -524,25 +532,38 @@ pub fn test_archive(
         .filter(|value| !value.is_empty());
 
     thread::spawn(move || {
-        let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
+        registry_for_thread.emit_direct_event(
+            &job_id,
+            JobEventDto {
+                event_type: JobEventKindDto::Started,
+                job_kind: Some(JobKindDto::TestArchive),
+                path: None,
+                bytes: None,
+                total_bytes: None,
+                total_bytes_processed: None,
+                entries: None,
+                message: None,
+            },
+        );
+
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match family {
-            ArchiveFamily::Zip => {
-                zmanager_core::zip_backend::test_zip_with_password_filter(
-                    &archive_path,
-                    password.as_deref(),
-                    |_| true,
-                )
-                    .map(to_terminal_summary_for_zip_test)
-                    .map_err(map_zip_error)
-            }
-            ArchiveFamily::Tzap => zmanager_core::tzap_backend::test_tzap_with_optional_password_filter_and_x509_trust(
+            ArchiveFamily::Zip => zmanager_core::zip_backend::test_zip_with_password_filter(
                 &archive_path,
                 password.as_deref(),
                 |_| true,
-                None,
             )
-            .map(to_terminal_summary_for_tzap_test)
-            .map_err(map_tzap_error),
+            .map(to_terminal_summary_for_zip_test)
+            .map_err(map_zip_error),
+            ArchiveFamily::Tzap => {
+                zmanager_core::tzap_backend::test_tzap_with_optional_password_filter_and_x509_trust(
+                    &archive_path,
+                    password.as_deref(),
+                    |_| true,
+                    None,
+                )
+                .map(to_terminal_summary_for_tzap_test)
+                .map_err(map_tzap_error)
+            }
             _ => zmanager_core::libarchive_backend::test_archive_with_password_filter(
                 &archive_path,
                 password.as_deref(),
@@ -554,7 +575,22 @@ pub fn test_archive(
 
         match result {
             Ok(summary) => {
+                let written_entries = summary.written_entries;
+                let written_bytes = summary.written_bytes;
                 registry_for_thread.set_terminal_summary(&job_id, summary);
+                registry_for_thread.emit_direct_event(
+                    &job_id,
+                    JobEventDto {
+                        event_type: JobEventKindDto::Completed,
+                        job_kind: Some(JobKindDto::TestArchive),
+                        path: None,
+                        bytes: Some(written_bytes),
+                        total_bytes: None,
+                        total_bytes_processed: None,
+                        entries: Some(written_entries),
+                        message: None,
+                    },
+                );
             }
             Err(error) => {
                 registry_for_thread.emit_direct_event(
@@ -646,7 +682,9 @@ fn map_browser_entry_kind(
 ) -> ArchiveEntryKindDto {
     match entry {
         zmanager_core::archive_browser::BrowserEntryKind::File => ArchiveEntryKindDto::File,
-        zmanager_core::archive_browser::BrowserEntryKind::Directory => ArchiveEntryKindDto::Directory,
+        zmanager_core::archive_browser::BrowserEntryKind::Directory => {
+            ArchiveEntryKindDto::Directory
+        }
         zmanager_core::archive_browser::BrowserEntryKind::Symlink => ArchiveEntryKindDto::Symlink,
         zmanager_core::archive_browser::BrowserEntryKind::Hardlink => ArchiveEntryKindDto::Hardlink,
         zmanager_core::archive_browser::BrowserEntryKind::Special => ArchiveEntryKindDto::Special,
@@ -688,20 +726,18 @@ fn map_zip_error(error: ZipBackendError) -> CommandErrorDto {
         ZipBackendError::Safety(source) => {
             CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
         }
-        ZipBackendError::Io { path, source } => map_io_error(path.to_string_lossy().to_string(), source),
+        ZipBackendError::Io { path, source } => {
+            map_io_error(path.to_string_lossy().to_string(), source)
+        }
         ZipBackendError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("ZIP plan failed: {source}"))
         }
-        ZipBackendError::VolumeSizeTooSmall { size, minimum } => {
-            CommandErrorDto::invalid_request(format!(
-                "ZIP volume size {size} is smaller than minimum {minimum}"
-            ))
-        }
-        ZipBackendError::UnsupportedSplitZip { .. } => {
-            CommandErrorDto::unsupported_format(
-                "ZIP split archives are unsupported for this operation in this path.".to_string(),
-            )
-        }
+        ZipBackendError::VolumeSizeTooSmall { size, minimum } => CommandErrorDto::invalid_request(
+            format!("ZIP volume size {size} is smaller than minimum {minimum}"),
+        ),
+        ZipBackendError::UnsupportedSplitZip { .. } => CommandErrorDto::unsupported_format(
+            "ZIP split archives are unsupported for this operation in this path.".to_string(),
+        ),
         ZipBackendError::InvalidSymlinkTarget { archive_path } => {
             CommandErrorDto::operation_failed(format!("invalid symlink target for {archive_path}"))
         }
@@ -752,11 +788,9 @@ fn map_7z_error(error: SevenZError) -> CommandErrorDto {
         SevenZError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("7z plan error: {source}"))
         }
-        SevenZError::VolumeSizeTooSmall { size, minimum } => {
-            CommandErrorDto::invalid_request(format!(
-                "7z volume size {size} bytes is smaller than minimum {minimum} bytes"
-            ))
-        }
+        SevenZError::VolumeSizeTooSmall { size, minimum } => CommandErrorDto::invalid_request(
+            format!("7z volume size {size} bytes is smaller than minimum {minimum} bytes"),
+        ),
         SevenZError::SevenZ(source) => {
             CommandErrorDto::operation_failed(format!("7z operation failed: {source}"))
         }
@@ -772,21 +806,25 @@ fn map_tzap_error(error: TzapError) -> CommandErrorDto {
         TzapError::Safety(source) => {
             CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
         }
-        TzapError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
+        TzapError::Io { path, source } => map_io_error(path.to_string_lossy().to_string(), source),
+        TzapError::Plan(source) => {
+            CommandErrorDto::operation_failed(format!("TZAP plan error: {source}"))
         }
-        TzapError::Plan(source) => CommandErrorDto::operation_failed(format!("TZAP plan error: {source}")),
-        TzapError::Format(source) => CommandErrorDto::unsupported_format(format!("TZAP format rejected archive: {source}")),
-        TzapError::X509RootAuth(message) => {
-            CommandErrorDto::unsupported_format(format!("TZAP root-auth verification failed: {message}"))
+        TzapError::Format(source) => {
+            CommandErrorDto::unsupported_format(format!("TZAP format rejected archive: {source}"))
         }
+        TzapError::X509RootAuth(message) => CommandErrorDto::unsupported_format(format!(
+            "TZAP root-auth verification failed: {message}"
+        )),
         TzapError::Cancelled => CommandErrorDto::cancelled("TZAP job was cancelled."),
     }
 }
 
 fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
     match error {
-        LibarchiveError::Io { path, source } => map_io_error(path.to_string_lossy().to_string(), source),
+        LibarchiveError::Io { path, source } => {
+            map_io_error(path.to_string_lossy().to_string(), source)
+        }
         LibarchiveError::Safety(source) => {
             CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
         }
@@ -813,7 +851,9 @@ fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
 
 fn map_rar_error(error: RarBackendError) -> CommandErrorDto {
     match error {
-        RarBackendError::Io { path, source } => map_io_error(path.to_string_lossy().to_string(), source),
+        RarBackendError::Io { path, source } => {
+            map_io_error(path.to_string_lossy().to_string(), source)
+        }
         RarBackendError::Safety(source) => {
             CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
         }
@@ -830,11 +870,9 @@ fn map_rar_error(error: RarBackendError) -> CommandErrorDto {
         } => CommandErrorDto::unsupported_format(format!(
             "RAR link target is invalid for {path}: {target}: {reason}"
         )),
-        RarBackendError::DictionaryTooLarge { path, size } => {
-            CommandErrorDto::invalid_request(format!(
-                "RAR dictionary is too large for {path}: {size} bytes"
-            ))
-        }
+        RarBackendError::DictionaryTooLarge { path, size } => CommandErrorDto::invalid_request(
+            format!("RAR dictionary is too large for {path}: {size} bytes"),
+        ),
     }
 }
 
@@ -878,9 +916,7 @@ fn extraction_policy(
     }
 }
 
-fn to_terminal_summary_for_zip_create(
-    report: ZipCreateReport,
-) -> JobTerminalSummaryDto {
+fn to_terminal_summary_for_zip_create(report: ZipCreateReport) -> JobTerminalSummaryDto {
     JobTerminalSummaryDto {
         written_entries: report.written_entries,
         skipped_entries: None,
@@ -916,9 +952,7 @@ fn to_terminal_summary_for_seven_create(report: SevenZCreateReport) -> JobTermin
     }
 }
 
-fn to_terminal_summary_for_extract(
-    report: impl ExtractSummary,
-) -> JobTerminalSummaryDto {
+fn to_terminal_summary_for_extract(report: impl ExtractSummary) -> JobTerminalSummaryDto {
     report.into_summary()
 }
 
@@ -1067,7 +1101,7 @@ fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandEr
     Ok(value)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArchiveFamily {
     Zip,
     TarZst,
@@ -1103,14 +1137,18 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
             | Some("z03")
     ) {
         ArchiveFamily::Zip
-    } else if matches!(extension.as_deref(), Some("tzst") | Some("tzap") | Some("7z")) {
+    } else if matches!(
+        extension.as_deref(),
+        Some("tzst") | Some("tzap") | Some("7z")
+    ) {
         match extension.as_deref() {
             Some("7z") => ArchiveFamily::SevenZ,
             Some("tzap") => ArchiveFamily::Tzap,
             Some("tzst") => ArchiveFamily::TarZst,
             _ => ArchiveFamily::Archive,
         }
-    } else if extension == Some("zst".to_string()) && stem.is_some_and(|value| value.ends_with(".tar"))
+    } else if extension == Some("zst".to_string())
+        && stem.is_some_and(|value| value.ends_with(".tar"))
     {
         ArchiveFamily::TarZst
     } else if extension == Some("rar".to_string()) {
@@ -1125,12 +1163,15 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::OverwritePolicyDto;
+    use crate::job_dto::JobStatusDto;
     use std::env;
     use std::fs;
     use std::io::Error;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use zmanager_core::safety::ExtractionSafetyError;
 
     #[test]
     fn list_archive_rejects_empty_path() {
@@ -1170,7 +1211,12 @@ mod tests {
         .unwrap_err();
 
         assert!(!error.message.contains(password));
-        assert!(!error.hint.as_ref().is_some_and(|value| value.contains(password)));
+        assert!(
+            !error
+                .hint
+                .as_ref()
+                .is_some_and(|value| value.contains(password))
+        );
     }
 
     #[test]
@@ -1191,7 +1237,11 @@ mod tests {
 
     #[test]
     fn mapping_safety_errors_to_unsafe_archive() {
-        let safety_error = map_zip_error(ZipBackendError::Safety("blocked".to_string()));
+        let safety_error = map_zip_error(ZipBackendError::Safety(
+            ExtractionSafetyError::UnsafeFileType {
+                archive_path: "blocked".to_string(),
+            },
+        ));
 
         assert_eq!(
             safety_error.code,
@@ -1210,14 +1260,8 @@ mod tests {
         .expect("non-empty paths should parse");
 
         assert_eq!(normalized.len(), 2);
-        assert_eq!(
-            normalized[0].to_string_lossy(),
-            "C:/tmp/src".to_string()
-        );
-        assert_eq!(
-            normalized[1].to_string_lossy(),
-            "C:/tmp/dest".to_string()
-        );
+        assert_eq!(normalized[0].to_string_lossy(), "C:/tmp/src".to_string());
+        assert_eq!(normalized[1].to_string_lossy(), "C:/tmp/dest".to_string());
     }
 
     #[test]
@@ -1228,7 +1272,10 @@ mod tests {
 
     #[test]
     fn detect_archive_family_is_case_insensitive_and_handles_windows_drive() {
-        assert_eq!(detect_archive_family(r"C:\\Users\\me\\archive.ZIP"), ArchiveFamily::Zip);
+        assert_eq!(
+            detect_archive_family(r"C:\\Users\\me\\archive.ZIP"),
+            ArchiveFamily::Zip
+        );
         assert_eq!(
             detect_archive_family(r"D:\\archives\\report.TAR.ZST"),
             ArchiveFamily::TarZst
@@ -1241,7 +1288,10 @@ mod tests {
 
     #[test]
     fn detect_archive_family_supports_tar_zst_double_extension_and_plain_tar() {
-        assert_eq!(detect_archive_family("/tmp/archive.tar.zst"), ArchiveFamily::TarZst);
+        assert_eq!(
+            detect_archive_family("/tmp/archive.tar.zst"),
+            ArchiveFamily::TarZst
+        );
     }
 
     #[test]
@@ -1260,10 +1310,7 @@ mod tests {
 
     #[test]
     fn normalize_non_empty_paths_accepts_windows_and_long_paths() {
-        let very_long_leaf = format!("{}{}",
-            "nested/",
-            "a".repeat(1024),
-        );
+        let very_long_leaf = format!("{}{}", "nested/", "a".repeat(1024),);
         let win_like = format!("C:\\tmp\\{very_long_leaf}.zip");
 
         let normalized = normalize_non_empty_paths(&[
@@ -1337,7 +1384,8 @@ mod tests {
         let destination = workspace.join("created.zip");
         fs::create_dir_all(&sources).expect("source directory should exist");
 
-        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
+        fs::write(sources.join("hello.txt"), b"hello from create")
+            .expect("fixture file should write");
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -1399,7 +1447,8 @@ mod tests {
             volume_size: None,
             preserve_metadata: false,
         };
-        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job =
+            start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
@@ -1412,15 +1461,17 @@ mod tests {
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
-        let (extract_poll, extract_events) = wait_for_job_terminal(&registry, &extract_job.job_id);
+        let (extract_poll, mut extract_events) =
+            wait_for_job_terminal(&registry, &extract_job.job_id);
         extract_events.extend_from_slice(&extract_poll.events);
 
-        let extracted_file = extract_destination.join("README.md");
+        let extracted_file = extract_destination.join("sources").join("README.md");
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
         assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
         assert!(
-            extract_events.iter()
+            extract_events
+                .iter()
                 .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
             "extract lifecycle should emit a completed event",
         );
@@ -1432,6 +1483,104 @@ mod tests {
         let _ = fs::remove_dir_all(&workspace);
     }
 
+    #[test]
+    fn command_boundary_test_archive_job_reaches_terminal_for_valid_zip() {
+        let workspace = create_temp_workspace("test-archive-valid");
+        let sources = workspace.join("sources");
+        let destination_archive = workspace.join("fixture.zip");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("hello.txt"), b"hello from test")
+            .expect("fixture file should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job =
+            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let test_job = start_test_archive_internal(
+            TestArchiveRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                password: None,
+            },
+            &registry,
+        )
+        .expect("test archive command should start a job");
+        let (test_poll, mut test_events) = wait_for_job_terminal(&registry, &test_job.job_id);
+        test_events.extend_from_slice(&test_poll.events);
+
+        assert_eq!(test_poll.status, JobStatusDto::Completed);
+        assert_eq!(test_poll.kind, JobKindDto::TestArchive);
+        assert!(
+            test_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
+            "test lifecycle should emit a started event",
+        );
+        assert!(
+            test_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "test lifecycle should emit a completed event",
+        );
+        assert!(
+            test_poll
+                .terminal_summary
+                .as_ref()
+                .is_some_and(|summary| summary.written_entries > 0),
+            "successful test should include a terminal summary",
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_test_archive_job_reports_failed_for_corrupt_zip() {
+        let workspace = create_temp_workspace("test-archive-corrupt");
+        let archive_path = workspace.join("corrupt.zip");
+        fs::write(&archive_path, b"this is not a valid zip archive")
+            .expect("corrupt archive fixture should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let test_job = start_test_archive_internal(
+            TestArchiveRequest {
+                archive_path: archive_path.to_string_lossy().to_string(),
+                password: None,
+            },
+            &registry,
+        )
+        .expect("test archive command should start a job");
+        let (test_poll, mut test_events) = wait_for_job_terminal(&registry, &test_job.job_id);
+        test_events.extend_from_slice(&test_poll.events);
+
+        assert_eq!(test_poll.status, JobStatusDto::Failed);
+        assert_eq!(test_poll.kind, JobKindDto::TestArchive);
+        assert!(test_poll.terminal_summary.is_none());
+        assert!(
+            test_events.iter().any(|event| {
+                matches!(event.event_type, JobEventKindDto::Failed)
+                    && event
+                        .message
+                        .as_ref()
+                        .is_some_and(|message| !message.is_empty())
+            }),
+            "failed test should emit a failure event with a message",
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
     #[cfg(unix)]
     #[test]
     fn list_archive_inaccessible_source_maps_to_io_error() {
@@ -1439,7 +1588,9 @@ mod tests {
         let archive_path = workspace.join("locked.zip");
         fs::write(&archive_path, b"not a real archive").expect("fixture should be written");
 
-        let mut permissions = fs::metadata(&archive_path).expect("fixture metadata should be readable").permissions();
+        let mut permissions = fs::metadata(&archive_path)
+            .expect("fixture metadata should be readable")
+            .permissions();
         permissions.set_mode(0o000);
         fs::set_permissions(&archive_path, permissions).expect("permissions should be restricted");
 
@@ -1471,7 +1622,10 @@ mod tests {
 
         assert_eq!(normalized[0].to_string_lossy(), r"C:\CON\archive.zip");
         assert_eq!(normalized[1].to_string_lossy(), r"D:\AUX\report.TAR.ZST");
-        assert_eq!(normalized[2].to_string_lossy(), r"\\server\\NUL\bundle.tZAP");
+        assert_eq!(
+            normalized[2].to_string_lossy(),
+            r"\\server\\NUL\bundle.tZAP"
+        );
     }
 
     #[cfg(windows)]
@@ -1485,7 +1639,9 @@ mod tests {
         fs::create_dir_all(&root).expect("case-collision workspace should be created");
         fs::write(&lower, b"lower-path").expect("baseline file should be written");
         let lower_canonical = lower.canonicalize().expect("canonical path should resolve");
-        let upper_canonical = upper.canonicalize().expect("case variant should resolve to same file");
+        let upper_canonical = upper
+            .canonicalize()
+            .expect("case variant should resolve to same file");
 
         assert_eq!(lower_canonical, upper_canonical);
         let read = fs::read_to_string(&upper).expect("case-variant path should resolve");
@@ -1510,7 +1666,8 @@ mod tests {
 
         fs::create_dir_all(&root).expect("case-variant workspace should be created");
         fs::write(&lower, b"lower-path").expect("lowercase baseline file should be written");
-        fs::write(&upper, b"upper-path").expect("uppercase path should be separate file on case-sensitive FS");
+        fs::write(&upper, b"upper-path")
+            .expect("uppercase path should be separate file on case-sensitive FS");
 
         assert_ne!(
             lower
