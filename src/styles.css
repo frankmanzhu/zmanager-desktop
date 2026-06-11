@@ -725,6 +725,11 @@ tbody tr:hover {
   background: var(--content-bg-hover);
 }
 
+tbody tr:focus-visible {
+  outline: 0;
+  box-shadow: inset var(--focus-ring);
+}
+
 tbody tr[aria-selected="true"],
 tbody tr.is-selected {
   background: var(--selected-bg);

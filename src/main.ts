@@ -71,6 +71,25 @@ type BrowserRow =
       entry: ArchiveEntryDto;
     };
 type ExtractMode = "archive" | "selection";
+type ArchiveFixture = {
+  archivePath: string;
+  entries: ArchiveEntryDto[];
+  totalSize?: number;
+};
+
+declare global {
+  interface ImportMeta {
+    readonly env: {
+      readonly DEV: boolean;
+    };
+  }
+
+  interface Window {
+    __zmanagerDev?: {
+      loadArchiveFixture: (fixture: ArchiveFixture) => void;
+    };
+  }
+}
 
 const app = document.querySelector<HTMLElement>("#app");
 if (!app) {
@@ -129,7 +148,7 @@ appRoot.innerHTML = `
       <div class="toolbar-group">
         <button id="open-archive" class="tool-button" type="button" aria-keyshortcuts="Control+O">Open</button>
         <button id="new-archive" class="tool-button" type="button" aria-keyshortcuts="Control+N">New</button>
-        <button id="add-archive" class="tool-button" type="button">Add</button>
+        <button id="add-archive" class="tool-button" type="button" disabled title="Adding to an existing archive is not supported yet">Add</button>
       </div>
       <div class="toolbar-separator" aria-hidden="true"></div>
       <div class="toolbar-group">
@@ -753,21 +772,23 @@ function updateCommandState() {
   const isLoading = browseState === "loading";
   const selectedCount = selectedEntries.size;
   const hasOneSelection = selectedCount === 1;
-  const canBrowse = hasArchive && !isLoading;
+  const canUseArchive = hasArchive && !isLoading && (browseState === "loaded" || browseState === "empty");
+  const canListEntries = hasArchive && !isLoading && browseState === "loaded";
 
-  searchInput.disabled = !canBrowse;
-  flatViewToggle.disabled = !hasArchive;
-  selectAllInput.disabled = !canBrowse || visibleRows().every((row) => row.rowType !== "entry");
+  searchInput.disabled = !canUseArchive;
+  flatViewToggle.disabled = !canUseArchive;
+  selectAllInput.disabled = !canListEntries || visibleRows().every((row) => row.rowType !== "entry");
   refreshArchiveButton.disabled = !hasArchive || isLoading;
   navBackButton.disabled = navigationHistory.length === 0;
   navUpButton.disabled = !currentArchiveFolder;
 
-  extractToolbarButton.disabled = !hasArchive || isLoading || (selectedCount > 0 && browseState !== "loaded");
-  testArchiveButton.disabled = !hasArchive || isLoading;
-  previewSelectedButton.disabled = !hasOneSelection || !hasArchive;
-  infoToolbarButton.disabled = !hasArchive;
+  extractToolbarButton.disabled = !canUseArchive || (selectedCount > 0 && !canListEntries);
+  testArchiveButton.disabled = !canUseArchive;
+  previewSelectedButton.disabled = !hasOneSelection || !canListEntries;
+  infoToolbarButton.disabled = !canUseArchive;
+  addArchiveButton.disabled = true;
 
-  menuSelectAllButton.disabled = !canBrowse;
+  menuSelectAllButton.disabled = !canListEntries;
   menuClearSelectionButton.disabled = selectedCount === 0;
   menuExtractButton.disabled = extractToolbarButton.disabled;
   menuTestButton.disabled = testArchiveButton.disabled;
@@ -892,7 +913,7 @@ function renderBrowseRows() {
     .map((row) => {
       if (row.rowType === "folder") {
         return `
-          <tr class="folder-row" data-folder-path="${escapeHtml(row.path)}">
+          <tr class="folder-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="Open folder ${escapeHtml(row.name)}">
             <td class="selection-column"></td>
             <td class="name-cell"><span class="row-primary">${escapeHtml(row.name)}</span></td>
             <td>-</td>
@@ -906,7 +927,12 @@ function renderBrowseRows() {
 
       const selected = selectedEntries.has(row.path);
       return `
-        <tr class="${selected ? "is-selected" : ""}" data-entry-path="${escapeHtml(row.path)}">
+        <tr
+          class="${selected ? "is-selected" : ""}"
+          data-entry-path="${escapeHtml(row.path)}"
+          tabindex="0"
+          aria-selected="${selected ? "true" : "false"}"
+        >
           <td class="selection-column">
             <input
               data-entry-path="${escapeHtml(row.path)}"
@@ -960,7 +986,7 @@ function renderDetails() {
         <div class="detail-actions">
           <button type="button" data-detail-action="extract-all">Extract All</button>
           <button type="button" data-detail-action="test">Test Archive</button>
-          <button type="button" data-detail-action="create">Add Files</button>
+          <button type="button" data-detail-action="create">New Archive</button>
           <button type="button" data-detail-action="archive-info">Info</button>
         </div>
       </div>
@@ -1261,6 +1287,63 @@ function closeOpenMenus() {
   }
 }
 
+async function openNativeDialog(options: Parameters<typeof openDialog>[0]) {
+  try {
+    return await openDialog(options);
+  } catch {
+    setOperationalStatus("Native dialogs are unavailable in browser preview.");
+    return null;
+  }
+}
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      [
+        "button:not(:disabled)",
+        "input:not(:disabled)",
+        "select:not(:disabled)",
+        "textarea:not(:disabled)",
+        "a[href]",
+        "[tabindex]:not([tabindex='-1'])",
+      ].join(","),
+    ),
+  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+}
+
+function getOpenModal(): HTMLElement | null {
+  for (const dialog of [extractDialog, createDialog, aboutDialog, infoDialog]) {
+    if (!dialog.hidden) {
+      return dialog;
+    }
+  }
+  return null;
+}
+
+function trapModalFocus(event: KeyboardEvent, dialog: HTMLElement) {
+  const focusable = getFocusableElements(dialog);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+    return;
+  }
+
+  if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function openModal(dialog: HTMLElement, focusSelector = "button, input, select") {
   focusedBeforeDialog = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   dialog.hidden = false;
@@ -1270,6 +1353,12 @@ function openModal(dialog: HTMLElement, focusSelector = "button, input, select")
 
 function closeModal(dialog: HTMLElement) {
   dialog.hidden = true;
+  if (dialog === extractDialog) {
+    browsePasswordInput.value = "";
+  }
+  if (dialog === createDialog) {
+    createPasswordInput.value = "";
+  }
   focusedBeforeDialog?.focus();
   focusedBeforeDialog = null;
 }
@@ -1306,6 +1395,7 @@ function navigateToFolder(folderPath: string, pushHistory = true) {
   selectedEntries.clear();
   searchInput.value = "";
   renderBrowse();
+  focusFirstVisibleRow();
 }
 
 function navigateBack() {
@@ -1316,6 +1406,7 @@ function navigateBack() {
   currentArchiveFolder = previous;
   selectedEntries.clear();
   renderBrowse();
+  focusFirstVisibleRow();
 }
 
 function navigateUp() {
@@ -1323,6 +1414,66 @@ function navigateUp() {
     return;
   }
   navigateToFolder(getParentPath(currentArchiveFolder));
+}
+
+function getTableRows(): HTMLTableRowElement[] {
+  return Array.from(tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-folder-path], tr[data-entry-path]"));
+}
+
+function focusTableRow(row: HTMLTableRowElement | null) {
+  if (!row) {
+    return;
+  }
+  row.focus();
+}
+
+function focusFirstVisibleRow() {
+  window.setTimeout(() => {
+    focusTableRow(getTableRows()[0] ?? null);
+  }, 0);
+}
+
+function focusRelativeTableRow(currentRow: HTMLTableRowElement, direction: 1 | -1) {
+  const rows = getTableRows();
+  const currentIndex = rows.indexOf(currentRow);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  const nextIndex = Math.max(0, Math.min(rows.length - 1, currentIndex + direction));
+  focusTableRow(rows[nextIndex]);
+}
+
+function activateTableRow(row: HTMLTableRowElement) {
+  const folderPath = row.dataset.folderPath;
+  if (folderPath !== undefined) {
+    navigateToFolder(folderPath);
+    return;
+  }
+
+  const entryPath = row.dataset.entryPath;
+  if (!entryPath) {
+    return;
+  }
+
+  selectedEntries = new Set([entryPath]);
+  renderBrowse();
+  void onPreviewSelectedEntry();
+}
+
+function toggleTableRowSelection(row: HTMLTableRowElement) {
+  const entryPath = row.dataset.entryPath;
+  if (!entryPath) {
+    return;
+  }
+
+  if (selectedEntries.has(entryPath)) {
+    selectedEntries.delete(entryPath);
+  } else {
+    selectedEntries.add(entryPath);
+  }
+  renderBrowse();
+  focusTableRow(tableBody.querySelector<HTMLTableRowElement>(`tr[data-entry-path="${CSS.escape(entryPath)}"]`));
 }
 
 function selectVisibleEntries() {
@@ -1344,6 +1495,26 @@ function showContextMenu(x: number, y: number, html: string) {
   contextMenu.hidden = false;
   contextMenu.style.left = `${x}px`;
   contextMenu.style.top = `${y}px`;
+}
+
+function showFolderContextMenu(folderPath: string, x: number, y: number) {
+  contextEntryPath = "";
+  showContextMenu(x, y, `
+    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}">Open Folder</button>
+  `);
+}
+
+function showEntryContextMenu(entryPath: string, x: number, y: number) {
+  contextEntryPath = entryPath;
+  if (!selectedEntries.has(entryPath)) {
+    selectedEntries = new Set([entryPath]);
+    renderBrowse();
+  }
+  showContextMenu(x, y, `
+    <button type="button" role="menuitem" data-context-action="preview">Preview</button>
+    <button type="button" role="menuitem" data-context-action="extract">Extract</button>
+    <button type="button" role="menuitem" data-context-action="info">Info</button>
+  `);
 }
 
 function hideContextMenu() {
@@ -1462,18 +1633,11 @@ async function loadArchive(request: ListArchiveRequest) {
     try {
       const listing = await listArchiveCommand(requestPayload);
 
-      currentArchivePath = listing.archivePath;
-      currentArchiveFolder = "";
-      navigationHistory = [];
-      browseEntries = listing.entries;
-      selectedEntries.clear();
-      setBrowseState(listing.entryCount > 0 ? "loaded" : "empty", "Archive loaded.");
-
-      messageElement.textContent = listing.entryCount > 0
-        ? `Loaded ${listing.entryCount} entries.`
-        : "Archive is valid but contains no entries.";
-
-      renderBrowse();
+      loadArchiveListingIntoState({
+        archivePath: listing.archivePath,
+        entries: listing.entries,
+        totalSize: listing.totalSize,
+      });
       return;
     } catch (error) {
       const commandError = asCommandError(error);
@@ -1505,6 +1669,74 @@ async function loadArchive(request: ListArchiveRequest) {
       browsePasswordInput.value = password;
     }
   }
+}
+
+function loadArchiveListingIntoState(listing: ArchiveFixture) {
+  currentArchivePath = listing.archivePath;
+  currentArchiveFolder = "";
+  navigationHistory = [];
+  searchInput.value = "";
+  isFlatView = false;
+  flatViewToggle.checked = false;
+  browseEntries = listing.entries;
+  selectedEntries.clear();
+  setBrowseState(listing.entries.length > 0 ? "loaded" : "empty", "Archive loaded.");
+
+  messageElement.textContent = listing.entries.length > 0
+    ? `Loaded ${listing.entries.length} entries.`
+    : "Archive is valid but contains no entries.";
+
+  renderBrowse();
+  focusFirstVisibleRow();
+}
+
+function isLocalDevHost() {
+  return import.meta.env.DEV && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
+}
+
+function loadLocalDevFixtureFromUrl() {
+  if (!isLocalDevHost()) {
+    return;
+  }
+
+  const fixtureName = new URLSearchParams(window.location.search).get("fixture");
+  if (fixtureName !== "archive") {
+    return;
+  }
+
+  loadArchiveListingIntoState({
+    archivePath: "C:/Users/Frank/Downloads/photos.zip",
+    entries: [
+      {
+        path: "wedding/",
+        kind: "directory",
+        size: 0,
+        compressedSize: 0,
+        modified: "2026-06-10T10:00:00Z",
+      },
+      {
+        path: "wedding/raw/photo01.jpg",
+        kind: "file",
+        size: 5_242_880,
+        compressedSize: 3_145_728,
+        modified: "2026-06-10T10:01:00Z",
+      },
+      {
+        path: "wedding/raw/photo02.jpg",
+        kind: "file",
+        size: 6_291_456,
+        compressedSize: 4_194_304,
+        modified: "2026-06-10T10:02:00Z",
+      },
+      {
+        path: "docs/readme.txt",
+        kind: "file",
+        size: 1_200,
+        compressedSize: 600,
+        modified: "2026-06-09T09:00:00Z",
+      },
+    ],
+  });
 }
 
 async function runPlan() {
@@ -1618,7 +1850,7 @@ function stopPolling() {
 }
 
 async function onOpenArchive() {
-  const selected = await openDialog({
+  const selected = await openNativeDialog({
     title: "Open archive",
     directory: false,
     multiple: false,
@@ -1693,7 +1925,7 @@ async function onRefreshArchive() {
 }
 
 async function onSelectDestinationForExtract() {
-  const selected = await openDialog({
+  const selected = await openNativeDialog({
     title: "Choose extract destination",
     directory: true,
     multiple: false,
@@ -1866,7 +2098,7 @@ async function onPreviewSelectedEntry() {
 }
 
 async function addSourcePathsFromDialog(mode: "files" | "folder") {
-  const selected = await openDialog({
+  const selected = await openNativeDialog({
     title: mode === "files" ? "Add source files" : "Add source folder",
     directory: mode === "folder",
     multiple: mode === "files",
@@ -1885,7 +2117,7 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 }
 
 async function onSelectCreateDestination() {
-  const selected = await openDialog({
+  const selected = await openNativeDialog({
     title: "Choose destination archive",
     directory: false,
     multiple: false,
@@ -2003,6 +2235,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function handleShortcut(event: KeyboardEvent) {
+  const openDialogElement = getOpenModal();
+  if (event.key === "Tab" && openDialogElement) {
+    trapModalFocus(event, openDialogElement);
+    return;
+  }
+
   if (event.ctrlKey && event.key.toLowerCase() === "o") {
     event.preventDefault();
     void onOpenArchive();
@@ -2210,6 +2448,57 @@ function bindActions() {
     renderBrowse();
   });
 
+  tableBody.addEventListener("keydown", (event) => {
+    if (event.target instanceof HTMLInputElement) {
+      return;
+    }
+
+    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-folder-path], tr[data-entry-path]");
+    if (!row) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusRelativeTableRow(row, 1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusRelativeTableRow(row, -1);
+      return;
+    }
+
+    if (event.key === " " || event.key === "Spacebar") {
+      event.preventDefault();
+      toggleTableRowSelection(row);
+      return;
+    }
+
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      const rect = row.getBoundingClientRect();
+      const x = rect.left + 24;
+      const y = rect.top + Math.min(rect.height - 2, 24);
+      const folderPath = row.dataset.folderPath;
+      if (folderPath !== undefined) {
+        showFolderContextMenu(folderPath, x, y);
+        return;
+      }
+      const entryPath = row.dataset.entryPath;
+      if (entryPath) {
+        showEntryContextMenu(entryPath, x, y);
+      }
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      activateTableRow(row);
+    }
+  });
+
   tableBody.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement;
     if (target.type !== "checkbox" || !target.dataset.entryPath) {
@@ -2251,9 +2540,7 @@ function bindActions() {
     const folderPath = row.dataset.folderPath;
     if (folderPath !== undefined) {
       event.preventDefault();
-      showContextMenu(event.clientX, event.clientY, `
-        <button type="button" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}">Open Folder</button>
-      `);
+      showFolderContextMenu(folderPath, event.clientX, event.clientY);
       return;
     }
 
@@ -2263,16 +2550,7 @@ function bindActions() {
     }
 
     event.preventDefault();
-    contextEntryPath = entryPath;
-    if (!selectedEntries.has(entryPath)) {
-      selectedEntries = new Set([entryPath]);
-      renderBrowse();
-    }
-    showContextMenu(event.clientX, event.clientY, `
-      <button type="button" data-context-action="preview">Preview</button>
-      <button type="button" data-context-action="extract">Extract</button>
-      <button type="button" data-context-action="info">Info</button>
-    `);
+    showEntryContextMenu(entryPath, event.clientX, event.clientY);
   });
 
   contextMenu.addEventListener("click", (event) => {
@@ -2424,4 +2702,10 @@ setCreatePlanState("idle");
 setBrowseState("idle", BROWSE_STATUS_IDLE);
 renderBrowse();
 renderJobs();
+if (isLocalDevHost()) {
+  window.__zmanagerDev = {
+    loadArchiveFixture: loadArchiveListingIntoState,
+  };
+}
+loadLocalDevFixtureFromUrl();
 void loadBootstrapState();
