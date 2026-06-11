@@ -141,18 +141,18 @@ impl JobRegistry {
     }
 
     pub fn emit_job_event(&self, job_id: &str, event: JobEvent) {
-        let mapped_kind = match event {
-            JobEvent::Started { kind, .. } => Some(kind),
+        let mapped_kind = match &event {
+            JobEvent::Started { kind, .. } => Some(*kind),
             _ => None,
         };
 
-        let event_dto = match event {
+        let event_dto = match &event {
             JobEvent::Started { kind: _, total_bytes } => JobEventDto {
                 event_type: JobEventKindDto::Started,
-                job_kind: Some(mapped_kind.map(JobKindDto::from)),
+                job_kind: mapped_kind.map(JobKindDto::from),
                 path: None,
                 bytes: None,
-                total_bytes,
+                total_bytes: *total_bytes,
                 total_bytes_processed: None,
                 entries: None,
                 message: None,
@@ -160,8 +160,8 @@ impl JobRegistry {
             JobEvent::EntryStarted { path, bytes } => JobEventDto {
                 event_type: JobEventKindDto::EntryStarted,
                 job_kind: None,
-                path: Some(path),
-                bytes,
+                path: Some(path.clone()),
+                bytes: *bytes,
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
@@ -174,18 +174,18 @@ impl JobRegistry {
             } => JobEventDto {
                 event_type: JobEventKindDto::BytesProcessed,
                 job_kind: None,
-                path,
-                bytes: Some(bytes),
+                path: path.clone(),
+                bytes: Some(*bytes),
                 total_bytes: None,
-                total_bytes_processed: Some(total_bytes_processed),
+                total_bytes_processed: Some(*total_bytes_processed),
                 entries: None,
                 message: None,
             },
             JobEvent::EntryFinished { path, bytes } => JobEventDto {
                 event_type: JobEventKindDto::EntryFinished,
                 job_kind: None,
-                path: Some(path),
-                bytes: Some(bytes),
+                path: Some(path.clone()),
+                bytes: Some(*bytes),
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
@@ -199,16 +199,16 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
-                message: Some(message),
+                message: Some(message.clone()),
             },
             JobEvent::Completed { entries, bytes } => JobEventDto {
                 event_type: JobEventKindDto::Completed,
                 job_kind: None,
                 path: None,
-                bytes: Some(bytes),
+                bytes: Some(*bytes),
                 total_bytes: None,
                 total_bytes_processed: None,
-                entries: Some(entries),
+                entries: Some(*entries),
                 message: None,
             },
             JobEvent::Failed { message } => JobEventDto {
@@ -219,7 +219,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
-                message: Some(message),
+                message: Some(message.clone()),
             },
             JobEvent::Cancelled { message } => JobEventDto {
                 event_type: JobEventKindDto::Cancelled,
@@ -229,7 +229,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
-                message: Some(message),
+                message: Some(message.clone()),
             },
         };
 

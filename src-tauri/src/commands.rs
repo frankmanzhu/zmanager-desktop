@@ -33,7 +33,7 @@ use zmanager_core::jobs::{
 use zmanager_core::libarchive_backend::{self, LibarchiveError};
 use zmanager_core::manifest::{plan_archives, PlanError, PlanOptions};
 use zmanager_core::rar_backend::RarBackendError;
-use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy};
+use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
 use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, SevenZError};
 use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
@@ -87,6 +87,7 @@ pub fn list_archive(
     let mut total_size = 0u64;
     let mut has_size = false;
     let mut entries = Vec::with_capacity(listing.entries.len());
+    let entry_count = listing.entries.len();
 
     for entry in listing.entries {
         if let Some(size) = entry.size {
@@ -106,7 +107,7 @@ pub fn list_archive(
     Ok(ArchiveListingResponse {
         archive_path,
         entries,
-        entry_count: listing.entries.len(),
+        entry_count,
         total_size: if has_size { Some(total_size) } else { None },
     })
 }
@@ -127,6 +128,8 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
     options.follow_symlinks = request.follow_symlinks;
 
     let manifest = plan_archives(sources, &options).map_err(map_plan_error)?;
+    let included_count = manifest.included_count();
+    let excluded_count = manifest.excluded_count();
     let entries = manifest
         .entries
         .into_iter()
@@ -144,8 +147,8 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
         .collect();
 
     Ok(CreatePlanResponse {
-        included_count: manifest.included_count(),
-        excluded_count: manifest.excluded_count(),
+        included_count,
+        excluded_count,
         total_bytes: manifest.total_bytes,
         excluded_bytes: manifest.excluded_bytes,
         entries,
@@ -189,9 +192,8 @@ fn start_create_internal(
 
     let password = request
         .password
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
     let replace_existing = request.replace_existing;
     let preserve_metadata = request.preserve_metadata;
     let compression_level = request.compression_level;
@@ -355,9 +357,8 @@ fn start_extract_internal(
     let family_for_thread = family;
     let password = request
         .password
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
     let policy = extraction_policy(request.overwrite, request.strip_components);
     let archive_path = archive_path;
     let destination_path = destination_path;
@@ -519,9 +520,8 @@ pub fn test_archive(
 
     let password = request
         .password
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
 
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
@@ -870,7 +870,7 @@ fn extraction_policy(
 ) -> ExtractionPolicy {
     ExtractionPolicy {
         overwrite: map_overwrite_policy(overwrite),
-        unsafe_file: Default::default(),
+        unsafe_file: UnsafeFilePolicy::Reject,
         include_patterns: Vec::new(),
         exclude_patterns: Vec::new(),
         strip_components,
