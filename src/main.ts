@@ -2283,6 +2283,7 @@ function bindActions() {
 
     const action = target.dataset.contextAction;
     const folderPath = target.dataset.folderPath;
+    const entryPath = contextEntryPath;
     hideContextMenu();
 
     if (action === "open-folder" && folderPath !== undefined) {
@@ -2297,8 +2298,8 @@ function bindActions() {
       openExtractDialog("selection");
       return;
     }
-    if (action === "info" && contextEntryPath) {
-      showEntryInfo(contextEntryPath);
+    if (action === "info" && entryPath) {
+      showEntryInfo(entryPath);
     }
   });
 
