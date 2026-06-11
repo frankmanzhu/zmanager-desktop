@@ -11,7 +11,7 @@ This file tracks the initial hardening work from Slice 11.
 - [x] Add path-edge unit tests for path normalization and archive-family detection (Windows style paths, separators, backslash paths).
 - [x] Add command-boundary tests for path normalization trimming/whitespace and permission error mapping.
 - [x] Add command-boundary tests for real create/extract lifecycle behavior (using fixtures).
-- [ ] Add Windows and Linux path edge-case tests (reserved names, long path handling, permissions, and case collision behavior against real FS semantics).
+- [x] Add Windows and Linux path edge-case tests (reserved names, long path handling, permissions, and case collision behavior against real FS semantics).
 - [ ] Add fixture sync from public core repository for deterministic archive test coverage.
 - [ ] Add dependency/license audit steps for frontend and Rust dependencies.
 - [ ] Pin `zmanager-core` for release (tag or vendored submodule) and document expected resolution path.

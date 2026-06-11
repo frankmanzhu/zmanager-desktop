@@ -1473,4 +1473,89 @@ mod tests {
         assert_eq!(normalized[1].to_string_lossy(), r"D:\AUX\report.TAR.ZST");
         assert_eq!(normalized[2].to_string_lossy(), r"\\server\\NUL\bundle.tZAP");
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_case_collision_is_os_case_insensitive() {
+        let workspace = create_temp_workspace("case-collision");
+        let root = workspace.join("root");
+        let lower = root.join("archive.zip");
+        let upper = root.join("ARCHIVE.ZIP");
+
+        fs::create_dir_all(&root).expect("case-collision workspace should be created");
+        fs::write(&lower, b"lower-path").expect("baseline file should be written");
+        let lower_canonical = lower.canonicalize().expect("canonical path should resolve");
+        let upper_canonical = upper.canonicalize().expect("case variant should resolve to same file");
+
+        assert_eq!(lower_canonical, upper_canonical);
+        let read = fs::read_to_string(&upper).expect("case-variant path should resolve");
+        assert_eq!(read, "lower-path");
+
+        let normalized = normalize_non_empty_paths(&[
+            lower.to_string_lossy().to_string(),
+            upper.to_string_lossy().to_string(),
+        ])
+        .expect("case-variant paths should parse");
+        assert_eq!(normalized.len(), 2);
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn linux_case_variants_are_distinct_paths() {
+        let workspace = create_temp_workspace("case-variance");
+        let root = workspace.join("root");
+        let lower = root.join("archive.zip");
+        let upper = root.join("ARCHIVE.ZIP");
+
+        fs::create_dir_all(&root).expect("case-variant workspace should be created");
+        fs::write(&lower, b"lower-path").expect("lowercase baseline file should be written");
+        fs::write(&upper, b"upper-path").expect("uppercase path should be separate file on case-sensitive FS");
+
+        assert_ne!(
+            lower
+                .canonicalize()
+                .expect("lower file path should resolve")
+                .to_string_lossy()
+                .to_string(),
+            upper
+                .canonicalize()
+                .expect("upper file path should resolve")
+                .to_string_lossy()
+                .to_string(),
+        );
+
+        assert_eq!(
+            fs::read_to_string(&lower).expect("lowercase file should be readable"),
+            "lower-path"
+        );
+        assert_eq!(
+            fs::read_to_string(&upper).expect("uppercase file should be readable"),
+            "upper-path"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_long_filename_semantics_remain_stable_for_create() {
+        let workspace = create_temp_workspace("long-name");
+        let root = workspace.join("root");
+        let long_name = format!("{}.zip", "a".repeat(140));
+        let long_path = root.join(long_name);
+
+        fs::create_dir_all(&root).expect("long-name workspace should be created");
+        fs::write(&long_path, b"ok").expect("long filenames should be writable");
+
+        let normalized = normalize_non_empty_paths(&[long_path.to_string_lossy().to_string()])
+            .expect("long filename should normalize");
+        assert_eq!(
+            normalized[0].to_string_lossy(),
+            long_path.to_string_lossy().to_string()
+        );
+        assert!(fs::metadata(&long_path).is_ok());
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
 }
