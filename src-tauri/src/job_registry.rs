@@ -322,6 +322,32 @@ impl Drop for JobRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(windows)]
+    fn temporary_preview_root() -> std::path::PathBuf {
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("zmanager-preview-windows-{now_nanos}"));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temporary preview directory should be available");
+        root
+    }
+
+    #[cfg(not(windows))]
+    fn temporary_preview_root() -> std::path::PathBuf {
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("zmanager-preview-{now_nanos}"));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("temporary preview directory should be available");
+        root
+    }
 
     #[test]
     fn job_poll_drains_events_exactly_once() {
@@ -409,6 +435,28 @@ mod tests {
             .expect("terminal job should be removable");
         assert!(matches!(removed, JobKindDto::ZipCreate));
         assert!(registry.snapshot(&response.job_id).is_none());
+    }
+
+    #[test]
+    fn replace_preview_root_cleans_previous_root() {
+        let registry = JobRegistry::new();
+        let root = temporary_preview_root();
+        let first = root.join("first");
+        let second = root.join("second");
+
+        fs::create_dir_all(&first).expect("first preview root should be created");
+        registry.replace_preview_root(first.clone());
+        assert!(first.exists(), "first preview root should exist after registration");
+
+        fs::create_dir_all(&second).expect("second preview root should be created");
+        registry.replace_preview_root(second.clone());
+
+        assert!(!first.exists(), "previous preview root should be removed");
+        assert!(second.exists(), "current preview root should remain");
+
+        registry.cleanup_preview_roots();
+        assert!(!second.exists(), "cleanup should remove remaining preview root");
+        let _ = fs::remove_dir_all(&root);
     }
 }
 

@@ -159,6 +159,13 @@ pub fn start_create(
     request: StartCreateRequest,
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_create_internal(request, &registry)
+}
+
+fn start_create_internal(
+    request: StartCreateRequest,
+    registry: &JobRegistry,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
     let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
 
@@ -177,7 +184,7 @@ pub fn start_create(
     };
 
     let (response, token) = registry.create_job(kind);
-    let registry_for_thread = registry.inner().clone();
+    let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
     let password = request
@@ -322,6 +329,13 @@ pub fn start_extract(
     request: StartExtractRequest,
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_extract_internal(request, &registry)
+}
+
+fn start_extract_internal(
+    request: StartExtractRequest,
+    registry: &JobRegistry,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
 
@@ -336,7 +350,7 @@ pub fn start_extract(
     };
 
     let (response, token) = registry.create_job(kind);
-    let registry_for_thread = registry.inner().clone();
+    let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
     let family_for_thread = family;
     let password = request
@@ -1112,7 +1126,11 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
 mod tests {
     use super::*;
     use std::env;
+    use std::fs;
     use std::io::Error;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn list_archive_rejects_empty_path() {
@@ -1279,5 +1297,180 @@ mod tests {
             detect_archive_family(r"D:\\WORK\\report.TAR.ZST"),
             ArchiveFamily::TarZst
         );
+    }
+
+    fn create_temp_workspace(name: &str) -> PathBuf {
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let base = env::temp_dir().join(format!("zmanager-command-{name}-{now_nanos}"));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("temporary workspace should be created");
+        base
+    }
+
+    fn wait_for_job_terminal(
+        registry: &crate::job_registry::JobRegistry,
+        job_id: &str,
+    ) -> (PollJobEventsResponseDto, Vec<JobEventDto>) {
+        let mut all_events = Vec::new();
+
+        for _ in 0..400 {
+            let poll = registry
+                .poll_events(job_id)
+                .expect("job should stay available while waiting for terminal state");
+            all_events.extend_from_slice(&poll.events);
+            if poll.status.is_terminal() {
+                return (poll, all_events);
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+
+        panic!("timed out while waiting for job to complete");
+    }
+
+    #[test]
+    fn command_boundary_start_create_job_reaches_terminal_and_writes_archive() {
+        let workspace = create_temp_workspace("start-create");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.zip");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+
+        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("create command should start a job");
+        let (create_poll, mut create_events) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        create_events.extend_from_slice(&create_poll.events);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(create_poll.kind, JobKindDto::ZipCreate);
+        assert!(
+            create_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
+            "create lifecycle should emit a started event",
+        );
+        assert!(
+            create_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "create lifecycle should emit a completed event",
+        );
+        assert!(create_poll.terminal_summary.is_some());
+        assert!(destination.is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_extract_job_reaches_terminal_and_outputs_expected_file() {
+        let workspace = create_temp_workspace("start-extract");
+        let sources = workspace.join("sources");
+        let destination_archive = workspace.join("fixture.zip");
+        let extract_destination = workspace.join("extracted");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::create_dir_all(&extract_destination).expect("extract directory should exist");
+
+        fs::write(sources.join("README.md"), b"# extractor").expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let extract_request = StartExtractRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            destination_path: extract_destination.to_string_lossy().to_string(),
+            password: None,
+            overwrite: OverwritePolicyDto::Replace,
+            strip_components: 0,
+        };
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("extract command should start a job");
+        let (extract_poll, extract_events) = wait_for_job_terminal(&registry, &extract_job.job_id);
+        extract_events.extend_from_slice(&extract_poll.events);
+
+        let extracted_file = extract_destination.join("README.md");
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
+        assert!(
+            extract_events.iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "extract lifecycle should emit a completed event",
+        );
+        assert!(extracted_file.is_file());
+        assert_eq!(
+            fs::read_to_string(&extracted_file).expect("extracted file should be readable"),
+            "# extractor"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn list_archive_inaccessible_source_maps_to_io_error() {
+        let workspace = create_temp_workspace("permission-denied");
+        let archive_path = workspace.join("locked.zip");
+        fs::write(&archive_path, b"not a real archive").expect("fixture should be written");
+
+        let mut permissions = fs::metadata(&archive_path).expect("fixture metadata should be readable").permissions();
+        permissions.set_mode(0o000);
+        fs::set_permissions(&archive_path, permissions).expect("permissions should be restricted");
+
+        let error = list_archive(crate::dto::ListArchiveRequest {
+            archive_path: archive_path.to_string_lossy().to_string(),
+            password: None,
+        })
+        .unwrap_err();
+
+        assert_eq!(error.code, constants::COMMAND_ERROR_IO_ERROR);
+        assert!(
+            !error.retryable,
+            "permission denied should not be marked retryable",
+        );
+
+        permissions.set_mode(0o644);
+        let _ = fs::set_permissions(&archive_path, permissions);
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn normalize_non_empty_paths_preserves_reserved_names() {
+        let normalized = normalize_non_empty_paths(&[
+            r"C:\CON\archive.zip".to_string(),
+            r"D:\AUX\report.TAR.ZST".to_string(),
+            r"\\server\\NUL\bundle.tZAP".to_string(),
+        ])
+        .expect("reserved-looking names should parse as paths");
+
+        assert_eq!(normalized[0].to_string_lossy(), r"C:\CON\archive.zip");
+        assert_eq!(normalized[1].to_string_lossy(), r"D:\AUX\report.TAR.ZST");
+        assert_eq!(normalized[2].to_string_lossy(), r"\\server\\NUL\bundle.tZAP");
     }
 }
