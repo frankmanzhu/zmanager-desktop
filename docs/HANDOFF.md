@@ -14,6 +14,8 @@ The initial Tauri scaffold includes:
 
 ## First Implementation Slice
 
+Read `docs/IMPLEMENTATION_STEPS.md` before coding. It contains the detailed command contracts, DTOs, backend APIs, tests, and done criteria for each slice.
+
 Start with the smallest vertical tracer bullet:
 
 1. Run `npm install`.
@@ -67,4 +69,3 @@ The cleanest release model is probably a Git dependency pinned by tag for releas
 ## Good Next Commit
 
 `Bootstrap Windows Linux desktop shell`
-
