@@ -41,6 +41,23 @@ cargo check
 cargo test
 ```
 
+On ARM64 Windows/MSVC development machines, `cargo check` and `cargo test` may need the same native dependency environment as the Windows CI script. Use the ARM64 vcpkg triplet and put Strawberry Perl on `PATH` before running Cargo:
+
+```powershell
+$triplet = "arm64-windows-static-md"
+$env:VCPKG_INSTALLATION_ROOT = "C:\vcpkg"
+$env:VCPKG_ROOT = "C:\vcpkg"
+$env:CMAKE_TOOLCHAIN_FILE = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"
+$env:VCPKG_DEFAULT_TRIPLET = $triplet
+$env:VCPKG_TARGET_TRIPLET = $triplet
+$env:LIB = "C:\vcpkg\installed\$triplet\debug\lib;C:\vcpkg\installed\$triplet\lib;" + $env:LIB
+$env:INCLUDE = "C:\vcpkg\installed\$triplet\include;" + $env:INCLUDE
+$env:PATH = "C:\Strawberry\perl\bin;C:\vcpkg\installed\$triplet\debug\bin;C:\vcpkg\installed\$triplet\bin;" + $env:PATH
+cargo test
+```
+
+This matters because `zmanager-libarchive-sys` needs the vcpkg toolchain/dependency paths, and OpenSSL build fallback expects `perl` to be available.
+
 4. If the `zmanager-core` path fails, fix `src-tauri/Cargo.toml` before touching UI code. The current local layout expects:
 
 ```text
