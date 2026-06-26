@@ -14,4 +14,9 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
-zmanager-core = { git = "https://github.com/frankmanzhu/zmanager", tag = "v1.0.3", package = "zmanager-core" }
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", branch = "main", package = "zmanager-core" }
+
+[patch."https://github.com/tzap-org/tzap"]
+tzap-core = { path = "../../tzap/crates/tzap-core" }
+tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
+tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }

@@ -37,6 +37,7 @@ use zmanager_core::jobs::{
 use zmanager_core::libarchive_backend::LibarchiveError;
 use zmanager_core::manifest::{PlanError, PlanOptions, plan_archives};
 use zmanager_core::rar_backend::RarBackendError;
+use zmanager_core::raw_stream_backend::RawStreamError;
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
 use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, SevenZError};
@@ -339,6 +340,7 @@ fn start_create_internal(
                     encrypt_file_names: true,
                     replace_existing,
                     volume_size,
+                    ..SevenZCreateOptions::default()
                 };
                 run_7z_create_job_from_sources_with_plan_options(
                     &request_sources,
@@ -875,6 +877,7 @@ fn map_archive_browser_error(error: ArchiveBrowserError) -> CommandErrorDto {
         ArchiveBrowserError::SevenZ(source) => map_7z_error(source),
         ArchiveBrowserError::Tzap(source) => map_tzap_error(source),
         ArchiveBrowserError::Libarchive(source) => map_libarchive_error(source),
+        ArchiveBrowserError::RawStream(source) => map_raw_stream_error(source),
         ArchiveBrowserError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
         }
@@ -971,6 +974,7 @@ fn map_7z_error(error: SevenZError) -> CommandErrorDto {
         SevenZError::SevenZ(source) => {
             CommandErrorDto::operation_failed(format!("7z operation failed: {source}"))
         }
+        SevenZError::Cancelled => CommandErrorDto::cancelled("7z job was cancelled."),
     }
 }
 
@@ -993,6 +997,12 @@ fn map_tzap_error(error: TzapError) -> CommandErrorDto {
         TzapError::X509RootAuth(message) => CommandErrorDto::unsupported_format(format!(
             "TZAP root-auth verification failed: {message}"
         )),
+        TzapError::KeyWrap(message) => {
+            CommandErrorDto::operation_failed(format!("TZAP key wrapping failed: {message}"))
+        }
+        TzapError::RecipientKeyRequired => CommandErrorDto::unsupported_format(
+            "This TZAP archive requires a recipient private key.".to_string(),
+        ),
         TzapError::Cancelled => CommandErrorDto::cancelled("TZAP job was cancelled."),
     }
 }
@@ -1022,6 +1032,47 @@ fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
         }
         LibarchiveError::Archive(source) => {
             CommandErrorDto::operation_failed(format!("libarchive error: {source}"))
+        }
+        LibarchiveError::RawStream(source) => map_raw_stream_error(source),
+        LibarchiveError::Cancelled => CommandErrorDto::cancelled("archive job was cancelled."),
+    }
+}
+
+fn map_raw_stream_error(error: RawStreamError) -> CommandErrorDto {
+    match error {
+        RawStreamError::Io { path, source } => {
+            map_io_error(path.to_string_lossy().to_string(), source)
+        }
+        RawStreamError::Safety(source) => {
+            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
+        }
+        RawStreamError::MissingOutputName { archive_path } => {
+            CommandErrorDto::unsupported_format(format!(
+                "could not derive an output file name from {}",
+                archive_path.display()
+            ))
+        }
+        RawStreamError::ExternalToolUnavailable { tool, source } => {
+            CommandErrorDto::operation_failed(format!(
+                "required decoder tool {tool} is not available: {source}"
+            ))
+        }
+        RawStreamError::ExternalToolFailed {
+            tool,
+            archive_path,
+            status,
+            message,
+        } => {
+            let status = status.map_or_else(|| "unknown".to_string(), |status| status.to_string());
+            let detail = if message.is_empty() {
+                String::new()
+            } else {
+                format!(": {message}")
+            };
+            CommandErrorDto::operation_failed(format!(
+                "{tool} failed to decode {} with status {status}{detail}",
+                archive_path.display()
+            ))
         }
     }
 }
@@ -2323,7 +2374,8 @@ mod tests {
             .expect("fixture metadata should be readable")
             .permissions();
         permissions.set_mode(0o000);
-        fs::set_permissions(&archive_path, permissions).expect("permissions should be restricted");
+        fs::set_permissions(&archive_path, permissions.clone())
+            .expect("permissions should be restricted");
 
         let error = list_archive(crate::dto::ListArchiveRequest {
             archive_path: archive_path.to_string_lossy().to_string(),
@@ -2387,7 +2439,7 @@ mod tests {
         let _ = fs::remove_dir_all(&workspace);
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     #[test]
     fn linux_case_variants_are_distinct_paths() {
         let workspace = create_temp_workspace("case-variance");

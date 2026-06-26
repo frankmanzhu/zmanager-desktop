@@ -213,6 +213,7 @@ export type JobKind =
   | "tzapCreate"
   | "tzapExtract"
   | "archiveExtract"
+  | "rawStreamExtract"
   | "testArchive";
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";

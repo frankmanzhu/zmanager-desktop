@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-TAG="${1:-v1.0.3}"
-REPO="${2:-https://github.com/frankmanzhu/zmanager}"
+TAG="${1:-v1.0.4}"
+REPO="${2:-https://github.com/tzap-org/zmanager}"
 CARGO_FILE="${3:-src-tauri/Cargo.toml}"
 
 pattern='s|zmanager-core\\s*=\\s*\\{\\s*path\\s*=\\s*"[^"]*"\\s*\\}|zmanager-core = { git = "'"$REPO"'", tag = "'"$TAG"'", package = "zmanager-core" }|'

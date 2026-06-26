@@ -31,6 +31,7 @@ pub enum JobKindDto {
     TzapCreate,
     TzapExtract,
     ArchiveExtract,
+    RawStreamExtract,
     TestArchive,
 }
 
