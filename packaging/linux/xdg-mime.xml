@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-zmanager-tzap">
+    <comment>ZManager TZAP archive</comment>
+    <glob pattern="*.tzap"/>
+  </mime-type>
+  <mime-type type="application/x-zmanager-tzst">
+    <comment>ZManager TZST archive</comment>
+    <glob pattern="*.tzst"/>
+    <glob pattern="*.tar.zst"/>
+  </mime-type>
+</mime-info>

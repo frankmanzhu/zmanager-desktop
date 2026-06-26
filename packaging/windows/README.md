@@ -1,15 +1,30 @@
 # Windows Packaging Notes
 
-Start with one installer target, then expand.
+The Windows bundle uses the Tauri NSIS target plus `nsis-context-menu.nsh`, wired by
+`src-tauri/tauri.conf.json` at `bundle.windows.nsis.installerHooks`.
 
-Recommended order:
+The hook registers current-user Explorer verbs under `HKCU\Software\Classes` after
+install and removes the same keys before uninstall. Commands launch the GUI with the
+quick-action CLI contract:
 
-1. NSIS installer for fast iteration.
-2. File associations for supported archive extensions.
-3. Explorer context menu actions for compress and extract.
-4. Code signing.
-5. WinGet metadata after public release artifacts are stable.
-6. MSIX only if the app needs Store-style install semantics.
+- `zmanager-desktop.exe --quick-action compress --path "<target>"`
+- `zmanager-desktop.exe --quick-action extract --path "<archive>"`
 
-Context menu actions should launch the GUI with an explicit operation request. Direct background shell operations can come later after notification and error-reporting behavior is designed.
+Explorer shows only `Compress using ZManager` and `Extract using ZManager`.
+Compression uses the app's default format, output location, and clean-source
+preference. Extraction uses the app's default extraction behavior: ask every time,
+extract here, or extract to a sibling folder. Extraction is registered for supported
+archive extensions through `SystemFileAssociations`.
+
+Release wiring:
+
+1. Keep the NSIS target enabled in `src-tauri/tauri.conf.json`.
+2. Build the installer with the existing Tauri/package scripts.
+3. The installer includes `packaging/windows/nsis-context-menu.nsh` automatically via
+   `installerHooks`.
+4. Validate install/uninstall by checking the Explorer verbs appear after install and
+   disappear after uninstall.
+
+Next packaging steps remain code signing, WinGet metadata after public artifacts are
+stable, and MSIX only if Store-style install semantics become necessary.
 

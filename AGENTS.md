@@ -11,9 +11,15 @@ The macOS app remains in `/Users/frankzhu/IdeaProjects/ZManager`. The public Rus
 - `npm install`: install frontend and Tauri CLI dependencies.
 - `npm run dev`: run the Vite frontend only.
 - `npm run build`: type-check and build the frontend.
+- `npm run test:frontend`: run DOM-free frontend flow and reducer tests.
 - `npm run tauri dev`: run the desktop shell.
+- `powershell -ExecutionPolicy Bypass -File scripts/smoke-windows-arm64.ps1`: run the Windows ARM64 recovery smoke after a package build.
+- `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1`: run the Windows ARM64 release gate, including frontend tests, Rust tests, package build, smoke, and installer launch.
+- `powershell -ExecutionPolicy Bypass -File scripts/build-windows-arm64-static.ps1`: build the Windows ARM64 static desktop app, including the required native environment setup.
 - `cd src-tauri && cargo check`: check the Rust command layer.
 - `cd src-tauri && cargo test`: run Rust command-layer tests when added.
+
+Use the package scripts in `package.json` for frontend and Tauri verification instead of bypassing them with direct `tsc`, `vite`, or Tauri CLI invocations, unless the user explicitly asks for a lower-level command.
 
 ## Architecture Rules
 

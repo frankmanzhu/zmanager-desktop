@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-quick-action-startup-state"
+description = "Enables the quick_action_startup_state command without any pre-configured scope."
+commands.allow = ["quick_action_startup_state"]
+
+[[permission]]
+identifier = "deny-quick-action-startup-state"
+description = "Denies the quick_action_startup_state command without any pre-configured scope."
+commands.deny = ["quick_action_startup_state"]

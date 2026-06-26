@@ -16,7 +16,36 @@ export type ProjectContract = {
     explorerIntegrationEnabled: boolean;
     desktopActionsEnabled: boolean;
     associatedExtensions: string[];
+    shellActions: {
+      label: string;
+      quickAction: string;
+    }[];
   };
+};
+
+export type QuickActionKind =
+  | "compress"
+  | "extract"
+  | "compressZip"
+  | "compressCleanSource"
+  | "extractHere"
+  | "extractToFolder";
+
+export type QuickActionRequestDto = {
+  kind: QuickActionKind;
+  paths: string[];
+};
+
+export type QuickActionStartupErrorDto = {
+  code: string;
+  message: string;
+  hint?: string | null;
+};
+
+export type QuickActionStartupStateDto = {
+  launchedForQuickAction: boolean;
+  quickAction?: QuickActionRequestDto | null;
+  error?: QuickActionStartupErrorDto | null;
 };
 
 export type CommandErrorDto = {
@@ -86,15 +115,7 @@ export type StartExtractRequest = {
   destinationPath: string;
   password?: string;
   overwrite: "refuse" | "replace" | "rename" | "ask";
-  stripComponents: number;
-};
-
-export type ExtractEntryRequest = {
-  archivePath: string;
-  entryPath: string;
-  destinationPath: string;
-  password?: string;
-  overwrite: "refuse" | "replace" | "rename" | "ask";
+  entryPaths?: string[];
   stripComponents: number;
 };
 
@@ -109,11 +130,6 @@ export type PreviewEntryRequest = {
 export type PreviewEntryResponse = {
   cleanupRoot: string;
   previewPath: string;
-  writtenBytes: number;
-};
-
-export type EntryExtractResponse = {
-  destinationPath: string;
   writtenBytes: number;
 };
 

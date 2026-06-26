@@ -27,8 +27,98 @@
     "active": true,
     "targets": ["nsis", "appimage", "deb", "rpm"],
     "category": "Utility",
+    "fileAssociations": [
+      {
+        "ext": ["zip", "zipx"],
+        "name": "ZIP archive",
+        "description": "ZIP archive",
+        "role": "Viewer",
+        "mimeType": "application/zip"
+      },
+      {
+        "ext": ["7z"],
+        "name": "7z archive",
+        "description": "7z archive",
+        "role": "Viewer",
+        "mimeType": "application/x-7z-compressed"
+      },
+      {
+        "ext": ["rar"],
+        "name": "RAR archive",
+        "description": "RAR archive",
+        "role": "Viewer",
+        "mimeType": "application/vnd.rar"
+      },
+      {
+        "ext": ["tar"],
+        "name": "TAR archive",
+        "description": "TAR archive",
+        "role": "Viewer",
+        "mimeType": "application/x-tar"
+      },
+      {
+        "ext": ["tar.gz", "tgz", "gz"],
+        "name": "Gzip archive",
+        "description": "Gzip archive",
+        "role": "Viewer",
+        "mimeType": "application/gzip"
+      },
+      {
+        "ext": ["tar.xz", "txz", "xz"],
+        "name": "XZ archive",
+        "description": "XZ archive",
+        "role": "Viewer",
+        "mimeType": "application/x-xz"
+      },
+      {
+        "ext": ["tar.zst", "tzst"],
+        "name": "ZManager TZST archive",
+        "description": "ZManager TZST archive",
+        "role": "Viewer",
+        "mimeType": "application/x-zmanager-tzst"
+      },
+      {
+        "ext": ["zst"],
+        "name": "Zstandard archive",
+        "description": "Zstandard archive",
+        "role": "Viewer",
+        "mimeType": "application/zstd"
+      },
+      {
+        "ext": ["tzap"],
+        "name": "ZManager TZAP archive",
+        "description": "ZManager TZAP archive",
+        "role": "Viewer",
+        "mimeType": "application/x-zmanager-tzap"
+      }
+    ],
     "shortDescription": "Safe archive manager for Windows and Linux",
-    "longDescription": "ZManager is a safe archive manager backed by the ZManager Rust archive engine."
+    "longDescription": "ZManager is a safe archive manager backed by the ZManager Rust archive engine.",
+    "windows": {
+      "nsis": {
+        "installerHooks": "../packaging/windows/nsis-context-menu.nsh"
+      }
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
+        "postInstallScript": "../packaging/linux/postinstall.sh",
+        "postRemoveScript": "../packaging/linux/postremove.sh",
+        "files": {
+          "../packaging/linux/xdg-mime.xml": "/usr/share/mime/packages/zmanager.xml",
+          "../packaging/linux/kde/zmanager-servicemenu.desktop": "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop"
+        }
+      },
+      "rpm": {
+        "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
+        "postInstallScript": "../packaging/linux/postinstall.sh",
+        "postRemoveScript": "../packaging/linux/postremove.sh",
+        "files": {
+          "../packaging/linux/xdg-mime.xml": "/usr/share/mime/packages/zmanager.xml",
+          "../packaging/linux/kde/zmanager-servicemenu.desktop": "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop"
+        }
+      }
+    }
   }
 }
 

@@ -516,6 +516,10 @@ impl JobEventCollector {
             job_id,
         }
     }
+
+    pub fn emit_direct(&mut self, event: JobEventDto) {
+        self.registry.emit_direct_event(&self.job_id, event);
+    }
 }
 
 impl JobEventSink for JobEventCollector {

@@ -8,6 +8,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test:frontend": "vitest run",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.2.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.8"
   }
 }

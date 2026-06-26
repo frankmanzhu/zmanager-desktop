@@ -28,7 +28,6 @@ The command boundary should be stable and coarse-grained:
 - `plan_create`
 - `start_create`
 - `start_extract`
-- `extract_entry`
 - `preview_entry`
 - `poll_job_events`
 - `cancel_job`

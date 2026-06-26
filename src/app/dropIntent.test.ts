@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+
+import { classifyDropIntent } from "./dropIntent";
+
+describe("drop intent classifier", () => {
+  it("opens one supported archive on the browse surface", () => {
+    expect(classifyDropIntent(["C:/tmp/archive.zip"], "browse")).toEqual({
+      kind: "openArchive",
+      surface: "browse",
+      archivePath: "C:/tmp/archive.zip",
+    });
+  });
+
+  it("opens supported compound and split archives from global drops", () => {
+    expect(classifyDropIntent(["C:/tmp/archive.tar.zst"], "global")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/archive.tar.zst",
+    });
+    expect(classifyDropIntent(["C:/tmp/archive.7z.001"], "unknown")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/archive.7z.001",
+    });
+    expect(classifyDropIntent(["C:/tmp/archive.vol002.tzap"], "global")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/archive.vol002.tzap",
+    });
+  });
+
+  it("rejects ordinary source drops on the browse surface", () => {
+    expect(classifyDropIntent([{ path: "C:/work/photos", kind: "directory" }], "browse")).toEqual({
+      kind: "rejectUnsupportedDrop",
+      surface: "browse",
+      reason: "browseRequiresArchive",
+      paths: ["C:/work/photos"],
+      archivePaths: [],
+      sourcePaths: ["C:/work/photos"],
+    });
+    expect(classifyDropIntent(["C:/work/notes.txt"], "browse")).toMatchObject({
+      kind: "rejectUnsupportedDrop",
+      reason: "browseRequiresArchive",
+    });
+  });
+
+  it("adds ordinary files and folders as create sources", () => {
+    expect(
+      classifyDropIntent(
+        [
+          { path: "C:/work/photos", kind: "directory" },
+          { path: "C:/work/readme.txt", kind: "file" },
+        ],
+        "create",
+      ),
+    ).toEqual({
+      kind: "addCreateSources",
+      surface: "create",
+      sourcePaths: ["C:/work/photos", "C:/work/readme.txt"],
+    });
+  });
+
+  it("treats archives as sources when they are dropped directly on create", () => {
+    expect(classifyDropIntent(["C:/work/nested.zip"], "create")).toEqual({
+      kind: "addCreateSources",
+      surface: "create",
+      sourcePaths: ["C:/work/nested.zip"],
+    });
+  });
+
+  it("adds ordinary global drops as create sources", () => {
+    expect(classifyDropIntent(["C:/work/readme.txt", "C:/work/src"], "unknown")).toEqual({
+      kind: "addCreateSources",
+      surface: "unknown",
+      sourcePaths: ["C:/work/readme.txt", "C:/work/src"],
+    });
+  });
+
+  it("asks for an action when archive and source drops are mixed", () => {
+    expect(
+      classifyDropIntent(
+        [
+          "C:/tmp/archive.zip",
+          { path: "C:/work/photos", kind: "directory" },
+          "C:/work/readme.txt",
+        ],
+        "global",
+      ),
+    ).toEqual({
+      kind: "askAction",
+      surface: "global",
+      archivePaths: ["C:/tmp/archive.zip"],
+      sourcePaths: ["C:/work/photos", "C:/work/readme.txt"],
+    });
+  });
+
+  it("rejects empty and multi-archive open drops without guessing", () => {
+    expect(classifyDropIntent([" ", ""], "unknown")).toEqual({
+      kind: "rejectUnsupportedDrop",
+      surface: "unknown",
+      reason: "emptyDrop",
+      paths: [],
+      archivePaths: [],
+      sourcePaths: [],
+    });
+    expect(classifyDropIntent(["C:/tmp/a.zip", "C:/tmp/b.7z"], "browse")).toEqual({
+      kind: "rejectUnsupportedDrop",
+      surface: "browse",
+      reason: "openRequiresSingleArchive",
+      paths: ["C:/tmp/a.zip", "C:/tmp/b.7z"],
+      archivePaths: ["C:/tmp/a.zip", "C:/tmp/b.7z"],
+      sourcePaths: [],
+    });
+  });
+});

@@ -13,11 +13,19 @@ pub struct HealthcheckResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectIntegrationShellActionDto {
+    pub label: &'static str,
+    pub quick_action: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectIntegrationContract {
     pub platform: &'static str,
     pub explorer_integration_enabled: bool,
     pub desktop_actions_enabled: bool,
     pub associated_extensions: &'static [&'static str],
+    pub shell_actions: Vec<ProjectIntegrationShellActionDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -27,6 +35,40 @@ pub struct ProjectContract {
     pub platform_strategy: &'static str,
     pub core_dependency: &'static str,
     pub platform_integration: ProjectIntegrationContract,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum QuickActionKindDto {
+    Compress,
+    Extract,
+    CompressZip,
+    CompressCleanSource,
+    ExtractHere,
+    ExtractToFolder,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickActionRequestDto {
+    pub kind: QuickActionKindDto,
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickActionStartupErrorDto {
+    pub code: String,
+    pub message: String,
+    pub hint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickActionStartupStateDto {
+    pub launched_for_quick_action: bool,
+    pub quick_action: Option<QuickActionRequestDto>,
+    pub error: Option<QuickActionStartupErrorDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -126,26 +168,9 @@ pub struct StartExtractRequest {
     pub password: Option<String>,
     pub overwrite: OverwritePolicyDto,
     #[serde(default)]
-    pub strip_components: usize,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtractEntryRequest {
-    pub archive_path: String,
-    pub entry_path: String,
-    pub destination_path: String,
-    pub password: Option<String>,
-    pub overwrite: OverwritePolicyDto,
+    pub entry_paths: Option<Vec<String>>,
     #[serde(default)]
     pub strip_components: usize,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EntryExtractResponse {
-    pub destination_path: String,
-    pub written_bytes: u64,
 }
 
 #[derive(Debug, Deserialize)]

@@ -8,8 +8,8 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        EntryExtractResponse, ExtractEntryRequest, PlanCreateRequest, PollJobEventsRequest,
-        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse,
+        ProjectContract, ProjectIntegrationContract, ProjectIntegrationShellActionDto,
         StartCreateRequest, StartExtractRequest, TestArchiveRequest,
     },
     error::CommandErrorDto,
@@ -18,12 +18,14 @@ use crate::{
         StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry},
+    quick_action::QuickActionStartupState,
 };
 use zmanager_core::archive_browser::{
     self, ArchiveBrowserError, BrowserExtractOptions, BrowserListOptions,
 };
 use zmanager_core::jobs::{
-    run_7z_create_job_from_sources_with_plan_options, run_7z_extract_job_with_password_and_policy,
+    CancellationToken, run_7z_create_job_from_sources_with_plan_options,
+    run_7z_extract_job_with_password_and_policy,
     run_libarchive_extract_job_with_password_and_policy,
     run_rar_extract_job_with_password_and_policy,
     run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
@@ -68,8 +70,29 @@ pub fn project_contract() -> crate::dto::ProjectContract {
             explorer_integration_enabled: integration.explorer_integration_enabled,
             desktop_actions_enabled: integration.desktop_actions_enabled,
             associated_extensions: integration.associated_extensions,
+            shell_actions: integration
+                .shell_actions
+                .iter()
+                .map(|action| ProjectIntegrationShellActionDto {
+                    label: action.label,
+                    quick_action: action.quick_action,
+                })
+                .collect(),
         },
     }
+}
+
+#[tauri::command]
+pub fn quick_action_startup_state(
+    state: State<'_, QuickActionStartupState>,
+) -> crate::dto::QuickActionStartupStateDto {
+    quick_action_startup_state_internal(state.inner())
+}
+
+fn quick_action_startup_state_internal(
+    state: &QuickActionStartupState,
+) -> crate::dto::QuickActionStartupStateDto {
+    state.to_dto()
 }
 
 #[tauri::command]
@@ -172,7 +195,35 @@ fn start_create_internal(
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
-    let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
+    let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?
+        .trim()
+        .to_string();
+    if destination_path.ends_with('/') || destination_path.ends_with('\\') {
+        return Err(CommandErrorDto::invalid_request(
+            "destinationPath must include a file name, not just a directory",
+        ));
+    }
+
+    let destination_path = ensure_non_empty_path(destination_path, "destinationPath")?;
+    if let Ok(metadata) = std::fs::metadata(&destination_path) {
+        if metadata.is_dir() {
+            return Err(CommandErrorDto::invalid_request(format!(
+                "destinationPath must be a file path, not a directory: {destination_path}"
+            )));
+        }
+    } else {
+        let parent = Path::new(&destination_path)
+            .parent()
+            .unwrap_or(Path::new(""));
+        if !parent.exists() {
+            return Err(CommandErrorDto::not_found(
+                format!("destination directory does not exist: {destination_path}"),
+                Some("Choose a destination inside an existing directory.".to_string()),
+            ));
+        }
+    }
+
+    validate_source_paths_exist(&sources)?;
 
     let plan_options = if request.clean_source {
         PlanOptions::clean_source()
@@ -332,6 +383,7 @@ fn start_extract_internal(
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
+    let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
 
     let family = detect_archive_family(&archive_path);
     let kind = match family {
@@ -357,66 +409,79 @@ fn start_extract_internal(
 
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
-        let result = match family_for_thread {
-            ArchiveFamily::Zip => run_zip_extract_job_with_password_and_policy(
+        let result = if entry_paths.is_empty() {
+            match family_for_thread {
+                ArchiveFamily::Zip => run_zip_extract_job_with_password_and_policy(
+                    &archive_path,
+                    &destination_path,
+                    password.as_deref(),
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_zip_error),
+                ArchiveFamily::TarZst => run_tar_zst_extract_job_with_policy(
+                    &archive_path,
+                    &destination_path,
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_tar_zst_error),
+                ArchiveFamily::SevenZ => run_7z_extract_job_with_password_and_policy(
+                    &archive_path,
+                    &destination_path,
+                    password.as_deref(),
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_7z_error),
+                ArchiveFamily::Rar => run_rar_extract_job_with_password_and_policy(
+                    &archive_path,
+                    &destination_path,
+                    password.as_deref(),
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_rar_error),
+                ArchiveFamily::Tzap => run_tzap_extract_job_with_password_and_policy(
+                    &archive_path,
+                    &destination_path,
+                    password.as_deref(),
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_tzap_error),
+                ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
+                    &archive_path,
+                    &destination_path,
+                    password.as_deref(),
+                    policy,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_extract)
+                .map_err(map_libarchive_error),
+            }
+        } else {
+            run_selected_extract_job(
                 &archive_path,
                 &destination_path,
+                &entry_paths,
                 password.as_deref(),
                 policy,
                 &token,
                 &mut sink,
+                kind,
             )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_zip_error),
-            ArchiveFamily::TarZst => run_tar_zst_extract_job_with_policy(
-                &archive_path,
-                &destination_path,
-                policy,
-                &token,
-                &mut sink,
-            )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_tar_zst_error),
-            ArchiveFamily::SevenZ => run_7z_extract_job_with_password_and_policy(
-                &archive_path,
-                &destination_path,
-                password.as_deref(),
-                policy,
-                &token,
-                &mut sink,
-            )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_7z_error),
-            ArchiveFamily::Rar => run_rar_extract_job_with_password_and_policy(
-                &archive_path,
-                &destination_path,
-                password.as_deref(),
-                policy,
-                &token,
-                &mut sink,
-            )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_rar_error),
-            ArchiveFamily::Tzap => run_tzap_extract_job_with_password_and_policy(
-                &archive_path,
-                &destination_path,
-                password.as_deref(),
-                policy,
-                &token,
-                &mut sink,
-            )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_tzap_error),
-            ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
-                &archive_path,
-                &destination_path,
-                password.as_deref(),
-                policy,
-                &token,
-                &mut sink,
-            )
-            .map(to_terminal_summary_for_extract)
-            .map_err(map_libarchive_error),
         };
 
         match result {
@@ -433,32 +498,6 @@ fn start_extract_internal(
     });
 
     Ok(response)
-}
-
-#[tauri::command]
-pub fn extract_entry(
-    request: ExtractEntryRequest,
-) -> Result<EntryExtractResponse, CommandErrorDto> {
-    let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
-    let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
-    let entry_path = ensure_non_empty_path(request.entry_path, "entryPath")?;
-
-    let report = archive_browser::extract_entry_with_options(
-        archive_path,
-        &entry_path,
-        destination_path,
-        BrowserExtractOptions {
-            password: request.password.as_deref(),
-            overwrite: map_overwrite_policy(request.overwrite),
-            strip_components: request.strip_components,
-        },
-    )
-    .map_err(map_archive_browser_error)?;
-
-    Ok(EntryExtractResponse {
-        destination_path: report.destination_path.to_string_lossy().to_string(),
-        written_bytes: report.written_bytes,
-    })
 }
 
 #[tauri::command]
@@ -592,6 +631,163 @@ fn start_test_archive_internal(
     });
 
     Ok(response)
+}
+
+fn run_selected_extract_job(
+    archive_path: &str,
+    destination_path: &str,
+    entry_paths: &[String],
+    password: Option<&str>,
+    policy: ExtractionPolicy,
+    token: &CancellationToken,
+    sink: &mut JobEventCollector,
+    kind: JobKindDto,
+) -> Result<JobTerminalSummaryDto, CommandErrorDto> {
+    sink.emit_direct(JobEventDto {
+        event_type: JobEventKindDto::Started,
+        job_kind: Some(kind),
+        code: None,
+        hint: None,
+        severity: None,
+        retryable: None,
+        path: None,
+        bytes: None,
+        total_bytes: None,
+        total_bytes_processed: None,
+        entries: Some(entry_paths.len()),
+        message: None,
+    });
+
+    let mut written_entries = 0usize;
+    let mut written_bytes = 0u64;
+
+    for entry_path in entry_paths {
+        if token.is_cancelled() {
+            return Ok(cancel_selected_extract_job(
+                sink,
+                kind,
+                Some(entry_path.clone()),
+                written_entries,
+                written_bytes,
+            ));
+        }
+
+        sink.emit_direct(JobEventDto {
+            event_type: JobEventKindDto::EntryStarted,
+            job_kind: Some(kind),
+            code: None,
+            hint: None,
+            severity: None,
+            retryable: None,
+            path: Some(entry_path.clone()),
+            bytes: None,
+            total_bytes: None,
+            total_bytes_processed: Some(written_bytes),
+            entries: Some(written_entries),
+            message: None,
+        });
+
+        let report = archive_browser::extract_entry_with_options(
+            archive_path,
+            entry_path,
+            destination_path,
+            BrowserExtractOptions {
+                password,
+                overwrite: policy.overwrite,
+                strip_components: policy.strip_components,
+            },
+        )
+        .map_err(map_archive_browser_error)?;
+
+        written_entries = written_entries.saturating_add(1);
+        written_bytes = written_bytes.saturating_add(report.written_bytes);
+        sink.emit_direct(JobEventDto {
+            event_type: JobEventKindDto::EntryFinished,
+            job_kind: Some(kind),
+            code: None,
+            hint: None,
+            severity: None,
+            retryable: None,
+            path: Some(entry_path.clone()),
+            bytes: Some(report.written_bytes),
+            total_bytes: None,
+            total_bytes_processed: Some(written_bytes),
+            entries: Some(written_entries),
+            message: None,
+        });
+
+        if token.is_cancelled() {
+            return Ok(cancel_selected_extract_job(
+                sink,
+                kind,
+                Some(entry_path.clone()),
+                written_entries,
+                written_bytes,
+            ));
+        }
+    }
+
+    if token.is_cancelled() {
+        return Ok(cancel_selected_extract_job(
+            sink,
+            kind,
+            None,
+            written_entries,
+            written_bytes,
+        ));
+    }
+
+    sink.emit_direct(JobEventDto {
+        event_type: JobEventKindDto::Completed,
+        job_kind: Some(kind),
+        code: None,
+        hint: None,
+        severity: None,
+        retryable: None,
+        path: None,
+        bytes: Some(written_bytes),
+        total_bytes: None,
+        total_bytes_processed: Some(written_bytes),
+        entries: Some(written_entries),
+        message: None,
+    });
+
+    Ok(JobTerminalSummaryDto {
+        written_entries,
+        skipped_entries: None,
+        written_bytes,
+        warnings: Vec::new(),
+    })
+}
+
+fn cancel_selected_extract_job(
+    sink: &mut JobEventCollector,
+    kind: JobKindDto,
+    path: Option<String>,
+    written_entries: usize,
+    written_bytes: u64,
+) -> JobTerminalSummaryDto {
+    sink.emit_direct(JobEventDto {
+        event_type: JobEventKindDto::Cancelled,
+        job_kind: Some(kind),
+        code: Some(constants::COMMAND_ERROR_CANCELLED),
+        hint: None,
+        severity: None,
+        retryable: Some(true),
+        path,
+        bytes: None,
+        total_bytes: None,
+        total_bytes_processed: Some(written_bytes),
+        entries: Some(written_entries),
+        message: Some("Extraction cancelled.".to_string()),
+    });
+
+    JobTerminalSummaryDto {
+        written_entries,
+        skipped_entries: None,
+        written_bytes,
+        warnings: vec!["Extraction cancelled.".to_string()],
+    }
 }
 
 #[tauri::command]
@@ -1071,6 +1267,46 @@ fn normalize_non_empty_paths(paths: &[String]) -> Result<Vec<PathBuf>, CommandEr
     Ok(normalized)
 }
 
+fn normalize_optional_entry_paths(
+    paths: Option<Vec<String>>,
+) -> Result<Vec<String>, CommandErrorDto> {
+    let Some(paths) = paths else {
+        return Ok(Vec::new());
+    };
+
+    let normalized = paths
+        .into_iter()
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+        .collect::<Vec<_>>();
+
+    if normalized.is_empty() {
+        return Err(CommandErrorDto::invalid_request(
+            "at least one selected entry path is required",
+        ));
+    }
+
+    Ok(normalized)
+}
+
+fn validate_source_paths_exist(sources: &[PathBuf]) -> Result<(), CommandErrorDto> {
+    for source in sources {
+        std::fs::metadata(source).map_err(|source_error| {
+            if source_error.kind() == io::ErrorKind::NotFound {
+                CommandErrorDto::not_found(
+                    format!("source path does not exist: {}", source.to_string_lossy()),
+                    Some(
+                        "Select an existing file or folder before creating an archive.".to_string(),
+                    ),
+                )
+            } else {
+                map_io_error(source.to_string_lossy().to_string(), source_error)
+            }
+        })?;
+    }
+    Ok(())
+}
+
 fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandErrorDto> {
     let value = value.trim().to_string();
     if value.is_empty() {
@@ -1146,7 +1382,9 @@ mod tests {
     use super::*;
     use crate::dto::OverwritePolicyDto;
     use crate::job_dto::JobStatusDto;
+    use crate::quick_action::QuickActionStartupState;
     use std::env;
+    use std::ffi::OsString;
     use std::fs;
     use std::io::Error;
     #[cfg(unix)]
@@ -1227,6 +1465,62 @@ mod tests {
         assert_eq!(
             safety_error.code,
             crate::constants::COMMAND_ERROR_UNSAFE_ARCHIVE
+        );
+    }
+
+    #[test]
+    fn quick_action_startup_state_command_exposes_pending_intent() {
+        let state = QuickActionStartupState::from_args(
+            [
+                "--quick-action",
+                "extract-here",
+                "--path",
+                "C:/tmp/one.zip",
+                "C:/tmp/two.tzst",
+            ]
+            .into_iter()
+            .map(OsString::from),
+        );
+
+        let response = quick_action_startup_state_internal(&state);
+
+        assert!(response.launched_for_quick_action);
+        assert!(response.error.is_none());
+        let quick_action = response
+            .quick_action
+            .expect("quick action intent should be present");
+        assert_eq!(
+            quick_action.kind,
+            crate::dto::QuickActionKindDto::ExtractHere
+        );
+        assert_eq!(quick_action.paths, ["C:/tmp/one.zip", "C:/tmp/two.tzst"]);
+    }
+
+    #[test]
+    fn quick_action_startup_state_command_exposes_invalid_launch() {
+        let state = QuickActionStartupState::from_args(
+            [
+                "--quick-action",
+                "extract-to-folder",
+                "--path",
+                "one.zip",
+                "two.zip",
+            ]
+            .into_iter()
+            .map(OsString::from),
+        );
+
+        let response = quick_action_startup_state_internal(&state);
+
+        assert!(response.launched_for_quick_action);
+        assert!(response.quick_action.is_none());
+        let error = response
+            .error
+            .expect("invalid launch should include an error");
+        assert_eq!(error.code, constants::COMMAND_ERROR_INVALID_REQUEST);
+        assert_eq!(
+            error.message,
+            "extract-to-folder requires exactly one archive path"
         );
     }
 
@@ -1359,6 +1653,235 @@ mod tests {
     }
 
     #[test]
+    fn recovery_smoke_create_open_test_extract_zip_end_to_end() {
+        let workspace = create_temp_workspace("recovery-smoke");
+        let source = workspace.join("source");
+        let nested = source.join("nested");
+        let destination_archive = workspace.join("created.zip");
+        let extract_destination = workspace.join("extracted");
+        fs::create_dir_all(&nested).expect("nested fixture directory should exist");
+        fs::create_dir_all(&extract_destination).expect("extract destination should exist");
+        fs::write(source.join("hello.txt"), b"hello smoke").expect("hello fixture should write");
+        fs::write(nested.join("readme.md"), b"# smoke").expect("nested fixture should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_job = start_create_internal(
+            StartCreateRequest {
+                sources: vec![source.to_string_lossy().to_string()],
+                destination_path: destination_archive.to_string_lossy().to_string(),
+                format: crate::dto::ArchiveFormatDto::Zip,
+                clean_source: false,
+                replace_existing: true,
+                password: None,
+                compression_level: None,
+                volume_size: None,
+                preserve_metadata: false,
+            },
+            &registry,
+        )
+        .expect("smoke create should start");
+
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert!(
+            destination_archive.is_file(),
+            "smoke archive should be written"
+        );
+
+        let listing = list_archive(crate::dto::ListArchiveRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            password: None,
+        })
+        .expect("smoke archive should list");
+        let listed_paths = listing
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect::<Vec<_>>();
+        assert!(listed_paths.contains(&"source/hello.txt"));
+        assert!(listed_paths.contains(&"source/nested/readme.md"));
+
+        let test_job = start_test_archive_internal(
+            TestArchiveRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                password: None,
+            },
+            &registry,
+        )
+        .expect("smoke test archive should start");
+        let (test_poll, _) = wait_for_job_terminal(&registry, &test_job.job_id);
+        assert_eq!(test_poll.status, JobStatusDto::Completed);
+
+        let extract_job = start_extract_internal(
+            StartExtractRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                destination_path: extract_destination.to_string_lossy().to_string(),
+                password: None,
+                overwrite: OverwritePolicyDto::Replace,
+                entry_paths: None,
+                strip_components: 0,
+            },
+            &registry,
+        )
+        .expect("smoke extract should start");
+        let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read_to_string(extract_destination.join("source").join("hello.txt"))
+                .expect("extracted hello should be readable"),
+            "hello smoke"
+        );
+        assert_eq!(
+            fs::read_to_string(
+                extract_destination
+                    .join("source")
+                    .join("nested")
+                    .join("readme.md"),
+            )
+            .expect("extracted nested file should be readable"),
+            "# smoke"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn recovery_smoke_password_required_invalid_and_valid_zip_flow() {
+        let workspace = create_temp_workspace("recovery-password-smoke");
+        let source = workspace.join("source");
+        let destination_archive = workspace.join("protected.zip");
+        fs::create_dir_all(&source).expect("password smoke source should exist");
+        fs::write(source.join("secret.txt"), b"protected smoke")
+            .expect("password smoke fixture should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_job = start_create_internal(
+            StartCreateRequest {
+                sources: vec![source.to_string_lossy().to_string()],
+                destination_path: destination_archive.to_string_lossy().to_string(),
+                format: crate::dto::ArchiveFormatDto::Zip,
+                clean_source: false,
+                replace_existing: true,
+                password: Some("smoke-secret".to_string()),
+                compression_level: None,
+                volume_size: None,
+                preserve_metadata: false,
+            },
+            &registry,
+        )
+        .expect("password smoke create should start");
+
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let listing = list_archive(crate::dto::ListArchiveRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            password: Some("smoke-secret".to_string()),
+        })
+        .expect("valid password should list protected archive");
+
+        assert!(
+            listing
+                .entries
+                .iter()
+                .any(|entry| entry.path == "source/secret.txt"),
+            "protected smoke archive should list expected file",
+        );
+
+        let missing_password_job = start_extract_internal(
+            StartExtractRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                destination_path: workspace
+                    .join("missing-password")
+                    .to_string_lossy()
+                    .to_string(),
+                password: None,
+                overwrite: OverwritePolicyDto::Replace,
+                entry_paths: None,
+                strip_components: 0,
+            },
+            &registry,
+        )
+        .expect("missing-password extract should start");
+        let (missing_password_poll, missing_password_events) =
+            wait_for_job_terminal(&registry, &missing_password_job.job_id);
+        assert_eq!(missing_password_poll.status, JobStatusDto::Failed);
+        assert!(
+            missing_password_events
+                .iter()
+                .any(|event| event.code.as_deref()
+                    == Some(constants::COMMAND_ERROR_PASSWORD_REQUIRED)),
+            "missing password extract should fail with password_required",
+        );
+
+        let invalid_password_job = start_extract_internal(
+            StartExtractRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                destination_path: workspace
+                    .join("invalid-password")
+                    .to_string_lossy()
+                    .to_string(),
+                password: Some("wrong-password".to_string()),
+                overwrite: OverwritePolicyDto::Replace,
+                entry_paths: None,
+                strip_components: 0,
+            },
+            &registry,
+        )
+        .expect("invalid-password extract should start");
+        let (invalid_password_poll, invalid_password_events) =
+            wait_for_job_terminal(&registry, &invalid_password_job.job_id);
+        assert_eq!(invalid_password_poll.status, JobStatusDto::Failed);
+        assert!(
+            invalid_password_events
+                .iter()
+                .any(|event| event.code.as_deref()
+                    == Some(constants::COMMAND_ERROR_INVALID_PASSWORD)),
+            "invalid password extract should fail with invalid_password",
+        );
+        assert!(
+            invalid_password_events
+                .iter()
+                .filter_map(|event| event.message.as_deref())
+                .all(|message| !message.contains("wrong-password")),
+            "invalid password diagnostics must not leak the attempted password",
+        );
+
+        let valid_extract_destination = workspace.join("valid-password");
+        fs::create_dir_all(&valid_extract_destination)
+            .expect("valid password destination should exist");
+        let valid_password_job = start_extract_internal(
+            StartExtractRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                destination_path: valid_extract_destination.to_string_lossy().to_string(),
+                password: Some("smoke-secret".to_string()),
+                overwrite: OverwritePolicyDto::Replace,
+                entry_paths: None,
+                strip_components: 0,
+            },
+            &registry,
+        )
+        .expect("valid-password extract should start");
+        let (valid_password_poll, valid_password_events) =
+            wait_for_job_terminal(&registry, &valid_password_job.job_id);
+        assert_eq!(valid_password_poll.status, JobStatusDto::Completed);
+        assert!(
+            valid_password_events
+                .iter()
+                .filter_map(|event| event.message.as_deref())
+                .all(|message| !message.contains("smoke-secret")),
+            "valid password diagnostics must not leak the password",
+        );
+        assert_eq!(
+            fs::read_to_string(valid_extract_destination.join("source").join("secret.txt"))
+                .expect("valid password extraction should write protected file"),
+            "protected smoke",
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn command_boundary_start_create_job_reaches_terminal_and_writes_archive() {
         let workspace = create_temp_workspace("start-create");
         let sources = workspace.join("sources");
@@ -1388,6 +1911,53 @@ mod tests {
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
         assert_eq!(create_poll.kind, JobKindDto::ZipCreate);
+        assert!(
+            create_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
+            "create lifecycle should emit a started event",
+        );
+        assert!(
+            create_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "create lifecycle should emit a completed event",
+        );
+        assert!(create_poll.terminal_summary.is_some());
+        assert!(destination.is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_tzap_create_job_reaches_terminal_and_writes_archive() {
+        let workspace = create_temp_workspace("start-create-tzap");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+
+        fs::write(sources.join("hello.txt"), b"hello from tzap create")
+            .expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("create command should start a job");
+        let (create_poll, mut create_events) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        create_events.extend_from_slice(&create_poll.events);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(create_poll.kind, JobKindDto::TzapCreate);
         assert!(
             create_events
                 .iter()
@@ -1438,6 +2008,7 @@ mod tests {
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
             overwrite: OverwritePolicyDto::Replace,
+            entry_paths: None,
             strip_components: 0,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
@@ -1462,6 +2033,185 @@ mod tests {
             "# extractor"
         );
         let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_extract_selected_entries_uses_job_lifecycle() {
+        let workspace = create_temp_workspace("start-extract-selected");
+        let sources = workspace.join("sources");
+        let destination_archive = workspace.join("fixture.zip");
+        let extract_destination = workspace.join("selected");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::create_dir_all(&extract_destination).expect("extract directory should exist");
+
+        fs::write(sources.join("keep.txt"), b"keep me").expect("selected fixture should write");
+        fs::write(sources.join("skip.txt"), b"skip me").expect("unselected fixture should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job =
+            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let extract_request = StartExtractRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            destination_path: extract_destination.to_string_lossy().to_string(),
+            password: None,
+            overwrite: OverwritePolicyDto::Replace,
+            entry_paths: Some(vec!["sources/keep.txt".to_string()]),
+            strip_components: 0,
+        };
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("selected extract command should start a job");
+        let (extract_poll, mut extract_events) =
+            wait_for_job_terminal(&registry, &extract_job.job_id);
+        extract_events.extend_from_slice(&extract_poll.events);
+
+        let extracted_file = extract_destination.join("sources").join("keep.txt");
+        let skipped_file = extract_destination.join("sources").join("skip.txt");
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
+        assert!(
+            extract_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::EntryStarted)),
+            "selected extract should emit per-entry lifecycle events",
+        );
+        assert!(
+            extract_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "selected extract lifecycle should emit a completed event",
+        );
+        assert!(
+            extract_poll
+                .terminal_summary
+                .as_ref()
+                .is_some_and(|summary| summary.written_entries == 1),
+            "selected extract should include a one-entry terminal summary",
+        );
+        assert!(extracted_file.is_file());
+        assert!(!skipped_file.exists());
+        assert_eq!(
+            fs::read_to_string(&extracted_file).expect("selected file should be readable"),
+            "keep me"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_create_rejects_directory_destination_path() {
+        let workspace = create_temp_workspace("start-create-directory-destination");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("destination-folder");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::create_dir_all(&destination).expect("destination directory should exist");
+        fs::write(sources.join("hello.txt"), b"hello from create")
+            .expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+
+        let error = start_create_internal(create_request, &registry)
+            .expect_err("directory destination should fail");
+        assert_eq!(error.code, crate::constants::COMMAND_ERROR_INVALID_REQUEST);
+        assert!(error.message.contains("file path"));
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_create_rejects_missing_source() {
+        let workspace = create_temp_workspace("start-create-missing-source");
+        let missing_source = workspace.join("does-not-exist");
+        let destination = workspace.join("created.tzap");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![missing_source.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: true,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+
+        let error = start_create_internal(create_request, &registry)
+            .expect_err("missing source should fail");
+        assert_eq!(error.code, crate::constants::COMMAND_ERROR_NOT_FOUND);
+        assert!(error.message.contains("source path does not exist"));
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn selected_extract_reports_cancelled_without_completed_event_when_token_is_cancelled() {
+        let registry = crate::job_registry::JobRegistry::new();
+        let (response, token) = registry.create_job(JobKindDto::ZipExtract);
+        registry
+            .request_cancel(&response.job_id)
+            .expect("cancel should target the selected extract job");
+        assert!(
+            token.is_cancelled(),
+            "registry cancellation should mark the selected extract token"
+        );
+
+        let mut sink = JobEventCollector::new(&registry, response.job_id.clone());
+        let summary = run_selected_extract_job(
+            "unused.zip",
+            "unused-destination",
+            &["sources/keep.txt".to_string()],
+            None,
+            extraction_policy(OverwritePolicyDto::Replace, 0),
+            &token,
+            &mut sink,
+            JobKindDto::ZipExtract,
+        )
+        .expect("pre-cancelled selected extract should finish with a terminal summary");
+
+        let poll = registry
+            .poll_events(&response.job_id)
+            .expect("cancelled selected extract job should be pollable");
+
+        assert_eq!(poll.status, JobStatusDto::Cancelled);
+        assert_eq!(summary.written_entries, 0);
+        assert_eq!(summary.written_bytes, 0);
+        assert!(
+            poll.events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Cancelled)),
+            "selected extract should emit a cancelled event",
+        );
+        assert!(
+            !poll
+                .events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "cancelled selected extract must not emit completed",
+        );
     }
 
     #[test]

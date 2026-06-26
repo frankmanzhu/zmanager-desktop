@@ -1,0 +1,108 @@
+import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_APP_PREFERENCES } from "./preferences";
+import {
+  quickCreateDestination,
+  quickExtractDestination,
+  runQuickActionRequest,
+  uniqueQuickActionPaths,
+  unsupportedQuickExtractPath,
+  type QuickActionPathHelpers,
+} from "./quickActions";
+
+const pathHelpers: QuickActionPathHelpers = {
+  nativeParentPath(path) {
+    const normalized = path.replace(/\\/g, "/");
+    const index = normalized.lastIndexOf("/");
+    return index > 0 ? normalized.slice(0, index) : "";
+  },
+  joinNativePath(parent, child) {
+    return parent ? `${parent}/${child}` : child;
+  },
+};
+
+describe("quick action helpers", () => {
+  it("deduplicates and trims quick-action paths", () => {
+    expect(uniqueQuickActionPaths([" a ", "", "b", "a", " b "])).toEqual(["a", "b"]);
+  });
+
+  it("builds quick create destinations from preferences", () => {
+    expect(
+      quickCreateDestination(
+        ["/tmp/photos"],
+        "tzap",
+        DEFAULT_APP_PREFERENCES,
+        pathHelpers,
+      ),
+    ).toBe("/tmp/photos.tzap");
+
+    expect(
+      quickCreateDestination(
+        ["/tmp/photos"],
+        "zip",
+        {
+          ...DEFAULT_APP_PREFERENCES,
+          defaultOutputLocation: "customFolder",
+          customOutputFolderPath: "/archives",
+        },
+        pathHelpers,
+      ),
+    ).toBe("/archives/photos.zip");
+  });
+
+  it("builds quick extract destinations from the extraction mode", () => {
+    expect(quickExtractDestination("/tmp/archive.tar.zst", "extractHere", pathHelpers)).toBe("/tmp");
+    expect(quickExtractDestination("/tmp/archive.tar.zst", "extractToFolder", pathHelpers)).toBe(
+      "/tmp/archive",
+    );
+  });
+
+  it("finds unsupported archive paths", () => {
+    expect(unsupportedQuickExtractPath(["one.zip", "notes.txt", "two.tzap"])).toBe("notes.txt");
+    expect(unsupportedQuickExtractPath(["one.zip", "two.tzap"])).toBeNull();
+  });
+
+  it("routes generic quick actions through preferences", async () => {
+    const handlers = {
+      startCreate: vi.fn().mockResolvedValue(undefined),
+      openExtractReview: vi.fn().mockResolvedValue(undefined),
+      startExtract: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runQuickActionRequest(
+      { kind: "compress", paths: ["/tmp/source"] },
+      {
+        ...DEFAULT_APP_PREFERENCES,
+        defaultArchiveFormat: "tzap",
+        defaultCleanSourceEnabled: true,
+      },
+      handlers,
+    );
+
+    expect(handlers.startCreate).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
+
+    await runQuickActionRequest(
+      { kind: "extract", paths: ["/tmp/archive.zip"] },
+      { ...DEFAULT_APP_PREFERENCES, defaultExtractionBehavior: "extractToFolder" },
+      handlers,
+    );
+
+    expect(handlers.startExtract).toHaveBeenCalledWith(["/tmp/archive.zip"], "extractToFolder");
+  });
+
+  it("routes ask-every-time extraction to user review", async () => {
+    const handlers = {
+      startCreate: vi.fn().mockResolvedValue(undefined),
+      openExtractReview: vi.fn().mockResolvedValue(undefined),
+      startExtract: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runQuickActionRequest(
+      { kind: "extract", paths: ["/tmp/archive.zip"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+
+    expect(handlers.openExtractReview).toHaveBeenCalledWith(["/tmp/archive.zip"]);
+    expect(handlers.startExtract).not.toHaveBeenCalled();
+  });
+});

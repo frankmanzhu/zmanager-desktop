@@ -7,8 +7,6 @@ import type {
   CommandErrorDto,
   CreatePlanResponse,
   DismissJobRequest,
-  EntryExtractResponse,
-  ExtractEntryRequest,
   HealthcheckResponse,
   ListArchiveRequest,
   PollJobEventsRequest,
@@ -17,6 +15,7 @@ import type {
   PreviewEntryRequest,
   PreviewEntryResponse,
   ProjectContract,
+  QuickActionStartupStateDto,
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
@@ -29,6 +28,10 @@ export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
 
 export async function fetchProjectContract(): Promise<ProjectContract> {
   return invoke<ProjectContract>("project_contract");
+}
+
+export async function fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto> {
+  return invoke<QuickActionStartupStateDto>("quick_action_startup_state");
 }
 
 export async function listArchive(request: ListArchiveRequest): Promise<ArchiveListingDto> {
@@ -51,12 +54,6 @@ export async function runStartCreate(request: StartCreateRequest): Promise<Start
 
 export async function runStartExtract(request: StartExtractRequest): Promise<StartJobResponseDto> {
   return invoke<StartJobResponseDto>("start_extract", {
-    request,
-  });
-}
-
-export async function runExtractEntry(request: ExtractEntryRequest): Promise<EntryExtractResponse> {
-  return invoke<EntryExtractResponse>("extract_entry", {
     request,
   });
 }

@@ -369,16 +369,26 @@ Core APIs to use:
 Commands:
 
 ```text
-extract_entry(request: ExtractEntryRequest) -> Result<EntryExtractResultDto, CommandErrorDto>
+start_extract(request: StartExtractRequest { entryPaths }) -> Result<StartJobResponseDto, CommandErrorDto>
 preview_entry(request: PreviewEntryRequest) -> Result<PreviewEntryResultDto, CommandErrorDto>
 ```
 
-Request fields:
+Selected extract request fields:
+
+```text
+archivePath
+destinationPath
+entryPaths
+password?
+overwrite
+stripComponents
+```
+
+Preview request fields:
 
 ```text
 archivePath
 entryPath
-destinationPath
 password?
 overwrite
 stripComponents
@@ -395,7 +405,7 @@ writtenBytes
 Steps:
 
 1. Add row selection to the Browse table.
-2. Enable selected-entry Extract when one or more rows are selected.
+2. Enable selected-entry Extract when one or more rows are selected, and route it through `start_extract` so polling, retry, cancellation, and terminal summaries stay consistent.
 3. For single-row preview, call `preview_entry`.
 4. Install `@tauri-apps/plugin-opener` and use it to open preview output.
 5. Track cleanup roots in Rust state and delete them when replaced or app exits.
@@ -403,7 +413,7 @@ Steps:
 
 Tests:
 
-- Extracting one file writes under the destination.
+- Extracting one selected file starts an extract job and writes under the destination.
 - Path traversal entries are rejected by core safety.
 - Preview returns a cleanup root and preview path.
 - Unsupported entries return `unsupported_format` or `operation_failed` with a clear message.

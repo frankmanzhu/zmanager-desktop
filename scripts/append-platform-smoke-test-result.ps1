@@ -40,5 +40,17 @@ if (-not (Test-Path $resultsPath)) {
     throw "Smoke-test matrix file not found: $resultsPath"
 }
 
-Add-Content -Path $resultsPath -Value $line
+$content = Get-Content -Path $resultsPath
+$insertIndex = [Array]::IndexOf($content, "## Required evidence per row")
+
+if ($insertIndex -gt 0) {
+    $updated = @()
+    $updated += $content[0..($insertIndex - 1)]
+    $updated += $line
+    $updated += $content[$insertIndex..($content.Length - 1)]
+    Set-Content -Path $resultsPath -Value $updated
+} else {
+    Add-Content -Path $resultsPath -Value $line
+}
+
 Write-Host "Appended smoke-test row to $resultsPath"

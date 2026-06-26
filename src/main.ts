@@ -1,5 +1,3 @@
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openPath as openWithOpener } from "@tauri-apps/plugin-opener";
 import "./styles.css";
 import {
   APP_TITLE,
@@ -29,14 +27,54 @@ import {
   normalizeArchivePath,
 } from "./app/archiveTree";
 import {
+  CREATE_ARCHIVE_FILTERS,
+  buildStartCreateRequest,
+  getArchiveName,
+  suggestedCreateArchiveName as buildSuggestedCreateArchiveName,
+  withCreateArchiveExtension,
+  type CreateArchiveFormat,
+} from "./app/createFlow";
+import {
+  unknownErrorMessage,
+} from "./app/dialogs";
+import {
+  buildStartExtractRequest,
+  type ExtractMode,
+} from "./app/extractFlow";
+import { isSupportedArchivePath } from "./app/archiveFileTypes";
+import {
+  classifyDropIntent,
+  type DropIntentSurface,
+} from "./app/dropIntent";
+import {
+  canRetryJobWithPassword as canRetryJobWithPasswordState,
+  createInitialJobState,
+  getLatestPasswordFailureEvent,
+  mergePolledJobState,
+  type JobRetryContext,
+} from "./app/jobs";
+import {
+  defaultCreateDirectory,
+  loadAppPreferences,
+  saveAppPreferences,
+  type AppPreferences,
+} from "./app/preferences";
+import {
+  quickCreateDestination as buildQuickCreateDestination,
+  quickExtractDestination as buildQuickExtractDestination,
+  runQuickActionRequest,
+  uniqueQuickActionPaths,
+  type QuickActionExtractMode,
+} from "./app/quickActions";
+import {
   asCommandError,
   cancelJob as cancelJobCommand,
   dismissJob as dismissJobCommand,
   fetchHealthcheck,
   fetchProjectContract,
+  fetchQuickActionStartupState,
   listArchive as listArchiveCommand,
   pollJobEvents as pollJobEventsCommand,
-  runExtractEntry,
   runPlanCreate,
   runPreviewEntry,
   runStartCreate,
@@ -53,11 +91,31 @@ import type {
   JobKind,
   JobState,
   ProjectContract,
-  StartCreateRequest,
-  StartExtractRequest,
+  QuickActionRequestDto,
   StartJobResponseDto,
 } from "./api/types";
 import { ListArchiveRequest, PlanCreateRequest } from "./api/types";
+import {
+  bindDesktopFileDrop,
+  isDesktopRuntime,
+  openDesktopPath,
+  openNativeDialog as openRuntimeDialog,
+  revealInFileManager,
+  saveNativeDialog as saveRuntimeDialog,
+  type DesktopFileDropEvent,
+  type OpenDialogOptions,
+  type SaveDialogOptions,
+} from "./desktop/runtime";
+import {
+  activeJobStatusText,
+  renderJobsListHtml,
+} from "./ui/jobsView";
+import {
+  collectPreferencesFromDialog as collectPreferencesFromView,
+  renderPreferencesDialog as renderPreferencesView,
+  syncPreferenceOutputState as syncPreferenceOutputViewState,
+  type PreferencesViewElements,
+} from "./ui/preferencesView";
 
 type SortKey = "name" | "kind" | "size" | "compressedSize" | "modified" | "ratio";
 type BrowserRow =
@@ -72,23 +130,15 @@ type BrowserRow =
       name: string;
       entry: ArchiveEntryDto;
     };
-type ExtractMode = "archive" | "selection";
-type JobRetryContext =
-  | {
-      retryKind: "extractArchive";
-      archivePath: string;
-      destinationPath: string;
-      overwrite: StartExtractRequest["overwrite"];
-      stripComponents: number;
-    }
-  | {
-      retryKind: "testArchive";
-      archivePath: string;
-    };
 type ArchiveFixture = {
   archivePath: string;
   entries: ArchiveEntryDto[];
   totalSize?: number;
+};
+
+const ARCHIVE_OPEN_FILTER = {
+  name: "Archives",
+  extensions: ["zip", "zipx", "7z", "rar", "tar", "gz", "xz", "zst", "tzst", "tzap"],
 };
 
 declare global {
@@ -111,7 +161,9 @@ if (!app) {
 }
 const appRoot = app;
 
-function toolbarIcon(name: "open" | "new" | "add" | "extract" | "test" | "preview" | "info" | "jobs"): string {
+function toolbarIcon(
+  name: "open" | "new" | "add" | "extract" | "test" | "preview" | "info" | "jobs" | "settings",
+): string {
   const paths = {
     open: '<path d="M3 6.5h4.2l1.3 1.5H13v6H3z" /><path d="M3 6.5V4h3.8l1.3 1.5H13V8" />',
     new: '<path d="M7.5 3v9" /><path d="M3 7.5h9" /><path d="M13.5 5v9H4.5" />',
@@ -121,6 +173,7 @@ function toolbarIcon(name: "open" | "new" | "add" | "extract" | "test" | "previe
     preview: '<path d="M2.5 8s2-3.5 5-3.5 5 3.5 5 3.5-2 3.5-5 3.5-5-3.5-5-3.5z" /><path d="M7.5 6.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
     info: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M7.5 7v3" /><path d="M7.5 5h.01" />',
     jobs: '<path d="M3 4.5h9" /><path d="M3 7.5h9" /><path d="M3 10.5h6" />',
+    settings: '<path d="M6.5 2.5h2l.4 1.5 1.3.5 1.4-.8 1 1.7-1.1 1.1.2 1.5 1.1 1.1-1 1.7-1.4-.8-1.3.5-.4 1.5h-2l-.4-1.5-1.3-.5-1.4.8-1-1.7 1.1-1.1-.2-1.5-1.1-1.1 1-1.7 1.4.8 1.3-.5z" /><path d="M7.5 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
   } satisfies Record<typeof name, string>;
 
   return `<svg class="tool-icon" aria-hidden="true" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
@@ -163,6 +216,7 @@ appRoot.innerHTML = `
         <summary>Tools</summary>
         <div class="menu-popover">
           <button id="menu-refresh" type="button">Refresh Listing</button>
+          <button id="menu-preferences" type="button">Preferences</button>
         </div>
       </details>
       <details class="menu">
@@ -174,6 +228,10 @@ appRoot.innerHTML = `
     </nav>
 
     <header class="command-toolbar" role="toolbar" aria-label="Archive actions">
+      <div class="toolbar-brand" aria-label="ZManager">
+        ${toolbarIcon("new")}
+        <span>ZManager</span>
+      </div>
       <div class="toolbar-group">
         <button id="open-archive" class="tool-button" type="button" aria-keyshortcuts="Control+O">${toolbarIcon("open")}<span>Open</span></button>
         <button id="new-archive" class="tool-button" type="button" aria-keyshortcuts="Control+N">${toolbarIcon("new")}<span>New</span></button>
@@ -188,6 +246,7 @@ appRoot.innerHTML = `
       </div>
       <div class="toolbar-spacer"></div>
       <p id="workspace-status" class="workspace-status">Ready</p>
+      <button id="preferences-toolbar" class="tool-button icon-only" type="button" aria-label="Preferences" title="Preferences">${toolbarIcon("settings")}</button>
       <button id="jobs-drawer-open" class="tool-button" type="button">${toolbarIcon("jobs")}<span>Jobs</span></button>
     </header>
 
@@ -276,6 +335,12 @@ appRoot.innerHTML = `
     </aside>
 
     <div id="context-menu" class="context-menu" role="menu" hidden></div>
+    <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
+      <div>
+        <strong id="drop-overlay-title">Drop files</strong>
+        <span id="drop-overlay-message">Open an archive or add files to a new archive.</span>
+      </div>
+    </div>
 
     <div id="extract-dialog" class="dialog-backdrop" hidden>
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title">
@@ -417,6 +482,69 @@ appRoot.innerHTML = `
       </section>
     </div>
 
+    <div id="preferences-dialog" class="dialog-backdrop" hidden>
+      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="preferences-title">
+        <div class="dialog-header">
+          <div>
+            <h2 id="preferences-title">Preferences</h2>
+            <p>Defaults for quick create, extract, and preview behavior.</p>
+          </div>
+          <button id="preferences-dialog-close" class="icon-button" type="button" aria-label="Close preferences dialog">Close</button>
+        </div>
+        <div class="dialog-body">
+          <div class="form-grid form-grid-compact">
+            <label>
+              <span>Default format</span>
+              <select id="pref-default-format">
+                <option value="zip">ZIP</option>
+                <option value="tarZst">TZST</option>
+                <option value="tzap">TZAP</option>
+                <option value="sevenZ">7Z</option>
+              </select>
+            </label>
+            <label>
+              <span>Default extraction</span>
+              <select id="pref-default-extraction">
+                <option value="askEveryTime">Ask every time</option>
+                <option value="extractHere">Extract here</option>
+                <option value="extractToFolder">Extract to folder</option>
+              </select>
+            </label>
+            <label>
+              <span>Create output</span>
+              <select id="pref-output-location">
+                <option value="sourceFolder">Source folder</option>
+                <option value="customFolder">Chosen folder</option>
+              </select>
+            </label>
+            <label>
+              <span>Preview cleanup</span>
+              <select id="pref-preview-cleanup">
+                <option value="beforeNextPreview">Before next preview</option>
+                <option value="whenAppCloses">When app closes</option>
+              </select>
+            </label>
+          </div>
+          <label class="field-row">
+            <span>Chosen output folder</span>
+            <div class="inline-field">
+              <input id="pref-custom-output" type="text" placeholder="Optional folder for new archives" />
+              <button id="pref-choose-output" type="button">Choose</button>
+            </div>
+          </label>
+          <div class="toggle-grid">
+            <label class="toggle-line"><input id="pref-clean-source" type="checkbox" /> Clean source by default</label>
+            <label class="toggle-line"><input id="pref-quick-open-extract" type="checkbox" /> Extract associated archives immediately when opened</label>
+          </div>
+          <p id="preferences-status" class="status status-idle">Preferences are stored locally and never include passwords.</p>
+        </div>
+        <div class="dialog-actions">
+          <button id="preferences-save" type="button">Save</button>
+          <button id="preferences-cancel" type="button">Cancel</button>
+        </div>
+      </section>
+    </div>
+
     <div id="info-dialog" class="dialog-backdrop" hidden>
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="info-title">
         <div class="dialog-header">
@@ -451,6 +579,7 @@ const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archi
 const previewSelectedButton = document.querySelector<HTMLButtonElement>("#preview-selected")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
 const jobsDrawerOpenButton = document.querySelector<HTMLButtonElement>("#jobs-drawer-open")!;
+const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
@@ -467,6 +596,7 @@ const menuTestButton = document.querySelector<HTMLButtonElement>("#menu-test")!;
 const menuPreviewButton = document.querySelector<HTMLButtonElement>("#menu-preview")!;
 const menuInfoButton = document.querySelector<HTMLButtonElement>("#menu-info")!;
 const menuRefreshButton = document.querySelector<HTMLButtonElement>("#menu-refresh")!;
+const menuPreferencesButton = document.querySelector<HTMLButtonElement>("#menu-preferences")!;
 const menuAboutButton = document.querySelector<HTMLButtonElement>("#menu-about")!;
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
@@ -513,10 +643,35 @@ const jobDrawer = document.querySelector<HTMLElement>("#job-drawer")!;
 const statusJobButton = document.querySelector<HTMLButtonElement>("#status-job-button")!;
 const jobDrawerCloseButton = document.querySelector<HTMLButtonElement>("#job-drawer-close")!;
 const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
+const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
+const dropOverlayTitle = document.querySelector<HTMLElement>("#drop-overlay-title")!;
+const dropOverlayMessage = document.querySelector<HTMLElement>("#drop-overlay-message")!;
 
 const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
 const copyDiagnosticsButton = document.querySelector<HTMLButtonElement>("#copy-diagnostics")!;
+const preferencesDialog = document.querySelector<HTMLDivElement>("#preferences-dialog")!;
+const preferencesDefaultFormatSelect = document.querySelector<HTMLSelectElement>("#pref-default-format")!;
+const preferencesDefaultExtractionSelect = document.querySelector<HTMLSelectElement>("#pref-default-extraction")!;
+const preferencesOutputLocationSelect = document.querySelector<HTMLSelectElement>("#pref-output-location")!;
+const preferencesPreviewCleanupSelect = document.querySelector<HTMLSelectElement>("#pref-preview-cleanup")!;
+const preferencesCustomOutputInput = document.querySelector<HTMLInputElement>("#pref-custom-output")!;
+const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>("#pref-choose-output")!;
+const preferencesCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-clean-source")!;
+const preferencesQuickOpenExtractCheckbox = document.querySelector<HTMLInputElement>("#pref-quick-open-extract")!;
+const preferencesStatusElement = document.querySelector<HTMLParagraphElement>("#preferences-status")!;
+const preferencesSaveButton = document.querySelector<HTMLButtonElement>("#preferences-save")!;
+const preferencesViewElements: PreferencesViewElements = {
+  defaultFormatSelect: preferencesDefaultFormatSelect,
+  defaultExtractionSelect: preferencesDefaultExtractionSelect,
+  outputLocationSelect: preferencesOutputLocationSelect,
+  previewCleanupSelect: preferencesPreviewCleanupSelect,
+  customOutputInput: preferencesCustomOutputInput,
+  chooseOutputButton: preferencesChooseOutputButton,
+  cleanSourceCheckbox: preferencesCleanSourceCheckbox,
+  quickOpenExtractCheckbox: preferencesQuickOpenExtractCheckbox,
+  statusElement: preferencesStatusElement,
+};
 const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
 const infoDialogBody = document.querySelector<HTMLDivElement>("#info-dialog-body")!;
 const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
@@ -533,19 +688,24 @@ let sortAscending = true;
 let isFlatView = false;
 let activeExtractMode: ExtractMode = "archive";
 let contextEntryPath = "";
+let contextSourcePath = "";
 
 let createSources: string[] = [];
 let createPlanState: CreateState = "idle";
 let currentPlan: CreatePlanResponse | null = null;
 let currentPlanError = "";
 let planDebounce: number | null = null;
+let appPreferences: AppPreferences = loadAppPreferences();
 let createPlanRevision = 0;
 let createSubmissionInFlight = false;
+let dropUnlisten: (() => void) | null = null;
 
 const jobs = new Map<string, JobState>();
 const jobRetryContexts = new Map<string, JobRetryContext>();
 const promptedPasswordRetryJobs = new Set<string>();
 let pollTimer: number | null = null;
+let pollInFlight = false;
+let pollAgainRequested = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let focusedBeforeDialog: HTMLElement | null = null;
@@ -609,9 +769,29 @@ function getParentPath(path: string): string {
   return getParentArchivePath(path) ?? "";
 }
 
-function getArchiveName(path: string): string {
-  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
-  return parts.at(-1) ?? APP_TITLE;
+function suggestedCreateArchiveName(): string {
+  return buildSuggestedCreateArchiveName(createSources, createFormatSelect.value as CreateArchiveFormat);
+}
+
+function joinNativePath(parentPath: string, childName: string): string {
+  const trimmedParent = parentPath.trim().replace(/[\\/]+$/, "");
+  if (!trimmedParent) {
+    return childName;
+  }
+  const separator = trimmedParent.includes("\\") ? "\\" : "/";
+  return `${trimmedParent}${separator}${childName}`;
+}
+
+function suggestedCreateArchiveDefaultPath(): string {
+  const directory = defaultCreateDirectory(appPreferences);
+  const name = suggestedCreateArchiveName();
+  return directory ? joinNativePath(directory, name) : name;
+}
+
+function nativeParentPath(path: string): string {
+  const trimmed = path.trim().replace(/[\\/]+$/, "");
+  const slash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return slash > 0 ? trimmed.slice(0, slash) : "";
 }
 
 function getEntryByPath(path: string): ArchiveEntryDto | null {
@@ -630,7 +810,7 @@ function getSelectedEntryPaths(): string[] {
 }
 
 function getKnownFolderPaths(): string[] {
-  const tree = buildArchiveTree(browseEntries, { rootName: getArchiveName(currentArchivePath) });
+  const tree = buildArchiveTree(browseEntries, { rootName: getArchiveName(currentArchivePath, APP_TITLE) });
   return flattenArchiveTree(tree).map((node) => node.path);
 }
 
@@ -800,10 +980,6 @@ function getArchivePasswordPrompt(commandCode: string): string {
     : BROWSE_ACTION_PASSWORD_INVALID;
 }
 
-function isPasswordErrorCode(code?: string | null): boolean {
-  return code === COMMAND_PASSWORD_REQUIRED || code === COMMAND_INVALID_PASSWORD;
-}
-
 function formatEventCode(code: string): string {
   return code
     .split("_")
@@ -811,19 +987,8 @@ function formatEventCode(code: string): string {
     .join(" ");
 }
 
-function getLatestPasswordFailureEvent(state: JobState): JobEventDto | null {
-  for (let index = state.events.length - 1; index >= 0; index -= 1) {
-    const event = state.events[index];
-    if (event.eventType === "failed" && isPasswordErrorCode(event.code)) {
-      return event;
-    }
-  }
-
-  return null;
-}
-
 function canRetryJobWithPassword(jobId: string, state: JobState): boolean {
-  return Boolean(jobRetryContexts.has(jobId) && getLatestPasswordFailureEvent(state));
+  return canRetryJobWithPasswordState(jobRetryContexts.has(jobId), state);
 }
 
 function updateCommandState() {
@@ -863,7 +1028,7 @@ function updateMeta() {
   }
 
   const folderLabel = currentArchiveFolder ? ` > ${currentArchiveFolder}` : "";
-  metaElement.textContent = `${getArchiveName(currentArchivePath)}${folderLabel} - ${browseEntries.length} entries`;
+  metaElement.textContent = `${getArchiveName(currentArchivePath, APP_TITLE)}${folderLabel} - ${browseEntries.length} entries`;
 }
 
 function renderPathBar() {
@@ -873,7 +1038,7 @@ function renderPathBar() {
   }
 
   const crumbs = getArchiveBreadcrumbs(currentArchiveFolder, {
-    rootName: getArchiveName(currentArchivePath),
+    rootName: getArchiveName(currentArchivePath, APP_TITLE),
   }).flatMap((crumb, index) => {
     const button = `<button type="button" data-crumb-path="${escapeHtml(crumb.path)}">${escapeHtml(crumb.name)}</button>`;
     return index === 0 ? [button] : [`<span aria-hidden="true">&gt;</span>`, button];
@@ -898,7 +1063,7 @@ function renderTree() {
   treeContentElement.innerHTML = folders
     .map((folder) => {
       const depth = folder ? folder.split("/").length : 0;
-      const label = folder ? getBaseName(folder) : getArchiveName(currentArchivePath);
+      const label = folder ? getBaseName(folder) : getArchiveName(currentArchivePath, APP_TITLE);
       return `
         <button
           class="tree-item ${folder === currentArchiveFolder ? "is-active" : ""}"
@@ -1036,7 +1201,7 @@ function renderDetails() {
     const totalSize = browseEntries.reduce((total, entry) => total + (entry.size ?? 0), 0);
     detailsElement.innerHTML = `
       <div class="detail-block">
-        <h3>${escapeHtml(getArchiveName(currentArchivePath))}</h3>
+        <h3>${escapeHtml(getArchiveName(currentArchivePath, APP_TITLE))}</h3>
         <dl class="detail-list">
           <div><dt>Entries</dt><dd>${browseEntries.length}</dd></div>
           <div><dt>Total size</dt><dd>${formatBytes(totalSize)}</dd></div>
@@ -1198,104 +1363,17 @@ function renderCreateSources() {
 }
 
 function renderJobStatusBar() {
-  const sortedJobs = Array.from(jobs.values()).sort((a, b) =>
-    b.snapshot.createdAt.localeCompare(a.snapshot.createdAt),
-  );
-  const active = sortedJobs.find((state) =>
-    state.snapshot.status === "queued" || state.snapshot.status === "running",
-  ) ?? sortedJobs[0];
-
-  if (!active) {
-    activeJobElement.textContent = "No jobs";
-    return;
-  }
-
-  activeJobElement.textContent = `${formatJobKind(active.snapshot.kind)}: ${active.snapshot.status}`;
+  activeJobElement.textContent = activeJobStatusText(jobs, formatJobKind);
 }
 
 function renderJobs() {
-  if (!jobs.size) {
-    jobsListElement.innerHTML = `
-      <div class="job-empty">
-        <strong>No running or terminal jobs.</strong>
-        <span>Start create, extract, or test actions to watch progress.</span>
-      </div>
-    `;
-    renderJobStatusBar();
-    return;
-  }
-
-  const entries = Array.from(jobs.values()).sort((a, b) =>
-    b.snapshot.createdAt.localeCompare(a.snapshot.createdAt),
-  );
-
-  jobsListElement.innerHTML = entries
-    .map((state) => {
-      const snapshot = state.snapshot;
-      const summary = snapshot.terminalSummary;
-      const recentEvents = state.events.slice(-12);
-      const canRetryPassword = canRetryJobWithPassword(snapshot.jobId, state);
-      return `
-        <article class="job-card">
-          <div class="job-header">
-            <div>
-              <p class="job-title">${escapeHtml(formatJobKind(snapshot.kind))}</p>
-              <p class="job-subtitle">${snapshot.status.toUpperCase()} - ${escapeHtml(snapshot.jobId)}</p>
-            </div>
-            <div class="job-actions">
-              ${snapshot.status === "queued" || snapshot.status === "running"
-                ? `<button type="button" data-cancel="${escapeHtml(snapshot.jobId)}">Cancel</button>`
-                : ""
-              }
-              ${canRetryPassword ? `<button type="button" data-retry-password="${escapeHtml(snapshot.jobId)}">Retry Password</button>` : ""}
-              ${snapshot.canDismiss ? `<button type="button" data-dismiss="${escapeHtml(snapshot.jobId)}">Dismiss</button>` : ""}
-            </div>
-          </div>
-          <ul class="event-list">
-            ${
-              recentEvents.length
-                ? recentEvents
-                    .map(
-                      (event) => `
-                    <li>
-                      <strong>${escapeHtml(event.eventType)}</strong>
-                      ${event.path ? ` - ${escapeHtml(event.path)}` : ""}
-                      ${typeof event.bytes === "number" ? ` - ${formatBytes(event.bytes)}` : ""}
-                      ${typeof event.entries === "number" ? ` - ${event.entries} entries` : ""}
-                      ${event.code ? ` - ${escapeHtml(formatEventCode(event.code))}` : ""}
-                      ${event.message ? ` - ${escapeHtml(event.message)}` : ""}
-                      ${event.hint ? ` - ${escapeHtml(event.hint)}` : ""}
-                    </li>
-                  `,
-                    )
-                    .join("")
-                : "<li class=empty>Waiting for updates...</li>"
-            }
-          </ul>
-          <div class="job-summary">
-            ${
-              summary
-                ? `
-                  <p><strong>Written:</strong> ${summary.writtenEntries} entries, ${formatBytes(summary.writtenBytes)}</p>
-                  ${
-                    typeof summary.skippedEntries === "number"
-                      ? `<p><strong>Skipped:</strong> ${summary.skippedEntries}</p>`
-                      : ""
-                  }
-                  ${
-                    summary.warnings.length
-                      ? `<p><strong>Warnings:</strong> ${summary.warnings.length}</p>`
-                      : ""
-                  }
-                `
-                : "<p>No summary yet.</p>"
-            }
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-
+  jobsListElement.innerHTML = renderJobsListHtml(jobs, {
+    escapeHtml,
+    formatBytes,
+    formatEventCode,
+    formatJobKind,
+    canRetryJobWithPassword,
+  });
   renderJobStatusBar();
 }
 
@@ -1321,6 +1399,13 @@ function queuePlanRun() {
     planDebounce = null;
     void runPlan(revision);
   }, 350);
+}
+
+function cancelQueuedPlanRun() {
+  if (planDebounce !== null) {
+    clearTimeout(planDebounce);
+    planDebounce = null;
+  }
 }
 
 function getOverwritePolicyValue(): "refuse" | "replace" | "rename" | "ask" {
@@ -1443,13 +1528,12 @@ function bindMenuBehavior() {
   }
 }
 
-async function openNativeDialog(options: Parameters<typeof openDialog>[0]) {
-  try {
-    return await openDialog(options);
-  } catch {
-    setOperationalStatus("Native dialogs are unavailable in browser preview.");
-    return null;
-  }
+async function openNativeDialog(options: OpenDialogOptions) {
+  return openRuntimeDialog(options, setOperationalStatus);
+}
+
+async function saveNativeDialog(options: SaveDialogOptions) {
+  return saveRuntimeDialog(options, setOperationalStatus);
 }
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -1468,7 +1552,7 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
 }
 
 function getOpenModal(): HTMLElement | null {
-  for (const dialog of [extractDialog, createDialog, aboutDialog, infoDialog]) {
+  for (const dialog of [extractDialog, createDialog, aboutDialog, preferencesDialog, infoDialog]) {
     if (!dialog.hidden) {
       return dialog;
     }
@@ -1536,6 +1620,172 @@ function toggleJobDrawer() {
   } else {
     openJobDrawer();
   }
+}
+
+function hasActiveJob(): boolean {
+  return Array.from(jobs.values()).some((state) =>
+    state.snapshot.status === "queued" || state.snapshot.status === "running",
+  );
+}
+
+function currentDropSurface(): DropIntentSurface {
+  if (!createDialog.hidden) {
+    return "create";
+  }
+  return "browse";
+}
+
+function setDropOverlay(active: boolean, title = "Drop files", message = "Open an archive or add files to a new archive.") {
+  workspaceElement.dataset.dropState = active ? "active" : "idle";
+  dropOverlay.setAttribute("aria-hidden", active ? "false" : "true");
+  dropOverlayTitle.textContent = title;
+  dropOverlayMessage.textContent = message;
+}
+
+function dropCopyForSurface(surface: DropIntentSurface): { title: string; message: string } {
+  if (surface === "create") {
+    return {
+      title: "Add sources",
+      message: "Drop files or folders to add them to the new archive.",
+    };
+  }
+
+  if (currentArchivePath) {
+    return {
+      title: "Open archive",
+      message: "Drop another archive to browse it, or drop files to create a new archive.",
+    };
+  }
+
+  return {
+    title: "Open or create",
+    message: "Drop an archive to browse it, or files and folders to create one.",
+  };
+}
+
+function setDropOverlayForSurface(surface: DropIntentSurface) {
+  const copy = dropCopyForSurface(surface);
+  setDropOverlay(true, copy.title, copy.message);
+}
+
+function rejectDrop(reason: string) {
+  switch (reason) {
+    case "emptyDrop":
+      setOperationalStatus("No files were dropped.");
+      break;
+    case "openRequiresSingleArchive":
+      setOperationalStatus("Drop one archive to open it, or use Create for multiple sources.");
+      break;
+    case "browseRequiresArchive":
+      setOperationalStatus("Drop an archive to browse, or use New to create an archive from files.");
+      break;
+    default:
+      setOperationalStatus("Unsupported drop.");
+  }
+}
+
+function addDroppedSources(paths: string[]) {
+  if (createDialog.hidden) {
+    openCreateDialog();
+  }
+  addSources(paths);
+  setOperationalStatus(`${paths.length} source${paths.length === 1 ? "" : "s"} added.`);
+}
+
+function handleDroppedPaths(paths: string[]) {
+  setDropOverlay(false);
+  const trimmedPaths = paths.map((path) => path.trim()).filter(Boolean);
+  if (hasActiveJob() || createSubmissionInFlight) {
+    setOperationalStatus("Finish the current job before dropping more files.");
+    return;
+  }
+
+  const surface = currentDropSurface();
+  const decision = classifyDropIntent(trimmedPaths, surface);
+  switch (decision.kind) {
+    case "openArchive":
+      if (!createDialog.hidden) {
+        closeModal(createDialog);
+      }
+      void loadArchive({ archivePath: decision.archivePath });
+      break;
+    case "addCreateSources":
+      addDroppedSources(decision.sourcePaths);
+      break;
+    case "askAction": {
+      const openArchive = window.confirm(
+        "This drop includes archives and regular files. Open the first archive instead of creating a new archive?",
+      );
+      if (openArchive) {
+        if (!createDialog.hidden) {
+          closeModal(createDialog);
+        }
+        void loadArchive({ archivePath: decision.archivePaths[0] });
+      } else {
+        addDroppedSources([...decision.archivePaths, ...decision.sourcePaths]);
+      }
+      break;
+    }
+    case "rejectUnsupportedDrop":
+      rejectDrop(decision.reason);
+      break;
+  }
+}
+
+function handleTauriDropEvent(event: DesktopFileDropEvent) {
+  if (event.type === "enter") {
+    setDropOverlayForSurface(currentDropSurface());
+    return;
+  }
+
+  if (event.type === "drop") {
+    handleDroppedPaths(event.paths);
+    return;
+  }
+
+  if (event.type === "leave") {
+    setDropOverlay(false);
+  }
+}
+
+async function bindTauriFileDrop() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  try {
+    dropUnlisten = await bindDesktopFileDrop(handleTauriDropEvent);
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, "File drag/drop is unavailable."));
+  }
+}
+
+function bindBrowserFileDropFallback() {
+  appRoot.addEventListener("dragover", (event) => {
+    if (isDesktopRuntime()) {
+      return;
+    }
+    event.preventDefault();
+    setDropOverlayForSurface(currentDropSurface());
+  });
+
+  appRoot.addEventListener("dragleave", (event) => {
+    if (isDesktopRuntime() || event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget)) {
+      return;
+    }
+    setDropOverlay(false);
+  });
+
+  appRoot.addEventListener("drop", (event) => {
+    if (isDesktopRuntime()) {
+      return;
+    }
+    event.preventDefault();
+    const paths = Array.from(event.dataTransfer?.files ?? [])
+      .map((file) => file.name)
+      .filter(Boolean);
+    handleDroppedPaths(paths);
+  });
 }
 
 function navigateToFolder(folderPath: string, pushHistory = true) {
@@ -1653,23 +1903,58 @@ function showContextMenu(x: number, y: number, html: string) {
   contextMenu.style.top = `${y}px`;
 }
 
+function entryIsUnderFolder(entryPath: string, folderPath: string): boolean {
+  const normalizedEntry = normalizeEntryPath(entryPath);
+  const normalizedFolder = normalizeFolderPath(folderPath).replace(/\/+$/, "");
+  if (!normalizedFolder) {
+    return true;
+  }
+  return normalizedEntry === normalizedFolder || normalizedEntry.startsWith(`${normalizedFolder}/`);
+}
+
+function selectFolderEntries(folderPath: string) {
+  selectedEntries = new Set(
+    browseEntries
+      .filter((entry) => entry.kind !== "directory" && entryIsUnderFolder(entry.path, folderPath))
+      .map((entry) => entry.path),
+  );
+  renderBrowse();
+}
+
 function showFolderContextMenu(folderPath: string, x: number, y: number) {
   contextEntryPath = "";
+  contextSourcePath = "";
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}">Open Folder</button>
+    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}">Extract Folder</button>
+    <button type="button" role="menuitem" data-context-action="info">Info</button>
   `);
 }
 
 function showEntryContextMenu(entryPath: string, x: number, y: number) {
   contextEntryPath = entryPath;
+  contextSourcePath = "";
   if (!selectedEntries.has(entryPath)) {
     selectedEntries = new Set([entryPath]);
     renderBrowse();
   }
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="preview">Preview</button>
-    <button type="button" role="menuitem" data-context-action="extract">Extract</button>
+    <button type="button" role="menuitem" data-context-action="extract">Extract Selected</button>
+    <button type="button" role="menuitem" data-context-action="extract-here">Extract Here</button>
+    <button type="button" role="menuitem" data-context-action="extract-all">Extract To...</button>
     <button type="button" role="menuitem" data-context-action="info">Info</button>
+  `);
+}
+
+function showSourceContextMenu(sourcePath: string, x: number, y: number) {
+  contextEntryPath = "";
+  contextSourcePath = sourcePath;
+  showContextMenu(x, y, `
+    <button type="button" role="menuitem" data-context-action="reveal-source">Reveal in File Manager</button>
+    <button type="button" role="menuitem" data-context-action="remove-source">Remove Source</button>
+    <div class="context-menu-separator" role="separator"></div>
+    <button type="button" role="menuitem" data-context-action="clear-sources">Clear All Sources</button>
   `);
 }
 
@@ -1677,6 +1962,7 @@ function hideContextMenu() {
   contextMenu.hidden = true;
   contextMenu.innerHTML = "";
   contextEntryPath = "";
+  contextSourcePath = "";
 }
 
 function showArchiveInfo() {
@@ -1727,6 +2013,10 @@ function showCurrentInfo() {
 function renderAboutDiagnostics() {
   const healthcheck = latestHealthcheck;
   const contract = latestContract;
+  const shellActions =
+    contract?.platformIntegration.shellActions
+      .map((action) => `${action.label} (${action.quickAction})`)
+      .join(", ") ?? "-";
   aboutDiagnostics.innerHTML = `
     <dl class="detail-list">
       <div><dt>Status</dt><dd>${escapeHtml(healthcheck?.status ?? "frontend-only")}</dd></div>
@@ -1737,6 +2027,8 @@ function renderAboutDiagnostics() {
       <div><dt>Explorer integration</dt><dd>${contract?.platformIntegration.explorerIntegrationEnabled ? "enabled" : "disabled"}</dd></div>
       <div><dt>Desktop actions</dt><dd>${contract?.platformIntegration.desktopActionsEnabled ? "enabled" : "disabled"}</dd></div>
       <div><dt>Extensions</dt><dd>${escapeHtml(contract?.platformIntegration.associatedExtensions.join(", ") ?? "-")}</dd></div>
+      <div><dt>Shell actions</dt><dd>${escapeHtml(shellActions)}</dd></div>
+      <div><dt>Quick open extraction</dt><dd>${appPreferences.quickOpenExtractionEnabled ? "enabled" : "disabled"}</dd></div>
     </dl>
   `;
 }
@@ -1747,10 +2039,63 @@ function diagnosticsText(): string {
       app: APP_TITLE,
       healthcheck: latestHealthcheck,
       contract: latestContract,
+      preferences: {
+        ...appPreferences,
+        customOutputFolderPath: appPreferences.customOutputFolderPath ? "(set)" : "",
+      },
     },
     null,
     2,
   );
+}
+
+function syncPreferenceOutputState() {
+  syncPreferenceOutputViewState(preferencesViewElements);
+}
+
+function renderPreferencesDialog() {
+  renderPreferencesView(preferencesViewElements, appPreferences);
+}
+
+function collectPreferencesFromDialog(): AppPreferences {
+  return collectPreferencesFromView(preferencesViewElements, appPreferences);
+}
+
+function applyCreatePreferenceDefaults() {
+  createFormatSelect.value = appPreferences.defaultArchiveFormat;
+  createCleanSourceCheckbox.checked = appPreferences.defaultCleanSourceEnabled;
+  if (!createDestinationInput.value.trim() && createSources.length > 0) {
+    createDestinationInput.value = suggestedCreateArchiveDefaultPath();
+  }
+  setCreatePlanState(createPlanState, currentPlanError);
+}
+
+function savePreferencesFromDialog() {
+  appPreferences = collectPreferencesFromDialog();
+  saveAppPreferences(appPreferences);
+  preferencesStatusElement.textContent = "Preferences saved.";
+  preferencesStatusElement.className = "status status-success";
+  applyCreatePreferenceDefaults();
+  window.setTimeout(() => closeModal(preferencesDialog), 240);
+}
+
+function openPreferencesDialog() {
+  renderPreferencesDialog();
+  openModal(preferencesDialog, "#pref-default-format");
+}
+
+async function onSelectPreferenceOutputFolder() {
+  const selected = await openNativeDialog({
+    title: "Choose default output folder",
+    directory: true,
+    multiple: false,
+  });
+
+  if (!selected || Array.isArray(selected)) {
+    return;
+  }
+
+  preferencesCustomOutputInput.value = selected;
 }
 
 function openExtractDialog(mode: ExtractMode) {
@@ -1768,7 +2113,19 @@ function openExtractDialog(mode: ExtractMode) {
   openModal(extractDialog, "#extract-destination");
 }
 
+function openExtractHereDialog(mode: ExtractMode) {
+  const parent = nativeParentPath(currentArchivePath);
+  openExtractDialog(mode);
+  if (parent) {
+    extractDestinationInput.value = parent;
+    extractDialogMessage.textContent = mode === "selection"
+      ? `Extract selected entries beside ${getArchiveName(currentArchivePath, APP_TITLE)}.`
+      : `Extract archive beside ${getArchiveName(currentArchivePath, APP_TITLE)}.`;
+  }
+}
+
 function openCreateDialog() {
+  applyCreatePreferenceDefaults();
   setCreatePlanState(createPlanState, currentPlanError);
   renderCreateSources();
   openModal(createDialog, "#add-source-files");
@@ -1946,23 +2303,15 @@ function addSources(paths: string[]) {
     }
   }
   createSources = Array.from(unique);
+  if (!createDestinationInput.value.trim()) {
+    createDestinationInput.value = suggestedCreateArchiveDefaultPath();
+  }
   renderCreateSources();
   queuePlanRun();
 }
 
 function addJobState(response: StartJobResponseDto, retryContext?: JobRetryContext) {
-  jobs.set(response.jobId, {
-    snapshot: {
-      jobId: response.jobId,
-      kind: response.kind,
-      status: response.status,
-      createdAt: response.createdAt,
-      canDismiss: false,
-      events: [],
-      terminalSummary: null,
-    },
-    events: [],
-  });
+  jobs.set(response.jobId, createInitialJobState(response));
 
   if (retryContext) {
     jobRetryContexts.set(response.jobId, retryContext);
@@ -1973,6 +2322,144 @@ function addJobState(response: StartJobResponseDto, retryContext?: JobRetryConte
   openJobDrawer();
 }
 
+async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cleanSource: boolean) {
+  const sources = uniqueQuickActionPaths(paths);
+  if (!sources.length) {
+    setOperationalStatus("Quick create needs at least one source.");
+    return;
+  }
+
+  openCreateDialog();
+  createSources = sources;
+  createFormatSelect.value = format;
+  createCleanSourceCheckbox.checked = cleanSource;
+  createReplaceExistingCheckbox.checked = false;
+  createDestinationInput.value = buildQuickCreateDestination(
+    sources,
+    format,
+    appPreferences,
+    { nativeParentPath, joinNativePath },
+  );
+  currentPlan = null;
+  cancelQueuedPlanRun();
+  renderCreateSources();
+
+  setOperationalStatus("Planning quick create...");
+  await runPlan();
+  if (createPlanState !== "ready" || currentPlan === null) {
+    setOperationalStatus("Quick create needs review before it can start.");
+    return;
+  }
+
+  await runCreate();
+}
+
+async function openQuickExtractReview(paths: string[]) {
+  const archives = uniqueQuickActionPaths(paths);
+  if (archives.length !== 1) {
+    setOperationalStatus("Open one archive at a time when extraction is set to ask every time.");
+    return;
+  }
+
+  const archivePath = archives[0];
+  if (!isSupportedArchivePath(archivePath)) {
+    setOperationalStatus(`Unsupported archive: ${archivePath}`);
+    return;
+  }
+
+  currentArchivePath = archivePath;
+  await loadArchive({ archivePath });
+  if (browseState !== "loaded" && browseState !== "empty") {
+    return;
+  }
+
+  setOperationalStatus("Choose extraction options.");
+  openExtractDialog("archive");
+}
+
+async function startQuickExtract(paths: string[], action: QuickActionExtractMode) {
+  const archives = uniqueQuickActionPaths(paths);
+  if (!archives.length) {
+    setOperationalStatus("Quick extract needs at least one archive.");
+    return;
+  }
+
+  for (const archivePath of archives) {
+    if (!isSupportedArchivePath(archivePath)) {
+      setOperationalStatus(`Unsupported archive: ${archivePath}`);
+      continue;
+    }
+
+    const destinationPath = buildQuickExtractDestination(
+      archivePath,
+      action,
+      { nativeParentPath, joinNativePath },
+    );
+    if (!destinationPath) {
+      setOperationalStatus(`Choose a destination before extracting ${archivePath}.`);
+      continue;
+    }
+
+    try {
+      const response = await runStartExtract(buildStartExtractRequest({
+        archivePath,
+        destinationPath,
+        overwrite: "rename",
+        stripComponents: 0,
+      }));
+      addJobState(response, {
+        retryKind: "extractArchive",
+        archivePath,
+        destinationPath,
+        overwrite: "rename",
+        stripComponents: 0,
+      });
+    } catch (error) {
+      const commandError = asCommandError(error);
+      setOperationalStatus(commandError?.message ?? `Unable to extract ${archivePath}.`);
+      if (commandError?.hint) {
+        setBrowseState("error", `${commandError.message}\n${commandError.hint}`);
+      }
+    }
+  }
+}
+
+async function handleQuickActionRequest(request: QuickActionRequestDto) {
+  await runQuickActionRequest(request, appPreferences, {
+    startCreate: startQuickCreate,
+    openExtractReview: openQuickExtractReview,
+    startExtract: startQuickExtract,
+  });
+}
+
+async function handleStartupQuickAction() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  try {
+    const state = await fetchQuickActionStartupState();
+    if (!state.launchedForQuickAction) {
+      return;
+    }
+
+    if (state.error) {
+      setOperationalStatus(state.error.message);
+      if (state.error.hint) {
+        setBrowseState("error", `${state.error.message}\n${state.error.hint}`);
+      }
+      return;
+    }
+
+    if (state.quickAction) {
+      setOperationalStatus("Starting quick action...");
+      await handleQuickActionRequest(state.quickAction);
+    }
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, "Unable to read quick-action startup state."));
+  }
+}
+
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {
   if (context.retryKind === "testArchive") {
     return runTestArchive({
@@ -1981,13 +2468,14 @@ async function startPasswordRetryJob(context: JobRetryContext, password: string)
     });
   }
 
-  return runStartExtract({
+  return runStartExtract(buildStartExtractRequest({
     archivePath: context.archivePath,
     destinationPath: context.destinationPath,
     overwrite: context.overwrite,
+    entryPaths: context.entryPaths,
     stripComponents: context.stripComponents,
     password,
-  });
+  }));
 }
 
 async function retryJobWithPasswordPrompt(jobId: string) {
@@ -2033,6 +2521,11 @@ async function maybePromptForJobPasswordRetry(jobId: string, state: JobState) {
 }
 
 async function pollJobs() {
+  if (pollInFlight) {
+    pollAgainRequested = true;
+    return;
+  }
+
   const pollableJobs = Array.from(jobs.values()).filter((state) => !state.snapshot.canDismiss);
   if (!pollableJobs.length) {
     stopPolling();
@@ -2040,38 +2533,39 @@ async function pollJobs() {
     return;
   }
 
-  await Promise.all(
-    pollableJobs.map(async (state) => {
-      const jobId = state.snapshot.jobId;
-      try {
-        const snapshot = await pollJobEventsCommand({ jobId });
+  pollInFlight = true;
+  try {
+    await Promise.all(
+      pollableJobs.map(async (state) => {
+        const jobId = state.snapshot.jobId;
+        try {
+          const snapshot = await pollJobEventsCommand({ jobId });
 
-        const previous = jobs.get(jobId);
-        const mergedEvents = [...(previous?.events ?? []), ...snapshot.events];
-        jobs.set(jobId, {
-          snapshot: {
-            ...snapshot,
-            terminalSummary: snapshot.terminalSummary ?? previous?.snapshot.terminalSummary ?? null,
-          },
-          events: mergedEvents,
-        });
+          jobs.set(jobId, mergePolledJobState(jobs.get(jobId), snapshot));
 
-        const updated = jobs.get(jobId);
-        if (updated) {
-          await maybePromptForJobPasswordRetry(jobId, updated);
+          const updated = jobs.get(jobId);
+          if (updated) {
+            await maybePromptForJobPasswordRetry(jobId, updated);
+          }
+        } catch (error) {
+          const commandError = asCommandError(error);
+          if (commandError?.code === "not_found") {
+            jobs.delete(jobId);
+            jobRetryContexts.delete(jobId);
+            promptedPasswordRetryJobs.delete(jobId);
+          }
         }
-      } catch (error) {
-        const commandError = asCommandError(error);
-        if (commandError?.code === "not_found") {
-          jobs.delete(jobId);
-          jobRetryContexts.delete(jobId);
-          promptedPasswordRetryJobs.delete(jobId);
-        }
-      }
-    }),
-  );
+      }),
+    );
 
-  renderJobs();
+    renderJobs();
+  } finally {
+    pollInFlight = false;
+    if (pollAgainRequested) {
+      pollAgainRequested = false;
+      void pollJobs();
+    }
+  }
 }
 
 function schedulePolling() {
@@ -2097,12 +2591,7 @@ async function onOpenArchive() {
     title: "Open archive",
     directory: false,
     multiple: false,
-    filters: [
-      {
-        name: "Archives",
-        extensions: ["zip", "7z", "rar", "tar", "gz", "xz", "zst", "tzst", "tzap"],
-      },
-    ],
+    filters: [ARCHIVE_OPEN_FILTER],
   });
 
   if (!selected || typeof selected !== "string") {
@@ -2203,19 +2692,20 @@ async function startExtract(destinationMode: ExtractMode) {
   if (destinationMode === "archive") {
     while (true) {
       try {
-        const response = await runStartExtract({
+        const response = await runStartExtract(buildStartExtractRequest({
           archivePath: currentArchivePath,
           destinationPath: destination,
           overwrite,
           stripComponents,
-          ...(password ? { password } : {}),
-        });
+          password,
+        }));
         closeModal(extractDialog);
         addJobState(response, {
           retryKind: "extractArchive",
           archivePath: currentArchivePath,
           destinationPath: destination,
           overwrite,
+          entryPaths: undefined,
           stripComponents,
         });
         return;
@@ -2247,33 +2737,25 @@ async function startExtract(destinationMode: ExtractMode) {
     return;
   }
 
-  closeModal(extractDialog);
   while (true) {
     try {
-      let totalBytes = 0;
-      let extractedCount = 0;
-      for (const entryPath of entries) {
-        const response = await runExtractEntry({
-          archivePath: currentArchivePath,
-          entryPath,
-          destinationPath: destination,
-          overwrite,
-          stripComponents,
-          ...(password ? { password } : {}),
-        });
-        totalBytes += response.writtenBytes;
-        extractedCount += 1;
-        setBrowseState("loaded", `${extractedCount} / ${entries.length} entries extracted.`);
-      }
-
-      const totalLabel = entries.length === extractedCount
-        ? `${extractedCount} entries`
-        : `${extractedCount} of ${entries.length} entries`;
-      setBrowseState(
-        "loaded",
-        `Extracted ${totalLabel} (${formatBytes(totalBytes)}) to ${destination}.`,
-      );
-      renderBrowse();
+      const response = await runStartExtract(buildStartExtractRequest({
+        archivePath: currentArchivePath,
+        destinationPath: destination,
+        overwrite,
+        entryPaths: entries,
+        stripComponents,
+        password,
+      }));
+      closeModal(extractDialog);
+      addJobState(response, {
+        retryKind: "extractArchive",
+        archivePath: currentArchivePath,
+        destinationPath: destination,
+        overwrite,
+        entryPaths: entries,
+        stripComponents,
+      });
       return;
     } catch (error) {
       const commandError = asCommandError(error);
@@ -2322,7 +2804,7 @@ async function onPreviewSelectedEntry() {
         ...(password ? { password } : {}),
       });
 
-      await openWithOpener(response.previewPath);
+      await openDesktopPath(response.previewPath);
       setBrowseState("loaded", `Preview ready: ${formatBytes(response.writtenBytes)}.`);
       renderBrowse();
       return;
@@ -2369,22 +2851,24 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 }
 
 async function onSelectCreateDestination() {
-  const selected = await openNativeDialog({
+  const selected = await saveNativeDialog({
     title: "Choose destination archive",
-    directory: false,
-    multiple: false,
-    filters: [
-      {
-        name: "Archive",
-        extensions: ["zip", "tzst", "tzap", "7z"],
-      },
-    ],
+    defaultPath: createDestinationInput.value.trim()
+      ? withCreateArchiveExtension(
+          createDestinationInput.value,
+          createFormatSelect.value as CreateArchiveFormat,
+        )
+      : suggestedCreateArchiveDefaultPath(),
+    filters: CREATE_ARCHIVE_FILTERS,
   });
 
   if (!selected || typeof selected !== "string") {
     return;
   }
-  createDestinationInput.value = selected;
+  createDestinationInput.value = withCreateArchiveExtension(
+    selected,
+    createFormatSelect.value as CreateArchiveFormat,
+  );
   setCreatePlanState(createPlanState, currentPlanError);
 }
 
@@ -2397,18 +2881,19 @@ async function runCreate() {
     return;
   }
 
-  const destinationPath = createDestinationInput.value.trim();
+  const format = createFormatSelect.value as CreateArchiveFormat;
+  const destinationPath = withCreateArchiveExtension(createDestinationInput.value, format);
   if (!destinationPath) {
     setCreatePlanState("error", "Pick a destination archive path.");
     return;
   }
+  createDestinationInput.value = destinationPath;
 
   if (createPlanState !== "ready" || currentPlan === null) {
     setCreatePlanState("error", "Refresh the plan before creating.");
     return;
   }
 
-  const format = createFormatSelect.value as StartCreateRequest["format"];
   const cleanSource = createCleanSourceCheckbox.checked;
   const replaceExisting = createReplaceExistingCheckbox.checked;
   const preserveMetadata = createPreserveMetadataCheckbox.checked;
@@ -2420,17 +2905,17 @@ async function runCreate() {
   setCreatePlanState(createPlanState, currentPlanError);
 
   try {
-    const request: StartCreateRequest = {
-      sources: [...createSources],
+    const request = buildStartCreateRequest({
+      sources: createSources,
       destinationPath,
       format,
       cleanSource,
       replaceExisting,
       preserveMetadata,
-      ...(passwordValue ? { password: passwordValue } : {}),
-      ...(compressionLevel !== undefined ? { compressionLevel } : {}),
-      ...(volumeSize !== undefined ? { volumeSize } : {}),
-    };
+      password: passwordValue,
+      compressionLevel,
+      volumeSize,
+    });
 
     const response = await runStartCreate(request);
 
@@ -2487,12 +2972,29 @@ async function loadBootstrapState() {
     latestContract = contract;
     setOperationalStatus(healthcheck.ready ? "Ready." : "Backend unavailable.");
     renderAboutDiagnostics();
-  } catch {
+  } catch (error) {
     latestHealthcheck = null;
     latestContract = null;
-    setOperationalStatus("Ready in browser preview.");
+    if (isDesktopRuntime()) {
+      const commandError = asCommandError(error);
+      setOperationalStatus(commandError?.message ?? unknownErrorMessage(error, "Backend unavailable."));
+    } else {
+      setOperationalStatus("Ready in browser preview.");
+    }
     renderAboutDiagnostics();
   }
+}
+
+function onCreateFormatChange() {
+  const destination = createDestinationInput.value.trim();
+  if (destination) {
+    createDestinationInput.value = withCreateArchiveExtension(
+      destination,
+      createFormatSelect.value as CreateArchiveFormat,
+    );
+  }
+
+  queuePlanRun();
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -2545,6 +3047,7 @@ function handleShortcut(event: KeyboardEvent) {
     if (!extractDialog.hidden) closeModal(extractDialog);
     else if (!createDialog.hidden) closeModal(createDialog);
     else if (!aboutDialog.hidden) closeModal(aboutDialog);
+    else if (!preferencesDialog.hidden) closeModal(preferencesDialog);
     else if (!infoDialog.hidden) closeModal(infoDialog);
     else if (workspaceElement.dataset.jobDrawer === "open") closeJobDrawer();
     else clearBrowseSelection();
@@ -2577,6 +3080,8 @@ function bindDialogCloseButtons() {
   document.querySelector<HTMLButtonElement>("#create-cancel")!.addEventListener("click", () => closeModal(createDialog));
   document.querySelector<HTMLButtonElement>("#about-dialog-close")!.addEventListener("click", () => closeModal(aboutDialog));
   document.querySelector<HTMLButtonElement>("#about-close")!.addEventListener("click", () => closeModal(aboutDialog));
+  document.querySelector<HTMLButtonElement>("#preferences-dialog-close")!.addEventListener("click", () => closeModal(preferencesDialog));
+  document.querySelector<HTMLButtonElement>("#preferences-cancel")!.addEventListener("click", () => closeModal(preferencesDialog));
   document.querySelector<HTMLButtonElement>("#info-dialog-close")!.addEventListener("click", () => closeModal(infoDialog));
   document.querySelector<HTMLButtonElement>("#info-close")!.addEventListener("click", () => closeModal(infoDialog));
 }
@@ -2590,6 +3095,7 @@ function bindActions() {
   previewSelectedButton.addEventListener("click", () => void onPreviewSelectedEntry());
   infoToolbarButton.addEventListener("click", showCurrentInfo);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
+  preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
   navUpButton.addEventListener("click", navigateUp);
@@ -2605,6 +3111,7 @@ function bindActions() {
   menuPreviewButton.addEventListener("click", () => void onPreviewSelectedEntry());
   menuInfoButton.addEventListener("click", showCurrentInfo);
   menuRefreshButton.addEventListener("click", () => void onRefreshArchive());
+  menuPreferencesButton.addEventListener("click", openPreferencesDialog);
   menuAboutButton.addEventListener("click", () => {
     renderAboutDiagnostics();
     openModal(aboutDialog, "#about-close");
@@ -2622,6 +3129,7 @@ function bindActions() {
     menuPreviewButton,
     menuInfoButton,
     menuRefreshButton,
+    menuPreferencesButton,
     menuAboutButton,
   ]) {
     button.addEventListener("click", () => closeOpenMenus());
@@ -2836,10 +3344,16 @@ function bindActions() {
     const action = target.dataset.contextAction;
     const folderPath = target.dataset.folderPath;
     const entryPath = contextEntryPath;
+    const sourcePath = contextSourcePath;
     hideContextMenu();
 
     if (action === "open-folder" && folderPath !== undefined) {
       navigateToFolder(folderPath);
+      return;
+    }
+    if (action === "extract-folder" && folderPath !== undefined) {
+      selectFolderEntries(folderPath);
+      openExtractDialog("selection");
       return;
     }
     if (action === "preview") {
@@ -2850,8 +3364,39 @@ function bindActions() {
       openExtractDialog("selection");
       return;
     }
+    if (action === "extract-here") {
+      openExtractHereDialog(selectedEntries.size ? "selection" : "archive");
+      return;
+    }
+    if (action === "extract-all") {
+      openExtractDialog("archive");
+      return;
+    }
     if (action === "info" && entryPath) {
       showEntryInfo(entryPath);
+      return;
+    }
+    if (action === "info") {
+      showArchiveInfo();
+      return;
+    }
+    if (action === "reveal-source" && sourcePath) {
+      void revealInFileManager(sourcePath).catch((error) => {
+        setOperationalStatus(unknownErrorMessage(error, "Unable to reveal source."));
+      });
+      return;
+    }
+    if (action === "remove-source" && sourcePath) {
+      createSources = createSources.filter((item) => item !== sourcePath);
+      renderCreateSources();
+      queuePlanRun();
+      return;
+    }
+    if (action === "clear-sources") {
+      createSources = [];
+      currentPlan = null;
+      renderCreateSources();
+      queuePlanRun();
     }
   });
 
@@ -2907,12 +3452,23 @@ function bindActions() {
     renderCreateSources();
     queuePlanRun();
   });
+  sourceListElement.addEventListener("contextmenu", (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>("li[data-source-path]");
+    if (!row?.dataset.sourcePath) {
+      return;
+    }
+    event.preventDefault();
+    showSourceContextMenu(row.dataset.sourcePath, event.clientX, event.clientY);
+  });
 
-  createFormatSelect.addEventListener("change", queuePlanRun);
+  createFormatSelect.addEventListener("change", onCreateFormatChange);
   createDestinationInput.addEventListener("input", () => setCreatePlanState(createPlanState, currentPlanError));
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
   runPlanButton.addEventListener("click", () => void runPlan());
   startCreateButton.addEventListener("click", () => void runCreate());
+  preferencesOutputLocationSelect.addEventListener("change", syncPreferenceOutputState);
+  preferencesChooseOutputButton.addEventListener("click", () => void onSelectPreferenceOutputFolder());
+  preferencesSaveButton.addEventListener("click", savePreferencesFromDialog);
 
   for (const button of [
     createCleanSourceCheckbox,
@@ -2980,6 +3536,8 @@ function bindActions() {
 bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
+bindBrowserFileDropFallback();
+applyCreatePreferenceDefaults();
 renderCreateSources();
 setCreatePlanState("idle");
 setBrowseState("idle", BROWSE_STATUS_IDLE);
@@ -2992,3 +3550,5 @@ if (isLocalDevHost()) {
 }
 loadLocalDevFixtureFromUrl();
 void loadBootstrapState();
+void bindTauriFileDrop();
+void handleStartupQuickAction();
