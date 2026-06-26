@@ -9,6 +9,7 @@ fn main() {
             "start_create",
             "start_extract",
             "preview_entry",
+            "cleanup_preview_roots",
             "test_archive",
             "poll_job_events",
             "cancel_job",

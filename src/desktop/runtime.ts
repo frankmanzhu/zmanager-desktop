@@ -14,6 +14,7 @@ import {
   runNativeOpenDialog,
   runNativeSaveDialog,
 } from "../app/dialogs";
+import { normalizeDroppedPaths } from "./paths";
 
 type StatusReporter = (message: string) => void;
 
@@ -46,7 +47,17 @@ export async function bindDesktopFileDrop(
   }
 
   return getCurrentWebview().onDragDropEvent((event) => {
-    onDropEvent(event.payload);
+    const payload = event.payload;
+    if (payload.type !== "drop") {
+      onDropEvent(payload);
+      return;
+    }
+
+    const dropPaths = normalizeDroppedPaths(payload.paths);
+    onDropEvent({
+      ...payload,
+      paths: dropPaths,
+    });
   });
 }
 

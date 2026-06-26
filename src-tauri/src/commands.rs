@@ -531,6 +531,11 @@ pub fn preview_entry(
 }
 
 #[tauri::command]
+pub fn cleanup_preview_roots(registry: State<'_, JobRegistry>) {
+    registry.cleanup_preview_roots();
+}
+
+#[tauri::command]
 pub fn test_archive(
     request: TestArchiveRequest,
     registry: State<'_, JobRegistry>,

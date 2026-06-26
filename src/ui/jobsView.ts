@@ -1,4 +1,5 @@
 import type { JobKind, JobState } from "../api/types";
+import { deriveJobProgress } from "../app/jobs";
 
 export type JobsViewFormatters = {
   escapeHtml: (value: string) => string;
@@ -6,6 +7,7 @@ export type JobsViewFormatters = {
   formatEventCode: (code: string) => string;
   formatJobKind: (kind: JobKind) => string;
   canRetryJobWithPassword: (jobId: string, state: JobState) => boolean;
+  formatDuration?: (milliseconds: number | null) => string;
 };
 
 export function sortedJobStates(jobs: Map<string, JobState>): JobState[] {
@@ -42,6 +44,9 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       const summary = snapshot.terminalSummary;
       const recentEvents = state.events.slice(-12);
       const canRetryPassword = formatters.canRetryJobWithPassword(snapshot.jobId, state);
+      const progress = deriveJobProgress(state);
+      const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
+      const progressValue = progress.progressPercent ?? 0;
       return `
         <article class="job-card">
           <div class="job-header">
@@ -58,6 +63,24 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
               ${snapshot.canDismiss ? `<button type="button" data-dismiss="${formatters.escapeHtml(snapshot.jobId)}">Dismiss</button>` : ""}
             </div>
           </div>
+          <div class="job-progress-grid">
+            <div><dt>Elapsed time</dt><dd>${formatters.escapeHtml(formatDuration(progress.elapsedMs))}</dd></div>
+            <div><dt>Remaining time</dt><dd>${formatters.escapeHtml(formatDuration(progress.remainingMs))}</dd></div>
+            <div><dt>Files</dt><dd>${progress.processedFiles}</dd></div>
+            <div><dt>Errors</dt><dd>${progress.errorCount}</dd></div>
+            <div><dt>Warnings</dt><dd>${progress.warningCount}</dd></div>
+            <div><dt>Total size</dt><dd>${progress.totalBytes === null ? "" : formatters.formatBytes(progress.totalBytes)}</dd></div>
+            <div><dt>Speed</dt><dd>${progress.speedBytesPerSecond === null ? "" : `${formatters.formatBytes(progress.speedBytesPerSecond)}/s`}</dd></div>
+            <div><dt>Processed</dt><dd>${formatters.formatBytes(progress.processedBytes)}</dd></div>
+            <div><dt>Compressed size</dt><dd>${progress.compressedBytes === null ? "" : formatters.formatBytes(progress.compressedBytes)}</dd></div>
+            <div><dt>Compression ratio</dt><dd>${progress.compressionRatio === null ? "" : `${Math.round(progress.compressionRatio * 100)}%`}</dd></div>
+            <div><dt>Status</dt><dd>${formatters.escapeHtml(progress.latestStatusMessage)}</dd></div>
+            <div class="span-2"><dt>File name</dt><dd>${formatters.escapeHtml(progress.currentFile)}</dd></div>
+          </div>
+          <progress
+            aria-label="Job progress"
+            ${progress.progressPercent === null ? "" : `value="${progressValue.toFixed(0)}" max="100"`}
+          ></progress>
           <ul class="event-list">
             ${
               recentEvents.length
@@ -102,4 +125,15 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       `;
     })
     .join("");
+}
+
+function defaultFormatDuration(milliseconds: number | null): string {
+  if (milliseconds === null || !Number.isFinite(milliseconds)) {
+    return "";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }

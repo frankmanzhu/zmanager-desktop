@@ -13,6 +13,7 @@
     "allow-start-create",
     "allow-start-extract",
     "allow-preview-entry",
+    "allow-cleanup-preview-roots",
     "allow-test-archive",
     "allow-poll-job-events",
     "allow-cancel-job",

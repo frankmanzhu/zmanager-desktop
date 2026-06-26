@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARCHIVE_OPEN_FILTER,
   SUPPORTED_ARCHIVE_FILE_SUFFIXES,
+  SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS,
   baseNameWithoutKnownArchiveExtension,
   getKnownArchiveSuffix,
   isSupportedArchivePath,
@@ -55,6 +57,16 @@ describe("archive file type helpers", () => {
     );
     expect(SUPPORTED_ARCHIVE_FILE_SUFFIXES.indexOf(".7z.001")).toBeLessThan(
       SUPPORTED_ARCHIVE_FILE_SUFFIXES.indexOf(".7z"),
+    );
+  });
+
+  it("keeps the native open dialog filter aligned with supported archive suffixes", () => {
+    expect(ARCHIVE_OPEN_FILTER).toEqual({
+      name: "Archives",
+      extensions: SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS,
+    });
+    expect(SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS).toEqual(
+      expect.arrayContaining(["7z", "7z.001", "tar.gz", "tar.zst", "tzap", "zip", "zipx"]),
     );
   });
 });

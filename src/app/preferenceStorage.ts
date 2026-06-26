@@ -11,7 +11,19 @@ export type PreferenceStorageKey =
   | "customOutputFolderPath"
   | "defaultExtractionBehavior"
   | "quickOpenExtractionEnabled"
-  | "previewCleanupPolicy";
+  | "previewCleanupPolicy"
+  | "showParentFolderItem"
+  | "showGridLines"
+  | "fullRowSelect"
+  | "singleClickOpen"
+  | "alternativeSelectionMode"
+  | "toolbarVisible"
+  | "largeToolbarButtons"
+  | "showToolbarLabels"
+  | "flatViewDefault"
+  | "tableVisibleColumns"
+  | "tableSortKey"
+  | "tableSortAscending";
 
 export const PREFERENCE_KEYS = {
   defaultArchiveFormat: "zmanager.defaultArchiveFormat",
@@ -21,6 +33,18 @@ export const PREFERENCE_KEYS = {
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",
   quickOpenExtractionEnabled: "zmanager.quickOpenExtractionEnabled",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
+  showParentFolderItem: "zmanager.showParentFolderItem",
+  showGridLines: "zmanager.showGridLines",
+  fullRowSelect: "zmanager.fullRowSelect",
+  singleClickOpen: "zmanager.singleClickOpen",
+  alternativeSelectionMode: "zmanager.alternativeSelectionMode",
+  toolbarVisible: "zmanager.toolbarVisible",
+  largeToolbarButtons: "zmanager.largeToolbarButtons",
+  showToolbarLabels: "zmanager.showToolbarLabels",
+  flatViewDefault: "zmanager.flatViewDefault",
+  tableVisibleColumns: "zmanager.tableVisibleColumns",
+  tableSortKey: "zmanager.tableSortKey",
+  tableSortAscending: "zmanager.tableSortAscending",
 } satisfies Record<PreferenceStorageKey, string>;
 
 export function resolvePreferenceStorage(): PreferenceStorage | null {

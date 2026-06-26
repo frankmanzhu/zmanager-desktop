@@ -100,13 +100,11 @@ describe("drop intent classifier", () => {
       archivePaths: [],
       sourcePaths: [],
     });
-    expect(classifyDropIntent(["C:/tmp/a.zip", "C:/tmp/b.7z"], "browse")).toEqual({
-      kind: "rejectUnsupportedDrop",
+    expect(classifyDropIntent(["C:/tmp/a.zip", "C:/tmp/b.7z"], "browse")).toMatchObject({
+      kind: "openArchive",
       surface: "browse",
-      reason: "openRequiresSingleArchive",
-      paths: ["C:/tmp/a.zip", "C:/tmp/b.7z"],
-      archivePaths: ["C:/tmp/a.zip", "C:/tmp/b.7z"],
-      sourcePaths: [],
+      archivePath: "C:/tmp/a.zip",
+      extraArchivePaths: ["C:/tmp/b.7z"],
     });
   });
 });

@@ -69,6 +69,17 @@ export const SUPPORTED_ARCHIVE_FILE_SUFFIXES = [
   return rhs.length - lhs.length;
 });
 
+export const SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS = Array.from(new Set([
+  ...SUPPORTED_COMPOUND_ARCHIVE_EXTENSIONS,
+  ...SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS,
+  ...SUPPORTED_SPLIT_ARCHIVE_FILE_SUFFIXES.map((suffix) => suffix.slice(1)),
+])).sort();
+
+export const ARCHIVE_OPEN_FILTER = {
+  name: "Archives",
+  extensions: SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS,
+};
+
 export function isSupportedArchivePath(path: string): boolean {
   const name = getLastPathComponent(path).toLowerCase();
   if (isTzapVolumeArchiveName(name)) {

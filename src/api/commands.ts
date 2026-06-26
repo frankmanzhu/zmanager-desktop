@@ -64,6 +64,10 @@ export async function runPreviewEntry(request: PreviewEntryRequest): Promise<Pre
   });
 }
 
+export async function cleanupPreviewRoots(): Promise<void> {
+  return invoke<void>("cleanup_preview_roots");
+}
+
 export async function runTestArchive(request: TestArchiveRequest): Promise<StartJobResponseDto> {
   return invoke<StartJobResponseDto>("test_archive", {
     request,

@@ -140,6 +140,10 @@ textarea:disabled {
   opacity: 0.68;
 }
 
+button[data-unsupported]:disabled {
+  border-style: dashed;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -193,6 +197,10 @@ p {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   background: linear-gradient(180deg, var(--chrome-bg) 0, var(--app-bg) 120px);
   color: var(--text);
+}
+
+.workspace.toolbar-hidden .command-toolbar {
+  display: none;
 }
 
 .topbar {
@@ -310,6 +318,19 @@ p {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--chrome-bg) 92%, var(--content-bg));
+}
+
+.command-toolbar.large .tool-button {
+  min-height: 32px;
+  padding: 8px 11px;
+}
+
+.command-toolbar.show-labels .tool-label {
+  display: inline-flex;
+}
+
+.command-toolbar:not(.show-labels) .tool-label {
+  display: none;
 }
 
 .command-toolbar button,
@@ -743,6 +764,7 @@ input[type="search"] {
 .archive-table-wrap {
   min-height: 320px;
   min-height: 0;
+  contain: content;
   overflow: auto;
   border: 0;
   border-radius: 0;
@@ -784,10 +806,27 @@ th[data-sort-key]:hover {
 
 tbody tr {
   background: var(--content-bg);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 36px;
 }
 
 tbody tr:hover {
   background: var(--content-bg-hover);
+}
+
+table.single-click-open tbody tr[data-entry-path],
+table.single-click-open tbody tr[data-folder-path] {
+  cursor: pointer;
+}
+
+table:not(.show-grid) tbody th,
+table:not(.show-grid) tbody td {
+  border-bottom-color: transparent;
+}
+
+table.full-row-select tbody tr.is-selected,
+table.full-row-select tbody tr[aria-selected="true"] {
+  background: var(--selected-bg);
 }
 
 tbody tr:focus-visible {
@@ -797,7 +836,7 @@ tbody tr:focus-visible {
 
 tbody tr[aria-selected="true"],
 tbody tr.is-selected {
-  background: var(--selected-bg);
+  background: transparent;
 }
 
 td:first-child,
@@ -1029,6 +1068,22 @@ th:first-child {
 .jobs-list {
   display: grid;
   gap: 8px;
+}
+
+.job-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px 12px;
+}
+
+.job-progress-grid dt,
+.job-progress-grid dd {
+  margin: 0;
+}
+
+.job-progress-grid dt {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .job-card {
@@ -1306,6 +1361,23 @@ progress {
   display: none;
 }
 
+@media (min-resolution: 1.5dppx), (min-resolution: 144dpi) {
+  :root {
+    --font-ui: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ubuntu, Cantarell, "Noto Sans", Arial, sans-serif;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+
+  .workspace {
+    --zmanager-status-bar-parts: 3;
+  }
+}
+
 @media (max-width: 960px) {
   body {
     overflow: auto;
@@ -1324,11 +1396,54 @@ progress {
   .browse-controls {
     justify-content: flex-start;
   }
+
+  .status-part:nth-child(3),
+  .status-part:nth-child(4) {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px), (max-height: 800px) {
+  .toolbar,
+  .command-toolbar {
+    padding-inline: 8px;
+  }
+
+  .path-bar {
+    padding-inline: 8px;
+    grid-template-columns: auto auto minmax(0, 1fr) minmax(140px, 180px) auto;
+  }
+
+  .status-bar {
+    padding-inline: 6px;
+    min-height: 32px;
+  }
+}
+
+@media (max-width: 740px), (max-height: 520px) {
+  .command-toolbar {
+    min-height: 48px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    gap: 2px;
+  }
+
+  .path-bar {
+    min-height: 40px;
+    gap: 6px;
+  }
+
+  .path-bar button,
+  .path-bar input,
+  .path-bar label {
+    min-height: 30px;
+  }
 }
 
 @media (max-width: 760px) {
   .workspace {
     min-height: 100vh;
+    --zmanager-status-bar-parts: 1;
   }
 
   .topbar,
@@ -1338,6 +1453,17 @@ progress {
     align-items: stretch;
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+
+  .status-bar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .status-part:nth-child(2),
+  .status-part:nth-child(3),
+  .status-part:nth-child(4) {
+    display: none;
   }
 
   .toolbar,
@@ -1404,4 +1530,62 @@ progress {
   .contract ul {
     columns: 1;
   }
+}
+
+/* Milestone 1 static shell hardening: bind layout to runtime constants */
+:root {
+  --zmanager-min-window-width: 720px;
+  --zmanager-min-window-height: 480px;
+  --zmanager-menu-height: 30px;
+  --zmanager-toolbar-height: 54px;
+  --zmanager-pathbar-height: 44px;
+  --zmanager-statusbar-height: 28px;
+  --zmanager-nav-pane-min: 160px;
+  --zmanager-nav-pane-max: 220px;
+  --zmanager-details-pane-min: 200px;
+  --zmanager-details-pane-max: 280px;
+  --zmanager-statusbar-parts: 4;
+}
+
+.app-menu {
+  height: var(--zmanager-menu-height);
+  min-height: var(--zmanager-menu-height);
+}
+
+.command-toolbar {
+  height: var(--zmanager-toolbar-height);
+  min-height: var(--zmanager-toolbar-height);
+}
+
+.path-bar {
+  height: var(--zmanager-path-bar-height);
+  min-height: var(--zmanager-path-bar-height);
+}
+
+.browser-shell {
+  grid-template-columns: minmax(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-max)) 1fr minmax(var(--zmanager-details-pane-min), var(--zmanager-details-pane-max));
+  min-height: 0;
+}
+
+.navigation-pane {
+  min-width: var(--zmanager-nav-pane-min);
+  max-width: var(--zmanager-nav-pane-max);
+}
+
+.details-pane {
+  min-width: var(--zmanager-details-pane-min);
+  max-width: var(--zmanager-details-pane-max);
+}
+
+.status-bar {
+  height: var(--zmanager-statusbar-height);
+  min-height: var(--zmanager-statusbar-height);
+  grid-template-columns: repeat(var(--zmanager-statusbar-parts), minmax(0, 1fr)) auto;
+}
+
+.status-part {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

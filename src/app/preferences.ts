@@ -1,5 +1,11 @@
 import type { CreateArchiveFormat } from "./createFlow";
 import {
+  DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+  normalizeColumnSettings,
+  type ArchiveSortKey,
+  type ArchiveTableColumnId,
+} from "./archiveTable";
+import {
   PREFERENCE_KEYS,
   resolvePreferenceStorage,
   type PreferenceStorage,
@@ -17,6 +23,18 @@ export type AppPreferences = {
   defaultExtractionBehavior: DefaultExtractionBehavior;
   quickOpenExtractionEnabled: boolean;
   previewCleanupPolicy: PreviewCleanupPolicy;
+  showParentFolderItem: boolean;
+  showGridLines: boolean;
+  fullRowSelect: boolean;
+  singleClickOpen: boolean;
+  alternativeSelectionMode: boolean;
+  toolbarVisible: boolean;
+  largeToolbarButtons: boolean;
+  showToolbarLabels: boolean;
+  flatViewDefault: boolean;
+  tableVisibleColumnIds: ArchiveTableColumnId[];
+  tableSortKey: ArchiveSortKey;
+  tableSortAscending: boolean;
 };
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
@@ -27,12 +45,40 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultExtractionBehavior: "askEveryTime",
   quickOpenExtractionEnabled: false,
   previewCleanupPolicy: "beforeNextPreview",
+  showParentFolderItem: true,
+  showGridLines: true,
+  fullRowSelect: true,
+  singleClickOpen: false,
+  alternativeSelectionMode: false,
+  toolbarVisible: true,
+  largeToolbarButtons: false,
+  showToolbarLabels: true,
+  flatViewDefault: false,
+  tableVisibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+  tableSortKey: "name",
+  tableSortAscending: true,
 };
 
 const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ"] as const;
 const OUTPUT_LOCATIONS = ["sourceFolder", "customFolder"] as const;
 const EXTRACTION_BEHAVIORS = ["askEveryTime", "extractHere", "extractToFolder"] as const;
 const PREVIEW_CLEANUP_POLICIES = ["beforeNextPreview", "whenAppCloses"] as const;
+const TABLE_SORT_KEYS = [
+  "name",
+  "size",
+  "compressedSize",
+  "modified",
+  "created",
+  "accessed",
+  "attributes",
+  "encrypted",
+  "method",
+  "crc",
+  "block",
+  "comment",
+  "kind",
+  "ratio",
+] as const;
 
 function isOneOf<T extends readonly string[]>(values: T, value: string | null): value is T[number] {
   return typeof value === "string" && values.includes(value);
@@ -52,6 +98,16 @@ function cleanPath(value: string | null): string {
   return value?.trim() ?? "";
 }
 
+function loadVisibleColumnIds(value: string | null): ArchiveTableColumnId[] {
+  if (!value) {
+    return DEFAULT_APP_PREFERENCES.tableVisibleColumnIds;
+  }
+
+  return normalizeColumnSettings({
+    visibleColumnIds: value.split(",").map((item) => item.trim()) as ArchiveTableColumnId[],
+  }).visibleColumnIds;
+}
+
 export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPreferences {
   if (!storage) {
     return { ...DEFAULT_APP_PREFERENCES };
@@ -61,6 +117,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   const defaultOutputLocation = storage.getItem(PREFERENCE_KEYS.defaultOutputLocation);
   const defaultExtractionBehavior = storage.getItem(PREFERENCE_KEYS.defaultExtractionBehavior);
   const previewCleanupPolicy = storage.getItem(PREFERENCE_KEYS.previewCleanupPolicy);
+  const tableSortKey = storage.getItem(PREFERENCE_KEYS.tableSortKey);
 
   return {
     defaultArchiveFormat: isOneOf(ARCHIVE_FORMATS, defaultArchiveFormat)
@@ -84,6 +141,50 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
       ? previewCleanupPolicy
       : DEFAULT_APP_PREFERENCES.previewCleanupPolicy,
+    showParentFolderItem: storedBool(
+      storage.getItem(PREFERENCE_KEYS.showParentFolderItem),
+      DEFAULT_APP_PREFERENCES.showParentFolderItem,
+    ),
+    showGridLines: storedBool(
+      storage.getItem(PREFERENCE_KEYS.showGridLines),
+      DEFAULT_APP_PREFERENCES.showGridLines,
+    ),
+    fullRowSelect: storedBool(
+      storage.getItem(PREFERENCE_KEYS.fullRowSelect),
+      DEFAULT_APP_PREFERENCES.fullRowSelect,
+    ),
+    singleClickOpen: storedBool(
+      storage.getItem(PREFERENCE_KEYS.singleClickOpen),
+      DEFAULT_APP_PREFERENCES.singleClickOpen,
+    ),
+    alternativeSelectionMode: storedBool(
+      storage.getItem(PREFERENCE_KEYS.alternativeSelectionMode),
+      DEFAULT_APP_PREFERENCES.alternativeSelectionMode,
+    ),
+    toolbarVisible: storedBool(
+      storage.getItem(PREFERENCE_KEYS.toolbarVisible),
+      DEFAULT_APP_PREFERENCES.toolbarVisible,
+    ),
+    largeToolbarButtons: storedBool(
+      storage.getItem(PREFERENCE_KEYS.largeToolbarButtons),
+      DEFAULT_APP_PREFERENCES.largeToolbarButtons,
+    ),
+    showToolbarLabels: storedBool(
+      storage.getItem(PREFERENCE_KEYS.showToolbarLabels),
+      DEFAULT_APP_PREFERENCES.showToolbarLabels,
+    ),
+    flatViewDefault: storedBool(
+      storage.getItem(PREFERENCE_KEYS.flatViewDefault),
+      DEFAULT_APP_PREFERENCES.flatViewDefault,
+    ),
+    tableVisibleColumnIds: loadVisibleColumnIds(storage.getItem(PREFERENCE_KEYS.tableVisibleColumns)),
+    tableSortKey: isOneOf(TABLE_SORT_KEYS, tableSortKey)
+      ? tableSortKey
+      : DEFAULT_APP_PREFERENCES.tableSortKey,
+    tableSortAscending: storedBool(
+      storage.getItem(PREFERENCE_KEYS.tableSortAscending),
+      DEFAULT_APP_PREFERENCES.tableSortAscending,
+    ),
   };
 }
 
@@ -98,6 +199,20 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
   storage.setItem(PREFERENCE_KEYS.quickOpenExtractionEnabled, String(preferences.quickOpenExtractionEnabled));
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
+  storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
+  storage.setItem(PREFERENCE_KEYS.showGridLines, String(preferences.showGridLines));
+  storage.setItem(PREFERENCE_KEYS.fullRowSelect, String(preferences.fullRowSelect));
+  storage.setItem(PREFERENCE_KEYS.singleClickOpen, String(preferences.singleClickOpen));
+  storage.setItem(PREFERENCE_KEYS.alternativeSelectionMode, String(preferences.alternativeSelectionMode));
+  storage.setItem(PREFERENCE_KEYS.toolbarVisible, String(preferences.toolbarVisible));
+  storage.setItem(PREFERENCE_KEYS.largeToolbarButtons, String(preferences.largeToolbarButtons));
+  storage.setItem(PREFERENCE_KEYS.showToolbarLabels, String(preferences.showToolbarLabels));
+  storage.setItem(PREFERENCE_KEYS.flatViewDefault, String(preferences.flatViewDefault));
+  storage.setItem(PREFERENCE_KEYS.tableVisibleColumns, normalizeColumnSettings({
+    visibleColumnIds: preferences.tableVisibleColumnIds,
+  }).visibleColumnIds.join(","));
+  storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
+  storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
 
   const customOutputFolderPath = preferences.customOutputFolderPath.trim();
   if (customOutputFolderPath) {
@@ -114,6 +229,10 @@ export function preferencesWithPatch(
   return {
     ...preferences,
     ...patch,
+    tableVisibleColumnIds:
+      patch.tableVisibleColumnIds !== undefined
+        ? normalizeColumnSettings({ visibleColumnIds: patch.tableVisibleColumnIds }).visibleColumnIds
+        : preferences.tableVisibleColumnIds,
     customOutputFolderPath:
       patch.customOutputFolderPath !== undefined
         ? patch.customOutputFolderPath.trim()

@@ -1,10 +1,12 @@
-# Classic Archive Manager GUI Implementation Plan
+﻿# 7-Zip File Manager-Style ZManager GUI Implementation Plan
 
 ## Purpose
 
-This plan turns `docs/ARCHIVE_MANAGER_GUI_DETAILED_REQUIREMENTS.md` into self-contained implementation milestones. Each milestone should leave the app in a runnable, demonstrably better state. The implementor should be able to complete, verify, and review each milestone independently before starting the next one.
+This plan turns `docs/ZMANAGER_GUI_DETAILED_REQUIREMENTS.md` into self-contained implementation milestones for the ZManager desktop app. Each milestone should leave the app in a runnable, demonstrably better state. The implementor should be able to complete, verify, and review each milestone independently before starting the next one.
 
-The target result is a dense classic archive manager GUI: menu bar, toolbar, path bar, details table, status bar, operation dialogs, progress/job UI, and drag/drop behavior similar to 7-Zip File Manager.
+The target result is a dense classic ZManager GUI modeled closely on 7-Zip File Manager: menu bar, toolbar, path bar, details table, status bar, operation dialogs, progress/job UI, and drag/drop behavior. The product name shown to users remains `ZManager`; avoid introducing generic placeholder app names in window titles, dialog titles, About labels, or diagnostics product names.
+
+When the GUI requirements or this plan are ambiguous, use the local 7-Zip source tree at `C:\Users\frankzhu\Projects\7z2601-src` as a UX and behavior reference for 7-Zip File Manager-like desktop interactions. Treat that source as a reference only: do not copy 7-Zip code into this repository, do not add 7-Zip as an app dependency, and do not reimplement archive engine behavior in TypeScript.
 
 ## Implementation Rules
 
@@ -14,6 +16,24 @@ The target result is a dense classic archive manager GUI: menu bar, toolbar, pat
 - Keep each milestone small enough to verify manually and, where practical, with automated tests.
 - Do not persist passwords or temporary extracted contents.
 - Prefer table-first desktop ergonomics over card-heavy layouts.
+- Keep user-visible app naming as `ZManager`. Generic phrases like "archive", "archive entry", and "archive manager workflow" are fine, but product chrome should say `ZManager`.
+
+## Native Platform Ownership Rules
+
+Native behavior must be split by platform as soon as platform-specific behavior appears. Shared archive core behavior and GUI logic should stay in the current shared framework when it remains clean and maintainable; split only the native pieces that cannot be implemented cleanly through shared abstractions. Do not hide Windows/Linux differences in random frontend call sites.
+
+- Keep shared frontend code platform-neutral. It may call owned abstractions such as `desktop/runtime.ts`, Tauri command DTOs, or command-state helpers, and it may own common GUI state, reducers, command mapping, table formatting, filtering, sorting, selection, and job presentation.
+- Keep shared Rust command contracts platform-neutral where practical. DTOs should use normalized strings and explicit fields rather than platform-shaped ad hoc payloads.
+- Keep Windows-specific native behavior under Windows-owned modules and packaging:
+  - `src-tauri/src/platform/windows.rs`
+  - `packaging/windows/`
+  - Windows file picker filters, system opener behavior, drag/drop path handling, long-path and separator edge cases, Explorer integration, and installer/shell integration.
+- Keep Linux-specific native behavior under Linux-owned modules and packaging:
+  - `src-tauri/src/platform/linux.rs`
+  - `packaging/linux/`
+  - Linux file picker behavior, system opener behavior, drag/drop URI/file-manager formats, symlink-heavy paths, MIME, `.desktop`, service menus, and desktop/file-manager integration.
+- If a milestone touches native file dialogs, system open/reveal, drag/drop, shell integration, file associations, installer behavior, temp cleanup, or OS path semantics, include a Windows path and a Linux path in that milestone's implementation and verification notes.
+- Platform-specific fixes must not regress the other platform. Add shared command-boundary tests for platform-neutral DTO behavior and platform-owned smoke notes for OS behavior.
 
 ## Milestone 1: Static Classic Shell
 
@@ -35,7 +55,7 @@ Create the visible application shell with no archive behavior required yet.
   - white table area
   - thin separators
   - rectangular controls
-- Window title behavior for empty state: `Archive Manager`.
+- Window title behavior for empty state: `ZManager`.
 
 ### Implementation Tasks
 
@@ -54,6 +74,7 @@ Create the visible application shell with no archive behavior required yet.
 - Launching the app shows all five main regions in order.
 - The toolbar button order is Add, Extract, Test, Copy, Move, Delete, Info.
 - The menu bar contains all top-level menu names.
+- Product chrome and default window title consistently show `ZManager`.
 - Empty table text is `Open or create an archive to begin.`
 - Status bar shows `0 / 0 object(s) selected` or equivalent empty state.
 - Window remains usable at 720x480.
@@ -89,6 +110,7 @@ Make the classic command surface consistent and state-driven, even before all co
   - mutable operation supported
   - job running
 - Populate File, Edit, View, Favorites, Tools, and Help menus with required items.
+- Name Help/About items with the product name, for example `About ZManager...`.
 - Add CRC submenu items as disabled or post-MVP if backend support is missing.
 - Add visible disabled mutation commands for Rename, Move, Delete, Comment, Create Folder, and Create File when not supported.
 - Route unsupported enabled commands to a single user-facing message: `Operation is not supported.`
@@ -99,14 +121,14 @@ Make the classic command surface consistent and state-driven, even before all co
 - With a loaded archive and no selection, Test and Info are enabled.
 - With selected rows, Extract/Copy/Info/View are enabled.
 - Mutation commands are visible but disabled unless explicitly supported.
-- Menu labels and shortcuts match the detailed requirement document.
+- Menu labels and shortcuts match the detailed requirement document, with product-name labels consistently using `ZManager`.
 
 ### Suggested Tests
 
 - Unit tests for command state selector.
 - DOM tests for menu item visibility and disabled states across fixture app states.
 
-## Milestone 3: Archive Table Baseline
+## Milestone 3: Archive Table Baseline âœ…
 
 ### Goal
 
@@ -166,7 +188,7 @@ Implement the details table as the primary archive browser surface.
 - DOM tests for default headers.
 - DOM tests for empty/loading/error state rows.
 
-## Milestone 4: Sorting, Selection, And Status Bar
+## Milestone 4: Sorting, Selection, And Status Bar ✅
 
 ### Goal
 
@@ -215,7 +237,7 @@ Make table interaction feel like a classic file manager.
 - Unit tests for selection reducer/state machine.
 - DOM tests for status bar values after fixture interactions.
 
-## Milestone 5: Archive Opening And Listing Integration
+## Milestone 5: Archive Opening And Listing Integration ✅
 
 ### Goal
 
@@ -231,11 +253,14 @@ Connect the shell to real archive listing behavior through the command layer.
 
 ### Implementation Tasks
 
-- Wire Open command to native file picker.
+- Wire Open command to native file picker through a platform-owned abstraction:
+  - Windows file picker behavior belongs to the Windows platform module.
+  - Linux file picker behavior belongs to the Linux platform module.
+  - The frontend calls only the shared abstraction.
 - Call list archive command with selected path.
 - Map listing DTOs into table row model.
 - Display archive path in path bar.
-- Update window title to `{archive file name} - Archive Manager`.
+- Update window title to `{archive file name} - ZManager`.
 - Implement Refresh command.
 - Handle normalized errors.
 - Handle password-required and invalid-password states with transient password prompt.
@@ -248,6 +273,7 @@ Connect the shell to real archive listing behavior through the command layer.
 - Opening a password-protected archive shows a password prompt.
 - Entering a wrong password shows invalid-password message and allows retry.
 - Window title changes after opening an archive.
+- Windows and Linux native file picker handling are split into platform-owned modules when behavior differs.
 - No password value appears in persisted storage or console diagnostics.
 
 ### Suggested Tests
@@ -256,7 +282,7 @@ Connect the shell to real archive listing behavior through the command layer.
 - UI test for password-required flow using mocked command responses.
 - Unit test for archive path/title formatting.
 
-## Milestone 6: Folder Navigation And Flat View
+## Milestone 6: Folder Navigation And Flat View ✅
 
 ### Goal
 
@@ -303,7 +329,7 @@ Support browsing inside archive folder hierarchy and flattened archive view.
 - Unit tests for current-folder row derivation.
 - UI tests for folder navigation and flat toggle.
 
-## Milestone 7: Details Pane And Properties
+## Milestone 7: Details Pane And Properties ✅
 
 ### Goal
 
@@ -356,7 +382,7 @@ Show useful archive and selection metadata without leaving the main window.
 - Unit tests for aggregate selection details.
 - DOM tests for no/single/multiple selection details.
 
-## Milestone 8: Extract Dialog And Extract Jobs
+## Milestone 8: Extract Dialog And Extract Jobs ✅
 
 ### Goal
 
@@ -384,6 +410,9 @@ Provide a complete classic Extract workflow.
   - show password toggle
   - restore file security when supported
   - OK, Cancel, Help
+- Route destination browsing through platform-owned native paths when behavior differs:
+  - Windows folder picker behavior belongs to the Windows platform module.
+  - Linux folder picker behavior belongs to the Linux platform module.
 - Wire toolbar/menu/F5 extraction commands.
 - For no selection, default to whole archive extraction.
 - For selection, pass selected entry paths.
@@ -402,6 +431,7 @@ Provide a complete classic Extract workflow.
 - Starting extraction creates a visible running job.
 - Selected-entry extraction passes only selected paths.
 - Whole-archive extraction works with no selected rows.
+- Windows and Linux destination picker behavior are verified through platform-owned paths where native behavior differs.
 - Cancel requests job cancellation and updates UI state.
 
 ### Suggested Tests
@@ -410,7 +440,7 @@ Provide a complete classic Extract workflow.
 - Unit test for extract request mapping.
 - UI test with mocked job lifecycle.
 
-## Milestone 9: Progress Dialog Or Job Drawer
+## Milestone 9: Progress Dialog Or Job Drawer ✅
 
 ### Goal
 
@@ -506,6 +536,10 @@ Implement a classic Add to Archive flow for creating archives from files/folders
   - options group
   - encryption group
   - OK/Create, Cancel, Help
+- Route source picker and save-dialog behavior through platform-owned native paths:
+  - Windows file/folder/save behavior belongs to the Windows platform module.
+  - Linux file/folder/save behavior belongs to the Linux platform module.
+  - The frontend receives normalized selected paths through the shared abstraction.
 - Support dropping files/folders onto the dialog source list.
 - Validate archive path and at least one source.
 - Validate password confirmation.
@@ -518,6 +552,7 @@ Implement a classic Add to Archive flow for creating archives from files/folders
 
 - Add toolbar/menu opens Add to Archive dialog.
 - Source picker adds files/folders.
+- Windows and Linux picker/save behavior are verified through platform-owned paths where native behavior differs.
 - Dragging files/folders into dialog adds sources.
 - Remove source removes selected source rows.
 - Password mismatch blocks Create with visible message.
@@ -530,7 +565,7 @@ Implement a classic Add to Archive flow for creating archives from files/folders
 - Unit tests for create request mapping and validation.
 - UI test for drag source list using mocked file paths where possible.
 
-## Milestone 11: Test Archive And Preview/View
+## Milestone 11: Test Archive And Preview/View ✅
 
 ### Goal
 
@@ -550,10 +585,12 @@ Implement non-extract inspection commands.
 - Implement Preview/View command for exactly one selected file row.
 - If no row or multiple rows selected, show `You must select one file.`
 - Use temporary extraction command for preview.
-- Open preview path with system opener.
+- Open preview path with the platform-owned system opener:
+  - Windows system opener behavior belongs to the Windows platform module.
+  - Linux system opener behavior belongs to the Linux platform module.
 - Track cleanup root returned by preview command.
 - Add Delete Temporary Files command for cleanup view/action.
-- Implement Open Outside with system opener when a real path or preview path is available.
+- Implement Open Outside through the same platform-owned system opener when a real path or preview path is available.
 
 ### Verification
 
@@ -562,6 +599,7 @@ Implement non-extract inspection commands.
 - Preview with no selection or multiple selection shows a clear message.
 - Temporary preview roots are tracked.
 - Delete Temporary Files command can clean tracked preview roots.
+- Windows and Linux Open Outside behavior are split and verified through platform-owned opener paths.
 
 ### Suggested Tests
 
@@ -569,7 +607,7 @@ Implement non-extract inspection commands.
 - UI test for test job mocked lifecycle.
 - Unit test for temp cleanup registry/state.
 
-## Milestone 12: Context Menus And Header Column Chooser
+## Milestone 12: Context Menus And Header Column Chooser âœ…
 
 ### Goal
 
@@ -618,7 +656,7 @@ Match classic right-click workflows.
 - Unit tests for column settings reducer.
 - Persistence test for column settings.
 
-## Milestone 13: Drag/Drop On Main Window
+## Milestone 13: Drag/Drop On Main Window ✅
 
 ### Goal
 
@@ -629,11 +667,15 @@ Make drag/drop a first-class main-window workflow.
 - Drop archive to open.
 - Drop files/folders to create flow.
 - Ambiguous drop choices.
+- Windows/Linux drop payload normalization.
 
 ### Implementation Tasks
 
 - Add drop target to main workspace.
-- Detect dropped archive files by extension/capability.
+- Normalize native drop payloads in platform-owned code before the frontend classifies the drop:
+  - Windows handles file-system paths and Explorer-originated drops in the Windows platform module.
+  - Linux handles file paths, file-manager URI formats, and symlink-heavy drops in the Linux platform module.
+- Detect dropped archive files by extension/capability after platform normalization.
 - Opening a single dropped archive loads listing.
 - Dropping multiple archive files opens the first and shows a non-blocking note or choice for the rest.
 - Dropping files/folders with no archive open opens Add to Archive dialog with sources preloaded.
@@ -649,13 +691,14 @@ Make drag/drop a first-class main-window workflow.
 - Dropping a folder opens Add to Archive dialog with that folder as a source.
 - Dropping files while an archive is open shows a choice instead of guessing.
 - Unsupported drops show a clear message and do not change current archive state.
+- Windows and Linux drop payload differences are covered by platform-owned smoke notes or tests.
 
 ### Suggested Tests
 
 - Unit tests for drop classification.
 - UI test for drop state using mocked file paths if environment supports it.
 
-## Milestone 14: Options And Safe Persistence
+## Milestone 14: Options And Safe Persistence ✅
 
 ### Goal
 
@@ -666,6 +709,7 @@ Persist safe classic preferences and expose them in an Options dialog.
 - Options pages.
 - Safe preference storage.
 - Apply settings to UI.
+- Platform-owned options for shell/file associations.
 
 ### Implementation Tasks
 
@@ -675,6 +719,9 @@ Persist safe classic preferences and expose them in an Options dialog.
   - Folders
   - Settings
   - Language, optional
+- Keep platform-owned settings split:
+  - Windows association and Explorer/menu integration settings belong to the Windows module and Windows packaging.
+  - Linux MIME, `.desktop`, service menu, and file-manager integration settings belong to the Linux module and Linux packaging.
 - Implement settings:
   - Show `..` item
   - Show real file icons
@@ -702,6 +749,7 @@ Persist safe classic preferences and expose them in an Options dialog.
 - Changing Show `..` item affects subfolder display.
 - Toolbar label/large button preferences update toolbar.
 - Closing/reopening app preserves safe preferences.
+- Windows/Linux shell integration settings are shown only through platform-owned capability data.
 - Search of persisted preference data shows no password values after password workflows.
 
 ### Suggested Tests
@@ -710,7 +758,7 @@ Persist safe classic preferences and expose them in an Options dialog.
 - UI tests for applying table/toolbar settings.
 - Persistence test for safe preferences.
 
-## Milestone 15: Keyboard Shortcuts And Accessibility Pass
+## Milestone 15: Keyboard Shortcuts And Accessibility Pass ✅
 
 ### Goal
 
@@ -749,7 +797,7 @@ Make the app efficient for keyboard-heavy users and usable with assistive tech.
 - Accessibility lint if available.
 - Manual keyboard-only smoke test.
 
-## Milestone 16: Polish, Responsiveness, And Shared Release Readiness
+## Milestone 16: Polish, Responsiveness, And Shared Release Readiness ✅
 
 ### Goal
 
@@ -761,7 +809,7 @@ Bring the shared GUI from functionally complete to release-candidate quality bef
 - Responsive minimum-size behavior.
 - Error polish.
 - Performance on large listings.
-- Shared smoke checks that do not require a platform-owned integration path.
+- Shared smoke checks that do not require platform-owned native integration.
 
 ### Implementation Tasks
 
@@ -772,10 +820,11 @@ Bring the shared GUI from functionally complete to release-candidate quality bef
   - high-DPI scaling
 - Ensure table handles large listings without blocking interaction.
 - Add virtualization if needed for large archives.
-- Audit all user-facing text for consistency.
+- Audit all user-facing text for consistency and confirm product naming is `ZManager`.
 - Audit all disabled/unsupported commands.
 - Audit password handling.
 - Audit temporary preview cleanup.
+- Confirm all native behavior discovered during shared polish has an explicit Windows or Linux owner before proceeding to platform release readiness.
 - Add screenshots to review artifact or QA notes if the workflow supports it.
 
 ### Verification
@@ -783,6 +832,7 @@ Bring the shared GUI from functionally complete to release-candidate quality bef
 - No incoherent overlap at minimum size.
 - Text fits in toolbar, path bar, dialogs, status bar, and table headers.
 - Large fixture archive remains responsive.
+- Product chrome consistently uses `ZManager`.
 - No password appears in logs, persistent storage, diagnostics, or job messages.
 
 ### Suggested Tests
@@ -917,4 +967,5 @@ Each milestone is complete only when:
 
 ## Final Acceptance
 
-The implementation is complete when all milestone verification sections pass and the app satisfies the acceptance checklist in `docs/ARCHIVE_MANAGER_GUI_DETAILED_REQUIREMENTS.md`.
+The implementation is complete when all milestone verification sections pass and the app satisfies the acceptance checklist in `docs/ZMANAGER_GUI_DETAILED_REQUIREMENTS.md`, applying this plan's explicit naming rule: the user-visible product name is `ZManager`.
+

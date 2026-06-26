@@ -1,10 +1,12 @@
-# Classic Archive Manager GUI Detailed Requirements
+# Classic ZManager GUI Detailed Requirements
 
 ## Goal
 
-Build a desktop archive manager GUI that closely resembles the classic 7-Zip File Manager experience. The interface should feel like a compact Windows file utility: menu bar, toolbar, path bar, details table, optional folder/details panes, status bar, modal operation dialogs, and strong drag/drop support.
+Build the ZManager desktop GUI so it closely resembles the classic 7-Zip File Manager experience. The interface should feel like a compact desktop file utility: menu bar, toolbar, path bar, details table, optional folder/details panes, status bar, modal operation dialogs, and strong drag/drop support.
 
 This document is an implementation-facing GUI specification. It describes the visible layout, controls, columns, formats, menus, dialogs, states, and interactions expected from the application.
+
+Shared archive engine behavior and common GUI logic should remain shared in the current Rust/Tauri/frontend framework where that stays clean. Native work that cannot be implemented cleanly through shared abstractions must be split into Windows-owned and Linux-owned paths.
 
 ## Visual Style
 
@@ -28,9 +30,9 @@ This document is an implementation-facing GUI specification. It describes the vi
 
 ### Window Title
 
-- Default title: `Archive Manager`
-- When an archive is open: `{archive file name} - Archive Manager`
-- When browsing inside a folder within an archive: `{archive file name}\{current archive path} - Archive Manager`
+- Default title: `ZManager`
+- When an archive is open: `{archive file name} - ZManager`
+- When browsing inside a folder within an archive: `{archive file name}\{current archive path} - ZManager`
 - When a long operation is active, do not replace the title with progress text. Progress belongs in the job/progress UI.
 
 ### Overall Layout
@@ -186,7 +188,7 @@ Required items:
 
 - Contents... (`F1`)
 - separator
-- About Archive Manager...
+- About ZManager...
 
 ## Main Toolbar
 
@@ -950,6 +952,7 @@ Never persist:
 
 An implementation satisfies this GUI spec when:
 
+- Product chrome, window titles, About labels, and diagnostics use `ZManager`.
 - The first visible screen has a menu bar, toolbar, path bar, archive table, and status bar.
 - The archive table defaults to Details view with Name, Size, Packed Size, and Modified columns.
 - The table can show the optional property columns listed above when data exists.

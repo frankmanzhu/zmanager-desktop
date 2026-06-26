@@ -11,6 +11,7 @@ pub const COMMAND_PLAN_CREATE: &str = "plan_create";
 pub const COMMAND_START_CREATE: &str = "start_create";
 pub const COMMAND_START_EXTRACT: &str = "start_extract";
 pub const COMMAND_PREVIEW_ENTRY: &str = "preview_entry";
+pub const COMMAND_CLEANUP_PREVIEW_ROOTS: &str = "cleanup_preview_roots";
 pub const COMMAND_POLL_JOB_EVENTS: &str = "poll_job_events";
 pub const COMMAND_CANCEL_JOB: &str = "cancel_job";
 pub const COMMAND_DISMISS_JOB: &str = "dismiss_job";
@@ -34,6 +35,7 @@ pub const PLANNED_COMMANDS: &[&str] = &[
     COMMAND_START_CREATE,
     COMMAND_START_EXTRACT,
     COMMAND_PREVIEW_ENTRY,
+    COMMAND_CLEANUP_PREVIEW_ROOTS,
     COMMAND_POLL_JOB_EVENTS,
     COMMAND_CANCEL_JOB,
     COMMAND_DISMISS_JOB,

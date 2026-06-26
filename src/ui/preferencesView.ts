@@ -16,6 +16,15 @@ export type PreferencesViewElements = {
   chooseOutputButton: HTMLButtonElement;
   cleanSourceCheckbox: HTMLInputElement;
   quickOpenExtractCheckbox: HTMLInputElement;
+  showParentFolderItemCheckbox: HTMLInputElement;
+  showGridLinesCheckbox: HTMLInputElement;
+  fullRowSelectCheckbox: HTMLInputElement;
+  singleClickOpenCheckbox: HTMLInputElement;
+  alternativeSelectionModeCheckbox: HTMLInputElement;
+  toolbarVisibleCheckbox: HTMLInputElement;
+  largeToolbarButtonsCheckbox: HTMLInputElement;
+  showToolbarLabelsCheckbox: HTMLInputElement;
+  flatViewDefaultCheckbox: HTMLInputElement;
   statusElement: HTMLParagraphElement;
 };
 
@@ -36,6 +45,15 @@ export function renderPreferencesDialog(
   elements.customOutputInput.value = preferences.customOutputFolderPath;
   elements.cleanSourceCheckbox.checked = preferences.defaultCleanSourceEnabled;
   elements.quickOpenExtractCheckbox.checked = preferences.quickOpenExtractionEnabled;
+  elements.showParentFolderItemCheckbox.checked = preferences.showParentFolderItem;
+  elements.showGridLinesCheckbox.checked = preferences.showGridLines;
+  elements.fullRowSelectCheckbox.checked = preferences.fullRowSelect;
+  elements.singleClickOpenCheckbox.checked = preferences.singleClickOpen;
+  elements.alternativeSelectionModeCheckbox.checked = preferences.alternativeSelectionMode;
+  elements.toolbarVisibleCheckbox.checked = preferences.toolbarVisible;
+  elements.largeToolbarButtonsCheckbox.checked = preferences.largeToolbarButtons;
+  elements.showToolbarLabelsCheckbox.checked = preferences.showToolbarLabels;
+  elements.flatViewDefaultCheckbox.checked = preferences.flatViewDefault;
   elements.statusElement.textContent = "Preferences are stored locally and never include passwords.";
   elements.statusElement.className = "status status-idle";
   syncPreferenceOutputState(elements);
@@ -53,5 +71,14 @@ export function collectPreferencesFromDialog(
     defaultExtractionBehavior: elements.defaultExtractionSelect.value as DefaultExtractionBehavior,
     quickOpenExtractionEnabled: elements.quickOpenExtractCheckbox.checked,
     previewCleanupPolicy: elements.previewCleanupSelect.value as PreviewCleanupPolicy,
+    showParentFolderItem: elements.showParentFolderItemCheckbox.checked,
+    showGridLines: elements.showGridLinesCheckbox.checked,
+    fullRowSelect: elements.fullRowSelectCheckbox.checked,
+    singleClickOpen: elements.singleClickOpenCheckbox.checked,
+    alternativeSelectionMode: elements.alternativeSelectionModeCheckbox.checked,
+    toolbarVisible: elements.toolbarVisibleCheckbox.checked,
+    largeToolbarButtons: elements.largeToolbarButtonsCheckbox.checked,
+    showToolbarLabels: elements.showToolbarLabelsCheckbox.checked,
+    flatViewDefault: elements.flatViewDefaultCheckbox.checked,
   });
 }

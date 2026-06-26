@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canRetryJobWithPassword,
   createInitialJobState,
+  deriveJobProgress,
   getLatestPasswordFailureEvent,
   mergePolledJobState,
 } from "./jobs";
@@ -92,5 +93,28 @@ describe("job state helpers", () => {
     expect(getLatestPasswordFailureEvent(state)?.code).toBe("password_required");
     expect(canRetryJobWithPassword(false, state)).toBe(false);
     expect(canRetryJobWithPassword(true, state)).toBe(true);
+  });
+
+  it("derives progress fields from job lifecycle events", () => {
+    const state: JobState = {
+      snapshot: pollResponse({ status: "running" }),
+      events: [
+        { eventType: "started", totalBytes: 100 },
+        { eventType: "entryStarted", path: "docs/readme.txt" },
+        { eventType: "bytesProcessed", totalBytesProcessed: 25, totalBytes: 100 },
+        { eventType: "entryFinished" },
+        { eventType: "warning", message: "skipped odd metadata" },
+      ],
+    };
+
+    const progress = deriveJobProgress(state, Date.parse(startedAt) + 5000);
+
+    expect(progress.processedBytes).toBe(25);
+    expect(progress.totalBytes).toBe(100);
+    expect(progress.progressPercent).toBe(25);
+    expect(progress.processedFiles).toBe(1);
+    expect(progress.warningCount).toBe(1);
+    expect(progress.currentFile).toBe("docs/readme.txt");
+    expect(progress.speedBytesPerSecond).toBe(5);
   });
 });

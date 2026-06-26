@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cleanup-preview-roots"
+description = "Enables the cleanup_preview_roots command without any pre-configured scope."
+commands.allow = ["cleanup_preview_roots"]
+
+[[permission]]
+identifier = "deny-cleanup-preview-roots"
+description = "Denies the cleanup_preview_roots command without any pre-configured scope."
+commands.deny = ["cleanup_preview_roots"]

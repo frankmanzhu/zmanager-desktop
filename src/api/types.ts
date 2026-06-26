@@ -64,6 +64,16 @@ export type ArchiveEntryDto = {
   size?: number;
   compressedSize?: number;
   modified?: string;
+  created?: string;
+  accessed?: string;
+  attributes?: string;
+  encrypted?: boolean;
+  method?: string;
+  crc?: string;
+  block?: number;
+  comment?: string;
+  solid?: boolean;
+  linkTarget?: string;
 };
 
 export type ArchiveListingDto = {

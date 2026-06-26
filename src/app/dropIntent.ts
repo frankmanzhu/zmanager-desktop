@@ -20,6 +20,7 @@ export type DropIntentDecision =
       kind: "openArchive";
       surface: DropIntentSurface;
       archivePath: string;
+      extraArchivePaths?: readonly string[];
     }
   | {
       kind: "addCreateSources";
@@ -87,7 +88,13 @@ export function classifyDropIntent(
   }
 
   if (archivePaths.length > 1) {
-    return rejectDrop(surface, "openRequiresSingleArchive", paths, archivePaths, sourcePaths);
+    const [archivePath, ...extraArchivePaths] = archivePaths;
+    return {
+      kind: "openArchive",
+      surface,
+      archivePath,
+      extraArchivePaths,
+    };
   }
 
   if (surface === "browse") {
