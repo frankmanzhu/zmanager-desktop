@@ -72,6 +72,8 @@ import {
 import {
   CREATE_ARCHIVE_FILTERS,
   buildStartCreateRequest,
+  commonSourceParentDirectory,
+  createStateAfterDestinationEdit,
   getArchiveName,
   suggestedCreateArchiveName as buildSuggestedCreateArchiveName,
   withCreateArchiveExtension,
@@ -91,6 +93,7 @@ import {
 } from "./app/archiveFileTypes";
 import {
   classifyDropIntent,
+  dropSurfaceForWorkspace,
   type DropIntentSurface,
 } from "./app/dropIntent";
 import {
@@ -1023,6 +1026,46 @@ function saveTablePreferences() {
   saveAppPreferences(appPreferences);
 }
 
+function savePreferencePatch(patch: Partial<AppPreferences>) {
+  appPreferences = {
+    ...appPreferences,
+    ...patch,
+  };
+  saveAppPreferences(appPreferences);
+  applyPreferenceClasses();
+  updateCommandState();
+}
+
+function setFlatView(nextFlatView: boolean, persistPreference: boolean) {
+  isFlatView = nextFlatView;
+  flatViewToggle.checked = nextFlatView;
+  if (persistPreference) {
+    savePreferencePatch({ flatViewDefault: nextFlatView });
+  }
+  renderBrowse();
+}
+
+function applySortCommand(nextSortKey: ArchiveSortKey) {
+  if (nextSortKey === sortKey) {
+    sortAscending = !sortAscending;
+  } else {
+    sortKey = nextSortKey;
+    sortAscending = true;
+  }
+
+  saveTablePreferences();
+  renderBrowse();
+}
+
+function closeAppWindow() {
+  if (!isDesktopRuntime()) {
+    setOperationalStatus("Use the browser window controls to close ZManager.");
+    return;
+  }
+
+  void getCurrentWindow().close();
+}
+
 function clearTrackedPreviewState() {
   currentPreviewCleanupRoot = "";
   currentPreviewPath = "";
@@ -1230,8 +1273,8 @@ function getParentPath(path: string): string {
   return getParentArchivePath(path) ?? "";
 }
 
-function suggestedCreateArchiveName(): string {
-  return buildSuggestedCreateArchiveName(createSources, createFormatSelect.value as CreateArchiveFormat);
+function suggestedCreateArchiveName(sources = createSources): string {
+  return buildSuggestedCreateArchiveName(sources, createFormatSelect.value as CreateArchiveFormat);
 }
 
 function joinNativePath(parentPath: string, childName: string): string {
@@ -1243,9 +1286,11 @@ function joinNativePath(parentPath: string, childName: string): string {
   return `${trimmedParent}${separator}${childName}`;
 }
 
-function suggestedCreateArchiveDefaultPath(): string {
-  const directory = defaultCreateDirectory(appPreferences);
-  const name = suggestedCreateArchiveName();
+function suggestedCreateArchiveDefaultPath(sources = createSources): string {
+  const directory =
+    defaultCreateDirectory(appPreferences) ??
+    commonSourceParentDirectory(sources, { nativeParentPath });
+  const name = suggestedCreateArchiveName(sources);
   return directory ? joinNativePath(directory, name) : name;
 }
 
@@ -1270,6 +1315,35 @@ function getSelectedEntryPaths(): string[] {
   return getSelectedEntryDtos().map((entry) => entry.path);
 }
 
+function getSelectedExtractEntryPaths(): string[] {
+  const extractPaths = new Set<string>();
+
+  for (const entry of getSelectedEntryDtos()) {
+    if (entry.kind !== "directory") {
+      extractPaths.add(entry.path);
+      continue;
+    }
+
+    const folderPath = normalizeFolderPath(entry.path);
+    let addedDescendant = false;
+    for (const candidate of browseEntries) {
+      if (candidate.kind === "directory") {
+        continue;
+      }
+      if (entryIsUnderFolder(candidate.path, folderPath)) {
+        extractPaths.add(candidate.path);
+        addedDescendant = true;
+      }
+    }
+
+    if (!addedDescendant) {
+      extractPaths.add(entry.path);
+    }
+  }
+
+  return [...extractPaths];
+}
+
 function getKnownFolderPaths(): string[] {
   const tree = buildArchiveTree(browseEntries, { rootName: getArchiveName(currentArchivePath, APP_TITLE) });
   return flattenArchiveTree(tree).map((node) => node.path);
@@ -1277,8 +1351,23 @@ function getKnownFolderPaths(): string[] {
 
 function getVisibleSelectablePaths(): string[] {
   return visibleRows()
-    .filter((row) => row.rowType === "entry")
+    .filter((row) => row.rowType === "entry" || (row.rowType === "folder" && row.entry))
     .map((row) => row.path);
+}
+
+function setFolderRow(
+  folderRows: Map<string, BrowserRow>,
+  path: string,
+  name: string,
+  entry?: ArchiveEntryDto,
+) {
+  const existing = folderRows.get(path);
+  folderRows.set(path, {
+    rowType: "folder",
+    path,
+    name,
+    entry: entry ?? (existing?.rowType === "folder" ? existing.entry : undefined),
+  });
 }
 
 function buildBrowserRows(): BrowserRow[] {
@@ -1336,11 +1425,12 @@ function buildBrowserRows(): BrowserRow[] {
     const parts = remainder.split("/").filter(Boolean);
     if (parts.length > 1 || entry.kind === "directory") {
       const childPath = folder ? `${folder}/${parts[0]}` : parts[0];
-      folderRows.set(childPath, {
-        rowType: "folder",
-        path: childPath,
-        name: parts[0],
-      });
+      setFolderRow(
+        folderRows,
+        childPath,
+        parts[0],
+        entry.kind === "directory" && childPath === normalized ? entry : undefined,
+      );
       continue;
     }
 
@@ -1418,10 +1508,13 @@ function updateCommandState() {
   const canUseArchive = hasArchive && !isLoading && (browseState === "loaded" || browseState === "empty");
   const canListEntries = hasArchive && !isLoading && browseState === "loaded";
   const visibleSelectableCount = getVisibleSelectablePaths().length;
+  const selectedDtos = getSelectedEntryDtos();
   const commandState = selectCommandState({
     browseState,
     hasArchive,
     focusedRow: Boolean(focusedEntryPath),
+    canNavigateUp: Boolean(currentArchiveFolder),
+    canOpenInside: selectedDtos.length === 1 && selectedDtos[0].kind === "directory",
     selectedCount,
     visibleSelectableCount,
     mutableOperationsSupported: false,
@@ -1685,9 +1778,26 @@ function renderBrowseRows() {
       }
 
       if (row.rowType === "folder") {
+        const selected = row.entry ? selectedEntries.has(row.path) : false;
         return `
-          <tr class="folder-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="Open folder ${escapeHtml(row.name)}">
-            <td class="selection-column"></td>
+          <tr
+            class="folder-row ${selected ? "is-selected" : ""}"
+            data-folder-path="${escapeHtml(row.path)}"
+            ${row.entry ? `data-entry-path="${escapeHtml(row.path)}"` : ""}
+            tabindex="0"
+            aria-label="Open folder ${escapeHtml(row.name)}"
+            aria-selected="${selected ? "true" : "false"}"
+          >
+            <td class="selection-column">
+              ${row.entry ? `
+                <input
+                  data-entry-path="${escapeHtml(row.path)}"
+                  type="checkbox"
+                  aria-label="Select ${escapeHtml(row.name)}"
+                  ${selected ? "checked" : ""}
+                />
+              ` : ""}
+            </td>
             ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
           </tr>
         `;
@@ -1976,6 +2086,11 @@ function cancelQueuedPlanRun() {
     clearTimeout(planDebounce);
     planDebounce = null;
   }
+}
+
+function refreshCreateStateAfterDestinationEdit() {
+  const nextState = createStateAfterDestinationEdit(createPlanState, currentPlan !== null);
+  setCreatePlanState(nextState, nextState === createPlanState ? currentPlanError : "");
 }
 
 const EXTRACT_DESTINATION_HISTORY_KEY = "zmanager.extractDestinationHistory";
@@ -2352,10 +2467,7 @@ function hasActiveJob(): boolean {
 }
 
 function currentDropSurface(): DropIntentSurface {
-  if (!createDialog.hidden) {
-    return "create";
-  }
-  return "browse";
+  return dropSurfaceForWorkspace({ createDialogOpen: !createDialog.hidden });
 }
 
 function setDropOverlay(active: boolean, title = "Drop files", message = "Open an archive or add files to a new archive.") {
@@ -2408,10 +2520,17 @@ function rejectDrop(reason: string) {
 }
 
 function addDroppedSources(paths: string[]) {
+  const wasCreateDialogHidden = createDialog.hidden;
+  if (wasCreateDialogHidden) {
+    applyCreatePreferenceDefaults();
+  }
+  addSources(paths);
   if (createDialog.hidden) {
     openCreateDialog();
   }
-  addSources(paths);
+  if (wasCreateDialogHidden) {
+    createDestinationInput.focus();
+  }
   setOperationalStatus(`${paths.length} source${paths.length === 1 ? "" : "s"} added.`);
 }
 
@@ -2709,16 +2828,20 @@ function entryIsUnderFolder(entryPath: string, folderPath: string): boolean {
 }
 
 function selectFolderEntries(folderPath: string) {
+  const descendantEntries = browseEntries
+    .filter((entry) => entry.kind !== "directory" && entryIsUnderFolder(entry.path, folderPath))
+    .map((entry) => entry.path);
+  const folderEntry = getEntryByPath(folderPath);
   selectedEntries = new Set(
-    browseEntries
-      .filter((entry) => entry.kind !== "directory" && entryIsUnderFolder(entry.path, folderPath))
-      .map((entry) => entry.path),
+    descendantEntries.length > 0
+      ? descendantEntries
+      : folderEntry ? [folderEntry.path] : [],
   );
   renderBrowse();
 }
 
-function showFolderContextMenu(folderPath: string, x: number, y: number) {
-  contextEntryPath = "";
+function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
+  contextEntryPath = entryPath;
   contextSourcePath = "";
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}">Open Folder</button>
@@ -2766,7 +2889,7 @@ function showTableHeaderContextMenu(x: number, y: number) {
         data-column-id="${escapeHtml(column.id)}"
         ${isNameColumn ? 'disabled aria-disabled="true"' : ""}
       >
-        ${checked ? "✓ " : "  "}${escapeHtml(column.label)}
+        ${checked ? "[x] " : "[ ] "}${escapeHtml(column.label)}
       </button>
     `;
   }).join("");
@@ -3065,7 +3188,6 @@ async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOpti
         return;
       }
       password = nextPassword;
-      browsePasswordInput.value = password;
     }
   }
 }
@@ -3583,7 +3705,6 @@ async function onTestArchive() {
           return;
         }
         password = nextPassword;
-        browsePasswordInput.value = password;
         continue;
       }
 
@@ -3842,7 +3963,6 @@ async function startExtract(destinationMode: ExtractMode) {
             return;
           }
           password = nextPassword;
-          browsePasswordInput.value = password;
           continue;
         }
         setBrowseState("error", commandError?.message ?? "Unable to start extraction.");
@@ -3851,7 +3971,7 @@ async function startExtract(destinationMode: ExtractMode) {
     }
   }
 
-  const entries = getSelectedEntryPaths();
+  const entries = getSelectedExtractEntryPaths();
   if (!entries.length) {
     extractDialogMessage.textContent = "Select at least one entry to extract.";
     return;
@@ -3897,7 +4017,6 @@ async function startExtract(destinationMode: ExtractMode) {
           return;
         }
         password = nextPassword;
-        browsePasswordInput.value = password;
         continue;
       }
       setBrowseState("error", commandError?.message ?? "Unable to extract selected entries.");
@@ -3923,12 +4042,17 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
 
   const selected = getSelectedEntryPaths();
   if (selected.length !== 1) {
-    setBrowseState("error", SINGLE_FILE_REQUIRED_MESSAGE);
+    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
     return;
   }
   const selectedEntry = getEntryByPath(selected[0]);
   if (!selectedEntry) {
-    setBrowseState("error", SINGLE_FILE_REQUIRED_MESSAGE);
+    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
+    return;
+  }
+
+  if (selectedEntry.kind === "directory") {
+    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
     return;
   }
 
@@ -3941,11 +4065,6 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
     } catch (error) {
       clearTrackedPreviewState();
     }
-  }
-
-  if (openOutside && selectedEntry.kind === "directory") {
-    setBrowseState("error", SINGLE_FILE_REQUIRED_MESSAGE);
-    return;
   }
 
   const overwrite = getOverwritePolicyValue();
@@ -3986,7 +4105,6 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
           return;
         }
         password = nextPassword;
-        browsePasswordInput.value = password;
         continue;
       }
 
@@ -4034,7 +4152,7 @@ async function onSelectCreateDestination() {
     selected,
     createFormatSelect.value as CreateArchiveFormat,
   );
-  setCreatePlanState(createPlanState, currentPlanError);
+  refreshCreateStateAfterDestinationEdit();
 }
 
 async function runCreate() {
@@ -4187,6 +4305,27 @@ function handleShortcut(event: KeyboardEvent) {
     return;
   }
 
+  if (event.key === "Escape") {
+    if (hasOpenMenu()) {
+      closeOpenMenus();
+      return;
+    }
+
+    hideContextMenu();
+    if (!extractDialog.hidden) closeModal(extractDialog);
+    else if (!createDialog.hidden) closeModal(createDialog);
+    else if (!aboutDialog.hidden) closeModal(aboutDialog);
+    else if (!preferencesDialog.hidden) closeModal(preferencesDialog);
+    else if (!infoDialog.hidden) closeModal(infoDialog);
+    else if (workspaceElement.dataset.jobDrawer === "open") closeJobDrawer();
+    else clearBrowseSelection();
+    return;
+  }
+
+  if (openDialogElement || isEditableTarget(event.target)) {
+    return;
+  }
+
   if (event.ctrlKey && event.key.toLowerCase() === "o") {
     event.preventDefault();
     void onOpenArchive();
@@ -4212,10 +4351,6 @@ function handleShortcut(event: KeyboardEvent) {
     return;
   }
 
-  if (isEditableTarget(event.target)) {
-    return;
-  }
-
   if (event.key === "F5") {
     event.preventDefault();
     void openExtractDialog(selectedEntries.size ? "selection" : "archive");
@@ -4225,23 +4360,6 @@ function handleShortcut(event: KeyboardEvent) {
   if (event.ctrlKey && event.key.toLowerCase() === "r") {
     event.preventDefault();
     void onRefreshArchive();
-    return;
-  }
-
-  if (event.key === "Escape") {
-    if (hasOpenMenu()) {
-      closeOpenMenus();
-      return;
-    }
-
-    hideContextMenu();
-    if (!extractDialog.hidden) closeModal(extractDialog);
-    else if (!createDialog.hidden) closeModal(createDialog);
-    else if (!aboutDialog.hidden) closeModal(aboutDialog);
-    else if (!preferencesDialog.hidden) closeModal(preferencesDialog);
-    else if (!infoDialog.hidden) closeModal(infoDialog);
-    else if (workspaceElement.dataset.jobDrawer === "open") closeJobDrawer();
-    else clearBrowseSelection();
     return;
   }
 
@@ -4292,6 +4410,9 @@ function bindActions() {
   addArchiveButton.addEventListener("click", openCreateDialog);
   extractToolbarButton.addEventListener("click", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
   testArchiveButton.addEventListener("click", () => void onTestArchive());
+  copyToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
+  moveToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
+  deleteToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
   infoToolbarButton.addEventListener("click", showCurrentInfo);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
@@ -4323,16 +4444,31 @@ function bindActions() {
   bindMenuItem("view", () => void onPreviewSelectedEntry());
   bindMenuItem("copyTo", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
   bindMenuItem("info", showCurrentInfo);
+  bindMenuItem("properties", showCurrentInfo);
   bindMenuItem("refresh", () => void onRefreshArchive());
+  bindMenuItem("exit", closeAppWindow);
+  bindMenuItem("detailsView", () => setOperationalStatus("Details view is active."));
+  bindMenuItem("sortName", () => applySortCommand("name"));
+  bindMenuItem("sortType", () => applySortCommand("kind"));
+  bindMenuItem("sortDate", () => applySortCommand("modified"));
+  bindMenuItem("sortSize", () => applySortCommand("size"));
+  bindMenuItem("archiveToolbar", () => {
+    savePreferencePatch({ toolbarVisible: !appPreferences.toolbarVisible });
+  });
+  bindMenuItem("standardToolbar", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
+  bindMenuItem("largeButtons", () => {
+    savePreferencePatch({ largeToolbarButtons: !appPreferences.largeToolbarButtons });
+  });
+  bindMenuItem("showButtonText", () => {
+    savePreferencePatch({ showToolbarLabels: !appPreferences.showToolbarLabels });
+  });
   bindMenuItem("options", openPreferencesDialog);
   bindMenuItem("about", () => {
     renderAboutDiagnostics();
     openModal(aboutDialog, "#about-close");
   });
   bindMenuItem("flatView", () => {
-    isFlatView = !isFlatView;
-    flatViewToggle.checked = isFlatView;
-    renderBrowse();
+    setFlatView(!isFlatView, true);
   });
   bindMenuItem("openInside", () => {
     const selected = getSelectedEntryPaths();
@@ -4353,8 +4489,7 @@ function bindActions() {
   });
 
   flatViewToggle.addEventListener("change", () => {
-    isFlatView = flatViewToggle.checked;
-    renderBrowse();
+    setFlatView(flatViewToggle.checked, true);
   });
 
   selectAllInput.addEventListener("change", () => {
@@ -4382,15 +4517,7 @@ function bindActions() {
         return;
       }
 
-      if (key === sortKey) {
-        sortAscending = !sortAscending;
-      } else {
-        sortKey = key;
-        sortAscending = true;
-      }
-
-      saveTablePreferences();
-      renderBrowse();
+      applySortCommand(key);
     });
   }
 
@@ -4433,6 +4560,25 @@ tableBody.addEventListener("click", (event) => {
     return;
   }
 
+  if (folderPath !== undefined) {
+    if (
+      appPreferences.singleClickOpen &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey
+    ) {
+      navigateToFolder(folderPath);
+      return;
+    }
+
+    if (entryPath) {
+      updateSelectionByIntent(entryPath, { ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey });
+      renderBrowse();
+      focusTableRow(tableBody.querySelector<HTMLTableRowElement>(`tr[data-entry-path="${CSS.escape(entryPath)}"]`));
+    }
+    return;
+  }
+
   if (entryPath) {
     updateSelectionByIntent(entryPath, { ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey });
     renderBrowse();
@@ -4447,16 +4593,6 @@ tableBody.addEventListener("click", (event) => {
       void onPreviewSelectedEntry();
     }
     return;
-  }
-
-  if (
-    appPreferences.singleClickOpen &&
-    folderPath &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey
-  ) {
-    navigateToFolder(folderPath);
   }
 });
 
@@ -4512,7 +4648,7 @@ tableBody.addEventListener("click", (event) => {
       const y = rect.top + Math.min(rect.height - 2, 24);
       const folderPath = row.dataset.folderPath;
       if (folderPath !== undefined) {
-        showFolderContextMenu(folderPath, x, y);
+        showFolderContextMenu(folderPath, x, y, row.dataset.entryPath);
         return;
       }
       const entryPath = row.dataset.entryPath;
@@ -4556,7 +4692,14 @@ tableBody.addEventListener("click", (event) => {
     const folderPath = row.dataset.folderPath;
     if (folderPath !== undefined) {
       event.preventDefault();
-      showFolderContextMenu(folderPath, event.clientX, event.clientY);
+      const entryPath = row.dataset.entryPath;
+      if (entryPath && !selectedEntries.has(entryPath)) {
+        selectedEntries = new Set([entryPath]);
+        selectionAnchorPath = entryPath;
+        focusedEntryPath = entryPath;
+        renderBrowse();
+      }
+      showFolderContextMenu(folderPath, event.clientX, event.clientY, entryPath);
       return;
     }
 
@@ -4760,7 +4903,7 @@ tableBody.addEventListener("click", (event) => {
   });
 
   createFormatSelect.addEventListener("change", onCreateFormatChange);
-  createDestinationInput.addEventListener("input", () => setCreatePlanState(createPlanState, currentPlanError));
+  createDestinationInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
   runPlanButton.addEventListener("click", () => void runPlan());
   startCreateButton.addEventListener("click", () => void runCreate());

@@ -66,6 +66,7 @@ describe("command state selector", () => {
     expect(state.info.enabled).toBe(true);
     expect(state.properties.enabled).toBe(true);
     expect(state.selectAll.enabled).toBe(true);
+    expect(state.upOneLevel.enabled).toBe(false);
   });
 
   it("enables row commands for a single selected entry and keeps mutations disabled", () => {
@@ -80,8 +81,25 @@ describe("command state selector", () => {
 
     expect(state.view.enabled).toBe(true);
     expect(state.copy.enabled).toBe(true);
+    expect(state.openInside.enabled).toBe(false);
     expect(state.delete.enabled).toBe(false);
     expect(state.rename.enabled).toBe(false);
+  });
+
+  it("enables navigation commands only when their target exists", () => {
+    const state = selectCommandState({
+      ...baseContext,
+      browseState: "loaded",
+      hasArchive: true,
+      focusedRow: true,
+      selectedCount: 1,
+      visibleSelectableCount: 3,
+      canNavigateUp: true,
+      canOpenInside: true,
+    });
+
+    expect(state.upOneLevel.enabled).toBe(true);
+    expect(state.openInside.enabled).toBe(true);
   });
 
   it("disables unsupported commands with a shared message", () => {

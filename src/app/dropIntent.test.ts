@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyDropIntent } from "./dropIntent";
+import { classifyDropIntent, dropSurfaceForWorkspace } from "./dropIntent";
 
 describe("drop intent classifier", () => {
+  it("uses the global drop surface for the main workspace", () => {
+    expect(dropSurfaceForWorkspace({ createDialogOpen: false })).toBe("global");
+    expect(classifyDropIntent(["C:/work/readme.txt"], dropSurfaceForWorkspace({ createDialogOpen: false }))).toEqual({
+      kind: "addCreateSources",
+      surface: "global",
+      sourcePaths: ["C:/work/readme.txt"],
+    });
+  });
+
+  it("uses the create drop surface while the create dialog is open", () => {
+    expect(dropSurfaceForWorkspace({ createDialogOpen: true })).toBe("create");
+  });
+
   it("opens one supported archive on the browse surface", () => {
     expect(classifyDropIntent(["C:/tmp/archive.zip"], "browse")).toEqual({
       kind: "openArchive",

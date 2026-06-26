@@ -15,8 +15,8 @@
         "title": "ZManager",
         "width": 1180,
         "height": 760,
-        "minWidth": 920,
-        "minHeight": 620
+        "minWidth": 720,
+        "minHeight": 480
       }
     ],
     "security": {

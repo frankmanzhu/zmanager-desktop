@@ -1,8 +1,10 @@
 import type { QuickActionRequestDto } from "../api/types";
 import { isSupportedArchivePath, baseNameWithoutKnownArchiveExtension } from "./archiveFileTypes";
 import {
+  commonSourceParentDirectory,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
+  type CreatePathHelpers,
   type CreateArchiveFormat,
 } from "./createFlow";
 import {
@@ -13,8 +15,7 @@ import {
 
 export type QuickActionExtractMode = Exclude<DefaultExtractionBehavior, "askEveryTime">;
 
-export type QuickActionPathHelpers = {
-  nativeParentPath: (path: string) => string;
+export type QuickActionPathHelpers = CreatePathHelpers & {
   joinNativePath: (parentPath: string, childName: string) => string;
 };
 
@@ -35,7 +36,10 @@ export function quickCreateDestination(
   pathHelpers: QuickActionPathHelpers,
 ): string {
   const firstPath = paths[0] ?? "";
-  const outputDirectory = defaultCreateDirectory(preferences) ?? pathHelpers.nativeParentPath(firstPath);
+  const outputDirectory =
+    defaultCreateDirectory(preferences) ??
+    commonSourceParentDirectory(paths, pathHelpers) ??
+    pathHelpers.nativeParentPath(firstPath);
   const name = suggestedCreateArchiveName(paths, format);
   return withCreateArchiveExtension(
     outputDirectory ? pathHelpers.joinNativePath(outputDirectory, name) : name,

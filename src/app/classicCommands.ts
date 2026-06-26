@@ -93,7 +93,7 @@ export type MenuGroup = {
 
 export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   open: { id: "open", label: "Open...", shortcut: "Ctrl+O", tooltip: "Open archive (Ctrl+O)" },
-  openInside: { id: "openInside", label: "Open Inside", shortcut: "Ctrl+PageDown", unsupported: true },
+  openInside: { id: "openInside", label: "Open Inside", shortcut: "Ctrl+PageDown" },
   openOutside: { id: "openOutside", label: "Open Outside", shortcut: "Shift+Enter" },
   view: { id: "view", label: "View", shortcut: "F3", tooltip: "View (F3)" },
   edit: { id: "edit", label: "Edit", shortcut: "F4", unsupported: true, mutation: true },
@@ -288,6 +288,8 @@ export type CommandContext = {
   browseState: BrowseState;
   hasArchive: boolean;
   focusedRow: boolean;
+  canNavigateUp?: boolean;
+  canOpenInside?: boolean;
   selectedCount: number;
   visibleSelectableCount: number;
   mutableOperationsSupported: boolean;
@@ -315,6 +317,8 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   const hasSelection = context.selectedCount > 0;
   const hasOneSelection = context.selectedCount === 1;
   const hasFocusedOrSelected = context.focusedRow || hasSelection;
+  const canNavigateUp = Boolean(context.canNavigateUp);
+  const canOpenInside = Boolean(context.canOpenInside);
   const mutationsEnabled = context.mutableOperationsSupported && !context.jobRunning;
 
   const state = Object.fromEntries(
@@ -331,14 +335,14 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive);
   enable(["copy"], hasSelection && canListEntries);
   enable(["view", "openOutside"], hasOneSelection && canListEntries);
-  enable(["openInside"], hasFocusedOrSelected && canListEntries);
+  enable(["openInside"], canOpenInside && canListEntries);
   enable(["selectAll"], canListEntries && context.visibleSelectableCount > 0);
   enable(["deselectAll"], hasSelection);
   enable(["invertSelection"], canListEntries && context.visibleSelectableCount > 0);
   enable(["selectByType", "deselectByType"], hasFocusedOrSelected && canListEntries);
   enable(["detailsView", "sortName", "sortType", "sortDate", "sortSize"], canListEntries);
   enable(["openRoot"], canUseArchive);
-  enable(["upOneLevel"], canUseArchive && context.focusedRow || canUseArchive);
+  enable(["upOneLevel"], canUseArchive && canNavigateUp);
   enable(["deleteTempFiles"], true);
 
   const mutationIds: CommandId[] = ["edit", "rename", "moveTo", "delete", "comment", "createFolder", "move"];

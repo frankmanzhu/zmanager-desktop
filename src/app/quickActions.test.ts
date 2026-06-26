@@ -49,6 +49,17 @@ describe("quick action helpers", () => {
     ).toBe("/archives/photos.zip");
   });
 
+  it("uses the common source parent for quick create destinations", () => {
+    expect(
+      quickCreateDestination(
+        ["/tmp/photos/raw/image.jpg", "/tmp/photos/edited/image.jpg"],
+        "zip",
+        DEFAULT_APP_PREFERENCES,
+        pathHelpers,
+      ),
+    ).toBe("/tmp/photos/image.jpg.zip");
+  });
+
   it("builds quick extract destinations from the extraction mode", () => {
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractHere", pathHelpers)).toBe("/tmp");
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractToFolder", pathHelpers)).toBe(

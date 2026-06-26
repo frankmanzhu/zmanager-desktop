@@ -2,6 +2,9 @@ import { isSupportedArchivePath } from "./archiveFileTypes";
 
 export type DropIntentSurface = "browse" | "create" | "global" | "unknown";
 export type DroppedPathKind = "file" | "directory" | "unknown";
+export type DropIntentWorkspaceState = {
+  createDialogOpen: boolean;
+};
 
 export type DroppedPath =
   | string
@@ -41,6 +44,10 @@ export type DropIntentDecision =
       archivePaths: string[];
       sourcePaths: string[];
     };
+
+export function dropSurfaceForWorkspace(state: DropIntentWorkspaceState): DropIntentSurface {
+  return state.createDialogOpen ? "create" : "global";
+}
 
 type ClassifiedDropPath = {
   path: string;

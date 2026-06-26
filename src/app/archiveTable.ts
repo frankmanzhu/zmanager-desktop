@@ -43,6 +43,7 @@ export type ArchiveTableRow =
       rowType: "folder";
       path: string;
       name: string;
+      entry?: ArchiveEntryDto;
     }
   | {
       rowType: "entry";

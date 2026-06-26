@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStartCreateRequest,
+  commonSourceParentDirectory,
+  createStateAfterDestinationEdit,
   getCreateArchiveExtension,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
 } from "./createFlow";
+
+const pathHelpers = {
+  nativeParentPath(path: string): string {
+    const trimmed = path.trim().replace(/[\\/]+$/, "");
+    const slash = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+    return slash > 0 ? trimmed.slice(0, slash) : "";
+  },
+};
 
 describe("create flow helpers", () => {
   it("normalizes archive extensions to the selected format", () => {
@@ -25,6 +35,28 @@ describe("create flow helpers", () => {
   it("suggests a safe archive name from the first source", () => {
     expect(suggestedCreateArchiveName(["C:/work/my:folder"], "zip")).toBe("my_folder.zip");
     expect(suggestedCreateArchiveName([], "sevenZ")).toBe("archive.7z");
+  });
+
+  it("finds the common parent directory for selected source paths", () => {
+    expect(commonSourceParentDirectory(["C:/work/docs"], pathHelpers)).toBe("C:/work");
+    expect(
+      commonSourceParentDirectory(
+        ["C:/work/docs/readme.md", "C:/work/docs/images/logo.png"],
+        pathHelpers,
+      ),
+    ).toBe("C:/work/docs");
+    expect(
+      commonSourceParentDirectory(
+        ["C:\\work\\docs\\readme.md", "C:\\work\\assets\\logo.png"],
+        pathHelpers,
+      ),
+    ).toBe("C:\\work");
+  });
+
+  it("restores a ready create state after destination edits when a plan still exists", () => {
+    expect(createStateAfterDestinationEdit("error", true)).toBe("ready");
+    expect(createStateAfterDestinationEdit("error", false)).toBe("error");
+    expect(createStateAfterDestinationEdit("loading", true)).toBe("loading");
   });
 
   it("builds create requests without blank optional fields", () => {
