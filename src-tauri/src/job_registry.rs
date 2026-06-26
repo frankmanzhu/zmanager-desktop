@@ -537,6 +537,7 @@ impl From<JobKind> for JobKindDto {
             JobKind::TzapCreate => JobKindDto::TzapCreate,
             JobKind::TzapExtract => JobKindDto::TzapExtract,
             JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
+            JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,
         }
     }
 }

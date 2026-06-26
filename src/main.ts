@@ -580,6 +580,8 @@ function formatJobKind(kind: JobKind): string {
       return "TZAP extract";
     case "archiveExtract":
       return "Archive extract";
+    case "rawStreamExtract":
+      return "Raw stream extract";
     case "testArchive":
       return "Archive test";
   }
