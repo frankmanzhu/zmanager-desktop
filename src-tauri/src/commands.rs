@@ -1236,6 +1236,23 @@ fn native_drag_items_from_listing(
             .iter()
             .find(|entry| archive_entry_key(&entry.path) == requested_key)
         else {
+            let before = selected_entries.len();
+            let folder_key = archive_folder_key(entry_path);
+            for descendant in entries {
+                if descendant.kind != zmanager_core::archive_browser::BrowserEntryKind::File {
+                    continue;
+                }
+                if entry_is_under_folder_key(&archive_entry_key(&descendant.path), &folder_key) {
+                    push_native_drag_listing_entry(
+                        descendant,
+                        &mut selected_entry_keys,
+                        &mut selected_entries,
+                    );
+                }
+            }
+            if selected_entries.len() > before {
+                continue;
+            }
             return Err(CommandErrorDto::not_found(
                 format!("archive entry not found: {entry_path}"),
                 Some("Open the archive again or choose a visible entry.".to_string()),
@@ -1959,6 +1976,34 @@ mod tests {
                 .map(|item| item.display_path.as_str())
                 .collect::<Vec<_>>(),
             vec!["a.txt", "nested\\b.txt"]
+        );
+    }
+
+    #[test]
+    fn native_drag_items_expand_synthetic_folder_prefixes() {
+        let entries = vec![
+            browser_entry(
+                "folder/alpha.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+            browser_entry(
+                "folder/beta.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+            browser_entry(
+                "root.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+        ];
+
+        let items = native_drag_items_from_listing(&entries, &["folder".to_string()], 0).unwrap();
+
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.display_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["folder\\alpha.txt", "folder\\beta.txt"]
         );
     }
 

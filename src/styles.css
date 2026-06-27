@@ -979,6 +979,8 @@ th:first-child {
   align-items: center;
   justify-content: center;
   color: var(--muted-strong);
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .row-icon {
@@ -1007,6 +1009,8 @@ th:first-child {
 .detail-icon-image {
   display: block;
   object-fit: contain;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .row-icon-folder,

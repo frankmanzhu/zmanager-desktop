@@ -1,0 +1,23 @@
+{
+  "rowExists": true,
+  "rowDataEntryPath": "folder",
+  "rowSelected": true,
+  "checkboxExists": true,
+  "checkboxChecked": true,
+  "iconDraggable": "false",
+  "browserDragstartPreventedFromIcon": true,
+  "visibleRows": [
+    {
+      "folderPath": "folder",
+      "entryPath": "folder",
+      "selected": true,
+      "text": "Folder: folder"
+    },
+    {
+      "folderPath": null,
+      "entryPath": "root.txt",
+      "selected": false,
+      "text": "Document file: root.txt 15 B15 B11/15/23, 9:13 AM"
+    }
+  ]
+}

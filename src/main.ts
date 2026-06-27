@@ -279,9 +279,10 @@ function renderEntryIcon(
       class="${className} ${className}-${descriptor.kind}"
       title="${escapeHtmlValue(descriptor.label)}"
       aria-hidden="true"
+      draggable="false"
     >
       ${dataUrl
-        ? `<img class="${className}-image" src="${escapeHtmlValue(dataUrl)}" alt="" />`
+        ? `<img class="${className}-image" src="${escapeHtmlValue(dataUrl)}" alt="" draggable="false" />`
         : renderIconNode(descriptor.icon, `${className}-svg`)}
     </span>
   `;
@@ -1483,10 +1484,26 @@ function getSelectedEntryPaths(): string[] {
   return getSelectedEntryDtos().map((entry) => entry.path);
 }
 
+function archiveFolderHasDescendants(folderPath: string): boolean {
+  return browseEntries.some(
+    (entry) => entry.kind !== "directory" && entryIsUnderFolder(entry.path, folderPath),
+  );
+}
+
 function getSelectedExtractEntryPaths(): string[] {
   const extractPaths = new Set<string>();
 
-  for (const entry of getSelectedEntryDtos()) {
+  for (const selectedPath of selectedEntries) {
+    const entry = getEntryByPath(selectedPath);
+    if (!entry) {
+      for (const candidate of browseEntries) {
+        if (candidate.kind !== "directory" && entryIsUnderFolder(candidate.path, selectedPath)) {
+          extractPaths.add(candidate.path);
+        }
+      }
+      continue;
+    }
+
     if (entry.kind !== "directory") {
       extractPaths.add(entry.path);
       continue;
@@ -1515,10 +1532,13 @@ function getSelectedExtractEntryPaths(): string[] {
 function selectedNativeDragEntryPaths(entryPath: string): string[] {
   if (!selectedEntries.has(entryPath)) {
     const entry = getEntryByPath(entryPath);
-    return entry ? [entry.path] : [];
+    if (entry) {
+      return [entry.path];
+    }
+    return archiveFolderHasDescendants(entryPath) ? [entryPath] : [];
   }
 
-  return getSelectedEntryPaths();
+  return [...selectedEntries];
 }
 
 function nativeDragStripComponents(): number {
@@ -1600,7 +1620,7 @@ function getKnownFolderPaths(): string[] {
 
 function getVisibleSelectablePaths(): string[] {
   return visibleRows()
-    .filter((row) => row.rowType === "entry" || (row.rowType === "folder" && row.entry))
+    .filter((row) => row.rowType === "entry" || row.rowType === "folder")
     .map((row) => row.path);
 }
 
@@ -2010,7 +2030,7 @@ function renderBrowseRows() {
     return;
   }
 
-  const selectableRows = rows.filter((row) => row.rowType === "entry" || (row.rowType === "folder" && row.entry));
+  const selectableRows = rows.filter((row) => row.rowType === "entry" || row.rowType === "folder");
   const selectedVisibleCount = selectableRows.filter((row) => selectedEntries.has(row.path)).length;
   selectAllInput.checked = selectableRows.length > 0 && selectedVisibleCount === selectableRows.length;
   selectAllInput.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < selectableRows.length;
@@ -2029,25 +2049,23 @@ function renderBrowseRows() {
       }
 
       if (row.rowType === "folder") {
-        const selected = row.entry ? selectedEntries.has(row.path) : false;
+        const selected = selectedEntries.has(row.path);
         return `
           <tr
             class="folder-row ${selected ? "is-selected" : ""}"
             data-folder-path="${escapeHtml(row.path)}"
-            ${row.entry ? `data-entry-path="${escapeHtml(row.path)}"` : ""}
+            data-entry-path="${escapeHtml(row.path)}"
             tabindex="0"
             aria-label="Open folder ${escapeHtml(row.name)}"
             aria-selected="${selected ? "true" : "false"}"
           >
             <td class="selection-column">
-              ${row.entry ? `
-                <input
-                  data-entry-path="${escapeHtml(row.path)}"
-                  type="checkbox"
-                  aria-label="Select ${escapeHtml(row.name)}"
-                  ${selected ? "checked" : ""}
-                />
-              ` : ""}
+              <input
+                data-entry-path="${escapeHtml(row.path)}"
+                type="checkbox"
+                aria-label="Select ${escapeHtml(row.name)}"
+                ${selected ? "checked" : ""}
+              />
             </td>
             ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
           </tr>
@@ -4987,12 +5005,17 @@ function bindActions() {
 
 function entryPathFromRowEvent(event: PointerEvent): string {
   const target = event.target as HTMLElement;
-  if (target instanceof HTMLInputElement || target.closest("button, a, input, select, textarea")) {
+  if (target.closest("button, a, select, textarea")) {
     return "";
   }
 
   const row = target.closest<HTMLTableRowElement>("tr[data-entry-path]");
   return row?.dataset.entryPath ?? "";
+}
+
+function suppressNativeDragClick(event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function clearPendingNativeDragGesture() {
@@ -5016,6 +5039,7 @@ function onNativeDragPointerMove(event: PointerEvent) {
 
   gesture.started = true;
   suppressNextTableClick = true;
+  document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
   event.preventDefault();
   const entryPath = gesture.entryPath;
   clearPendingNativeDragGesture();
@@ -5049,6 +5073,12 @@ tableBody.addEventListener("pointerdown", (event) => {
   document.addEventListener("pointermove", onNativeDragPointerMove);
   document.addEventListener("pointerup", onNativeDragPointerEnd);
   document.addEventListener("pointercancel", onNativeDragPointerEnd);
+});
+
+tableBody.addEventListener("dragstart", (event) => {
+  if ((event.target as HTMLElement | null)?.closest("tr[data-entry-path]")) {
+    event.preventDefault();
+  }
 });
 
 tableBody.addEventListener("click", (event) => {
