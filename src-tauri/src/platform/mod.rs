@@ -4,6 +4,9 @@ mod windows;
 #[cfg(not(target_os = "windows"))]
 mod linux;
 
+use std::io::Write;
+use std::sync::Arc;
+
 pub struct PlatformProfile {
     pub platform: &'static str,
     pub explorer_integration_enabled: bool,
@@ -17,6 +20,39 @@ pub struct ShellActionProfile {
     pub quick_action: &'static str,
 }
 
+#[derive(Clone, Debug)]
+pub struct NativeFileDragItem {
+    pub entry_path: String,
+    pub display_path: String,
+    pub size: Option<u64>,
+    pub modified_unix_seconds: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeFileDragOutcome {
+    Dropped,
+    Cancelled,
+    NoDrop,
+}
+
+pub type NativeFileDragStreamProvider =
+    Arc<dyn Fn(&str, &mut dyn Write) -> Result<u64, NativeFileDragError> + Send + Sync>;
+
+#[derive(Debug)]
+pub struct NativeFileDragError {
+    pub message: String,
+    pub hint: Option<String>,
+}
+
+impl NativeFileDragError {
+    pub fn new(message: impl Into<String>, hint: Option<impl Into<String>>) -> Self {
+        Self {
+            message: message.into(),
+            hint: hint.map(Into::into),
+        }
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub use windows::register_platform_services;
 
@@ -28,6 +64,12 @@ pub use windows::system_file_icons;
 
 #[cfg(not(target_os = "windows"))]
 pub use linux::system_file_icons;
+
+#[cfg(target_os = "windows")]
+pub use windows::start_native_file_drag;
+
+#[cfg(not(target_os = "windows"))]
+pub use linux::start_native_file_drag;
 
 #[cfg(target_os = "windows")]
 pub fn integration_profile() -> PlatformProfile {

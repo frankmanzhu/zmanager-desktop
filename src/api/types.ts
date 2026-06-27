@@ -163,6 +163,18 @@ export type PreviewEntryResponse = {
   writtenBytes: number;
 };
 
+export type NativeFileDragRequest = {
+  archivePath: string;
+  entryPaths: string[];
+  password?: string;
+  stripComponents: number;
+};
+
+export type NativeFileDragResponse = {
+  stagingRoot: string;
+  draggedPaths: string[];
+};
+
 export type TestArchiveRequest = {
   archivePath: string;
   password?: string;

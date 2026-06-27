@@ -27,6 +27,7 @@ fn main() {
             commands::start_create,
             commands::start_extract,
             commands::preview_entry,
+            commands::start_native_file_drag,
             commands::cleanup_preview_roots,
             commands::test_archive,
             commands::poll_job_events,

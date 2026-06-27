@@ -1,6 +1,9 @@
 use tauri::{Builder, Wry};
 
-use super::ShellActionProfile;
+use super::{
+    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
+    ShellActionProfile,
+};
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 /// Linux-specific shell integration surface.
@@ -59,4 +62,14 @@ pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFi
             data_url: None,
         })
         .collect()
+}
+
+pub fn start_native_file_drag(
+    _items: &[NativeFileDragItem],
+    _stream_provider: NativeFileDragStreamProvider,
+) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+    Err(NativeFileDragError::new(
+        "Native drag-out is not implemented for Linux yet.",
+        Some("Use Extract... while the Linux XDND/file-manager drag source is added."),
+    ))
 }

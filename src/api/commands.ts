@@ -9,6 +9,8 @@ import type {
   DismissJobRequest,
   HealthcheckResponse,
   ListArchiveRequest,
+  NativeFileDragRequest,
+  NativeFileDragResponse,
   PollJobEventsRequest,
   PollJobEventsResponseDto,
   PlanCreateRequest,
@@ -70,6 +72,14 @@ export async function runStartExtract(request: StartExtractRequest): Promise<Sta
 
 export async function runPreviewEntry(request: PreviewEntryRequest): Promise<PreviewEntryResponse> {
   return invoke<PreviewEntryResponse>("preview_entry", {
+    request,
+  });
+}
+
+export async function runStartNativeFileDrag(
+  request: NativeFileDragRequest,
+): Promise<NativeFileDragResponse> {
+  return invoke<NativeFileDragResponse>("start_native_file_drag", {
     request,
   });
 }

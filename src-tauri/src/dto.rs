@@ -223,6 +223,24 @@ pub struct PreviewEntryResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NativeFileDragRequest {
+    pub archive_path: String,
+    #[serde(default)]
+    pub entry_paths: Vec<String>,
+    pub password: Option<String>,
+    #[serde(default)]
+    pub strip_components: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeFileDragResponse {
+    pub staging_root: String,
+    pub dragged_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TestArchiveRequest {
     pub archive_path: String,
     pub password: Option<String>,

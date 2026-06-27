@@ -72,6 +72,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body,
 #app {
@@ -196,8 +200,23 @@ p {
   min-height: 100vh;
   display: grid;
   grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "menu"
+    "toolbar"
+    "path"
+    "body"
+    "status";
   background: var(--chrome-bg);
   color: var(--text);
+}
+
+.workspace.toolbar-hidden {
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "menu"
+    "path"
+    "body"
+    "status";
 }
 
 .workspace.toolbar-hidden .command-toolbar {
@@ -231,6 +250,7 @@ p {
 }
 
 .app-menu {
+  grid-area: menu;
   display: none;
   min-height: 30px;
   display: flex;
@@ -315,6 +335,7 @@ p {
 }
 
 .command-toolbar {
+  grid-area: toolbar;
   min-height: 54px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
@@ -424,6 +445,7 @@ button svg {
 }
 
 .path-bar {
+  grid-area: path;
   min-height: 44px;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) minmax(190px, 280px) auto;
@@ -488,6 +510,7 @@ button svg {
 }
 
 .browser-shell {
+  grid-area: body;
   display: grid;
   grid-template-columns: minmax(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-max)) minmax(520px, 1fr) minmax(var(--zmanager-details-pane-min), var(--zmanager-details-pane-max));
   min-height: 0;
@@ -690,7 +713,8 @@ button svg {
 .detail-list dd {
   min-width: 0;
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .details-actions,
@@ -1063,6 +1087,7 @@ th:first-child {
 }
 
 .status-bar {
+  grid-area: status;
   min-height: 28px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1770,8 +1795,8 @@ progress {
   --zmanager-statusbar-height: 28px;
   --zmanager-nav-pane-min: 150px;
   --zmanager-nav-pane-max: 180px;
-  --zmanager-details-pane-min: 180px;
-  --zmanager-details-pane-max: 220px;
+  --zmanager-details-pane-min: 220px;
+  --zmanager-details-pane-max: 280px;
   --zmanager-statusbar-parts: 4;
 }
 

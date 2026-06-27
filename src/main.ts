@@ -139,6 +139,7 @@ import {
   pollJobEvents as pollJobEventsCommand,
   runPlanCreate,
   runPreviewEntry,
+  runStartNativeFileDrag,
   runStartCreate,
   runStartExtract,
   runTestArchive,
@@ -191,6 +192,16 @@ type ArchiveFixture = {
   entries: ArchiveEntryDto[];
   entryCount?: number;
   totalSize?: number;
+};
+
+const NATIVE_DRAG_THRESHOLD_PX = 6;
+
+type NativeDragGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  entryPath: string;
+  started: boolean;
 };
 
 declare global {
@@ -1048,6 +1059,8 @@ let currentPreviewCleanupRoot = "";
 let currentPreviewPath = "";
 let currentPreviewEntryPath = "";
 let dropUnlisten: (() => void) | null = null;
+let pendingNativeDragGesture: NativeDragGesture | null = null;
+let suppressNextTableClick = false;
 
 const jobs = new Map<string, JobState>();
 const jobRetryContexts = new Map<string, JobRetryContext>();
@@ -1499,6 +1512,81 @@ function getSelectedExtractEntryPaths(): string[] {
   return [...extractPaths];
 }
 
+function selectedNativeDragEntryPaths(entryPath: string): string[] {
+  if (!selectedEntries.has(entryPath)) {
+    const entry = getEntryByPath(entryPath);
+    return entry ? [entry.path] : [];
+  }
+
+  return getSelectedEntryPaths();
+}
+
+function nativeDragStripComponents(): number {
+  if (isFlatView || !currentArchiveFolder) {
+    return 0;
+  }
+
+  return currentArchiveFolder.split("/").filter(Boolean).length;
+}
+
+async function startNativeDragOut(entryPath: string) {
+  if (!currentArchivePath) {
+    return;
+  }
+
+  if (!isDesktopRuntime()) {
+    setOperationalStatus("Native drag-out is available in the desktop app.");
+    return;
+  }
+
+  if (!selectedEntries.has(entryPath)) {
+    selectedEntries = new Set([entryPath]);
+    focusedEntryPath = entryPath;
+    selectionAnchorPath = entryPath;
+    renderBrowse();
+  }
+
+  const entryPaths = selectedNativeDragEntryPaths(entryPath);
+  if (!entryPaths.length) {
+    setOperationalStatus("Select at least one entry to drag out.");
+    return;
+  }
+
+  let password = browsePasswordInput.value.trim() || undefined;
+  const stripComponents = nativeDragStripComponents();
+  setOperationalStatus(`Preparing ${entryPaths.length} item(s) for drag-out...`);
+
+  while (true) {
+    try {
+      await runStartNativeFileDrag({
+        archivePath: currentArchivePath,
+        entryPaths,
+        stripComponents,
+        ...(password ? { password } : {}),
+      });
+      setOperationalStatus("Drag-out completed.");
+      return;
+    } catch (error) {
+      const commandError = asCommandError(error);
+      if (
+        commandError?.code === COMMAND_PASSWORD_REQUIRED ||
+        commandError?.code === COMMAND_INVALID_PASSWORD
+      ) {
+        const nextPassword = promptForArchivePassword(getArchivePasswordPrompt(commandError.code));
+        if (!nextPassword) {
+          setOperationalStatus(commandError.message);
+          return;
+        }
+        password = nextPassword;
+        continue;
+      }
+
+      setOperationalStatus(commandError?.message ?? "Unable to start native drag-out.");
+      return;
+    }
+  }
+}
+
 function getKnownFolderPaths(): string[] {
   const tree = buildArchiveTree(browseEntries, { rootName: getArchiveName(currentArchivePath, APP_TITLE) });
   return flattenArchiveTree(tree).map((node) => node.path);
@@ -1857,11 +1945,12 @@ function renderCell(row: BrowserRow, column: ArchiveTableColumn, showFullPath: b
     return `<td class="${className}">${renderNameCell(row, showFullPath)}</td>`;
   }
 
-  if (row.rowType !== "entry") {
+  const entry = row.rowType === "entry" || row.rowType === "folder" ? row.entry : undefined;
+  if (!entry) {
     return `<td class="${className}"></td>`;
   }
 
-  return `<td class="${className}">${escapeHtml(formatArchiveTableValue(row.entry, column.id))}</td>`;
+  return `<td class="${className}">${escapeHtml(formatArchiveTableValue(entry, column.id))}</td>`;
 }
 
 function renderBrowseRows() {
@@ -1915,7 +2004,7 @@ function renderBrowseRows() {
     return;
   }
 
-  const selectableRows = rows.filter((row) => row.rowType === "entry");
+  const selectableRows = rows.filter((row) => row.rowType === "entry" || (row.rowType === "folder" && row.entry));
   const selectedVisibleCount = selectableRows.filter((row) => selectedEntries.has(row.path)).length;
   selectAllInput.checked = selectableRows.length > 0 && selectedVisibleCount === selectableRows.length;
   selectAllInput.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < selectableRows.length;
@@ -2776,7 +2865,20 @@ async function bindTauriFileDrop() {
   }
 }
 
+function browserDroppedFilePath(file: File): string {
+  const fileWithPath = file as File & { path?: string };
+  return fileWithPath.path?.trim() || file.webkitRelativePath?.trim() || file.name;
+}
+
 function bindBrowserFileDropFallback() {
+  appRoot.addEventListener("dragenter", (event) => {
+    if (isDesktopRuntime()) {
+      return;
+    }
+    event.preventDefault();
+    setDropOverlayForSurface(currentDropSurface());
+  });
+
   appRoot.addEventListener("dragover", (event) => {
     if (isDesktopRuntime()) {
       return;
@@ -2786,7 +2888,7 @@ function bindBrowserFileDropFallback() {
   });
 
   appRoot.addEventListener("dragleave", (event) => {
-    if (isDesktopRuntime() || event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget)) {
+    if (isDesktopRuntime() || (event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget))) {
       return;
     }
     setDropOverlay(false);
@@ -2798,7 +2900,7 @@ function bindBrowserFileDropFallback() {
     }
     event.preventDefault();
     const paths = Array.from(event.dataTransfer?.files ?? [])
-      .map((file) => file.name)
+      .map(browserDroppedFilePath)
       .filter(Boolean);
     handleDroppedPaths(paths);
   });
@@ -3576,28 +3678,28 @@ function loadLocalDevFixtureFromUrl() {
         kind: "directory",
         size: 0,
         compressedSize: 0,
-        modified: "2026-06-10T10:00:00Z",
+        modified: "1781085600",
       },
       {
         path: "wedding/raw/photo01.jpg",
         kind: "file",
         size: 5_242_880,
         compressedSize: 3_145_728,
-        modified: "2026-06-10T10:01:00Z",
+        modified: "1781085660",
       },
       {
         path: "wedding/raw/photo02.jpg",
         kind: "file",
         size: 6_291_456,
         compressedSize: 4_194_304,
-        modified: "2026-06-10T10:02:00Z",
+        modified: "1781085720",
       },
       {
         path: "docs/readme.txt",
         kind: "file",
         size: 1_200,
         compressedSize: 600,
-        modified: "2026-06-09T09:00:00Z",
+        modified: "1780995600",
       },
     ],
   });
@@ -4800,8 +4902,13 @@ function bindActions() {
     setFlatView(flatViewToggle.checked, true);
   });
 
-  selectAllInput.addEventListener("change", () => {
-    if (selectAllInput.checked) {
+  tableHead.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement;
+    if (target.id !== "select-all") {
+      return;
+    }
+
+    if (target.checked) {
       selectAllVisibleEntries();
       return;
     }
@@ -4872,7 +4979,79 @@ function bindActions() {
     navigateToFolder(target.dataset.treePath ?? "");
   });
 
+function entryPathFromRowEvent(event: PointerEvent): string {
+  const target = event.target as HTMLElement;
+  if (target instanceof HTMLInputElement || target.closest("button, a, input, select, textarea")) {
+    return "";
+  }
+
+  const row = target.closest<HTMLTableRowElement>("tr[data-entry-path]");
+  return row?.dataset.entryPath ?? "";
+}
+
+function clearPendingNativeDragGesture() {
+  pendingNativeDragGesture = null;
+  document.removeEventListener("pointermove", onNativeDragPointerMove);
+  document.removeEventListener("pointerup", onNativeDragPointerEnd);
+  document.removeEventListener("pointercancel", onNativeDragPointerEnd);
+}
+
+function onNativeDragPointerMove(event: PointerEvent) {
+  const gesture = pendingNativeDragGesture;
+  if (!gesture || gesture.pointerId !== event.pointerId || gesture.started) {
+    return;
+  }
+
+  const deltaX = event.clientX - gesture.startX;
+  const deltaY = event.clientY - gesture.startY;
+  if (Math.hypot(deltaX, deltaY) < NATIVE_DRAG_THRESHOLD_PX) {
+    return;
+  }
+
+  gesture.started = true;
+  suppressNextTableClick = true;
+  event.preventDefault();
+  const entryPath = gesture.entryPath;
+  clearPendingNativeDragGesture();
+  void startNativeDragOut(entryPath);
+}
+
+function onNativeDragPointerEnd(event: PointerEvent) {
+  if (pendingNativeDragGesture?.pointerId !== event.pointerId) {
+    return;
+  }
+  clearPendingNativeDragGesture();
+}
+
+tableBody.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || !currentArchivePath || hasActiveJob()) {
+    return;
+  }
+
+  const entryPath = entryPathFromRowEvent(event);
+  if (!entryPath) {
+    return;
+  }
+
+  pendingNativeDragGesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    entryPath,
+    started: false,
+  };
+  document.addEventListener("pointermove", onNativeDragPointerMove);
+  document.addEventListener("pointerup", onNativeDragPointerEnd);
+  document.addEventListener("pointercancel", onNativeDragPointerEnd);
+});
+
 tableBody.addEventListener("click", (event) => {
+  if (suppressNextTableClick) {
+    suppressNextTableClick = false;
+    event.preventDefault();
+    return;
+  }
+
   const target = event.target as HTMLElement;
   if (target instanceof HTMLInputElement) {
     return;
@@ -4934,6 +5113,8 @@ tableBody.addEventListener("click", (event) => {
       selectedEntries.delete(path);
     }
 
+    focusedEntryPath = path;
+    selectionAnchorPath = path;
     renderBrowse();
   });
 

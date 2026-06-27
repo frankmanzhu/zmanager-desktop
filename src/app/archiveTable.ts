@@ -4,6 +4,7 @@ import {
   formatCompressionRatio,
   formatDate,
   getPathBasename,
+  parseDateValue,
 } from "./formatting";
 
 export type ArchiveTableColumnId =
@@ -298,10 +299,10 @@ export function compareOptionalNumbers(left?: number | null, right?: number | nu
 }
 
 export function compareOptionalDates(left?: string | null, right?: string | null): number {
-  const leftTime = Date.parse(left ?? "");
-  const rightTime = Date.parse(right ?? "");
-  const leftKnown = !Number.isNaN(leftTime);
-  const rightKnown = !Number.isNaN(rightTime);
+  const leftTime = parseDateValue(left)?.getTime();
+  const rightTime = parseDateValue(right)?.getTime();
+  const leftKnown = typeof leftTime === "number";
+  const rightKnown = typeof rightTime === "number";
 
   if (!leftKnown && !rightKnown) {
     return 0;

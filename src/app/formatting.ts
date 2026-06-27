@@ -4,6 +4,9 @@ const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB", "EB"] as const;
 const HTML_ESCAPE_PATTERN = /[&<>"']/g;
 const TRAILING_PATH_SEPARATOR_PATTERN = /[\\/]+$/;
 const PATH_SEPARATOR_PATTERN = /[\\/]+/;
+const ZERO_DATE_PATTERN = /^0{4}-0{2}-0{2}/;
+const NUMERIC_DATE_PATTERN = /^-?\d+(?:\.\d+)?$/;
+const EPOCH_SECONDS_THRESHOLD = 100_000_000_000;
 
 const HTML_ESCAPE_REPLACEMENTS: Record<string, string> = {
   "&": "&amp;",
@@ -60,12 +63,8 @@ export function formatDate(
   options: FormatDateOptions = {},
 ): string {
   const emptyValue = options.emptyValue ?? DEFAULT_EMPTY_VALUE;
-  if (value === undefined || value === null || value === "") {
-    return emptyValue;
-  }
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseDateValue(value);
+  if (!date) {
     return emptyValue;
   }
 
@@ -73,6 +72,59 @@ export function formatDate(
     dateStyle: options.dateStyle ?? "medium",
     timeStyle: options.timeStyle ?? "short",
   }).format(date);
+}
+
+export function parseDateValue(value?: string | number | Date | null): Date | null {
+  if (isUnknownDateValue(value)) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return epochDateFromNumber(value);
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (NUMERIC_DATE_PATTERN.test(trimmed)) {
+    return epochDateFromNumber(Number(trimmed));
+  }
+
+  const date = new Date(trimmed);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isUnknownDateValue(value?: string | number | Date | null): boolean {
+  if (value === undefined || value === null) {
+    return true;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime());
+  }
+
+  if (typeof value === "number") {
+    return !Number.isFinite(value) || value === 0;
+  }
+
+  const trimmed = value.trim();
+  return trimmed === "" || trimmed === "0" || ZERO_DATE_PATTERN.test(trimmed);
+}
+
+function epochDateFromNumber(value: number): Date | null {
+  if (!Number.isFinite(value) || value === 0) {
+    return null;
+  }
+
+  const milliseconds = Math.abs(value) < EPOCH_SECONDS_THRESHOLD ? value * 1000 : value;
+  const date = new Date(milliseconds);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function calculateCompressionRatio(

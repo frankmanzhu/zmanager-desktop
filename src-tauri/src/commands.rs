@@ -1,6 +1,8 @@
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::State;
 
@@ -8,12 +10,12 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse,
-        ProjectContract, ProjectIntegrationContract, ProjectIntegrationShellActionDto,
-        StartCreateRequest, StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse,
-        TestArchiveRequest,
+        NativeFileDragRequest, NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest,
+        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ProjectIntegrationShellActionDto, StartCreateRequest, StartExtractRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
     },
-    error::CommandErrorDto,
+    error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
         JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
         StartJobResponseDto,
@@ -535,6 +537,52 @@ pub fn preview_entry(
         cleanup_root: report.cleanup_root.to_string_lossy().to_string(),
         preview_path: report.preview_path.to_string_lossy().to_string(),
         written_bytes: report.written_bytes,
+    })
+}
+
+#[tauri::command]
+pub fn start_native_file_drag(
+    request: NativeFileDragRequest,
+    registry: State<'_, JobRegistry>,
+) -> Result<NativeFileDragResponse, CommandErrorDto> {
+    let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
+    let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
+    let password = request
+        .password
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    let staging_root = create_native_drag_staging_root()?;
+
+    for entry_path in &entry_paths {
+        if let Err(error) = archive_browser::extract_entry_with_options(
+            &archive_path,
+            entry_path,
+            &staging_root,
+            BrowserExtractOptions {
+                password: password.as_deref(),
+                overwrite: OverwritePolicy::Replace,
+                strip_components: request.strip_components,
+            },
+        )
+        .map_err(map_archive_browser_error)
+        {
+            let _ = fs::remove_dir_all(&staging_root);
+            return Err(error);
+        }
+    }
+
+    let dragged_paths =
+        staged_drag_paths_for_entries(&staging_root, &entry_paths, request.strip_components)?;
+
+    registry.replace_preview_root(staging_root.clone());
+    crate::platform::start_native_file_drag(&dragged_paths).map_err(map_native_file_drag_error)?;
+
+    Ok(NativeFileDragResponse {
+        staging_root: staging_root.to_string_lossy().to_string(),
+        dragged_paths: dragged_paths
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect(),
     })
 }
 
@@ -1134,6 +1182,74 @@ fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
     }
 }
 
+fn map_native_file_drag_error(error: crate::platform::NativeFileDragError) -> CommandErrorDto {
+    CommandErrorDto::new(
+        constants::COMMAND_ERROR_OPERATION_FAILED,
+        error.message,
+        error.hint,
+        ErrorSeverityDto::Warning,
+        false,
+    )
+}
+
+fn create_native_drag_staging_root() -> Result<PathBuf, CommandErrorDto> {
+    let now_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!("zmanager-drag-{now_nanos}"));
+    fs::create_dir_all(&root)
+        .map_err(|error| map_io_error(root.to_string_lossy().to_string(), error))?;
+    Ok(root)
+}
+
+fn staged_drag_paths_for_entries(
+    staging_root: &Path,
+    entry_paths: &[String],
+    strip_components: usize,
+) -> Result<Vec<PathBuf>, CommandErrorDto> {
+    let mut dragged_paths = Vec::with_capacity(entry_paths.len());
+
+    for entry_path in entry_paths {
+        let Some(relative_path) = stripped_entry_path(entry_path, strip_components) else {
+            return Err(CommandErrorDto::invalid_request(format!(
+                "entry path is empty after stripping components: {entry_path}"
+            )));
+        };
+        let staged_path = staging_root.join(relative_path);
+        if !staged_path.exists() {
+            return Err(CommandErrorDto::not_found(
+                format!(
+                    "staged drag file was not created: {}",
+                    staged_path.to_string_lossy()
+                ),
+                Some("Try extracting the selection normally.".to_string()),
+            ));
+        }
+        dragged_paths.push(staged_path);
+    }
+
+    Ok(dragged_paths)
+}
+
+fn stripped_entry_path(entry_path: &str, strip_components: usize) -> Option<PathBuf> {
+    let components = entry_path
+        .split(|character| character == '/' || character == '\\')
+        .filter(|component| !component.is_empty())
+        .skip(strip_components)
+        .collect::<Vec<_>>();
+
+    if components.is_empty() {
+        return None;
+    }
+
+    let mut path = PathBuf::new();
+    for component in components {
+        path.push(component);
+    }
+    Some(path)
+}
+
 fn map_overwrite_policy(policy: crate::dto::OverwritePolicyDto) -> OverwritePolicy {
     match policy {
         crate::dto::OverwritePolicyDto::Refuse => OverwritePolicy::Refuse,
@@ -1455,6 +1571,19 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use zmanager_core::safety::ExtractionSafetyError;
+
+    #[test]
+    fn stripped_entry_path_uses_current_folder_depth_for_drag_out() {
+        assert_eq!(
+            stripped_entry_path("docs/readme.txt", 1),
+            Some(PathBuf::from("readme.txt"))
+        );
+        assert_eq!(
+            stripped_entry_path("docs/nested/readme.txt", 1),
+            Some(PathBuf::from("nested").join("readme.txt"))
+        );
+        assert_eq!(stripped_entry_path("docs", 1), None);
+    }
 
     #[test]
     fn list_archive_rejects_empty_path() {
