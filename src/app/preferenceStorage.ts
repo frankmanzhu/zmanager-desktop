@@ -10,7 +10,6 @@ export type PreferenceStorageKey =
   | "defaultOutputLocation"
   | "customOutputFolderPath"
   | "defaultExtractionBehavior"
-  | "quickOpenExtractionEnabled"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
   | "showGridLines"
@@ -31,7 +30,6 @@ export const PREFERENCE_KEYS = {
   defaultOutputLocation: "zmanager.defaultOutputLocation",
   customOutputFolderPath: "zmanager.customOutputFolderPath",
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",
-  quickOpenExtractionEnabled: "zmanager.quickOpenExtractionEnabled",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
   showGridLines: "zmanager.showGridLines",

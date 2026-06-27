@@ -138,6 +138,8 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
     let mut kind: Option<Result<QuickActionKindDto, QuickActionError>> = None;
     let mut paths = Vec::new();
     let mut pending_path_values = false;
+    let mut saw_unknown_option = false;
+    let mut ordinary_open_paths = Vec::new();
 
     for arg in args {
         let arg = match arg.into_string() {
@@ -186,6 +188,9 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
 
         if arg.starts_with("--") {
             pending_path_values = false;
+            if !requested {
+                saw_unknown_option = true;
+            }
             continue;
         }
 
@@ -195,11 +200,20 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             } else if pending_path_values {
                 paths.push(arg);
             }
+        } else if !saw_unknown_option {
+            ordinary_open_paths.push(arg);
         }
     }
 
     if !requested {
-        return ParseOutcome::NotRequested;
+        if ordinary_open_paths.is_empty() {
+            return ParseOutcome::NotRequested;
+        }
+
+        return ParseOutcome::Requested(validate_request(
+            QuickActionKindDto::Open,
+            ordinary_open_paths,
+        ));
     }
 
     let kind = match kind.unwrap_or_else(|| {
@@ -224,6 +238,7 @@ fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
 
     match normalized.as_str() {
         "compress" => Ok(QuickActionKindDto::Compress),
+        "open" | "browse" => Ok(QuickActionKindDto::Open),
         "extract" => Ok(QuickActionKindDto::Extract),
         "compresszip" => Ok(QuickActionKindDto::CompressZip),
         "compresscleansource" | "cleansource" => Ok(QuickActionKindDto::CompressCleanSource),
@@ -243,6 +258,14 @@ fn validate_request(
     let paths = normalize_local_paths(paths)?;
 
     match kind {
+        QuickActionKindDto::Open => {
+            if paths.len() != 1 {
+                return Err(QuickActionError::invalid(
+                    "open requires exactly one archive path",
+                ));
+            }
+            validate_all_supported_archives(&paths)?;
+        }
         QuickActionKindDto::Compress
         | QuickActionKindDto::CompressZip
         | QuickActionKindDto::CompressCleanSource => {
@@ -374,6 +397,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_plain_supported_archive_arg_as_open_request() {
+        let request = requested(&["C:/tmp/archive.tzap"]);
+
+        assert_eq!(request.kind, QuickActionKindDto::Open);
+        assert_eq!(request.paths, ["C:/tmp/archive.tzap"]);
+    }
+
+    #[test]
     fn parse_accepts_kebab_and_camel_case_actions() {
         let preferred_compress = requested(&[
             "--quick-action",
@@ -495,28 +526,24 @@ mod tests {
 
     #[test]
     fn quick_actions_reject_remote_urls_and_password_args() {
-        assert!(
-            invalid(&[
-                "--quick-action",
-                "compress-zip",
-                "--path",
-                "https://example.com/a"
-            ])
-            .message
-            .contains("must be local")
-        );
-        assert!(
-            invalid(&[
-                "--quick-action",
-                "extract",
-                "--password",
-                "secret",
-                "--path",
-                "archive.zip",
-            ])
-            .message
-            .contains("passwords cannot be supplied")
-        );
+        assert!(invalid(&[
+            "--quick-action",
+            "compress-zip",
+            "--path",
+            "https://example.com/a"
+        ])
+        .message
+        .contains("must be local"));
+        assert!(invalid(&[
+            "--quick-action",
+            "extract",
+            "--password",
+            "secret",
+            "--path",
+            "archive.zip",
+        ])
+        .message
+        .contains("passwords cannot be supplied"));
     }
 
     #[test]

@@ -20,6 +20,7 @@ export type QuickActionPathHelpers = CreatePathHelpers & {
 };
 
 export type QuickActionHandlers = {
+  openArchive: (paths: string[]) => Promise<void>;
   startCreate: (paths: string[], format: CreateArchiveFormat, cleanSource: boolean) => Promise<void>;
   openExtractReview: (paths: string[]) => Promise<void>;
   startExtract: (paths: string[], action: QuickActionExtractMode) => Promise<void>;
@@ -71,6 +72,9 @@ export async function runQuickActionRequest(
   handlers: QuickActionHandlers,
 ): Promise<void> {
   switch (request.kind) {
+    case "open":
+      await handlers.openArchive(request.paths);
+      break;
     case "compress":
       await handlers.startCreate(
         request.paths,

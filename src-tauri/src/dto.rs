@@ -40,6 +40,7 @@ pub struct ProjectContract {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum QuickActionKindDto {
+    Open,
     Compress,
     Extract,
     CompressZip,

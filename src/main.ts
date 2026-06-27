@@ -793,7 +793,6 @@ appRoot.innerHTML = `
                 <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> Show toolbar labels</label>
                 <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> Flat view</label>
                 <label class="toggle-line"><input id="pref-clean-source" type="checkbox" /> Clean source by default</label>
-                <label class="toggle-line"><input id="pref-quick-open-extract" type="checkbox" /> Extract associated archives immediately when opened</label>
               </div>
             </section>
             <section class="options-page">
@@ -930,7 +929,6 @@ const preferencesPreviewCleanupSelect = document.querySelector<HTMLSelectElement
 const preferencesCustomOutputInput = document.querySelector<HTMLInputElement>("#pref-custom-output")!;
 const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>("#pref-choose-output")!;
 const preferencesCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-clean-source")!;
-const preferencesQuickOpenExtractCheckbox = document.querySelector<HTMLInputElement>("#pref-quick-open-extract")!;
 const preferencesShowParentCheckbox = document.querySelector<HTMLInputElement>("#pref-show-parent")!;
 const preferencesShowGridCheckbox = document.querySelector<HTMLInputElement>("#pref-show-grid")!;
 const preferencesFullRowSelectCheckbox = document.querySelector<HTMLInputElement>("#pref-full-row-select")!;
@@ -950,7 +948,6 @@ const preferencesViewElements: PreferencesViewElements = {
   customOutputInput: preferencesCustomOutputInput,
   chooseOutputButton: preferencesChooseOutputButton,
   cleanSourceCheckbox: preferencesCleanSourceCheckbox,
-  quickOpenExtractCheckbox: preferencesQuickOpenExtractCheckbox,
   showParentFolderItemCheckbox: preferencesShowParentCheckbox,
   showGridLinesCheckbox: preferencesShowGridCheckbox,
   fullRowSelectCheckbox: preferencesFullRowSelectCheckbox,
@@ -3006,7 +3003,6 @@ function renderAboutDiagnostics() {
       <div><dt>Desktop actions</dt><dd>${contract?.platformIntegration.desktopActionsEnabled ? "enabled" : "disabled"}</dd></div>
       <div><dt>Extensions</dt><dd>${escapeHtml(contract?.platformIntegration.associatedExtensions.join(", ") ?? "-")}</dd></div>
       <div><dt>Shell actions</dt><dd>${escapeHtml(shellActions)}</dd></div>
-      <div><dt>Quick open extraction</dt><dd>${appPreferences.quickOpenExtractionEnabled ? "enabled" : "disabled"}</dd></div>
     </dl>
   `;
 }
@@ -3387,6 +3383,24 @@ function addJobState(response: StartJobResponseDto, retryContext?: JobRetryConte
   openJobDrawer();
 }
 
+async function openQuickActionArchive(paths: string[]) {
+  const archives = uniqueQuickActionPaths(paths);
+  if (archives.length !== 1) {
+    setBrowseState("error", "Open one archive at a time.");
+    renderBrowse();
+    return;
+  }
+
+  const archivePath = archives[0];
+  if (!isSupportedArchivePath(archivePath)) {
+    setBrowseState("error", `Unsupported archive: ${archivePath}`);
+    renderBrowse();
+    return;
+  }
+
+  await loadArchive({ archivePath });
+}
+
 async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cleanSource: boolean) {
   const sources = uniqueQuickActionPaths(paths);
   if (!sources.length) {
@@ -3492,6 +3506,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
 
 async function handleQuickActionRequest(request: QuickActionRequestDto) {
   await runQuickActionRequest(request, appPreferences, {
+    openArchive: openQuickActionArchive,
     startCreate: startQuickCreate,
     openExtractReview: openQuickExtractReview,
     startExtract: startQuickExtract,
@@ -3518,7 +3533,10 @@ async function handleStartupQuickAction() {
     }
 
     if (state.quickAction) {
-      setOperationalStatus("Starting quick action...");
+      const startupStatus = state.quickAction.kind === "open"
+        ? "Opening archive..."
+        : "Starting quick action...";
+      setOperationalStatus(startupStatus);
       await handleQuickActionRequest(state.quickAction);
     }
   } catch (error) {

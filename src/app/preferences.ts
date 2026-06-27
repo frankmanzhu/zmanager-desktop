@@ -21,7 +21,6 @@ export type AppPreferences = {
   defaultOutputLocation: DefaultOutputLocation;
   customOutputFolderPath: string;
   defaultExtractionBehavior: DefaultExtractionBehavior;
-  quickOpenExtractionEnabled: boolean;
   previewCleanupPolicy: PreviewCleanupPolicy;
   showParentFolderItem: boolean;
   showGridLines: boolean;
@@ -43,7 +42,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultOutputLocation: "sourceFolder",
   customOutputFolderPath: "",
   defaultExtractionBehavior: "askEveryTime",
-  quickOpenExtractionEnabled: false,
   previewCleanupPolicy: "beforeNextPreview",
   showParentFolderItem: true,
   showGridLines: true,
@@ -134,10 +132,6 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     defaultExtractionBehavior: isOneOf(EXTRACTION_BEHAVIORS, defaultExtractionBehavior)
       ? defaultExtractionBehavior
       : DEFAULT_APP_PREFERENCES.defaultExtractionBehavior,
-    quickOpenExtractionEnabled: storedBool(
-      storage.getItem(PREFERENCE_KEYS.quickOpenExtractionEnabled),
-      DEFAULT_APP_PREFERENCES.quickOpenExtractionEnabled,
-    ),
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
       ? previewCleanupPolicy
       : DEFAULT_APP_PREFERENCES.previewCleanupPolicy,
@@ -197,7 +191,6 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.defaultCleanSourceEnabled, String(preferences.defaultCleanSourceEnabled));
   storage.setItem(PREFERENCE_KEYS.defaultOutputLocation, preferences.defaultOutputLocation);
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
-  storage.setItem(PREFERENCE_KEYS.quickOpenExtractionEnabled, String(preferences.quickOpenExtractionEnabled));
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
   storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
   storage.setItem(PREFERENCE_KEYS.showGridLines, String(preferences.showGridLines));

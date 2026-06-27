@@ -24,6 +24,7 @@ export type ProjectContract = {
 };
 
 export type QuickActionKind =
+  | "open"
   | "compress"
   | "extract"
   | "compressZip"

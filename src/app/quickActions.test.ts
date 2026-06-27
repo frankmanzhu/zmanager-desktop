@@ -74,6 +74,7 @@ describe("quick action helpers", () => {
 
   it("routes generic quick actions through preferences", async () => {
     const handlers = {
+      openArchive: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
@@ -100,8 +101,49 @@ describe("quick action helpers", () => {
     expect(handlers.startExtract).toHaveBeenCalledWith(["/tmp/archive.zip"], "extractToFolder");
   });
 
+  it("routes associated archive opens to browsing by default", async () => {
+    const handlers = {
+      openArchive: vi.fn().mockResolvedValue(undefined),
+      startCreate: vi.fn().mockResolvedValue(undefined),
+      openExtractReview: vi.fn().mockResolvedValue(undefined),
+      startExtract: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runQuickActionRequest(
+      { kind: "open", paths: ["/tmp/archive.tzap"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+
+    expect(handlers.openArchive).toHaveBeenCalledWith(["/tmp/archive.tzap"]);
+    expect(handlers.openExtractReview).not.toHaveBeenCalled();
+    expect(handlers.startExtract).not.toHaveBeenCalled();
+  });
+
+  it("routes associated archive opens to browsing regardless of extraction defaults", async () => {
+    const handlers = {
+      openArchive: vi.fn().mockResolvedValue(undefined),
+      startCreate: vi.fn().mockResolvedValue(undefined),
+      openExtractReview: vi.fn().mockResolvedValue(undefined),
+      startExtract: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runQuickActionRequest(
+      { kind: "open", paths: ["/tmp/archive.zip"] },
+      {
+        ...DEFAULT_APP_PREFERENCES,
+        defaultExtractionBehavior: "extractHere",
+      },
+      handlers,
+    );
+
+    expect(handlers.openArchive).toHaveBeenCalledWith(["/tmp/archive.zip"]);
+    expect(handlers.startExtract).not.toHaveBeenCalled();
+  });
+
   it("routes ask-every-time extraction to user review", async () => {
     const handlers = {
+      openArchive: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
