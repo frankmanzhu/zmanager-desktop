@@ -89,6 +89,14 @@ test("synthetic folder rows can be selected from the table row", async ({ page }
   await expect(folderRow.locator("input[type='checkbox']")).toBeChecked();
 });
 
+test("double-clicking a folder row opens the folder after selection", async ({ page }) => {
+  await entryRow(page, "folder").locator(".row-name").dblclick();
+
+  await expect(entryRow(page, "folder/alpha.txt")).toBeVisible();
+  await expect(entryRow(page, "folder/beta.txt")).toBeVisible();
+  await expect(entryRow(page, "root.txt")).toBeHidden();
+});
+
 test("dragging a selected synthetic folder row starts native drag for the folder path", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
   await folderRow.locator(".row-name").click();
@@ -103,6 +111,128 @@ test("dragging a selected synthetic folder row starts native drag for the folder
       stripComponents: 0,
     },
   });
+});
+
+test("ctrl-click adds rows to the selection without starting native drag-out", async ({ page }) => {
+  const folderRow = entryRow(page, "folder");
+  const rootRow = entryRow(page, "root.txt");
+
+  await rootRow.locator(".row-name").click();
+  await folderRow.locator(".row-name").click({ modifiers: ["Control"] });
+
+  await expect(rootRow).toHaveAttribute("aria-selected", "true");
+  await expect(folderRow).toHaveAttribute("aria-selected", "true");
+  expect(await nativeDragCalls(page)).toEqual([]);
+});
+
+test("pressing an unselected file row waits for click or drag intent", async ({ page }) => {
+  const rootRow = entryRow(page, "root.txt");
+  const box = await rootRow.locator(".row-name").boundingBox();
+  if (!box) {
+    throw new Error("Unable to locate root row name");
+  }
+
+  await expect(rootRow).toHaveAttribute("aria-selected", "false");
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+
+  await expect(rootRow).toHaveAttribute("aria-selected", "false");
+  await expect(rootRow.locator("input[type='checkbox']")).not.toBeChecked();
+  expect(await nativeDragCalls(page)).toEqual([]);
+
+  await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2, { steps: 2 });
+  await expect(rootRow).toHaveAttribute("aria-selected", "false");
+  expect(await nativeDragCalls(page)).toEqual([]);
+
+  await page.mouse.up();
+
+  await expect(rootRow).toHaveAttribute("aria-selected", "true");
+  await expect(rootRow.locator("input[type='checkbox']")).toBeChecked();
+  expect(await nativeDragCalls(page)).toEqual([]);
+});
+
+test("dragging an unselected file row selects it when native drag-out starts", async ({ page }) => {
+  const rootRow = entryRow(page, "root.txt");
+  const box = await rootRow.locator(".row-name").boundingBox();
+  if (!box) {
+    throw new Error("Unable to locate root row name");
+  }
+
+  await expect(rootRow).toHaveAttribute("aria-selected", "false");
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await expect(rootRow).toHaveAttribute("aria-selected", "false");
+
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2, { steps: 3 });
+  const [call] = await waitForNativeDragCalls(page);
+  expect(call.args).toEqual({
+    request: {
+      archivePath: archiveFixture.archivePath,
+      entryPaths: ["root.txt"],
+      stripComponents: 0,
+    },
+  });
+
+  await page.mouse.up();
+});
+
+test("dragging one selected row starts native drag-out for the selected set", async ({ page }) => {
+  await entryRow(page, "root.txt").locator(".row-name").click();
+  await entryRow(page, "folder").locator(".row-name").click({ modifiers: ["Control"] });
+
+  await dragRowName(page, "root.txt");
+
+  const [call] = await waitForNativeDragCalls(page);
+  expect(call.args).toEqual({
+    request: {
+      archivePath: archiveFixture.archivePath,
+      entryPaths: ["root.txt", "folder"],
+      stripComponents: 0,
+    },
+  });
+});
+
+test("dragging blank table space marquee-selects intersecting rows", async ({ page }) => {
+  const folderRow = entryRow(page, "folder");
+  const rootRow = entryRow(page, "root.txt");
+  const shellBox = await page.locator(".table-shell").boundingBox();
+  const folderBox = await folderRow.boundingBox();
+  const rootBox = await rootRow.boundingBox();
+  if (!shellBox || !folderBox || !rootBox) {
+    throw new Error("Unable to locate table geometry");
+  }
+
+  const startX = shellBox.x + shellBox.width - 12;
+  const startY = rootBox.y + rootBox.height + 28;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(folderBox.x + 2, folderBox.y + 2, { steps: 5 });
+
+  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(folderRow).toHaveAttribute("aria-selected", "true");
+  await expect(rootRow).toHaveAttribute("aria-selected", "true");
+  expect(await nativeDragCalls(page)).toEqual([]);
+
+  await page.mouse.up();
+  await expect(page.locator(".marquee-selection")).toBeHidden();
+});
+
+test("checkbox selection does not start native drag-out", async ({ page }) => {
+  const rootRow = entryRow(page, "root.txt");
+  const checkbox = rootRow.locator("input[type='checkbox']");
+  const box = await checkbox.boundingBox();
+  if (!box) {
+    throw new Error("Unable to locate root checkbox");
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 14, box.y + box.height / 2, { steps: 3 });
+  await page.mouse.up();
+
+  expect(await nativeDragCalls(page)).toEqual([]);
 });
 
 test("dragging a file row starts native drag for the file and suppresses browser icon drag", async ({

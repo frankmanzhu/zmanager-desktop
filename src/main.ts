@@ -195,6 +195,7 @@ type ArchiveFixture = {
 };
 
 const NATIVE_DRAG_THRESHOLD_PX = 6;
+const MARQUEE_SELECTION_THRESHOLD_PX = 5;
 
 type NativeDragGesture = {
   pointerId: number;
@@ -202,6 +203,24 @@ type NativeDragGesture = {
   startY: number;
   entryPath: string;
   started: boolean;
+};
+
+type MarqueeSelectionGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  additive: boolean;
+  baseSelection: Set<string>;
+  started: boolean;
+};
+
+type ViewportRect = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
 };
 
 declare global {
@@ -920,6 +939,7 @@ const messageElement = document.querySelector<HTMLParagraphElement>("#browse-mes
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
+const tableShellElement = document.querySelector<HTMLDivElement>(".table-shell")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
 
@@ -1061,6 +1081,8 @@ let currentPreviewPath = "";
 let currentPreviewEntryPath = "";
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
+let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
+let marqueeSelectionElement: HTMLDivElement | null = null;
 let suppressNextTableClick = false;
 
 const jobs = new Map<string, JobState>();
@@ -2990,6 +3012,27 @@ function updateSelectionByIntent(
   selectedEntries = intentResult.selectedPaths;
   selectionAnchorPath = intentResult.anchorPath;
   focusedEntryPath = entryPath;
+}
+
+function syncVisibleSelectionUi() {
+  const visiblePaths = getVisibleSelectablePaths();
+  const selectedVisibleCount = visiblePaths.filter((path) => selectedEntries.has(path)).length;
+  selectAllInput.checked = visiblePaths.length > 0 && selectedVisibleCount === visiblePaths.length;
+  selectAllInput.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visiblePaths.length;
+
+  for (const row of tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
+    const path = row.dataset.entryPath ?? "";
+    const selected = selectedEntries.has(path);
+    row.classList.toggle("is-selected", selected);
+    row.setAttribute("aria-selected", String(selected));
+    const checkbox = row.querySelector<HTMLInputElement>("input[type='checkbox']");
+    if (checkbox) {
+      checkbox.checked = selected;
+    }
+  }
+
+  renderDetails();
+  updateCommandState();
 }
 
 function selectAllVisibleEntries() {
@@ -5003,9 +5046,17 @@ function bindActions() {
     navigateToFolder(target.dataset.treePath ?? "");
   });
 
-function entryPathFromRowEvent(event: PointerEvent): string {
+function hasSelectionModifier(event: PointerEvent | MouseEvent): boolean {
+  return event.ctrlKey || event.metaKey || event.shiftKey;
+}
+
+function entryPathFromNativeDragEvent(event: PointerEvent): string {
   const target = event.target as HTMLElement;
-  if (target.closest("button, a, select, textarea")) {
+  if (target.closest("button, a, input, select, textarea")) {
+    return "";
+  }
+
+  if (!target.closest(".row-primary")) {
     return "";
   }
 
@@ -5014,8 +5065,140 @@ function entryPathFromRowEvent(event: PointerEvent): string {
 }
 
 function suppressNativeDragClick(event: MouseEvent) {
+  suppressNextTableClick = false;
   event.preventDefault();
   event.stopPropagation();
+}
+
+function viewportRectBetween(startX: number, startY: number, endX: number, endY: number): ViewportRect {
+  const left = Math.min(startX, endX);
+  const top = Math.min(startY, endY);
+  const right = Math.max(startX, endX);
+  const bottom = Math.max(startY, endY);
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function viewportRectsIntersect(left: ViewportRect, right: DOMRect): boolean {
+  return left.left <= right.right &&
+    left.right >= right.left &&
+    left.top <= right.bottom &&
+    left.bottom >= right.top;
+}
+
+function ensureMarqueeSelectionElement(): HTMLDivElement {
+  if (marqueeSelectionElement) {
+    return marqueeSelectionElement;
+  }
+
+  marqueeSelectionElement = document.createElement("div");
+  marqueeSelectionElement.className = "marquee-selection";
+  document.body.appendChild(marqueeSelectionElement);
+  return marqueeSelectionElement;
+}
+
+function removeMarqueeSelectionElement() {
+  marqueeSelectionElement?.remove();
+  marqueeSelectionElement = null;
+  document.body.classList.remove("is-marquee-selecting");
+}
+
+function setMarqueeSelectionElementRect(rect: ViewportRect) {
+  const element = ensureMarqueeSelectionElement();
+  element.style.left = `${rect.left}px`;
+  element.style.top = `${rect.top}px`;
+  element.style.width = `${rect.width}px`;
+  element.style.height = `${rect.height}px`;
+}
+
+function selectedRowsInMarqueeRect(rect: ViewportRect): string[] {
+  const paths: string[] = [];
+  for (const row of tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
+    if (viewportRectsIntersect(rect, row.getBoundingClientRect())) {
+      const path = row.dataset.entryPath;
+      if (path) {
+        paths.push(path);
+      }
+    }
+  }
+  return paths;
+}
+
+function canStartMarqueeSelection(event: PointerEvent): boolean {
+  if (event.button !== 0 || !currentArchivePath || browseState !== "loaded" || hasActiveJob()) {
+    return false;
+  }
+
+  const target = event.target as HTMLElement;
+  if (!target.closest(".table-shell")) {
+    return false;
+  }
+
+  if (target.closest("button, a, input, select, textarea, .column-resizer")) {
+    return false;
+  }
+
+  return !target.closest(".row-primary, .row-secondary");
+}
+
+function clearPendingMarqueeSelection() {
+  pendingMarqueeSelection = null;
+  document.removeEventListener("pointermove", onMarqueeSelectionPointerMove);
+  document.removeEventListener("pointerup", onMarqueeSelectionPointerEnd);
+  document.removeEventListener("pointercancel", onMarqueeSelectionPointerEnd);
+  removeMarqueeSelectionElement();
+}
+
+function updateMarqueeSelection(rect: ViewportRect, gesture: MarqueeSelectionGesture) {
+  const selectedInRect = selectedRowsInMarqueeRect(rect);
+  const nextSelection = gesture.additive ? new Set(gesture.baseSelection) : new Set<string>();
+
+  for (const path of selectedInRect) {
+    nextSelection.add(path);
+  }
+
+  selectedEntries = nextSelection;
+  const focusedPath = [...getVisibleSelectablePaths()].reverse().find((path) => nextSelection.has(path)) ?? "";
+  focusedEntryPath = focusedPath;
+  selectionAnchorPath = focusedPath;
+  syncVisibleSelectionUi();
+}
+
+function onMarqueeSelectionPointerMove(event: PointerEvent) {
+  const gesture = pendingMarqueeSelection;
+  if (!gesture || gesture.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const rect = viewportRectBetween(gesture.startX, gesture.startY, event.clientX, event.clientY);
+  if (!gesture.started && Math.hypot(rect.width, rect.height) < MARQUEE_SELECTION_THRESHOLD_PX) {
+    return;
+  }
+
+  if (!gesture.started) {
+    gesture.started = true;
+    suppressNextTableClick = true;
+    document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
+    document.body.classList.add("is-marquee-selecting");
+  }
+
+  event.preventDefault();
+  setMarqueeSelectionElementRect(rect);
+  updateMarqueeSelection(rect, gesture);
+}
+
+function onMarqueeSelectionPointerEnd(event: PointerEvent) {
+  if (pendingMarqueeSelection?.pointerId !== event.pointerId) {
+    return;
+  }
+
+  clearPendingMarqueeSelection();
 }
 
 function clearPendingNativeDragGesture() {
@@ -5043,6 +5226,9 @@ function onNativeDragPointerMove(event: PointerEvent) {
   event.preventDefault();
   const entryPath = gesture.entryPath;
   clearPendingNativeDragGesture();
+  if (!selectedEntries.has(entryPath)) {
+    selectEntryForNativeDragGesture(entryPath);
+  }
   void startNativeDragOut(entryPath);
 }
 
@@ -5053,12 +5239,25 @@ function onNativeDragPointerEnd(event: PointerEvent) {
   clearPendingNativeDragGesture();
 }
 
-tableBody.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0 || !currentArchivePath || hasActiveJob()) {
+function selectEntryForNativeDragGesture(entryPath: string) {
+  focusedEntryPath = entryPath;
+
+  if (selectedEntries.has(entryPath)) {
     return;
   }
 
-  const entryPath = entryPathFromRowEvent(event);
+  selectedEntries = new Set([entryPath]);
+  selectionAnchorPath = entryPath;
+  renderBrowse();
+  focusTableRow(tableBody.querySelector<HTMLTableRowElement>(`tr[data-entry-path="${CSS.escape(entryPath)}"]`));
+}
+
+tableBody.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || !currentArchivePath || hasActiveJob() || hasSelectionModifier(event)) {
+    return;
+  }
+
+  const entryPath = entryPathFromNativeDragEvent(event);
   if (!entryPath) {
     return;
   }
@@ -5073,6 +5272,25 @@ tableBody.addEventListener("pointerdown", (event) => {
   document.addEventListener("pointermove", onNativeDragPointerMove);
   document.addEventListener("pointerup", onNativeDragPointerEnd);
   document.addEventListener("pointercancel", onNativeDragPointerEnd);
+});
+
+tableShellElement.addEventListener("pointerdown", (event) => {
+  if (!canStartMarqueeSelection(event)) {
+    return;
+  }
+
+  pendingMarqueeSelection = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    additive: hasSelectionModifier(event),
+    baseSelection: new Set(selectedEntries),
+    started: false,
+  };
+
+  document.addEventListener("pointermove", onMarqueeSelectionPointerMove);
+  document.addEventListener("pointerup", onMarqueeSelectionPointerEnd);
+  document.addEventListener("pointercancel", onMarqueeSelectionPointerEnd);
 });
 
 tableBody.addEventListener("dragstart", (event) => {
@@ -5100,12 +5318,17 @@ tableBody.addEventListener("click", (event) => {
     return;
   }
 
+  const plainPrimaryClick = !event.ctrlKey && !event.metaKey && !event.shiftKey;
+
   if (folderPath !== undefined) {
+    if (event.detail >= 2 && plainPrimaryClick) {
+      navigateToFolder(folderPath);
+      return;
+    }
+
     if (
       appPreferences.singleClickOpen &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.shiftKey
+      plainPrimaryClick
     ) {
       navigateToFolder(folderPath);
       return;
@@ -5126,9 +5349,7 @@ tableBody.addEventListener("click", (event) => {
 
     if (
       appPreferences.singleClickOpen &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.shiftKey
+      plainPrimaryClick
     ) {
       void onPreviewSelectedEntry();
     }

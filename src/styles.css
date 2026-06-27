@@ -889,6 +889,20 @@ body.is-resizing-column {
   user-select: none;
 }
 
+body.is-marquee-selecting {
+  cursor: default;
+  user-select: none;
+}
+
+.marquee-selection {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  border: 1px solid var(--selected-border);
+  background: color-mix(in srgb, var(--selected-bg) 56%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 65%, transparent);
+}
+
 tbody tr {
   background: var(--content-bg);
   content-visibility: auto;
