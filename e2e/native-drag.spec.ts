@@ -1,0 +1,313 @@
+import { expect, test, type Page } from "@playwright/test";
+
+type ArchiveEntryKind = "file" | "directory" | "symlink" | "hardlink" | "special";
+
+type ArchiveEntryFixture = {
+  path: string;
+  kind: ArchiveEntryKind;
+  size?: number;
+  compressedSize?: number;
+  modified?: string;
+};
+
+type ArchiveFixture = {
+  archivePath: string;
+  entries: ArchiveEntryFixture[];
+  entryCount: number;
+  totalSize: number;
+};
+
+type IpcCall = {
+  cmd: string;
+  args: Record<string, unknown>;
+};
+
+declare global {
+  interface Window {
+    __zmanagerDev?: {
+      loadArchiveFixture: (fixture: ArchiveFixture) => void;
+    };
+    __zmanagerE2E?: {
+      ipcCalls: IpcCall[];
+    };
+    __TAURI_EVENT_PLUGIN_INTERNALS__?: {
+      unregisterListener: (event: string, id: number) => void;
+    };
+    __TAURI_INTERNALS__?: Record<string, unknown>;
+    isTauri?: boolean;
+  }
+}
+
+const archiveFixture: ArchiveFixture = {
+  archivePath: "C:/fixtures/drag-proof.zip",
+  entryCount: 3,
+  totalSize: 61,
+  entries: [
+    {
+      path: "folder/alpha.txt",
+      kind: "file",
+      size: 23,
+      compressedSize: 23,
+      modified: "1781085660",
+    },
+    {
+      path: "folder/beta.txt",
+      kind: "file",
+      size: 18,
+      compressedSize: 18,
+      modified: "1781085720",
+    },
+    {
+      path: "root.txt",
+      kind: "file",
+      size: 20,
+      compressedSize: 21,
+      modified: "1781085780",
+    },
+  ],
+};
+
+test.beforeEach(async ({ page }) => {
+  await installTauriStub(page);
+  await page.goto("/");
+  await page.waitForFunction(() => Boolean(window.__zmanagerDev));
+  await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
+  await expect(entryRow(page, "folder")).toBeVisible();
+  await expect(entryRow(page, "root.txt")).toBeVisible();
+  await clearIpcCalls(page);
+});
+
+test("synthetic folder rows can be selected from the table row", async ({ page }) => {
+  const folderRow = entryRow(page, "folder");
+
+  await expect(folderRow).toHaveAttribute("aria-selected", "false");
+  await expect(folderRow.locator("input[type='checkbox']")).not.toBeChecked();
+
+  await folderRow.locator(".row-name").click();
+
+  await expect(folderRow).toHaveAttribute("aria-selected", "true");
+  await expect(folderRow.locator("input[type='checkbox']")).toBeChecked();
+});
+
+test("dragging a selected synthetic folder row starts native drag for the folder path", async ({ page }) => {
+  const folderRow = entryRow(page, "folder");
+  await folderRow.locator(".row-name").click();
+
+  await dragRowName(page, "folder");
+
+  const [call] = await waitForNativeDragCalls(page);
+  expect(call.args).toEqual({
+    request: {
+      archivePath: archiveFixture.archivePath,
+      entryPaths: ["folder"],
+      stripComponents: 0,
+    },
+  });
+});
+
+test("dragging a file row starts native drag for the file and suppresses browser icon drag", async ({
+  page,
+}) => {
+  const rootRow = entryRow(page, "root.txt");
+
+  await expect(rootRow.locator(".row-icon")).toHaveAttribute("draggable", "false");
+  await expect(await dispatchDragStartFromIcon(rootRow)).toBe(true);
+
+  await dragRowName(page, "root.txt");
+
+  const [call] = await waitForNativeDragCalls(page);
+  expect(call.args).toEqual({
+    request: {
+      archivePath: archiveFixture.archivePath,
+      entryPaths: ["root.txt"],
+      stripComponents: 0,
+    },
+  });
+  await expect(rootRow).toHaveAttribute("aria-selected", "true");
+});
+
+async function installTauriStub(page: Page) {
+  await page.addInitScript(() => {
+    const ipcCalls: IpcCall[] = [];
+    const callbacks = new Map<number, { callback: unknown; once: boolean }>();
+    let callbackId = 1;
+
+    Object.defineProperty(window, "isTauri", {
+      configurable: true,
+      value: true,
+    });
+
+    window.__zmanagerE2E = { ipcCalls };
+
+    const invoke = async (cmd: string, args: Record<string, unknown> = {}) => {
+      ipcCalls.push({ cmd, args });
+
+      if (cmd === "healthcheck") {
+        return {
+          engine: "zmanager-core",
+          version: "e2e",
+          ready: true,
+          summary: "E2E backend stub",
+          shell: "playwright",
+          status: "ok",
+        };
+      }
+
+      if (cmd === "project_contract") {
+        return {
+          commands: ["start_native_file_drag"],
+          platformStrategy: "e2e",
+          coreDependency: "stub",
+          platformIntegration: {
+            platform: "windows",
+            explorerIntegrationEnabled: true,
+            desktopActionsEnabled: false,
+            associatedExtensions: ["zip"],
+            shellActions: [],
+          },
+        };
+      }
+
+      if (cmd === "quick_action_startup_state") {
+        return {
+          launchedForQuickAction: false,
+          quickAction: null,
+          error: null,
+        };
+      }
+
+      if (cmd === "system_file_icons") {
+        const request = args.request as { entries?: { key: string }[] } | undefined;
+        return {
+          icons: (request?.entries ?? []).map((entry) => ({
+            key: entry.key,
+            dataUrl: null,
+          })),
+        };
+      }
+
+      if (cmd === "start_native_file_drag") {
+        const request = args.request as { entryPaths: string[] };
+        return {
+          outcome: "dropped",
+          draggedEntries: request.entryPaths,
+        };
+      }
+
+      if (cmd === "cleanup_preview_roots") {
+        return undefined;
+      }
+
+      if (cmd === "plugin:window|inner_size") {
+        return { width: 1280, height: 800 };
+      }
+
+      if (cmd === "plugin:window|inner_position") {
+        return { x: 0, y: 0 };
+      }
+
+      if (cmd === "plugin:event|listen") {
+        return args.handler;
+      }
+
+      if (cmd === "plugin:event|unlisten" || cmd.startsWith("plugin:window|")) {
+        return undefined;
+      }
+
+      if (cmd.startsWith("plugin:")) {
+        return undefined;
+      }
+
+      throw new Error(`Unhandled Tauri command in e2e stub: ${cmd}`);
+    };
+
+    const transformCallback = (callback: unknown, once = false) => {
+      const id = callbackId++;
+      callbacks.set(id, { callback, once });
+      return id;
+    };
+
+    const unregisterCallback = (id: number) => {
+      callbacks.delete(id);
+    };
+
+    const runCallback = (id: number, data: unknown) => {
+      const registration = callbacks.get(id);
+      if (!registration || typeof registration.callback !== "function") {
+        return;
+      }
+      if (registration.once) {
+        callbacks.delete(id);
+      }
+      registration.callback(data);
+    };
+
+    window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener: (_event: string, id: number) => unregisterCallback(id),
+    };
+
+    window.__TAURI_INTERNALS__ = {
+      callbacks,
+      convertFileSrc: (path: string) => path,
+      invoke,
+      metadata: {
+        currentWindow: { label: "main" },
+        currentWebview: { label: "main" },
+      },
+      runCallback,
+      transformCallback,
+      unregisterCallback,
+    };
+  });
+}
+
+function entryRow(page: Page, entryPath: string) {
+  return page.locator(`tbody tr[data-entry-path="${entryPath}"]`);
+}
+
+async function clearIpcCalls(page: Page) {
+  await page.evaluate(() => {
+    if (window.__zmanagerE2E) {
+      window.__zmanagerE2E.ipcCalls.length = 0;
+    }
+  });
+}
+
+async function nativeDragCalls(page: Page): Promise<IpcCall[]> {
+  return page.evaluate(() =>
+    (window.__zmanagerE2E?.ipcCalls ?? []).filter(
+      (call) => call.cmd === "start_native_file_drag",
+    ),
+  );
+}
+
+async function waitForNativeDragCalls(page: Page): Promise<IpcCall[]> {
+  await expect.poll(async () => (await nativeDragCalls(page)).length).toBe(1);
+  return nativeDragCalls(page);
+}
+
+async function dragRowName(page: Page, entryPath: string) {
+  const rowName = entryRow(page, entryPath).locator(".row-name");
+  const box = await rowName.boundingBox();
+  if (!box) {
+    throw new Error(`Unable to locate row name for ${entryPath}`);
+  }
+
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 12, startY + 2, { steps: 3 });
+  await page.mouse.up();
+}
+
+async function dispatchDragStartFromIcon(row: ReturnType<typeof entryRow>): Promise<boolean> {
+  return row.locator(".row-icon").evaluate((icon) => {
+    const event = new DragEvent("dragstart", {
+      bubbles: true,
+      cancelable: true,
+    });
+    icon.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}

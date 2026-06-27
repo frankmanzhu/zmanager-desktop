@@ -410,6 +410,9 @@ mod windows_file_drag {
                 if (format.tymed & TYMED_ISTREAM.0 as u32) == 0 {
                     return DV_E_TYMED;
                 }
+                if format.lindex == -1 {
+                    return S_OK;
+                }
                 if format.lindex < 0 || format.lindex as usize >= self.items.len() {
                     return DV_E_LINDEX;
                 }
@@ -668,6 +671,180 @@ mod windows_file_drag {
 
         fn flush(&mut self) -> io::Result<()> {
             Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::{
+            collections::HashMap,
+            fs,
+            path::{Path, PathBuf},
+            sync::Arc,
+            thread,
+            time::{Duration, SystemTime, UNIX_EPOCH},
+        };
+
+        use super::*;
+        use ::windows::{
+            Win32::{
+                Foundation::POINTL,
+                System::{
+                    Com::IBindCtx,
+                    Ole::{DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, IDropTarget},
+                    SystemServices::MODIFIERKEYS_FLAGS,
+                },
+                UI::Shell::{BHID_SFUIObject, IShellItem, SHCreateItemFromParsingName},
+            },
+            core::PCWSTR,
+        };
+
+        const KEEP_VIRTUAL_DROP_PROOF_DIR_ENV: &str = "ZMANAGER_KEEP_VIRTUAL_DROP_PROOF_DIR";
+
+        #[test]
+        fn shell_folder_accepts_virtual_file_drag_data_object() {
+            let kept_drop_target =
+                std::env::var_os(KEEP_VIRTUAL_DROP_PROOF_DIR_ENV).map(PathBuf::from);
+            let drop_target = kept_drop_target
+                .clone()
+                .unwrap_or_else(|| unique_temp_dir("zmanager-virtual-drop-target"));
+            fs::create_dir_all(&drop_target).expect("create shell drop target");
+
+            let result = run_shell_virtual_file_drop(&drop_target);
+
+            if kept_drop_target.is_none() {
+                let _ = fs::remove_dir_all(&drop_target);
+            }
+            result.expect("shell folder should accept virtual file drag data object");
+        }
+
+        fn run_shell_virtual_file_drop(
+            drop_target: &Path,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            let payloads = Arc::new(HashMap::from([
+                (
+                    "folder/alpha.txt".to_string(),
+                    b"alpha from virtual drag".to_vec(),
+                ),
+                (
+                    "folder/beta.txt".to_string(),
+                    b"beta from virtual drag".to_vec(),
+                ),
+            ]));
+            let provider_payloads = Arc::clone(&payloads);
+            let stream_provider: NativeFileDragStreamProvider =
+                Arc::new(move |entry_path, writer| {
+                    let bytes = provider_payloads.get(entry_path).ok_or_else(|| {
+                        NativeFileDragError::new(
+                            format!("missing test payload for {entry_path}"),
+                            None::<String>,
+                        )
+                    })?;
+                    writer.write_all(bytes).map_err(|error| {
+                        NativeFileDragError::new(
+                            format!("failed to write test payload: {error}"),
+                            None::<String>,
+                        )
+                    })?;
+                    Ok(bytes.len() as u64)
+                });
+
+            let items = vec![
+                NativeFileDragItem {
+                    entry_path: "folder/alpha.txt".to_string(),
+                    display_path: "folder\\alpha.txt".to_string(),
+                    size: Some(payloads["folder/alpha.txt"].len() as u64),
+                    modified_unix_seconds: None,
+                },
+                NativeFileDragItem {
+                    entry_path: "folder/beta.txt".to_string(),
+                    display_path: "folder\\beta.txt".to_string(),
+                    size: Some(payloads["folder/beta.txt"].len() as u64),
+                    modified_unix_seconds: None,
+                },
+            ];
+
+            let _ole = OleApartment::initialize().map_err(|error| error.message)?;
+            let data_object: IDataObject = VirtualFileDragDataObject {
+                items,
+                stream_provider,
+            }
+            .into();
+            let shell_drop_target = shell_folder_drop_target(drop_target)?;
+            let point = POINTL { x: 0, y: 0 };
+            let mut effect = DROPEFFECT_COPY;
+
+            unsafe {
+                shell_drop_target.DragEnter(
+                    &data_object,
+                    MODIFIERKEYS_FLAGS(0),
+                    point,
+                    &mut effect as *mut DROPEFFECT,
+                )?;
+            }
+            assert_ne!(
+                effect, DROPEFFECT_NONE,
+                "shell folder rejected the virtual-file data object on DragEnter"
+            );
+
+            effect = DROPEFFECT_COPY;
+            unsafe {
+                shell_drop_target.Drop(
+                    &data_object,
+                    MODIFIERKEYS_FLAGS(0),
+                    point,
+                    &mut effect as *mut DROPEFFECT,
+                )?;
+            }
+            assert_ne!(
+                effect, DROPEFFECT_NONE,
+                "shell folder rejected the virtual-file data object on Drop"
+            );
+
+            wait_for_file_contents(
+                &drop_target.join("folder").join("alpha.txt"),
+                payloads["folder/alpha.txt"].as_slice(),
+            )?;
+            wait_for_file_contents(
+                &drop_target.join("folder").join("beta.txt"),
+                payloads["folder/beta.txt"].as_slice(),
+            )?;
+
+            Ok(())
+        }
+
+        fn shell_folder_drop_target(path: &Path) -> ::windows::core::Result<IDropTarget> {
+            let wide_path = wide_null(&path.to_string_lossy());
+            let folder: IShellItem = unsafe {
+                SHCreateItemFromParsingName(PCWSTR(wide_path.as_ptr()), None::<&IBindCtx>)?
+            };
+            unsafe { folder.BindToHandler(None::<&IBindCtx>, &BHID_SFUIObject) }
+        }
+
+        fn wait_for_file_contents(
+            path: &Path,
+            expected: &[u8],
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            for _ in 0..20 {
+                if path.exists() && fs::read(path)? == expected {
+                    return Ok(());
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+
+            Err(format!(
+                "expected dropped file contents were not written to {}",
+                path.display()
+            )
+            .into())
+        }
+
+        fn unique_temp_dir(prefix: &str) -> PathBuf {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos();
+            std::env::temp_dir().join(format!("{prefix}-{nanos}"))
         }
     }
 }
