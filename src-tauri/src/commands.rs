@@ -1,8 +1,8 @@
-use std::fs;
-use std::io;
+use std::collections::HashSet;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::State;
 
@@ -10,10 +10,10 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        NativeFileDragRequest, NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest,
-        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
-        ProjectIntegrationShellActionDto, StartCreateRequest, StartExtractRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PlanCreateRequest,
+        PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
+        ProjectIntegrationContract, ProjectIntegrationShellActionDto, StartCreateRequest,
+        StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -543,7 +543,7 @@ pub fn preview_entry(
 #[tauri::command]
 pub fn start_native_file_drag(
     request: NativeFileDragRequest,
-    registry: State<'_, JobRegistry>,
+    _registry: State<'_, JobRegistry>,
 ) -> Result<NativeFileDragResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
@@ -551,37 +551,36 @@ pub fn start_native_file_drag(
         .password
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
-    let staging_root = create_native_drag_staging_root()?;
 
-    for entry_path in &entry_paths {
-        if let Err(error) = archive_browser::extract_entry_with_options(
-            &archive_path,
-            entry_path,
-            &staging_root,
-            BrowserExtractOptions {
-                password: password.as_deref(),
-                overwrite: OverwritePolicy::Replace,
-                strip_components: request.strip_components,
-            },
-        )
-        .map_err(map_archive_browser_error)
-        {
-            let _ = fs::remove_dir_all(&staging_root);
-            return Err(error);
-        }
-    }
+    let drag_items = build_native_drag_items(
+        &archive_path,
+        &entry_paths,
+        request.strip_components,
+        password.as_deref(),
+    )?;
+    preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
 
-    let dragged_paths =
-        staged_drag_paths_for_entries(&staging_root, &entry_paths, request.strip_components)?;
+    let stream_archive_path = archive_path.clone();
+    let stream_password = password.clone();
+    let stream_provider: crate::platform::NativeFileDragStreamProvider =
+        Arc::new(move |entry_path, writer| {
+            stream_native_drag_entry(
+                &stream_archive_path,
+                stream_password.as_deref(),
+                entry_path,
+                writer,
+            )
+            .map_err(native_file_drag_error_from_command)
+        });
 
-    registry.replace_preview_root(staging_root.clone());
-    crate::platform::start_native_file_drag(&dragged_paths).map_err(map_native_file_drag_error)?;
+    let outcome = crate::platform::start_native_file_drag(&drag_items, stream_provider)
+        .map_err(map_native_file_drag_error)?;
 
     Ok(NativeFileDragResponse {
-        staging_root: staging_root.to_string_lossy().to_string(),
-        dragged_paths: dragged_paths
+        outcome: map_native_file_drag_outcome(outcome),
+        dragged_entries: drag_items
             .iter()
-            .map(|path| path.to_string_lossy().to_string())
+            .map(|item| item.entry_path.clone())
             .collect(),
     })
 }
@@ -1192,47 +1191,136 @@ fn map_native_file_drag_error(error: crate::platform::NativeFileDragError) -> Co
     )
 }
 
-fn create_native_drag_staging_root() -> Result<PathBuf, CommandErrorDto> {
-    let now_nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!("zmanager-drag-{now_nanos}"));
-    fs::create_dir_all(&root)
-        .map_err(|error| map_io_error(root.to_string_lossy().to_string(), error))?;
-    Ok(root)
+fn native_file_drag_error_from_command(
+    error: CommandErrorDto,
+) -> crate::platform::NativeFileDragError {
+    crate::platform::NativeFileDragError::new(error.message, error.hint)
 }
 
-fn staged_drag_paths_for_entries(
-    staging_root: &Path,
+fn map_native_file_drag_outcome(
+    outcome: crate::platform::NativeFileDragOutcome,
+) -> NativeFileDragOutcomeDto {
+    match outcome {
+        crate::platform::NativeFileDragOutcome::Dropped => NativeFileDragOutcomeDto::Dropped,
+        crate::platform::NativeFileDragOutcome::Cancelled => NativeFileDragOutcomeDto::Cancelled,
+        crate::platform::NativeFileDragOutcome::NoDrop => NativeFileDragOutcomeDto::NoDrop,
+    }
+}
+
+fn build_native_drag_items(
+    archive_path: &str,
     entry_paths: &[String],
     strip_components: usize,
-) -> Result<Vec<PathBuf>, CommandErrorDto> {
-    let mut dragged_paths = Vec::with_capacity(entry_paths.len());
+    password: Option<&str>,
+) -> Result<Vec<crate::platform::NativeFileDragItem>, CommandErrorDto> {
+    let listing = archive_browser::list_entries_with_options(
+        Path::new(archive_path),
+        BrowserListOptions { password },
+    )
+    .map_err(map_archive_browser_error)?;
 
-    for entry_path in entry_paths {
-        let Some(relative_path) = stripped_entry_path(entry_path, strip_components) else {
-            return Err(CommandErrorDto::invalid_request(format!(
-                "entry path is empty after stripping components: {entry_path}"
-            )));
-        };
-        let staged_path = staging_root.join(relative_path);
-        if !staged_path.exists() {
-            return Err(CommandErrorDto::not_found(
-                format!(
-                    "staged drag file was not created: {}",
-                    staged_path.to_string_lossy()
-                ),
-                Some("Try extracting the selection normally.".to_string()),
-            ));
-        }
-        dragged_paths.push(staged_path);
-    }
-
-    Ok(dragged_paths)
+    native_drag_items_from_listing(&listing.entries, entry_paths, strip_components)
 }
 
-fn stripped_entry_path(entry_path: &str, strip_components: usize) -> Option<PathBuf> {
+fn native_drag_items_from_listing(
+    entries: &[zmanager_core::archive_browser::BrowserEntry],
+    entry_paths: &[String],
+    strip_components: usize,
+) -> Result<Vec<crate::platform::NativeFileDragItem>, CommandErrorDto> {
+    let mut selected_entry_keys = HashSet::new();
+    let mut selected_entries = Vec::new();
+
+    for entry_path in entry_paths {
+        let requested_key = archive_entry_key(entry_path);
+        let Some(selected) = entries
+            .iter()
+            .find(|entry| archive_entry_key(&entry.path) == requested_key)
+        else {
+            return Err(CommandErrorDto::not_found(
+                format!("archive entry not found: {entry_path}"),
+                Some("Open the archive again or choose a visible entry.".to_string()),
+            ));
+        };
+
+        match selected.kind {
+            zmanager_core::archive_browser::BrowserEntryKind::File => {
+                push_native_drag_listing_entry(
+                    selected,
+                    &mut selected_entry_keys,
+                    &mut selected_entries,
+                );
+            }
+            zmanager_core::archive_browser::BrowserEntryKind::Directory => {
+                let before = selected_entries.len();
+                let folder_key = archive_folder_key(&selected.path);
+                for descendant in entries {
+                    if descendant.kind != zmanager_core::archive_browser::BrowserEntryKind::File {
+                        continue;
+                    }
+                    if entry_is_under_folder_key(&archive_entry_key(&descendant.path), &folder_key)
+                    {
+                        push_native_drag_listing_entry(
+                            descendant,
+                            &mut selected_entry_keys,
+                            &mut selected_entries,
+                        );
+                    }
+                }
+                if selected_entries.len() == before {
+                    return Err(CommandErrorDto::unsupported_format(format!(
+                        "directory has no regular file entries to drag out: {}",
+                        selected.path
+                    )));
+                }
+            }
+            _ => {
+                return Err(CommandErrorDto::unsupported_format(format!(
+                    "entry cannot be dragged out as a virtual file: {}",
+                    selected.path
+                )));
+            }
+        }
+    }
+
+    let mut display_path_keys = HashSet::new();
+    let mut items = Vec::with_capacity(selected_entries.len());
+    for entry in selected_entries {
+        let display_path = virtual_drag_display_path(&entry.path, strip_components)?;
+        let display_key = display_path.to_lowercase();
+        if !display_path_keys.insert(display_key) {
+            return Err(CommandErrorDto::invalid_request(format!(
+                "more than one selected entry would drag out as {display_path}"
+            )));
+        }
+
+        items.push(crate::platform::NativeFileDragItem {
+            entry_path: entry.path.clone(),
+            display_path,
+            size: entry.size,
+            modified_unix_seconds: entry
+                .modified
+                .as_deref()
+                .and_then(|modified| modified.parse::<u64>().ok()),
+        });
+    }
+
+    Ok(items)
+}
+
+fn push_native_drag_listing_entry<'a>(
+    entry: &'a zmanager_core::archive_browser::BrowserEntry,
+    selected_entry_keys: &mut HashSet<String>,
+    selected_entries: &mut Vec<&'a zmanager_core::archive_browser::BrowserEntry>,
+) {
+    if selected_entry_keys.insert(archive_entry_key(&entry.path)) {
+        selected_entries.push(entry);
+    }
+}
+
+fn virtual_drag_display_path(
+    entry_path: &str,
+    strip_components: usize,
+) -> Result<String, CommandErrorDto> {
     let components = entry_path
         .split(|character| character == '/' || character == '\\')
         .filter(|component| !component.is_empty())
@@ -1240,14 +1328,255 @@ fn stripped_entry_path(entry_path: &str, strip_components: usize) -> Option<Path
         .collect::<Vec<_>>();
 
     if components.is_empty() {
-        return None;
+        return Err(CommandErrorDto::invalid_request(format!(
+            "entry path is empty after stripping components: {entry_path}"
+        )));
     }
 
-    let mut path = PathBuf::new();
-    for component in components {
-        path.push(component);
+    for component in &components {
+        validate_virtual_drag_component(component, entry_path)?;
     }
-    Some(path)
+
+    let display_path = components.join("\\");
+    if display_path.encode_utf16().count() > WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16 {
+        return Err(CommandErrorDto::invalid_request(format!(
+            "entry path is too long for Windows virtual drag-out: {entry_path}"
+        )));
+    }
+
+    Ok(display_path)
+}
+
+const WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16: usize = 259;
+const WINDOWS_RESERVED_FILE_NAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+fn validate_virtual_drag_component(
+    component: &str,
+    entry_path: &str,
+) -> Result<(), CommandErrorDto> {
+    if component == "." || component == ".." {
+        return Err(CommandErrorDto::unsafe_archive(format!(
+            "entry path contains unsafe traversal component: {entry_path}"
+        )));
+    }
+
+    if component.ends_with(' ') || component.ends_with('.') {
+        return Err(CommandErrorDto::unsafe_archive(format!(
+            "entry path contains a Windows-unsafe component: {entry_path}"
+        )));
+    }
+
+    if component.chars().any(is_windows_invalid_file_name_char) {
+        return Err(CommandErrorDto::unsafe_archive(format!(
+            "entry path contains a Windows-unsafe character: {entry_path}"
+        )));
+    }
+
+    let reserved_probe = component
+        .split_once('.')
+        .map_or(component, |(stem, _)| stem)
+        .to_ascii_uppercase();
+    if WINDOWS_RESERVED_FILE_NAMES
+        .iter()
+        .any(|reserved| reserved_probe == *reserved)
+    {
+        return Err(CommandErrorDto::unsafe_archive(format!(
+            "entry path contains a Windows-reserved file name: {entry_path}"
+        )));
+    }
+
+    Ok(())
+}
+
+fn is_windows_invalid_file_name_char(character: char) -> bool {
+    character == '\0'
+        || character.is_control()
+        || matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*')
+}
+
+fn archive_entry_key(path: &str) -> String {
+    path.split(|character| character == '/' || character == '\\')
+        .filter(|component| !component.is_empty())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn archive_folder_key(path: &str) -> String {
+    let mut key = archive_entry_key(path);
+    if !key.ends_with('/') {
+        key.push('/');
+    }
+    key
+}
+
+fn entry_is_under_folder_key(entry_key: &str, folder_key: &str) -> bool {
+    entry_key.starts_with(folder_key) && entry_key.len() > folder_key.len()
+}
+
+fn preflight_native_drag_stream(
+    archive_path: &str,
+    password: Option<&str>,
+    items: &[crate::platform::NativeFileDragItem],
+) -> Result<(), CommandErrorDto> {
+    if zmanager_core::raw_stream_backend::detect_raw_stream_format(Path::new(archive_path))
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let Some(item) = items
+        .iter()
+        .filter(|item| item.size != Some(0))
+        .min_by_key(|item| item.size.unwrap_or(u64::MAX))
+        .or_else(|| items.first())
+    else {
+        return Ok(());
+    };
+
+    let mut sink = io::sink();
+    stream_native_drag_entry(archive_path, password, &item.entry_path, &mut sink)?;
+    Ok(())
+}
+
+fn stream_native_drag_entry(
+    archive_path: &str,
+    password: Option<&str>,
+    entry_path: &str,
+    output: &mut dyn Write,
+) -> Result<u64, CommandErrorDto> {
+    let archive_path = Path::new(archive_path);
+
+    if let Some(format) = zmanager_core::raw_stream_backend::detect_raw_stream_format(archive_path)
+    {
+        let output_name =
+            zmanager_core::raw_stream_backend::output_name_for_raw_stream(archive_path, format)
+                .ok_or_else(|| {
+                    CommandErrorDto::unsupported_format(format!(
+                        "could not derive an output file name from {}",
+                        archive_path.display()
+                    ))
+                })?;
+        if archive_entry_key(&output_name) != archive_entry_key(entry_path) {
+            return Err(CommandErrorDto::not_found(
+                format!("archive entry not found: {entry_path}"),
+                Some("Open the archive again or choose a visible entry.".to_string()),
+            ));
+        }
+
+        let mut writer = DynWriteAdapter { inner: output };
+        return zmanager_core::raw_stream_backend::copy_raw_stream_to_writer(
+            archive_path,
+            format,
+            &mut writer,
+        )
+        .map_err(map_raw_stream_error);
+    }
+
+    match stream_archive_family(archive_path) {
+        ArchiveFamily::Zip => {
+            let mut writer = DynWriteAdapter { inner: output };
+            let report = zmanager_core::zip_backend::copy_zip_files_to_writer(
+                archive_path,
+                password,
+                |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                &mut writer,
+            )
+            .map_err(map_zip_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
+        ArchiveFamily::TarZst => {
+            let mut writer = DynWriteAdapter { inner: output };
+            let report = zmanager_core::tar_zst_backend::copy_tar_zst_files_to_writer(
+                archive_path,
+                |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                &mut writer,
+            )
+            .map_err(map_tar_zst_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
+        ArchiveFamily::SevenZ => {
+            let mut writer = DynWriteAdapter { inner: output };
+            let report = zmanager_core::sevenz_backend::copy_7z_files_to_writer(
+                archive_path,
+                password,
+                |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                &mut writer,
+            )
+            .map_err(map_7z_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
+        ArchiveFamily::Tzap => {
+            let report =
+                zmanager_core::tzap_backend::copy_tzap_files_to_writer_with_optional_password(
+                    archive_path,
+                    password,
+                    |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                    output,
+                )
+                .map_err(map_tzap_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
+        ArchiveFamily::Rar | ArchiveFamily::Archive => {
+            let mut writer = DynWriteAdapter { inner: output };
+            let report = zmanager_core::libarchive_backend::copy_archive_files_to_writer(
+                archive_path,
+                password,
+                |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                &mut writer,
+            )
+            .map_err(map_libarchive_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
+    }
+}
+
+fn stream_archive_family(archive_path: &Path) -> ArchiveFamily {
+    let family = detect_archive_family(&archive_path.to_string_lossy());
+    if family == ArchiveFamily::Zip
+        && zmanager_core::libarchive_backend::is_split_zip_path(archive_path)
+    {
+        ArchiveFamily::Archive
+    } else {
+        family
+    }
+}
+
+fn one_streamed_entry_bytes(
+    entry_path: &str,
+    written_entries: usize,
+    written_bytes: u64,
+) -> Result<u64, CommandErrorDto> {
+    if written_entries == 1 {
+        return Ok(written_bytes);
+    }
+
+    if written_entries == 0 {
+        return Err(CommandErrorDto::not_found(
+            format!("archive entry was not streamed: {entry_path}"),
+            Some("Open the archive again or choose a regular file entry.".to_string()),
+        ));
+    }
+
+    Err(CommandErrorDto::operation_failed(format!(
+        "archive streamed {written_entries} files for one drag-out entry: {entry_path}"
+    )))
+}
+
+struct DynWriteAdapter<'a> {
+    inner: &'a mut dyn Write,
+}
+
+impl Write for DynWriteAdapter<'_> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.inner.write(buffer)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
 }
 
 fn map_overwrite_policy(policy: crate::dto::OverwritePolicyDto) -> OverwritePolicy {
@@ -1573,16 +1902,100 @@ mod tests {
     use zmanager_core::safety::ExtractionSafetyError;
 
     #[test]
-    fn stripped_entry_path_uses_current_folder_depth_for_drag_out() {
+    fn virtual_drag_display_path_uses_current_folder_depth() {
         assert_eq!(
-            stripped_entry_path("docs/readme.txt", 1),
-            Some(PathBuf::from("readme.txt"))
+            virtual_drag_display_path("docs/readme.txt", 1).unwrap(),
+            "readme.txt"
         );
         assert_eq!(
-            stripped_entry_path("docs/nested/readme.txt", 1),
-            Some(PathBuf::from("nested").join("readme.txt"))
+            virtual_drag_display_path("docs/nested/readme.txt", 1).unwrap(),
+            "nested\\readme.txt"
         );
-        assert_eq!(stripped_entry_path("docs", 1), None);
+        assert!(virtual_drag_display_path("docs", 1).is_err());
+    }
+
+    #[test]
+    fn virtual_drag_display_path_rejects_windows_unsafe_names() {
+        for path in [
+            "../escape.txt",
+            "docs/CON.txt",
+            "docs/name:stream.txt",
+            "docs/trailing-dot.",
+            "docs/trailing-space ",
+        ] {
+            assert!(
+                virtual_drag_display_path(path, 0).is_err(),
+                "{path} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn native_drag_items_expand_folders_to_regular_file_descendants() {
+        let entries = vec![
+            browser_entry(
+                "docs",
+                zmanager_core::archive_browser::BrowserEntryKind::Directory,
+            ),
+            browser_entry(
+                "docs/a.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+            browser_entry(
+                "docs/nested/b.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+            browser_entry(
+                "other.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+        ];
+
+        let items = native_drag_items_from_listing(&entries, &["docs".to_string()], 1).unwrap();
+
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.display_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a.txt", "nested\\b.txt"]
+        );
+    }
+
+    #[test]
+    fn native_drag_items_reject_duplicate_display_paths() {
+        let entries = vec![
+            browser_entry(
+                "one/readme.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+            browser_entry(
+                "two/README.txt",
+                zmanager_core::archive_browser::BrowserEntryKind::File,
+            ),
+        ];
+
+        let error = native_drag_items_from_listing(
+            &entries,
+            &["one/readme.txt".to_string(), "two/README.txt".to_string()],
+            1,
+        )
+        .unwrap_err();
+
+        assert_eq!(error.code, constants::COMMAND_ERROR_INVALID_REQUEST);
+    }
+
+    fn browser_entry(
+        path: &str,
+        kind: zmanager_core::archive_browser::BrowserEntryKind,
+    ) -> zmanager_core::archive_browser::BrowserEntry {
+        zmanager_core::archive_browser::BrowserEntry {
+            path: path.to_string(),
+            kind,
+            size: Some(1),
+            compressed_size: None,
+            modified: Some("1700000000".to_string()),
+        }
     }
 
     #[test]

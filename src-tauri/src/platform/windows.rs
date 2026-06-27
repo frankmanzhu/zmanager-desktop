@@ -2,8 +2,7 @@ use std::{
     ffi::OsStr,
     mem::{ManuallyDrop, size_of},
     os::windows::ffi::OsStrExt,
-    path::PathBuf,
-    ptr::{copy_nonoverlapping, null_mut},
+    ptr::null_mut,
     slice,
 };
 
@@ -23,7 +22,10 @@ use windows_sys::Win32::{
     },
 };
 
-use super::{NativeFileDragError, ShellActionProfile};
+use super::{
+    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
+    ShellActionProfile,
+};
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 /// Windows-specific shell integration profile values.
@@ -250,62 +252,70 @@ fn wide_null(value: &str) -> Vec<u16> {
     OsStr::new(value).encode_wide().chain(Some(0)).collect()
 }
 
-pub fn start_native_file_drag(paths: &[PathBuf]) -> Result<(), NativeFileDragError> {
-    if paths.is_empty() {
+pub fn start_native_file_drag(
+    items: &[NativeFileDragItem],
+    stream_provider: NativeFileDragStreamProvider,
+) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+    if items.is_empty() {
         return Err(NativeFileDragError::new(
-            "No staged files are available to drag.",
+            "No archive files are available to drag.",
             None::<String>,
         ));
     }
 
-    for path in paths {
-        if !path.exists() {
-            return Err(NativeFileDragError::new(
-                format!(
-                    "staged drag path does not exist: {}",
-                    path.to_string_lossy()
-                ),
-                Some("Try extracting the selection again."),
-            ));
-        }
-    }
-
-    windows_file_drag::start_drag(paths)
+    windows_file_drag::start_drag(items, stream_provider)
 }
 
 type HBRUSH__ = core::ffi::c_void;
 
 mod windows_file_drag {
+    use std::io::{self, Write};
+
     use super::*;
 
     use ::windows::{
         Win32::{
             Foundation::{
                 DRAGDROP_S_CANCEL, DRAGDROP_S_DROP, DRAGDROP_S_USEDEFAULTCURSORS, DV_E_FORMATETC,
-                E_NOTIMPL, OLE_E_ADVISENOTSUPPORTED, S_OK,
+                DV_E_LINDEX, DV_E_TYMED, E_FAIL, E_NOTIMPL, FILETIME, OLE_E_ADVISENOTSUPPORTED,
+                S_OK,
             },
             System::{
+                Com::StructuredStorage::CreateStreamOnHGlobal,
                 Com::{
                     DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject,
-                    IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA, STGMEDIUM, STGMEDIUM_0,
-                    TYMED_HGLOBAL,
+                    IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA, IStream, STGMEDIUM,
+                    STGMEDIUM_0, STREAM_SEEK_SET, TYMED_HGLOBAL, TYMED_ISTREAM,
                 },
                 Memory::{GMEM_MOVEABLE, GMEM_ZEROINIT, GlobalAlloc, GlobalLock, GlobalUnlock},
                 Ole::{
-                    CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DoDragDrop, IDropSource,
+                    DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, DoDragDrop, IDropSource,
                     IDropSource_Impl, OleInitialize, OleUninitialize,
                 },
                 SystemServices::{MK_LBUTTON, MODIFIERKEYS_FLAGS},
             },
-            UI::Shell::{DROPFILES, SHCreateStdEnumFmtEtc},
+            UI::Shell::{
+                FD_ATTRIBUTES, FD_FILESIZE, FD_WRITESTIME, FILEDESCRIPTORW, SHCreateStdEnumFmtEtc,
+            },
         },
         core::{BOOL, Error as WindowsError, HRESULT, Ref, Result as WindowsResult, implement},
     };
+    use windows_sys::Win32::{
+        System::DataExchange::RegisterClipboardFormatW,
+        UI::Shell::{CFSTR_FILECONTENTS, CFSTR_FILEDESCRIPTORW},
+    };
 
-    pub fn start_drag(paths: &[PathBuf]) -> Result<(), NativeFileDragError> {
+    const WINDOWS_TICK: u64 = 10_000_000;
+    const UNIX_EPOCH_AS_WINDOWS_FILETIME_SECONDS: u64 = 11_644_473_600;
+
+    pub fn start_drag(
+        items: &[NativeFileDragItem],
+        stream_provider: NativeFileDragStreamProvider,
+    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
         let _ole = OleApartment::initialize()?;
-        let data_object: IDataObject = FileDragDataObject {
-            paths: paths.to_vec(),
+        let data_object: IDataObject = VirtualFileDragDataObject {
+            items: items.to_vec(),
+            stream_provider,
         }
         .into();
         let drop_source: IDropSource = FileDropSource.into();
@@ -319,6 +329,9 @@ mod windows_file_drag {
             )
         };
 
+        if result == DRAGDROP_S_CANCEL {
+            return Ok(NativeFileDragOutcome::Cancelled);
+        }
         if result.is_err() {
             return Err(NativeFileDragError::new(
                 format!("Windows native drag failed: 0x{:08X}", result.0 as u32),
@@ -326,7 +339,11 @@ mod windows_file_drag {
             ));
         }
 
-        Ok(())
+        if result == DRAGDROP_S_DROP && effect != DROPEFFECT_NONE {
+            Ok(NativeFileDragOutcome::Dropped)
+        } else {
+            Ok(NativeFileDragOutcome::NoDrop)
+        }
     }
 
     struct OleApartment;
@@ -352,19 +369,25 @@ mod windows_file_drag {
     }
 
     #[implement(IDataObject)]
-    struct FileDragDataObject {
-        paths: Vec<PathBuf>,
+    struct VirtualFileDragDataObject {
+        items: Vec<NativeFileDragItem>,
+        stream_provider: NativeFileDragStreamProvider,
     }
 
-    impl IDataObject_Impl for FileDragDataObject_Impl {
+    impl IDataObject_Impl for VirtualFileDragDataObject_Impl {
         fn GetData(&self, pformatetcin: *const FORMATETC) -> WindowsResult<STGMEDIUM> {
             let format = unsafe { pformatetcin.as_ref() }
                 .ok_or_else(|| WindowsError::from_hresult(DV_E_FORMATETC))?;
-            if !is_hdrop_format(format) {
-                return Err(WindowsError::from_hresult(DV_E_FORMATETC));
+
+            if is_file_descriptor_format(format) {
+                return file_group_descriptor_medium(&self.items);
+            }
+            if is_file_contents_format(format) {
+                let index = item_index(format, self.items.len())?;
+                return file_contents_medium(&self.items[index], &self.stream_provider);
             }
 
-            hdrop_medium(&self.paths)
+            Err(WindowsError::from_hresult(DV_E_FORMATETC))
         }
 
         fn GetDataHere(
@@ -380,11 +403,20 @@ mod windows_file_drag {
                 return DV_E_FORMATETC;
             };
 
-            if is_hdrop_format(format) {
-                S_OK
-            } else {
-                DV_E_FORMATETC
+            if is_file_descriptor_format(format) {
+                return S_OK;
             }
+            if format.cfFormat == file_contents_format() {
+                if (format.tymed & TYMED_ISTREAM.0 as u32) == 0 {
+                    return DV_E_TYMED;
+                }
+                if format.lindex < 0 || format.lindex as usize >= self.items.len() {
+                    return DV_E_LINDEX;
+                }
+                return S_OK;
+            }
+
+            DV_E_FORMATETC
         }
 
         fn GetCanonicalFormatEtc(
@@ -412,7 +444,7 @@ mod windows_file_drag {
                 return Err(WindowsError::from_hresult(E_NOTIMPL));
             }
 
-            unsafe { SHCreateStdEnumFmtEtc(&[hdrop_format()]) }
+            unsafe { SHCreateStdEnumFmtEtc(&[file_descriptor_format(), file_contents_formatetc()]) }
         }
 
         fn DAdvise(
@@ -458,9 +490,9 @@ mod windows_file_drag {
         }
     }
 
-    fn hdrop_format() -> FORMATETC {
+    fn file_descriptor_format() -> FORMATETC {
         FORMATETC {
-            cfFormat: CF_HDROP.0,
+            cfFormat: file_descriptor_clipboard_format(),
             ptd: null_mut(),
             dwAspect: DVASPECT_CONTENT.0,
             lindex: -1,
@@ -468,17 +500,51 @@ mod windows_file_drag {
         }
     }
 
-    fn is_hdrop_format(format: &FORMATETC) -> bool {
-        format.cfFormat == CF_HDROP.0
+    fn file_contents_formatetc() -> FORMATETC {
+        FORMATETC {
+            cfFormat: file_contents_format(),
+            ptd: null_mut(),
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_ISTREAM.0 as u32,
+        }
+    }
+
+    fn is_file_descriptor_format(format: &FORMATETC) -> bool {
+        format.cfFormat == file_descriptor_clipboard_format()
             && format.dwAspect == DVASPECT_CONTENT.0
             && (format.tymed & TYMED_HGLOBAL.0 as u32) != 0
     }
 
-    fn hdrop_medium(paths: &[PathBuf]) -> WindowsResult<STGMEDIUM> {
-        let wide_paths = encode_hdrop_paths(paths);
-        let dropfiles_size = size_of::<DROPFILES>();
-        let wide_paths_size = wide_paths.len() * size_of::<u16>();
-        let allocation_size = dropfiles_size + wide_paths_size;
+    fn is_file_contents_format(format: &FORMATETC) -> bool {
+        format.cfFormat == file_contents_format()
+            && format.dwAspect == DVASPECT_CONTENT.0
+            && (format.tymed & TYMED_ISTREAM.0 as u32) != 0
+    }
+
+    fn item_index(format: &FORMATETC, item_count: usize) -> WindowsResult<usize> {
+        if format.lindex < 0 {
+            return Err(WindowsError::from_hresult(DV_E_LINDEX));
+        }
+        let index = format.lindex as usize;
+        if index >= item_count {
+            return Err(WindowsError::from_hresult(DV_E_LINDEX));
+        }
+        Ok(index)
+    }
+
+    fn file_descriptor_clipboard_format() -> u16 {
+        unsafe { RegisterClipboardFormatW(CFSTR_FILEDESCRIPTORW) as u16 }
+    }
+
+    fn file_contents_format() -> u16 {
+        unsafe { RegisterClipboardFormatW(CFSTR_FILECONTENTS) as u16 }
+    }
+
+    fn file_group_descriptor_medium(items: &[NativeFileDragItem]) -> WindowsResult<STGMEDIUM> {
+        let descriptor_size = size_of::<FILEDESCRIPTORW>();
+        let header_size = size_of::<u32>();
+        let allocation_size = header_size + descriptor_size * items.len();
 
         let hglobal = unsafe { GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, allocation_size)? };
         let locked = unsafe { GlobalLock(hglobal) };
@@ -486,24 +552,12 @@ mod windows_file_drag {
             return Err(WindowsError::from_win32());
         }
 
-        let dropfiles = DROPFILES {
-            pFiles: dropfiles_size as u32,
-            pt: Default::default(),
-            fNC: false.into(),
-            fWide: true.into(),
-        };
-
         unsafe {
-            copy_nonoverlapping(
-                &dropfiles as *const DROPFILES as *const u8,
-                locked as *mut u8,
-                dropfiles_size,
-            );
-            copy_nonoverlapping(
-                wide_paths.as_ptr() as *const u8,
-                (locked as *mut u8).add(dropfiles_size),
-                wide_paths_size,
-            );
+            (locked as *mut u32).write(items.len() as u32);
+            let descriptors = (locked as *mut u8).add(header_size) as *mut FILEDESCRIPTORW;
+            for (index, item) in items.iter().enumerate() {
+                descriptors.add(index).write(file_descriptor(item));
+            }
             let _ = GlobalUnlock(hglobal);
         }
 
@@ -514,13 +568,106 @@ mod windows_file_drag {
         })
     }
 
-    fn encode_hdrop_paths(paths: &[PathBuf]) -> Vec<u16> {
-        let mut encoded = Vec::new();
-        for path in paths {
-            encoded.extend(path.as_os_str().encode_wide());
-            encoded.push(0);
+    fn file_descriptor(item: &NativeFileDragItem) -> FILEDESCRIPTORW {
+        let name = wide_drag_file_name(&item.display_path);
+        let mut file_name = [0u16; 260];
+        let copy_len = name.len().min(file_name.len().saturating_sub(1));
+        file_name[..copy_len].copy_from_slice(&name[..copy_len]);
+
+        let mut descriptor = FILEDESCRIPTORW {
+            dwFlags: FD_ATTRIBUTES.0 as u32,
+            dwFileAttributes: FILE_ATTRIBUTE_NORMAL,
+            cFileName: file_name,
+            ..FILEDESCRIPTORW::default()
+        };
+
+        if let Some(size) = item.size {
+            descriptor.dwFlags |= FD_FILESIZE.0 as u32;
+            descriptor.nFileSizeHigh = (size >> 32) as u32;
+            descriptor.nFileSizeLow = (size & 0xFFFF_FFFF) as u32;
         }
-        encoded.push(0);
-        encoded
+        if let Some(modified) = item.modified_unix_seconds {
+            descriptor.dwFlags |= FD_WRITESTIME.0 as u32;
+            descriptor.ftLastWriteTime = filetime_from_unix_seconds(modified);
+        }
+
+        descriptor
+    }
+
+    fn filetime_from_unix_seconds(seconds: u64) -> FILETIME {
+        let ticks = seconds
+            .saturating_add(UNIX_EPOCH_AS_WINDOWS_FILETIME_SECONDS)
+            .saturating_mul(WINDOWS_TICK);
+        FILETIME {
+            dwLowDateTime: ticks as u32,
+            dwHighDateTime: (ticks >> 32) as u32,
+        }
+    }
+
+    fn wide_drag_file_name(path: &str) -> Vec<u16> {
+        path.encode_utf16().filter(|value| *value != 0).collect()
+    }
+
+    fn file_contents_medium(
+        item: &NativeFileDragItem,
+        stream_provider: &NativeFileDragStreamProvider,
+    ) -> WindowsResult<STGMEDIUM> {
+        let stream = unsafe { CreateStreamOnHGlobal(Default::default(), true)? };
+        {
+            let mut writer = ComStreamWriter {
+                stream: stream.clone(),
+            };
+            (stream_provider)(&item.entry_path, &mut writer)
+                .map_err(|_| WindowsError::from_hresult(E_FAIL))?;
+            writer
+                .flush()
+                .map_err(|_| WindowsError::from_hresult(E_FAIL))?;
+        }
+        unsafe {
+            stream
+                .Seek(0, STREAM_SEEK_SET, None)
+                .map_err(|_| WindowsError::from_hresult(E_FAIL))?;
+        }
+
+        Ok(STGMEDIUM {
+            tymed: TYMED_ISTREAM.0 as u32,
+            u: STGMEDIUM_0 {
+                pstm: ManuallyDrop::new(Some(stream)),
+            },
+            pUnkForRelease: ManuallyDrop::new(None),
+        })
+    }
+
+    struct ComStreamWriter {
+        stream: IStream,
+    }
+
+    impl Write for ComStreamWriter {
+        fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+            let chunk_len = buffer.len().min(u32::MAX as usize);
+            if chunk_len == 0 {
+                return Ok(0);
+            }
+
+            let mut written = 0u32;
+            let result = unsafe {
+                self.stream.Write(
+                    buffer.as_ptr().cast(),
+                    chunk_len as u32,
+                    Some(&mut written as *mut u32),
+                )
+            };
+            if result.is_err() {
+                return Err(io::Error::other(format!(
+                    "COM stream write failed: 0x{:08X}",
+                    result.0 as u32
+                )));
+            }
+            Ok(written as usize)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
     }
 }

@@ -235,8 +235,16 @@ pub struct NativeFileDragRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeFileDragResponse {
-    pub staging_root: String,
-    pub dragged_paths: Vec<String>,
+    pub outcome: NativeFileDragOutcomeDto,
+    pub dragged_entries: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeFileDragOutcomeDto {
+    Dropped,
+    Cancelled,
+    NoDrop,
 }
 
 #[derive(Debug, Deserialize)]

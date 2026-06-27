@@ -1558,13 +1558,19 @@ async function startNativeDragOut(entryPath: string) {
 
   while (true) {
     try {
-      await runStartNativeFileDrag({
+      const response = await runStartNativeFileDrag({
         archivePath: currentArchivePath,
         entryPaths,
         stripComponents,
         ...(password ? { password } : {}),
       });
-      setOperationalStatus("Drag-out completed.");
+      if (response.outcome === "cancelled") {
+        setOperationalStatus("Drag-out cancelled.");
+      } else if (response.outcome === "noDrop") {
+        setOperationalStatus("Drag-out ended without a drop.");
+      } else {
+        setOperationalStatus(`Dragged out ${response.draggedEntries.length} item(s).`);
+      }
       return;
     } catch (error) {
       const commandError = asCommandError(error);

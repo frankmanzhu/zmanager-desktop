@@ -171,8 +171,8 @@ export type NativeFileDragRequest = {
 };
 
 export type NativeFileDragResponse = {
-  stagingRoot: string;
-  draggedPaths: string[];
+  outcome: "dropped" | "cancelled" | "noDrop";
+  draggedEntries: string[];
 };
 
 export type TestArchiveRequest = {
