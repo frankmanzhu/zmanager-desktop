@@ -22,6 +22,11 @@
   !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\SystemFileAssociations\${EXTENSION}\shell" "ExtractToFolder"
 !macroend
 
+!macro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR EXTENSION
+  !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\SystemFileAssociations\${EXTENSION}\shell" "ExtractHere"
+  !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\SystemFileAssociations\${EXTENSION}\shell" "ExtractToFolder"
+!macroend
+
 !macro ZM_REGISTER_ARCHIVE_EXTENSIONS
   !insertmacro ZM_REGISTER_ARCHIVE_EXTENSION ".zip"
   !insertmacro ZM_REGISTER_ARCHIVE_EXTENSION ".zipx"
@@ -52,6 +57,21 @@
   !insertmacro ZM_UNREGISTER_ARCHIVE_EXTENSION ".tzap"
 !macroend
 
+!macro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".zip"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".zipx"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".7z"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".rar"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".tar"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".gz"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".tgz"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".xz"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".txz"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".zst"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".tzst"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS_FOR ".tzap"
+!macroend
+
 !macro ZM_REFRESH_SHELL_ASSOCIATIONS
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 !macroend
@@ -63,6 +83,7 @@
   !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\Directory\shell" "CompressCleanSource"
   !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\Directory\Background\shell" "CompressZip"
   !insertmacro ZM_DELETE_CONTEXT_VERB "Software\Classes\Directory\Background\shell" "CompressCleanSource"
+  !insertmacro ZM_UNREGISTER_RETIRED_ARCHIVE_EXTENSION_VERBS
   !insertmacro ZM_WRITE_CONTEXT_VERB "Software\Classes\*\shell" "Compress" "Compress using ZManager" "compress" "%1"
   !insertmacro ZM_WRITE_CONTEXT_VERB "Software\Classes\Directory\shell" "Compress" "Compress using ZManager" "compress" "%1"
   !insertmacro ZM_WRITE_CONTEXT_VERB "Software\Classes\Directory\Background\shell" "Compress" "Compress using ZManager" "compress" "%V"
