@@ -37,6 +37,34 @@ pub struct ProjectContract {
     pub platform_integration: ProjectIntegrationContract,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemFileIconRequest {
+    pub entries: Vec<SystemFileIconRequestEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemFileIconRequestEntry {
+    pub key: String,
+    pub path: String,
+    #[serde(default)]
+    pub is_directory: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemFileIconResponse {
+    pub icons: Vec<SystemFileIconDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemFileIconDto {
+    pub key: String,
+    pub data_url: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum QuickActionKindDto {

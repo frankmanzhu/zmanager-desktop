@@ -11,10 +11,10 @@ export const APP_TOOLBAR_HEIGHT_PX = 54;
 export const APP_PATH_BAR_HEIGHT_PX = 44;
 export const APP_STATUS_BAR_HEIGHT_PX = 28;
 
-export const APP_NAV_PANE_MIN_WIDTH_PX = 160;
-export const APP_NAV_PANE_MAX_WIDTH_PX = 220;
-export const APP_DETAILS_PANE_MIN_WIDTH_PX = 200;
-export const APP_DETAILS_PANE_MAX_WIDTH_PX = 280;
+export const APP_NAV_PANE_MIN_WIDTH_PX = 150;
+export const APP_NAV_PANE_MAX_WIDTH_PX = 180;
+export const APP_DETAILS_PANE_MIN_WIDTH_PX = 180;
+export const APP_DETAILS_PANE_MAX_WIDTH_PX = 220;
 export const APP_STATUS_BAR_PARTS = 4;
 
 export const BROWSE_STATUS_IDLE = "No archive selected.";

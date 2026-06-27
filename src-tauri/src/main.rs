@@ -20,6 +20,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::healthcheck,
             commands::project_contract,
+            commands::system_file_icons,
             commands::quick_action_startup_state,
             commands::list_archive,
             commands::plan_create,

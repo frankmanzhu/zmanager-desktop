@@ -24,6 +24,12 @@ pub use windows::register_platform_services;
 pub use linux::register_platform_services;
 
 #[cfg(target_os = "windows")]
+pub use windows::system_file_icons;
+
+#[cfg(not(target_os = "windows"))]
+pub use linux::system_file_icons;
+
+#[cfg(target_os = "windows")]
 pub fn integration_profile() -> PlatformProfile {
     PlatformProfile {
         platform: windows::PLATFORM_NAME,

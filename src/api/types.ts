@@ -23,6 +23,25 @@ export type ProjectContract = {
   };
 };
 
+export type SystemFileIconRequestEntry = {
+  key: string;
+  path: string;
+  isDirectory: boolean;
+};
+
+export type SystemFileIconRequest = {
+  entries: SystemFileIconRequestEntry[];
+};
+
+export type SystemFileIconDto = {
+  key: string;
+  dataUrl?: string | null;
+};
+
+export type SystemFileIconResponse = {
+  icons: SystemFileIconDto[];
+};
+
 export type QuickActionKind =
   | "open"
   | "compress"

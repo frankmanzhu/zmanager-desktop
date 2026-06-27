@@ -12,6 +12,7 @@ export type PreferenceStorageKey =
   | "defaultExtractionBehavior"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
+  | "showRealFileIcons"
   | "showGridLines"
   | "fullRowSelect"
   | "singleClickOpen"
@@ -21,6 +22,8 @@ export type PreferenceStorageKey =
   | "showToolbarLabels"
   | "flatViewDefault"
   | "tableVisibleColumns"
+  | "tableColumnOrder"
+  | "tableColumnWidths"
   | "tableSortKey"
   | "tableSortAscending";
 
@@ -32,6 +35,7 @@ export const PREFERENCE_KEYS = {
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
+  showRealFileIcons: "zmanager.showRealFileIcons",
   showGridLines: "zmanager.showGridLines",
   fullRowSelect: "zmanager.fullRowSelect",
   singleClickOpen: "zmanager.singleClickOpen",
@@ -41,6 +45,8 @@ export const PREFERENCE_KEYS = {
   showToolbarLabels: "zmanager.showToolbarLabels",
   flatViewDefault: "zmanager.flatViewDefault",
   tableVisibleColumns: "zmanager.tableVisibleColumns",
+  tableColumnOrder: "zmanager.tableColumnOrder",
+  tableColumnWidths: "zmanager.tableColumnWidths",
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
 } satisfies Record<PreferenceStorageKey, string>;

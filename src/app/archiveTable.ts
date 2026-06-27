@@ -28,6 +28,7 @@ export type ArchiveTableColumn = {
   id: ArchiveTableColumnId;
   label: string;
   width: number;
+  minWidth?: number;
   align: "left" | "right" | "center";
   defaultVisible: boolean;
   alwaysVisible?: boolean;
@@ -52,8 +53,12 @@ export type ArchiveTableRow =
       entry: ArchiveEntryDto;
     };
 
+export type ArchiveTableColumnWidthMap = Partial<Record<ArchiveTableColumnId, number>>;
+
 export type ArchiveTableColumnSettings = {
   visibleColumnIds: ArchiveTableColumnId[];
+  columnOrderIds: ArchiveTableColumnId[];
+  columnWidths: ArchiveTableColumnWidthMap;
 };
 
 const EMPTY_VALUE = "";
@@ -62,12 +67,14 @@ const TABLE_DATE_FORMAT = {
   dateStyle: "short",
   timeStyle: "short",
 } as const;
+const DEFAULT_MIN_COLUMN_WIDTH = 64;
+const MAX_COLUMN_WIDTH = 520;
 
 export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
-  { id: "name", label: "Name", width: 160, align: "left", defaultVisible: true, alwaysVisible: true },
+  { id: "name", label: "Name", width: 190, minWidth: 140, align: "left", defaultVisible: true, alwaysVisible: true },
   { id: "size", label: "Size", width: 100, align: "right", defaultVisible: true },
-  { id: "compressedSize", label: "Packed Size", width: 100, align: "right", defaultVisible: true },
-  { id: "modified", label: "Modified", width: 140, align: "left", defaultVisible: true },
+  { id: "compressedSize", label: "Packed Size", width: 110, align: "right", defaultVisible: true },
+  { id: "modified", label: "Modified", width: 150, align: "left", defaultVisible: true },
   { id: "created", label: "Created", width: 140, align: "left", defaultVisible: false },
   { id: "accessed", label: "Accessed", width: 140, align: "left", defaultVisible: false },
   { id: "attributes", label: "Attributes", width: 90, align: "left", defaultVisible: false },
@@ -83,25 +90,41 @@ export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
   .filter((column) => column.defaultVisible)
   .map((column) => column.id);
+export const DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS = ARCHIVE_TABLE_COLUMNS.map((column) => column.id);
 
 export function normalizeColumnSettings(
   settings?: Partial<ArchiveTableColumnSettings> | null,
 ): ArchiveTableColumnSettings {
-  const available = new Set(ARCHIVE_TABLE_COLUMNS.map((column) => column.id));
+  const availableColumns = new Map(ARCHIVE_TABLE_COLUMNS.map((column) => [column.id, column]));
+  const available = new Set(availableColumns.keys());
   const incoming = settings?.visibleColumnIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS;
   const visibleColumnIds = incoming.filter((id) => available.has(id));
+  const incomingOrder = settings?.columnOrderIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS;
+  const orderedIds = uniqueColumnIds(incomingOrder.filter((id) => available.has(id)));
+  const missingOrderedIds = DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS.filter((id) => !orderedIds.includes(id));
+  const columnOrderIds: ArchiveTableColumnId[] = [
+    "name",
+    ...orderedIds.filter((id) => id !== "name"),
+    ...missingOrderedIds.filter((id) => id !== "name"),
+  ];
 
   if (!visibleColumnIds.includes("name")) {
     visibleColumnIds.unshift("name");
   }
 
   return {
-    visibleColumnIds: Array.from(new Set(visibleColumnIds)),
+    visibleColumnIds: uniqueColumnIds(visibleColumnIds),
+    columnOrderIds,
+    columnWidths: normalizeColumnWidths(settings?.columnWidths, availableColumns),
   };
 }
 
 export function resetColumnSettings(): ArchiveTableColumnSettings {
-  return normalizeColumnSettings({ visibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS });
+  return normalizeColumnSettings({
+    visibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    columnOrderIds: DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    columnWidths: {},
+  });
 }
 
 export function toggleColumnVisibility(
@@ -119,12 +142,100 @@ export function toggleColumnVisibility(
     visible.add(columnId);
   }
 
-  return normalizeColumnSettings({ visibleColumnIds: Array.from(visible) });
+  return normalizeColumnSettings({
+    ...settings,
+    visibleColumnIds: Array.from(visible),
+  });
 }
 
 export function visibleColumns(settings: ArchiveTableColumnSettings): ArchiveTableColumn[] {
-  const visible = new Set(normalizeColumnSettings(settings).visibleColumnIds);
-  return ARCHIVE_TABLE_COLUMNS.filter((column) => visible.has(column.id));
+  const normalized = normalizeColumnSettings(settings);
+  const visible = new Set(normalized.visibleColumnIds);
+  const columnsById = new Map(ARCHIVE_TABLE_COLUMNS.map((column) => [column.id, column]));
+  return normalized.columnOrderIds
+    .filter((id) => visible.has(id))
+    .map((id) => {
+      const column = columnsById.get(id)!;
+      return {
+        ...column,
+        width: normalized.columnWidths[id] ?? column.width,
+      };
+    });
+}
+
+export function setColumnWidth(
+  settings: ArchiveTableColumnSettings,
+  columnId: ArchiveTableColumnId,
+  width: number,
+): ArchiveTableColumnSettings {
+  const column = ARCHIVE_TABLE_COLUMNS.find((item) => item.id === columnId);
+  if (!column) {
+    return normalizeColumnSettings(settings);
+  }
+
+  return normalizeColumnSettings({
+    ...settings,
+    columnWidths: {
+      ...settings.columnWidths,
+      [columnId]: clampColumnWidth(width, column),
+    },
+  });
+}
+
+export function moveColumn(
+  settings: ArchiveTableColumnSettings,
+  columnId: ArchiveTableColumnId,
+  direction: "left" | "right",
+): ArchiveTableColumnSettings {
+  if (columnId === "name") {
+    return normalizeColumnSettings(settings);
+  }
+
+  const normalized = normalizeColumnSettings(settings);
+  const order = [...normalized.columnOrderIds];
+  const visible = new Set(normalized.visibleColumnIds);
+  const visibleOrder = order.filter((id) => visible.has(id));
+  const currentVisibleIndex = visibleOrder.indexOf(columnId);
+  const nextVisibleIndex = direction === "left" ? currentVisibleIndex - 1 : currentVisibleIndex + 1;
+
+  if (currentVisibleIndex <= 0 || nextVisibleIndex <= 0 || nextVisibleIndex >= visibleOrder.length) {
+    return normalized;
+  }
+
+  const targetColumnId = visibleOrder[nextVisibleIndex];
+  const currentIndex = order.indexOf(columnId);
+  const nextIndex = order.indexOf(targetColumnId);
+  [order[currentIndex], order[nextIndex]] = [order[nextIndex], order[currentIndex]];
+  return normalizeColumnSettings({
+    ...normalized,
+    columnOrderIds: order,
+  });
+}
+
+function uniqueColumnIds(ids: ArchiveTableColumnId[]): ArchiveTableColumnId[] {
+  return Array.from(new Set(ids));
+}
+
+function normalizeColumnWidths(
+  widths: ArchiveTableColumnWidthMap | undefined,
+  availableColumns: ReadonlyMap<ArchiveTableColumnId, ArchiveTableColumn>,
+): ArchiveTableColumnWidthMap {
+  const normalized: ArchiveTableColumnWidthMap = {};
+
+  for (const [columnId, width] of Object.entries(widths ?? {}) as Array<[ArchiveTableColumnId, number]>) {
+    const column = availableColumns.get(columnId);
+    if (!column || !Number.isFinite(width)) {
+      continue;
+    }
+    normalized[columnId] = clampColumnWidth(width, column);
+  }
+
+  return normalized;
+}
+
+function clampColumnWidth(width: number, column: ArchiveTableColumn): number {
+  const minWidth = column.minWidth ?? DEFAULT_MIN_COLUMN_WIDTH;
+  return Math.min(MAX_COLUMN_WIDTH, Math.max(minWidth, Math.round(width)));
 }
 
 export function formatArchiveTableValue(

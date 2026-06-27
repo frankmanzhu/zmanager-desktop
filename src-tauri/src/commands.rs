@@ -10,7 +10,8 @@ use crate::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
         PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse,
         ProjectContract, ProjectIntegrationContract, ProjectIntegrationShellActionDto,
-        StartCreateRequest, StartExtractRequest, TestArchiveRequest,
+        StartCreateRequest, StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse,
+        TestArchiveRequest,
     },
     error::CommandErrorDto,
     job_dto::{
@@ -80,6 +81,13 @@ pub fn project_contract() -> crate::dto::ProjectContract {
                 })
                 .collect(),
         },
+    }
+}
+
+#[tauri::command]
+pub fn system_file_icons(request: SystemFileIconRequest) -> SystemFileIconResponse {
+    SystemFileIconResponse {
+        icons: crate::platform::system_file_icons(&request.entries),
     }
 }
 

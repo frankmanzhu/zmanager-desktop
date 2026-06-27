@@ -19,6 +19,8 @@ import type {
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
+  SystemFileIconRequest,
+  SystemFileIconResponse,
   TestArchiveRequest,
 } from "./types";
 
@@ -28,6 +30,14 @@ export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
 
 export async function fetchProjectContract(): Promise<ProjectContract> {
   return invoke<ProjectContract>("project_contract");
+}
+
+export async function fetchSystemFileIcons(
+  request: SystemFileIconRequest,
+): Promise<SystemFileIconResponse> {
+  return invoke<SystemFileIconResponse>("system_file_icons", {
+    request,
+  });
 }
 
 export async function fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto> {

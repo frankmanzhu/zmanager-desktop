@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   formatArchiveTableValue,
+  moveColumn,
+  normalizeColumnSettings,
   resetColumnSettings,
+  setColumnWidth,
   sortArchiveRows,
   toggleColumnVisibility,
+  visibleColumns,
 } from "./archiveTable";
 import type { ArchiveTableRow } from "./archiveTable";
 
@@ -46,6 +50,27 @@ describe("archive table columns and formatters", () => {
     const settings = toggleColumnVisibility(resetColumnSettings(), "name");
 
     expect(settings.visibleColumnIds).toContain("name");
+  });
+
+  it("persists column order and width settings", () => {
+    const settings = setColumnWidth(
+      moveColumn(normalizeColumnSettings({
+        visibleColumnIds: ["name", "size", "compressedSize", "modified"],
+      }), "compressedSize", "left"),
+      "name",
+      260,
+    );
+
+    expect(settings.columnOrderIds.slice(0, 4)).toEqual([
+      "name",
+      "compressedSize",
+      "size",
+      "modified",
+    ]);
+    expect(visibleColumns(settings).map((column) => [column.id, column.width])).toContainEqual([
+      "name",
+      260,
+    ]);
   });
 });
 

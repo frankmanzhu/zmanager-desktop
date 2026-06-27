@@ -37,8 +37,10 @@ import {
 import {
   ARCHIVE_TABLE_COLUMNS,
   formatArchiveTableValue,
+  moveColumn,
   normalizeColumnSettings,
   resetColumnSettings,
+  setColumnWidth,
   sortArchiveRows,
   toggleColumnVisibility,
   visibleColumns,
@@ -48,6 +50,14 @@ import {
   type ArchiveTableColumnSettings,
   type ArchiveTableRow,
 } from "./app/archiveTable";
+import {
+  archiveEntryIconDescriptor,
+  archiveFileIconDescriptor,
+  archiveRowIconDescriptor,
+  archiveTreeIconDescriptor,
+  type ArchiveEntryIconDescriptor,
+} from "./app/archiveEntryIcons";
+import type { IconNode } from "lucide";
 import {
   applyRowSelectionIntent,
   invertVisibleSelection,
@@ -123,6 +133,7 @@ import {
   fetchHealthcheck,
   fetchProjectContract,
   fetchQuickActionStartupState,
+  fetchSystemFileIcons,
   listArchive as listArchiveCommand,
   cleanupPreviewRoots,
   pollJobEvents as pollJobEventsCommand,
@@ -149,6 +160,7 @@ import type {
   ProjectContract,
   QuickActionRequestDto,
   StartJobResponseDto,
+  SystemFileIconRequestEntry,
 } from "./api/types";
 import { ListArchiveRequest, PlanCreateRequest } from "./api/types";
 import {
@@ -231,6 +243,37 @@ function toolbarIcon(
   } satisfies Record<typeof name, string>;
 
   return `<svg class="tool-icon" aria-hidden="true" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
+}
+
+function renderIconNode(iconNode: IconNode, className: string): string {
+  const children = iconNode
+    .map(([tag, attrs]) => {
+      const attributes = Object.entries(attrs)
+        .map(([key, value]) => `${key}="${escapeHtmlValue(String(value))}"`)
+        .join(" ");
+      return `<${tag} ${attributes}></${tag}>`;
+    })
+    .join("");
+
+  return `<svg class="${escapeHtmlValue(className)}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${children}</svg>`;
+}
+
+function renderEntryIcon(
+  descriptor: ArchiveEntryIconDescriptor,
+  className: "row-icon" | "tree-icon" | "detail-icon",
+  dataUrl?: string | null,
+): string {
+  return `
+    <span
+      class="${className} ${className}-${descriptor.kind}"
+      title="${escapeHtmlValue(descriptor.label)}"
+      aria-hidden="true"
+    >
+      ${dataUrl
+        ? `<img class="${className}-image" src="${escapeHtmlValue(dataUrl)}" alt="" />`
+        : renderIconNode(descriptor.icon, `${className}-svg`)}
+    </span>
+  `;
 }
 
 function commandIcon(commandId: CommandId): ReturnType<typeof toolbarIcon> {
@@ -399,7 +442,7 @@ appRoot.innerHTML = `
         </div>
         <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
         <div class="table-shell" tabindex="0">
-          <table>
+          <table id="entry-table">
             <thead id="entry-table-head">
               <tr>
                 <th class="selection-column">
@@ -783,7 +826,7 @@ appRoot.innerHTML = `
               </div>
               <div class="toggle-grid">
                 <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> Show .. item</label>
-                <label class="toggle-line"><input type="checkbox" disabled /> Show real file icons</label>
+                <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> Show real file icons</label>
                 <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> Full row select</label>
                 <label class="toggle-line"><input id="pref-show-grid" type="checkbox" /> Show grid lines</label>
                 <label class="toggle-line"><input id="pref-single-click" type="checkbox" /> Single-click to open</label>
@@ -864,6 +907,7 @@ const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!
 const messageElement = document.querySelector<HTMLParagraphElement>("#browse-message")!;
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
+const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
 
@@ -930,6 +974,7 @@ const preferencesCustomOutputInput = document.querySelector<HTMLInputElement>("#
 const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>("#pref-choose-output")!;
 const preferencesCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-clean-source")!;
 const preferencesShowParentCheckbox = document.querySelector<HTMLInputElement>("#pref-show-parent")!;
+const preferencesRealFileIconsCheckbox = document.querySelector<HTMLInputElement>("#pref-real-file-icons")!;
 const preferencesShowGridCheckbox = document.querySelector<HTMLInputElement>("#pref-show-grid")!;
 const preferencesFullRowSelectCheckbox = document.querySelector<HTMLInputElement>("#pref-full-row-select")!;
 const preferencesSingleClickCheckbox = document.querySelector<HTMLInputElement>("#pref-single-click")!;
@@ -949,6 +994,7 @@ const preferencesViewElements: PreferencesViewElements = {
   chooseOutputButton: preferencesChooseOutputButton,
   cleanSourceCheckbox: preferencesCleanSourceCheckbox,
   showParentFolderItemCheckbox: preferencesShowParentCheckbox,
+  showRealFileIconsCheckbox: preferencesRealFileIconsCheckbox,
   showGridLinesCheckbox: preferencesShowGridCheckbox,
   fullRowSelectCheckbox: preferencesFullRowSelectCheckbox,
   singleClickOpenCheckbox: preferencesSingleClickCheckbox,
@@ -973,8 +1019,12 @@ let browseEntries: ArchiveEntryDto[] = [];
 let selectedEntries = new Set<string>();
 let navigationHistory: string[] = [];
 let appPreferences: AppPreferences = loadAppPreferences();
+let systemIconDataUrls = new Map<string, string | null>();
+let systemIconRequestRevision = 0;
 let tableColumnSettings: ArchiveTableColumnSettings = normalizeColumnSettings({
   visibleColumnIds: appPreferences.tableVisibleColumnIds,
+  columnOrderIds: appPreferences.tableColumnOrderIds,
+  columnWidths: appPreferences.tableColumnWidths,
 });
 let sortKey: ArchiveSortKey = appPreferences.tableSortKey;
 let sortAscending = appPreferences.tableSortAscending;
@@ -1017,6 +1067,8 @@ function saveTablePreferences() {
   appPreferences = {
     ...appPreferences,
     tableVisibleColumnIds: tableColumnSettings.visibleColumnIds,
+    tableColumnOrderIds: tableColumnSettings.columnOrderIds,
+    tableColumnWidths: tableColumnSettings.columnWidths,
     tableSortKey: sortKey,
     tableSortAscending: sortAscending,
   };
@@ -1088,9 +1140,9 @@ function applyPreferenceClasses() {
   workspaceElement.classList.toggle("toolbar-hidden", !appPreferences.toolbarVisible);
   commandToolbarElement?.classList.toggle("large", appPreferences.largeToolbarButtons);
   commandToolbarElement?.classList.toggle("show-labels", appPreferences.showToolbarLabels);
-  tableBody.classList.toggle("show-grid", appPreferences.showGridLines);
-  tableBody.classList.toggle("full-row-select", appPreferences.fullRowSelect);
-  tableBody.classList.toggle("single-click-open", appPreferences.singleClickOpen);
+  entryTable.classList.toggle("show-grid", appPreferences.showGridLines);
+  entryTable.classList.toggle("full-row-select", appPreferences.fullRowSelect);
+  entryTable.classList.toggle("single-click-open", appPreferences.singleClickOpen);
 }
 
 function formatBytes(value?: number): string {
@@ -1264,6 +1316,112 @@ function normalizeFolderPath(path: string): string {
 
 function getBaseName(path: string): string {
   return getPathBasename(path, path);
+}
+
+function systemIconRequestForPath(path: string, isDirectory: boolean): SystemFileIconRequestEntry {
+  const lookupPath = isDirectory ? "folder" : systemIconLookupPath(path);
+  return {
+    key: isDirectory ? "directory" : `file:${lookupPath.toLowerCase()}`,
+    path: lookupPath,
+    isDirectory,
+  };
+}
+
+function systemIconLookupPath(path: string): string {
+  const suffix = getKnownArchiveSuffix(path);
+  if (suffix) {
+    return suffix;
+  }
+
+  const extension = pathExtension(path);
+  return extension ? `.${extension}` : "file";
+}
+
+function pathExtension(path: string): string | null {
+  const name = getBaseName(path);
+  const dotIndex = name.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === name.length - 1) {
+    return null;
+  }
+
+  return name.slice(dotIndex + 1).toLowerCase();
+}
+
+function systemIconRequestForEntry(entry: ArchiveEntryDto): SystemFileIconRequestEntry | null {
+  if (entry.kind === "directory") {
+    return systemIconRequestForPath("folder", true);
+  }
+  if (entry.kind === "special") {
+    return null;
+  }
+
+  return systemIconRequestForPath(entry.path, false);
+}
+
+function systemIconRequestForRow(row: BrowserRow): SystemFileIconRequestEntry | null {
+  if (row.rowType === "parent" || row.rowType === "folder") {
+    return systemIconRequestForPath("folder", true);
+  }
+
+  return systemIconRequestForEntry(row.entry);
+}
+
+function systemIconDataUrlForRequest(request: SystemFileIconRequestEntry | null): string | null {
+  if (!appPreferences.showRealFileIcons || !request) {
+    return null;
+  }
+
+  return systemIconDataUrls.get(request.key) ?? null;
+}
+
+function collectSystemIconRequests(): SystemFileIconRequestEntry[] {
+  if (!currentArchivePath || !appPreferences.showRealFileIcons) {
+    return [];
+  }
+
+  const requests = new Map<string, SystemFileIconRequestEntry>();
+  const add = (request: SystemFileIconRequestEntry | null) => {
+    if (request && !systemIconDataUrls.has(request.key)) {
+      requests.set(request.key, request);
+    }
+  };
+
+  add(systemIconRequestForPath(currentArchivePath, false));
+  add(systemIconRequestForPath("folder", true));
+  for (const entry of browseEntries) {
+    add(systemIconRequestForEntry(entry));
+  }
+
+  return [...requests.values()];
+}
+
+function queueSystemIconRefresh() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  const entries = collectSystemIconRequests();
+  if (!entries.length) {
+    return;
+  }
+
+  const requestRevision = ++systemIconRequestRevision;
+  void fetchSystemFileIcons({ entries })
+    .then((response) => {
+      if (requestRevision < systemIconRequestRevision) {
+        return;
+      }
+
+      for (const icon of response.icons) {
+        systemIconDataUrls.set(icon.key, icon.dataUrl ?? null);
+      }
+      renderBrowse();
+    })
+    .catch(() => {
+      for (const entry of entries) {
+        systemIconDataUrls.set(entry.key, null);
+      }
+    });
 }
 
 function getParentPath(path: string): string {
@@ -1618,6 +1776,12 @@ function renderTree() {
     .map((folder) => {
       const depth = folder ? folder.split("/").length : 0;
       const label = folder ? getBaseName(folder) : getArchiveName(currentArchivePath, APP_TITLE);
+      const icon = archiveTreeIconDescriptor(folder === "", folder === currentArchiveFolder);
+      const iconDataUrl = systemIconDataUrlForRequest(
+        folder === ""
+          ? systemIconRequestForPath(currentArchivePath, false)
+          : systemIconRequestForPath("folder", true),
+      );
       return `
         <button
           class="tree-item ${folder === currentArchiveFolder ? "is-active" : ""}"
@@ -1625,7 +1789,8 @@ function renderTree() {
           data-tree-path="${escapeHtml(folder)}"
           style="--depth: ${depth}"
         >
-          ${escapeHtml(label)}
+          ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
+          <span class="tree-label">${escapeHtml(label)}</span>
         </button>
       `;
     })
@@ -1636,8 +1801,15 @@ function tableColspan(): number {
   return visibleColumns(tableColumnSettings).length + 1;
 }
 
+function tableMinimumWidth(columns = visibleColumns(tableColumnSettings)): number {
+  const selectionWidth = 28;
+  const columnWidth = columns.reduce((total, column) => total + column.width, 0);
+  return Math.max(720, selectionWidth + columnWidth);
+}
+
 function renderTableHeader() {
   const columns = visibleColumns(tableColumnSettings);
+  entryTable.style.minWidth = `${tableMinimumWidth(columns)}px`;
   tableHead.innerHTML = `
     <tr>
       <th class="selection-column">
@@ -1645,13 +1817,15 @@ function renderTableHeader() {
       </th>
       ${columns.map((column) => `
         <th
+          data-column-id="${column.id}"
           data-sort-key="${column.id}"
           class="${column.align !== "left" ? `align-${column.align}` : ""}"
-          style="min-width: ${column.width}px"
+          style="width: ${column.width}px; min-width: ${column.minWidth ?? 64}px"
           aria-sort="${sortKey === column.id ? (sortAscending ? "ascending" : "descending") : "none"}"
         >
-          <span>${escapeHtml(column.label)}</span>
+          <span class="column-header-label">${escapeHtml(column.label)}</span>
           ${sortKey === column.id ? `<span class="sort-indicator" aria-hidden="true">${sortAscending ? "^" : "v"}</span>` : ""}
+          <span class="column-resizer" data-column-resizer="${column.id}" aria-hidden="true"></span>
         </th>
       `).join("")}
     </tr>
@@ -1659,30 +1833,15 @@ function renderTableHeader() {
   selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
 }
 
-function rowIconClass(row: BrowserRow): string {
-  if (row.rowType === "parent" || row.rowType === "folder") {
-    return "folder";
-  }
-  switch (row.entry.kind) {
-    case "directory":
-      return "folder";
-    case "symlink":
-      return "symlink";
-    case "hardlink":
-      return "hardlink";
-    case "special":
-      return "special";
-    case "file":
-      return isSupportedArchivePath(row.entry.path) ? "archive" : "file";
-  }
-}
-
 function renderNameCell(row: BrowserRow, showFullPath: boolean): string {
   const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
+  const icon = archiveRowIconDescriptor(row);
+  const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForRow(row));
   return `
     <span class="row-primary">
-      <span class="row-icon row-icon-${rowIconClass(row)}" aria-hidden="true"></span>
-      <span>${escapeHtml(row.name)}</span>
+      ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
+      <span class="sr-only">${escapeHtml(icon.label)}:</span>
+      <span class="row-name">${escapeHtml(row.name)}</span>
     </span>
     ${showFullPath && row.rowType === "entry" ? `<span class="row-secondary">${escapeHtml(secondaryPath)}</span>` : ""}
   `;
@@ -1861,7 +2020,14 @@ function renderDetails() {
 
     detailsElement.innerHTML = `
       <div class="detail-block">
-        <h3>${escapeHtml(getArchiveName(currentArchivePath, APP_TITLE))}</h3>
+        <h3 class="detail-title">
+          ${renderEntryIcon(
+            archiveFileIconDescriptor(currentArchivePath),
+            "detail-icon",
+            systemIconDataUrlForRequest(systemIconRequestForPath(currentArchivePath, false)),
+          )}
+          <span>${escapeHtml(getArchiveName(currentArchivePath, APP_TITLE))}</span>
+        </h3>
         <dl class="detail-list">
           ${list}
         </dl>
@@ -1882,9 +2048,13 @@ function renderDetails() {
     const modified = formatDate(entry.modified);
     const packed = formatOptionalBytes(entry.compressedSize);
     const size = formatOptionalBytes(entry.size);
+    const icon = archiveEntryIconDescriptor(entry);
     detailsElement.innerHTML = `
       <div class="detail-block">
-        <h3>${escapeHtml(getBaseName(entry.path))}</h3>
+        <h3 class="detail-title">
+          ${renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForEntry(entry)))}
+          <span>${escapeHtml(getBaseName(entry.path))}</span>
+        </h3>
         <dl class="detail-list">
           <div><dt>Name</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
           <div><dt>Type</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
@@ -1943,6 +2113,8 @@ function renderBrowse() {
   if (browseState === "loaded" && selectedEntries.size > 0) {
     messageElement.textContent = `${selectedEntries.size} selected entries.`;
   }
+
+  queueSystemIconRefresh();
 }
 
 function setCreatePlanState(state: CreateState, statusMessage = "") {
@@ -2813,6 +2985,73 @@ function showContextMenu(x: number, y: number, html: string) {
   contextMenu.hidden = false;
   contextMenu.style.left = `${x}px`;
   contextMenu.style.top = `${y}px`;
+  const rect = contextMenu.getBoundingClientRect();
+  const clampedX = Math.max(4, Math.min(x, window.innerWidth - rect.width - 4));
+  const clampedY = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4));
+  contextMenu.style.left = `${clampedX}px`;
+  contextMenu.style.top = `${clampedY}px`;
+}
+
+function tableColumnById(columnId: ArchiveTableColumnId): ArchiveTableColumn | undefined {
+  return visibleColumns(tableColumnSettings).find((column) => column.id === columnId)
+    ?? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === columnId);
+}
+
+function setTableColumnWidth(columnId: ArchiveTableColumnId, width: number, persist: boolean) {
+  tableColumnSettings = setColumnWidth(tableColumnSettings, columnId, width);
+  if (persist) {
+    saveTablePreferences();
+  }
+  renderBrowse();
+}
+
+function adjustTableColumnWidth(columnId: ArchiveTableColumnId, delta: number) {
+  const column = tableColumnById(columnId);
+  if (!column) {
+    return;
+  }
+  setTableColumnWidth(columnId, column.width + delta, true);
+}
+
+function resetTableColumnWidth(columnId: ArchiveTableColumnId) {
+  const column = ARCHIVE_TABLE_COLUMNS.find((item) => item.id === columnId);
+  if (!column) {
+    return;
+  }
+  setTableColumnWidth(columnId, column.width, true);
+}
+
+function startColumnResize(event: PointerEvent, columnId: ArchiveTableColumnId) {
+  const column = tableColumnById(columnId);
+  if (!column) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  document.body.classList.add("is-resizing-column");
+
+  const startX = event.clientX;
+  const startWidth = column.width;
+  let latestWidth = startWidth;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    latestWidth = startWidth + moveEvent.clientX - startX;
+    tableColumnSettings = setColumnWidth(tableColumnSettings, columnId, latestWidth);
+    renderBrowseRows();
+  };
+
+  const onPointerUp = () => {
+    document.body.classList.remove("is-resizing-column");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    tableColumnSettings = setColumnWidth(tableColumnSettings, columnId, latestWidth);
+    saveTablePreferences();
+    renderBrowse();
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp, { once: true });
 }
 
 function entryIsUnderFolder(entryPath: string, folderPath: string): boolean {
@@ -2841,9 +3080,15 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
   contextEntryPath = entryPath;
   contextSourcePath = "";
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}">Open Folder</button>
-    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}">Extract Folder</button>
-    <button type="button" role="menuitem" data-context-action="info">Properties</button>
+    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Open</span></button>
+    <button type="button" role="menuitem" data-context-action="open-inside" ${entryPath ? "" : "disabled"}><span class="context-menu-label">Open Inside</span></button>
+    <button type="button" role="menuitem" data-context-action="open-outside" disabled><span class="context-menu-label">Open Outside</span></button>
+    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Extract...</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
+    <button type="button" role="menuitem" data-context-action="copy-to" disabled><span class="context-menu-label">Copy To...</span></button>
+    <button type="button" role="menuitem" data-context-action="move-to" disabled><span class="context-menu-label">Move To...</span></button>
+    <button type="button" role="menuitem" data-context-action="delete-entry" disabled><span class="context-menu-label">Delete</span></button>
+    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
   `);
 }
 
@@ -2860,33 +3105,78 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   const canOpenInside = entry?.kind === "directory";
   const hasSingleSelection = getSelectedEntryPaths().length === 1;
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-entry" ${!hasSingleSelection ? "disabled" : ""}>Open</button>
-    <button type="button" role="menuitem" data-context-action="open-inside" ${!canOpenInside || !hasSingleSelection ? "disabled" : ""}>Open Inside</button>
-    <button type="button" role="menuitem" data-context-action="open-outside" ${!hasSingleSelection ? "disabled" : ""}>Open Outside</button>
-    <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}>View</button>
-    <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}>Extract...</button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}>Test</button>
-    <button type="button" role="menuitem" data-context-action="copy-to" disabled>Copy To...</button>
-    <button type="button" role="menuitem" data-context-action="info">Properties</button>
+    <button type="button" role="menuitem" data-context-action="open-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open</span></button>
+    <button type="button" role="menuitem" data-context-action="open-inside" ${!canOpenInside || !hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open Inside</span></button>
+    <button type="button" role="menuitem" data-context-action="open-outside" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open Outside</span></button>
+    <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">View</span></button>
+    <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">Extract...</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
+    <button type="button" role="menuitem" data-context-action="copy-to" disabled><span class="context-menu-label">Copy To...</span></button>
+    <button type="button" role="menuitem" data-context-action="move-to" disabled><span class="context-menu-label">Move To...</span></button>
+    <button type="button" role="menuitem" data-context-action="delete-entry" disabled><span class="context-menu-label">Delete</span></button>
+    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
     <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="select-by-type">Select by Type</button>
-    <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}>Deselect by Type</button>
+    <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">Select by Type</span></button>
+    <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">Deselect by Type</span></button>
   `);
 }
 
-function showTableHeaderContextMenu(x: number, y: number) {
+function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: ArchiveTableColumnId) {
+  const selectedColumn = ARCHIVE_TABLE_COLUMNS.find((column) => column.id === selectedColumnId);
+  const normalizedSettings = normalizeColumnSettings(tableColumnSettings);
+  const visibleColumnOrder = normalizedSettings.columnOrderIds.filter((id) =>
+    normalizedSettings.visibleColumnIds.includes(id),
+  );
+  const selectedColumnIndex = selectedColumnId
+    ? visibleColumnOrder.indexOf(selectedColumnId)
+    : -1;
+  const selectedColumnMenu = selectedColumn ? `
+    <div class="context-menu-caption">Column: ${escapeHtml(selectedColumn.label)}</div>
+    <button
+      type="button"
+      role="menuitem"
+      data-context-action="move-column-left"
+      data-column-id="${escapeHtml(selectedColumn.id)}"
+      ${selectedColumn.id === "name" || selectedColumnIndex <= 1 ? "disabled" : ""}
+    >
+      <span class="context-menu-label">Move Left</span>
+    </button>
+    <button
+      type="button"
+      role="menuitem"
+      data-context-action="move-column-right"
+      data-column-id="${escapeHtml(selectedColumn.id)}"
+      ${selectedColumn.id === "name" || selectedColumnIndex < 1 || selectedColumnIndex >= visibleColumnOrder.length - 1 ? "disabled" : ""}
+    >
+      <span class="context-menu-label">Move Right</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="narrow-column" data-column-id="${escapeHtml(selectedColumn.id)}">
+      <span class="context-menu-label">Narrower</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="widen-column" data-column-id="${escapeHtml(selectedColumn.id)}">
+      <span class="context-menu-label">Wider</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="reset-column-width" data-column-id="${escapeHtml(selectedColumn.id)}">
+      <span class="context-menu-label">Reset Width</span>
+    </button>
+    <div class="context-menu-separator" role="separator"></div>
+  ` : "";
+
   const menuRows = ARCHIVE_TABLE_COLUMNS.map((column) => {
     const isNameColumn = column.id === "name";
     const checked = isNameColumn || tableColumnSettings.visibleColumnIds.includes(column.id);
     return `
       <button
         type="button"
-        role="menuitem"
+        class="context-check-item"
+        role="menuitemcheckbox"
+        aria-checked="${checked ? "true" : "false"}"
         data-context-action="toggle-column"
         data-column-id="${escapeHtml(column.id)}"
         ${isNameColumn ? 'disabled aria-disabled="true"' : ""}
       >
-        ${checked ? "[x] " : "[ ] "}${escapeHtml(column.label)}
+        <span class="context-check" aria-hidden="true"></span>
+        <span class="context-menu-label">${escapeHtml(column.label)}</span>
       </button>
     `;
   }).join("");
@@ -2894,7 +3184,7 @@ function showTableHeaderContextMenu(x: number, y: number) {
   showContextMenu(
     x,
     y,
-    `${menuRows}
+    `${selectedColumnMenu}${menuRows}
       <div class="context-menu-separator" role="separator"></div>
       <button type="button" role="menuitem" data-context-action="reset-columns">Reset columns</button>
     `,
@@ -4520,24 +4810,41 @@ function bindActions() {
 
   tableHead.addEventListener("contextmenu", (event) => {
     const target = (event.target as HTMLElement | null);
-    if (!target?.closest("th")) {
+    const header = target?.closest<HTMLTableCellElement>("th");
+    if (!header) {
       return;
     }
     event.preventDefault();
-    showTableHeaderContextMenu(event.clientX, event.clientY);
+    showTableHeaderContextMenu(
+      event.clientX,
+      event.clientY,
+      header.dataset.columnId as ArchiveTableColumnId | undefined,
+    );
   });
 
-  const sortHeaders = Array.from(tableHead.querySelectorAll<HTMLTableCellElement>("th[data-sort-key]"));
-  for (const header of sortHeaders) {
-    header.addEventListener("click", () => {
-      const key = header.dataset.sortKey as ArchiveSortKey | undefined;
-      if (!key) {
-        return;
-      }
+  tableHead.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement | null)?.closest("[data-column-resizer]")) {
+      return;
+    }
 
-      applySortCommand(key);
-    });
-  }
+    const header = (event.target as HTMLElement | null)?.closest<HTMLTableCellElement>("th[data-sort-key]");
+    const key = header?.dataset.sortKey as ArchiveSortKey | undefined;
+    if (!key) {
+      return;
+    }
+
+    applySortCommand(key);
+  });
+
+  tableHead.addEventListener("pointerdown", (event) => {
+    const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-column-resizer]");
+    const columnId = target?.dataset.columnResizer as ArchiveTableColumnId | undefined;
+    if (!columnId) {
+      return;
+    }
+
+    startColumnResize(event, columnId);
+  });
 
   pathCrumbsElement.addEventListener("click", (event) => {
     const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-crumb-path]");
@@ -4811,10 +5118,38 @@ tableBody.addEventListener("click", (event) => {
       setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
       return;
     }
+    if (action === "move-to" || action === "delete-entry") {
+      setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
+      return;
+    }
     if (action === "toggle-column" && columnId) {
       tableColumnSettings = toggleColumnVisibility(tableColumnSettings, columnId);
       saveTablePreferences();
       renderBrowse();
+      return;
+    }
+    if (action === "move-column-left" && columnId) {
+      tableColumnSettings = moveColumn(tableColumnSettings, columnId, "left");
+      saveTablePreferences();
+      renderBrowse();
+      return;
+    }
+    if (action === "move-column-right" && columnId) {
+      tableColumnSettings = moveColumn(tableColumnSettings, columnId, "right");
+      saveTablePreferences();
+      renderBrowse();
+      return;
+    }
+    if (action === "narrow-column" && columnId) {
+      adjustTableColumnWidth(columnId, -24);
+      return;
+    }
+    if (action === "widen-column" && columnId) {
+      adjustTableColumnWidth(columnId, 24);
+      return;
+    }
+    if (action === "reset-column-width" && columnId) {
+      resetTableColumnWidth(columnId);
       return;
     }
     if (action === "reset-columns") {

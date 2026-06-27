@@ -16,6 +16,7 @@ export type PreferencesViewElements = {
   chooseOutputButton: HTMLButtonElement;
   cleanSourceCheckbox: HTMLInputElement;
   showParentFolderItemCheckbox: HTMLInputElement;
+  showRealFileIconsCheckbox: HTMLInputElement;
   showGridLinesCheckbox: HTMLInputElement;
   fullRowSelectCheckbox: HTMLInputElement;
   singleClickOpenCheckbox: HTMLInputElement;
@@ -44,6 +45,7 @@ export function renderPreferencesDialog(
   elements.customOutputInput.value = preferences.customOutputFolderPath;
   elements.cleanSourceCheckbox.checked = preferences.defaultCleanSourceEnabled;
   elements.showParentFolderItemCheckbox.checked = preferences.showParentFolderItem;
+  elements.showRealFileIconsCheckbox.checked = preferences.showRealFileIcons;
   elements.showGridLinesCheckbox.checked = preferences.showGridLines;
   elements.fullRowSelectCheckbox.checked = preferences.fullRowSelect;
   elements.singleClickOpenCheckbox.checked = preferences.singleClickOpen;
@@ -69,6 +71,7 @@ export function collectPreferencesFromDialog(
     defaultExtractionBehavior: elements.defaultExtractionSelect.value as DefaultExtractionBehavior,
     previewCleanupPolicy: elements.previewCleanupSelect.value as PreviewCleanupPolicy,
     showParentFolderItem: elements.showParentFolderItemCheckbox.checked,
+    showRealFileIcons: elements.showRealFileIconsCheckbox.checked,
     showGridLines: elements.showGridLinesCheckbox.checked,
     fullRowSelect: elements.fullRowSelectCheckbox.checked,
     singleClickOpen: elements.singleClickOpenCheckbox.checked,

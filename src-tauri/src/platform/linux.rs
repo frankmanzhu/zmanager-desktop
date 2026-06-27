@@ -1,6 +1,7 @@
 use tauri::{Builder, Wry};
 
 use super::ShellActionProfile;
+use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 /// Linux-specific shell integration surface.
 ///
@@ -48,4 +49,14 @@ pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     }
 
     builder
+}
+
+pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
+    entries
+        .iter()
+        .map(|entry| SystemFileIconDto {
+            key: entry.key.clone(),
+            data_url: None,
+        })
+        .collect()
 }

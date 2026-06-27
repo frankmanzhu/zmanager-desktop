@@ -1,9 +1,11 @@
 import type { CreateArchiveFormat } from "./createFlow";
 import {
   DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+  DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
   normalizeColumnSettings,
   type ArchiveSortKey,
   type ArchiveTableColumnId,
+  type ArchiveTableColumnWidthMap,
 } from "./archiveTable";
 import {
   PREFERENCE_KEYS,
@@ -23,6 +25,7 @@ export type AppPreferences = {
   defaultExtractionBehavior: DefaultExtractionBehavior;
   previewCleanupPolicy: PreviewCleanupPolicy;
   showParentFolderItem: boolean;
+  showRealFileIcons: boolean;
   showGridLines: boolean;
   fullRowSelect: boolean;
   singleClickOpen: boolean;
@@ -32,6 +35,8 @@ export type AppPreferences = {
   showToolbarLabels: boolean;
   flatViewDefault: boolean;
   tableVisibleColumnIds: ArchiveTableColumnId[];
+  tableColumnOrderIds: ArchiveTableColumnId[];
+  tableColumnWidths: ArchiveTableColumnWidthMap;
   tableSortKey: ArchiveSortKey;
   tableSortAscending: boolean;
 };
@@ -44,6 +49,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultExtractionBehavior: "askEveryTime",
   previewCleanupPolicy: "beforeNextPreview",
   showParentFolderItem: true,
+  showRealFileIcons: true,
   showGridLines: true,
   fullRowSelect: true,
   singleClickOpen: false,
@@ -53,6 +59,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   showToolbarLabels: true,
   flatViewDefault: false,
   tableVisibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+  tableColumnOrderIds: DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+  tableColumnWidths: {},
   tableSortKey: "name",
   tableSortAscending: true,
 };
@@ -106,6 +114,33 @@ function loadVisibleColumnIds(value: string | null): ArchiveTableColumnId[] {
   }).visibleColumnIds;
 }
 
+function loadColumnOrderIds(value: string | null): ArchiveTableColumnId[] {
+  if (!value) {
+    return DEFAULT_APP_PREFERENCES.tableColumnOrderIds;
+  }
+
+  return normalizeColumnSettings({
+    columnOrderIds: value.split(",").map((item) => item.trim()) as ArchiveTableColumnId[],
+  }).columnOrderIds;
+}
+
+function loadColumnWidths(value: string | null): ArchiveTableColumnWidthMap {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const columnWidths = Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, width]) => typeof width === "number" && Number.isFinite(width)),
+    ) as ArchiveTableColumnWidthMap;
+    return normalizeColumnSettings({ columnWidths }).columnWidths;
+  } catch {
+    return {};
+  }
+}
+
 export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPreferences {
   if (!storage) {
     return { ...DEFAULT_APP_PREFERENCES };
@@ -138,6 +173,10 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     showParentFolderItem: storedBool(
       storage.getItem(PREFERENCE_KEYS.showParentFolderItem),
       DEFAULT_APP_PREFERENCES.showParentFolderItem,
+    ),
+    showRealFileIcons: storedBool(
+      storage.getItem(PREFERENCE_KEYS.showRealFileIcons),
+      DEFAULT_APP_PREFERENCES.showRealFileIcons,
     ),
     showGridLines: storedBool(
       storage.getItem(PREFERENCE_KEYS.showGridLines),
@@ -172,6 +211,8 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       DEFAULT_APP_PREFERENCES.flatViewDefault,
     ),
     tableVisibleColumnIds: loadVisibleColumnIds(storage.getItem(PREFERENCE_KEYS.tableVisibleColumns)),
+    tableColumnOrderIds: loadColumnOrderIds(storage.getItem(PREFERENCE_KEYS.tableColumnOrder)),
+    tableColumnWidths: loadColumnWidths(storage.getItem(PREFERENCE_KEYS.tableColumnWidths)),
     tableSortKey: isOneOf(TABLE_SORT_KEYS, tableSortKey)
       ? tableSortKey
       : DEFAULT_APP_PREFERENCES.tableSortKey,
@@ -193,6 +234,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
   storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
+  storage.setItem(PREFERENCE_KEYS.showRealFileIcons, String(preferences.showRealFileIcons));
   storage.setItem(PREFERENCE_KEYS.showGridLines, String(preferences.showGridLines));
   storage.setItem(PREFERENCE_KEYS.fullRowSelect, String(preferences.fullRowSelect));
   storage.setItem(PREFERENCE_KEYS.singleClickOpen, String(preferences.singleClickOpen));
@@ -201,9 +243,14 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.largeToolbarButtons, String(preferences.largeToolbarButtons));
   storage.setItem(PREFERENCE_KEYS.showToolbarLabels, String(preferences.showToolbarLabels));
   storage.setItem(PREFERENCE_KEYS.flatViewDefault, String(preferences.flatViewDefault));
-  storage.setItem(PREFERENCE_KEYS.tableVisibleColumns, normalizeColumnSettings({
+  const tableSettings = normalizeColumnSettings({
     visibleColumnIds: preferences.tableVisibleColumnIds,
-  }).visibleColumnIds.join(","));
+    columnOrderIds: preferences.tableColumnOrderIds,
+    columnWidths: preferences.tableColumnWidths,
+  });
+  storage.setItem(PREFERENCE_KEYS.tableVisibleColumns, tableSettings.visibleColumnIds.join(","));
+  storage.setItem(PREFERENCE_KEYS.tableColumnOrder, tableSettings.columnOrderIds.join(","));
+  storage.setItem(PREFERENCE_KEYS.tableColumnWidths, JSON.stringify(tableSettings.columnWidths));
   storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
   storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
 
@@ -222,14 +269,28 @@ export function preferencesWithPatch(
   return {
     ...preferences,
     ...patch,
-    tableVisibleColumnIds:
-      patch.tableVisibleColumnIds !== undefined
-        ? normalizeColumnSettings({ visibleColumnIds: patch.tableVisibleColumnIds }).visibleColumnIds
-        : preferences.tableVisibleColumnIds,
+    ...normalizePreferenceTablePatch(preferences, patch),
     customOutputFolderPath:
       patch.customOutputFolderPath !== undefined
         ? patch.customOutputFolderPath.trim()
         : preferences.customOutputFolderPath,
+  };
+}
+
+function normalizePreferenceTablePatch(
+  preferences: AppPreferences,
+  patch: Partial<AppPreferences>,
+): Pick<AppPreferences, "tableVisibleColumnIds" | "tableColumnOrderIds" | "tableColumnWidths"> {
+  const normalized = normalizeColumnSettings({
+    visibleColumnIds: patch.tableVisibleColumnIds ?? preferences.tableVisibleColumnIds,
+    columnOrderIds: patch.tableColumnOrderIds ?? preferences.tableColumnOrderIds,
+    columnWidths: patch.tableColumnWidths ?? preferences.tableColumnWidths,
+  });
+
+  return {
+    tableVisibleColumnIds: normalized.visibleColumnIds,
+    tableColumnOrderIds: normalized.columnOrderIds,
+    tableColumnWidths: normalized.columnWidths,
   };
 }
 
