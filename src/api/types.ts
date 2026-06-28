@@ -47,6 +47,9 @@ export type QuickActionKind =
   | "compress"
   | "extract"
   | "compressZip"
+  | "compressTzap"
+  | "compressSevenZ"
+  | "compressTarZst"
   | "compressCleanSource"
   | "extractHere"
   | "extractToFolder";
@@ -134,6 +137,7 @@ export type StartCreateRequest = {
   format: "zip" | "tarZst" | "tzap" | "sevenZ";
   cleanSource: boolean;
   replaceExisting: boolean;
+  destinationCollisionStrategy?: "refuse" | "rename";
   password?: string;
   compressionLevel?: number;
   volumeSize?: number;
@@ -145,6 +149,7 @@ export type StartExtractRequest = {
   destinationPath: string;
   password?: string;
   overwrite: "refuse" | "replace" | "rename" | "ask";
+  destinationCollisionStrategy?: "refuse" | "rename";
   entryPaths?: string[];
   stripComponents: number;
 };

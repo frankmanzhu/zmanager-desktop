@@ -61,7 +61,9 @@ describe("quick action helpers", () => {
   });
 
   it("builds quick extract destinations from the extraction mode", () => {
-    expect(quickExtractDestination("/tmp/archive.tar.zst", "extractHere", pathHelpers)).toBe("/tmp");
+    expect(quickExtractDestination("/tmp/archive.tar.zst", "extractHere", pathHelpers)).toBe(
+      "/tmp/archive",
+    );
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractToFolder", pathHelpers)).toBe(
       "/tmp/archive",
     );
@@ -118,6 +120,41 @@ describe("quick action helpers", () => {
     expect(handlers.openArchive).toHaveBeenCalledWith(["/tmp/archive.tzap"]);
     expect(handlers.openExtractReview).not.toHaveBeenCalled();
     expect(handlers.startExtract).not.toHaveBeenCalled();
+  });
+
+  it("routes fixed-format create quick actions", async () => {
+    const handlers = {
+      openArchive: vi.fn().mockResolvedValue(undefined),
+      startCreate: vi.fn().mockResolvedValue(undefined),
+      openExtractReview: vi.fn().mockResolvedValue(undefined),
+      startExtract: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await runQuickActionRequest(
+      { kind: "compressTzap", paths: ["/tmp/source"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+    await runQuickActionRequest(
+      { kind: "compressZip", paths: ["/tmp/source"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+    await runQuickActionRequest(
+      { kind: "compressSevenZ", paths: ["/tmp/source"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+    await runQuickActionRequest(
+      { kind: "compressTarZst", paths: ["/tmp/source"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
+
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", false);
   });
 
   it("routes associated archive opens to browsing regardless of extraction defaults", async () => {

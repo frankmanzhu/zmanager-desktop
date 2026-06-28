@@ -240,7 +240,14 @@ fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
         "compress" => Ok(QuickActionKindDto::Compress),
         "open" | "browse" => Ok(QuickActionKindDto::Open),
         "extract" => Ok(QuickActionKindDto::Extract),
-        "compresszip" => Ok(QuickActionKindDto::CompressZip),
+        "compresszip" | "addtozip" => Ok(QuickActionKindDto::CompressZip),
+        "compresstzap" | "addtotzap" => Ok(QuickActionKindDto::CompressTzap),
+        "compress7z" | "compresssevenz" | "addto7z" | "addtosevenz" => {
+            Ok(QuickActionKindDto::CompressSevenZ)
+        }
+        "compresstarzst" | "compresstzst" | "addtotarzst" | "addtotzst" => {
+            Ok(QuickActionKindDto::CompressTarZst)
+        }
         "compresscleansource" | "cleansource" => Ok(QuickActionKindDto::CompressCleanSource),
         "extracthere" => Ok(QuickActionKindDto::ExtractHere),
         "extracttofolder" | "extractfolder" => Ok(QuickActionKindDto::ExtractToFolder),
@@ -268,6 +275,9 @@ fn validate_request(
         }
         QuickActionKindDto::Compress
         | QuickActionKindDto::CompressZip
+        | QuickActionKindDto::CompressTzap
+        | QuickActionKindDto::CompressSevenZ
+        | QuickActionKindDto::CompressTarZst
         | QuickActionKindDto::CompressCleanSource => {
             if paths.is_empty() {
                 return Err(QuickActionError::invalid(
@@ -434,6 +444,18 @@ mod tests {
         assert_eq!(compress.kind, QuickActionKindDto::CompressZip);
         assert_eq!(compress.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
 
+        let compress_tzap =
+            requested(&["--quick-action", "compress-tzap", "--path", "C:/tmp/source"]);
+        assert_eq!(compress_tzap.kind, QuickActionKindDto::CompressTzap);
+
+        let compress_seven_z =
+            requested(&["--quick-action", "compress-7z", "--path", "C:/tmp/source"]);
+        assert_eq!(compress_seven_z.kind, QuickActionKindDto::CompressSevenZ);
+
+        let compress_tzst =
+            requested(&["--quick-action", "compress-tzst", "--path", "C:/tmp/source"]);
+        assert_eq!(compress_tzst.kind, QuickActionKindDto::CompressTarZst);
+
         let extract = requested(&[
             "--quick-action=extractToFolder",
             "--path",
@@ -526,24 +548,28 @@ mod tests {
 
     #[test]
     fn quick_actions_reject_remote_urls_and_password_args() {
-        assert!(invalid(&[
-            "--quick-action",
-            "compress-zip",
-            "--path",
-            "https://example.com/a"
-        ])
-        .message
-        .contains("must be local"));
-        assert!(invalid(&[
-            "--quick-action",
-            "extract",
-            "--password",
-            "secret",
-            "--path",
-            "archive.zip",
-        ])
-        .message
-        .contains("passwords cannot be supplied"));
+        assert!(
+            invalid(&[
+                "--quick-action",
+                "compress-zip",
+                "--path",
+                "https://example.com/a"
+            ])
+            .message
+            .contains("must be local")
+        );
+        assert!(
+            invalid(&[
+                "--quick-action",
+                "extract",
+                "--password",
+                "secret",
+                "--path",
+                "archive.zip",
+            ])
+            .message
+            .contains("passwords cannot be supplied")
+        );
     }
 
     #[test]

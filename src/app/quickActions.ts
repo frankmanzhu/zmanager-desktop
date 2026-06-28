@@ -54,10 +54,6 @@ export function quickExtractDestination(
   pathHelpers: QuickActionPathHelpers,
 ): string {
   const parent = pathHelpers.nativeParentPath(archivePath);
-  if (action === "extractHere") {
-    return parent;
-  }
-
   const folderName = baseNameWithoutKnownArchiveExtension(archivePath);
   return parent ? pathHelpers.joinNativePath(parent, folderName) : folderName;
 }
@@ -91,6 +87,15 @@ export async function runQuickActionRequest(
       break;
     case "compressZip":
       await handlers.startCreate(request.paths, "zip", false);
+      break;
+    case "compressTzap":
+      await handlers.startCreate(request.paths, "tzap", false);
+      break;
+    case "compressSevenZ":
+      await handlers.startCreate(request.paths, "sevenZ", false);
+      break;
+    case "compressTarZst":
+      await handlers.startCreate(request.paths, "tarZst", false);
       break;
     case "compressCleanSource":
       await handlers.startCreate(request.paths, "tarZst", true);

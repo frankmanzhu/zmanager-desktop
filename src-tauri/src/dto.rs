@@ -72,6 +72,9 @@ pub enum QuickActionKindDto {
     Compress,
     Extract,
     CompressZip,
+    CompressTzap,
+    CompressSevenZ,
+    CompressTarZst,
     CompressCleanSource,
     ExtractHere,
     ExtractToFolder,
@@ -172,6 +175,19 @@ pub enum ArchiveFormatDto {
     SevenZ,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DestinationCollisionStrategyDto {
+    Refuse,
+    Rename,
+}
+
+impl Default for DestinationCollisionStrategyDto {
+    fn default() -> Self {
+        Self::Refuse
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartCreateRequest {
@@ -182,6 +198,8 @@ pub struct StartCreateRequest {
     pub clean_source: bool,
     #[serde(default)]
     pub replace_existing: bool,
+    #[serde(default)]
+    pub destination_collision_strategy: DestinationCollisionStrategyDto,
     pub password: Option<String>,
     pub compression_level: Option<u32>,
     pub volume_size: Option<u64>,
@@ -196,6 +214,8 @@ pub struct StartExtractRequest {
     pub destination_path: String,
     pub password: Option<String>,
     pub overwrite: OverwritePolicyDto,
+    #[serde(default)]
+    pub destination_collision_strategy: DestinationCollisionStrategyDto,
     #[serde(default)]
     pub entry_paths: Option<Vec<String>>,
     #[serde(default)]

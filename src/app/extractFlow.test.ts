@@ -42,4 +42,16 @@ describe("extract flow helpers", () => {
       password: "secret",
     });
   });
+
+  it("includes destination collision strategy when requested", () => {
+    const request = buildStartExtractRequest({
+      archivePath: "C:/tmp/archive.zip",
+      destinationPath: "C:/tmp/out",
+      overwrite: "rename",
+      destinationCollisionStrategy: "rename",
+      stripComponents: 0,
+    });
+
+    expect(request.destinationCollisionStrategy).toBe("rename");
+  });
 });

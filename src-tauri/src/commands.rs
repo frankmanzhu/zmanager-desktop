@@ -10,10 +10,11 @@ use crate::{
     constants,
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PlanCreateRequest,
-        PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
-        ProjectIntegrationContract, ProjectIntegrationShellActionDto, StartCreateRequest,
-        StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
+        NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest,
+        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ProjectIntegrationShellActionDto, StartCreateRequest, StartExtractRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -206,9 +207,19 @@ fn start_create_internal(
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
-    let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?
-        .trim()
-        .to_string();
+    let requested_destination_path =
+        ensure_non_empty_path(request.destination_path, "destinationPath")?
+            .trim()
+            .to_string();
+    let destination_path = if request.destination_collision_strategy
+        == DestinationCollisionStrategyDto::Rename
+        && !request.replace_existing
+    {
+        next_available_destination_path(&requested_destination_path)
+    } else {
+        requested_destination_path
+    };
+
     if destination_path.ends_with('/') || destination_path.ends_with('\\') {
         return Err(CommandErrorDto::invalid_request(
             "destinationPath must include a file name, not just a directory",
@@ -394,7 +405,14 @@ fn start_extract_internal(
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
-    let destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
+    let requested_destination_path =
+        ensure_non_empty_path(request.destination_path, "destinationPath")?;
+    let destination_path =
+        if request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename {
+            next_available_destination_path(&requested_destination_path)
+        } else {
+            requested_destination_path
+        };
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
 
     let family = detect_archive_family(&archive_path);
@@ -1844,6 +1862,60 @@ fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandEr
     Ok(value)
 }
 
+fn next_available_destination_path(path: &str) -> String {
+    let candidate = Path::new(path);
+    if !candidate.exists() {
+        return path.to_string();
+    }
+
+    let parent = candidate.parent().unwrap_or(Path::new(""));
+    let file_name = candidate
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(path);
+    let (stem, suffix) = split_collision_name(file_name);
+
+    for index in 2..10_000 {
+        let renamed = parent.join(format!("{stem} {index}{suffix}"));
+        if !renamed.exists() {
+            return renamed.to_string_lossy().to_string();
+        }
+    }
+
+    path.to_string()
+}
+
+fn split_collision_name(name: &str) -> (&str, &str) {
+    const COMPOUND_SUFFIXES: &[&str] = &[
+        ".tar.br",
+        ".tar.bz2",
+        ".tar.gz",
+        ".tar.lz",
+        ".tar.lz4",
+        ".tar.lzma",
+        ".tar.lzo",
+        ".tar.lrz",
+        ".tar.xz",
+        ".tar.z",
+        ".tar.zst",
+    ];
+
+    let lower_name = name.to_ascii_lowercase();
+    for suffix in COMPOUND_SUFFIXES {
+        if lower_name.ends_with(suffix) && name.len() > suffix.len() {
+            return name.split_at(name.len() - suffix.len());
+        }
+    }
+
+    if let Some(dot_index) = name.rfind('.') {
+        if dot_index > 0 {
+            return name.split_at(dot_index);
+        }
+    }
+
+    (name, "")
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ArchiveFamily {
     Zip,
@@ -2323,6 +2395,7 @@ mod tests {
                 format: crate::dto::ArchiveFormatDto::Zip,
                 clean_source: false,
                 replace_existing: true,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 password: None,
                 compression_level: None,
                 volume_size: None,
@@ -2369,6 +2442,7 @@ mod tests {
                 destination_path: extract_destination.to_string_lossy().to_string(),
                 password: None,
                 overwrite: OverwritePolicyDto::Replace,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
             },
@@ -2413,6 +2487,7 @@ mod tests {
                 format: crate::dto::ArchiveFormatDto::Zip,
                 clean_source: false,
                 replace_existing: true,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 password: Some("smoke-secret".to_string()),
                 compression_level: None,
                 volume_size: None,
@@ -2448,6 +2523,7 @@ mod tests {
                     .to_string(),
                 password: None,
                 overwrite: OverwritePolicyDto::Replace,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
             },
@@ -2474,6 +2550,7 @@ mod tests {
                     .to_string(),
                 password: Some("wrong-password".to_string()),
                 overwrite: OverwritePolicyDto::Replace,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
             },
@@ -2507,6 +2584,7 @@ mod tests {
                 destination_path: valid_extract_destination.to_string_lossy().to_string(),
                 password: Some("smoke-secret".to_string()),
                 overwrite: OverwritePolicyDto::Replace,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
             },
@@ -2549,6 +2627,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Zip,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2580,6 +2659,46 @@ mod tests {
     }
 
     #[test]
+    fn command_boundary_start_create_renames_existing_destination_when_requested() {
+        let workspace = create_temp_workspace("start-create-rename-destination");
+        let sources = workspace.join("docs");
+        let destination = workspace.join("docs.tzap");
+        let renamed_destination = workspace.join("docs 2.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("README.md"), b"# docs").expect("fixture file should write");
+        fs::write(&destination, b"existing archive should stay untouched")
+            .expect("existing destination should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("create command should start a renamed-destination job");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&destination).expect("original destination should remain readable"),
+            b"existing archive should stay untouched"
+        );
+        assert!(
+            renamed_destination.is_file(),
+            "renamed archive destination should be written"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn command_boundary_start_tzap_create_job_reaches_terminal_and_writes_archive() {
         let workspace = create_temp_workspace("start-create-tzap");
         let sources = workspace.join("sources");
@@ -2596,6 +2715,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Tzap,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2627,6 +2747,66 @@ mod tests {
     }
 
     #[test]
+    fn command_boundary_start_extract_renames_existing_destination_when_requested() {
+        let workspace = create_temp_workspace("start-extract-rename-destination");
+        let sources = workspace.join("sources");
+        let destination_archive = workspace.join("fixture.zip");
+        let extract_destination = workspace.join("extracted");
+        let renamed_extract_destination = workspace.join("extracted 2");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::create_dir_all(&extract_destination).expect("existing extract directory should exist");
+        fs::write(sources.join("README.md"), b"# extractor").expect("fixture file should write");
+        fs::write(extract_destination.join("marker.txt"), b"keep")
+            .expect("existing destination marker should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job =
+            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let extract_request = StartExtractRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            destination_path: extract_destination.to_string_lossy().to_string(),
+            password: None,
+            overwrite: OverwritePolicyDto::Rename,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            entry_paths: None,
+            strip_components: 0,
+        };
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("extract command should start a renamed-destination job");
+        let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read_to_string(extract_destination.join("marker.txt"))
+                .expect("existing destination marker should remain"),
+            "keep"
+        );
+        assert!(
+            renamed_extract_destination
+                .join("sources")
+                .join("README.md")
+                .is_file(),
+            "renamed extract destination should receive archive contents"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn command_boundary_start_extract_job_reaches_terminal_and_outputs_expected_file() {
         let workspace = create_temp_workspace("start-extract");
         let sources = workspace.join("sources");
@@ -2644,6 +2824,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Zip,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2659,6 +2840,7 @@ mod tests {
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
             overwrite: OverwritePolicyDto::Replace,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: None,
             strip_components: 0,
         };
@@ -2705,6 +2887,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Zip,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2720,6 +2903,7 @@ mod tests {
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
             overwrite: OverwritePolicyDto::Replace,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: Some(vec!["sources/keep.txt".to_string()]),
             strip_components: 0,
         };
@@ -2779,6 +2963,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Tzap,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2805,6 +2990,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Tzap,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,
@@ -2881,6 +3067,7 @@ mod tests {
             format: crate::dto::ArchiveFormatDto::Zip,
             clean_source: false,
             replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             password: None,
             compression_level: None,
             volume_size: None,

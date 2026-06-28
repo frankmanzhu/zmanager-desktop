@@ -201,6 +201,7 @@ export type BuildStartCreateRequestInput = {
   format: CreateArchiveFormat;
   cleanSource: boolean;
   replaceExisting: boolean;
+  destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
   preserveMetadata: boolean;
   password?: string;
   compressionLevel?: number;
@@ -214,6 +215,9 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     format: input.format,
     cleanSource: input.cleanSource,
     replaceExisting: input.replaceExisting,
+    ...(input.destinationCollisionStrategy
+      ? { destinationCollisionStrategy: input.destinationCollisionStrategy }
+      : {}),
     preserveMetadata: input.preserveMetadata,
     ...(input.password ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),

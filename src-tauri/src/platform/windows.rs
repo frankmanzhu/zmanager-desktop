@@ -40,12 +40,32 @@ pub const EXPLORER_ASSOCIATED_EXTENSIONS: &[&str] = &[
 
 pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
     ShellActionProfile {
-        label: "Compress using ZManager",
+        label: "ZManager > Open archive",
+        quick_action: "open",
+    },
+    ShellActionProfile {
+        label: "ZManager > Extract Here",
+        quick_action: "extractHere",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to archive",
         quick_action: "compress",
     },
     ShellActionProfile {
-        label: "Extract using ZManager",
-        quick_action: "extract",
+        label: "ZManager > Add to .tzap",
+        quick_action: "compressTzap",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .zip",
+        quick_action: "compressZip",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .7z",
+        quick_action: "compressSevenZ",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .tzst",
+        quick_action: "compressTarZst",
     },
 ];
 

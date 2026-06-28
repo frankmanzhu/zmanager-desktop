@@ -160,6 +160,7 @@ import type {
   JobState,
   ProjectContract,
   QuickActionRequestDto,
+  StartCreateRequest,
   StartJobResponseDto,
   SystemFileIconRequestEntry,
 } from "./api/types";
@@ -3889,7 +3890,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
     return;
   }
 
-  await runCreate();
+  await runCreate({ destinationCollisionStrategy: "rename" });
 }
 
 async function openQuickExtractReview(paths: string[]) {
@@ -3943,6 +3944,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
         archivePath,
         destinationPath,
         overwrite: "rename",
+        destinationCollisionStrategy: "rename",
         stripComponents: 0,
       }));
       recordExtractDestinationHistory(destinationPath);
@@ -4632,7 +4634,9 @@ async function onSelectCreateDestination() {
   refreshCreateStateAfterDestinationEdit();
 }
 
-async function runCreate() {
+async function runCreate(
+  options: { destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"] } = {},
+) {
   if (createSubmissionInFlight) {
     return;
   }
@@ -4676,6 +4680,7 @@ async function runCreate() {
       format,
       cleanSource,
       replaceExisting,
+      destinationCollisionStrategy: options.destinationCollisionStrategy,
       preserveMetadata,
       password: passwordValue,
       compressionLevel,

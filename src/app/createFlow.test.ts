@@ -81,4 +81,18 @@ describe("create flow helpers", () => {
       preserveMetadata: false,
     });
   });
+
+  it("includes destination collision strategy when requested", () => {
+    const request = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: false,
+      destinationCollisionStrategy: "rename",
+      preserveMetadata: false,
+    });
+
+    expect(request.destinationCollisionStrategy).toBe("rename");
+  });
 });
