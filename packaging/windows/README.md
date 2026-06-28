@@ -9,6 +9,7 @@ quick-action CLI contract:
 
 - `zmanager-desktop.exe --quick-action open --path "<archive>"`
 - `zmanager-desktop.exe --quick-action extract-here --path "<archive>"`
+- `zmanager-desktop.exe --quick-action extract-to-folder --path "<archive>"`
 - `zmanager-desktop.exe --quick-action compress --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-tzap --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-zip --path "<target>"`
@@ -17,7 +18,7 @@ quick-action CLI contract:
 - `zmanager-desktop.exe --quick-action-request "<request.json>"`
 
 Explorer shows a single `ZManager` cascaded menu. Supported archive extensions show
-`Open archive` and `Extract Here` first, followed by `Add to archive...`,
+`Extract Here`, `Extract to Archive Folder`, and `Open archive` first, followed by `Add to archive...`,
 `Add to .tzap`, `Add to .zip`, `Add to .7z`, and `Add to .tzst`, so archive files
 can also be archived again. Other files, selected folders, and folder backgrounds
 show the same add actions. The hook uses explicit ordered per-user

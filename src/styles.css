@@ -815,6 +815,80 @@ input[type="search"] {
   background: var(--content-bg);
 }
 
+.table-shell.has-start-empty {
+  display: grid;
+  overflow: hidden;
+}
+
+.archive-empty-state {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  background: var(--content-bg);
+  color: var(--muted-strong);
+}
+
+.archive-empty-state-inner {
+  width: min(430px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.archive-empty-state-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--content-bg-subtle);
+  color: var(--accent);
+}
+
+.archive-empty-state-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.archive-empty-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.archive-empty-copy h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.archive-empty-copy p,
+.archive-empty-hint {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--muted);
+}
+
+.archive-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.primary-action {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.primary-action:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
 table {
   width: 100%;
   min-width: 720px;

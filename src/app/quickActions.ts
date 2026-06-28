@@ -55,6 +55,10 @@ export function quickExtractDestination(
   pathHelpers: QuickActionPathHelpers,
 ): string {
   const parent = pathHelpers.nativeParentPath(archivePath);
+  if (action === "extractHere") {
+    return parent;
+  }
+
   const folderName = baseNameWithoutKnownArchiveExtension(archivePath);
   return parent ? pathHelpers.joinNativePath(parent, folderName) : folderName;
 }

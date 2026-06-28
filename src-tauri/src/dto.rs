@@ -24,7 +24,7 @@ pub struct ProjectIntegrationContract {
     pub platform: &'static str,
     pub explorer_integration_enabled: bool,
     pub desktop_actions_enabled: bool,
-    pub associated_extensions: &'static [&'static str],
+    pub associated_extensions: Vec<String>,
     pub shell_actions: Vec<ProjectIntegrationShellActionDto>,
 }
 

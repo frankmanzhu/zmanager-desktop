@@ -13,12 +13,6 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 pub const PLATFORM_NAME: &str = "linux";
 pub const DESKTOP_ACTIONS_ENABLED: bool = true;
 
-/// Reserved MIME-like extension mapping to support future `.desktop` and MIME metadata.
-pub const DESKTOP_ASSOCIATED_EXTENSIONS: &[&str] = &[
-    "zip", "zipx", "7z", "rar", "tar", "tar.gz", "tgz", "gz", "tar.xz", "txz", "xz", "tar.zst",
-    "tzst", "zst", "tzap",
-];
-
 pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
     ShellActionProfile {
         label: "Compress using ZManager",
@@ -34,8 +28,8 @@ pub fn is_desktop_actions_enabled() -> bool {
     DESKTOP_ACTIONS_ENABLED
 }
 
-pub fn associated_extensions() -> &'static [&'static str] {
-    DESKTOP_ASSOCIATED_EXTENSIONS
+pub fn associated_extensions() -> Vec<String> {
+    crate::archive_file_types::associated_extensions()
 }
 
 pub fn shell_actions() -> &'static [ShellActionProfile] {

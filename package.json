@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run generate:archive-types && tsc --noEmit && vite build",
+    "generate:archive-types": "node scripts/generate-archive-file-types.mjs",
     "preview": "vite preview",
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",

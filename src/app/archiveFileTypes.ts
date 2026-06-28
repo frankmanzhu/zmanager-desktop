@@ -1,58 +1,11 @@
+import archiveFileTypesManifest from "./archiveFileTypes.manifest.json";
+
 const TZAP_EXTENSION_SUFFIX = ".tzap";
 const TZAP_VOLUME_MARKER = ".vol";
 
-export const SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS = [
-  "7z",
-  "apk",
-  "appx",
-  "br",
-  "bz2",
-  "cab",
-  "cbr",
-  "cpio",
-  "deb",
-  "gz",
-  "ipa",
-  "iso",
-  "jar",
-  "lz",
-  "lz4",
-  "lzma",
-  "lzo",
-  "lrz",
-  "rar",
-  "rpm",
-  "tar",
-  "tbz2",
-  "tgz",
-  "txz",
-  "tzap",
-  "tzst",
-  "war",
-  "xar",
-  "xpi",
-  "xz",
-  "z",
-  "zip",
-  "zipx",
-  "zst",
-] as const;
-
-export const SUPPORTED_COMPOUND_ARCHIVE_EXTENSIONS = [
-  "tar.br",
-  "tar.bz2",
-  "tar.gz",
-  "tar.lz",
-  "tar.lz4",
-  "tar.lzma",
-  "tar.lzo",
-  "tar.lrz",
-  "tar.xz",
-  "tar.z",
-  "tar.zst",
-] as const;
-
-export const SUPPORTED_SPLIT_ARCHIVE_FILE_SUFFIXES = [".7z.001", ".vol000.tzap"] as const;
+export const SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS = archiveFileTypesManifest.singleExtensions;
+export const SUPPORTED_COMPOUND_ARCHIVE_EXTENSIONS = archiveFileTypesManifest.compoundExtensions;
+export const SUPPORTED_SPLIT_ARCHIVE_FILE_SUFFIXES = archiveFileTypesManifest.splitArchiveSuffixes;
 
 const SUPPORTED_SINGLE_ARCHIVE_EXTENSION_SET = new Set<string>(SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS);
 const SUPPORTED_COMPOUND_ARCHIVE_EXTENSION_SET = new Set<string>(SUPPORTED_COMPOUND_ARCHIVE_EXTENSIONS);

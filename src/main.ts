@@ -5,6 +5,11 @@ import {
   COMMAND_PASSWORD_REQUIRED,
   BROWSE_ACTION_PASSWORD_INVALID,
   BROWSE_ACTION_PASSWORD_REQUIRED,
+  BROWSE_EMPTY_STATE_DESCRIPTION,
+  BROWSE_EMPTY_STATE_DROP_HINT,
+  BROWSE_EMPTY_STATE_CREATE_ACTION,
+  BROWSE_EMPTY_STATE_OPEN_ACTION,
+  BROWSE_EMPTY_STATE_TITLE,
   BROWSE_STATUS_EMPTY,
   BROWSE_STATUS_IDLE,
   BROWSE_STATUS_LOADING,
@@ -476,6 +481,20 @@ appRoot.innerHTML = `
         </div>
         <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
         <div class="table-shell" tabindex="0">
+          <div id="archive-empty-state" class="archive-empty-state" hidden>
+            <div class="archive-empty-state-inner">
+              <span class="archive-empty-state-icon" aria-hidden="true">${toolbarIcon("open")}</span>
+              <div class="archive-empty-copy">
+                <h2>${BROWSE_EMPTY_STATE_TITLE}</h2>
+                <p>${BROWSE_EMPTY_STATE_DESCRIPTION}</p>
+              </div>
+              <div class="archive-empty-actions">
+                <button class="primary-action" type="button" data-empty-action="open">${toolbarIcon("open")}<span>${BROWSE_EMPTY_STATE_OPEN_ACTION}</span></button>
+                <button type="button" data-empty-action="create">${toolbarIcon("new")}<span>${BROWSE_EMPTY_STATE_CREATE_ACTION}</span></button>
+              </div>
+              <p class="archive-empty-hint">${BROWSE_EMPTY_STATE_DROP_HINT}</p>
+            </div>
+          </div>
           <table id="entry-table">
             <thead id="entry-table-head">
               <tr>
@@ -943,6 +962,7 @@ const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
 const tableShellElement = document.querySelector<HTMLDivElement>(".table-shell")!;
+const archiveEmptyStateElement = document.querySelector<HTMLDivElement>("#archive-empty-state")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
 
@@ -1784,6 +1804,13 @@ function getArchivePasswordPrompt(commandCode: string): string {
     : BROWSE_ACTION_PASSWORD_INVALID;
 }
 
+function isPasswordCommandError(commandError: ReturnType<typeof asCommandError>): boolean {
+  return (
+    commandError?.code === COMMAND_PASSWORD_REQUIRED ||
+    commandError?.code === COMMAND_INVALID_PASSWORD
+  );
+}
+
 function formatEventCode(code: string): string {
   return code
     .split("_")
@@ -1972,6 +1999,12 @@ function renderTableHeader() {
   selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
 }
 
+function setArchiveEmptyStateVisible(visible: boolean) {
+  archiveEmptyStateElement.hidden = !visible;
+  entryTable.hidden = visible;
+  tableShellElement.classList.toggle("has-start-empty", visible);
+}
+
 function renderNameCell(row: BrowserRow, showFullPath: boolean): string {
   const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
   const icon = archiveRowIconDescriptor(row);
@@ -2006,6 +2039,7 @@ function renderCell(row: BrowserRow, column: ArchiveTableColumn, showFullPath: b
 
 function renderBrowseRows() {
   renderTableHeader();
+  setArchiveEmptyStateVisible(false);
 
   if (browseState === "loading") {
     tableBody.innerHTML = `
@@ -2030,11 +2064,8 @@ function renderBrowseRows() {
   }
 
   if (!currentArchivePath) {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="${tableColspan()}" class="empty">${BROWSE_STATUS_EMPTY}</td>
-      </tr>
-    `;
+    tableBody.innerHTML = "";
+    setArchiveEmptyStateVisible(true);
     selectAllInput.checked = false;
     selectAllInput.indeterminate = false;
     return;
@@ -3976,27 +4007,43 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
       continue;
     }
 
-    try {
-      const response = await runStartExtract(buildStartExtractRequest({
-        archivePath,
-        destinationPath,
-        overwrite: "rename",
-        destinationCollisionStrategy: "rename",
-        stripComponents: 0,
-      }));
-      recordExtractDestinationHistory(destinationPath);
-      addJobState(response, {
-        retryKind: "extractArchive",
-        archivePath,
-        destinationPath,
-        overwrite: "rename",
-        stripComponents: 0,
-      });
-    } catch (error) {
-      const commandError = asCommandError(error);
-      setOperationalStatus(commandError?.message ?? `Unable to extract ${archivePath}.`);
-      if (commandError?.hint) {
-        setBrowseState("error", `${commandError.message}\n${commandError.hint}`);
+    let password: string | undefined;
+    while (true) {
+      try {
+        const response = await runStartExtract(buildStartExtractRequest({
+          archivePath,
+          destinationPath,
+          overwrite: "rename",
+          destinationCollisionStrategy: "rename",
+          stripComponents: 0,
+          ...(password ? { password } : {}),
+        }));
+        recordExtractDestinationHistory(destinationPath);
+        addJobState(response, {
+          retryKind: "extractArchive",
+          archivePath,
+          destinationPath,
+          overwrite: "rename",
+          stripComponents: 0,
+        });
+        break;
+      } catch (error) {
+        const commandError = asCommandError(error);
+        if (commandError && isPasswordCommandError(commandError)) {
+          const nextPassword = promptForArchivePassword(getArchivePasswordPrompt(commandError.code));
+          if (!nextPassword) {
+            setOperationalStatus(commandError.message);
+            break;
+          }
+          password = nextPassword;
+          continue;
+        }
+
+        setOperationalStatus(commandError?.message ?? `Unable to extract ${archivePath}.`);
+        if (commandError?.hint) {
+          setBrowseState("error", `${commandError.message}\n${commandError.hint}`);
+        }
+        break;
       }
     }
   }
@@ -4018,8 +4065,13 @@ async function handleStartupQuickAction() {
   }
 
   try {
-    const state = await fetchQuickActionStartupState();
-    await handleQuickActionStartupState(state);
+    while (true) {
+      const state = await fetchQuickActionStartupState();
+      await handleQuickActionStartupState(state);
+      if (!state.launchedForQuickAction || state.error) {
+        break;
+      }
+    }
   } catch (error) {
     setOperationalStatus(unknownErrorMessage(error, "Unable to read quick-action startup state."));
   }
@@ -5101,6 +5153,22 @@ function bindActions() {
       return;
     }
     navigateToFolder(target.dataset.treePath ?? "");
+  });
+
+  archiveEmptyStateElement.addEventListener("click", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-empty-action]");
+    if (!target) {
+      return;
+    }
+
+    if (target.dataset.emptyAction === "open") {
+      void onOpenArchive();
+      return;
+    }
+
+    if (target.dataset.emptyAction === "create") {
+      openCreateDialog();
+    }
   });
 
 function hasSelectionModifier(event: PointerEvent | MouseEvent): boolean {

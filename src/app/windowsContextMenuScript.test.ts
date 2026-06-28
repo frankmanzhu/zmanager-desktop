@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS } from "./archiveFileTypes";
 
 declare const process: {
   cwd(): string;
@@ -20,6 +21,21 @@ const script = readFileSync(
   "utf8",
 );
 
+const expectedWindowsArchiveExtensions = [...SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS, "001"]
+  .map((extension) => `.${extension}`)
+  .sort();
+
+function registeredArchiveExtensions(macroName: string): string[] {
+  const macroStart = script.indexOf(`!macro ${macroName}`);
+  expect(macroStart, `${macroName} should exist`).toBeGreaterThan(-1);
+  const macroEnd = script.indexOf("!macroend", macroStart);
+  expect(macroEnd, `${macroName} should end`).toBeGreaterThan(macroStart);
+  return Array.from(
+    script.slice(macroStart, macroEnd).matchAll(/ZM_(?:UN)?REGISTER_ARCHIVE_EXTENSION "([^"]+)"/g),
+    (match) => match[1],
+  ).sort();
+}
+
 describe("Windows context menu installer hook", () => {
   it("uses ExtendedSubCommandsKey without stale SubCommands values", () => {
     expect(script).toContain('"ExtendedSubCommandsKey"');
@@ -29,13 +45,14 @@ describe("Windows context menu installer hook", () => {
 
   it("keeps the archive submenu actions in the requested order", () => {
     const expected = [
-      '"01OpenArchive" "Open archive"',
-      '"02ExtractHere" "Extract Here"',
-      '"03AddToArchive" "Add to archive..."',
-      '"04AddToTzap" "Add to .tzap"',
-      '"05AddToZip" "Add to .zip"',
-      '"06AddToSevenZ" "Add to .7z"',
-      '"07AddToTzst" "Add to .tzst"',
+      '"01ExtractHere" "Extract Here"',
+      '"02ExtractToFolder" "Extract to Archive Folder"',
+      '"03OpenArchive" "Open archive"',
+      '"04AddToArchive" "Add to archive..."',
+      '"05AddToTzap" "Add to .tzap"',
+      '"06AddToZip" "Add to .zip"',
+      '"07AddToSevenZ" "Add to .7z"',
+      '"08AddToTzst" "Add to .tzst"',
     ];
 
     let cursor = -1;
@@ -49,5 +66,17 @@ describe("Windows context menu installer hook", () => {
 
   it("does not use the removed shell multi-select coordinator flag", () => {
     expect(script).not.toContain("--shell-multi-select");
+  });
+
+  it("keeps Windows archive extension registration aligned with frontend archive support", () => {
+    expect(registeredArchiveExtensions("ZM_REGISTER_ARCHIVE_EXTENSIONS")).toEqual(
+      expectedWindowsArchiveExtensions,
+    );
+    expect(registeredArchiveExtensions("ZM_UNREGISTER_ARCHIVE_EXTENSIONS")).toEqual(
+      expectedWindowsArchiveExtensions,
+    );
+    for (const extension of expectedWindowsArchiveExtensions) {
+      expect(script).toContain(`NOT System.FileExtension:=${extension}`);
+    }
   });
 });

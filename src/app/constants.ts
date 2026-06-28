@@ -22,6 +22,12 @@ export const BROWSE_STATUS_LOADING = "Loading archive entries...";
 export const BROWSE_STATUS_UNKNOWN = "Failed to load archive.";
 export const BROWSE_STATUS_READY = "Open an archive to browse entries.";
 export const BROWSE_STATUS_EMPTY = "Open or create an archive to begin.";
+export const BROWSE_EMPTY_STATE_TITLE = "Archive contents";
+export const BROWSE_EMPTY_STATE_DESCRIPTION =
+  "Open an archive to inspect its files and folders, or create a new archive from local items.";
+export const BROWSE_EMPTY_STATE_DROP_HINT = "Drop a supported archive here to open it.";
+export const BROWSE_EMPTY_STATE_OPEN_ACTION = "Open Archive";
+export const BROWSE_EMPTY_STATE_CREATE_ACTION = "Create Archive";
 export const BROWSE_ACTION_PASSWORD_REQUIRED =
   "This archive is password-protected. Enter a password to continue.";
 export const BROWSE_ACTION_PASSWORD_INVALID =

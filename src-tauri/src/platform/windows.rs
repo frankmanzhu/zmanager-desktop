@@ -32,21 +32,18 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 pub const PLATFORM_NAME: &str = "windows";
 pub const EXPLORER_ACTIONS_ENABLED: bool = true;
 
-/// Archive extensions that map to Windows shell associations when enabled.
-pub const EXPLORER_ASSOCIATED_EXTENSIONS: &[&str] = &[
-    "001", "7z", "apk", "appx", "br", "bz2", "cab", "cbr", "cpio", "deb", "gz", "ipa", "iso",
-    "jar", "lz", "lz4", "lzma", "lzo", "lrz", "rar", "rpm", "tar", "tar.gz", "tbz2", "tgz", "txz",
-    "tzap", "tzst", "war", "xar", "xpi", "xz", "z", "zip", "zipx", "zst",
-];
-
 pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
-    ShellActionProfile {
-        label: "ZManager > Open archive",
-        quick_action: "open",
-    },
     ShellActionProfile {
         label: "ZManager > Extract Here",
         quick_action: "extractHere",
+    },
+    ShellActionProfile {
+        label: "ZManager > Extract to Archive Folder",
+        quick_action: "extractToFolder",
+    },
+    ShellActionProfile {
+        label: "ZManager > Open archive",
+        quick_action: "open",
     },
     ShellActionProfile {
         label: "ZManager > Add to archive...",
@@ -74,8 +71,8 @@ pub fn is_explorer_integration_enabled() -> bool {
     EXPLORER_ACTIONS_ENABLED
 }
 
-pub fn associated_extensions() -> &'static [&'static str] {
-    EXPLORER_ASSOCIATED_EXTENSIONS
+pub fn associated_extensions() -> Vec<String> {
+    crate::archive_file_types::associated_extensions()
 }
 
 pub fn shell_actions() -> &'static [ShellActionProfile] {

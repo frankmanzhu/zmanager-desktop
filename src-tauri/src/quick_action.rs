@@ -22,16 +22,6 @@ const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret
 const QUICK_ACTION_EVENT: &str = "zmanager-quick-action";
 const QUICK_ACTION_BURST_DEBOUNCE: Duration = Duration::from_millis(450);
 
-const SUPPORTED_SINGLE_EXTENSIONS: &[&str] = &[
-    "7z", "apk", "appx", "br", "bz2", "cab", "cbr", "cpio", "deb", "gz", "ipa", "iso", "jar", "lz",
-    "lz4", "lzma", "lzo", "lrz", "rar", "rpm", "tar", "tbz2", "tgz", "txz", "tzap", "tzst", "war",
-    "xar", "xpi", "xz", "z", "zip", "zipx", "zst",
-];
-const SUPPORTED_COMPOUND_EXTENSIONS: &[&str] = &[
-    "tar.br", "tar.bz2", "tar.gz", "tar.lz", "tar.lz4", "tar.lzma", "tar.lzo", "tar.lrz", "tar.xz",
-    "tar.z", "tar.zst",
-];
-const SUPPORTED_SPLIT_ARCHIVE_SUFFIXES: &[&str] = &[".7z.001", ".vol000.tzap"];
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
 
@@ -120,7 +110,7 @@ impl QuickActionLaunchCoordinator {
         }
 
         let mut inner = self.inner.lock().expect("quick-action lock poisoned");
-        if let Some(request) = drain_pending_creates(&mut inner).into_iter().next() {
+        if let Some(request) = pop_pending_create(&mut inner) {
             return QuickActionStartupState::Requested(request);
         }
 
@@ -280,6 +270,14 @@ fn drain_pending_creates(inner: &mut QuickActionLaunchState) -> Vec<QuickActionR
     inner.pending_creates.drain(..).collect()
 }
 
+fn pop_pending_create(inner: &mut QuickActionLaunchState) -> Option<QuickActionRequestDto> {
+    if inner.pending_creates.is_empty() {
+        None
+    } else {
+        Some(inner.pending_creates.remove(0))
+    }
+}
+
 fn append_unique_paths(target: &mut Vec<String>, paths: Vec<String>) {
     for path in paths {
         if !target.iter().any(|existing| existing == &path) {
@@ -305,14 +303,14 @@ pub fn is_supported_archive_path(path: &str) -> bool {
         return true;
     }
 
-    if SUPPORTED_SPLIT_ARCHIVE_SUFFIXES
+    if crate::archive_file_types::split_archive_suffixes()
         .iter()
-        .any(|suffix| name.ends_with(suffix))
+        .any(|suffix| name.ends_with(suffix.as_str()))
     {
         return true;
     }
 
-    if SUPPORTED_COMPOUND_EXTENSIONS
+    if crate::archive_file_types::compound_extensions()
         .iter()
         .any(|extension| name.ends_with(&format!(".{extension}")))
     {
@@ -323,7 +321,9 @@ pub fn is_supported_archive_path(path: &str) -> bool {
         return false;
     };
 
-    SUPPORTED_SINGLE_EXTENSIONS.contains(&extension)
+    crate::archive_file_types::single_extensions()
+        .iter()
+        .any(|supported_extension| supported_extension == extension)
 }
 
 fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOutcome {
@@ -804,6 +804,41 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/one", "C:/tmp/two"]);
+        assert_eq!(
+            coordinator.startup_state(),
+            QuickActionStartupState::NotRequested
+        );
+    }
+
+    #[test]
+    fn startup_coordinator_returns_mixed_create_launches_without_dropping_later_actions() {
+        let coordinator = empty_coordinator();
+        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
+            QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec!["C:/tmp/one".to_string()],
+            },
+        ));
+        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
+            QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressTzap,
+                paths: vec!["C:/tmp/two".to_string()],
+            },
+        ));
+
+        let first = match coordinator.startup_state() {
+            QuickActionStartupState::Requested(request) => request,
+            other => panic!("expected first create request, got {other:?}"),
+        };
+        let second = match coordinator.startup_state() {
+            QuickActionStartupState::Requested(request) => request,
+            other => panic!("expected second create request, got {other:?}"),
+        };
+
+        assert_eq!(first.kind, QuickActionKindDto::CompressZip);
+        assert_eq!(first.paths, ["C:/tmp/one"]);
+        assert_eq!(second.kind, QuickActionKindDto::CompressTzap);
+        assert_eq!(second.paths, ["C:/tmp/two"]);
         assert_eq!(
             coordinator.startup_state(),
             QuickActionStartupState::NotRequested

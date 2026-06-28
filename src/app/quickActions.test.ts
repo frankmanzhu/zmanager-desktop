@@ -62,7 +62,7 @@ describe("quick action helpers", () => {
 
   it("builds quick extract destinations from the extraction mode", () => {
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractHere", pathHelpers)).toBe(
-      "/tmp/archive",
+      "/tmp",
     );
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractToFolder", pathHelpers)).toBe(
       "/tmp/archive",
