@@ -2,8 +2,10 @@ import { isSupportedArchivePath } from "./archiveFileTypes";
 
 export type DropIntentSurface = "browse" | "create" | "global" | "unknown";
 export type DroppedPathKind = "file" | "directory" | "unknown";
+export type WorkspaceDropMode = "compress" | "extract";
 export type DropIntentWorkspaceState = {
   createDialogOpen: boolean;
+  mode?: WorkspaceDropMode;
 };
 
 export type DroppedPath =
@@ -46,7 +48,15 @@ export type DropIntentDecision =
     };
 
 export function dropSurfaceForWorkspace(state: DropIntentWorkspaceState): DropIntentSurface {
-  return state.createDialogOpen ? "create" : "global";
+  if (state.createDialogOpen || state.mode === "compress") {
+    return "create";
+  }
+
+  if (state.mode === "extract") {
+    return "browse";
+  }
+
+  return "global";
 }
 
 type ClassifiedDropPath = {

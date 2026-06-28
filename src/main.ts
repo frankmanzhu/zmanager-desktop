@@ -7,7 +7,6 @@ import {
   BROWSE_ACTION_PASSWORD_REQUIRED,
   BROWSE_EMPTY_STATE_DESCRIPTION,
   BROWSE_EMPTY_STATE_DROP_HINT,
-  BROWSE_EMPTY_STATE_CREATE_ACTION,
   BROWSE_EMPTY_STATE_OPEN_ACTION,
   BROWSE_EMPTY_STATE_TITLE,
   BROWSE_STATUS_EMPTY,
@@ -27,6 +26,13 @@ import {
   APP_DETAILS_PANE_MIN_WIDTH_PX,
   APP_DETAILS_PANE_MAX_WIDTH_PX,
   APP_STATUS_BAR_PARTS,
+  COMPRESS_EMPTY_TABLE_MESSAGE,
+  COMPRESS_TABLE_DESCRIPTION,
+  COMPRESS_TABLE_TITLE,
+  EXTRACT_TABLE_DESCRIPTION,
+  EXTRACT_TABLE_TITLE,
+  MODE_COMPRESS_LABEL,
+  MODE_EXTRACT_LABEL,
 } from "./app/constants";
 import {
   CLASSIC_MENU_GROUPS,
@@ -110,6 +116,7 @@ import {
   classifyDropIntent,
   dropSurfaceForWorkspace,
   type DropIntentSurface,
+  type WorkspaceDropMode,
 } from "./app/dropIntent";
 import {
   canRetryJobWithPassword as canRetryJobWithPasswordState,
@@ -434,18 +441,24 @@ function renderToolbar(): string {
 
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
-    <nav class="app-menu" aria-label="Application menu">
+    <nav class="app-menu" aria-label="Application menu" hidden>
       ${renderMenuBar()}
     </nav>
 
-    <header class="command-toolbar" role="toolbar" aria-label="Archive actions">
-      ${renderToolbar()}
+    <header class="command-toolbar mode-toolbar" role="toolbar" aria-label="Workspace modes">
+      <div class="mode-switch" role="tablist" aria-label="Workspace mode">
+        <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress">${MODE_COMPRESS_LABEL}</button>
+        <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract">${MODE_EXTRACT_LABEL}</button>
+      </div>
+      <div class="legacy-command-buttons" hidden>
+        ${renderToolbar()}
+        <button id="open-archive" type="button" data-command-id="open" aria-label="Open archive">${toolbarIcon("open")}</button>
+        <button id="new-archive" type="button" data-command-id="createFile" aria-label="New archive">${toolbarIcon("new")}</button>
+        <button id="preferences-toolbar" type="button" data-command-id="options" aria-label="Options">${toolbarIcon("settings")}</button>
+        <button id="jobs-drawer-open" type="button">${toolbarIcon("jobs")}<span class="tool-label">Jobs</span></button>
+      </div>
       <div class="toolbar-spacer"></div>
       <p id="workspace-status" class="workspace-status">Ready</p>
-      <button id="open-archive" class="tool-button icon-only secondary-tool" type="button" data-command-id="open" aria-label="Open archive" title="Open archive (Ctrl+O)">${toolbarIcon("open")}</button>
-      <button id="new-archive" class="tool-button icon-only secondary-tool" type="button" data-command-id="createFile" aria-label="New archive" title="New archive (Ctrl+N)">${toolbarIcon("new")}</button>
-      <button id="preferences-toolbar" class="tool-button icon-only secondary-tool" type="button" data-command-id="options" aria-label="Options" title="Options">${toolbarIcon("settings")}</button>
-      <button id="jobs-drawer-open" class="tool-button" type="button">${toolbarIcon("jobs")}<span class="tool-label">Jobs</span></button>
     </header>
 
     <section class="path-bar" aria-label="Archive location">
@@ -474,12 +487,32 @@ appRoot.innerHTML = `
       <section class="archive-table-pane" aria-label="Archive entries">
         <div class="table-pane-header">
           <div>
-            <h1>${APP_TITLE}</h1>
+            <h1 id="workspace-title">${APP_TITLE}</h1>
             <p id="browse-meta">${BROWSE_STATUS_READY}</p>
           </div>
+          <button id="compress-create-archive" type="button" hidden>Create Archive</button>
           <button id="refresh-archive" type="button" data-command-id="refresh" disabled>Refresh</button>
         </div>
         <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
+        <div id="compress-surface" class="compress-surface" hidden>
+          <div class="compress-table-shell">
+            <table id="compress-source-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Location</th>
+                  <th>Kind</th>
+                  <th class="action-column">Action</th>
+                </tr>
+              </thead>
+              <tbody id="compress-source-body">
+                <tr>
+                  <td colspan="4" class="empty">${COMPRESS_EMPTY_TABLE_MESSAGE}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div class="table-shell" tabindex="0">
           <div id="archive-empty-state" class="archive-empty-state" hidden>
             <div class="archive-empty-state-inner">
@@ -487,10 +520,6 @@ appRoot.innerHTML = `
               <div class="archive-empty-copy">
                 <h2>${BROWSE_EMPTY_STATE_TITLE}</h2>
                 <p>${BROWSE_EMPTY_STATE_DESCRIPTION}</p>
-              </div>
-              <div class="archive-empty-actions">
-                <button class="primary-action" type="button" data-empty-action="open">${toolbarIcon("open")}<span>${BROWSE_EMPTY_STATE_OPEN_ACTION}</span></button>
-                <button type="button" data-empty-action="create">${toolbarIcon("new")}<span>${BROWSE_EMPTY_STATE_CREATE_ACTION}</span></button>
               </div>
               <p class="archive-empty-hint">${BROWSE_EMPTY_STATE_DROP_HINT}</p>
             </div>
@@ -927,6 +956,8 @@ appRoot.innerHTML = `
 
 const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
 const commandToolbarElement = document.querySelector<HTMLDivElement>(".command-toolbar")!;
+const modeCompressButton = document.querySelector<HTMLButtonElement>("#mode-compress")!;
+const modeExtractButton = document.querySelector<HTMLButtonElement>("#mode-extract")!;
 const statusElement = document.querySelector<HTMLParagraphElement>("#workspace-status")!;
 const statusTextElement = document.querySelector<HTMLSpanElement>("#status-text")!;
 const statusSelectionCountElement = document.querySelector<HTMLSpanElement>("#status-selection-count")!;
@@ -944,12 +975,10 @@ const newArchiveButton = document.querySelector<HTMLButtonElement>("#new-archive
 const addArchiveButton = document.querySelector<HTMLButtonElement>("#add-archive")!;
 const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
 const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archive")!;
-const copyToolbarButton = document.querySelector<HTMLButtonElement>("#copy-toolbar")!;
-const moveToolbarButton = document.querySelector<HTMLButtonElement>("#move-toolbar")!;
-const deleteToolbarButton = document.querySelector<HTMLButtonElement>("#delete-toolbar")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
 const jobsDrawerOpenButton = document.querySelector<HTMLButtonElement>("#jobs-drawer-open")!;
 const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
+const compressCreateArchiveButton = document.querySelector<HTMLButtonElement>("#compress-create-archive")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
@@ -957,7 +986,10 @@ const flatViewToggle = document.querySelector<HTMLInputElement>("#flat-view-togg
 const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
+const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#workspace-title")!;
 const messageElement = document.querySelector<HTMLParagraphElement>("#browse-message")!;
+const compressSurfaceElement = document.querySelector<HTMLDivElement>("#compress-surface")!;
+const compressSourceBody = document.querySelector<HTMLTableSectionElement>("#compress-source-body")!;
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
@@ -1064,6 +1096,7 @@ const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
 const infoDialogBody = document.querySelector<HTMLDivElement>("#info-dialog-body")!;
 const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
 
+let workspaceMode: WorkspaceDropMode = "compress";
 let currentArchivePath = "";
 let currentArchiveFolder = "";
 let currentArchiveEntryCount = 0;
@@ -1196,7 +1229,7 @@ function updateStatusBar() {
 }
 
 function applyPreferenceClasses() {
-  workspaceElement.classList.toggle("toolbar-hidden", !appPreferences.toolbarVisible);
+  workspaceElement.classList.remove("toolbar-hidden");
   commandToolbarElement?.classList.toggle("large", appPreferences.largeToolbarButtons);
   commandToolbarElement?.classList.toggle("show-labels", appPreferences.showToolbarLabels);
   entryTable.classList.toggle("show-grid", appPreferences.showGridLines);
@@ -1852,9 +1885,6 @@ function updateCommandState() {
   addArchiveButton.disabled = !commandState.add.enabled;
   extractToolbarButton.disabled = !commandState.extract.enabled;
   testArchiveButton.disabled = !canUseArchive;
-  copyToolbarButton.disabled = !commandState.copy.enabled;
-  moveToolbarButton.disabled = !commandState.move.enabled;
-  deleteToolbarButton.disabled = !commandState.delete.enabled;
   infoToolbarButton.disabled = !commandState.info.enabled;
 
   for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
@@ -1897,6 +1927,52 @@ function updateMeta() {
   metaElement.textContent = `${getArchiveName(currentArchivePath, APP_TITLE)}${folderLabel} - ${browseEntries.length} entries`;
 }
 
+function renderWorkspaceMode() {
+  const isCompress = workspaceMode === "compress";
+  if (isCompress) {
+    renderCompressSources();
+  }
+  workspaceElement.dataset.mode = workspaceMode;
+  modeCompressButton.classList.toggle("is-active", isCompress);
+  modeExtractButton.classList.toggle("is-active", !isCompress);
+  modeCompressButton.setAttribute("aria-selected", String(isCompress));
+  modeExtractButton.setAttribute("aria-selected", String(!isCompress));
+  modeCompressButton.setAttribute("aria-pressed", String(isCompress));
+  modeExtractButton.setAttribute("aria-pressed", String(!isCompress));
+
+  compressSurfaceElement.hidden = !isCompress;
+  tableShellElement.hidden = isCompress;
+  compressCreateArchiveButton.hidden = !isCompress;
+  compressCreateArchiveButton.disabled = createSources.length === 0;
+  refreshArchiveButton.hidden = isCompress;
+  messageElement.hidden = isCompress;
+
+  if (isCompress) {
+    workspaceTitleElement.textContent = COMPRESS_TABLE_TITLE;
+    metaElement.textContent = COMPRESS_TABLE_DESCRIPTION;
+    statusSelectionCountElement.textContent = `${createSources.length} source${createSources.length === 1 ? "" : "s"} staged`;
+    statusSelectionSizeElement.textContent = "";
+    statusFocusedSizeElement.textContent = "";
+    statusFocusedModifiedElement.textContent = "";
+  } else {
+    workspaceTitleElement.textContent = EXTRACT_TABLE_TITLE;
+    if (!currentArchivePath) {
+      metaElement.textContent = EXTRACT_TABLE_DESCRIPTION;
+    }
+  }
+}
+
+function setWorkspaceMode(mode: WorkspaceDropMode) {
+  if (workspaceMode === mode) {
+    renderWorkspaceMode();
+    return;
+  }
+
+  workspaceMode = mode;
+  renderWorkspaceMode();
+  setOperationalStatus(mode === "compress" ? "Compress mode." : "Extract mode.");
+}
+
 function renderPathBar() {
   if (!currentArchivePath) {
     pathFieldInput.value = BROWSE_STATUS_EMPTY;
@@ -1930,8 +2006,6 @@ function renderTree() {
     treeContentElement.innerHTML = `
       <div class="empty-pane">
         <p>No archive open.</p>
-        <button type="button" data-tree-action="open">Open Archive</button>
-        <button type="button" data-tree-action="create">Create Archive</button>
       </div>
     `;
     return;
@@ -2157,12 +2231,8 @@ function renderDetails() {
   if (!currentArchivePath) {
     detailsElement.innerHTML = `
       <div class="details-empty">
-        <h3>Ready</h3>
-        <p>Open an archive or create a new one.</p>
-        <div class="detail-actions">
-          <button type="button" data-detail-action="open">Open Archive</button>
-          <button type="button" data-detail-action="create">Create Archive</button>
-        </div>
+        <h3>No selection</h3>
+        <p>Details appear after an archive is open.</p>
       </div>
     `;
     return;
@@ -2278,6 +2348,7 @@ function renderBrowse() {
   renderDetails();
   updateMeta();
   updateCommandState();
+  renderWorkspaceMode();
 
   if (browseState === "loaded" && selectedEntries.size > 0) {
     messageElement.textContent = `${selectedEntries.size} selected entries.`;
@@ -2373,11 +2444,59 @@ function renderCreateSources() {
       }
       createSources = createSources.filter((item) => item !== path);
       renderCreateSources();
+      renderCompressSources();
       queuePlanRun();
     });
   }
 
   setCreatePlanState(createPlanState, currentPlanError);
+}
+
+function sourceKindLabel(path: string): string {
+  if (isSupportedArchivePath(path)) {
+    return "Archive";
+  }
+
+  return "File or folder";
+}
+
+function renderCompressSources() {
+  compressCreateArchiveButton.disabled = createSources.length === 0;
+
+  if (createSources.length === 0) {
+    compressSourceBody.innerHTML = `
+      <tr>
+        <td colspan="4" class="empty">${COMPRESS_EMPTY_TABLE_MESSAGE}</td>
+      </tr>
+    `;
+    return;
+  }
+
+  compressSourceBody.innerHTML = createSources
+    .map((path) => `
+      <tr data-source-path="${escapeHtml(path)}">
+        <td class="name-cell">${escapeHtml(getPathBasename(path) || path)}</td>
+        <td>${escapeHtml(nativeParentPath(path) || path)}</td>
+        <td>${escapeHtml(sourceKindLabel(path))}</td>
+        <td class="action-column">
+          <button type="button" data-compress-source-remove="${escapeHtml(path)}">Remove</button>
+        </td>
+      </tr>
+    `)
+    .join("");
+
+  for (const button of compressSourceBody.querySelectorAll<HTMLButtonElement>("[data-compress-source-remove]")) {
+    button.addEventListener("click", () => {
+      const path = button.dataset.compressSourceRemove;
+      if (!path) {
+        return;
+      }
+      createSources = createSources.filter((item) => item !== path);
+      renderCreateSources();
+      renderCompressSources();
+      queuePlanRun();
+    });
+  }
 }
 
 function renderJobStatusBar() {
@@ -2805,10 +2924,10 @@ function hasActiveJob(): boolean {
 }
 
 function currentDropSurface(): DropIntentSurface {
-  return dropSurfaceForWorkspace({ createDialogOpen: !createDialog.hidden });
+  return dropSurfaceForWorkspace({ createDialogOpen: !createDialog.hidden, mode: workspaceMode });
 }
 
-function setDropOverlay(active: boolean, title = "Drop files", message = "Open an archive or add files to a new archive.") {
+function setDropOverlay(active: boolean, title = "Drop files", message = "Drop files into Compress or archives into Extract.") {
   workspaceElement.dataset.dropState = active ? "active" : "idle";
   dropOverlay.setAttribute("aria-hidden", active ? "false" : "true");
   dropOverlayTitle.textContent = title;
@@ -2819,7 +2938,7 @@ function dropCopyForSurface(surface: DropIntentSurface): { title: string; messag
   if (surface === "create") {
     return {
       title: "Add sources",
-      message: "Drop files or folders to add them to the new archive.",
+      message: "Drop files or folders to add them to the Compress table.",
     };
   }
 
@@ -2831,8 +2950,8 @@ function dropCopyForSurface(surface: DropIntentSurface): { title: string; messag
   }
 
   return {
-    title: "Open or create",
-    message: "Drop an archive to browse it, or files and folders to create one.",
+    title: "Choose a mode",
+    message: "Use Compress for files and folders, or Extract for an archive.",
   };
 }
 
@@ -2863,10 +2982,8 @@ function addDroppedSources(paths: string[]) {
     applyCreatePreferenceDefaults();
   }
   addSources(paths);
-  if (createDialog.hidden) {
-    openCreateDialog();
-  }
-  if (wasCreateDialogHidden) {
+  setWorkspaceMode("compress");
+  if (!createDialog.hidden && wasCreateDialogHidden) {
     createDestinationInput.focus();
   }
   setOperationalStatus(`${paths.length} source${paths.length === 1 ? "" : "s"} added.`);
@@ -3279,18 +3396,22 @@ function selectFolderEntries(folderPath: string) {
   renderBrowse();
 }
 
+function showStartupContextMenu(x: number, y: number) {
+  contextEntryPath = "";
+  contextSourcePath = "";
+  showContextMenu(x, y, `
+    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${BROWSE_EMPTY_STATE_OPEN_ACTION}</span></button>
+  `);
+}
+
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
   contextEntryPath = entryPath;
   contextSourcePath = "";
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Open</span></button>
     <button type="button" role="menuitem" data-context-action="open-inside" ${entryPath ? "" : "disabled"}><span class="context-menu-label">Open Inside</span></button>
-    <button type="button" role="menuitem" data-context-action="open-outside" disabled><span class="context-menu-label">Open Outside</span></button>
     <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Extract...</span></button>
     <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
-    <button type="button" role="menuitem" data-context-action="copy-to" disabled><span class="context-menu-label">Copy To...</span></button>
-    <button type="button" role="menuitem" data-context-action="move-to" disabled><span class="context-menu-label">Move To...</span></button>
-    <button type="button" role="menuitem" data-context-action="delete-entry" disabled><span class="context-menu-label">Delete</span></button>
     <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
   `);
 }
@@ -3314,9 +3435,6 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
     <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">View</span></button>
     <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">Extract...</span></button>
     <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
-    <button type="button" role="menuitem" data-context-action="copy-to" disabled><span class="context-menu-label">Copy To...</span></button>
-    <button type="button" role="menuitem" data-context-action="move-to" disabled><span class="context-menu-label">Move To...</span></button>
-    <button type="button" role="menuitem" data-context-action="delete-entry" disabled><span class="context-menu-label">Delete</span></button>
     <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
     <div class="context-menu-separator" role="separator"></div>
     <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">Select by Type</span></button>
@@ -3619,6 +3737,7 @@ function openCreateDialog() {
   createShowPasswordInput.checked = false;
   setCreatePlanState(createPlanState, currentPlanError);
   renderCreateSources();
+  renderCompressSources();
   renderCreateDestinationHistory();
   openModal(createDialog, "#add-source-files");
 }
@@ -3630,6 +3749,7 @@ type LoadArchiveOptions = {
 async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOptions = {}) {
   let password = request.password?.trim();
   const preserveState = options.preserveState ?? false;
+  setWorkspaceMode("extract");
 
   while (true) {
     const requestPayload: ListArchiveRequest = {
@@ -3861,6 +3981,7 @@ function addSources(paths: string[]) {
     createDestinationInput.value = suggestedCreateArchiveDefaultPath();
   }
   renderCreateSources();
+  renderCompressSources();
   queuePlanRun();
 }
 
@@ -3915,6 +4036,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
   currentPlan = null;
   cancelQueuedPlanRun();
   renderCreateSources();
+  renderCompressSources();
 
   setOperationalStatus("Planning quick create...");
   await runPlan();
@@ -3951,6 +4073,7 @@ async function openQuickCreateReview(
   currentPlan = null;
   cancelQueuedPlanRun();
   renderCreateSources();
+  renderCompressSources();
 
   setOperationalStatus("Planning quick create...");
   await runPlan();
@@ -4991,15 +5114,15 @@ function bindDialogCloseButtons() {
 }
 
 function bindActions() {
+  modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
+  modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
   openArchiveButton.addEventListener("click", () => void onOpenArchive());
   newArchiveButton.addEventListener("click", openCreateDialog);
   addArchiveButton.addEventListener("click", openCreateDialog);
   extractToolbarButton.addEventListener("click", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
   testArchiveButton.addEventListener("click", () => void onTestArchive());
-  copyToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  moveToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  deleteToolbarButton.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
   infoToolbarButton.addEventListener("click", showCurrentInfo);
+  compressCreateArchiveButton.addEventListener("click", openCreateDialog);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
@@ -5155,20 +5278,9 @@ function bindActions() {
     navigateToFolder(target.dataset.treePath ?? "");
   });
 
-  archiveEmptyStateElement.addEventListener("click", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-empty-action]");
-    if (!target) {
-      return;
-    }
-
-    if (target.dataset.emptyAction === "open") {
-      void onOpenArchive();
-      return;
-    }
-
-    if (target.dataset.emptyAction === "create") {
-      openCreateDialog();
-    }
+  archiveEmptyStateElement.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    showStartupContextMenu(event.clientX, event.clientY);
   });
 
 function hasSelectionModifier(event: PointerEvent | MouseEvent): boolean {
@@ -5613,6 +5725,14 @@ tableBody.addEventListener("click", (event) => {
     const sourcePath = contextSourcePath;
     hideContextMenu();
 
+    if (action === "open-archive") {
+      void onOpenArchive();
+      return;
+    }
+    if (action === "create-archive") {
+      openCreateDialog();
+      return;
+    }
     if (action === "open-folder" && folderPath !== undefined) {
       navigateToFolder(folderPath);
       return;
@@ -5677,14 +5797,6 @@ tableBody.addEventListener("click", (event) => {
       void onTestArchive();
       return;
     }
-    if (action === "copy-to") {
-      setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
-      return;
-    }
-    if (action === "move-to" || action === "delete-entry") {
-      setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
-      return;
-    }
     if (action === "toggle-column" && columnId) {
       tableColumnSettings = toggleColumnVisibility(tableColumnSettings, columnId);
       saveTablePreferences();
@@ -5746,6 +5858,7 @@ tableBody.addEventListener("click", (event) => {
     if (action === "remove-source" && sourcePath) {
       createSources = createSources.filter((item) => item !== sourcePath);
       renderCreateSources();
+      renderCompressSources();
       queuePlanRun();
       return;
     }
@@ -5753,6 +5866,7 @@ tableBody.addEventListener("click", (event) => {
       createSources = [];
       currentPlan = null;
       renderCreateSources();
+      renderCompressSources();
       queuePlanRun();
     }
   });
@@ -5807,6 +5921,7 @@ tableBody.addEventListener("click", (event) => {
     createSources = [];
     currentPlan = null;
     renderCreateSources();
+    renderCompressSources();
     queuePlanRun();
   });
   sourceListElement.addEventListener("contextmenu", (event) => {
@@ -5914,6 +6029,7 @@ loadCreateDestinationHistory();
 renderCreateDestinationHistory();
 applyCreatePreferenceDefaults();
 renderCreateSources();
+renderCompressSources();
 setCreatePlanState("idle");
 setBrowseState("idle", BROWSE_STATUS_IDLE);
 renderBrowse();

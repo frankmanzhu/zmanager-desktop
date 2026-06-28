@@ -161,20 +161,6 @@ export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   info: { id: "info", label: "Info", shortcut: "Alt+Enter", tooltip: "Info (Alt+Enter)" },
 };
 
-const CRC_MENU: MenuItem[] = [
-  { kind: "command", id: "crc32" },
-  { kind: "command", id: "crc64" },
-  { kind: "command", id: "xxh64" },
-  { kind: "command", id: "md5" },
-  { kind: "command", id: "sha1" },
-  { kind: "command", id: "sha256" },
-  { kind: "command", id: "sha384" },
-  { kind: "command", id: "sha512" },
-  { kind: "command", id: "sha3256" },
-  { kind: "command", id: "blake2sp" },
-  { kind: "command", id: "crcAll" },
-];
-
 export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
   {
     label: "File",
@@ -183,22 +169,9 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
       { kind: "command", id: "openInside" },
       { kind: "command", id: "openOutside" },
       { kind: "command", id: "view" },
-      { kind: "command", id: "edit" },
-      { kind: "separator" },
-      { kind: "command", id: "rename" },
-      { kind: "command", id: "copyTo" },
-      { kind: "command", id: "moveTo" },
-      { kind: "command", id: "delete" },
-      { kind: "separator" },
-      { kind: "command", id: "splitFile" },
-      { kind: "command", id: "combineFiles" },
       { kind: "separator" },
       { kind: "command", id: "properties" },
-      { kind: "command", id: "comment" },
-      { kind: "submenu", label: "CRC", items: CRC_MENU },
-      { kind: "command", id: "diff" },
       { kind: "separator" },
-      { kind: "command", id: "createFolder" },
       { kind: "command", id: "createFile" },
       { kind: "separator" },
       { kind: "command", id: "exit" },
@@ -210,8 +183,6 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
       { kind: "command", id: "selectAll" },
       { kind: "command", id: "deselectAll" },
       { kind: "command", id: "invertSelection" },
-      { kind: "command", id: "selectMask" },
-      { kind: "command", id: "deselectMask" },
       { kind: "command", id: "selectByType" },
       { kind: "command", id: "deselectByType" },
     ],
@@ -219,42 +190,25 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
   {
     label: "View",
     items: [
-      { kind: "command", id: "largeIcons" },
-      { kind: "command", id: "smallIcons" },
-      { kind: "command", id: "listView" },
-      { kind: "command", id: "detailsView" },
-      { kind: "separator" },
       { kind: "command", id: "sortName" },
       { kind: "command", id: "sortType" },
       { kind: "command", id: "sortDate" },
       { kind: "command", id: "sortSize" },
-      { kind: "command", id: "unsorted" },
       { kind: "separator" },
       { kind: "command", id: "flatView" },
-      { kind: "command", id: "twoPanels" },
       { kind: "separator" },
       {
         kind: "submenu",
         label: "Toolbars",
         items: [
           { kind: "command", id: "archiveToolbar" },
-          { kind: "command", id: "standardToolbar" },
           { kind: "command", id: "largeButtons" },
           { kind: "command", id: "showButtonText" },
         ],
       },
       { kind: "command", id: "openRoot" },
       { kind: "command", id: "upOneLevel" },
-      { kind: "command", id: "foldersHistory" },
       { kind: "command", id: "refresh" },
-      { kind: "command", id: "autoRefresh" },
-    ],
-  },
-  {
-    label: "Favorites",
-    items: [
-      { kind: "command", id: "addFavorite" },
-      { kind: "separator" },
     ],
   },
   {
@@ -262,16 +216,12 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
     items: [
       { kind: "command", id: "options" },
       { kind: "separator" },
-      { kind: "command", id: "benchmark" },
-      { kind: "separator" },
       { kind: "command", id: "deleteTempFiles" },
     ],
   },
   {
     label: "Help",
     items: [
-      { kind: "command", id: "helpContents" },
-      { kind: "separator" },
       { kind: "command", id: "about" },
     ],
   },
@@ -279,7 +229,7 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
 
 export const CLASSIC_TOOLBAR_GROUPS: CommandId[][] = [
   ["add", "extract", "test"],
-  ["copy", "move", "delete", "info"],
+  ["info"],
 ];
 
 export const CLASSIC_TOOLBAR_ORDER: CommandId[] = CLASSIC_TOOLBAR_GROUPS.flat();

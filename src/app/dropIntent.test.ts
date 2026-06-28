@@ -16,6 +16,12 @@ describe("drop intent classifier", () => {
     expect(dropSurfaceForWorkspace({ createDialogOpen: true })).toBe("create");
   });
 
+  it("uses create drops for Compress mode and browse drops for Extract mode", () => {
+    expect(dropSurfaceForWorkspace({ createDialogOpen: false, mode: "compress" })).toBe("create");
+    expect(dropSurfaceForWorkspace({ createDialogOpen: false, mode: "extract" })).toBe("browse");
+    expect(dropSurfaceForWorkspace({ createDialogOpen: true, mode: "extract" })).toBe("create");
+  });
+
   it("opens one supported archive on the browse surface", () => {
     expect(classifyDropIntent(["C:/tmp/archive.zip"], "browse")).toEqual({
       kind: "openArchive",

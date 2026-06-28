@@ -4,9 +4,23 @@ import {
   CLASSIC_MENU_GROUPS,
   CLASSIC_TOOLBAR_ORDER,
   COMMAND_DEFINITIONS,
+  type CommandId,
+  type MenuItem,
   UNSUPPORTED_OPERATION_MESSAGE,
   selectCommandState,
 } from "./classicCommands";
+
+function collectMenuCommandIds(items: readonly MenuItem[]): CommandId[] {
+  return items.flatMap((item) => {
+    if (item.kind === "command") {
+      return [item.id];
+    }
+    if (item.kind === "submenu") {
+      return collectMenuCommandIds(item.items);
+    }
+    return [];
+  });
+}
 
 describe("classic command definitions", () => {
   it("keeps the required top-level menu groups visible", () => {
@@ -14,10 +28,17 @@ describe("classic command definitions", () => {
       "File",
       "Edit",
       "View",
-      "Favorites",
       "Tools",
       "Help",
     ]);
+  });
+
+  it("does not expose unsupported commands in the menu bar", () => {
+    const visibleMenuCommandIds = CLASSIC_MENU_GROUPS.flatMap((group) => collectMenuCommandIds(group.items));
+
+    for (const id of visibleMenuCommandIds) {
+      expect(COMMAND_DEFINITIONS[id].unsupported).not.toBe(true);
+    }
   });
 
   it("keeps the classic toolbar command order", () => {
@@ -25,9 +46,6 @@ describe("classic command definitions", () => {
       "Add",
       "Extract",
       "Test",
-      "Copy",
-      "Move",
-      "Delete",
       "Info",
     ]);
   });

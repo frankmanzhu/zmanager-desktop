@@ -199,9 +199,8 @@ p {
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
-    "menu"
     "toolbar"
     "path"
     "body"
@@ -211,12 +210,29 @@ p {
 }
 
 .workspace.toolbar-hidden {
-  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
-    "menu"
     "path"
     "body"
     "status";
+}
+
+.workspace[data-mode="compress"] {
+  grid-template-rows: var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "toolbar"
+    "body"
+    "status";
+}
+
+.workspace[data-mode="compress"] .path-bar,
+.workspace[data-mode="compress"] .navigation-pane,
+.workspace[data-mode="compress"] .details-pane {
+  display: none;
+}
+
+.workspace[data-mode="compress"] .browser-shell {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace.toolbar-hidden .command-toolbar {
@@ -340,6 +356,36 @@ p {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--chrome-bg) 92%, var(--content-bg));
+}
+
+.mode-toolbar {
+  flex-wrap: nowrap;
+}
+
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mode-button {
+  min-width: 120px;
+  min-height: 34px;
+  padding-inline: 18px;
+  font-weight: 650;
+}
+
+.mode-button.is-active,
+.mode-button[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.mode-button.is-active:hover:not(:disabled),
+.mode-button[aria-selected="true"]:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .command-toolbar.large .tool-button {
@@ -487,6 +533,10 @@ button svg {
 
 .search-field input {
   width: 100%;
+  min-width: 0;
+}
+
+.search-field input[type="search"] {
   min-width: 0;
 }
 
@@ -649,7 +699,7 @@ button svg {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--content-bg);
 }
@@ -815,6 +865,48 @@ input[type="search"] {
   background: var(--content-bg);
 }
 
+.compress-surface {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--content-bg);
+}
+
+.compress-table-shell {
+  min-height: 0;
+  overflow: auto;
+}
+
+.action-column {
+  width: 112px;
+  text-align: right;
+}
+
+#compress-source-table {
+  min-width: 760px;
+}
+
+#compress-source-table th:nth-child(1),
+#compress-source-table td:nth-child(1) {
+  width: 32%;
+}
+
+#compress-source-table th:nth-child(2),
+#compress-source-table td:nth-child(2) {
+  width: 44%;
+}
+
+#compress-source-table th:nth-child(3),
+#compress-source-table td:nth-child(3) {
+  width: 14%;
+}
+
+#compress-source-table th:nth-child(4),
+#compress-source-table td:nth-child(4) {
+  width: 112px;
+}
+
 .table-shell.has-start-empty {
   display: grid;
   overflow: hidden;
@@ -869,24 +961,6 @@ input[type="search"] {
   margin: 0;
   max-width: 36rem;
   color: var(--muted);
-}
-
-.archive-empty-actions {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.primary-action {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #ffffff;
-}
-
-.primary-action:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
 }
 
 table {
@@ -1012,8 +1086,8 @@ tbody tr.is-selected {
   background: var(--selected-bg);
 }
 
-td:first-child,
-th:first-child {
+#entry-table td:first-child,
+#entry-table th:first-child {
   width: 28px;
   text-align: center;
 }
