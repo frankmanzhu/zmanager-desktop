@@ -34,8 +34,9 @@ pub const EXPLORER_ACTIONS_ENABLED: bool = true;
 
 /// Archive extensions that map to Windows shell associations when enabled.
 pub const EXPLORER_ASSOCIATED_EXTENSIONS: &[&str] = &[
-    "zip", "zipx", "7z", "rar", "tar", "tar.gz", "tgz", "gz", "tar.xz", "txz", "xz", "tar.zst",
-    "tzst", "zst", "tzap",
+    "001", "7z", "apk", "appx", "br", "bz2", "cab", "cbr", "cpio", "deb", "gz", "ipa", "iso",
+    "jar", "lz", "lz4", "lzma", "lzo", "lrz", "rar", "rpm", "tar", "tar.gz", "tbz2", "tgz", "txz",
+    "tzap", "tzst", "war", "xar", "xpi", "xz", "z", "zip", "zipx", "zst",
 ];
 
 pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
@@ -48,7 +49,7 @@ pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
         quick_action: "extractHere",
     },
     ShellActionProfile {
-        label: "ZManager > Add to archive",
+        label: "ZManager > Add to archive...",
         quick_action: "compress",
     },
     ShellActionProfile {

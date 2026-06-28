@@ -77,6 +77,7 @@ describe("quick action helpers", () => {
   it("routes generic quick actions through preferences", async () => {
     const handlers = {
       openArchive: vi.fn().mockResolvedValue(undefined),
+      openCreateReview: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
@@ -92,7 +93,8 @@ describe("quick action helpers", () => {
       handlers,
     );
 
-    expect(handlers.startCreate).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
+    expect(handlers.openCreateReview).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
+    expect(handlers.startCreate).not.toHaveBeenCalled();
 
     await runQuickActionRequest(
       { kind: "extract", paths: ["/tmp/archive.zip"] },
@@ -106,6 +108,7 @@ describe("quick action helpers", () => {
   it("routes associated archive opens to browsing by default", async () => {
     const handlers = {
       openArchive: vi.fn().mockResolvedValue(undefined),
+      openCreateReview: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
@@ -125,6 +128,7 @@ describe("quick action helpers", () => {
   it("routes fixed-format create quick actions", async () => {
     const handlers = {
       openArchive: vi.fn().mockResolvedValue(undefined),
+      openCreateReview: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
@@ -160,6 +164,7 @@ describe("quick action helpers", () => {
   it("routes associated archive opens to browsing regardless of extraction defaults", async () => {
     const handlers = {
       openArchive: vi.fn().mockResolvedValue(undefined),
+      openCreateReview: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),
@@ -181,6 +186,7 @@ describe("quick action helpers", () => {
   it("routes ask-every-time extraction to user review", async () => {
     const handlers = {
       openArchive: vi.fn().mockResolvedValue(undefined),
+      openCreateReview: vi.fn().mockResolvedValue(undefined),
       startCreate: vi.fn().mockResolvedValue(undefined),
       openExtractReview: vi.fn().mockResolvedValue(undefined),
       startExtract: vi.fn().mockResolvedValue(undefined),

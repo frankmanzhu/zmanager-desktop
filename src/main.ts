@@ -149,6 +149,7 @@ import {
   LogicalPosition,
   LogicalSize,
 } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import type {
   ArchiveEntryDto,
   BrowseState,
@@ -160,6 +161,7 @@ import type {
   JobState,
   ProjectContract,
   QuickActionRequestDto,
+  QuickActionStartupStateDto,
   StartCreateRequest,
   StartJobResponseDto,
   SystemFileIconRequestEntry,
@@ -3893,6 +3895,41 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
   await runCreate({ destinationCollisionStrategy: "rename" });
 }
 
+async function openQuickCreateReview(
+  paths: string[],
+  format: CreateArchiveFormat,
+  cleanSource: boolean,
+) {
+  const sources = uniqueQuickActionPaths(paths);
+  if (!sources.length) {
+    setOperationalStatus("Quick create needs at least one source.");
+    return;
+  }
+
+  openCreateDialog();
+  createSources = sources;
+  createFormatSelect.value = format;
+  createCleanSourceCheckbox.checked = cleanSource;
+  createReplaceExistingCheckbox.checked = false;
+  createDestinationInput.value = buildQuickCreateDestination(
+    sources,
+    format,
+    appPreferences,
+    { nativeParentPath, joinNativePath },
+  );
+  currentPlan = null;
+  cancelQueuedPlanRun();
+  renderCreateSources();
+
+  setOperationalStatus("Planning quick create...");
+  await runPlan();
+  if (createPlanState === "ready" && currentPlan !== null) {
+    setOperationalStatus("Review the archive options, then create the archive.");
+  } else {
+    setOperationalStatus("Quick create needs review before it can start.");
+  }
+}
+
 async function openQuickExtractReview(paths: string[]) {
   const archives = uniqueQuickActionPaths(paths);
   if (archives.length !== 1) {
@@ -3968,6 +4005,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
 async function handleQuickActionRequest(request: QuickActionRequestDto) {
   await runQuickActionRequest(request, appPreferences, {
     openArchive: openQuickActionArchive,
+    openCreateReview: openQuickCreateReview,
     startCreate: startQuickCreate,
     openExtractReview: openQuickExtractReview,
     startExtract: startQuickExtract,
@@ -3981,28 +4019,42 @@ async function handleStartupQuickAction() {
 
   try {
     const state = await fetchQuickActionStartupState();
-    if (!state.launchedForQuickAction) {
-      return;
-    }
-
-    if (state.error) {
-      setOperationalStatus(state.error.message);
-      if (state.error.hint) {
-        setBrowseState("error", `${state.error.message}\n${state.error.hint}`);
-      }
-      return;
-    }
-
-    if (state.quickAction) {
-      const startupStatus = state.quickAction.kind === "open"
-        ? "Opening archive..."
-        : "Starting quick action...";
-      setOperationalStatus(startupStatus);
-      await handleQuickActionRequest(state.quickAction);
-    }
+    await handleQuickActionStartupState(state);
   } catch (error) {
     setOperationalStatus(unknownErrorMessage(error, "Unable to read quick-action startup state."));
   }
+}
+
+async function handleQuickActionStartupState(state: QuickActionStartupStateDto) {
+  if (!state.launchedForQuickAction) {
+    return;
+  }
+
+  if (state.error) {
+    setOperationalStatus(state.error.message);
+    if (state.error.hint) {
+      setBrowseState("error", `${state.error.message}\n${state.error.hint}`);
+    }
+    return;
+  }
+
+  if (state.quickAction) {
+    const startupStatus = state.quickAction.kind === "open"
+      ? "Opening archive..."
+      : "Starting quick action...";
+    setOperationalStatus(startupStatus);
+    await handleQuickActionRequest(state.quickAction);
+  }
+}
+
+async function bindQuickActionLaunchEvents() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  await listen<QuickActionStartupStateDto>("zmanager-quick-action", (event) => {
+    void handleQuickActionStartupState(event.payload);
+  });
 }
 
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {
@@ -5806,4 +5858,5 @@ if (isLocalDevHost()) {
 loadLocalDevFixtureFromUrl();
 void loadBootstrapState();
 void bindTauriFileDrop();
+void bindQuickActionLaunchEvents();
 void handleStartupQuickAction();

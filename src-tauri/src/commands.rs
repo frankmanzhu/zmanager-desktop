@@ -22,7 +22,7 @@ use crate::{
         StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry},
-    quick_action::QuickActionStartupState,
+    quick_action::QuickActionLaunchCoordinator,
 };
 use zmanager_core::archive_browser::{
     self, ArchiveBrowserError, BrowserExtractOptions, BrowserListOptions,
@@ -96,13 +96,14 @@ pub fn system_file_icons(request: SystemFileIconRequest) -> SystemFileIconRespon
 
 #[tauri::command]
 pub fn quick_action_startup_state(
-    state: State<'_, QuickActionStartupState>,
+    state: State<'_, QuickActionLaunchCoordinator>,
 ) -> crate::dto::QuickActionStartupStateDto {
-    quick_action_startup_state_internal(state.inner())
+    state.startup_state().to_dto()
 }
 
+#[cfg(test)]
 fn quick_action_startup_state_internal(
-    state: &QuickActionStartupState,
+    state: &crate::quick_action::QuickActionStartupState,
 ) -> crate::dto::QuickActionStartupStateDto {
     state.to_dto()
 }

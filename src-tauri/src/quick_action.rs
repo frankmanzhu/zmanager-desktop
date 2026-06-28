@@ -1,4 +1,13 @@
-use std::ffi::OsString;
+use std::{
+    ffi::OsString,
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
+
+use tauri::{AppHandle, Emitter};
 
 use crate::dto::{
     QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
@@ -7,8 +16,11 @@ use crate::dto::{
 
 const QUICK_ACTION_ARG: &str = "--quick-action";
 const QUICK_ACTION_ARG_ALIAS: &str = "--action";
+const QUICK_ACTION_REQUEST_ARG: &str = "--quick-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
+const QUICK_ACTION_EVENT: &str = "zmanager-quick-action";
+const QUICK_ACTION_BURST_DEBOUNCE: Duration = Duration::from_millis(450);
 
 const SUPPORTED_SINGLE_EXTENSIONS: &[&str] = &[
     "7z", "apk", "appx", "br", "bz2", "cab", "cbr", "cpio", "deb", "gz", "ipa", "iso", "jar", "lz",
@@ -31,8 +43,17 @@ pub enum QuickActionStartupState {
 }
 
 impl QuickActionStartupState {
-    pub fn from_env() -> Self {
-        Self::from_args(std::env::args_os().skip(1))
+    pub fn from_startup_env() -> Self {
+        let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+        Self::from_args(args)
+    }
+
+    fn from_process_or_user_args(args: Vec<OsString>) -> Self {
+        if first_arg_is_executable_path(args.first()) {
+            return Self::from_args(args.into_iter().skip(1));
+        }
+
+        Self::from_args(args)
     }
 
     pub fn from_args(args: impl IntoIterator<Item = OsString>) -> Self {
@@ -63,6 +84,121 @@ impl QuickActionStartupState {
                 error: Some(error.to_dto()),
             },
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct QuickActionLaunchCoordinator {
+    inner: Arc<Mutex<QuickActionLaunchState>>,
+}
+
+#[derive(Debug)]
+struct QuickActionLaunchState {
+    startup: QuickActionStartupState,
+    pending_creates: Vec<QuickActionRequestDto>,
+    pending_generation: u64,
+    flush_scheduled: bool,
+}
+
+impl QuickActionLaunchCoordinator {
+    pub fn from_startup_env() -> Self {
+        let coordinator = Self {
+            inner: Arc::new(Mutex::new(QuickActionLaunchState {
+                startup: QuickActionStartupState::NotRequested,
+                pending_creates: Vec::new(),
+                pending_generation: 0,
+                flush_scheduled: false,
+            })),
+        };
+        coordinator.ingest_startup_state(QuickActionStartupState::from_startup_env());
+        coordinator
+    }
+
+    pub fn startup_state(&self) -> QuickActionStartupState {
+        if self.has_pending_creates() {
+            thread::sleep(QUICK_ACTION_BURST_DEBOUNCE);
+        }
+
+        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
+        if let Some(request) = drain_pending_creates(&mut inner).into_iter().next() {
+            return QuickActionStartupState::Requested(request);
+        }
+
+        std::mem::replace(&mut inner.startup, QuickActionStartupState::NotRequested)
+    }
+
+    pub fn ingest_secondary_process_args(&self, args: Vec<OsString>, app: AppHandle) {
+        match QuickActionStartupState::from_process_or_user_args(args) {
+            QuickActionStartupState::Requested(request) if is_create_quick_action(request.kind) => {
+                self.add_pending_create(request);
+                self.schedule_flush(app);
+            }
+            state => {
+                let _ = app.emit(QUICK_ACTION_EVENT, state.to_dto());
+            }
+        }
+    }
+
+    fn ingest_startup_state(&self, state: QuickActionStartupState) {
+        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
+        match state {
+            QuickActionStartupState::Requested(request) if is_create_quick_action(request.kind) => {
+                add_pending_create_locked(&mut inner, request);
+            }
+            other => {
+                inner.startup = other;
+            }
+        }
+    }
+
+    fn has_pending_creates(&self) -> bool {
+        !self
+            .inner
+            .lock()
+            .expect("quick-action lock poisoned")
+            .pending_creates
+            .is_empty()
+    }
+
+    fn add_pending_create(&self, request: QuickActionRequestDto) {
+        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
+        add_pending_create_locked(&mut inner, request);
+    }
+
+    fn schedule_flush(&self, app: AppHandle) {
+        let coordinator = self.clone();
+        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
+        if inner.flush_scheduled {
+            return;
+        }
+        inner.flush_scheduled = true;
+        let mut observed_generation = inner.pending_generation;
+        drop(inner);
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(QUICK_ACTION_BURST_DEBOUNCE);
+                let requests = {
+                    let mut inner = coordinator
+                        .inner
+                        .lock()
+                        .expect("quick-action lock poisoned");
+                    if inner.pending_generation != observed_generation {
+                        observed_generation = inner.pending_generation;
+                        continue;
+                    }
+
+                    inner.flush_scheduled = false;
+                    drain_pending_creates(&mut inner)
+                };
+
+                for request in requests {
+                    let state = QuickActionStartupState::Requested(request);
+                    let _ = app.emit(QUICK_ACTION_EVENT, state.to_dto());
+                }
+                break;
+            }
+        });
     }
 }
 
@@ -101,6 +237,63 @@ enum ParseOutcome {
     Requested(Result<QuickActionRequestDto, QuickActionError>),
 }
 
+fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
+    let Some(arg) = arg.and_then(|value| value.to_str()) else {
+        return false;
+    };
+    Path::new(arg)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+}
+
+fn is_create_quick_action(kind: QuickActionKindDto) -> bool {
+    matches!(
+        kind,
+        QuickActionKindDto::Compress
+            | QuickActionKindDto::CompressZip
+            | QuickActionKindDto::CompressTzap
+            | QuickActionKindDto::CompressSevenZ
+            | QuickActionKindDto::CompressTarZst
+            | QuickActionKindDto::CompressCleanSource
+    )
+}
+
+fn add_pending_create_locked(inner: &mut QuickActionLaunchState, request: QuickActionRequestDto) {
+    inner.pending_generation = inner.pending_generation.saturating_add(1);
+    if let Some(existing) = inner
+        .pending_creates
+        .iter_mut()
+        .find(|existing| existing.kind == request.kind)
+    {
+        append_unique_paths(&mut existing.paths, request.paths);
+        return;
+    }
+
+    inner.pending_creates.push(QuickActionRequestDto {
+        kind: request.kind,
+        paths: unique_paths(request.paths),
+    });
+}
+
+fn drain_pending_creates(inner: &mut QuickActionLaunchState) -> Vec<QuickActionRequestDto> {
+    inner.pending_creates.drain(..).collect()
+}
+
+fn append_unique_paths(target: &mut Vec<String>, paths: Vec<String>) {
+    for path in paths {
+        if !target.iter().any(|existing| existing == &path) {
+            target.push(path);
+        }
+    }
+}
+
+fn unique_paths(paths: Vec<String>) -> Vec<String> {
+    let mut unique = Vec::new();
+    append_unique_paths(&mut unique, paths);
+    unique
+}
+
 pub fn is_supported_archive_path(path: &str) -> bool {
     let name = path
         .rsplit(['/', '\\'])
@@ -137,7 +330,9 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
     let mut requested = false;
     let mut kind: Option<Result<QuickActionKindDto, QuickActionError>> = None;
     let mut paths = Vec::new();
+    let mut request_file_path: Option<String> = None;
     let mut pending_path_values = false;
+    let mut pending_request_file_value = false;
     let mut saw_unknown_option = false;
     let mut ordinary_open_paths = Vec::new();
 
@@ -168,6 +363,15 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             requested = true;
             kind = Some(parse_kind(value));
             pending_path_values = false;
+            pending_request_file_value = false;
+            continue;
+        }
+
+        if let Some(value) = arg.strip_prefix("--quick-action-request=") {
+            requested = true;
+            request_file_path = Some(value.to_string());
+            pending_path_values = false;
+            pending_request_file_value = false;
             continue;
         }
 
@@ -177,17 +381,27 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
                 "--quick-action requires an action value",
             )));
             pending_path_values = false;
+            pending_request_file_value = false;
+            continue;
+        }
+
+        if arg == QUICK_ACTION_REQUEST_ARG {
+            requested = true;
+            pending_request_file_value = true;
+            pending_path_values = false;
             continue;
         }
 
         if arg == PATH_ARG {
             requested = true;
             pending_path_values = true;
+            pending_request_file_value = false;
             continue;
         }
 
         if arg.starts_with("--") {
             pending_path_values = false;
+            pending_request_file_value = false;
             if !requested {
                 saw_unknown_option = true;
             }
@@ -195,7 +409,10 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
         }
 
         if requested {
-            if matches!(kind, Some(Err(_))) {
+            if pending_request_file_value {
+                request_file_path = Some(arg);
+                pending_request_file_value = false;
+            } else if matches!(kind, Some(Err(_))) {
                 kind = Some(parse_kind(&arg));
             } else if pending_path_values {
                 paths.push(arg);
@@ -216,6 +433,16 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
         ));
     }
 
+    if pending_request_file_value {
+        return ParseOutcome::Requested(Err(QuickActionError::invalid(
+            "--quick-action-request requires a file path",
+        )));
+    }
+
+    if let Some(request_file_path) = request_file_path {
+        return ParseOutcome::Requested(read_quick_action_request_file(&request_file_path));
+    }
+
     let kind = match kind.unwrap_or_else(|| {
         Err(QuickActionError::invalid(
             "--quick-action is required for quick-action launches",
@@ -226,6 +453,30 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
     };
 
     ParseOutcome::Requested(validate_request(kind, paths))
+}
+
+fn read_quick_action_request_file(
+    request_file_path: &str,
+) -> Result<QuickActionRequestDto, QuickActionError> {
+    let trimmed_path = request_file_path.trim();
+    if trimmed_path.is_empty() {
+        return Err(QuickActionError::invalid(
+            "--quick-action-request requires a file path",
+        ));
+    }
+    if trimmed_path.contains("://") {
+        return Err(QuickActionError::invalid(format!(
+            "quick-action request path must be local: {trimmed_path}"
+        )));
+    }
+
+    let content = fs::read_to_string(trimmed_path).map_err(|error| {
+        QuickActionError::invalid(format!("unable to read quick-action request: {error}"))
+    })?;
+    let request = serde_json::from_str::<QuickActionRequestDto>(&content).map_err(|error| {
+        QuickActionError::invalid(format!("invalid quick-action request JSON: {error}"))
+    })?;
+    validate_request(request.kind, request.paths)
 }
 
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
@@ -379,6 +630,7 @@ fn base_name_without_tzap_volume_suffix(name: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn state_from_args(args: &[&str]) -> QuickActionStartupState {
         QuickActionStartupState::from_args(args.iter().map(OsString::from))
@@ -395,6 +647,25 @@ mod tests {
         match state_from_args(args) {
             QuickActionStartupState::Invalid(error) => error,
             other => panic!("expected invalid quick action, got {other:?}"),
+        }
+    }
+
+    fn unique_temp_file(name: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("zmanager-{name}-{nanos}.json"))
+    }
+
+    fn empty_coordinator() -> QuickActionLaunchCoordinator {
+        QuickActionLaunchCoordinator {
+            inner: Arc::new(Mutex::new(QuickActionLaunchState {
+                startup: QuickActionStartupState::NotRequested,
+                pending_creates: Vec::new(),
+                pending_generation: 0,
+                flush_scheduled: false,
+            })),
         }
     }
 
@@ -456,6 +727,19 @@ mod tests {
             requested(&["--quick-action", "compress-tzst", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tzst.kind, QuickActionKindDto::CompressTarZst);
 
+        let unknown_option_compress = requested(&[
+            "--quick-action",
+            "compress-tzap",
+            "--ignored-shell-option",
+            "--path",
+            "C:/tmp/source",
+        ]);
+        assert_eq!(
+            unknown_option_compress.kind,
+            QuickActionKindDto::CompressTzap
+        );
+        assert_eq!(unknown_option_compress.paths, ["C:/tmp/source"]);
+
         let extract = requested(&[
             "--quick-action=extractToFolder",
             "--path",
@@ -478,6 +762,68 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::ExtractHere);
         assert_eq!(request.paths, ["C:/tmp/one.zip", "C:/tmp/two.tzap"]);
+    }
+
+    #[test]
+    fn parse_accepts_structured_quick_action_request_file() {
+        let request_path = unique_temp_file("quick-action-request");
+        std::fs::write(
+            &request_path,
+            r#"{"kind":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#,
+        )
+        .expect("quick-action request fixture should write");
+
+        let request_path_text = request_path.to_string_lossy().to_string();
+        let request = requested(&["--quick-action-request", &request_path_text]);
+
+        assert_eq!(request.kind, QuickActionKindDto::CompressZip);
+        assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
+        let _ = std::fs::remove_file(request_path);
+    }
+
+    #[test]
+    fn startup_coordinator_coalesces_create_launches_by_action() {
+        let coordinator = empty_coordinator();
+        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
+            QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec!["C:/tmp/one".to_string()],
+            },
+        ));
+        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
+            QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec!["C:/tmp/two".to_string(), "C:/tmp/one".to_string()],
+            },
+        ));
+
+        let request = match coordinator.startup_state() {
+            QuickActionStartupState::Requested(request) => request,
+            other => panic!("expected coalesced create request, got {other:?}"),
+        };
+
+        assert_eq!(request.kind, QuickActionKindDto::CompressZip);
+        assert_eq!(request.paths, ["C:/tmp/one", "C:/tmp/two"]);
+        assert_eq!(
+            coordinator.startup_state(),
+            QuickActionStartupState::NotRequested
+        );
+    }
+
+    #[test]
+    fn structured_quick_action_request_file_uses_normal_validation() {
+        let request_path = unique_temp_file("invalid-quick-action-request");
+        std::fs::write(
+            &request_path,
+            r#"{"kind":"extractHere","paths":["C:/tmp/notes.txt"]}"#,
+        )
+        .expect("invalid quick-action request fixture should write");
+
+        let request_path_text = request_path.to_string_lossy().to_string();
+        let error = invalid(&["--quick-action-request", &request_path_text]);
+
+        assert!(error.message.contains("unsupported archive"));
+        let _ = std::fs::remove_file(request_path);
     }
 
     #[test]

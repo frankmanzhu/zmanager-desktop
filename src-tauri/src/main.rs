@@ -10,13 +10,25 @@ mod platform;
 mod quick_action;
 
 fn main() {
+    let quick_action_launch_coordinator =
+        quick_action::QuickActionLaunchCoordinator::from_startup_env();
+    let single_instance_coordinator = quick_action_launch_coordinator.clone();
+
     let builder = tauri::Builder::default();
     let builder = platform::register_platform_services(builder);
     builder
         .manage(job_registry::JobRegistry::new())
-        .manage(quick_action::QuickActionStartupState::from_env())
+        .manage(quick_action_launch_coordinator)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(
+            move |app, argv, _cwd| {
+                single_instance_coordinator.ingest_secondary_process_args(
+                    argv.into_iter().map(std::ffi::OsString::from).collect(),
+                    app.clone(),
+                );
+            },
+        ))
         .invoke_handler(tauri::generate_handler![
             commands::healthcheck,
             commands::project_contract,
