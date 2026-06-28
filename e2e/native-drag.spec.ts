@@ -26,6 +26,7 @@ declare global {
   interface Window {
     __zmanagerDev?: {
       loadArchiveFixture: (fixture: ArchiveFixture) => void;
+      setSystemIconFixtures?: (fixtures: Record<string, string | null>) => void;
     };
     __zmanagerE2E?: {
       ipcCalls: IpcCall[];
@@ -71,6 +72,7 @@ test.beforeEach(async ({ page }) => {
   await installTauriStub(page);
   await page.goto("/");
   await page.waitForFunction(() => Boolean(window.__zmanagerDev));
+  await page.getByRole("tab", { name: "Extract" }).click();
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
   await expect(entryRow(page, "folder")).toBeVisible();
   await expect(entryRow(page, "root.txt")).toBeVisible();
@@ -197,15 +199,15 @@ test("dragging one selected row starts native drag-out for the selected set", as
 test("dragging blank table space marquee-selects intersecting rows", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
   const rootRow = entryRow(page, "root.txt");
-  const shellBox = await page.locator(".table-shell").boundingBox();
   const folderBox = await folderRow.boundingBox();
   const rootBox = await rootRow.boundingBox();
-  if (!shellBox || !folderBox || !rootBox) {
+  const rootSizeCellBox = await rootRow.locator("td").nth(2).boundingBox();
+  if (!folderBox || !rootBox || !rootSizeCellBox) {
     throw new Error("Unable to locate table geometry");
   }
 
-  const startX = shellBox.x + shellBox.width - 12;
-  const startY = rootBox.y + rootBox.height + 28;
+  const startX = rootSizeCellBox.x + rootSizeCellBox.width - 8;
+  const startY = rootSizeCellBox.y + rootSizeCellBox.height / 2;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
   await page.mouse.move(folderBox.x + 2, folderBox.y + 2, { steps: 5 });

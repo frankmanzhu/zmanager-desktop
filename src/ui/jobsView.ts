@@ -1,5 +1,5 @@
 import type { JobKind, JobState } from "../api/types";
-import { deriveJobProgress } from "../app/jobs";
+import { deriveJobProgress, isTerminalJobStatus } from "../app/jobs";
 
 export type JobsViewFormatters = {
   escapeHtml: (value: string) => string;
@@ -47,6 +47,9 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       const progress = deriveJobProgress(state);
       const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
       const progressValue = progress.progressPercent ?? 0;
+      const progressAttributes = progress.progressPercent === null && !isTerminalJobStatus(snapshot.status)
+        ? ""
+        : `value="${progressValue.toFixed(0)}" max="100"`;
       return `
         <article class="job-card">
           <div class="job-header">
@@ -79,7 +82,7 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
           </div>
           <progress
             aria-label="Job progress"
-            ${progress.progressPercent === null ? "" : `value="${progressValue.toFixed(0)}" max="100"`}
+            ${progressAttributes}
           ></progress>
           <ul class="event-list">
             ${

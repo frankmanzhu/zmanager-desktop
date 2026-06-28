@@ -27,6 +27,10 @@ export function isPasswordErrorCode(code?: string | null): boolean {
   return code === COMMAND_PASSWORD_REQUIRED || code === COMMAND_INVALID_PASSWORD;
 }
 
+export function isTerminalJobStatus(status: JobStatus): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
 export function getLatestPasswordFailureEvent(state: JobState): JobEventDto | null {
   for (let index = state.events.length - 1; index >= 0; index -= 1) {
     const event = state.events[index];
@@ -143,9 +147,14 @@ export function deriveJobProgress(
   const remainingMs = remainingBytes !== null && speedBytesPerSecond && speedBytesPerSecond > 0
     ? (remainingBytes / speedBytesPerSecond) * 1000
     : null;
-  const progressPercent = totalBytes !== null && totalBytes > 0
+  const measuredProgressPercent = totalBytes !== null && totalBytes > 0
     ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
     : null;
+  const progressPercent = state.snapshot.status === "completed"
+    ? 100
+    : isTerminalJobStatus(state.snapshot.status)
+      ? measuredProgressPercent ?? 0
+      : measuredProgressPercent;
 
   return {
     id: state.snapshot.jobId,

@@ -41,42 +41,55 @@ Primary user goal: switch between Compress and Extract without fake or broken UI
    - Health: passing.
    - Entry context menu opens and passes visible control scan.
 
+9. `10-preferences-dialog.png` through `20-search-empty-results.png`
+   - Health: passing.
+   - Secondary surfaces now covered: Options, About, Jobs drawer with running/completed/failed jobs, empty Extract context menu, archive details, column context menu, multi-selection details, Archive Info, image-entry details, Entry Info, and search with no results.
+
+10. `21-compact-compress-empty.png` through `24-compact-preferences-dialog.png`
+    - Health: passing.
+    - Compact viewport pass now covers Compress empty, Compress with sources, Extract loaded, and Options.
+
 ## Fix Applied
 
 - Scoped archive first-column sizing to `#entry-table`.
 - Added explicit width contracts for `#compress-source-table` columns.
 - Added `src/app/guiLayoutContracts.test.ts` to prevent unscoped first-column table rules and require Compress table column declarations.
 - Scoped the path-bar search input minimum width so it cannot collide with the `Flat` toggle.
-- Added `e2e/gui-visual-scan.spec.ts` to capture key GUI states and fail on clipped labels or overlapping visible controls.
+- Split native icon image classes from file-kind wrapper classes so image entries cannot expand row/detail icon boxes.
+- Made terminal job progress determinate so completed create jobs stop at `100%` instead of showing an indeterminate progress bar.
+- Added `e2e/gui-visual-scan.spec.ts` to capture primary and secondary GUI states and fail on clipped labels, overlapping visible controls, oversized row/tree/detail icons, or terminal jobs with indeterminate progress.
 
 ## Current Verification
 
-- `npm.cmd run test:frontend`: passed, 16 test files / 95 tests.
+- `npm.cmd run test:frontend`: passed, 17 test files / 100 tests.
 - `npm.cmd run build`: passed.
-- `npx.cmd playwright test e2e/gui-visual-scan.spec.ts`: passed, 1 GUI scan.
+- `npm.cmd run test:e2e`: passed, 13 Playwright tests.
+- `npx.cmd playwright test e2e/gui-visual-scan.spec.ts`: passed, 3 GUI scan tests covering 24 screenshots.
 
 ## UX Risks Still Open
 
 1. Dialogs still come from the older architecture and need deeper review against the two-mode model.
 2. The Create Archive action is visually separated from the staged-file table but still opens the old modal, so the flow is not yet fully resolved.
 3. Extract drag-out behavior needs end-to-end verification in the real Tauri shell, not browser preview.
-4. Responsive states below the default desktop viewport should be added to the scan.
+4. More compact viewport variants should be added if the supported minimum window size changes.
 
 ## Accessibility Risks Still Open
 
 1. Keyboard flow through Compress source rows and Remove buttons has not been validated.
 2. Screen-reader labels for mode switching need testing with actual accessibility tooling.
-3. Responsive reflow at narrow widths needs screenshot evidence.
+3. Screen-reader behavior for the Jobs drawer and modal focus trap needs manual assistive-tech verification.
 
 ## Quality Gate Plan
 
-1. Add visual-state fixtures for Preferences, Jobs drawer, narrow viewport, and real Tauri drag-out.
-2. Add a repeatable visual scan command that starts the app, captures every fixture at desktop and narrow widths, and fails on:
+1. Add real Tauri-shell visual smoke coverage for native drag-out and actual Windows system icons.
+2. Keep the repeatable visual scan command covering desktop and compact widths, failing on:
    - clipped button/header text,
    - visible element overlap,
    - horizontal overflow outside intended scroll containers,
    - missing main action for the active mode,
-   - hidden/disabled fake actions in primary chrome.
+   - hidden/disabled fake actions in primary chrome,
+   - oversized row/tree/detail icons,
+   - terminal jobs with indeterminate progress.
 3. Add CSS contract tests for global selectors that can damage unrelated tables or controls.
 4. Require `npm.cmd run test:frontend`, `npm.cmd run build`, and the visual scan before GUI work is considered complete.
 5. Keep audit screenshots in `docs/gui-audit/` whenever a GUI bug is fixed so reviewers can compare before/after evidence.

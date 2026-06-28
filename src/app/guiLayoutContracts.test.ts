@@ -30,4 +30,11 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("#compress-source-table th:nth-child(3)");
     expect(styles).toContain("#compress-source-table th:nth-child(4)");
   });
+
+  it("keeps native icon image sizing separate from file-kind icon classes", () => {
+    expect(styles).toContain(".row-icon-native-image");
+    expect(styles).toContain(".tree-icon-native-image");
+    expect(styles).toContain(".detail-icon-native-image");
+    expect(styles).not.toMatch(/\.row-icon-image,\s*\n\.tree-icon-image,\s*\n\.detail-icon-image\s*\{\s*\n\s*width:\s*100%;/);
+  });
 });

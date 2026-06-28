@@ -238,6 +238,8 @@ type ViewportRect = {
   height: number;
 };
 
+type DevDialogName = "about" | "preferences" | "info" | "jobs";
+
 declare global {
   interface ImportMeta {
     readonly env: {
@@ -248,6 +250,10 @@ declare global {
   interface Window {
     __zmanagerDev?: {
       loadArchiveFixture: (fixture: ArchiveFixture) => void;
+      setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
+      setJobFixtures: (fixtures: JobState[]) => void;
+      openSurface: (surface: DevDialogName) => void;
+      closeModal: () => void;
     };
   }
 }
@@ -316,7 +322,7 @@ function renderEntryIcon(
       draggable="false"
     >
       ${dataUrl
-        ? `<img class="${className}-image" src="${escapeHtmlValue(dataUrl)}" alt="" draggable="false" />`
+        ? `<img class="${className}-native-image" src="${escapeHtmlValue(dataUrl)}" alt="" draggable="false" />`
         : renderIconNode(descriptor.icon, `${className}-svg`)}
     </span>
   `;
@@ -6037,6 +6043,38 @@ renderJobs();
 if (isLocalDevHost()) {
   window.__zmanagerDev = {
     loadArchiveFixture: loadArchiveListingIntoState,
+    setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
+      systemIconDataUrls = new Map(Object.entries(fixtures));
+      renderBrowse();
+    },
+    setJobFixtures: (fixtures: JobState[]) => {
+      jobs.clear();
+      jobRetryContexts.clear();
+      promptedPasswordRetryJobs.clear();
+      for (const fixture of fixtures) {
+        jobs.set(fixture.snapshot.jobId, fixture);
+      }
+      renderJobs();
+    },
+    openSurface: (surface: DevDialogName) => {
+      if (surface === "about") {
+        renderAboutDiagnostics();
+        openModal(aboutDialog, "#about-close");
+      } else if (surface === "preferences") {
+        openPreferencesDialog();
+      } else if (surface === "info") {
+        showCurrentInfo();
+      } else if (surface === "jobs") {
+        openJobDrawer();
+      }
+    },
+    closeModal: () => {
+      const openDialog = getOpenModal();
+      if (openDialog) {
+        closeModal(openDialog);
+      }
+      closeJobDrawer();
+    },
   };
 }
 loadLocalDevFixtureFromUrl();

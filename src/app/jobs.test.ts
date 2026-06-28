@@ -117,4 +117,39 @@ describe("job state helpers", () => {
     expect(progress.currentFile).toBe("docs/readme.txt");
     expect(progress.speedBytesPerSecond).toBe(5);
   });
+
+  it("makes completed jobs determinate even when total bytes are unknown", () => {
+    const state: JobState = {
+      snapshot: pollResponse({
+        status: "completed",
+        canDismiss: true,
+        terminalSummary: {
+          writtenEntries: 2,
+          skippedEntries: null,
+          writtenBytes: 42,
+          warnings: [],
+        },
+      }),
+      events: [{ eventType: "completed", jobKind: "zipCreate" }],
+    };
+
+    const progress = deriveJobProgress(state, Date.parse(startedAt) + 5000);
+
+    expect(progress.progressPercent).toBe(100);
+    expect(progress.latestStatusMessage).toBe("completed");
+  });
+
+  it("stops failed and cancelled jobs at a determinate progress value", () => {
+    const failed: JobState = {
+      snapshot: pollResponse({ status: "failed", canDismiss: true }),
+      events: [{ eventType: "failed", message: "Cannot write archive." }],
+    };
+    const cancelled: JobState = {
+      snapshot: pollResponse({ status: "cancelled", canDismiss: true }),
+      events: [{ eventType: "cancelled", message: "Cancelled." }],
+    };
+
+    expect(deriveJobProgress(failed).progressPercent).toBe(0);
+    expect(deriveJobProgress(cancelled).progressPercent).toBe(0);
+  });
 });

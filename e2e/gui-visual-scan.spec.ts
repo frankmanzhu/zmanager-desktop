@@ -17,10 +17,32 @@ type ArchiveFixture = {
   totalSize: number;
 };
 
+type JobStateFixture = {
+  snapshot: {
+    jobId: string;
+    kind: string;
+    status: string;
+    createdAt: string;
+    canDismiss: boolean;
+    events: unknown[];
+    terminalSummary: {
+      writtenEntries: number;
+      skippedEntries: number | null;
+      writtenBytes: number;
+      warnings: string[];
+    } | null;
+  };
+  events: unknown[];
+};
+
 declare global {
   interface Window {
     __zmanagerDev?: {
       loadArchiveFixture: (fixture: ArchiveFixture) => void;
+      setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
+      setJobFixtures: (fixtures: JobStateFixture[]) => void;
+      openSurface: (surface: "about" | "preferences" | "info" | "jobs") => void;
+      closeModal: () => void;
     };
     __TAURI_EVENT_PLUGIN_INTERNALS__?: {
       unregisterListener: (event: string, id: number) => void;
@@ -31,6 +53,13 @@ declare global {
 }
 
 const auditDir = "docs/gui-audit";
+
+const nativeImageIcon =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Crect width='256' height='256' fill='%23f9fafb'/%3E%3Crect x='32' y='32' width='192' height='192' rx='18' fill='%2393c5fd'/%3E%3Ccircle cx='180' cy='82' r='24' fill='%23eff6ff'/%3E%3Cpath d='M48 208l60-78 42 48 28-34 34 64z' fill='%230284c7'/%3E%3C/svg%3E";
+const nativeFileIcon =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M56 20h94l50 50v166H56z' fill='%23ffffff' stroke='%236b7280' stroke-width='14'/%3E%3Cpath d='M150 20v58h50' fill='%23e5e7eb'/%3E%3C/svg%3E";
+const nativeFolderIcon =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M18 72h84l22 28h114v112H18z' fill='%23fbbf24'/%3E%3Cpath d='M18 92h220v120H18z' fill='%23f59e0b'/%3E%3C/svg%3E";
 
 const archiveFixture: ArchiveFixture = {
   archivePath: "C:/fixtures/visual-scan.zip",
@@ -75,6 +104,59 @@ const archiveFixture: ArchiveFixture = {
   ],
 };
 
+const jobsFixture: JobStateFixture[] = [
+  {
+    snapshot: {
+      jobId: "job-create-complete",
+      kind: "zipCreate",
+      status: "completed",
+      createdAt: "2026-06-28T01:00:00Z",
+      canDismiss: true,
+      events: [],
+      terminalSummary: {
+        writtenEntries: 3,
+        skippedEntries: null,
+        writtenBytes: 124_928,
+        warnings: [],
+      },
+    },
+    events: [
+      { eventType: "started", jobKind: "zipCreate", message: "Creating archive." },
+      { eventType: "completed", jobKind: "zipCreate", message: "Archive created." },
+    ],
+  },
+  {
+    snapshot: {
+      jobId: "job-extract-running",
+      kind: "zipExtract",
+      status: "running",
+      createdAt: "2026-06-28T01:01:00Z",
+      canDismiss: false,
+      events: [],
+      terminalSummary: null,
+    },
+    events: [
+      { eventType: "started", totalBytes: 200_000, message: "Extracting." },
+      { eventType: "entryStarted", path: "documents/quarterly-review.pdf" },
+      { eventType: "bytesProcessed", totalBytesProcessed: 84_000, totalBytes: 200_000 },
+    ],
+  },
+  {
+    snapshot: {
+      jobId: "job-test-failed",
+      kind: "zipTest",
+      status: "failed",
+      createdAt: "2026-06-28T01:02:00Z",
+      canDismiss: true,
+      events: [],
+      terminalSummary: null,
+    },
+    events: [
+      { eventType: "failed", code: "io_error", message: "Unable to read central directory." },
+    ],
+  },
+];
+
 test.beforeEach(async ({ page }) => {
   await installTauriStub(page);
   await page.goto("/");
@@ -97,7 +179,15 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "06-extract-empty");
 
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
+  await page.evaluate((fixtures) => window.__zmanagerDev?.setSystemIconFixtures(fixtures), {
+    directory: nativeFolderIcon,
+    "file:.pdf": nativeFileIcon,
+    "file:.png": nativeImageIcon,
+    "file:.txt": nativeFileIcon,
+    "file:.zip": nativeFileIcon,
+  });
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
+  await expect(page.locator(".row-icon-native-image").first()).toBeVisible();
   await captureAndScan(page, "07-extract-with-archive");
 
   await page.locator('tr[data-entry-path="documents"] .row-name').click();
@@ -112,10 +202,100 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "09-entry-context-menu");
 });
 
+test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
+  await openDevSurface(page, "preferences");
+  await expect(page.getByRole("dialog", { name: "Options" })).toBeVisible();
+  await captureAndScan(page, "10-preferences-dialog");
+  await closeDevSurface(page);
+
+  await openDevSurface(page, "about");
+  await expect(page.getByRole("dialog", { name: "About ZManager" })).toBeVisible();
+  await captureAndScan(page, "11-about-dialog");
+  await closeDevSurface(page);
+
+  await page.evaluate((jobs) => window.__zmanagerDev?.setJobFixtures(jobs), jobsFixture);
+  await openDevSurface(page, "jobs");
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+  await captureAndScan(page, "12-jobs-drawer-with-terminal-and-running");
+  await closeDevSurface(page);
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await captureAndScan(page, "13-extract-empty-context-menu");
+
+  await loadArchiveWithIcons(page);
+  await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
+  await captureAndScan(page, "14-extract-archive-details");
+
+  await page.locator("th[data-column-id='name']").click({ button: "right" });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await captureAndScan(page, "15-column-context-menu");
+
+  await page.locator('tr[data-entry-path="documents"] .row-name').click();
+  await page.locator('tr[data-entry-path="images"] .row-name').click({ modifiers: ["Control"] });
+  await expect(page.locator('tr[data-entry-path="documents"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('tr[data-entry-path="images"]')).toHaveAttribute("aria-selected", "true");
+  await captureAndScan(page, "16-multi-selection-details");
+
+  await openDevSurface(page, "info");
+  await expect(page.getByRole("dialog", { name: "Archive Info" })).toBeVisible();
+  await captureAndScan(page, "17-multi-selection-info-dialog");
+  await closeDevSurface(page);
+
+  await page.locator('tr[data-entry-path="images"] .row-name').dblclick();
+  await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
+  await page.locator('tr[data-entry-path="images/product-screenshot.png"] .row-name').click();
+  await captureAndScan(page, "18-image-entry-details");
+
+  await openDevSurface(page, "info");
+  await expect(page.getByRole("dialog", { name: "Entry Info" })).toBeVisible();
+  await captureAndScan(page, "19-image-entry-info-dialog");
+  await closeDevSurface(page);
+
+  await page.locator("#search-entries").fill("missing-entry");
+  await captureAndScan(page, "20-search-empty-results");
+});
+
+test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await captureAndScan(page, "21-compact-compress-empty");
+
+  await dropFiles(page, ["quarterly-report.pdf", "photos-folder"]);
+  await captureAndScan(page, "22-compact-compress-with-sources");
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+  await captureAndScan(page, "23-compact-extract-loaded");
+
+  await openDevSurface(page, "preferences");
+  await captureAndScan(page, "24-compact-preferences-dialog");
+  await closeDevSurface(page);
+});
+
 async function captureAndScan(page: Page, name: string) {
   await page.screenshot({ path: `${auditDir}/${name}.png`, fullPage: false });
   const problems = await scanVisibleLayout(page);
   expect(problems, `${name} layout problems`).toEqual([]);
+}
+
+async function loadArchiveWithIcons(page: Page) {
+  await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
+  await page.evaluate((fixtures) => window.__zmanagerDev?.setSystemIconFixtures(fixtures), {
+    directory: nativeFolderIcon,
+    "file:.pdf": nativeFileIcon,
+    "file:.png": nativeImageIcon,
+    "file:.txt": nativeFileIcon,
+    "file:.zip": nativeFileIcon,
+  });
+}
+
+async function openDevSurface(page: Page, surface: "about" | "preferences" | "info" | "jobs") {
+  await page.evaluate((surfaceName) => window.__zmanagerDev?.openSurface(surfaceName), surface);
+}
+
+async function closeDevSurface(page: Page) {
+  await page.evaluate(() => window.__zmanagerDev?.closeModal());
 }
 
 async function dropFiles(page: Page, names: string[]) {
@@ -201,6 +381,29 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       }
     }
 
+    for (const icon of Array.from(document.querySelectorAll<HTMLElement>(".row-icon,.tree-icon,.detail-icon"))) {
+      const style = window.getComputedStyle(icon);
+      const rect = icon.getBoundingClientRect();
+      if (style.display === "none" || style.visibility === "hidden" || rect.width === 0 || rect.height === 0) {
+        continue;
+      }
+      const limit = icon.classList.contains("row-icon") ? 19 : 18;
+      if (rect.width > limit || rect.height > limit) {
+        problems.push(`oversized ${Array.from(icon.classList).join(".")} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+      }
+    }
+
+    for (const jobCard of Array.from(document.querySelectorAll<HTMLElement>(".job-card"))) {
+      const subtitle = jobCard.querySelector<HTMLElement>(".job-subtitle")?.textContent ?? "";
+      const progress = jobCard.querySelector<HTMLProgressElement>("progress");
+      if (!progress) {
+        continue;
+      }
+      if (/\b(COMPLETED|FAILED|CANCELLED)\b/.test(subtitle) && !progress.hasAttribute("value")) {
+        problems.push(`terminal job has indeterminate progress "${subtitle.trim()}"`);
+      }
+    }
+
     const controls = elements.filter((element) =>
       element.matches("button,input,select,summary,#context-menu [role='menuitem']"),
     );
@@ -227,7 +430,6 @@ async function installTauriStub(page: Page) {
   await page.addInitScript(() => {
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
-
     const invoke = async (cmd: string, args: Record<string, unknown> = {}) => {
       if (cmd === "healthcheck") {
         return {
@@ -268,7 +470,11 @@ async function installTauriStub(page: Page) {
         return {
           icons: (request?.entries ?? []).map((entry) => ({
             key: entry.key,
-            dataUrl: null,
+            dataUrl: entry.key === "directory"
+              ? nativeFolderIcon
+              : entry.key === "file:.png" || entry.key === "file:.bmp"
+                ? nativeImageIcon
+                : nativeFileIcon,
           })),
         };
       }
