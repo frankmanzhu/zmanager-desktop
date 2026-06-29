@@ -203,6 +203,17 @@ mod linux_file_drag {
     use super::*;
 
     const URI_LIST_TARGET_INFO: u32 = 1;
+    const GNOME_COPIED_FILES_TARGET_INFO: u32 = 2;
+    const URI_LIST_TARGET: &str = "text/uri-list";
+    const GNOME_COPIED_FILES_TARGET: &str = "x-special/gnome-copied-files";
+
+    fn gnome_copied_files_payload(uris: &[String]) -> String {
+        format!("copy\n{}\n", uris.join("\n"))
+    }
+
+    fn drag_selected_copy_action(selected_action: gdk::DragAction) -> bool {
+        selected_action.contains(gdk::DragAction::COPY)
+    }
 
     pub fn start_drag(
         staged_drag: LinuxStagedDrag,
@@ -242,18 +253,34 @@ mod linux_file_drag {
 
         source.drag_source_set(
             gdk::ModifierType::BUTTON1_MASK,
-            &[gtk::TargetEntry::new(
-                "text/uri-list",
-                gtk::TargetFlags::OTHER_APP,
-                URI_LIST_TARGET_INFO,
-            )],
+            &[
+                gtk::TargetEntry::new(
+                    URI_LIST_TARGET,
+                    gtk::TargetFlags::OTHER_APP,
+                    URI_LIST_TARGET_INFO,
+                ),
+                gtk::TargetEntry::new(
+                    GNOME_COPIED_FILES_TARGET,
+                    gtk::TargetFlags::OTHER_APP,
+                    GNOME_COPIED_FILES_TARGET_INFO,
+                ),
+            ],
             gdk::DragAction::COPY,
         );
         source.drag_source_add_uri_targets();
         source.drag_source_set_icon_name("zmanager-desktop");
 
         let data_uris = uris.clone();
-        source.connect_drag_data_get(move |_source, _context, selection_data, _info, _time| {
+        source.connect_drag_data_get(move |_source, _context, selection_data, info, _time| {
+            if info == GNOME_COPIED_FILES_TARGET_INFO {
+                selection_data.set(
+                    &gdk::Atom::intern(GNOME_COPIED_FILES_TARGET),
+                    8,
+                    gnome_copied_files_payload(&data_uris).as_bytes(),
+                );
+                return;
+            }
+
             let uri_refs = data_uris.iter().map(String::as_str).collect::<Vec<_>>();
             selection_data.set_uris(&uri_refs);
         });
@@ -263,8 +290,8 @@ mod linux_file_drag {
         let dropped_for_end = Rc::clone(&dropped);
         let staged_drag_for_end = Rc::clone(&staged_drag);
         source.connect_drag_end(move |_source, context| {
-            let was_dropped = !drag_failed_for_end.get()
-                || context.selected_action().contains(gdk::DragAction::COPY);
+            let was_dropped =
+                !drag_failed_for_end.get() && drag_selected_copy_action(context.selected_action());
             dropped_for_end.set(was_dropped);
             drag_finished_for_end.set(true);
             if let Some(staged_drag) = staged_drag_for_end.borrow_mut().take() {
@@ -284,11 +311,18 @@ mod linux_file_drag {
             glib::Propagation::Proceed
         });
 
-        let target_list = gtk::TargetList::new(&[gtk::TargetEntry::new(
-            "text/uri-list",
-            gtk::TargetFlags::OTHER_APP,
-            URI_LIST_TARGET_INFO,
-        )]);
+        let target_list = gtk::TargetList::new(&[
+            gtk::TargetEntry::new(
+                URI_LIST_TARGET,
+                gtk::TargetFlags::OTHER_APP,
+                URI_LIST_TARGET_INFO,
+            ),
+            gtk::TargetEntry::new(
+                GNOME_COPIED_FILES_TARGET,
+                gtk::TargetFlags::OTHER_APP,
+                GNOME_COPIED_FILES_TARGET_INFO,
+            ),
+        ]);
         let current_event = gtk::current_event();
         let Some(_context) = source.drag_begin_with_coordinates(
             &target_list,
@@ -317,6 +351,31 @@ mod linux_file_drag {
             Ok(NativeFileDragOutcome::Dropped)
         } else {
             Ok(NativeFileDragOutcome::NoDrop)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn linux_drag_success_requires_selected_copy_action() {
+            assert!(drag_selected_copy_action(gdk::DragAction::COPY));
+            assert!(!drag_selected_copy_action(gdk::DragAction::empty()));
+            assert!(!drag_selected_copy_action(gdk::DragAction::MOVE));
+        }
+
+        #[test]
+        fn gnome_copied_files_payload_uses_copy_header_and_uri_lines() {
+            let payload = gnome_copied_files_payload(&[
+                "file:///tmp/zmanager/a.txt".to_string(),
+                "file:///tmp/zmanager/b.txt".to_string(),
+            ]);
+
+            assert_eq!(
+                payload,
+                "copy\nfile:///tmp/zmanager/a.txt\nfile:///tmp/zmanager/b.txt\n"
+            );
         }
     }
 }
