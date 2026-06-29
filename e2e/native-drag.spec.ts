@@ -198,6 +198,25 @@ test("dragging one selected row starts native drag-out for the selected set", as
   });
 });
 
+test("dragging a search result keeps full archive path structure", async ({ page }) => {
+  await entryRow(page, "folder").locator(".row-name").dblclick();
+  await expect(entryRow(page, "root.txt")).toBeHidden();
+
+  await page.locator("#search-entries").fill("root");
+  await expect(entryRow(page, "root.txt")).toBeVisible();
+
+  await dragRowName(page, "root.txt");
+
+  const [call] = await waitForNativeDragCalls(page);
+  expect(call.args).toEqual({
+    request: {
+      archivePath: archiveFixture.archivePath,
+      entryPaths: ["root.txt"],
+      stripComponents: 0,
+    },
+  });
+});
+
 test("dragging blank table space marquee-selects intersecting rows", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
   const rootRow = entryRow(page, "root.txt");

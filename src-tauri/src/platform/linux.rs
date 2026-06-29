@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
+    collections::HashSet,
     fs,
     path::PathBuf,
     rc::Rc,
@@ -99,7 +100,7 @@ pub fn start_native_file_drag(
 
 struct LinuxStagedDrag {
     root: Option<PathBuf>,
-    file_paths: Vec<PathBuf>,
+    drag_paths: Vec<PathBuf>,
 }
 
 impl LinuxStagedDrag {
@@ -115,10 +116,12 @@ impl LinuxStagedDrag {
             )
         })?;
 
-        let mut file_paths = Vec::with_capacity(items.len());
+        let mut drag_paths = Vec::new();
+        let mut drag_path_keys = HashSet::new();
         for item in items {
             let relative_path = linux_drag_relative_path(&item.display_path)?;
             let output_path = root.join(relative_path);
+            record_linux_drag_path(&root, &output_path, &mut drag_path_keys, &mut drag_paths)?;
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent).map_err(|error| {
                     NativeFileDragError::new(
@@ -135,12 +138,11 @@ impl LinuxStagedDrag {
                 )
             })?;
             stream_provider(&item.entry_path, &mut output)?;
-            file_paths.push(output_path);
         }
 
         Ok(Self {
             root: Some(root),
-            file_paths,
+            drag_paths,
         })
     }
 
@@ -199,6 +201,33 @@ fn linux_drag_relative_path(display_path: &str) -> Result<PathBuf, NativeFileDra
     Ok(relative_path)
 }
 
+fn record_linux_drag_path(
+    root: &PathBuf,
+    output_path: &PathBuf,
+    drag_path_keys: &mut HashSet<PathBuf>,
+    drag_paths: &mut Vec<PathBuf>,
+) -> Result<(), NativeFileDragError> {
+    let relative_path = output_path.strip_prefix(root).map_err(|error| {
+        NativeFileDragError::new(
+            format!("Unable to prepare Linux drag-out path: {error}"),
+            Some("Try extracting normally while native drag-out is being checked."),
+        )
+    })?;
+
+    let Some(top_component) = relative_path.components().next() else {
+        return Err(NativeFileDragError::new(
+            "Archive entry has no file name for drag-out.",
+            None::<String>,
+        ));
+    };
+    let drag_path = root.join(top_component.as_os_str());
+    if drag_path_keys.insert(drag_path.clone()) {
+        drag_paths.push(drag_path);
+    }
+
+    Ok(())
+}
+
 mod linux_file_drag {
     use super::*;
 
@@ -226,7 +255,7 @@ mod linux_file_drag {
         }
 
         let uris = staged_drag
-            .file_paths
+            .drag_paths
             .iter()
             .map(|path| gio::File::for_path(path).uri().to_string())
             .collect::<Vec<_>>();
@@ -388,10 +417,10 @@ mod tests {
 
     #[test]
     fn linux_staged_drag_writes_nested_files_and_cleans_up() {
-        let payloads = Arc::new(HashMap::from([(
-            "docs/readme.txt".to_string(),
-            b"drag payload".to_vec(),
-        )]));
+        let payloads = Arc::new(HashMap::from([
+            ("docs/readme.txt".to_string(), b"drag payload".to_vec()),
+            ("root.txt".to_string(), b"root payload".to_vec()),
+        ]));
         let provider_payloads = Arc::clone(&payloads);
         let provider: NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
             let bytes = provider_payloads.get(entry_path).ok_or_else(|| {
@@ -410,21 +439,38 @@ mod tests {
         });
 
         let staged = LinuxStagedDrag::create(
-            &[NativeFileDragItem {
-                entry_path: "docs/readme.txt".to_string(),
-                display_path: "docs\\readme.txt".to_string(),
-                size: Some(12),
-                modified_unix_seconds: None,
-            }],
+            &[
+                NativeFileDragItem {
+                    entry_path: "docs/readme.txt".to_string(),
+                    display_path: "docs\\readme.txt".to_string(),
+                    size: Some(12),
+                    modified_unix_seconds: None,
+                },
+                NativeFileDragItem {
+                    entry_path: "root.txt".to_string(),
+                    display_path: "root.txt".to_string(),
+                    size: Some(12),
+                    modified_unix_seconds: None,
+                },
+            ],
             provider,
         )
         .expect("stage drag files");
         let root = staged.root.clone().expect("test staged root");
-        let file_path = staged.file_paths[0].clone();
+        let nested_file_path = root.join("docs/readme.txt");
+        let root_file_path = root.join("root.txt");
 
         assert_eq!(
-            fs::read(&file_path).expect("read staged file"),
+            fs::read(&nested_file_path).expect("read staged nested file"),
             b"drag payload"
+        );
+        assert_eq!(
+            fs::read(&root_file_path).expect("read staged root file"),
+            b"root payload"
+        );
+        assert_eq!(
+            staged.drag_paths,
+            vec![root.join("docs"), root.join("root.txt")]
         );
         drop(staged);
         assert!(!root.exists(), "staged drag root should be cleaned up");

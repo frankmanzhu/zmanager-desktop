@@ -1637,7 +1637,7 @@ function selectedNativeDragEntryPaths(entryPath: string): string[] {
 }
 
 function nativeDragStripComponents(): number {
-  if (isFlatView || !currentArchiveFolder) {
+  if (isFlatView || searchInput.value.trim() || !currentArchiveFolder) {
     return 0;
   }
 
