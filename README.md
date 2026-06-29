@@ -62,21 +62,29 @@ fresh Ubuntu machine, install:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential cmake curl file libacl1-dev libayatana-appindicator3-dev libbz2-dev libgtk-3-dev liblz4-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 ```
 
 These packages provide `cmake` for the bundled libarchive build and the
 `pkg-config` entries required by the Rust GTK stack, including `libsoup-3.0`
 and `webkit2gtk-4.1`. They also provide native link libraries such as `acl`,
-`bz2`, and `lz4` for archive tests and packaging. Without them, Cargo can fail
-in `zmanager-libarchive-sys`, `soup3-sys`, WebKit-related build scripts, or the
-final Rust link step.
+`bz2`, `expat`, `lz4`, and `xml2` for archive tests and packaging. Without
+them, Cargo can fail in `zmanager-libarchive-sys`, `soup3-sys`, WebKit-related
+build scripts, or the final Rust link step.
+
+The repository includes a Linux Cargo config that appends `-lexpat` as a final
+link argument. Keep `libexpat1-dev` installed; it prevents GNU ld ordering
+failures when the bundled libarchive references Expat symbols on ARM64.
 
 Build an Ubuntu/Debian package with:
 
 ```sh
-scripts/build-linux-ubuntu-deb.sh --skip-tests
+scripts/build-linux-ubuntu-deb.sh
 ```
+
+On a fresh machine, `scripts/build-linux-ubuntu-deb.sh --install-deps` installs
+the Ubuntu packages above, Node.js 20, and Rust through rustup before building.
+Use `--skip-tests` only when you need a packaging-only build.
 
 The build script also stages a copy under `/tmp/zmanager-desktop-deb/` so apt's
 `_apt` sandbox user can read it. Install from that staged path, not directly

@@ -15,10 +15,13 @@ Builds the Ubuntu/Debian .deb distribution package with Tauri.
 
 Ubuntu prerequisites:
   sudo apt-get update
-  sudo apt-get install build-essential cmake curl file libacl1-dev libayatana-appindicator3-dev libbz2-dev libgtk-3-dev liblz4-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+  sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install nodejs
 
 Options:
-  --install-deps  Install required Ubuntu build packages with apt.
+  --install-deps  Install required Ubuntu build packages, Node.js, and Rust.
   --skip-tests    Skip frontend and Rust tests before packaging.
   -h, --help      Show this help.
 EOF
@@ -45,24 +48,20 @@ while (($#)); do
   shift
 done
 
-required_commands=(node npm cargo rustc pkg-config dpkg-deb cmake)
-missing_commands=()
-for command_name in "${required_commands[@]}"; do
-  if ! command -v "$command_name" >/dev/null 2>&1; then
-    missing_commands+=("$command_name")
-  fi
-done
-
 ubuntu_packages=(
   build-essential
+  ca-certificates
   cmake
   curl
   file
+  gnupg
   libacl1-dev
   libayatana-appindicator3-dev
   libbz2-dev
+  libexpat1-dev
   libgtk-3-dev
   liblz4-dev
+  libxml2-dev
   libsoup-3.0-dev
   librsvg2-dev
   libssl-dev
@@ -70,6 +69,55 @@ ubuntu_packages=(
   libxdo-dev
   patchelf
 )
+
+source_cargo_env() {
+  if [[ -f "$HOME/.cargo/env" ]]; then
+    # shellcheck disable=SC1091
+    . "$HOME/.cargo/env"
+  fi
+}
+
+source_cargo_env
+
+version_major() {
+  "$1" --version | sed -E 's/^[^0-9]*([0-9]+).*/\1/'
+}
+
+version_minor() {
+  "$1" --version | sed -E 's/^[^0-9]*[0-9]+\.([0-9]+).*/\1/'
+}
+
+node_install_required() {
+  if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local node_major
+  node_major="$(version_major node)"
+  [[ -z "$node_major" || "$node_major" -lt 20 ]]
+}
+
+rust_install_required() {
+  if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local rust_major rust_minor
+  rust_major="$(version_major rustc)"
+  rust_minor="$(version_minor rustc)"
+  [[ -z "$rust_major" || -z "$rust_minor" || "$rust_major" -lt 1 || ("$rust_major" -eq 1 && "$rust_minor" -lt 85) ]]
+}
+
+collect_missing_commands() {
+  local command_name
+  missing_commands=()
+  required_commands=(node npm cargo rustc pkg-config dpkg-deb cmake)
+  for command_name in "${required_commands[@]}"; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+      missing_commands+=("$command_name")
+    fi
+  done
+}
 
 if ((install_deps)); then
   if ! sudo -n true 2>/dev/null; then
@@ -80,12 +128,26 @@ if ((install_deps)); then
   fi
   sudo apt-get update
   sudo apt-get install -y "${ubuntu_packages[@]}"
+
+  if node_install_required; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+  fi
+
+  if rust_install_required; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source_cargo_env
+  fi
 fi
 
+collect_missing_commands
 if ((${#missing_commands[@]})); then
   echo "Missing required command(s): ${missing_commands[*]}" >&2
   echo "Install Node.js, Rust, and Ubuntu packaging prerequisites, then rerun." >&2
+  echo "Or run: scripts/build-linux-ubuntu-deb.sh --install-deps" >&2
   echo "Ubuntu packages: sudo apt-get install ${ubuntu_packages[*]}" >&2
+  echo "Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" >&2
+  echo "Node.js: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install nodejs" >&2
   exit 1
 fi
 
@@ -109,14 +171,6 @@ if ((${#missing_pkg_config_packages[@]})); then
   echo "Or run: scripts/build-linux-ubuntu-deb.sh --install-deps" >&2
   exit 1
 fi
-
-version_major() {
-  "$1" --version | sed -E 's/^[^0-9]*([0-9]+).*/\1/'
-}
-
-version_minor() {
-  "$1" --version | sed -E 's/^[^0-9]*[0-9]+\.([0-9]+).*/\1/'
-}
 
 rust_major="$(version_major rustc)"
 rust_minor="$(version_minor rustc)"

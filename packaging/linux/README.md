@@ -42,13 +42,13 @@ native archive/link dependencies:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential cmake curl file libacl1-dev libayatana-appindicator3-dev libbz2-dev libgtk-3-dev liblz4-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 ```
 
 These packages provide `cmake` for the bundled libarchive build and required
 `pkg-config` entries such as `gtk+-3.0`, `libsoup-3.0`, and `webkit2gtk-4.1`.
-They also provide native link libraries such as `acl`, `bz2`, and `lz4`. If
-they are missing, Cargo fails before packaging, often in
+They also provide native link libraries such as `acl`, `bz2`, `expat`, `lz4`,
+and `xml2`. If they are missing, Cargo fails before packaging, often in
 `zmanager-libarchive-sys`, `soup3-sys`, WebKit build scripts, or the final Rust
 link step. A missing libsoup package looks like:
 
@@ -65,9 +65,14 @@ is `cmake` not installed?
 ```
 
 You can also run `scripts/build-linux-ubuntu-deb.sh --install-deps`, but it
-requires an interactive sudo session. The script expects Rust 1.85 or newer
-because the Tauri crate uses the Rust 2024 edition. Node.js 20 or newer is
-required when running the default test path.
+requires an interactive sudo session. The script installs missing Node.js 20
+and Rust through rustup, then reloads Cargo's environment before checking
+versions. The script expects Rust 1.85 or newer because the Tauri crate uses the
+Rust 2024 edition.
+
+The repository includes `.cargo/config.toml` to append `-lexpat` on Linux. Keep
+`libexpat1-dev` in the dependency list; it avoids ARM64 GNU ld ordering
+failures when test or release binaries link bundled libarchive.
 
 Quick-action command contract:
 
