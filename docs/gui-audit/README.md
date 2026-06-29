@@ -49,6 +49,15 @@ Primary user goal: switch between Compress and Extract without fake or broken UI
     - Health: passing.
     - Compact viewport pass now covers Compress empty, Compress with sources, Extract loaded, and Options.
 
+11. `25-compress-drop-overlay.png` through `31-flat-view-with-icons.png`
+    - Health: passing.
+    - Additional transient and option-heavy states covered: Compress drag overlay, Create source context menu, Create advanced/password/volume options, Extract drag overlay, empty Jobs drawer, Preferences custom output folder, and flat archive view with native icon fixtures.
+
+12. `32-min-compress-empty.png` through `36-min-extract-dialog.png`
+    - Health: passing after status-bar fix.
+    - Minimum-size viewport pass covers Compress empty, long source names, Create dialog, Extract loaded, and Extract dialog.
+    - Finding fixed: at 760x540, the status bar's responsive padding pushed the `No jobs` button partly outside the viewport.
+
 ## Fix Applied
 
 - Scoped archive first-column sizing to `#entry-table`.
@@ -57,21 +66,22 @@ Primary user goal: switch between Compress and Extract without fake or broken UI
 - Scoped the path-bar search input minimum width so it cannot collide with the `Flat` toggle.
 - Split native icon image classes from file-kind wrapper classes so image entries cannot expand row/detail icon boxes.
 - Made terminal job progress determinate so completed create jobs stop at `100%` instead of showing an indeterminate progress bar.
-- Added `e2e/gui-visual-scan.spec.ts` to capture primary and secondary GUI states and fail on clipped labels, overlapping visible controls, oversized row/tree/detail icons, or terminal jobs with indeterminate progress.
+- Reduced the small-width status bar padding so the Jobs button stays inside the fixed status row.
+- Added `e2e/gui-visual-scan.spec.ts` to capture primary, secondary, transient, compact, and minimum-size GUI states. It fails on clipped labels, overlapping visible controls, page horizontal overflow, controls outside the viewport, oversized row/tree/detail icons, or terminal jobs with indeterminate progress.
 
 ## Current Verification
 
 - `npm.cmd run test:frontend`: passed, 17 test files / 100 tests.
 - `npm.cmd run build`: passed.
-- `npm.cmd run test:e2e`: passed, 13 Playwright tests.
-- `npx.cmd playwright test e2e/gui-visual-scan.spec.ts`: passed, 3 GUI scan tests covering 24 screenshots.
+- `npm.cmd run test:e2e`: passed, 14 Playwright tests.
+- `npx.cmd playwright test e2e/gui-visual-scan.spec.ts`: passed, 4 GUI scan tests covering 36 screenshots.
 
 ## UX Risks Still Open
 
 1. Dialogs still come from the older architecture and need deeper review against the two-mode model.
 2. The Create Archive action is visually separated from the staged-file table but still opens the old modal, so the flow is not yet fully resolved.
 3. Extract drag-out behavior needs end-to-end verification in the real Tauri shell, not browser preview.
-4. More compact viewport variants should be added if the supported minimum window size changes.
+4. More viewport variants should be added if the supported minimum window size changes.
 
 ## Accessibility Risks Still Open
 
@@ -85,7 +95,7 @@ Primary user goal: switch between Compress and Extract without fake or broken UI
 2. Keep the repeatable visual scan command covering desktop and compact widths, failing on:
    - clipped button/header text,
    - visible element overlap,
-   - horizontal overflow outside intended scroll containers,
+   - page horizontal overflow and visible controls outside the viewport,
    - missing main action for the active mode,
    - hidden/disabled fake actions in primary chrome,
    - oversized row/tree/detail icons,

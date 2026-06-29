@@ -166,6 +166,11 @@ test.beforeEach(async ({ page }) => {
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
   await captureAndScan(page, "03-compress-empty");
 
+  await dragFiles(page, ["draft.zip"]);
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
+  await captureAndScan(page, "25-compress-drop-overlay");
+  await dragLeave(page);
+
   await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
   await captureAndScan(page, "04-compress-with-sources");
@@ -173,10 +178,28 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await page.getByRole("button", { name: "Create Archive" }).click();
   await expect(page.getByRole("dialog", { name: "Add to Archive" })).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
+
+  await page.locator("#source-list li").first().click({ button: "right" });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await captureAndScan(page, "26-create-source-context-menu");
+  await page.locator("#create-title").click();
+
+  await page.locator("#create-dialog details.advanced-options summary").click();
+  await page.locator("#create-format").selectOption("sevenZ");
+  await page.locator("#create-volume").fill("1048576");
+  await page.locator("#create-password").fill("correct horse battery staple");
+  await page.locator("#create-password-confirm").fill("correct horse battery staple");
+  await page.locator("#create-show-password").check();
+  await captureAndScan(page, "27-create-dialog-advanced-options");
   await page.getByRole("button", { name: "Cancel" }).click();
 
   await page.getByRole("tab", { name: "Extract" }).click();
   await captureAndScan(page, "06-extract-empty");
+
+  await dragFiles(page, ["sample.zip"]);
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
+  await captureAndScan(page, "28-extract-drop-overlay");
+  await dragLeave(page);
 
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
   await page.evaluate((fixtures) => window.__zmanagerDev?.setSystemIconFixtures(fixtures), {
@@ -203,9 +226,18 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
 });
 
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
+  await openDevSurface(page, "jobs");
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+  await captureAndScan(page, "29-jobs-drawer-empty");
+  await closeDevSurface(page);
+
   await openDevSurface(page, "preferences");
   await expect(page.getByRole("dialog", { name: "Options" })).toBeVisible();
   await captureAndScan(page, "10-preferences-dialog");
+
+  await page.locator("#pref-output-location").selectOption("customFolder");
+  await page.locator("#pref-custom-output").fill("C:/Users/frankzhu/Desktop/ZManager Output");
+  await captureAndScan(page, "30-preferences-custom-output");
   await closeDevSurface(page);
 
   await openDevSurface(page, "about");
@@ -255,6 +287,10 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
 
   await page.locator("#search-entries").fill("missing-entry");
   await captureAndScan(page, "20-search-empty-results");
+
+  await page.locator("#search-entries").fill("");
+  await page.locator("#flat-view-toggle").check();
+  await captureAndScan(page, "31-flat-view-with-icons");
 });
 
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
@@ -271,6 +307,30 @@ test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await openDevSurface(page, "preferences");
   await captureAndScan(page, "24-compact-preferences-dialog");
   await closeDevSurface(page);
+});
+
+test("minimum-size visual surfaces stay within the app bounds", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 540 });
+  await captureAndScan(page, "32-min-compress-empty");
+
+  await dropFiles(page, [
+    "very-long-file-name-that-should-not-break-the-compress-table-layout-report-final.pdf",
+    "deeply-nested-folder-with-a-long-name",
+  ]);
+  await captureAndScan(page, "33-min-compress-long-sources");
+
+  await page.getByRole("button", { name: "Create Archive" }).click();
+  await captureAndScan(page, "34-min-create-dialog");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+  await captureAndScan(page, "35-min-extract-loaded");
+
+  await page.locator('tr[data-entry-path="documents"] .row-name').click();
+  await page.getByRole("button", { name: "Extract" }).click();
+  await captureAndScan(page, "36-min-extract-dialog");
+  await page.getByRole("button", { name: "Cancel" }).click();
 });
 
 async function captureAndScan(page: Page, name: string) {
@@ -311,6 +371,32 @@ async function dropFiles(page: Page, names: string[]) {
     });
     document.querySelector("#app")?.dispatchEvent(event);
   }, names);
+}
+
+async function dragFiles(page: Page, names: string[]) {
+  await page.evaluate((fileNames) => {
+    const dataTransfer = new DataTransfer();
+    for (const name of fileNames) {
+      dataTransfer.items.add(new File(["fixture"], name));
+    }
+    const event = new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer,
+    });
+    document.querySelector("#app")?.dispatchEvent(event);
+  }, names);
+}
+
+async function dragLeave(page: Page) {
+  await page.evaluate(() => {
+    const event = new DragEvent("dragleave", {
+      bubbles: true,
+      cancelable: true,
+      relatedTarget: document.body,
+    });
+    document.querySelector("#app")?.dispatchEvent(event);
+  });
 }
 
 async function scanVisibleLayout(page: Page): Promise<string[]> {
@@ -369,6 +455,11 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
 
     const problems: string[] = [];
 
+    const documentWidth = Math.max(document.documentElement.scrollWidth, document.body.scrollWidth);
+    if (documentWidth > window.innerWidth + 1) {
+      problems.push(`page horizontal overflow ${documentWidth} > ${window.innerWidth}`);
+    }
+
     for (const element of elements) {
       const measuredElement = element.matches("th")
         ? (element.querySelector<HTMLElement>(".column-header-label") ?? element)
@@ -378,6 +469,10 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       const clippedBlock = measuredElement.scrollHeight > measuredElement.clientHeight + 1;
       if (label && (clippedInline || clippedBlock)) {
         problems.push(`clipped ${element.tagName.toLowerCase()} "${label}"`);
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.left < -1 || rect.right > window.innerWidth + 1 || rect.top < -1 || rect.bottom > window.innerHeight + 1) {
+        problems.push(`out of viewport ${element.tagName.toLowerCase()} "${label}"`);
       }
     }
 

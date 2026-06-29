@@ -1998,7 +1998,8 @@ progress {
 
   .status-bar {
     gap: 6px;
-    padding: 6px 8px;
+    align-items: center;
+    padding: 2px 6px;
   }
 
   .status-part:nth-child(2),
