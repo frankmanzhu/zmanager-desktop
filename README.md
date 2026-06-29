@@ -61,12 +61,13 @@ GTK/WebKit development packages. On a fresh Ubuntu machine, install:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential cmake curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 ```
 
-These packages provide the `pkg-config` entries required by the Rust GTK stack,
-including `libsoup-3.0` and `webkit2gtk-4.1`. Without them, Cargo can fail in
-`soup3-sys` or WebKit-related build scripts.
+These packages provide `cmake` for the bundled libarchive build and the
+`pkg-config` entries required by the Rust GTK stack, including `libsoup-3.0`
+and `webkit2gtk-4.1`. Without them, Cargo can fail in `zmanager-libarchive-sys`,
+`soup3-sys`, or WebKit-related build scripts.
 
 Build an Ubuntu/Debian package with:
 

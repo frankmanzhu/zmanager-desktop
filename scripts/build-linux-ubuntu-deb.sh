@@ -15,7 +15,7 @@ Builds the Ubuntu/Debian .deb distribution package with Tauri.
 
 Ubuntu prerequisites:
   sudo apt-get update
-  sudo apt-get install build-essential curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+  sudo apt-get install build-essential cmake curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 
 Options:
   --install-deps  Install required Ubuntu build packages with apt.
@@ -45,7 +45,7 @@ while (($#)); do
   shift
 done
 
-required_commands=(node npm cargo rustc pkg-config dpkg-deb)
+required_commands=(node npm cargo rustc pkg-config dpkg-deb cmake)
 missing_commands=()
 for command_name in "${required_commands[@]}"; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -55,6 +55,7 @@ done
 
 ubuntu_packages=(
   build-essential
+  cmake
   curl
   file
   libayatana-appindicator3-dev

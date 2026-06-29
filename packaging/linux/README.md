@@ -27,16 +27,25 @@ Fresh Ubuntu builders must install Tauri's native GTK/WebKit dependencies:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential cmake curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 ```
 
-These packages provide required `pkg-config` entries such as `gtk+-3.0`,
-`libsoup-3.0`, and `webkit2gtk-4.1`. If they are missing, Cargo fails before
-packaging, often in `soup3-sys`, with output similar to:
+These packages provide `cmake` for the bundled libarchive build and required
+`pkg-config` entries such as `gtk+-3.0`, `libsoup-3.0`, and `webkit2gtk-4.1`.
+If they are missing, Cargo fails before packaging, often in
+`zmanager-libarchive-sys`, `soup3-sys`, or WebKit build scripts. A missing
+libsoup package looks like:
 
 ```text
 pkg-config --libs --cflags libsoup-3.0 'libsoup-3.0 >= 3.0'
 No package 'libsoup-3.0' found
+```
+
+A missing `cmake` package looks like:
+
+```text
+failed to execute command: No such file or directory (os error 2)
+is `cmake` not installed?
 ```
 
 You can also run `scripts/build-linux-ubuntu-deb.sh --install-deps`, but it
