@@ -14,8 +14,6 @@
     "allow-start-create",
     "allow-start-extract",
     "allow-start-native-file-drag",
-    "allow-prepare-native-file-drag",
-    "allow-clear-native-file-drag",
     "allow-preview-entry",
     "allow-cleanup-preview-roots",
     "allow-test-archive",

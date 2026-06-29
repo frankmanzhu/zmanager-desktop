@@ -73,12 +73,6 @@ pub use windows::start_native_file_drag;
 #[cfg(not(target_os = "windows"))]
 pub use linux::start_native_file_drag;
 
-#[cfg(not(target_os = "windows"))]
-pub use linux::prepare_native_file_drag_uris;
-
-#[cfg(not(target_os = "windows"))]
-pub use linux::clear_prepared_native_file_drag;
-
 #[cfg(target_os = "windows")]
 pub fn integration_profile() -> PlatformProfile {
     PlatformProfile {

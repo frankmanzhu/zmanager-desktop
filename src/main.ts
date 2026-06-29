@@ -141,7 +141,6 @@ import {
 import {
   asCommandError,
   cancelJob as cancelJobCommand,
-  clearNativeFileDrag,
   dismissJob as dismissJobCommand,
   fetchHealthcheck,
   fetchProjectContract,
@@ -151,7 +150,6 @@ import {
   cleanupPreviewRoots,
   pollJobEvents as pollJobEventsCommand,
   runPlanCreate,
-  runPrepareNativeFileDrag,
   runPreviewEntry,
   runStartNativeFileDrag,
   runStartCreate,
@@ -174,7 +172,6 @@ import type {
   JobKind,
   JobState,
   NativeFileDragRequest,
-  PreparedNativeFileDragResponse,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -222,14 +219,6 @@ type NativeDragGesture = {
   startY: number;
   entryPath: string;
   started: boolean;
-};
-
-type PreparedLinuxNativeDrag = {
-  requestKey: string;
-  entryPath: string;
-  promise: Promise<PreparedNativeFileDragResponse>;
-  result: PreparedNativeFileDragResponse | null;
-  error: string;
 };
 
 type MarqueeSelectionGesture = {
@@ -1162,7 +1151,6 @@ let currentPreviewPath = "";
 let currentPreviewEntryPath = "";
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
-let pendingLinuxNativeDrag: PreparedLinuxNativeDrag | null = null;
 let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
 let marqueeSelectionElement: HTMLDivElement | null = null;
 let suppressNextTableClick = false;
@@ -1653,17 +1641,6 @@ function nativeDragStripComponents(): number {
   return currentArchiveFolder.split("/").filter(Boolean).length;
 }
 
-function isLinuxNativeUriDragEnabled(): boolean {
-  return isDesktopRuntime() && latestContract?.platformIntegration.platform === "linux";
-}
-
-function clearLinuxNativeDragPayload() {
-  if (isLinuxNativeUriDragEnabled()) {
-    pendingLinuxNativeDrag = null;
-    void clearNativeFileDrag().catch(() => undefined);
-  }
-}
-
 function nativeDragRowAttributes(): string {
   return "";
 }
@@ -1748,67 +1725,6 @@ async function startNativeDragOut(entryPath: string) {
       return;
     }
   }
-}
-
-function linuxNativeDragRequestKey(request: NativeFileDragRequest): string {
-  return JSON.stringify({
-    archivePath: request.archivePath,
-    entryPaths: request.entryPaths,
-    password: Boolean(request.password),
-    stripComponents: request.stripComponents,
-  });
-}
-
-function prepareLinuxNativeDragForEntry(entryPath: string): PreparedLinuxNativeDrag | null {
-  if (!isLinuxNativeUriDragEnabled()) {
-    return null;
-  }
-
-  const password = browsePasswordInput.value.trim() || undefined;
-  const request = nativeDragRequestForEntry(entryPath, password);
-  if (!request) {
-    setOperationalStatus("Select at least one entry to drag out.");
-    return null;
-  }
-
-  const requestKey = linuxNativeDragRequestKey(request);
-  if (
-    pendingLinuxNativeDrag?.requestKey === requestKey &&
-    !pendingLinuxNativeDrag.result &&
-    !pendingLinuxNativeDrag.error
-  ) {
-    return pendingLinuxNativeDrag;
-  }
-
-  setOperationalStatus(`Preparing ${request.entryPaths.length} item(s) for drag-out...`);
-  const preparedDrag: PreparedLinuxNativeDrag = {
-    requestKey,
-    entryPath,
-    promise: runPrepareNativeFileDrag(request),
-    result: null,
-    error: "",
-  };
-  pendingLinuxNativeDrag = preparedDrag;
-
-  void preparedDrag.promise
-    .then((response) => {
-      if (pendingLinuxNativeDrag?.requestKey !== requestKey) {
-        return response;
-      }
-      pendingLinuxNativeDrag.result = response;
-      setOperationalStatus(`Ready to drag ${response.draggedEntries.length} item(s).`);
-      return response;
-    })
-    .catch((error) => {
-      const commandError = asCommandError(error);
-      if (pendingLinuxNativeDrag?.requestKey === requestKey) {
-        pendingLinuxNativeDrag.error =
-          commandError?.message ?? "Unable to prepare native drag-out.";
-        setOperationalStatus(pendingLinuxNativeDrag.error);
-      }
-    });
-
-  return preparedDrag;
 }
 
 function getKnownFolderPaths(): string[] {
@@ -5587,10 +5503,13 @@ function onNativeDragPointerMove(event: PointerEvent) {
   document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
   event.preventDefault();
   const entryPath = gesture.entryPath;
-  clearPendingNativeDragGesture();
   if (!selectedEntries.has(entryPath)) {
     selectEntryForNativeDragGesture(entryPath);
   }
+
+  document.removeEventListener("pointermove", onNativeDragPointerMove);
+
+  clearPendingNativeDragGesture();
   void startNativeDragOut(entryPath);
 }
 
@@ -5616,20 +5535,11 @@ function selectEntryForNativeDragGesture(entryPath: string) {
 
 tableBody.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !currentArchivePath || hasActiveJob() || hasSelectionModifier(event)) {
-    clearLinuxNativeDragPayload();
     return;
   }
 
   const entryPath = entryPathFromNativeDragEvent(event);
   if (!entryPath) {
-    clearLinuxNativeDragPayload();
-    return;
-  }
-
-  if (isLinuxNativeUriDragEnabled()) {
-    void prepareLinuxNativeDragForEntry(entryPath);
-    document.addEventListener("pointerup", clearLinuxNativeDragPayload, { once: true });
-    document.addEventListener("pointercancel", clearLinuxNativeDragPayload, { once: true });
     return;
   }
 
@@ -5650,7 +5560,6 @@ tableShellElement.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  clearLinuxNativeDragPayload();
   pendingMarqueeSelection = {
     pointerId: event.pointerId,
     startX: event.clientX,
@@ -5667,9 +5576,6 @@ tableShellElement.addEventListener("pointerdown", (event) => {
 
 tableBody.addEventListener("dragstart", (event) => {
   if ((event.target as HTMLElement | null)?.closest("tr[data-entry-path]")) {
-    if (isLinuxNativeUriDragEnabled()) {
-      return;
-    }
     event.preventDefault();
   }
 });

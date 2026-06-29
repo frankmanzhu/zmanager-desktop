@@ -14,7 +14,6 @@ import type {
   PollJobEventsRequest,
   PollJobEventsResponseDto,
   PlanCreateRequest,
-  PreparedNativeFileDragResponse,
   PreviewEntryRequest,
   PreviewEntryResponse,
   ProjectContract,
@@ -83,18 +82,6 @@ export async function runStartNativeFileDrag(
   return invoke<NativeFileDragResponse>("start_native_file_drag", {
     request,
   });
-}
-
-export async function runPrepareNativeFileDrag(
-  request: NativeFileDragRequest,
-): Promise<PreparedNativeFileDragResponse> {
-  return invoke<PreparedNativeFileDragResponse>("prepare_native_file_drag", {
-    request,
-  });
-}
-
-export async function clearNativeFileDrag(): Promise<void> {
-  return invoke<void>("clear_native_file_drag");
 }
 
 export async function cleanupPreviewRoots(): Promise<void> {

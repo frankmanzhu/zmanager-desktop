@@ -180,11 +180,6 @@ export type NativeFileDragResponse = {
   draggedEntries: string[];
 };
 
-export type PreparedNativeFileDragResponse = {
-  draggedEntries: string[];
-  uris: string[];
-};
-
 export type TestArchiveRequest = {
   archivePath: string;
   password?: string;

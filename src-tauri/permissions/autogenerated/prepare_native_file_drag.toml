@@ -1,9 +1,0 @@
-[[permission]]
-identifier = "allow-prepare-native-file-drag"
-description = "Enables the prepare_native_file_drag command without any pre-configured scope."
-commands.allow = ["prepare_native_file_drag"]
-
-[[permission]]
-identifier = "deny-prepare-native-file-drag"
-description = "Denies the prepare_native_file_drag command without any pre-configured scope."
-commands.deny = ["prepare_native_file_drag"]

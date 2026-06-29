@@ -69,14 +69,7 @@ const archiveFixture: ArchiveFixture = {
 };
 
 test.beforeEach(async ({ page }) => {
-  await installTauriStub(page);
-  await page.goto("/");
-  await page.waitForFunction(() => Boolean(window.__zmanagerDev));
-  await page.getByRole("tab", { name: "Extract" }).click();
-  await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
-  await expect(entryRow(page, "folder")).toBeVisible();
-  await expect(entryRow(page, "root.txt")).toBeVisible();
-  await clearIpcCalls(page);
+  await loadExtractFixture(page);
 });
 
 test("synthetic folder rows can be selected from the table row", async ({ page }) => {
@@ -124,6 +117,15 @@ test("ctrl-click adds rows to the selection without starting native drag-out", a
 
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
+  expect(await nativeDragCalls(page)).toEqual([]);
+});
+
+test("shift-click selects a visible range without starting native drag-out", async ({ page }) => {
+  await entryRow(page, "folder").locator(".row-name").click();
+  await entryRow(page, "root.txt").locator(".row-name").click({ modifiers: ["Shift"] });
+
+  await expect(entryRow(page, "folder")).toHaveAttribute("aria-selected", "true");
+  await expect(entryRow(page, "root.txt")).toHaveAttribute("aria-selected", "true");
   expect(await nativeDragCalls(page)).toEqual([]);
 });
 
@@ -258,8 +260,101 @@ test("dragging a file row starts native drag for the file and suppresses browser
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
 });
 
-async function installTauriStub(page: Page) {
-  await page.addInitScript(() => {
+test.describe("linux native drag arming", () => {
+  test.beforeEach(async ({ page }) => {
+    await loadExtractFixture(page, { platform: "linux" });
+  });
+
+  test("pressing and holding a row does not prepare or start native drag-out", async ({ page }) => {
+    const rootRow = entryRow(page, "root.txt");
+    const box = await rootRow.locator(".row-name").boundingBox();
+    if (!box) {
+      throw new Error("Unable to locate root row name");
+    }
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(150);
+
+    await expect(rootRow).toHaveAttribute("aria-selected", "false");
+    expect(await nativeDragCalls(page)).toEqual([]);
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+
+    await page.mouse.up();
+  });
+
+  test("linux starts direct native drag only after real drag movement", async ({ page }) => {
+    const rootRow = entryRow(page, "root.txt");
+    const box = await rootRow.locator(".row-name").boundingBox();
+    if (!box) {
+      throw new Error("Unable to locate root row name");
+    }
+
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 3, startY, { steps: 2 });
+
+    expect(await nativeDragCalls(page)).toEqual([]);
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+
+    await page.mouse.move(startX + 12, startY + 2, { steps: 3 });
+
+    const [call] = await waitForNativeDragCalls(page);
+    expect(call.args).toEqual({
+      request: {
+        archivePath: archiveFixture.archivePath,
+        entryPaths: ["root.txt"],
+        stripComponents: 0,
+      },
+    });
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+    await expect(rootRow).toHaveAttribute("aria-selected", "true");
+
+    await page.mouse.up();
+  });
+
+  test("linux ctrl-click and shift-click select without preparing drag-out", async ({ page }) => {
+    const folderRow = entryRow(page, "folder");
+    const rootRow = entryRow(page, "root.txt");
+
+    await rootRow.locator(".row-name").click();
+    await folderRow.locator(".row-name").click({ modifiers: ["Control"] });
+
+    await expect(rootRow).toHaveAttribute("aria-selected", "true");
+    await expect(folderRow).toHaveAttribute("aria-selected", "true");
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+
+    await rootRow.locator(".row-name").click({ modifiers: ["Shift"] });
+
+    await expect(rootRow).toHaveAttribute("aria-selected", "true");
+    await expect(folderRow).toHaveAttribute("aria-selected", "true");
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+  });
+
+  test("linux table row DOM dragstart is suppressed so WebKit does not start a DOM drag", async ({ page }) => {
+    const rootRow = entryRow(page, "root.txt");
+
+    await expect(await dispatchDragStartFromIcon(rootRow)).toBe(true);
+    expect(await preparedNativeDragCalls(page)).toEqual([]);
+  });
+});
+
+async function loadExtractFixture(page: Page, options?: { platform?: "windows" | "linux" }) {
+  await installTauriStub(page, options);
+  await page.goto("/");
+  await page.waitForFunction(() => Boolean(window.__zmanagerDev));
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
+  await expect(entryRow(page, "folder")).toBeVisible();
+  await expect(entryRow(page, "root.txt")).toBeVisible();
+  await clearIpcCalls(page);
+}
+
+async function installTauriStub(page: Page, options?: { platform?: "windows" | "linux" }) {
+  const platform = options?.platform ?? "windows";
+  await page.addInitScript((platform: "windows" | "linux") => {
     const ipcCalls: IpcCall[] = [];
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
@@ -291,7 +386,7 @@ async function installTauriStub(page: Page) {
           platformStrategy: "e2e",
           coreDependency: "stub",
           platformIntegration: {
-            platform: "windows",
+            platform,
             explorerIntegrationEnabled: true,
             desktopActionsEnabled: false,
             associatedExtensions: ["zip"],
@@ -324,6 +419,18 @@ async function installTauriStub(page: Page) {
           outcome: "dropped",
           draggedEntries: request.entryPaths,
         };
+      }
+
+      if (cmd === "prepare_native_file_drag") {
+        const request = args.request as { entryPaths: string[] };
+        return {
+          draggedEntries: request.entryPaths,
+          uris: request.entryPaths.map((entryPath) => `file:///tmp/zmanager-drag-proof/${entryPath}`),
+        };
+      }
+
+      if (cmd === "clear_native_file_drag") {
+        return undefined;
       }
 
       if (cmd === "cleanup_preview_roots") {
@@ -390,7 +497,7 @@ async function installTauriStub(page: Page) {
       transformCallback,
       unregisterCallback,
     };
-  });
+  }, platform);
 }
 
 function entryRow(page: Page, entryPath: string) {
@@ -409,6 +516,14 @@ async function nativeDragCalls(page: Page): Promise<IpcCall[]> {
   return page.evaluate(() =>
     (window.__zmanagerE2E?.ipcCalls ?? []).filter(
       (call) => call.cmd === "start_native_file_drag",
+    ),
+  );
+}
+
+async function preparedNativeDragCalls(page: Page): Promise<IpcCall[]> {
+  return page.evaluate(() =>
+    (window.__zmanagerE2E?.ipcCalls ?? []).filter(
+      (call) => call.cmd === "prepare_native_file_drag",
     ),
   );
 }

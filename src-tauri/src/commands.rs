@@ -11,10 +11,10 @@ use crate::{
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
         DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
-        NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest,
-        PreparedNativeFileDragResponse, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
-        ProjectIntegrationContract, ProjectIntegrationShellActionDto, StartCreateRequest,
-        StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest,
+        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ProjectIntegrationShellActionDto, StartCreateRequest, StartExtractRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -602,68 +602,6 @@ pub fn start_native_file_drag(
             .map(|item| item.entry_path.clone())
             .collect(),
     })
-}
-
-#[tauri::command]
-pub fn prepare_native_file_drag(
-    request: NativeFileDragRequest,
-    _registry: State<'_, JobRegistry>,
-) -> Result<PreparedNativeFileDragResponse, CommandErrorDto> {
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = request;
-        return Err(CommandErrorDto::invalid_request(
-            "Prepared URI drag-out is only used on Linux.",
-        ));
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
-        let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
-        let password = request
-            .password
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty());
-
-        let drag_items = build_native_drag_items(
-            &archive_path,
-            &entry_paths,
-            request.strip_components,
-            password.as_deref(),
-        )?;
-        preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
-
-        let stream_archive_path = archive_path.clone();
-        let stream_password = password.clone();
-        let stream_provider: crate::platform::NativeFileDragStreamProvider =
-            Arc::new(move |entry_path, writer| {
-                stream_native_drag_entry(
-                    &stream_archive_path,
-                    stream_password.as_deref(),
-                    entry_path,
-                    writer,
-                )
-                .map_err(native_file_drag_error_from_command)
-            });
-
-        let uris = crate::platform::prepare_native_file_drag_uris(&drag_items, stream_provider)
-            .map_err(map_native_file_drag_error)?;
-
-        Ok(PreparedNativeFileDragResponse {
-            dragged_entries: drag_items
-                .iter()
-                .map(|item| item.entry_path.clone())
-                .collect(),
-            uris,
-        })
-    }
-}
-
-#[tauri::command]
-pub fn clear_native_file_drag() {
-    #[cfg(target_os = "linux")]
-    crate::platform::clear_prepared_native_file_drag();
 }
 
 #[tauri::command]

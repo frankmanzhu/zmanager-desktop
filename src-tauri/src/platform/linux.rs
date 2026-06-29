@@ -3,14 +3,13 @@ use std::{
     fs,
     path::PathBuf,
     rc::Rc,
-    sync::{Arc, Mutex, OnceLock},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use tauri::{Builder, Manager, Wry};
+use tauri::{Builder, Wry};
 
 use super::{
     NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
@@ -36,9 +35,6 @@ pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
     },
 ];
 
-const URI_LIST_TARGET_INFO: u32 = 1;
-const GNOME_COPIED_FILES_TARGET_INFO: u32 = 2;
-
 pub fn is_desktop_actions_enabled() -> bool {
     DESKTOP_ACTIONS_ENABLED
 }
@@ -60,15 +56,7 @@ pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
         let _ = associated_extensions();
     }
 
-    builder.setup(|app| {
-        if let Some(webview_window) = app.get_webview_window("main") {
-            let _ = webview_window.with_webview(|platform_webview| {
-                install_webview_file_drag_source(platform_webview.inner());
-            });
-        }
-
-        Ok(())
-    })
+    builder
 }
 
 pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
@@ -107,119 +95,6 @@ pub fn start_native_file_drag(
 
     let staged_drag = LinuxStagedDrag::create(items, stream_provider)?;
     linux_file_drag::start_drag(staged_drag)
-}
-
-pub fn prepare_native_file_drag_uris(
-    items: &[NativeFileDragItem],
-    stream_provider: NativeFileDragStreamProvider,
-) -> Result<Vec<String>, NativeFileDragError> {
-    if items.is_empty() {
-        return Err(NativeFileDragError::new(
-            "No archive files are available to drag.",
-            None::<String>,
-        ));
-    }
-
-    set_prepared_native_drag_payload(items.to_vec(), stream_provider);
-    Ok(Vec::new())
-}
-
-struct LinuxPreparedDragPayload {
-    items: Vec<NativeFileDragItem>,
-    stream_provider: NativeFileDragStreamProvider,
-    uris: Option<Vec<String>>,
-}
-
-fn prepared_native_drag_payload() -> &'static Mutex<Option<LinuxPreparedDragPayload>> {
-    static PAYLOAD: OnceLock<Mutex<Option<LinuxPreparedDragPayload>>> = OnceLock::new();
-    PAYLOAD.get_or_init(|| Mutex::new(None))
-}
-
-fn set_prepared_native_drag_payload(
-    items: Vec<NativeFileDragItem>,
-    stream_provider: NativeFileDragStreamProvider,
-) {
-    if let Ok(mut payload) = prepared_native_drag_payload().lock() {
-        *payload = Some(LinuxPreparedDragPayload {
-            items,
-            stream_provider,
-            uris: None,
-        });
-    }
-}
-
-fn current_prepared_native_drag_uris() -> Option<Vec<String>> {
-    let mut payload = prepared_native_drag_payload().lock().ok()?;
-    let payload = payload.as_mut()?;
-
-    if let Some(uris) = payload.uris.clone() {
-        return Some(uris);
-    }
-
-    let staged_drag =
-        LinuxStagedDrag::create(&payload.items, Arc::clone(&payload.stream_provider)).ok()?;
-    let uris = staged_drag.file_uris();
-    staged_drag.keep_for_file_manager_copy();
-    payload.uris = Some(uris.clone());
-    Some(uris)
-}
-
-fn clear_prepared_native_drag_payload() {
-    if let Ok(mut payload) = prepared_native_drag_payload().lock() {
-        *payload = None;
-    }
-}
-
-pub fn clear_prepared_native_file_drag() {
-    clear_prepared_native_drag_payload();
-}
-
-fn install_webview_file_drag_source(webview: impl IsA<gtk::Widget>) {
-    let widget = webview.upcast::<gtk::Widget>();
-    widget.drag_source_set(
-        gdk::ModifierType::BUTTON1_MASK,
-        &[
-            gtk::TargetEntry::new(
-                "text/uri-list",
-                gtk::TargetFlags::OTHER_APP,
-                URI_LIST_TARGET_INFO,
-            ),
-            gtk::TargetEntry::new(
-                "x-special/gnome-copied-files",
-                gtk::TargetFlags::OTHER_APP,
-                GNOME_COPIED_FILES_TARGET_INFO,
-            ),
-        ],
-        gdk::DragAction::COPY,
-    );
-    widget.drag_source_add_uri_targets();
-    widget.drag_source_set_icon_name("zmanager-desktop");
-
-    widget.connect_drag_data_get(move |_source, _context, selection_data, info, _time| {
-        let Some(uris) = current_prepared_native_drag_uris() else {
-            return;
-        };
-        if uris.is_empty() {
-            return;
-        }
-
-        if info == GNOME_COPIED_FILES_TARGET_INFO {
-            let payload = format!("copy\n{}\n", uris.join("\n"));
-            selection_data.set(
-                &gdk::Atom::intern("x-special/gnome-copied-files"),
-                8,
-                payload.as_bytes(),
-            );
-            return;
-        }
-
-        let uri_refs = uris.iter().map(String::as_str).collect::<Vec<_>>();
-        selection_data.set_uris(&uri_refs);
-    });
-
-    widget.connect_drag_end(move |_source, _context| {
-        clear_prepared_native_drag_payload();
-    });
 }
 
 struct LinuxStagedDrag {
@@ -267,13 +142,6 @@ impl LinuxStagedDrag {
             root: Some(root),
             file_paths,
         })
-    }
-
-    fn file_uris(&self) -> Vec<String> {
-        self.file_paths
-            .iter()
-            .map(|path| gio::File::for_path(path).uri().to_string())
-            .collect()
     }
 
     fn keep_for_file_manager_copy(mut self) {
@@ -507,46 +375,5 @@ mod tests {
     fn linux_drag_relative_path_rejects_traversal() {
         assert!(linux_drag_relative_path("../escape.txt").is_err());
         assert!(linux_drag_relative_path("folder/../../escape.txt").is_err());
-    }
-
-    #[test]
-    fn linux_prepare_native_drag_uris_writes_payload_and_sets_drag_slot() {
-        let provider: NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
-            assert_eq!(entry_path, "root.txt");
-            writer
-                .write_all(b"prepared drag payload")
-                .map_err(|error| {
-                    NativeFileDragError::new(
-                        format!("unable to write test payload: {error}"),
-                        None::<String>,
-                    )
-                })?;
-            Ok(21)
-        });
-
-        let prepared_uris = prepare_native_file_drag_uris(
-            &[NativeFileDragItem {
-                entry_path: "root.txt".to_string(),
-                display_path: "root.txt".to_string(),
-                size: Some(21),
-                modified_unix_seconds: None,
-            }],
-            provider,
-        )
-        .expect("prepare native drag uris");
-
-        assert!(prepared_uris.is_empty());
-        let uris = current_prepared_native_drag_uris().expect("lazy GTK drag URI payload");
-        let staged_path = gio::File::for_uri(&uris[0])
-            .path()
-            .expect("prepared URI should resolve to a local staged path");
-        assert_eq!(
-            fs::read(&staged_path).expect("read staged prepared payload"),
-            b"prepared drag payload"
-        );
-
-        clear_prepared_native_drag_payload();
-        let root = staged_path.parent().expect("staged file root");
-        let _ = fs::remove_dir_all(root);
     }
 }
