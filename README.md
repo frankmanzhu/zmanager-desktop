@@ -56,18 +56,21 @@ cargo check
 
 ## Linux Build Prerequisites
 
-Ubuntu/Debian builds need Rust 1.85 or newer, Node.js, npm, and Tauri's native
-GTK/WebKit development packages. On a fresh Ubuntu machine, install:
+Ubuntu/Debian builds need Rust 1.85 or newer, Node.js, npm, Tauri's native
+GTK/WebKit development packages, and native archive/link dependencies. On a
+fresh Ubuntu machine, install:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential cmake curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential cmake curl file libacl1-dev libayatana-appindicator3-dev libbz2-dev libgtk-3-dev liblz4-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
 ```
 
 These packages provide `cmake` for the bundled libarchive build and the
 `pkg-config` entries required by the Rust GTK stack, including `libsoup-3.0`
-and `webkit2gtk-4.1`. Without them, Cargo can fail in `zmanager-libarchive-sys`,
-`soup3-sys`, or WebKit-related build scripts.
+and `webkit2gtk-4.1`. They also provide native link libraries such as `acl`,
+`bz2`, and `lz4` for archive tests and packaging. Without them, Cargo can fail
+in `zmanager-libarchive-sys`, `soup3-sys`, WebKit-related build scripts, or the
+final Rust link step.
 
 Build an Ubuntu/Debian package with:
 

@@ -105,8 +105,8 @@
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
         "files": {
-          "../packaging/linux/xdg-mime.xml": "/usr/share/mime/packages/zmanager.xml",
-          "../packaging/linux/kde/zmanager-servicemenu.desktop": "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop"
+          "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
+          "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
       },
       "rpm": {
@@ -114,11 +114,10 @@
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
         "files": {
-          "../packaging/linux/xdg-mime.xml": "/usr/share/mime/packages/zmanager.xml",
-          "../packaging/linux/kde/zmanager-servicemenu.desktop": "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop"
+          "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
+          "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
       }
     }
   }
 }
-
