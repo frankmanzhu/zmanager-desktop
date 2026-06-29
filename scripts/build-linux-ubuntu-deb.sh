@@ -146,10 +146,17 @@ fi
 
 npm run tauri -- build --bundles deb
 
+apt_stage_dir="/tmp/zmanager-desktop-deb"
+install -d -m 0755 "$apt_stage_dir"
+
 deb_count=0
 while IFS= read -r artifact; do
   deb_count=$((deb_count + 1))
+  staged_artifact="$apt_stage_dir/$(basename "$artifact")"
+  install -m 0644 "$artifact" "$staged_artifact"
   echo "Built package: $artifact"
+  echo "Apt-readable package: $staged_artifact"
+  echo "Install without _apt sandbox warning: sudo apt-get install --reinstall $staged_artifact"
 done < <(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
 
 if ((deb_count == 0)); then

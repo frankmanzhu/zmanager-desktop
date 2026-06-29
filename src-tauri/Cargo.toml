@@ -40,6 +40,12 @@ windows = { version = "0.61.3", features = [
 ] }
 windows-core = "0.61.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gdk = "0.18.2"
+gio = "0.18.4"
+glib = "0.18.5"
+gtk = "0.18.2"
+
 [patch."https://github.com/tzap-org/tzap"]
 tzap-core = { path = "../../tzap/crates/tzap-core" }
 tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }

@@ -261,6 +261,13 @@ pub struct NativeFileDragResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PreparedNativeFileDragResponse {
+    pub dragged_entries: Vec<String>,
+    pub uris: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NativeFileDragOutcomeDto {
     Dropped,
     Cancelled,

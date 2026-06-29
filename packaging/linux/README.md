@@ -6,9 +6,15 @@ desktop templates for quick-action routes.
 Packaged materials:
 
 - `zmanager.desktop.hbs`: launcher/Open With desktop entry plus desktop actions.
+- `zmanager-desktop.desktop`: visible GNOME launcher whose desktop id matches
+  Tauri's Wayland app id for dock/taskbar icon matching.
 - `xdg-mime.xml`: MIME definitions for ZManager-owned `.tzst`, `.tar.zst`, and `.tzap`
   extensions.
-- `postinstall.sh` and `postremove.sh`: refresh XDG MIME and desktop databases.
+- `src-tauri/icons/icon-256.png`, `icon-512.png`, and `icon.png`: installed as
+  the `zmanager-desktop` hicolor app icon in indexed sizes for desktop shells.
+- `com.frankmanzhu.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
+  package managers and software centers.
+- `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon caches.
 - `kde/zmanager-servicemenu.desktop`: KDE/Dolphin service-menu actions installed by
   deb/rpm packages.
 
@@ -16,6 +22,14 @@ Ubuntu/Debian package build:
 
 ```sh
 scripts/build-linux-ubuntu-deb.sh
+```
+
+The build script prints both the canonical bundle artifact and an apt-readable
+copy staged under `/tmp/zmanager-desktop-deb/`. Install the staged copy to avoid
+apt's `_apt` sandbox warning when the project lives in a private home directory:
+
+```sh
+sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_0.1.0_amd64.deb
 ```
 
 Ubuntu is best served by a `.deb` package. It integrates with `dpkg`/apt,

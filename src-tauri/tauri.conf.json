@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "enableGTKAppId": true,
     "windows": [
       {
         "title": "ZManager",
@@ -27,6 +28,7 @@
     "active": true,
     "targets": ["nsis", "appimage", "deb", "rpm"],
     "category": "Utility",
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "fileAssociations": [
       {
         "ext": ["zip", "zipx"],
@@ -105,6 +107,11 @@
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
         "files": {
+          "/usr/share/icons/hicolor/256x256/apps/zmanager-desktop.png": "icons/icon-256.png",
+          "/usr/share/icons/hicolor/512x512/apps/zmanager-desktop.png": "icons/icon-512.png",
+          "/usr/share/icons/hicolor/1024x1024/apps/zmanager-desktop.png": "icons/icon.png",
+          "/usr/share/applications/zmanager-desktop.desktop": "../packaging/linux/zmanager-desktop.desktop",
+          "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
@@ -114,6 +121,11 @@
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
         "files": {
+          "/usr/share/icons/hicolor/256x256/apps/zmanager-desktop.png": "icons/icon-256.png",
+          "/usr/share/icons/hicolor/512x512/apps/zmanager-desktop.png": "icons/icon-512.png",
+          "/usr/share/icons/hicolor/1024x1024/apps/zmanager-desktop.png": "icons/icon.png",
+          "/usr/share/applications/zmanager-desktop.desktop": "../packaging/linux/zmanager-desktop.desktop",
+          "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }

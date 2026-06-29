@@ -6195,6 +6195,10 @@ name = "zmanager-desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "gdk",
+ "gio",
+ "glib",
+ "gtk",
  "png 0.18.1",
  "serde",
  "serde_json",

@@ -141,6 +141,7 @@ import {
 import {
   asCommandError,
   cancelJob as cancelJobCommand,
+  clearNativeFileDrag,
   dismissJob as dismissJobCommand,
   fetchHealthcheck,
   fetchProjectContract,
@@ -150,6 +151,7 @@ import {
   cleanupPreviewRoots,
   pollJobEvents as pollJobEventsCommand,
   runPlanCreate,
+  runPrepareNativeFileDrag,
   runPreviewEntry,
   runStartNativeFileDrag,
   runStartCreate,
@@ -171,6 +173,8 @@ import type {
   JobEventDto,
   JobKind,
   JobState,
+  NativeFileDragRequest,
+  PreparedNativeFileDragResponse,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -218,6 +222,14 @@ type NativeDragGesture = {
   startY: number;
   entryPath: string;
   started: boolean;
+};
+
+type PreparedLinuxNativeDrag = {
+  requestKey: string;
+  entryPath: string;
+  promise: Promise<PreparedNativeFileDragResponse>;
+  result: PreparedNativeFileDragResponse | null;
+  error: string;
 };
 
 type MarqueeSelectionGesture = {
@@ -496,11 +508,32 @@ appRoot.innerHTML = `
             <h1 id="workspace-title">${APP_TITLE}</h1>
             <p id="browse-meta">${BROWSE_STATUS_READY}</p>
           </div>
-          <button id="compress-create-archive" type="button" hidden>Create Archive</button>
           <button id="refresh-archive" type="button" data-command-id="refresh" disabled>Refresh</button>
         </div>
         <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
         <div id="compress-surface" class="compress-surface" hidden>
+          <div class="compress-create-panel" aria-label="Create archive">
+            <div class="compress-create-row">
+              <label class="compress-destination-field">
+                <span>Destination</span>
+                <div class="inline-field">
+                  <input id="create-destination" type="text" placeholder="Choose output archive" list="create-destination-history" />
+                  <button id="browse-create-destination" type="button">...</button>
+                </div>
+                <datalist id="create-destination-history"></datalist>
+              </label>
+              <div class="compress-create-actions">
+                <button id="add-source" class="secondary-action" type="button">Add Sources</button>
+                <button id="clear-sources" class="quiet-action" type="button" hidden>Clear</button>
+                <span class="compress-action-divider" aria-hidden="true"></span>
+                <button id="create-options-open" class="secondary-action" type="button">Options</button>
+                <button id="start-create" class="primary-action" type="button" disabled>Create Archive</button>
+              </div>
+            </div>
+            <div class="compress-plan-row">
+              <p id="create-plan-meta">Drop files or folders here, or add sources from disk.</p>
+            </div>
+          </div>
           <div class="compress-table-shell">
             <table id="compress-source-table">
               <thead>
@@ -513,7 +546,12 @@ appRoot.innerHTML = `
               </thead>
               <tbody id="compress-source-body">
                 <tr>
-                  <td colspan="4" class="empty">${COMPRESS_EMPTY_TABLE_MESSAGE}</td>
+                  <td colspan="4" class="compress-empty-cell">
+                    <div class="compress-empty-state">
+                      <strong>${COMPRESS_EMPTY_TABLE_MESSAGE}</strong>
+                      <span>Drag files or folders anywhere in this window, or use Add Sources.</span>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -680,27 +718,14 @@ appRoot.innerHTML = `
       <section class="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="create-title">
         <div class="dialog-header">
           <div>
-            <h2 id="create-title">Add to Archive</h2>
-            <p>Choose sources, destination, format, and review the plan.</p>
+            <h2 id="create-title">Archive Options</h2>
+            <p>Format, compression, password, and archive safety settings.</p>
           </div>
-          <button id="create-dialog-close" class="icon-button" type="button" aria-label="Close create dialog">Close</button>
+          <button id="create-dialog-close" class="icon-button" type="button" aria-label="Close archive options">Close</button>
         </div>
         <div class="dialog-body">
-          <div class="source-controls">
-            <button id="add-source-files" type="button">Add source</button>
-            <button id="add-source-folders" type="button">Add folder</button>
-            <button id="clear-sources" type="button">Clear</button>
-          </div>
-          <ul id="source-list" class="list-box"></ul>
-          <div class="form-grid">
-            <label class="span-2">
-              <span>Archive</span>
-              <div class="inline-field">
-                <input id="create-destination" type="text" placeholder="Choose output archive" list="create-destination-history" />
-                <button id="browse-create-destination" type="button">...</button>
-              </div>
-              <datalist id="create-destination-history"></datalist>
-            </label>
+          <ul id="source-list" class="list-box" hidden></ul>
+          <div class="form-grid create-options-grid">
             <label>
               <span>Archive format</span>
               <select id="create-format">
@@ -804,19 +829,16 @@ appRoot.innerHTML = `
           <div class="plan-header">
             <div>
               <h3>Plan</h3>
-              <p id="create-plan-meta">Pick sources to generate an inclusion plan.</p>
+              <p>Detailed inclusion preview for the staged sources.</p>
             </div>
-            <button id="run-plan" type="button" disabled>Refresh Plan</button>
           </div>
-          <p id="create-plan-status" class="status status-idle">Plan status: idle.</p>
           <div id="create-plan-summary" class="summary-card">
             <p>No plan available yet.</p>
           </div>
         </div>
         <div class="dialog-actions">
-          <button id="start-create" type="button" disabled>OK</button>
           <button type="button" data-command-id="helpContents">Help</button>
-          <button id="create-cancel" type="button">Cancel</button>
+          <button id="create-cancel" type="button">Close</button>
         </div>
       </section>
     </div>
@@ -984,7 +1006,7 @@ const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archi
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
 const jobsDrawerOpenButton = document.querySelector<HTMLButtonElement>("#jobs-drawer-open")!;
 const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
-const compressCreateArchiveButton = document.querySelector<HTMLButtonElement>("#compress-create-archive")!;
+const createOptionsOpenButton = document.querySelector<HTMLButtonElement>("#create-options-open")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
@@ -1022,8 +1044,7 @@ const extractDeduplicateRootCheckbox = document.querySelector<HTMLInputElement>(
 const extractRestoreSecurityCheckbox = document.querySelector<HTMLInputElement>("#extract-restore-security")!;
 
 const createDialog = document.querySelector<HTMLDivElement>("#create-dialog")!;
-const addSourceFilesButton = document.querySelector<HTMLButtonElement>("#add-source-files")!;
-const addSourceFoldersButton = document.querySelector<HTMLButtonElement>("#add-source-folders")!;
+const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
 const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
 const sourceListElement = document.querySelector<HTMLUListElement>("#source-list")!;
 const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format")!;
@@ -1039,9 +1060,7 @@ const createPasswordConfirmInput = document.querySelector<HTMLInputElement>("#cr
 const createShowPasswordInput = document.querySelector<HTMLInputElement>("#create-show-password")!;
 const createCompressionInput = document.querySelector<HTMLSelectElement>("#create-compression-level")!;
 const createVolumeInput = document.querySelector<HTMLInputElement>("#create-volume")!;
-const runPlanButton = document.querySelector<HTMLButtonElement>("#run-plan")!;
 const createPlanMeta = document.querySelector<HTMLParagraphElement>("#create-plan-meta")!;
-const createPlanStatus = document.querySelector<HTMLParagraphElement>("#create-plan-status")!;
 const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary")!;
 const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create")!;
 
@@ -1143,6 +1162,7 @@ let currentPreviewPath = "";
 let currentPreviewEntryPath = "";
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
+let pendingLinuxNativeDrag: PreparedLinuxNativeDrag | null = null;
 let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
 let marqueeSelectionElement: HTMLDivElement | null = null;
 let suppressNextTableClick = false;
@@ -1633,6 +1653,39 @@ function nativeDragStripComponents(): number {
   return currentArchiveFolder.split("/").filter(Boolean).length;
 }
 
+function isLinuxNativeUriDragEnabled(): boolean {
+  return isDesktopRuntime() && latestContract?.platformIntegration.platform === "linux";
+}
+
+function clearLinuxNativeDragPayload() {
+  if (isLinuxNativeUriDragEnabled()) {
+    pendingLinuxNativeDrag = null;
+    void clearNativeFileDrag().catch(() => undefined);
+  }
+}
+
+function nativeDragRowAttributes(): string {
+  return "";
+}
+
+function nativeDragRequestForEntry(entryPath: string, password?: string): NativeFileDragRequest | null {
+  if (!currentArchivePath) {
+    return null;
+  }
+
+  const entryPaths = selectedNativeDragEntryPaths(entryPath);
+  if (!entryPaths.length) {
+    return null;
+  }
+
+  return {
+    archivePath: currentArchivePath,
+    entryPaths,
+    stripComponents: nativeDragStripComponents(),
+    ...(password ? { password } : {}),
+  };
+}
+
 async function startNativeDragOut(entryPath: string) {
   if (!currentArchivePath) {
     return;
@@ -1650,24 +1703,18 @@ async function startNativeDragOut(entryPath: string) {
     renderBrowse();
   }
 
-  const entryPaths = selectedNativeDragEntryPaths(entryPath);
-  if (!entryPaths.length) {
+  let password = browsePasswordInput.value.trim() || undefined;
+  const request = nativeDragRequestForEntry(entryPath, password);
+  if (!request) {
     setOperationalStatus("Select at least one entry to drag out.");
     return;
   }
 
-  let password = browsePasswordInput.value.trim() || undefined;
-  const stripComponents = nativeDragStripComponents();
-  setOperationalStatus(`Preparing ${entryPaths.length} item(s) for drag-out...`);
+  setOperationalStatus(`Preparing ${request.entryPaths.length} item(s) for drag-out...`);
 
   while (true) {
     try {
-      const response = await runStartNativeFileDrag({
-        archivePath: currentArchivePath,
-        entryPaths,
-        stripComponents,
-        ...(password ? { password } : {}),
-      });
+      const response = await runStartNativeFileDrag(request);
       if (response.outcome === "cancelled") {
         setOperationalStatus("Drag-out cancelled.");
       } else if (response.outcome === "noDrop") {
@@ -1688,6 +1735,12 @@ async function startNativeDragOut(entryPath: string) {
           return;
         }
         password = nextPassword;
+        const retryRequest = nativeDragRequestForEntry(entryPath, password);
+        if (!retryRequest) {
+          setOperationalStatus("Select at least one entry to drag out.");
+          return;
+        }
+        Object.assign(request, retryRequest);
         continue;
       }
 
@@ -1695,6 +1748,67 @@ async function startNativeDragOut(entryPath: string) {
       return;
     }
   }
+}
+
+function linuxNativeDragRequestKey(request: NativeFileDragRequest): string {
+  return JSON.stringify({
+    archivePath: request.archivePath,
+    entryPaths: request.entryPaths,
+    password: Boolean(request.password),
+    stripComponents: request.stripComponents,
+  });
+}
+
+function prepareLinuxNativeDragForEntry(entryPath: string): PreparedLinuxNativeDrag | null {
+  if (!isLinuxNativeUriDragEnabled()) {
+    return null;
+  }
+
+  const password = browsePasswordInput.value.trim() || undefined;
+  const request = nativeDragRequestForEntry(entryPath, password);
+  if (!request) {
+    setOperationalStatus("Select at least one entry to drag out.");
+    return null;
+  }
+
+  const requestKey = linuxNativeDragRequestKey(request);
+  if (
+    pendingLinuxNativeDrag?.requestKey === requestKey &&
+    !pendingLinuxNativeDrag.result &&
+    !pendingLinuxNativeDrag.error
+  ) {
+    return pendingLinuxNativeDrag;
+  }
+
+  setOperationalStatus(`Preparing ${request.entryPaths.length} item(s) for drag-out...`);
+  const preparedDrag: PreparedLinuxNativeDrag = {
+    requestKey,
+    entryPath,
+    promise: runPrepareNativeFileDrag(request),
+    result: null,
+    error: "",
+  };
+  pendingLinuxNativeDrag = preparedDrag;
+
+  void preparedDrag.promise
+    .then((response) => {
+      if (pendingLinuxNativeDrag?.requestKey !== requestKey) {
+        return response;
+      }
+      pendingLinuxNativeDrag.result = response;
+      setOperationalStatus(`Ready to drag ${response.draggedEntries.length} item(s).`);
+      return response;
+    })
+    .catch((error) => {
+      const commandError = asCommandError(error);
+      if (pendingLinuxNativeDrag?.requestKey === requestKey) {
+        pendingLinuxNativeDrag.error =
+          commandError?.message ?? "Unable to prepare native drag-out.";
+        setOperationalStatus(pendingLinuxNativeDrag.error);
+      }
+    });
+
+  return preparedDrag;
 }
 
 function getKnownFolderPaths(): string[] {
@@ -1948,8 +2062,6 @@ function renderWorkspaceMode() {
 
   compressSurfaceElement.hidden = !isCompress;
   tableShellElement.hidden = isCompress;
-  compressCreateArchiveButton.hidden = !isCompress;
-  compressCreateArchiveButton.disabled = createSources.length === 0;
   refreshArchiveButton.hidden = isCompress;
   messageElement.hidden = isCompress;
 
@@ -2173,6 +2285,7 @@ function renderBrowseRows() {
 
   const showFullPath = Boolean(searchInput.value.trim()) || isFlatView;
   const columns = visibleColumns(tableColumnSettings);
+  const nativeDragAttributes = nativeDragRowAttributes();
   tableBody.innerHTML = rows
     .map((row) => {
       if (row.rowType === "parent") {
@@ -2192,6 +2305,7 @@ function renderBrowseRows() {
             data-folder-path="${escapeHtml(row.path)}"
             data-entry-path="${escapeHtml(row.path)}"
             tabindex="0"
+            ${nativeDragAttributes}
             aria-label="Open folder ${escapeHtml(row.name)}"
             aria-selected="${selected ? "true" : "false"}"
           >
@@ -2214,6 +2328,7 @@ function renderBrowseRows() {
           class="${selected ? "is-selected" : ""}"
           data-entry-path="${escapeHtml(row.path)}"
           tabindex="0"
+          ${nativeDragAttributes}
           aria-selected="${selected ? "true" : "false"}"
         >
           <td class="selection-column">
@@ -2367,25 +2482,6 @@ function setCreatePlanState(state: CreateState, statusMessage = "") {
   createPlanState = state;
   currentPlanError = statusMessage;
 
-  switch (state) {
-    case "loading":
-      createPlanStatus.textContent = "Plan status: loading...";
-      createPlanStatus.className = "status status-loading";
-      break;
-    case "error":
-      createPlanStatus.textContent = statusMessage || "Plan status: failed.";
-      createPlanStatus.className = "status status-error";
-      break;
-    case "ready":
-      createPlanStatus.textContent = "Plan status: ready.";
-      createPlanStatus.className = "status status-loaded";
-      break;
-    default:
-      createPlanStatus.textContent = "Plan status: idle.";
-      createPlanStatus.className = "status status-idle";
-  }
-
-  runPlanButton.disabled = createSources.length === 0 || state === "loading";
   const hasReadyPlan = state === "ready" && currentPlan !== null;
   startCreateButton.disabled =
     createSubmissionInFlight ||
@@ -2423,9 +2519,12 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
 }
 
 function renderCreateSources() {
+  clearSourcesButton.hidden = createSources.length === 0;
+  clearSourcesButton.disabled = createSources.length === 0;
+
   createPlanMeta.textContent = createSources.length
     ? `${createSources.length} source${createSources.length === 1 ? "" : "s"} selected.`
-    : "Pick sources to generate an inclusion plan.";
+    : "Drop files or folders here, or add sources from disk.";
 
   if (createSources.length === 0) {
     sourceListElement.innerHTML = `<li class="empty">No sources yet.</li>`;
@@ -2467,12 +2566,15 @@ function sourceKindLabel(path: string): string {
 }
 
 function renderCompressSources() {
-  compressCreateArchiveButton.disabled = createSources.length === 0;
-
   if (createSources.length === 0) {
     compressSourceBody.innerHTML = `
       <tr>
-        <td colspan="4" class="empty">${COMPRESS_EMPTY_TABLE_MESSAGE}</td>
+        <td colspan="4" class="compress-empty-cell">
+          <div class="compress-empty-state">
+            <strong>${COMPRESS_EMPTY_TABLE_MESSAGE}</strong>
+            <span>Drag files or folders anywhere in this window, or use Add Sources.</span>
+          </div>
+        </td>
       </tr>
     `;
     return;
@@ -2983,15 +3085,10 @@ function rejectDrop(reason: string) {
 }
 
 function addDroppedSources(paths: string[]) {
-  const wasCreateDialogHidden = createDialog.hidden;
-  if (wasCreateDialogHidden) {
-    applyCreatePreferenceDefaults();
-  }
+  applyCreatePreferenceDefaults();
   addSources(paths);
   setWorkspaceMode("compress");
-  if (!createDialog.hidden && wasCreateDialogHidden) {
-    createDestinationInput.focus();
-  }
+  createDestinationInput.focus();
   setOperationalStatus(`${paths.length} source${paths.length === 1 ? "" : "s"} added.`);
 }
 
@@ -3528,6 +3625,16 @@ function showSourceContextMenu(sourcePath: string, x: number, y: number) {
   `);
 }
 
+function showAddSourcesMenu(anchor: HTMLElement) {
+  const rect = anchor.getBoundingClientRect();
+  contextEntryPath = "";
+  contextSourcePath = "";
+  showContextMenu(rect.left, rect.bottom + 4, `
+    <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">Files...</span></button>
+    <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">Folder...</span></button>
+  `);
+}
+
 function hideContextMenu() {
   contextMenu.hidden = true;
   contextMenu.innerHTML = "";
@@ -3731,21 +3838,31 @@ function openExtractHereDialog(mode: ExtractMode) {
   }
 }
 
-function openCreateDialog() {
+function showCreateWorkspace() {
   applyCreatePreferenceDefaults();
   if (!createDestinationInput.value.trim() && createDestinationHistory[0]) {
     createDestinationInput.value = createDestinationHistory[0];
   }
+  setWorkspaceMode("compress");
+  setCreatePlanState(createPlanState, currentPlanError);
+  renderCreateSources();
+  renderCompressSources();
+  renderCreateDestinationHistory();
+  createDestinationInput.focus();
+}
+
+function openCreateOptionsDialog() {
+  setWorkspaceMode("compress");
+  setCreatePlanState(createPlanState, currentPlanError);
+  renderCreateSources();
+  renderCompressSources();
+  renderCreateDestinationHistory();
   createPasswordInput.value = "";
   createPasswordConfirmInput.value = "";
   createPasswordInput.type = "password";
   createPasswordConfirmInput.type = "password";
   createShowPasswordInput.checked = false;
-  setCreatePlanState(createPlanState, currentPlanError);
-  renderCreateSources();
-  renderCompressSources();
-  renderCreateDestinationHistory();
-  openModal(createDialog, "#add-source-files");
+  openModal(createDialog, "#create-format");
 }
 
 type LoadArchiveOptions = {
@@ -4028,7 +4145,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
     return;
   }
 
-  openCreateDialog();
+  showCreateWorkspace();
   createSources = sources;
   createFormatSelect.value = format;
   createCleanSourceCheckbox.checked = cleanSource;
@@ -4065,7 +4182,7 @@ async function openQuickCreateReview(
     return;
   }
 
-  openCreateDialog();
+  showCreateWorkspace();
   createSources = sources;
   createFormatSelect.value = format;
   createCleanSourceCheckbox.checked = cleanSource;
@@ -4980,6 +5097,7 @@ async function loadBootstrapState() {
     latestContract = contract;
     setOperationalStatus(healthcheck.ready ? "Ready." : "Backend unavailable.");
     renderAboutDiagnostics();
+    renderBrowse();
   } catch (error) {
     latestHealthcheck = null;
     latestContract = null;
@@ -4990,6 +5108,7 @@ async function loadBootstrapState() {
       setOperationalStatus("Ready in browser preview.");
     }
     renderAboutDiagnostics();
+    renderBrowse();
   }
 }
 
@@ -5049,7 +5168,7 @@ function handleShortcut(event: KeyboardEvent) {
 
   if (event.ctrlKey && event.key.toLowerCase() === "n") {
     event.preventDefault();
-    openCreateDialog();
+    showCreateWorkspace();
     return;
   }
 
@@ -5123,12 +5242,12 @@ function bindActions() {
   modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
   modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
   openArchiveButton.addEventListener("click", () => void onOpenArchive());
-  newArchiveButton.addEventListener("click", openCreateDialog);
-  addArchiveButton.addEventListener("click", openCreateDialog);
+  newArchiveButton.addEventListener("click", showCreateWorkspace);
+  addArchiveButton.addEventListener("click", showCreateWorkspace);
   extractToolbarButton.addEventListener("click", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
   testArchiveButton.addEventListener("click", () => void onTestArchive());
   infoToolbarButton.addEventListener("click", showCurrentInfo);
-  compressCreateArchiveButton.addEventListener("click", openCreateDialog);
+  createOptionsOpenButton.addEventListener("click", openCreateOptionsDialog);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
@@ -5147,7 +5266,7 @@ function bindActions() {
   };
 
   bindMenuItem("open", () => void onOpenArchive());
-  bindMenuItem("createFile", openCreateDialog);
+  bindMenuItem("createFile", showCreateWorkspace);
   bindMenuItem("selectAll", selectVisibleEntries);
   bindMenuItem("deselectAll", clearBrowseSelection);
   bindMenuItem("selectByType", () => selectEntriesByType("add"));
@@ -5273,7 +5392,7 @@ function bindActions() {
       return;
     }
     if (actionTarget?.dataset.treeAction === "create") {
-      openCreateDialog();
+      showCreateWorkspace();
       return;
     }
 
@@ -5497,11 +5616,20 @@ function selectEntryForNativeDragGesture(entryPath: string) {
 
 tableBody.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || !currentArchivePath || hasActiveJob() || hasSelectionModifier(event)) {
+    clearLinuxNativeDragPayload();
     return;
   }
 
   const entryPath = entryPathFromNativeDragEvent(event);
   if (!entryPath) {
+    clearLinuxNativeDragPayload();
+    return;
+  }
+
+  if (isLinuxNativeUriDragEnabled()) {
+    void prepareLinuxNativeDragForEntry(entryPath);
+    document.addEventListener("pointerup", clearLinuxNativeDragPayload, { once: true });
+    document.addEventListener("pointercancel", clearLinuxNativeDragPayload, { once: true });
     return;
   }
 
@@ -5522,6 +5650,7 @@ tableShellElement.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  clearLinuxNativeDragPayload();
   pendingMarqueeSelection = {
     pointerId: event.pointerId,
     startX: event.clientX,
@@ -5538,6 +5667,9 @@ tableShellElement.addEventListener("pointerdown", (event) => {
 
 tableBody.addEventListener("dragstart", (event) => {
   if ((event.target as HTMLElement | null)?.closest("tr[data-entry-path]")) {
+    if (isLinuxNativeUriDragEnabled()) {
+      return;
+    }
     event.preventDefault();
   }
 });
@@ -5736,7 +5868,15 @@ tableBody.addEventListener("click", (event) => {
       return;
     }
     if (action === "create-archive") {
-      openCreateDialog();
+      showCreateWorkspace();
+      return;
+    }
+    if (action === "add-source-files") {
+      void addSourcePathsFromDialog("files");
+      return;
+    }
+    if (action === "add-source-folder") {
+      void addSourcePathsFromDialog("folder");
       return;
     }
     if (action === "open-folder" && folderPath !== undefined) {
@@ -5888,7 +6028,7 @@ tableBody.addEventListener("click", (event) => {
         void onOpenArchive();
         break;
       case "create":
-        openCreateDialog();
+        showCreateWorkspace();
         break;
       case "extract-all":
         openExtractDialog("archive");
@@ -5921,8 +6061,10 @@ tableBody.addEventListener("click", (event) => {
   browseExtractDestinationButton.addEventListener("click", () => void onSelectDestinationForExtract());
   extractStartButton.addEventListener("click", () => void startExtract(activeExtractMode));
 
-  addSourceFilesButton.addEventListener("click", () => void addSourcePathsFromDialog("files"));
-  addSourceFoldersButton.addEventListener("click", () => void addSourcePathsFromDialog("folder"));
+  addSourceButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    showAddSourcesMenu(addSourceButton);
+  });
   clearSourcesButton.addEventListener("click", () => {
     createSources = [];
     currentPlan = null;
@@ -5942,7 +6084,6 @@ tableBody.addEventListener("click", (event) => {
   createFormatSelect.addEventListener("change", onCreateFormatChange);
   createDestinationInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
-  runPlanButton.addEventListener("click", () => void runPlan());
   startCreateButton.addEventListener("click", () => void runCreate());
   preferencesOutputLocationSelect.addEventListener("change", syncPreferenceOutputState);
   preferencesChooseOutputButton.addEventListener("click", () => void onSelectPreferenceOutputFolder());

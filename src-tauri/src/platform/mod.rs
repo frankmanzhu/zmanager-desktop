@@ -25,12 +25,14 @@ pub struct NativeFileDragItem {
     pub entry_path: String,
     pub display_path: String,
     pub size: Option<u64>,
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub modified_unix_seconds: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragOutcome {
     Dropped,
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     Cancelled,
     NoDrop,
 }
@@ -70,6 +72,12 @@ pub use windows::start_native_file_drag;
 
 #[cfg(not(target_os = "windows"))]
 pub use linux::start_native_file_drag;
+
+#[cfg(not(target_os = "windows"))]
+pub use linux::prepare_native_file_drag_uris;
+
+#[cfg(not(target_os = "windows"))]
+pub use linux::clear_prepared_native_file_drag;
 
 #[cfg(target_os = "windows")]
 pub fn integration_profile() -> PlatformProfile {

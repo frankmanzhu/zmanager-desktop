@@ -78,6 +78,14 @@ Build an Ubuntu/Debian package with:
 scripts/build-linux-ubuntu-deb.sh --skip-tests
 ```
 
+The build script also stages a copy under `/tmp/zmanager-desktop-deb/` so apt's
+`_apt` sandbox user can read it. Install from that staged path, not directly
+from a private home/project directory:
+
+```sh
+sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_0.1.0_amd64.deb
+```
+
 ## Layout
 
 ```text
