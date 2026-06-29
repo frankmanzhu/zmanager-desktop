@@ -547,6 +547,7 @@ appRoot.innerHTML = `
           </div>
         </div>
         <div class="table-shell" tabindex="0">
+          <div id="marquee-hit-surface" class="marquee-hit-surface" aria-hidden="true"></div>
           <div id="archive-empty-state" class="archive-empty-state" hidden>
             <div class="archive-empty-state-inner">
               <span class="archive-empty-state-icon" aria-hidden="true">${toolbarIcon("open")}</span>
@@ -1011,6 +1012,8 @@ const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
 const tableShellElement = document.querySelector<HTMLDivElement>(".table-shell")!;
+const marqueeHitSurfaceElement = document.querySelector<HTMLDivElement>("#marquee-hit-surface")!;
+const archiveTablePaneElement = document.querySelector<HTMLElement>(".archive-table-pane")!;
 const archiveEmptyStateElement = document.querySelector<HTMLDivElement>("#archive-empty-state")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
@@ -5413,11 +5416,18 @@ function canStartMarqueeSelection(event: PointerEvent): boolean {
     return false;
   }
 
-  const target = event.target as HTMLElement;
-  if (!target.closest(".table-shell")) {
+  const tableShellRect = tableShellElement.getBoundingClientRect();
+  const isInsideListView =
+    event.clientX >= tableShellRect.left &&
+    event.clientX <= tableShellRect.right &&
+    event.clientY >= tableShellRect.top &&
+    event.clientY <= tableShellRect.bottom;
+
+  if (!isInsideListView) {
     return false;
   }
 
+  const target = event.target as HTMLElement;
   if (target.closest("button, a, input, select, textarea, .column-resizer")) {
     return false;
   }
@@ -5555,11 +5565,19 @@ tableBody.addEventListener("pointerdown", (event) => {
   document.addEventListener("pointercancel", onNativeDragPointerEnd);
 });
 
-tableShellElement.addEventListener("pointerdown", (event) => {
+function armMarqueeSelectionFromPointer(event: PointerEvent) {
+  if (pendingMarqueeSelection?.pointerId === event.pointerId) {
+    return;
+  }
+
   if (!canStartMarqueeSelection(event)) {
     return;
   }
 
+  event.preventDefault();
+  if (event.currentTarget instanceof HTMLElement && event.currentTarget.hasPointerCapture?.(event.pointerId) === false) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
   pendingMarqueeSelection = {
     pointerId: event.pointerId,
     startX: event.clientX,
@@ -5572,12 +5590,24 @@ tableShellElement.addEventListener("pointerdown", (event) => {
   document.addEventListener("pointermove", onMarqueeSelectionPointerMove);
   document.addEventListener("pointerup", onMarqueeSelectionPointerEnd);
   document.addEventListener("pointercancel", onMarqueeSelectionPointerEnd);
-});
+}
+
+marqueeHitSurfaceElement.addEventListener("pointerdown", armMarqueeSelectionFromPointer);
+tableShellElement.addEventListener("pointerdown", armMarqueeSelectionFromPointer, { capture: true });
+archiveTablePaneElement.addEventListener("pointerdown", armMarqueeSelectionFromPointer);
 
 tableBody.addEventListener("dragstart", (event) => {
   if ((event.target as HTMLElement | null)?.closest("tr[data-entry-path]")) {
     event.preventDefault();
   }
+});
+
+tableShellElement.addEventListener("selectstart", (event) => {
+  event.preventDefault();
+});
+
+tableShellElement.addEventListener("dragstart", (event) => {
+  event.preventDefault();
 });
 
 tableBody.addEventListener("click", (event) => {

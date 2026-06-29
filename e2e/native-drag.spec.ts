@@ -223,6 +223,51 @@ test("dragging blank table space marquee-selects intersecting rows", async ({ pa
   await expect(page.locator(".marquee-selection")).toBeHidden();
 });
 
+test("dragging empty list-view space starts marquee selection", async ({ page }) => {
+  const folderRow = entryRow(page, "folder");
+  const rootRow = entryRow(page, "root.txt");
+  const tableShellBox = await page.locator(".table-shell").boundingBox();
+  const folderBox = await folderRow.boundingBox();
+  const rootBox = await rootRow.boundingBox();
+  if (!tableShellBox || !folderBox || !rootBox) {
+    throw new Error("Unable to locate list-view geometry");
+  }
+
+  const startX = tableShellBox.x + tableShellBox.width / 2;
+  const startY = Math.min(rootBox.y + rootBox.height + 60, tableShellBox.y + tableShellBox.height - 16);
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(folderBox.x + 2, folderBox.y + 2, { steps: 8 });
+
+  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(folderRow).toHaveAttribute("aria-selected", "true");
+  await expect(rootRow).toHaveAttribute("aria-selected", "true");
+  expect(await nativeDragCalls(page)).toEqual([]);
+
+  await page.mouse.up();
+  await expect(page.locator(".marquee-selection")).toBeHidden();
+});
+
+test("archive list suppresses WebView text selection gestures", async ({ page }) => {
+  const rootRow = entryRow(page, "root.txt");
+  const sizeCell = rootRow.locator("td").nth(2);
+  const box = await sizeCell.boundingBox();
+  if (!box) {
+    throw new Error("Unable to locate root size cell");
+  }
+
+  await expect(await dispatchSelectStartFromCell(sizeCell)).toBe(true);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 120, box.y - 32, { steps: 6 });
+
+  await expect(page.locator(".marquee-selection")).toBeVisible();
+  expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+
+  await page.mouse.up();
+});
+
 test("checkbox selection does not start native drag-out", async ({ page }) => {
   const rootRow = entryRow(page, "root.txt");
   const checkbox = rootRow.locator("input[type='checkbox']");
@@ -555,6 +600,17 @@ async function dispatchDragStartFromIcon(row: ReturnType<typeof entryRow>): Prom
       cancelable: true,
     });
     icon.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}
+
+async function dispatchSelectStartFromCell(cell: ReturnType<typeof entryRow>): Promise<boolean> {
+  return cell.evaluate((element) => {
+    const event = new Event("selectstart", {
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(event);
     return event.defaultPrevented;
   });
 }

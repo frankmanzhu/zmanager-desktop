@@ -175,14 +175,9 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
   await captureAndScan(page, "04-compress-with-sources");
 
-  await page.getByRole("button", { name: "Create Archive" }).click();
-  await expect(page.getByRole("dialog", { name: "Add to Archive" })).toBeVisible();
+  await page.locator("#create-options-open").click();
+  await expect(page.getByRole("dialog", { name: "Archive Options" })).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
-
-  await page.locator("#source-list li").first().click({ button: "right" });
-  await expect(page.locator("#context-menu")).toBeVisible();
-  await captureAndScan(page, "26-create-source-context-menu");
-  await page.locator("#create-title").click();
 
   await page.locator("#create-dialog details.advanced-options summary").click();
   await page.locator("#create-format").selectOption("sevenZ");
@@ -191,7 +186,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await page.locator("#create-password-confirm").fill("correct horse battery staple");
   await page.locator("#create-show-password").check();
   await captureAndScan(page, "27-create-dialog-advanced-options");
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.locator("#create-cancel").click();
 
   await page.getByRole("tab", { name: "Extract" }).click();
   await captureAndScan(page, "06-extract-empty");
@@ -218,7 +213,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await page.getByRole("button", { name: "Extract" }).click();
   await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
   await captureAndScan(page, "08-extract-dialog");
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.locator("#extract-cancel").click();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
@@ -319,9 +314,9 @@ test("minimum-size visual surfaces stay within the app bounds", async ({ page })
   ]);
   await captureAndScan(page, "33-min-compress-long-sources");
 
-  await page.getByRole("button", { name: "Create Archive" }).click();
+  await page.locator("#create-options-open").click();
   await captureAndScan(page, "34-min-create-dialog");
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.locator("#create-cancel").click();
 
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);
@@ -416,6 +411,26 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       return width * height;
     };
 
+    const isClippedByScrollableAncestor = (element: HTMLElement): boolean => {
+      const rect = element.getBoundingClientRect();
+      let parent = element.parentElement;
+      while (parent && parent !== document.body) {
+        const style = window.getComputedStyle(parent);
+        const canScroll = /(auto|scroll)/.test(`${style.overflow}${style.overflowY}${style.overflowX}`);
+        if (canScroll && (parent.scrollHeight > parent.clientHeight + 1 || parent.scrollWidth > parent.clientWidth + 1)) {
+          const parentRect = parent.getBoundingClientRect();
+          return (
+            rect.left < parentRect.left - 1 ||
+            rect.right > parentRect.right + 1 ||
+            rect.top < parentRect.top - 1 ||
+            rect.bottom > parentRect.bottom + 1
+          );
+        }
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
     const selector = [
       "button",
       "input",
@@ -431,6 +446,9 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
 
     const elements = Array.from(document.querySelectorAll<HTMLElement>(selector))
       .filter((element) => {
+        if (isClippedByScrollableAncestor(element)) {
+          return false;
+        }
         const style = window.getComputedStyle(element);
         const rect = element.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;

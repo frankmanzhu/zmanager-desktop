@@ -857,12 +857,50 @@ input[type="search"] {
 
 .table-shell,
 .archive-table-wrap {
+  position: relative;
   min-height: 0;
   overflow: auto;
   border: 0;
   border-top: 1px solid var(--border);
   border-radius: 0;
   background: var(--content-bg);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.marquee-hit-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#archive-empty-state {
+  position: relative;
+  z-index: 2;
+}
+
+#entry-table {
+  position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#entry-table th,
+#entry-table td {
+  position: relative;
+  z-index: 2;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#entry-table th {
+  z-index: 3;
 }
 
 .compress-surface {
@@ -1720,6 +1758,7 @@ progress {
 
 .dialog-body {
   min-height: 0;
+  max-height: calc(100vh - 180px);
   display: grid;
   gap: 10px;
   padding: 12px;
