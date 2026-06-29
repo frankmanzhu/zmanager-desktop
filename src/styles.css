@@ -199,8 +199,9 @@ p {
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
+    "menu"
     "toolbar"
     "path"
     "body"
@@ -210,17 +211,27 @@ p {
 }
 
 .workspace.toolbar-hidden {
-  grid-template-rows: var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
+    "menu"
     "path"
     "body"
     "status";
 }
 
 .workspace[data-mode="compress"] {
-  grid-template-rows: var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
+    "menu"
     "toolbar"
+    "body"
+    "status";
+}
+
+.workspace[data-mode="compress"].toolbar-hidden {
+  grid-template-rows: var(--zmanager-menu-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "menu"
     "body"
     "status";
 }
@@ -368,6 +379,13 @@ p {
   gap: 4px;
 }
 
+.legacy-command-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .mode-button {
   min-width: 120px;
   min-height: 34px;
@@ -494,7 +512,7 @@ button svg {
   grid-area: path;
   min-height: 44px;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) minmax(190px, 280px) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(190px, 280px);
   align-items: center;
   gap: 8px;
   padding: 7px 14px;
@@ -538,13 +556,6 @@ button svg {
 
 .search-field input[type="search"] {
   min-width: 0;
-}
-
-.flat-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted-strong);
 }
 
 .path-actions {
@@ -754,6 +765,11 @@ button svg {
   margin: 0;
 }
 
+.details-list > div,
+.detail-list > div {
+  display: contents;
+}
+
 .details-list dt,
 .detail-list dt {
   color: var(--muted);
@@ -767,12 +783,8 @@ button svg {
   word-break: normal;
 }
 
-.details-actions,
-.detail-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+.diagnostics {
+  min-width: 0;
 }
 
 .panel-header {
@@ -1991,7 +2003,7 @@ progress {
 
   .path-bar {
     padding-inline: 8px;
-    grid-template-columns: auto auto minmax(0, 1fr) minmax(140px, 180px) auto;
+    grid-template-columns: auto auto minmax(0, 1fr) minmax(140px, 180px);
   }
 
   .status-bar {
@@ -2052,8 +2064,7 @@ progress {
   .browse-actions,
   .source-controls,
   .job-actions,
-  .compress-create-actions,
-  .details-actions {
+  .compress-create-actions {
     align-items: stretch;
   }
 
@@ -2062,8 +2073,7 @@ progress {
   .browse-actions button,
   .source-controls button,
   .job-actions button,
-  .compress-create-actions button,
-  .details-actions button {
+  .compress-create-actions button {
     justify-content: center;
   }
 

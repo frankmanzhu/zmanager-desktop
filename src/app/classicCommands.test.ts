@@ -41,6 +41,23 @@ describe("classic command definitions", () => {
     }
   });
 
+  it("keeps redundant navigation commands out of the View menu", () => {
+    const viewMenu = CLASSIC_MENU_GROUPS.find((group) => group.label === "View");
+    expect(viewMenu).toBeDefined();
+
+    const viewMenuCommandIds = collectMenuCommandIds(viewMenu?.items ?? []);
+    expect(viewMenuCommandIds).toEqual([
+      "sortName",
+      "sortType",
+      "sortDate",
+      "sortSize",
+      "flatView",
+      "archiveToolbar",
+      "largeButtons",
+      "showButtonText",
+    ]);
+  });
+
   it("keeps the classic toolbar command order", () => {
     expect(CLASSIC_TOOLBAR_ORDER.map((id) => COMMAND_DEFINITIONS[id].label)).toEqual([
       "Add",

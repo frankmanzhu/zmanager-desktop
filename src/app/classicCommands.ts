@@ -206,9 +206,6 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
           { kind: "command", id: "showButtonText" },
         ],
       },
-      { kind: "command", id: "openRoot" },
-      { kind: "command", id: "upOneLevel" },
-      { kind: "command", id: "refresh" },
     ],
   },
   {

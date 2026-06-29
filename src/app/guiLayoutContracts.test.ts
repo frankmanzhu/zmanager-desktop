@@ -16,8 +16,35 @@ const { readFileSync } = require("fs");
 const { join } = require("path");
 
 const styles = readFileSync(join(process.cwd(), "src", "styles.css"), "utf8");
+const mainSource = readFileSync(join(process.cwd(), "src", "main.ts"), "utf8");
 
 describe("GUI layout contracts", () => {
+  it("renders the classic menu and command toolbar visibly", () => {
+    expect(mainSource).toContain('<nav class="app-menu" aria-label="Application menu">');
+    expect(mainSource).toContain('<div class="legacy-command-buttons">');
+    expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
+  });
+
+  it("does not duplicate command buttons in secondary panes", () => {
+    expect(mainSource).not.toContain("flat-view-toggle");
+    expect(mainSource).not.toContain("data-detail-action");
+    expect(styles).not.toContain(".flat-toggle");
+    expect(styles).not.toContain(".detail-actions");
+  });
+
+  it("does not show unimplemented preferences", () => {
+    expect(mainSource).not.toContain("<h3>System</h3>");
+    expect(mainSource).not.toContain("<h3>Menu/Shell integration</h3>");
+    expect(mainSource).not.toContain("Integrate to shell context menu");
+    expect(mainSource).not.toContain("Cascaded context menu");
+    expect(mainSource).not.toContain("Icons in context menu");
+  });
+
+  it("keeps About diagnostics in the dialog body layout", () => {
+    expect(mainSource).toContain('<div class="dialog-body">\n          <div id="about-diagnostics" class="diagnostics"></div>');
+    expect(styles).toContain(".detail-list > div {\n  display: contents;");
+  });
+
   it("scopes archive selection-column sizing to the archive table", () => {
     expect(styles).not.toMatch(/(^|[},]\s*)td:first-child\s*,\s*th:first-child\s*\{/m);
     expect(styles).toContain("#entry-table td:first-child");

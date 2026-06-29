@@ -448,7 +448,7 @@ function renderToolbar(): string {
 
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
-    <nav class="app-menu" aria-label="Application menu" hidden>
+    <nav class="app-menu" aria-label="Application menu">
       ${renderMenuBar()}
     </nav>
 
@@ -457,7 +457,7 @@ appRoot.innerHTML = `
         <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress">${MODE_COMPRESS_LABEL}</button>
         <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract">${MODE_EXTRACT_LABEL}</button>
       </div>
-      <div class="legacy-command-buttons" hidden>
+      <div class="legacy-command-buttons">
         ${renderToolbar()}
         <button id="open-archive" type="button" data-command-id="open" aria-label="Open archive">${toolbarIcon("open")}</button>
         <button id="new-archive" type="button" data-command-id="createFile" aria-label="New archive">${toolbarIcon("new")}</button>
@@ -476,10 +476,6 @@ appRoot.innerHTML = `
       <label class="search-field">
         <span class="sr-only">Search entries</span>
         <input id="search-entries" type="search" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
-      </label>
-      <label class="flat-toggle">
-        <input id="flat-view-toggle" type="checkbox" disabled />
-        <span>Flat</span>
       </label>
     </section>
 
@@ -842,7 +838,9 @@ appRoot.innerHTML = `
           </div>
           <button id="about-dialog-close" class="icon-button" type="button" aria-label="Close about dialog">Close</button>
         </div>
-        <div id="about-diagnostics" class="diagnostics"></div>
+        <div class="dialog-body">
+          <div id="about-diagnostics" class="diagnostics"></div>
+        </div>
         <div class="dialog-actions">
           <button id="copy-diagnostics" type="button">Copy Diagnostics</button>
           <button id="about-close" type="button">Close</button>
@@ -861,22 +859,6 @@ appRoot.innerHTML = `
         </div>
         <div class="dialog-body">
           <div class="options-pages">
-            <section class="options-page">
-              <h3>System</h3>
-              <div class="list-box compact-list">
-                <div class="option-row"><input type="checkbox" disabled /><span>.zip</span><span>Archive</span></div>
-                <div class="option-row"><input type="checkbox" disabled /><span>.7z</span><span>Archive</span></div>
-                <div class="option-row"><input type="checkbox" disabled /><span>.tar.zst</span><span>Archive</span></div>
-              </div>
-            </section>
-            <section class="options-page">
-              <h3>Menu/Shell integration</h3>
-              <div class="toggle-grid">
-                <label class="toggle-line"><input type="checkbox" disabled /> Integrate to shell context menu</label>
-                <label class="toggle-line"><input type="checkbox" disabled /> Cascaded context menu</label>
-                <label class="toggle-line"><input type="checkbox" disabled /> Icons in context menu</label>
-              </div>
-            </section>
             <section class="options-page">
               <h3>Folders</h3>
               <div class="form-grid form-grid-compact">
@@ -1000,7 +982,6 @@ const createOptionsOpenButton = document.querySelector<HTMLButtonElement>("#crea
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
-const flatViewToggle = document.querySelector<HTMLInputElement>("#flat-view-toggle")!;
 const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
@@ -1196,7 +1177,6 @@ function savePreferencePatch(patch: Partial<AppPreferences>) {
 
 function setFlatView(nextFlatView: boolean, persistPreference: boolean) {
   isFlatView = nextFlatView;
-  flatViewToggle.checked = nextFlatView;
   if (persistPreference) {
     savePreferencePatch({ flatViewDefault: nextFlatView });
   }
@@ -1246,7 +1226,7 @@ function updateStatusBar() {
 }
 
 function applyPreferenceClasses() {
-  workspaceElement.classList.remove("toolbar-hidden");
+  workspaceElement.classList.toggle("toolbar-hidden", !appPreferences.toolbarVisible);
   commandToolbarElement?.classList.toggle("large", appPreferences.largeToolbarButtons);
   commandToolbarElement?.classList.toggle("show-labels", appPreferences.showToolbarLabels);
   entryTable.classList.toggle("show-grid", appPreferences.showGridLines);
@@ -1915,7 +1895,6 @@ function updateCommandState() {
   });
 
   searchInput.disabled = !canUseArchive;
-  flatViewToggle.disabled = !canUseArchive;
   selectAllInput.disabled = !canListEntries || visibleSelectableCount === 0;
   refreshArchiveButton.disabled = !hasArchive || isLoading;
   navBackButton.disabled = navigationHistory.length === 0;
@@ -2310,12 +2289,6 @@ function renderDetails() {
         <dl class="detail-list">
           ${list}
         </dl>
-        <div class="detail-actions">
-          <button type="button" data-detail-action="extract-all">Extract All</button>
-          <button type="button" data-detail-action="test">Test Archive</button>
-          <button type="button" data-detail-action="create">New Archive</button>
-          <button type="button" data-detail-action="archive-info">Info</button>
-        </div>
       </div>
     `;
     return;
@@ -2349,11 +2322,6 @@ function renderDetails() {
           ${addDetailRow("Solid", formatOptionalBoolean(entry.solid))}
           ${addDetailRow("Link target", entry.linkTarget)}
         </dl>
-        <div class="detail-actions">
-          <button type="button" data-detail-action="extract-selection">Extract</button>
-          <button type="button" data-detail-action="preview">Preview</button>
-          <button type="button" data-detail-action="entry-info">Info</button>
-        </div>
       </div>
     `;
     return;
@@ -2373,10 +2341,6 @@ function renderDetails() {
         ${addDetailRow("Total size", selectedTotal === null ? null : formatBytes(selectedTotal))}
         ${addDetailRow("Path preview", pathPreview)}
       </dl>
-      <div class="detail-actions">
-        <button type="button" data-detail-action="extract-selection">Extract Selected</button>
-        <button type="button" data-detail-action="clear-selection">Clear Selection</button>
-      </div>
     </div>
   `;
 }
@@ -3691,7 +3655,6 @@ function savePreferencesFromDialog() {
   appPreferences = collectPreferencesFromDialog();
   saveAppPreferences(appPreferences);
   isFlatView = appPreferences.flatViewDefault;
-  flatViewToggle.checked = isFlatView;
   preferencesStatusElement.textContent = "Preferences saved.";
   preferencesStatusElement.className = "status status-success";
   applyCreatePreferenceDefaults();
@@ -3867,13 +3830,11 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
       : "";
     searchInput.value = preservedSearchQuery;
     isFlatView = preservedFlatView;
-    flatViewToggle.checked = preservedFlatView;
   } else {
     currentArchiveFolder = "";
     navigationHistory = [];
     searchInput.value = "";
     isFlatView = false;
-    flatViewToggle.checked = false;
   }
 
   const nextSelection = new Set<string>();
@@ -5241,10 +5202,6 @@ function bindActions() {
     renderBrowse();
   });
 
-  flatViewToggle.addEventListener("change", () => {
-    setFlatView(flatViewToggle.checked, true);
-  });
-
   tableHead.addEventListener("change", (event) => {
     const target = event.target as HTMLInputElement;
     if (target.id !== "select-all") {
@@ -5950,47 +5907,6 @@ tableBody.addEventListener("click", (event) => {
       renderCreateSources();
       renderCompressSources();
       queuePlanRun();
-    }
-  });
-
-  detailsElement.addEventListener("click", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-detail-action]");
-    if (!target) {
-      return;
-    }
-
-    switch (target.dataset.detailAction) {
-      case "open":
-        void onOpenArchive();
-        break;
-      case "create":
-        showCreateWorkspace();
-        break;
-      case "extract-all":
-        openExtractDialog("archive");
-        break;
-      case "extract-selection":
-        openExtractDialog("selection");
-        break;
-      case "test":
-        void onTestArchive();
-        break;
-      case "preview":
-        void onPreviewSelectedEntry();
-        break;
-      case "entry-info": {
-        const selected = getSelectedEntryDtos()[0];
-        if (selected) {
-          showEntryInfo(selected.path);
-        }
-        break;
-      }
-      case "archive-info":
-        showArchiveInfo();
-        break;
-      case "clear-selection":
-        clearBrowseSelection();
-        break;
     }
   });
 
