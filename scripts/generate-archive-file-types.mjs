@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(import.meta.dirname, "..");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = resolve(repoRoot, "src", "app", "archiveFileTypes.manifest.json");
 const windowsHookPath = resolve(repoRoot, "packaging", "windows", "nsis-context-menu.nsh");
 

@@ -54,6 +54,26 @@ cd src-tauri
 cargo check
 ```
 
+## Linux Build Prerequisites
+
+Ubuntu/Debian builds need Rust 1.85 or newer, Node.js, npm, and Tauri's native
+GTK/WebKit development packages. On a fresh Ubuntu machine, install:
+
+```sh
+sudo apt-get update
+sudo apt-get install build-essential curl file libayatana-appindicator3-dev libgtk-3-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+```
+
+These packages provide the `pkg-config` entries required by the Rust GTK stack,
+including `libsoup-3.0` and `webkit2gtk-4.1`. Without them, Cargo can fail in
+`soup3-sys` or WebKit-related build scripts.
+
+Build an Ubuntu/Debian package with:
+
+```sh
+scripts/build-linux-ubuntu-deb.sh --skip-tests
+```
+
 ## Layout
 
 ```text
@@ -86,5 +106,3 @@ Build a working Windows/Linux MVP with:
 - platform packaging
 
 Read `docs/HANDOFF.md` first before implementing.
-
- 
