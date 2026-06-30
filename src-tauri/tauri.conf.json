@@ -103,6 +103,7 @@
     },
     "linux": {
       "deb": {
+        "depends": ["python3-nautilus"],
         "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
@@ -113,10 +114,13 @@
           "/usr/share/applications/zmanager-desktop.desktop": "../packaging/linux/zmanager-desktop.desktop",
           "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
+          "/usr/share/nautilus-python/extensions/zmanager_nautilus.py": "../packaging/linux/nautilus/zmanager_nautilus.py",
+          "/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop": "../packaging/linux/kde/zmanager-archive-servicemenu.desktop",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
       },
       "rpm": {
+        "depends": ["python3-nautilus"],
         "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
@@ -127,6 +131,8 @@
           "/usr/share/applications/zmanager-desktop.desktop": "../packaging/linux/zmanager-desktop.desktop",
           "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
+          "/usr/share/nautilus-python/extensions/zmanager_nautilus.py": "../packaging/linux/nautilus/zmanager_nautilus.py",
+          "/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop": "../packaging/linux/kde/zmanager-archive-servicemenu.desktop",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
       }

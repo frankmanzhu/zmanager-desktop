@@ -1,17 +1,33 @@
 [Desktop Entry]
 Type=Service
+Name=ZManager
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
-MimeType=all/all;inode/directory;application/zip;application/x-7z-compressed;application/vnd.rar;application/x-rar-compressed;application/x-tar;application/gzip;application/x-compressed-tar;application/x-xz;application/x-xz-compressed-tar;application/zstd;application/x-zmanager-tzst;application/x-zmanager-tzap;
-Actions=Compress;Extract;
+MimeType=application/octet-stream;inode/directory;
+Actions=AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;
 X-KDE-Priority=TopLevel
 X-KDE-Submenu=ZManager
 
-[Desktop Action Compress]
-Name=Compress using ZManager
+[Desktop Action AddToArchive]
+Name=Add to archive...
 Icon=zmanager-desktop
 Exec=zmanager-desktop --quick-action compress --path %F
 
-[Desktop Action Extract]
-Name=Extract using ZManager
+[Desktop Action AddToTzap]
+Name=Add to .tzap
 Icon=zmanager-desktop
-Exec=zmanager-desktop --quick-action extract --path %F
+Exec=zmanager-desktop --quick-action compress-tzap --path %F
+
+[Desktop Action AddToZip]
+Name=Add to .zip
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action compress-zip --path %F
+
+[Desktop Action AddToSevenZ]
+Name=Add to .7z
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action compress-7z --path %F
+
+[Desktop Action AddToTzst]
+Name=Add to .tzst
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action compress-tzst --path %F

@@ -3,6 +3,7 @@ import { DEFAULT_APP_PREFERENCES } from "./preferences";
 import {
   quickCreateDestination,
   quickExtractDestination,
+  quickExtractDestinationCollisionStrategy,
   runQuickActionRequest,
   uniqueQuickActionPaths,
   unsupportedQuickExtractPath,
@@ -67,6 +68,11 @@ describe("quick action helpers", () => {
     expect(quickExtractDestination("/tmp/archive.tar.zst", "extractToFolder", pathHelpers)).toBe(
       "/tmp/archive",
     );
+  });
+
+  it("only renames the destination folder for extract-to-folder quick actions", () => {
+    expect(quickExtractDestinationCollisionStrategy("extractHere")).toBeUndefined();
+    expect(quickExtractDestinationCollisionStrategy("extractToFolder")).toBe("rename");
   });
 
   it("finds unsupported archive paths", () => {

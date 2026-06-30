@@ -27,12 +27,36 @@ pub const DESKTOP_ACTIONS_ENABLED: bool = true;
 
 pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
     ShellActionProfile {
-        label: "Compress using ZManager",
+        label: "ZManager > Extract Here",
+        quick_action: "extractHere",
+    },
+    ShellActionProfile {
+        label: "ZManager > Extract to Archive Folder",
+        quick_action: "extractToFolder",
+    },
+    ShellActionProfile {
+        label: "ZManager > Open archive",
+        quick_action: "open",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to archive...",
         quick_action: "compress",
     },
     ShellActionProfile {
-        label: "Extract using ZManager",
-        quick_action: "extract",
+        label: "ZManager > Add to .tzap",
+        quick_action: "compressTzap",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .zip",
+        quick_action: "compressZip",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .7z",
+        quick_action: "compressSevenZ",
+    },
+    ShellActionProfile {
+        label: "ZManager > Add to .tzst",
+        quick_action: "compressTarZst",
     },
 ];
 

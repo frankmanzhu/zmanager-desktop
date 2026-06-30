@@ -1,4 +1,4 @@
-import type { QuickActionRequestDto } from "../api/types";
+import type { QuickActionRequestDto, StartExtractRequest } from "../api/types";
 import { isSupportedArchivePath, baseNameWithoutKnownArchiveExtension } from "./archiveFileTypes";
 import {
   commonSourceParentDirectory,
@@ -61,6 +61,12 @@ export function quickExtractDestination(
 
   const folderName = baseNameWithoutKnownArchiveExtension(archivePath);
   return parent ? pathHelpers.joinNativePath(parent, folderName) : folderName;
+}
+
+export function quickExtractDestinationCollisionStrategy(
+  action: QuickActionExtractMode,
+): StartExtractRequest["destinationCollisionStrategy"] | undefined {
+  return action === "extractToFolder" ? "rename" : undefined;
 }
 
 export function unsupportedQuickExtractPath(paths: string[]): string | null {

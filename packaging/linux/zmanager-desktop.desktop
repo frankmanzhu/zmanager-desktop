@@ -9,14 +9,44 @@ StartupWMClass=zmanager-desktop
 StartupNotify=true
 Terminal=false
 Type=Application
-Actions=Compress;Extract;
+Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;
 
-[Desktop Action Compress]
-Name=Compress using ZManager
+[Desktop Action ExtractHere]
+Name=Extract Here
+Exec=zmanager-desktop --quick-action extract-here --path %F
+Icon=zmanager-desktop
+
+[Desktop Action ExtractToFolder]
+Name=Extract to Archive Folder
+Exec=zmanager-desktop --quick-action extract-to-folder --path %F
+Icon=zmanager-desktop
+
+[Desktop Action OpenArchive]
+Name=Open archive
+Exec=zmanager-desktop --quick-action open --path %F
+Icon=zmanager-desktop
+
+[Desktop Action AddToArchive]
+Name=Add to archive...
 Exec=zmanager-desktop --quick-action compress --path %F
 Icon=zmanager-desktop
 
-[Desktop Action Extract]
-Name=Extract using ZManager
-Exec=zmanager-desktop --quick-action extract --path %F
+[Desktop Action AddToTzap]
+Name=Add to .tzap
+Exec=zmanager-desktop --quick-action compress-tzap --path %F
+Icon=zmanager-desktop
+
+[Desktop Action AddToZip]
+Name=Add to .zip
+Exec=zmanager-desktop --quick-action compress-zip --path %F
+Icon=zmanager-desktop
+
+[Desktop Action AddToSevenZ]
+Name=Add to .7z
+Exec=zmanager-desktop --quick-action compress-7z --path %F
+Icon=zmanager-desktop
+
+[Desktop Action AddToTzst]
+Name=Add to .tzst
+Exec=zmanager-desktop --quick-action compress-tzst --path %F
 Icon=zmanager-desktop

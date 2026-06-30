@@ -15,8 +15,13 @@ Packaged materials:
 - `com.frankmanzhu.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
   package managers and software centers.
 - `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon caches.
-- `kde/zmanager-servicemenu.desktop`: KDE/Dolphin service-menu actions installed by
-  deb/rpm packages.
+- `nautilus/zmanager_nautilus.py`: GNOME Files/Nautilus Python extension that
+  adds the real right-click `ZManager` submenu for selected files, folders, and
+  folder backgrounds.
+- `kde/zmanager-archive-servicemenu.desktop`: KDE/Dolphin archive-only
+  extraction/open service-menu actions installed by deb/rpm packages.
+- `kde/zmanager-servicemenu.desktop`: KDE/Dolphin create service-menu actions for
+  selected files and folders installed by deb/rpm packages.
 
 Ubuntu/Debian package build:
 
@@ -76,20 +81,44 @@ failures when test or release binaries link bundled libarchive.
 
 Quick-action command contract:
 
-- `zmanager-desktop --quick-action compress --path <target>`
-- `zmanager-desktop --quick-action extract --path <archive>`
+- `zmanager-desktop --quick-action extract-here --path <archive>...`
+- `zmanager-desktop --quick-action extract-to-folder --path <archive>`
+- `zmanager-desktop --quick-action open --path <archive>`
+- `zmanager-desktop --quick-action compress --path <target>...`
+- `zmanager-desktop --quick-action compress-tzap --path <target>...`
+- `zmanager-desktop --quick-action compress-zip --path <target>...`
+- `zmanager-desktop --quick-action compress-7z --path <target>...`
+- `zmanager-desktop --quick-action compress-tzst --path <target>...`
 
-The actions use the app preferences for archive format, clean-source behavior,
-output folder, and extraction destination behavior.
+These labels and command routes mirror the Windows `ZManager` cascaded context
+menu documented in `docs/windows-context-menu-behavior.md`. The app validates
+all quick actions before starting work; unsupported paths fail visibly instead
+of relying on file-manager metadata for safety.
 
-GNOME Files generally honors the MIME association for Open With, but does not reliably
-consume `.desktop` quick actions as per-file context-menu actions. Use Open With,
-drag/drop, or a user-installed Nautilus script that forwards to the same CLI contract.
+GNOME Files/Nautilus consumes the packaged Python extension from
+`/usr/share/nautilus-python/extensions/zmanager_nautilus.py`. The deb/rpm package
+depends on `python3-nautilus` so the extension host is present. Restart Nautilus
+after install or upgrade because Nautilus does not reload Python extensions while
+it is running:
 
-KDE/Dolphin consumes the packaged service menu from
-`/usr/share/kio/servicemenus/zmanager-servicemenu.desktop` when installed from deb/rpm.
-If a distribution expects the user-level path, copy the same file to
-`~/.local/share/kio/servicemenus/` and run `kbuildsycoca6` or log out and back in.
+```sh
+nautilus -q
+```
+
+After restart, selected files, selected folders, and folder backgrounds show a
+top-level `ZManager` submenu. Supported archive selections show extract/open
+actions first and create actions after them; non-archive file/folder selections
+show create actions.
+
+KDE/Dolphin consumes the packaged service menus from
+`/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop` and
+`/usr/share/kio/servicemenus/zmanager-servicemenu.desktop` when installed from
+deb/rpm. Archive MIME selections receive `Extract Here`, `Extract to Archive
+Folder`, and `Open archive`; selected files and folders receive the create
+actions. Archive selections also receive create actions through the generic
+create service menu, matching Windows. If a distribution expects the user-level
+path, copy both files to `~/.local/share/kio/servicemenus/` and run
+`kbuildsycoca6` or log out and back in.
 
 AppImage builds carry the app desktop metadata for manual registration, but system-level
 Open With and service-menu installation depends on the user or distribution integration

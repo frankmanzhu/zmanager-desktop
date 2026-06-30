@@ -134,6 +134,7 @@ import {
 import {
   quickCreateDestination as buildQuickCreateDestination,
   quickExtractDestination as buildQuickExtractDestination,
+  quickExtractDestinationCollisionStrategy,
   runQuickActionRequest,
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
@@ -4140,7 +4141,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
           archivePath,
           destinationPath,
           overwrite: "rename",
-          destinationCollisionStrategy: "rename",
+          destinationCollisionStrategy: quickExtractDestinationCollisionStrategy(action),
           stripComponents: 0,
           ...(password ? { password } : {}),
         }));
