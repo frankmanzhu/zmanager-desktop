@@ -133,8 +133,7 @@ import {
 } from "./app/preferences";
 import {
   quickCreateDestination as buildQuickCreateDestination,
-  quickExtractDestination as buildQuickExtractDestination,
-  quickExtractDestinationCollisionStrategy,
+  quickExtractDestinationPlan,
   runQuickActionRequest,
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
@@ -4124,34 +4123,42 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
       continue;
     }
 
-    const destinationPath = buildQuickExtractDestination(
-      archivePath,
-      action,
-      { nativeParentPath, joinNativePath },
-    );
-    if (!destinationPath) {
-      setOperationalStatus(`Choose a destination before extracting ${archivePath}.`);
-      continue;
-    }
-
     let password: string | undefined;
     while (true) {
       try {
+        const listing = action === "extractHere"
+          ? await listArchiveCommand({
+            archivePath,
+            ...(password ? { password } : {}),
+          })
+          : null;
+        const destinationPlan = quickExtractDestinationPlan(
+          archivePath,
+          action,
+          { nativeParentPath, joinNativePath },
+          listing?.entries,
+        );
+        if (!destinationPlan.destinationPath) {
+          setOperationalStatus(`Choose a destination before extracting ${archivePath}.`);
+          break;
+        }
+
         const response = await runStartExtract(buildStartExtractRequest({
           archivePath,
-          destinationPath,
+          destinationPath: destinationPlan.destinationPath,
           overwrite: "rename",
-          destinationCollisionStrategy: quickExtractDestinationCollisionStrategy(action),
-          stripComponents: 0,
+          destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
+          stripComponents: destinationPlan.stripComponents,
           ...(password ? { password } : {}),
         }));
-        recordExtractDestinationHistory(destinationPath);
+        recordExtractDestinationHistory(destinationPlan.destinationPath);
         addJobState(response, {
           retryKind: "extractArchive",
           archivePath,
-          destinationPath,
+          destinationPath: destinationPlan.destinationPath,
           overwrite: "rename",
-          stripComponents: 0,
+          destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
+          stripComponents: destinationPlan.stripComponents,
         });
         break;
       } catch (error) {
@@ -4248,6 +4255,7 @@ async function startPasswordRetryJob(context: JobRetryContext, password: string)
     archivePath: context.archivePath,
     destinationPath: context.destinationPath,
     overwrite: context.overwrite,
+    destinationCollisionStrategy: context.destinationCollisionStrategy,
     entryPaths: context.entryPaths,
     stripComponents: context.stripComponents,
     password,

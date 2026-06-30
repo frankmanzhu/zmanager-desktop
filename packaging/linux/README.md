@@ -101,6 +101,11 @@ menu documented in `docs/windows-context-menu-behavior.md`. The app validates
 all quick actions before starting work; unsupported paths fail visibly instead
 of relying on file-manager metadata for safety.
 
+`Extract Here` accepts multiple selected archives. `Extract to Archive Folder`
+and `Open archive` are single-archive actions, matching Windows Explorer's `%1`
+verb contract; Linux desktop and KDE metadata use single-file tokens for those
+actions, and the Nautilus extension disables them for multi-selection.
+
 GNOME Files/Nautilus consumes the packaged Python extension from
 `/usr/share/nautilus-python/extensions/zmanager_nautilus.py`. The deb/rpm package
 depends on `python3-nautilus` so the extension host is present. Install `.deb`

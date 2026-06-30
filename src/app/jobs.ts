@@ -15,6 +15,7 @@ export type JobRetryContext =
       archivePath: string;
       destinationPath: string;
       overwrite: StartExtractRequest["overwrite"];
+      destinationCollisionStrategy?: StartExtractRequest["destinationCollisionStrategy"];
       entryPaths?: string[];
       stripComponents: number;
     }

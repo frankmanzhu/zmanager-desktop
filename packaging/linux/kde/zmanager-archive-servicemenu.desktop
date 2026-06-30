@@ -15,9 +15,9 @@ Exec=zmanager-desktop --quick-action extract-here --path %F
 [Desktop Action ExtractToFolder]
 Name=Extract to Archive Folder
 Icon=zmanager-desktop
-Exec=zmanager-desktop --quick-action extract-to-folder --path %F
+Exec=zmanager-desktop --quick-action extract-to-folder --path %f
 
 [Desktop Action OpenArchive]
 Name=Open archive
 Icon=zmanager-desktop
-Exec=zmanager-desktop --quick-action open --path %F
+Exec=zmanager-desktop --quick-action open --path %f

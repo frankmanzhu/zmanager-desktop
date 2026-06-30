@@ -4,6 +4,8 @@ import {
   quickCreateDestination,
   quickExtractDestination,
   quickExtractDestinationCollisionStrategy,
+  quickExtractDestinationPlan,
+  quickExtractSingleRootFolder,
   runQuickActionRequest,
   uniqueQuickActionPaths,
   unsupportedQuickExtractPath,
@@ -73,6 +75,54 @@ describe("quick action helpers", () => {
   it("only renames the destination folder for extract-to-folder quick actions", () => {
     expect(quickExtractDestinationCollisionStrategy("extractHere")).toBeUndefined();
     expect(quickExtractDestinationCollisionStrategy("extractToFolder")).toBe("rename");
+  });
+
+  it("detects folder-wrapped archives for extract-here root renaming", () => {
+    expect(quickExtractSingleRootFolder([
+      { path: "photos/", kind: "directory" },
+      { path: "photos/raw/image.jpg" },
+      { path: "photos/edited/image.jpg" },
+    ])).toBe("photos");
+
+    expect(quickExtractSingleRootFolder([{ path: "empty", kind: "directory" }])).toBe("empty");
+    expect(quickExtractSingleRootFolder([{ path: "README.md" }])).toBeNull();
+    expect(quickExtractSingleRootFolder([
+      { path: "photos/image.jpg" },
+      { path: "docs/readme.txt" },
+    ])).toBeNull();
+    expect(quickExtractSingleRootFolder([{ path: "../escape.txt" }])).toBeNull();
+  });
+
+  it("plans extract-here folder-wrapped archives as a renamed root destination", () => {
+    expect(
+      quickExtractDestinationPlan("/tmp/photos.zip", "extractHere", pathHelpers, [
+        { path: "photos/", kind: "directory" },
+        { path: "photos/raw/image.jpg" },
+      ]),
+    ).toEqual({
+      destinationPath: "/tmp/photos",
+      stripComponents: 1,
+      destinationCollisionStrategy: "rename",
+    });
+
+    expect(
+      quickExtractDestinationPlan("/tmp/photos.zip", "extractHere", pathHelpers, [
+        { path: "README.md" },
+      ]),
+    ).toEqual({
+      destinationPath: "/tmp",
+      stripComponents: 0,
+    });
+  });
+
+  it("plans extract-to-folder quick actions with destination root renaming", () => {
+    expect(
+      quickExtractDestinationPlan("/tmp/photos.zip", "extractToFolder", pathHelpers),
+    ).toEqual({
+      destinationPath: "/tmp/photos",
+      stripComponents: 0,
+      destinationCollisionStrategy: "rename",
+    });
   });
 
   it("finds unsupported archive paths", () => {

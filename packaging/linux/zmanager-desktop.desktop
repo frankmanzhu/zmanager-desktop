@@ -18,12 +18,12 @@ Icon=zmanager-desktop
 
 [Desktop Action ExtractToFolder]
 Name=Extract to Archive Folder
-Exec=zmanager-desktop --quick-action extract-to-folder --path %F
+Exec=zmanager-desktop --quick-action extract-to-folder --path %f
 Icon=zmanager-desktop
 
 [Desktop Action OpenArchive]
 Name=Open archive
-Exec=zmanager-desktop --quick-action open --path %F
+Exec=zmanager-desktop --quick-action open --path %f
 Icon=zmanager-desktop
 
 [Desktop Action AddToArchive]

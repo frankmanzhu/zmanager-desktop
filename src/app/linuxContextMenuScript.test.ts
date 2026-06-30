@@ -19,24 +19,26 @@ type ExpectedAction = {
   action: string;
   label: string;
   quickAction: string;
+  pathToken: "%F" | "%f";
 };
 
 const archiveActions: ExpectedAction[] = [
-  { action: "ExtractHere", label: "Extract Here", quickAction: "extract-here" },
+  { action: "ExtractHere", label: "Extract Here", quickAction: "extract-here", pathToken: "%F" },
   {
     action: "ExtractToFolder",
     label: "Extract to Archive Folder",
     quickAction: "extract-to-folder",
+    pathToken: "%f",
   },
-  { action: "OpenArchive", label: "Open archive", quickAction: "open" },
+  { action: "OpenArchive", label: "Open archive", quickAction: "open", pathToken: "%f" },
 ];
 
 const createActions: ExpectedAction[] = [
-  { action: "AddToArchive", label: "Add to archive...", quickAction: "compress" },
-  { action: "AddToTzap", label: "Add to .tzap", quickAction: "compress-tzap" },
-  { action: "AddToZip", label: "Add to .zip", quickAction: "compress-zip" },
-  { action: "AddToSevenZ", label: "Add to .7z", quickAction: "compress-7z" },
-  { action: "AddToTzst", label: "Add to .tzst", quickAction: "compress-tzst" },
+  { action: "AddToArchive", label: "Add to archive...", quickAction: "compress", pathToken: "%F" },
+  { action: "AddToTzap", label: "Add to .tzap", quickAction: "compress-tzap", pathToken: "%F" },
+  { action: "AddToZip", label: "Add to .zip", quickAction: "compress-zip", pathToken: "%F" },
+  { action: "AddToSevenZ", label: "Add to .7z", quickAction: "compress-7z", pathToken: "%F" },
+  { action: "AddToTzst", label: "Add to .tzst", quickAction: "compress-tzst", pathToken: "%F" },
 ];
 
 const windowsOrderedActions = [...archiveActions, ...createActions];
@@ -57,7 +59,7 @@ function expectAction(entry: string, expected: ExpectedAction): void {
   const nextBlock = entry.indexOf("\n[Desktop Action ", blockStart + 1);
   const block = entry.slice(blockStart, nextBlock === -1 ? undefined : nextBlock);
   expect(block).toContain(`Name=${expected.label}`);
-  expect(block).toContain(`--quick-action ${expected.quickAction} --path %F`);
+  expect(block).toContain(`--quick-action ${expected.quickAction} --path ${expected.pathToken}`);
 }
 
 describe("Linux context menu packaging", () => {
