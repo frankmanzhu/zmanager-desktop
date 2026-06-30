@@ -29,6 +29,12 @@ Ubuntu/Debian package build:
 scripts/build-linux-ubuntu-deb.sh
 ```
 
+Release `.deb` artifacts must be built on Ubuntu 22.04 LTS (jammy), preferably
+on amd64 for the primary x86_64 package. Ubuntu 22.04 is the runtime baseline.
+Building on Ubuntu 24.04 or newer can produce binaries linked against newer
+system libraries than Ubuntu 22.04 has. The build script enforces the Jammy
+baseline by default; use `--allow-non-baseline` only for local test packages.
+
 The build script prints both the canonical bundle artifact and an apt-readable
 copy staged under `/tmp/zmanager-desktop-deb/`. Install the staged copy to avoid
 apt's `_apt` sandbox warning when the project lives in a private home directory:
@@ -97,9 +103,21 @@ of relying on file-manager metadata for safety.
 
 GNOME Files/Nautilus consumes the packaged Python extension from
 `/usr/share/nautilus-python/extensions/zmanager_nautilus.py`. The deb/rpm package
-depends on `python3-nautilus` so the extension host is present. Restart Nautilus
-after install or upgrade because Nautilus does not reload Python extensions while
-it is running:
+depends on `python3-nautilus` so the extension host is present. Install `.deb`
+packages through `apt-get install ./ZManager_...deb` rather than bare `dpkg -i`
+unless dependencies are already installed; `dpkg` can unpack ZManager without
+installing `python3-nautilus`, leaving GNOME Files with no Python extension host.
+On Ubuntu 22.04, `python3-nautilus` is in the `universe` repository, so a clean
+VM may need:
+
+```sh
+sudo add-apt-repository universe
+sudo apt-get update
+```
+
+The extension supports both Nautilus 4.0 and older Nautilus 3.0 Python APIs.
+Restart Nautilus after install or upgrade because Nautilus does not reload Python
+extensions while it is running:
 
 ```sh
 nautilus -q
@@ -109,6 +127,34 @@ After restart, selected files, selected folders, and folder backgrounds show a
 top-level `ZManager` submenu. Supported archive selections show extract/open
 actions first and create actions after them; non-archive file/folder selections
 show create actions.
+
+GNOME install checks:
+
+```sh
+dpkg -s z-manager python3-nautilus
+ls -l /usr/share/nautilus-python/extensions/zmanager_nautilus.py
+PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import importlib.util
+path = "/usr/share/nautilus-python/extensions/zmanager_nautilus.py"
+spec = importlib.util.spec_from_file_location("zmanager_nautilus", path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print("ZManager Nautilus extension imports")
+PY
+```
+
+For a verbose load check, quit Nautilus and launch it from a terminal:
+
+```sh
+nautilus -q
+ZMANAGER_NAUTILUS_DEBUG_LOG=/tmp/zmanager-nautilus-debug.log \
+  NAUTILUS_PYTHON_DEBUG=misc nautilus "$HOME"
+```
+
+Right-click a file or folder, then check `/tmp/zmanager-nautilus-debug.log` for
+`get_file_items` and `run_quick_action` lines. If `nautilus-python` reports no
+load attempt, the extension host package is missing or Nautilus was not
+restarted.
 
 KDE/Dolphin consumes the packaged service menus from
 `/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop` and
@@ -123,3 +169,19 @@ path, copy both files to `~/.local/share/kio/servicemenus/` and run
 AppImage builds carry the app desktop metadata for manual registration, but system-level
 Open With and service-menu installation depends on the user or distribution integration
 tool installing that metadata.
+
+Distribution expectations:
+
+- Ubuntu 22.04 LTS: primary baseline for `.deb` release builds and GNOME
+  Nautilus smoke testing.
+- Ubuntu 24.04 LTS: supported as a newer runtime, but not the release build
+  baseline.
+- Debian GNOME: package shape is similar, but dependency names and Nautilus API
+  version can vary by release. Validate on the target Debian stable release
+  before publishing Debian-specific artifacts.
+- Fedora/openSUSE/RHEL-family: use `.rpm`, but dependency names differ. The
+  current package metadata names `python3-nautilus`, which is Ubuntu/Debian
+  naming and may need distro-specific rpm dependency mapping before release.
+- KDE/Dolphin: service-menu files are packaged, but should be smoke-tested on
+  each target distro because KIO service-menu cache behavior differs by KDE
+  version.

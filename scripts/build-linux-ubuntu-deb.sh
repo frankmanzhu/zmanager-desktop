@@ -6,12 +6,17 @@ cd "$repo_root"
 
 install_deps=0
 skip_tests=0
+allow_non_baseline=0
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests]
+Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests] [--allow-non-baseline]
 
 Builds the Ubuntu/Debian .deb distribution package with Tauri.
+
+Release baseline:
+  Build release .deb artifacts on Ubuntu 22.04 LTS (jammy). Building on newer
+  Ubuntu releases can link against newer system libraries than Ubuntu 22.04 has.
 
 Ubuntu prerequisites:
   sudo apt-get update
@@ -23,6 +28,8 @@ Ubuntu prerequisites:
 Options:
   --install-deps  Install required Ubuntu build packages, Node.js, and Rust.
   --skip-tests    Skip frontend and Rust tests before packaging.
+  --allow-non-baseline
+                  Allow local/test builds outside Ubuntu 22.04 jammy.
   -h, --help      Show this help.
 EOF
 }
@@ -34,6 +41,9 @@ while (($#)); do
       ;;
     --skip-tests)
       skip_tests=1
+      ;;
+    --allow-non-baseline)
+      allow_non_baseline=1
       ;;
     -h|--help)
       usage
@@ -47,6 +57,38 @@ while (($#)); do
   esac
   shift
 done
+
+check_release_baseline() {
+  local os_id="" version_codename="" pretty_name=""
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    os_id="${ID:-}"
+    version_codename="${VERSION_CODENAME:-}"
+    pretty_name="${PRETTY_NAME:-}"
+  fi
+
+  if [[ "$os_id" == "ubuntu" && "$version_codename" == "jammy" ]]; then
+    return
+  fi
+
+  if ((allow_non_baseline)); then
+    echo "Warning: building outside the Ubuntu 22.04 jammy release baseline: ${pretty_name:-unknown OS}" >&2
+    echo "Use this package for local testing only; build release .deb artifacts on Ubuntu 22.04." >&2
+    return
+  fi
+
+  cat >&2 <<EOF
+Release .deb builds must run on Ubuntu 22.04 LTS (jammy).
+Current build OS: ${pretty_name:-unknown OS}
+
+Build on an Ubuntu 22.04 amd64 machine/VM/container for release packages, or
+rerun with --allow-non-baseline for a local test package only.
+EOF
+  exit 1
+}
+
+check_release_baseline
 
 ubuntu_packages=(
   build-essential

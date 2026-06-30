@@ -8,7 +8,10 @@ from urllib.parse import unquote, urlparse
 
 import gi
 
-gi.require_version("Nautilus", "4.0")
+try:
+    gi.require_version("Nautilus", "4.0")
+except ValueError:
+    gi.require_version("Nautilus", "3.0")
 from gi.repository import GObject, Nautilus
 
 
@@ -79,7 +82,8 @@ CREATE_ACTIONS = (
 
 
 class ZManagerMenuProvider(GObject.GObject, Nautilus.MenuProvider):
-    def get_file_items(self, files: List[Nautilus.FileInfo]) -> List[Nautilus.MenuItem]:
+    def get_file_items(self, *args) -> List[Nautilus.MenuItem]:
+        files = args[-1]
         paths = local_paths(files)
         debug_log("get_file_items", paths)
         if not paths:
@@ -88,10 +92,8 @@ class ZManagerMenuProvider(GObject.GObject, Nautilus.MenuProvider):
         all_archives = all(is_archive_path(path) for path in paths)
         return [build_zmanager_menu(paths, all_archives, "File")]
 
-    def get_background_items(
-        self,
-        current_folder: Nautilus.FileInfo,
-    ) -> List[Nautilus.MenuItem]:
+    def get_background_items(self, *args) -> List[Nautilus.MenuItem]:
+        current_folder = args[-1]
         path = local_path(current_folder)
         debug_log("get_background_items", [path] if path is not None else [])
         if path is None:
