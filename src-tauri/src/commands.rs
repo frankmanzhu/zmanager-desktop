@@ -2748,6 +2748,74 @@ mod tests {
     }
 
     #[test]
+    fn command_boundary_start_tzap_extract_job_reaches_terminal_and_outputs_expected_file() {
+        let workspace = create_temp_workspace("start-extract-tzap");
+        let sources = workspace.join("sources");
+        let destination_archive = workspace.join("fixture.tzap");
+        let extract_destination = workspace.join("extracted");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::create_dir_all(&extract_destination).expect("extract directory should exist");
+
+        fs::write(sources.join("README.md"), b"# extractor").expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: false,
+        };
+        let create_job =
+            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let extract_request = StartExtractRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            destination_path: extract_destination.to_string_lossy().to_string(),
+            password: None,
+            overwrite: OverwritePolicyDto::Replace,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            entry_paths: None,
+            strip_components: 0,
+        };
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("extract command should start a job");
+        let (extract_poll, mut extract_events) =
+            wait_for_job_terminal(&registry, &extract_job.job_id);
+        extract_events.extend_from_slice(&extract_poll.events);
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(extract_poll.kind, JobKindDto::TzapExtract);
+        assert!(
+            extract_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
+            "extract lifecycle should emit a started event",
+        );
+        assert!(
+            extract_events
+                .iter()
+                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            "extract lifecycle should emit a completed event",
+        );
+        assert!(extract_poll.terminal_summary.is_some());
+
+        assert_eq!(
+            fs::read_to_string(extract_destination.join("sources").join("README.md"))
+                .expect("extracted README should be readable"),
+            "# extractor"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn command_boundary_start_extract_renames_existing_destination_when_requested() {
         let workspace = create_temp_workspace("start-extract-rename-destination");
         let sources = workspace.join("sources");
