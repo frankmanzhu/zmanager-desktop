@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Url};
 
 use crate::dto::{
     QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
@@ -231,10 +231,31 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
     let Some(arg) = arg.and_then(|value| value.to_str()) else {
         return false;
     };
-    Path::new(arg)
+
+    let path = Path::new(arg);
+    if path
         .extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+    {
+        return true;
+    }
+
+    let Some(file_name) = path.file_name().and_then(|file_name| file_name.to_str()) else {
+        return false;
+    };
+
+    if file_name.eq_ignore_ascii_case("zmanager-desktop")
+        || file_name.eq_ignore_ascii_case("zmanager-desktop.exe")
+    {
+        return true;
+    }
+
+    std::env::current_exe()
+        .ok()
+        .and_then(|current_exe| current_exe.file_name().map(|name| name.to_owned()))
+        .and_then(|current_exe_name| current_exe_name.to_str().map(str::to_owned))
+        .is_some_and(|current_exe_name| current_exe_name == file_name)
 }
 
 fn is_create_quick_action(kind: QuickActionKindDto) -> bool {
@@ -574,16 +595,33 @@ fn normalize_local_paths(paths: Vec<String>) -> Result<Vec<String>, QuickActionE
             continue;
         }
 
-        if path.contains("://") {
+        let path = normalize_local_path(path)?;
+        normalized.push(path);
+    }
+
+    Ok(normalized)
+}
+
+fn normalize_local_path(path: &str) -> Result<String, QuickActionError> {
+    if path.contains("://") {
+        let url = Url::parse(path).map_err(|_| {
+            QuickActionError::invalid(format!("quick-action path must be local: {path}"))
+        })?;
+        if url.scheme() != "file" {
             return Err(QuickActionError::invalid(format!(
                 "quick-action path must be local: {path}"
             )));
         }
 
-        normalized.push(path.to_string());
+        return url
+            .to_file_path()
+            .map(|path| path.to_string_lossy().to_string())
+            .map_err(|_| {
+                QuickActionError::invalid(format!("quick-action path must be local: {path}"))
+            });
     }
 
-    Ok(normalized)
+    Ok(path.to_string())
 }
 
 fn validate_all_supported_archives(paths: &[String]) -> Result<(), QuickActionError> {
@@ -683,6 +721,40 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::Open);
         assert_eq!(request.paths, ["C:/tmp/archive.tzap"]);
+    }
+
+    #[test]
+    fn parse_file_uri_archive_arg_as_open_request() {
+        let request = requested(&["file:///home/frank/Documents/beeware-tutorial.tzap"]);
+
+        assert_eq!(request.kind, QuickActionKindDto::Open);
+        assert_eq!(
+            request.paths,
+            ["/home/frank/Documents/beeware-tutorial.tzap"]
+        );
+    }
+
+    #[test]
+    fn parse_secondary_process_args_ignores_linux_executable_argv() {
+        let state = QuickActionStartupState::from_process_or_user_args(
+            [
+                "/usr/bin/zmanager-desktop",
+                "file:///home/frank/Documents/beeware-tutorial.tzap",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect(),
+        );
+
+        let QuickActionStartupState::Requested(request) = state else {
+            panic!("expected open request from secondary process args, got {state:?}");
+        };
+
+        assert_eq!(request.kind, QuickActionKindDto::Open);
+        assert_eq!(
+            request.paths,
+            ["/home/frank/Documents/beeware-tutorial.tzap"]
+        );
     }
 
     #[test]

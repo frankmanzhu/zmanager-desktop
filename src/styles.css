@@ -683,6 +683,25 @@ button svg {
   width: 100%;
 }
 
+.tree-disclosure,
+.tree-disclosure-placeholder {
+  width: 12px;
+  flex: 0 0 auto;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.tree-disclosure {
+  cursor: pointer;
+}
+
+.tree-disclosure-placeholder {
+  visibility: hidden;
+}
+
 .tab.is-active,
 .tree-item.is-active,
 .nav-item.is-active,

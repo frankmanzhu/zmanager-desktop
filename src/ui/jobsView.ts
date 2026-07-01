@@ -42,7 +42,6 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
     .map((state) => {
       const snapshot = state.snapshot;
       const summary = snapshot.terminalSummary;
-      const recentEvents = state.events.slice(-12);
       const canRetryPassword = formatters.canRetryJobWithPassword(snapshot.jobId, state);
       const progress = deriveJobProgress(state);
       const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
@@ -84,27 +83,6 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
             aria-label="Job progress"
             ${progressAttributes}
           ></progress>
-          <ul class="event-list">
-            ${
-              recentEvents.length
-                ? recentEvents
-                    .map(
-                      (event) => `
-                    <li>
-                      <strong>${formatters.escapeHtml(event.eventType)}</strong>
-                      ${event.path ? ` - ${formatters.escapeHtml(event.path)}` : ""}
-                      ${typeof event.bytes === "number" ? ` - ${formatters.formatBytes(event.bytes)}` : ""}
-                      ${typeof event.entries === "number" ? ` - ${event.entries} entries` : ""}
-                      ${event.code ? ` - ${formatters.escapeHtml(formatters.formatEventCode(event.code))}` : ""}
-                      ${event.message ? ` - ${formatters.escapeHtml(event.message)}` : ""}
-                      ${event.hint ? ` - ${formatters.escapeHtml(event.hint)}` : ""}
-                    </li>
-                  `,
-                    )
-                    .join("")
-                : "<li class=empty>Waiting for updates...</li>"
-            }
-          </ul>
           <div class="job-summary">
             ${
               summary

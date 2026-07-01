@@ -287,10 +287,7 @@ impl JobRegistry {
                 _ => {}
             }
 
-            while record.events.len() >= MAX_EVENTS_TO_KEEP {
-                let _ = record.events.pop_front();
-            }
-            record.events.push_back(event_dto);
+            push_recorded_event(record, event_dto);
         });
     }
 
@@ -312,10 +309,7 @@ impl JobRegistry {
                 _ => {}
             }
 
-            while record.events.len() >= MAX_EVENTS_TO_KEEP {
-                let _ = record.events.pop_front();
-            }
-            record.events.push_back(event);
+            push_recorded_event(record, event);
         });
     }
 
@@ -343,6 +337,23 @@ impl JobRegistry {
             }
         });
     }
+}
+
+fn push_recorded_event(record: &mut JobRecord, event: JobEventDto) {
+    match event.event_type {
+        JobEventKindDto::EntryStarted | JobEventKindDto::EntryFinished => return,
+        JobEventKindDto::BytesProcessed => {
+            record
+                .events
+                .retain(|existing| existing.event_type != JobEventKindDto::BytesProcessed);
+        }
+        _ => {}
+    }
+
+    while record.events.len() >= MAX_EVENTS_TO_KEEP {
+        let _ = record.events.pop_front();
+    }
+    record.events.push_back(event);
 }
 
 impl Drop for JobRegistry {
@@ -435,6 +446,69 @@ mod tests {
             JobEventKindDto::Started
         ));
         assert_eq!(snapshot.events[0].job_kind, Some(JobKindDto::ZipCreate));
+    }
+
+    #[test]
+    fn job_progress_events_are_coalesced_without_entry_chatter() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::Started {
+                kind: zmanager_core::jobs::JobKind::ZipExtract,
+                total_bytes: Some(100),
+            },
+        );
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::EntryStarted {
+                path: "docs/one.txt".to_string(),
+                bytes: Some(10),
+            },
+        );
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::BytesProcessed {
+                path: Some("docs/one.txt".to_string()),
+                bytes: 10,
+                total_bytes_processed: 10,
+            },
+        );
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::EntryFinished {
+                path: "docs/one.txt".to_string(),
+                bytes: 10,
+            },
+        );
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::BytesProcessed {
+                path: Some("docs/two.txt".to_string()),
+                bytes: 20,
+                total_bytes_processed: 30,
+            },
+        );
+
+        let snapshot = registry
+            .snapshot(&response.job_id)
+            .expect("job should exist after progress events");
+
+        assert_eq!(
+            snapshot
+                .events
+                .iter()
+                .map(|event| event.event_type)
+                .collect::<Vec<_>>(),
+            [JobEventKindDto::Started, JobEventKindDto::BytesProcessed]
+        );
+        let progress = snapshot
+            .events
+            .last()
+            .expect("progress event should remain");
+        assert_eq!(progress.path.as_deref(), Some("docs/two.txt"));
+        assert_eq!(progress.total_bytes_processed, Some(30));
     }
 
     #[test]

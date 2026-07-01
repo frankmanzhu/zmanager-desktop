@@ -2920,10 +2920,11 @@ mod tests {
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
         assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
         assert!(
-            extract_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::EntryStarted)),
-            "selected extract should emit per-entry lifecycle events",
+            !extract_events.iter().any(|event| matches!(
+                event.event_type,
+                JobEventKindDto::EntryStarted | JobEventKindDto::EntryFinished
+            )),
+            "selected extract should not expose per-entry lifecycle chatter",
         );
         assert!(
             extract_events

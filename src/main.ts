@@ -83,8 +83,6 @@ import {
   getPathBasename,
 } from "./app/formatting";
 import {
-  buildArchiveTree,
-  flattenArchiveTree,
   getArchiveBreadcrumbs,
   archiveFolderExists,
   getParentArchivePath,
@@ -203,6 +201,13 @@ import {
 } from "./ui/preferencesView";
 
 type BrowserRow = ArchiveTableRow;
+type ArchiveTreeFolder = {
+  path: string;
+  name: string;
+  depth: number;
+  hasChildren: boolean;
+  isExpanded: boolean;
+};
 type ArchiveFixture = {
   archivePath: string;
   entries: ArchiveEntryDto[];
@@ -1122,6 +1127,9 @@ let contextEntryPath = "";
 let contextSourcePath = "";
 let extractDestinationHistory: string[] = [];
 let createDestinationHistory: string[] = [];
+const archiveTreeRootPath = "";
+const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
+let archiveTreeChildrenByParent = new Map<string, string[]>();
 
 let createSources: string[] = [];
 let createPlanState: CreateState = "idle";
@@ -1565,6 +1573,62 @@ function archiveFolderHasDescendants(folderPath: string): boolean {
   );
 }
 
+function buildArchiveTreeChildren(entries: ArchiveEntryDto[]): Map<string, string[]> {
+  const childrenByParent = new Map<string, Set<string>>();
+  const addChild = (parentPath: string, childName: string) => {
+    const current = childrenByParent.get(parentPath);
+    if (current) {
+      current.add(childName);
+      return;
+    }
+    childrenByParent.set(parentPath, new Set([childName]));
+  };
+
+  for (const entry of entries) {
+    const normalized = normalizeEntryPath(entry.path);
+    if (!normalized) {
+      continue;
+    }
+
+    const segments = normalized.split("/").filter(Boolean);
+    if (!segments.length) {
+      continue;
+    }
+
+    const folderDepth = entry.kind === "directory" ? segments.length : segments.length - 1;
+    for (let i = 0; i < folderDepth; i += 1) {
+      const parentPath = i === 0 ? archiveTreeRootPath : segments.slice(0, i).join("/");
+      addChild(parentPath, segments[i]);
+    }
+  }
+
+  const sortedChildren = new Map<string, string[]>();
+  for (const [parentPath, childSet] of childrenByParent) {
+    sortedChildren.set(
+      parentPath,
+      [...childSet].sort((left, right) => left.localeCompare(right)),
+    );
+  }
+  return sortedChildren;
+}
+
+function expandArchiveTreeFolderAndAncestors(folderPath: string) {
+  let current = normalizeFolderPath(folderPath);
+  while (current) {
+    expandedArchiveTreeFolders.add(current);
+    const parent = getParentPath(current);
+    if (!parent) {
+      break;
+    }
+    current = parent;
+  }
+}
+
+function resetArchiveTreeState() {
+  expandedArchiveTreeFolders.clear();
+  expandedArchiveTreeFolders.add(archiveTreeRootPath);
+}
+
 function getSelectedExtractEntryPaths(): string[] {
   const extractPaths = new Set<string>();
 
@@ -1710,9 +1774,44 @@ async function startNativeDragOut(entryPath: string) {
   }
 }
 
-function getKnownFolderPaths(): string[] {
-  const tree = buildArchiveTree(browseEntries, { rootName: getArchiveName(currentArchivePath, APP_TITLE) });
-  return flattenArchiveTree(tree).map((node) => node.path);
+function getKnownFolderPaths(): ArchiveTreeFolder[] {
+  const currentFolder = normalizeFolderPath(currentArchiveFolder);
+  const folders: ArchiveTreeFolder[] = [];
+
+  folders.push({
+    path: archiveTreeRootPath,
+    name: getArchiveName(currentArchivePath, APP_TITLE),
+    depth: 0,
+    hasChildren: archiveTreeChildrenByParent.has(archiveTreeRootPath),
+    isExpanded: true,
+  });
+
+  const addChildFolders = (parentPath: string, depth: number) => {
+    const children = archiveTreeChildrenByParent.get(parentPath);
+    if (!children?.length) {
+      return;
+    }
+
+    for (const childName of children) {
+      const childPath = parentPath ? `${parentPath}/${childName}` : childName;
+      const childHasChildren = archiveTreeChildrenByParent.has(childPath);
+      const isExpanded = expandedArchiveTreeFolders.has(childPath);
+      folders.push({
+        path: childPath,
+        name: childName,
+        depth,
+        hasChildren: childHasChildren,
+        isExpanded,
+      });
+      if (childHasChildren && isExpanded) {
+        addChildFolders(childPath, depth + 1);
+      }
+    }
+  };
+
+  expandArchiveTreeFolderAndAncestors(currentFolder);
+  addChildFolders(archiveTreeRootPath, 1);
+  return folders;
 }
 
 function getVisibleSelectablePaths(): string[] {
@@ -2030,21 +2129,28 @@ function renderTree() {
   const folders = getKnownFolderPaths();
   treeContentElement.innerHTML = folders
     .map((folder) => {
-      const depth = folder ? folder.split("/").length : 0;
-      const label = folder ? getBaseName(folder) : getArchiveName(currentArchivePath, APP_TITLE);
-      const icon = archiveTreeIconDescriptor(folder === "", folder === currentArchiveFolder);
+      const depth = folder.depth;
+      const label = folder.name;
+      const isRoot = folder.path === archiveTreeRootPath;
+      const disclosure = folder.hasChildren && !isRoot
+        ? `<span class="tree-disclosure" data-tree-toggle data-tree-path="${escapeHtml(folder.path)}" aria-label="${
+          folder.isExpanded ? "Collapse" : "Expand"
+        } ${escapeHtml(folder.name)}" aria-hidden="true">${folder.isExpanded ? "-" : "+"}</span>`
+        : `<span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>`;
+      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder);
       const iconDataUrl = systemIconDataUrlForRequest(
-        folder === ""
+        isRoot
           ? systemIconRequestForPath(currentArchivePath, false)
           : systemIconRequestForPath("folder", true),
       );
       return `
         <button
-          class="tree-item ${folder === currentArchiveFolder ? "is-active" : ""}"
+          class="tree-item ${folder.path === currentArchiveFolder ? "is-active" : ""}"
           type="button"
-          data-tree-path="${escapeHtml(folder)}"
+          data-tree-path="${escapeHtml(folder.path)}"
           style="--depth: ${depth}"
         >
+          ${disclosure}
           ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
           <span class="tree-label">${escapeHtml(label)}</span>
         </button>
@@ -3099,6 +3205,7 @@ function navigateToFolder(folderPath: string, pushHistory = true) {
     navigationHistory.push(currentArchiveFolder);
   }
   currentArchiveFolder = nextFolder;
+  expandArchiveTreeFolderAndAncestors(nextFolder);
   selectedEntries.clear();
   focusedEntryPath = "";
   selectionAnchorPath = "";
@@ -3113,6 +3220,7 @@ function navigateBack() {
     return;
   }
   currentArchiveFolder = previous;
+  expandArchiveTreeFolderAndAncestors(currentArchiveFolder);
   selectedEntries.clear();
   focusedEntryPath = "";
   selectionAnchorPath = "";
@@ -3818,6 +3926,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
   clearTrackedPreviewState();
   currentArchivePath = listing.archivePath;
   browseEntries = listing.entries;
+  archiveTreeChildrenByParent = buildArchiveTreeChildren(listing.entries);
   currentArchiveEntryCount = typeof listing.entryCount === "number" && Number.isFinite(listing.entryCount)
     ? listing.entryCount
     : listing.entries.length;
@@ -3830,10 +3939,12 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
       : "";
     searchInput.value = preservedSearchQuery;
     isFlatView = preservedFlatView;
+    expandArchiveTreeFolderAndAncestors(currentArchiveFolder);
   } else {
+    resetArchiveTreeState();
     currentArchiveFolder = "";
-    navigationHistory = [];
     searchInput.value = "";
+    navigationHistory = [];
     isFlatView = false;
   }
 
@@ -4126,17 +4237,10 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
     let password: string | undefined;
     while (true) {
       try {
-        const listing = action === "extractHere"
-          ? await listArchiveCommand({
-            archivePath,
-            ...(password ? { password } : {}),
-          })
-          : null;
         const destinationPlan = quickExtractDestinationPlan(
           archivePath,
           action,
           { nativeParentPath, joinNativePath },
-          listing?.entries,
         );
         if (!destinationPlan.destinationPath) {
           setOperationalStatus(`Choose a destination before extracting ${archivePath}.`);
@@ -5278,6 +5382,19 @@ function bindActions() {
     }
     if (actionTarget?.dataset.treeAction === "create") {
       showCreateWorkspace();
+      return;
+    }
+
+    const toggleTarget = (event.target as HTMLElement).closest<HTMLElement>("[data-tree-toggle]");
+    if (toggleTarget) {
+      event.preventDefault();
+      const folderPath = toggleTarget.dataset.treePath ?? "";
+      if (!expandedArchiveTreeFolders.has(folderPath)) {
+        expandedArchiveTreeFolders.add(folderPath);
+      } else {
+        expandedArchiveTreeFolders.delete(folderPath);
+      }
+      renderBrowse();
       return;
     }
 
