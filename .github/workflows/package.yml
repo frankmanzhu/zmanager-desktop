@@ -1,0 +1,83 @@
+name: Package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+            artifact-name: zmanager-windows-x64
+          - arch: arm64
+            runner: windows-11-arm
+            artifact-name: zmanager-windows-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare and build Windows package
+        shell: pwsh
+        run: |
+          .\scripts\prepare-windows-static-build.ps1 `
+            -Architecture ${{ matrix.arch }} `
+            -InstallMissing `
+            -InstallNodeModules `
+            -Build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/zmanager-desktop.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            artifact-name: zmanager-linux-x64-deb
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            artifact-name: zmanager-linux-arm64-deb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Debian package
+        shell: bash
+        run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
+
+      - name: Upload Debian artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            /tmp/zmanager-desktop-deb/*.deb
