@@ -36,12 +36,15 @@ system libraries than Ubuntu 22.04 has. The build script enforces the Jammy
 baseline by default; use `--allow-non-baseline` only for local test packages.
 
 The build script prints both the canonical bundle artifact and an apt-readable
-copy staged under `/tmp/zmanager-desktop-deb/`. Install the staged copy to avoid
-apt's `_apt` sandbox warning when the project lives in a private home directory:
+copy staged under `/tmp/zmanager-desktop-deb/`, then reinstalls the staged copy
+through apt. This avoids apt's `_apt` sandbox warning when the project lives in
+a private home directory:
 
 ```sh
-sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_0.1.0_amd64.deb
+scripts/build-linux-ubuntu-deb.sh
 ```
+
+Use `--no-install` when you only want to build and stage the `.deb` artifact.
 
 Ubuntu is best served by a `.deb` package. It integrates with `dpkg`/apt,
 desktop launchers, MIME associations, and the post-install hooks in this

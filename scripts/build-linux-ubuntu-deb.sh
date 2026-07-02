@@ -7,12 +7,14 @@ cd "$repo_root"
 install_deps=0
 skip_tests=0
 allow_non_baseline=0
+install_package=1
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests] [--allow-non-baseline]
+Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests] [--allow-non-baseline] [--no-install]
 
-Builds the Ubuntu/Debian .deb distribution package with Tauri.
+Builds the Ubuntu/Debian .deb distribution package with Tauri, stages it under
+/tmp/zmanager-desktop-deb, and reinstalls the staged package through apt.
 
 Release baseline:
   Build release .deb artifacts on Ubuntu 22.04 LTS (jammy). Building on newer
@@ -30,6 +32,7 @@ Options:
   --skip-tests    Skip frontend and Rust tests before packaging.
   --allow-non-baseline
                   Allow local/test builds outside Ubuntu 22.04 jammy.
+  --no-install    Build and stage the .deb without reinstalling it.
   -h, --help      Show this help.
 EOF
 }
@@ -44,6 +47,9 @@ while (($#)); do
       ;;
     --allow-non-baseline)
       allow_non_baseline=1
+      ;;
+    --no-install)
+      install_package=0
       ;;
     -h|--help)
       usage
@@ -154,6 +160,12 @@ collect_missing_commands() {
   local command_name
   missing_commands=()
   required_commands=(node npm cargo rustc pkg-config dpkg-deb cmake)
+  if ((install_package)); then
+    required_commands+=(apt-get)
+    if ((EUID != 0)); then
+      required_commands+=(sudo)
+    fi
+  fi
   for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       missing_commands+=("$command_name")
@@ -246,16 +258,29 @@ apt_stage_dir="/tmp/zmanager-desktop-deb"
 install -d -m 0755 "$apt_stage_dir"
 
 deb_count=0
+staged_artifacts=()
 while IFS= read -r artifact; do
   deb_count=$((deb_count + 1))
   staged_artifact="$apt_stage_dir/$(basename "$artifact")"
   install -m 0644 "$artifact" "$staged_artifact"
+  staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Apt-readable package: $staged_artifact"
-  echo "Install without _apt sandbox warning: sudo apt-get install --reinstall $staged_artifact"
 done < <(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
 
 if ((deb_count == 0)); then
   echo "Tauri build completed, but no .deb package was found under src-tauri/target/release/bundle/deb." >&2
   exit 1
+fi
+
+if ((install_package)); then
+  echo "Installing staged package(s): ${staged_artifacts[*]}"
+  if ((EUID == 0)); then
+    apt-get install -y --reinstall "${staged_artifacts[@]}"
+  else
+    sudo apt-get install -y --reinstall "${staged_artifacts[@]}"
+  fi
+else
+  echo "Skipping install because --no-install was set."
+  echo "Install without _apt sandbox warning: sudo apt-get install --reinstall ${staged_artifacts[*]}"
 fi
