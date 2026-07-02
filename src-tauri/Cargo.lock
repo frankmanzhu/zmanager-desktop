@@ -4958,6 +4958,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.9"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -4980,6 +4981,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-keywrap"
 version = "0.1.9"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
 dependencies = [
  "hpke",
  "openssl",
@@ -4992,6 +4994,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-signing"
 version = "0.1.9"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
 dependencies = [
  "ed25519-dalek",
  "openssl",
@@ -6161,6 +6164,7 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-core"
 version = "1.0.5"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6215,6 +6219,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.5"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6223,6 +6228,8 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive-sys"
 version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1b987f51444865751f952b9e8c0c6a219904df8fc64498fdd96ac26717530b5"
 dependencies = [
  "cmake",
  "libc",
@@ -6232,6 +6239,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.5"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
 dependencies = [
  "cc",
  "zeroize",
