@@ -45,8 +45,27 @@ function Resolve-WindowsStaticTriplet {
     return "x64-windows-static-md"
 }
 
+function Resolve-PerlBin {
+    param([string]$RequestedPerlBin)
+
+    if ((Test-Path (Join-Path $RequestedPerlBin "perl.exe"))) {
+        return (Resolve-Path $RequestedPerlBin).Path
+    }
+
+    $perl = Get-Command "perl.exe" -ErrorAction SilentlyContinue
+    if (-not $perl) {
+        $perl = Get-Command "perl" -ErrorAction SilentlyContinue
+    }
+    if ($perl) {
+        return (Split-Path $perl.Source -Parent)
+    }
+
+    throw "Perl was not found at $RequestedPerlBin or on PATH. Install Strawberry Perl, or pass -PerlBin C:\path\to\perl\bin."
+}
+
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $Triplet = Resolve-WindowsStaticTriplet -RequestedTriplet $Triplet -ResolvedArchitecture $resolvedArchitecture
+$resolvedPerlBin = Resolve-PerlBin -RequestedPerlBin $PerlBin
 
 $toolchainFile = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $debugLib = Join-Path $VcpkgRoot "installed\$Triplet\debug\lib"
@@ -57,10 +76,6 @@ $releaseBin = Join-Path $VcpkgRoot "installed\$Triplet\bin"
 
 if (-not (Test-Path $toolchainFile)) {
     throw "vcpkg toolchain file was not found: $toolchainFile. Install vcpkg at $VcpkgRoot and run $VcpkgRoot\bootstrap-vcpkg.bat."
-}
-
-if (-not (Test-Path $PerlBin)) {
-    throw "Perl bin directory was not found: $PerlBin"
 }
 
 if ((-not (Test-Path $include)) -or (-not (Test-Path $debugLib)) -or (-not (Test-Path $releaseLib))) {
@@ -75,11 +90,12 @@ $env:VCPKG_DEFAULT_TRIPLET = $Triplet
 $env:VCPKG_TARGET_TRIPLET = $Triplet
 $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
-$env:PATH = "$PerlBin;$debugBin;$releaseBin;" + $env:PATH
+$env:PATH = "$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
 
 Write-Host "Configured Windows static native build environment."
 Write-Host "Architecture: $resolvedArchitecture"
 Write-Host "Triplet: $Triplet"
+Write-Host "Perl bin: $resolvedPerlBin"
 Write-Host "VCPKG_ROOT: $env:VCPKG_ROOT"
 Write-Host "CMAKE_TOOLCHAIN_FILE: $env:CMAKE_TOOLCHAIN_FILE"
 

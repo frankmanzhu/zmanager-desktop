@@ -69,6 +69,20 @@ C:\vcpkg\vcpkg.exe install zlib bzip2 liblzma zstd lz4 openssl --triplet arm64-w
 
 6. Install Strawberry Perl so `C:\Strawberry\perl\bin` exists. This is needed by OpenSSL's build fallback.
 
+The machine-prep entry point can verify the required tools, install vcpkg packages when allowed, configure the static build environment, and optionally build the artifact:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\prepare-windows-static-build.ps1 -Architecture x64 -InstallMissing -InstallNodeModules -Build
+```
+
+Run the `-InstallMissing` form from an elevated PowerShell session because Visual Studio Build Tools, Node.js, Rust, Strawberry Perl, and the default `C:\vcpkg` location may require administrator permissions.
+
+For CI images where Node, Rust, MSVC, Perl, and vcpkg are already installed, omit the install flags:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\prepare-windows-static-build.ps1 -Architecture x64 -Build
+```
+
 The helper script form is:
 
 ```powershell
