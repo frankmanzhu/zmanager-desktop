@@ -119,6 +119,7 @@ import {
 import {
   canRetryJobWithPassword as canRetryJobWithPasswordState,
   createInitialJobState,
+  deriveJobProgress,
   getLatestPasswordFailureEvent,
   isTerminalJobStatus,
   mergePolledJobState,
@@ -621,6 +622,31 @@ appRoot.innerHTML = `
       <div id="jobs-list" class="jobs-list"></div>
     </aside>
 
+    <section id="quick-progress" class="quick-progress" aria-label="Quick action progress" hidden>
+      <div class="quick-progress-grid">
+        <div class="quick-progress-metric"><span>Elapsed time:</span><strong id="quick-elapsed">00:00:00</strong></div>
+        <div class="quick-progress-metric"><span>Total size:</span><strong id="quick-total-size"></strong></div>
+        <div class="quick-progress-metric"><span>Remaining time:</span><strong id="quick-remaining">--:--:--</strong></div>
+        <div class="quick-progress-metric"><span>Speed:</span><strong id="quick-speed"></strong></div>
+        <div class="quick-progress-metric"><span>Files:</span><strong id="quick-files">0</strong></div>
+        <div class="quick-progress-metric"><span>Processed:</span><strong id="quick-processed"></strong></div>
+        <div class="quick-progress-metric"><span></span><strong id="quick-total-files"></strong></div>
+        <div class="quick-progress-metric"><span>Compressed size:</span><strong id="quick-compressed-size"></strong></div>
+        <div class="quick-progress-metric"><span></span><strong></strong></div>
+        <div class="quick-progress-metric"><span>Compression ratio:</span><strong id="quick-ratio"></strong></div>
+      </div>
+      <div class="quick-progress-current">
+        <p id="quick-operation">Starting</p>
+        <p id="quick-current-path"></p>
+      </div>
+      <progress id="quick-progress-bar" aria-label="Quick action progress"></progress>
+      <div class="quick-progress-actions">
+        <button id="quick-background" type="button" disabled>Background</button>
+        <button id="quick-continue" type="button" disabled>Continue</button>
+        <button id="quick-cancel" type="button">Cancel</button>
+      </div>
+    </section>
+
     <div id="context-menu" class="context-menu" role="menu" hidden></div>
     <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
       <div>
@@ -1055,6 +1081,20 @@ const refreshJobsButton = document.querySelector<HTMLButtonElement>("#refresh-jo
 const jobDrawer = document.querySelector<HTMLElement>("#job-drawer")!;
 const statusJobButton = document.querySelector<HTMLButtonElement>("#status-job-button")!;
 const jobDrawerCloseButton = document.querySelector<HTMLButtonElement>("#job-drawer-close")!;
+const quickProgressElement = document.querySelector<HTMLElement>("#quick-progress")!;
+const quickElapsedElement = document.querySelector<HTMLElement>("#quick-elapsed")!;
+const quickRemainingElement = document.querySelector<HTMLElement>("#quick-remaining")!;
+const quickFilesElement = document.querySelector<HTMLElement>("#quick-files")!;
+const quickTotalFilesElement = document.querySelector<HTMLElement>("#quick-total-files")!;
+const quickTotalSizeElement = document.querySelector<HTMLElement>("#quick-total-size")!;
+const quickSpeedElement = document.querySelector<HTMLElement>("#quick-speed")!;
+const quickProcessedElement = document.querySelector<HTMLElement>("#quick-processed")!;
+const quickCompressedSizeElement = document.querySelector<HTMLElement>("#quick-compressed-size")!;
+const quickRatioElement = document.querySelector<HTMLElement>("#quick-ratio")!;
+const quickOperationElement = document.querySelector<HTMLElement>("#quick-operation")!;
+const quickCurrentPathElement = document.querySelector<HTMLElement>("#quick-current-path")!;
+const quickProgressBar = document.querySelector<HTMLProgressElement>("#quick-progress-bar")!;
+const quickCancelButton = document.querySelector<HTMLButtonElement>("#quick-cancel")!;
 const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
 const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
 const dropOverlayTitle = document.querySelector<HTMLElement>("#drop-overlay-title")!;
@@ -1225,7 +1265,19 @@ function closeAppWindow() {
 }
 
 function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
-  return Boolean(request && request.kind !== "open");
+  return Boolean(request && [
+    "compressZip",
+    "compressTzap",
+    "compressSevenZ",
+    "compressTarZst",
+    "compressCleanSource",
+    "extractHere",
+    "extractToFolder",
+  ].includes(request.kind));
+}
+
+function hasQuickActionJobs(state: QuickActionStartupStateDto): boolean {
+  return Boolean(state.quickActionJobs?.length);
 }
 
 function clearQuickActionAutoCloseTimer() {
@@ -1254,7 +1306,10 @@ async function revealQuickActionJobWindow() {
 
   quickActionWindowMode = "jobOnly";
   workspaceElement.dataset.quickActionMode = "job-only";
-  openJobDrawer();
+  quickProgressElement.hidden = false;
+  jobDrawer.setAttribute("aria-hidden", "true");
+  workspaceElement.dataset.jobDrawer = "closed";
+  renderQuickProgress();
 
   if (quickActionWindowShown) {
     return;
@@ -1278,7 +1333,7 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
   if (
     state.launchedForQuickAction &&
     !state.error &&
-    isJobOnlyQuickActionRequest(state.quickAction)
+    (hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))
   ) {
     await revealQuickActionJobWindow();
     return;
@@ -1294,6 +1349,7 @@ function trackQuickActionJob(jobId: string) {
 
   clearQuickActionAutoCloseTimer();
   quickActionJobIds.add(jobId);
+  renderQuickProgress();
 }
 
 function maybeCloseCompletedQuickActionWindow() {
@@ -1321,10 +1377,12 @@ function maybeCloseCompletedQuickActionWindow() {
 
   if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
     setOperationalStatus("Quick action needs attention.");
+    renderQuickProgress();
     return;
   }
 
   setOperationalStatus("Quick action completed.");
+  renderQuickProgress();
   quickActionAutoCloseTimer = window.setTimeout(() => {
     closeAppWindow();
   }, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
@@ -1399,6 +1457,122 @@ function formatJobKind(kind: JobKind): string {
 
 function formatDate(value?: string): string {
   return formatDateValue(value, { emptyValue: "" });
+}
+
+function formatDurationClock(milliseconds: number | null): string {
+  if (milliseconds === null || !Number.isFinite(milliseconds)) {
+    return "--:--:--";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function quickActionOperationLabel(kind?: JobKind): string {
+  switch (kind) {
+    case "zipCreate":
+    case "sevenZCreate":
+    case "tarZstdCreate":
+    case "tzapCreate":
+      return "Adding";
+    case "zipExtract":
+    case "sevenZExtract":
+    case "rarExtract":
+    case "tarZstdExtract":
+    case "tzapExtract":
+    case "archiveExtract":
+    case "rawStreamExtract":
+      return "Extracting";
+    case "testArchive":
+      return "Testing";
+    default:
+      return "Starting";
+  }
+}
+
+function renderQuickProgress() {
+  if (quickActionWindowMode !== "jobOnly") {
+    return;
+  }
+
+  const trackedJobs = Array.from(quickActionJobIds, (jobId) => jobs.get(jobId)).filter(
+    (job): job is JobState => Boolean(job),
+  );
+
+  if (!trackedJobs.length) {
+    quickElapsedElement.textContent = "00:00:00";
+    quickRemainingElement.textContent = "--:--:--";
+    quickFilesElement.textContent = "0";
+    quickTotalFilesElement.textContent = "";
+    quickTotalSizeElement.textContent = "";
+    quickSpeedElement.textContent = "";
+    quickProcessedElement.textContent = "";
+    quickCompressedSizeElement.textContent = "";
+    quickRatioElement.textContent = "";
+    quickOperationElement.textContent = "Starting";
+    quickCurrentPathElement.textContent = "";
+    quickProgressBar.removeAttribute("value");
+    quickProgressBar.removeAttribute("max");
+    quickCancelButton.disabled = true;
+    return;
+  }
+
+  const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job));
+  const latestJob = trackedJobs.at(-1);
+  const latestProgress = progressSnapshots.at(-1);
+  const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
+  const anyActive = trackedJobs.some((job) =>
+    job.snapshot.status === "queued" || job.snapshot.status === "running",
+  );
+  const elapsedMs = Math.max(...progressSnapshots.map((progress) => progress.elapsedMs), 0);
+  const processedBytes = progressSnapshots.reduce((total, progress) => total + progress.processedBytes, 0);
+  const totalBytes = progressSnapshots.every((progress) => progress.totalBytes !== null)
+    ? progressSnapshots.reduce((total, progress) => total + (progress.totalBytes ?? 0), 0)
+    : null;
+  const processedFiles = progressSnapshots.reduce((total, progress) => total + progress.processedFiles, 0);
+  const remainingMs = totalBytes !== null && processedBytes > 0 && elapsedMs > 0
+    ? Math.max(0, ((totalBytes - processedBytes) / (processedBytes / elapsedMs)))
+    : null;
+  const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
+    ? processedBytes / (elapsedMs / 1000)
+    : null;
+  const progressPercent = totalBytes !== null && totalBytes > 0
+    ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
+    : allTerminal && trackedJobs.every((job) => job.snapshot.status === "completed")
+      ? 100
+      : null;
+  const currentFile = latestProgress?.currentFile || latestProgress?.latestStatusMessage || "";
+  const operation = allTerminal
+    ? latestJob?.snapshot.status === "completed"
+      ? "Completed"
+      : latestJob?.snapshot.status === "cancelled"
+        ? "Cancelled"
+        : "Failed"
+    : quickActionOperationLabel(latestJob?.snapshot.kind);
+
+  quickElapsedElement.textContent = formatDurationClock(elapsedMs);
+  quickRemainingElement.textContent = formatDurationClock(remainingMs);
+  quickFilesElement.textContent = String(processedFiles);
+  quickTotalFilesElement.textContent = trackedJobs.length > 1 ? `/ ${trackedJobs.length} job(s)` : "";
+  quickTotalSizeElement.textContent = totalBytes === null ? "" : formatBytes(totalBytes);
+  quickSpeedElement.textContent = speedBytesPerSecond === null ? "" : `${formatBytes(speedBytesPerSecond)}/s`;
+  quickProcessedElement.textContent = processedBytes > 0 ? formatBytes(processedBytes) : "";
+  quickCompressedSizeElement.textContent = "";
+  quickRatioElement.textContent = progressPercent === null ? "" : `${Math.round(progressPercent)}%`;
+  quickOperationElement.textContent = operation;
+  quickCurrentPathElement.textContent = currentFile;
+  quickCancelButton.disabled = !anyActive;
+
+  if (progressPercent === null) {
+    quickProgressBar.removeAttribute("value");
+    quickProgressBar.removeAttribute("max");
+  } else {
+    quickProgressBar.value = progressPercent;
+    quickProgressBar.max = 100;
+  }
 }
 
 function formatRatio(entry: ArchiveEntryDto): string {
@@ -2727,6 +2901,7 @@ function renderJobs() {
     canRetryJobWithPassword,
   });
   renderJobStatusBar();
+  renderQuickProgress();
 }
 
 function queuePlanRun() {
@@ -3114,6 +3289,11 @@ function closeModal(dialog: HTMLElement) {
 }
 
 function openJobDrawer() {
+  if (quickActionWindowMode === "jobOnly") {
+    void pollJobs();
+    return;
+  }
+
   jobDrawer.setAttribute("aria-hidden", "false");
   workspaceElement.dataset.jobDrawer = "open";
   void pollJobs();
@@ -4426,6 +4606,18 @@ async function handleQuickActionRequest(request: QuickActionRequestDto) {
   });
 }
 
+async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
+  if (!responses.length) {
+    return;
+  }
+
+  await revealQuickActionJobWindow();
+  for (const response of responses) {
+    addJobState(response);
+  }
+  setOperationalStatus("Quick action started.");
+}
+
 async function handleStartupQuickAction() {
   if (!isDesktopRuntime()) {
     return;
@@ -4462,6 +4654,11 @@ async function handleQuickActionStartupState(state: QuickActionStartupStateDto) 
     if (state.error.hint) {
       setBrowseState("error", `${state.error.message}\n${state.error.hint}`);
     }
+    return;
+  }
+
+  if (state.quickActionJobs?.length) {
+    await activateQuickActionJobs(state.quickActionJobs);
     return;
   }
 
@@ -6254,6 +6451,16 @@ tableBody.addEventListener("click", (event) => {
     }
     if (dismissId) {
       void onDismissJob(dismissId);
+    }
+  });
+
+  quickCancelButton.addEventListener("click", () => {
+    for (const jobId of quickActionJobIds) {
+      const state = jobs.get(jobId);
+      if (!state || isTerminalJobStatus(state.snapshot.status)) {
+        continue;
+      }
+      void onCancelJob(jobId);
     }
   });
 

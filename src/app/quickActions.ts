@@ -159,7 +159,7 @@ export async function runQuickActionRequest(
       await handlers.openArchive(request.paths);
       break;
     case "compress":
-      await handlers.startCreate(
+      await handlers.openCreateReview(
         request.paths,
         preferences.defaultArchiveFormat,
         preferences.defaultCleanSourceEnabled,

@@ -149,8 +149,8 @@ describe("quick action helpers", () => {
       handlers,
     );
 
-    expect(handlers.startCreate).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
-    expect(handlers.openCreateReview).not.toHaveBeenCalled();
+    expect(handlers.openCreateReview).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
+    expect(handlers.startCreate).not.toHaveBeenCalled();
 
     await runQuickActionRequest(
       { kind: "extract", paths: ["/tmp/archive.zip"] },

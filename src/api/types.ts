@@ -68,6 +68,7 @@ export type QuickActionStartupErrorDto = {
 export type QuickActionStartupStateDto = {
   launchedForQuickAction: boolean;
   quickAction?: QuickActionRequestDto | null;
+  quickActionJobs?: StartJobResponseDto[] | null;
   error?: QuickActionStartupErrorDto | null;
 };
 

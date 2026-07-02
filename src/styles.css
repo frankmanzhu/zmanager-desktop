@@ -262,8 +262,75 @@ p {
 .workspace[data-quick-action-mode="job-only"] .path-bar,
 .workspace[data-quick-action-mode="job-only"] .browser-shell,
 .workspace[data-quick-action-mode="job-only"] .status-bar,
+.workspace[data-quick-action-mode="job-only"] .job-drawer,
 .workspace[data-quick-action-mode="job-only"] .drop-overlay {
   display: none;
+}
+
+.quick-progress {
+  grid-area: body;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 14px;
+  padding: 20px 16px 16px;
+  background: #f1f1f1;
+  color: #000;
+  font-size: 16px;
+}
+
+.quick-progress[hidden] {
+  display: none;
+}
+
+.quick-progress-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 8px 80px;
+}
+
+.quick-progress-metric {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(80px, auto);
+  align-items: baseline;
+  gap: 12px;
+}
+
+.quick-progress-metric strong {
+  min-width: 0;
+  font-weight: 400;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.quick-progress-current {
+  display: grid;
+  gap: 8px;
+  min-height: 58px;
+}
+
+.quick-progress-current p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-progress progress {
+  width: 100%;
+  height: 40px;
+  accent-color: #08b329;
+}
+
+.quick-progress-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  justify-content: end;
+  gap: 20px;
+}
+
+.quick-progress-actions button {
+  min-height: 38px;
+  border-radius: 0;
+  font-size: 16px;
 }
 
 .topbar {
@@ -1850,30 +1917,6 @@ progress {
   min-height: 0;
   padding: 10px;
   overflow: auto;
-}
-
-.workspace[data-quick-action-mode="job-only"] .job-drawer,
-.workspace[data-quick-action-mode="job-only"] .job-drawer[aria-hidden="true"] {
-  position: static;
-  grid-area: body;
-  max-height: none;
-  min-height: 0;
-  height: 100vh;
-  display: grid;
-  border-top: 0;
-  box-shadow: none;
-}
-
-.workspace[data-quick-action-mode="job-only"] .job-drawer-header {
-  min-height: 52px;
-}
-
-.workspace[data-quick-action-mode="job-only"] #job-drawer-close {
-  display: none;
-}
-
-.workspace[data-quick-action-mode="job-only"] .job-drawer > .jobs-list {
-  padding: 10px;
 }
 
 .context-menu {

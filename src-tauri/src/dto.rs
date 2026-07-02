@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::job_dto::StartJobResponseDto;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HealthcheckResponse {
@@ -100,6 +102,7 @@ pub struct QuickActionStartupErrorDto {
 pub struct QuickActionStartupStateDto {
     pub launched_for_quick_action: bool,
     pub quick_action: Option<QuickActionRequestDto>,
+    pub quick_action_jobs: Vec<StartJobResponseDto>,
     pub error: Option<QuickActionStartupErrorDto>,
 }
 
@@ -166,7 +169,7 @@ pub struct PlanCreateRequest {
     pub follow_symlinks: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ArchiveFormatDto {
     Zip,

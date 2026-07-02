@@ -9,9 +9,16 @@ use std::{
 
 use tauri::{AppHandle, Emitter, Url};
 
-use crate::dto::{
-    QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
-    QuickActionStartupStateDto,
+use crate::{
+    commands::{start_create_internal, start_extract_internal},
+    dto::{
+        ArchiveFormatDto, DestinationCollisionStrategyDto, OverwritePolicyDto, QuickActionKindDto,
+        QuickActionRequestDto, QuickActionStartupErrorDto, QuickActionStartupStateDto,
+        StartCreateRequest, StartExtractRequest,
+    },
+    error::CommandErrorDto,
+    job_dto::StartJobResponseDto,
+    job_registry::JobRegistry,
 };
 
 const QUICK_ACTION_ARG: &str = "--quick-action";
@@ -29,6 +36,7 @@ const TZAP_VOLUME_MARKER: &str = ".vol";
 pub enum QuickActionStartupState {
     NotRequested,
     Requested(QuickActionRequestDto),
+    StartedJobs(Vec<StartJobResponseDto>),
     Invalid(QuickActionError),
 }
 
@@ -61,16 +69,25 @@ impl QuickActionStartupState {
             Self::NotRequested => QuickActionStartupStateDto {
                 launched_for_quick_action: false,
                 quick_action: None,
+                quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::Requested(request) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 quick_action: Some(request.clone()),
+                quick_action_jobs: Vec::new(),
+                error: None,
+            },
+            Self::StartedJobs(jobs) => QuickActionStartupStateDto {
+                launched_for_quick_action: true,
+                quick_action: None,
+                quick_action_jobs: jobs.clone(),
                 error: None,
             },
             Self::Invalid(error) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 quick_action: None,
+                quick_action_jobs: Vec::new(),
                 error: Some(error.to_dto()),
             },
         }
@@ -91,7 +108,7 @@ struct QuickActionLaunchState {
 }
 
 impl QuickActionLaunchCoordinator {
-    pub fn from_startup_env() -> Self {
+    pub fn from_startup_state(state: QuickActionStartupState) -> Self {
         let coordinator = Self {
             inner: Arc::new(Mutex::new(QuickActionLaunchState {
                 startup: QuickActionStartupState::NotRequested,
@@ -100,7 +117,7 @@ impl QuickActionLaunchCoordinator {
                 flush_scheduled: false,
             })),
         };
-        coordinator.ingest_startup_state(QuickActionStartupState::from_startup_env());
+        coordinator.ingest_startup_state(state);
         coordinator
     }
 
@@ -117,14 +134,19 @@ impl QuickActionLaunchCoordinator {
         std::mem::replace(&mut inner.startup, QuickActionStartupState::NotRequested)
     }
 
-    pub fn ingest_secondary_process_args(&self, args: Vec<OsString>, app: AppHandle) {
+    pub fn ingest_secondary_process_args(
+        &self,
+        args: Vec<OsString>,
+        app: AppHandle,
+        registry: JobRegistry,
+    ) {
         match QuickActionStartupState::from_process_or_user_args(args) {
             QuickActionStartupState::Requested(request) if is_create_quick_action(request.kind) => {
                 self.add_pending_create(request);
-                self.schedule_flush(app);
+                self.schedule_flush(app, registry);
             }
             state => {
-                let _ = app.emit(QUICK_ACTION_EVENT, state.to_dto());
+                let _ = app.emit(QUICK_ACTION_EVENT, startup_state_to_dto(state, &registry));
             }
         }
     }
@@ -155,7 +177,7 @@ impl QuickActionLaunchCoordinator {
         add_pending_create_locked(&mut inner, request);
     }
 
-    fn schedule_flush(&self, app: AppHandle) {
+    fn schedule_flush(&self, app: AppHandle, registry: JobRegistry) {
         let coordinator = self.clone();
         let mut inner = self.inner.lock().expect("quick-action lock poisoned");
         if inner.flush_scheduled {
@@ -184,11 +206,51 @@ impl QuickActionLaunchCoordinator {
 
                 for request in requests {
                     let state = QuickActionStartupState::Requested(request);
-                    let _ = app.emit(QUICK_ACTION_EVENT, state.to_dto());
+                    let _ = app.emit(QUICK_ACTION_EVENT, startup_state_to_dto(state, &registry));
                 }
                 break;
             }
         });
+    }
+}
+
+pub fn startup_state_to_dto(
+    state: QuickActionStartupState,
+    registry: &JobRegistry,
+) -> QuickActionStartupStateDto {
+    match state {
+        QuickActionStartupState::Requested(request) if is_direct_job_quick_action(request.kind) => {
+            match start_direct_quick_action_jobs(&request, registry) {
+                Ok(quick_action_jobs) => QuickActionStartupStateDto {
+                    launched_for_quick_action: true,
+                    quick_action: None,
+                    quick_action_jobs,
+                    error: None,
+                },
+                Err(error) => QuickActionStartupStateDto {
+                    launched_for_quick_action: true,
+                    quick_action: None,
+                    quick_action_jobs: Vec::new(),
+                    error: Some(QuickActionStartupErrorDto::from(error)),
+                },
+            }
+        }
+        other => other.to_dto(),
+    }
+}
+
+pub fn prestart_direct_quick_action(
+    state: QuickActionStartupState,
+    registry: &JobRegistry,
+) -> QuickActionStartupState {
+    match state {
+        QuickActionStartupState::Requested(request) if is_direct_job_quick_action(request.kind) => {
+            match start_direct_quick_action_jobs(&request, registry) {
+                Ok(jobs) => QuickActionStartupState::StartedJobs(jobs),
+                Err(error) => QuickActionStartupState::Invalid(QuickActionError::from(error)),
+            }
+        }
+        other => other,
     }
 }
 
@@ -218,6 +280,26 @@ impl QuickActionError {
             code: self.code.to_string(),
             message: self.message.clone(),
             hint: self.hint.clone(),
+        }
+    }
+}
+
+impl From<CommandErrorDto> for QuickActionStartupErrorDto {
+    fn from(error: CommandErrorDto) -> Self {
+        Self {
+            code: error.code.to_string(),
+            message: error.message,
+            hint: error.hint,
+        }
+    }
+}
+
+impl From<CommandErrorDto> for QuickActionError {
+    fn from(error: CommandErrorDto) -> Self {
+        Self {
+            code: error.code,
+            message: error.message,
+            hint: error.hint,
         }
     }
 }
@@ -270,6 +352,109 @@ fn is_create_quick_action(kind: QuickActionKindDto) -> bool {
     )
 }
 
+pub fn is_direct_job_quick_action(kind: QuickActionKindDto) -> bool {
+    matches!(
+        kind,
+        QuickActionKindDto::CompressZip
+            | QuickActionKindDto::CompressTzap
+            | QuickActionKindDto::CompressSevenZ
+            | QuickActionKindDto::CompressTarZst
+            | QuickActionKindDto::CompressCleanSource
+            | QuickActionKindDto::ExtractHere
+            | QuickActionKindDto::ExtractToFolder
+    )
+}
+
+fn start_direct_quick_action_jobs(
+    request: &QuickActionRequestDto,
+    registry: &JobRegistry,
+) -> Result<Vec<StartJobResponseDto>, CommandErrorDto> {
+    match request.kind {
+        QuickActionKindDto::CompressZip => {
+            start_direct_create_job(request, ArchiveFormatDto::Zip, false, registry)
+        }
+        QuickActionKindDto::CompressTzap => {
+            start_direct_create_job(request, ArchiveFormatDto::Tzap, false, registry)
+        }
+        QuickActionKindDto::CompressSevenZ => {
+            start_direct_create_job(request, ArchiveFormatDto::SevenZ, false, registry)
+        }
+        QuickActionKindDto::CompressTarZst => {
+            start_direct_create_job(request, ArchiveFormatDto::TarZst, false, registry)
+        }
+        QuickActionKindDto::CompressCleanSource => {
+            start_direct_create_job(request, ArchiveFormatDto::TarZst, true, registry)
+        }
+        QuickActionKindDto::ExtractHere | QuickActionKindDto::ExtractToFolder => {
+            start_direct_extract_jobs(request, registry)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+fn start_direct_create_job(
+    request: &QuickActionRequestDto,
+    format: ArchiveFormatDto,
+    clean_source: bool,
+    registry: &JobRegistry,
+) -> Result<Vec<StartJobResponseDto>, CommandErrorDto> {
+    let sources = unique_paths(request.paths.clone());
+    let destination_path = quick_create_destination(&sources, format).ok_or_else(|| {
+        CommandErrorDto::invalid_request("compress quick actions require at least one path")
+    })?;
+
+    let response = start_create_internal(
+        StartCreateRequest {
+            sources,
+            destination_path,
+            format,
+            clean_source,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            preserve_metadata: true,
+        },
+        registry,
+    )?;
+
+    Ok(vec![response])
+}
+
+fn start_direct_extract_jobs(
+    request: &QuickActionRequestDto,
+    registry: &JobRegistry,
+) -> Result<Vec<StartJobResponseDto>, CommandErrorDto> {
+    let mut responses = Vec::new();
+    let action = request.kind;
+    for archive_path in unique_paths(request.paths.clone()) {
+        let destination_path = quick_extract_destination(&archive_path, action).ok_or_else(|| {
+            CommandErrorDto::invalid_request("extract quick actions require archive paths with parent folders")
+        })?;
+
+        let response = start_extract_internal(
+            StartExtractRequest {
+                archive_path,
+                destination_path,
+                password: None,
+                overwrite: OverwritePolicyDto::Rename,
+                destination_collision_strategy: if action == QuickActionKindDto::ExtractToFolder {
+                    DestinationCollisionStrategyDto::Rename
+                } else {
+                    DestinationCollisionStrategyDto::Refuse
+                },
+                entry_paths: None,
+                strip_components: 0,
+            },
+            registry,
+        )?;
+        responses.push(response);
+    }
+
+    Ok(responses)
+}
+
 fn add_pending_create_locked(inner: &mut QuickActionLaunchState, request: QuickActionRequestDto) {
     inner.pending_generation = inner.pending_generation.saturating_add(1);
     if let Some(existing) = inner
@@ -311,6 +496,130 @@ fn unique_paths(paths: Vec<String>) -> Vec<String> {
     let mut unique = Vec::new();
     append_unique_paths(&mut unique, paths);
     unique
+}
+
+fn quick_create_destination(paths: &[String], format: ArchiveFormatDto) -> Option<String> {
+    let first_path = paths.first()?.trim();
+    if first_path.is_empty() {
+        return None;
+    }
+
+    let output_directory = native_parent_path(first_path);
+    let archive_name = suggested_create_archive_name(first_path, format);
+    Some(join_native_path(output_directory, &archive_name))
+}
+
+fn suggested_create_archive_name(path: &str, format: ArchiveFormatDto) -> String {
+    let source_name = native_file_name(path).unwrap_or("archive");
+    let safe_name = sanitize_archive_name(source_name);
+    format!("{safe_name}.{}", create_format_extension(format))
+}
+
+fn sanitize_archive_name(name: &str) -> String {
+    let sanitized = name
+        .chars()
+        .map(|character| match character {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '\0'..='\u{1f}' => '_',
+            _ => character,
+        })
+        .collect::<String>()
+        .trim()
+        .to_string();
+
+    if sanitized.is_empty() {
+        "archive".to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn create_format_extension(format: ArchiveFormatDto) -> &'static str {
+    match format {
+        ArchiveFormatDto::Zip => "zip",
+        ArchiveFormatDto::TarZst => "tzst",
+        ArchiveFormatDto::Tzap => "tzap",
+        ArchiveFormatDto::SevenZ => "7z",
+    }
+}
+
+fn quick_extract_destination(path: &str, action: QuickActionKindDto) -> Option<String> {
+    let parent = native_parent_path(path);
+    match action {
+        QuickActionKindDto::ExtractHere => Some(parent.to_string()),
+        QuickActionKindDto::ExtractToFolder => {
+            let folder_name = archive_base_name_without_known_extension(path)?;
+            Some(join_native_path(parent, &folder_name))
+        }
+        _ => None,
+    }
+}
+
+fn archive_base_name_without_known_extension(path: &str) -> Option<String> {
+    let name = native_file_name(path)?.trim();
+    if name.is_empty() {
+        return None;
+    }
+
+    let lower_name = name.to_ascii_lowercase();
+    if let Some(marker_index) = tzap_volume_marker_index(&lower_name) {
+        return Some(name[..marker_index].to_string());
+    }
+
+    let mut suffixes = crate::archive_file_types::compound_extensions()
+        .iter()
+        .map(|extension| format!(".{extension}"))
+        .chain(
+            crate::archive_file_types::single_extensions()
+                .iter()
+                .map(|extension| format!(".{extension}")),
+        )
+        .collect::<Vec<_>>();
+    suffixes.sort_by_key(|suffix| std::cmp::Reverse(suffix.len()));
+
+    for suffix in suffixes {
+        if lower_name.ends_with(&suffix) && name.len() > suffix.len() {
+            return Some(name[..name.len() - suffix.len()].to_string());
+        }
+    }
+
+    Some(name.to_string())
+}
+
+fn tzap_volume_marker_index(lower_name: &str) -> Option<usize> {
+    if !lower_name.ends_with(TZAP_EXTENSION_SUFFIX) {
+        return None;
+    }
+
+    let stem = &lower_name[..lower_name.len() - TZAP_EXTENSION_SUFFIX.len()];
+    let marker_index = stem.rfind(TZAP_VOLUME_MARKER)?;
+    let digits = &stem[marker_index + TZAP_VOLUME_MARKER.len()..];
+    if marker_index > 0 && !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        Some(marker_index)
+    } else {
+        None
+    }
+}
+
+fn native_parent_path(path: &str) -> &str {
+    match path.rfind(|character| character == '/' || character == '\\') {
+        Some(index) if index > 0 => &path[..index],
+        Some(0) => &path[..1],
+        _ => "",
+    }
+}
+
+fn native_file_name(path: &str) -> Option<&str> {
+    path.rsplit(['/', '\\']).find(|part| !part.is_empty())
+}
+
+fn join_native_path(parent: &str, child: &str) -> String {
+    let parent = parent.trim_end_matches(|character| character == '/' || character == '\\');
+    if parent.is_empty() {
+        return child.to_string();
+    }
+
+    let separator = if parent.contains('\\') || parent.ends_with(':') { '\\' } else { '/' };
+    format!("{parent}{separator}{child}")
 }
 
 pub fn is_supported_archive_path(path: &str) -> bool {
@@ -668,6 +977,11 @@ fn base_name_without_tzap_volume_suffix(name: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::job_dto::{JobStatusDto, PollJobEventsResponseDto};
+    use crate::job_registry::JobRegistry;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn state_from_args(args: &[&str]) -> QuickActionStartupState {
@@ -694,6 +1008,34 @@ mod tests {
             .expect("system time should be after unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!("zmanager-{name}-{nanos}.json"))
+    }
+
+    fn create_temp_workspace(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("zmanager-quick-action-{name}-{nanos}"));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("temporary workspace should be created");
+        base
+    }
+
+    fn wait_for_job_terminal(
+        registry: &JobRegistry,
+        job_id: &str,
+    ) -> PollJobEventsResponseDto {
+        for _ in 0..400 {
+            let poll = registry
+                .poll_events(job_id)
+                .expect("job should stay available while waiting for terminal state");
+            if poll.status.is_terminal() {
+                return poll;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+
+        panic!("timed out while waiting for job to complete");
     }
 
     fn empty_coordinator() -> QuickActionLaunchCoordinator {
@@ -1064,5 +1406,82 @@ mod tests {
                 "{path} should not be supported"
             );
         }
+    }
+
+    #[test]
+    fn startup_state_starts_tzap_create_job_and_writes_archive() {
+        let workspace = create_temp_workspace("tzap-create");
+        let source = workspace.join("note.txt");
+        fs::write(&source, b"quick action tzap").expect("source should be written");
+        let registry = JobRegistry::new();
+
+        let prestarted = prestart_direct_quick_action(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressTzap,
+                paths: vec![source.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let response = startup_state_to_dto(prestarted, &registry);
+
+        assert!(response.launched_for_quick_action);
+        assert!(response.error.is_none());
+        assert!(response.quick_action.is_none());
+        assert_eq!(response.quick_action_jobs.len(), 1);
+
+        let terminal = wait_for_job_terminal(&registry, &response.quick_action_jobs[0].job_id);
+        assert_eq!(terminal.status, JobStatusDto::Completed);
+        assert!(
+            workspace.join("note.txt.tzap").exists(),
+            "direct quick action should write the expected archive"
+        );
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn startup_state_starts_extract_here_job_and_writes_file() {
+        let workspace = create_temp_workspace("extract-here");
+        let source = workspace.join("payload.txt");
+        fs::write(&source, b"quick action extract").expect("source should be written");
+        let registry = JobRegistry::new();
+
+        let create_response = startup_state_to_dto(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec![source.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let create_job = create_response
+            .quick_action_jobs
+            .first()
+            .expect("zip create job should be started");
+        let create_terminal = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_terminal.status, JobStatusDto::Completed);
+
+        fs::remove_file(&source).expect("source should be removed before extract");
+        let archive = workspace.join("payload.txt.zip");
+        assert!(archive.exists(), "zip quick action should create archive");
+
+        let extract_response = startup_state_to_dto(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::ExtractHere,
+                paths: vec![archive.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let extract_job = extract_response
+            .quick_action_jobs
+            .first()
+            .expect("extract-here job should be started");
+        let extract_terminal = wait_for_job_terminal(&registry, &extract_job.job_id);
+        assert_eq!(extract_terminal.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&source).expect("extracted file should exist"),
+            b"quick action extract"
+        );
+
+        let _ = fs::remove_dir_all(workspace);
     }
 }

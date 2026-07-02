@@ -97,15 +97,17 @@ pub fn system_file_icons(request: SystemFileIconRequest) -> SystemFileIconRespon
 #[tauri::command]
 pub fn quick_action_startup_state(
     state: State<'_, QuickActionLaunchCoordinator>,
+    registry: State<'_, JobRegistry>,
 ) -> crate::dto::QuickActionStartupStateDto {
-    state.startup_state().to_dto()
+    crate::quick_action::startup_state_to_dto(state.startup_state(), &registry)
 }
 
 #[cfg(test)]
 fn quick_action_startup_state_internal(
     state: &crate::quick_action::QuickActionStartupState,
+    registry: &JobRegistry,
 ) -> crate::dto::QuickActionStartupStateDto {
-    state.to_dto()
+    crate::quick_action::startup_state_to_dto(state.clone(), registry)
 }
 
 #[tauri::command]
@@ -203,7 +205,7 @@ pub fn start_create(
     start_create_internal(request, &registry)
 }
 
-fn start_create_internal(
+pub(crate) fn start_create_internal(
     request: StartCreateRequest,
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
@@ -401,7 +403,7 @@ pub fn start_extract(
     start_extract_internal(request, &registry)
 }
 
-fn start_extract_internal(
+pub(crate) fn start_extract_internal(
     request: StartExtractRequest,
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
@@ -2197,16 +2199,16 @@ mod tests {
         let state = QuickActionStartupState::from_args(
             [
                 "--quick-action",
-                "extract-here",
+                "open",
                 "--path",
                 "C:/tmp/one.zip",
-                "C:/tmp/two.tzst",
             ]
             .into_iter()
             .map(OsString::from),
         );
 
-        let response = quick_action_startup_state_internal(&state);
+        let registry = JobRegistry::new();
+        let response = quick_action_startup_state_internal(&state, &registry);
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
@@ -2215,9 +2217,9 @@ mod tests {
             .expect("quick action intent should be present");
         assert_eq!(
             quick_action.kind,
-            crate::dto::QuickActionKindDto::ExtractHere
+            crate::dto::QuickActionKindDto::Open
         );
-        assert_eq!(quick_action.paths, ["C:/tmp/one.zip", "C:/tmp/two.tzst"]);
+        assert_eq!(quick_action.paths, ["C:/tmp/one.zip"]);
     }
 
     #[test]
@@ -2234,7 +2236,8 @@ mod tests {
             .map(OsString::from),
         );
 
-        let response = quick_action_startup_state_internal(&state);
+        let registry = JobRegistry::new();
+        let response = quick_action_startup_state_internal(&state, &registry);
 
         assert!(response.launched_for_quick_action);
         assert!(response.quick_action.is_none());

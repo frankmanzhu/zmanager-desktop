@@ -113,7 +113,7 @@ pub struct JobTerminalSummaryDto {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartJobResponseDto {
     pub job_id: String,

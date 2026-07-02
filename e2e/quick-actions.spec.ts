@@ -8,6 +8,7 @@ type IpcCall = {
 type QuickActionStartupState = {
   launchedForQuickAction: boolean;
   quickAction: { kind: string; paths: string[] } | null;
+  quickActionJobs?: { jobId: string; kind: string; status: string; createdAt: string }[] | null;
   error: null;
 };
 
@@ -27,6 +28,7 @@ declare global {
 const notRequestedState: QuickActionStartupState = {
   launchedForQuickAction: false,
   quickAction: null,
+  quickActionJobs: [],
   error: null,
 };
 
@@ -34,7 +36,13 @@ test("fixed create context actions use the compact job window and close after co
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
-      quickAction: { kind: "compressTzap", paths: ["/tmp/source.txt"] },
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      }],
       error: null,
     },
     notRequestedState,
@@ -43,19 +51,12 @@ test("fixed create context actions use the compact job window and close after co
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
-  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
   await expect(page.locator(".browser-shell")).toBeHidden();
 
-  const startCreateCall = await waitForIpcCall(page, "start_create");
-  expect(startCreateCall.args.request).toMatchObject({
-    sources: ["/tmp/source.txt"],
-    destinationPath: "/tmp/source.txt.tzap",
-    format: "tzap",
-    cleanSource: false,
-    replaceExisting: false,
-    destinationCollisionStrategy: "rename",
-    preserveMetadata: true,
-  });
+  const calls = await ipcCalls(page);
+  expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
+  await expect(page.locator("#quick-progress")).toBeVisible();
 
   await expectWindowCommand(page, "plugin:window|close");
 });
@@ -64,7 +65,13 @@ test("extract-here context actions start extraction without listing the archive"
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
-      quickAction: { kind: "extractHere", paths: ["/tmp/archive.tzap"] },
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapExtract",
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      }],
       error: null,
     },
     notRequestedState,
@@ -74,15 +81,8 @@ test("extract-here context actions start extraction without listing the archive"
 
   await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
 
-  const startExtractCall = await waitForIpcCall(page, "start_extract");
-  expect(startExtractCall.args.request).toMatchObject({
-    archivePath: "/tmp/archive.tzap",
-    destinationPath: "/tmp",
-    overwrite: "rename",
-    stripComponents: 0,
-  });
-
   const calls = await ipcCalls(page);
+  expect(calls.some((call) => call.cmd === "start_extract")).toBe(false);
   expect(calls.some((call) => call.cmd === "list_archive")).toBe(false);
   await expectWindowCommand(page, "plugin:window|close");
 });
@@ -95,7 +95,6 @@ async function installQuickActionTauriStub(
     const ipcCalls: IpcCall[] = [];
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
-    let jobSequence = 1;
 
     Object.defineProperty(window, "isTauri", {
       configurable: true,
@@ -137,29 +136,8 @@ async function installQuickActionTauriStub(
         return states.shift() ?? {
           launchedForQuickAction: false,
           quickAction: null,
+          quickActionJobs: [],
           error: null,
-        };
-      }
-
-      if (cmd === "start_create") {
-        const request = args.request as { format?: string };
-        const jobId = `job-${jobSequence++}`;
-        const kind = request.format === "tzap" ? "tzapCreate" : "zipCreate";
-        return {
-          jobId,
-          kind,
-          status: "queued",
-          createdAt: new Date().toISOString(),
-        };
-      }
-
-      if (cmd === "start_extract") {
-        const jobId = `job-${jobSequence++}`;
-        return {
-          jobId,
-          kind: "tzapExtract",
-          status: "queued",
-          createdAt: new Date().toISOString(),
         };
       }
 
@@ -167,7 +145,7 @@ async function installQuickActionTauriStub(
         const request = args.request as { jobId: string };
         return {
           jobId: request.jobId,
-          kind: request.jobId === "job-1" ? "tzapCreate" : "tzapExtract",
+          kind: "tzapCreate",
           status: "completed",
           createdAt: new Date().toISOString(),
           canDismiss: true,
@@ -266,20 +244,6 @@ async function installQuickActionTauriStub(
 
 async function ipcCalls(page: Page): Promise<IpcCall[]> {
   return page.evaluate(() => window.__zmanagerE2E?.ipcCalls ?? []);
-}
-
-async function waitForIpcCall(page: Page, command: string): Promise<IpcCall> {
-  await expect.poll(async () => {
-    const calls = await ipcCalls(page);
-    return calls.some((call) => call.cmd === command);
-  }).toBe(true);
-
-  const calls = await ipcCalls(page);
-  const call = calls.find((candidate) => candidate.cmd === command);
-  if (!call) {
-    throw new Error(`Missing IPC call: ${command}`);
-  }
-  return call;
 }
 
 async function expectWindowCommand(page: Page, command: string) {

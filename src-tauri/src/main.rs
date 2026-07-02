@@ -22,24 +22,31 @@ fn main() {
     let startup_job_only_window = matches!(
         &startup_window_state,
         quick_action::QuickActionStartupState::Requested(request)
-            if request.kind != dto::QuickActionKindDto::Open
+            if quick_action::is_direct_job_quick_action(request.kind)
+    );
+    let job_registry = job_registry::JobRegistry::new();
+    let startup_state = quick_action::prestart_direct_quick_action(
+        startup_window_state,
+        &job_registry,
     );
     let quick_action_launch_coordinator =
-        quick_action::QuickActionLaunchCoordinator::from_startup_env();
+        quick_action::QuickActionLaunchCoordinator::from_startup_state(startup_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
 
     let builder = tauri::Builder::default();
     let builder = platform::register_platform_services(builder);
     builder
-        .manage(job_registry::JobRegistry::new())
+        .manage(job_registry)
         .manage(quick_action_launch_coordinator)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
             move |app, argv, _cwd| {
+                let registry = app.state::<job_registry::JobRegistry>().inner().clone();
                 single_instance_coordinator.ingest_secondary_process_args(
                     argv.into_iter().map(std::ffi::OsString::from).collect(),
                     app.clone(),
+                    registry,
                 );
             },
         ))
