@@ -15,10 +15,10 @@ The app is not ready for users until the real desktop workflows are verified end
 - Preview/open an extracted temporary file.
 - Cancel and dismiss jobs.
 
-The Windows ARM64 static build entry point works:
+The Windows static build entry point works and auto-selects x64 or ARM64:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-windows-arm64-static.ps1
+powershell -ExecutionPolicy Bypass -File scripts/build-windows-static.ps1
 ```
 
 It produced:
@@ -39,12 +39,12 @@ Subphase breakdown used to close the plan:
 3. Job lifecycle stabilization: serialized poll batches, preserved terminal summaries, added selected-extract cancellation events, and removed the direct `extract_entry` command surface.
 4. Frontend responsibility split: extracted DOM-free helpers into `src/app/dialogs.ts`, `src/app/createFlow.ts`, `src/app/extractFlow.ts`, and `src/app/jobs.ts`.
 5. Test coverage: added frontend Vitest tests and Rust recovery smoke tests for create/open/list/test/extract plus password-required/invalid/valid extraction.
-6. Release gate: added `scripts/smoke-windows-arm64.ps1` and `scripts/release-gate-windows-arm64.ps1`; the release gate passed locally and recorded the result in `docs/platform-smoke-test-results.md`.
+6. Release gate: added `scripts/smoke-windows-static.ps1` and `scripts/release-gate-windows-static.ps1`; the release gate passed locally and recorded the result in `docs/platform-smoke-test-results.md`.
 
 Release-gate command:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1
+powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-static.ps1
 ```
 
 Latest verified artifacts:
@@ -158,7 +158,7 @@ Smoke flow:
 
 Acceptance:
 
-- This smoke flow can run on Windows ARM64.
+- This smoke flow can run on the Windows static build target.
 - Failures produce actionable logs/screenshots.
 - It is documented as the release gate.
 
@@ -299,7 +299,7 @@ End-to-end smoke:
 
 Acceptance:
 
-- Windows ARM64 build script passes.
+- Windows static build script passes.
 - Rust command-boundary tests pass in the native environment.
 - E2E smoke passes against the built app or Tauri dev app.
 
@@ -307,8 +307,8 @@ Acceptance:
 
 No release until all of these pass:
 
-- `powershell -ExecutionPolicy Bypass -File scripts/build-windows-arm64-static.ps1`
-- native dialog smoke on Windows ARM64
+- `powershell -ExecutionPolicy Bypass -File scripts/build-windows-static.ps1`
+- native dialog smoke on Windows
 - create/open/extract/test smoke
 - password-required smoke
 - corrupt archive smoke

@@ -150,8 +150,8 @@ Implementation steps:
 1. Run `npm run test:frontend`.
 2. Run `npm run build`.
 3. Run `cd src-tauri && cargo test`.
-4. Run `powershell -ExecutionPolicy Bypass -File scripts/smoke-windows-arm64.ps1` if a packaged build is available.
-5. Run `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1` for final release confidence.
+4. Run `powershell -ExecutionPolicy Bypass -File scripts/smoke-windows-static.ps1` if a packaged build is available.
+5. Run `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-static.ps1` for final release confidence.
 6. Manually inspect the app at the minimum window size and normal desktop size.
 
 Done when:

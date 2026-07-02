@@ -201,8 +201,8 @@ Likely files:
 
 - `src-tauri/src/platform/windows.rs`
 - `packaging/windows/README.md`
-- `scripts/build-windows-arm64-static.ps1`
-- `scripts/smoke-windows-arm64.ps1`
+- `scripts/build-windows-static.ps1`
+- `scripts/smoke-windows-static.ps1`
 - possibly `src-tauri/tauri.conf.json` bundle metadata
 
 ## Slice 6: Linux File-Manager Actions
@@ -355,7 +355,7 @@ Manual smoke:
 - Right-click archive in Explorer: Extract using ZManager.
 - Right-click folder in Explorer: Compress using ZManager.
 - Verify failed/password-required quick action opens the app with recovery state.
-- Run Windows ARM64 release gate.
+- Run the Windows static release gate.
 
 Commands:
 
@@ -363,8 +363,8 @@ Commands:
 npm run test:frontend
 npm run build
 cd src-tauri && cargo test
-powershell -ExecutionPolicy Bypass -File scripts/smoke-windows-arm64.ps1
-powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1
+powershell -ExecutionPolicy Bypass -File scripts/smoke-windows-static.ps1
+powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-static.ps1
 ```
 
 ## Recommended Execution Order

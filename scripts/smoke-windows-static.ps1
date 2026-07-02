@@ -1,7 +1,9 @@
 param(
     [switch]$SkipAppLaunch,
     [switch]$SkipResultAppend,
-    [string]$LogDir
+    [string]$LogDir,
+    [ValidateSet("Auto", "x64", "arm64")]
+    [string]$Architecture = "Auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,9 +15,30 @@ if ([string]::IsNullOrWhiteSpace($LogDir)) {
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$transcriptPath = Join-Path $LogDir "smoke-windows-arm64-$timestamp.log"
+
+function Resolve-WindowsStaticArchitecture {
+    param([string]$RequestedArchitecture)
+
+    if ($RequestedArchitecture -ne "Auto") {
+        return $RequestedArchitecture
+    }
+
+    $architecture = $env:PROCESSOR_ARCHITECTURE
+    if ($architecture -eq "ARM64") {
+        return "arm64"
+    }
+    if ($architecture -eq "AMD64") {
+        return "x64"
+    }
+
+    throw "Could not determine Windows build architecture from PROCESSOR_ARCHITECTURE='$architecture'. Pass -Architecture x64 or -Architecture arm64."
+}
+
+$resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
+$platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
+$transcriptPath = Join-Path $LogDir "smoke-windows-static-$resolvedArchitecture-$timestamp.log"
 $artifactPath = Join-Path $repoRoot "src-tauri/target/release/zmanager-desktop.exe"
-$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_arm64-setup.exe"
+$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_$resolvedArchitecture-setup.exe"
 
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Script) {
     Write-Host ""
@@ -36,14 +59,14 @@ $notes = "Command smoke and app launch passed. Log: $transcriptPath"
 
 try {
     Invoke-SmokeStep "Rust recovery smoke tests" {
-        $setupScript = Join-Path $repoRoot "scripts/setup-windows-arm64-static-env.ps1"
-        & powershell -ExecutionPolicy Bypass -File $setupScript -Run "Set-Location src-tauri; cargo test recovery_smoke -- --nocapture"
+        $setupScript = Join-Path $repoRoot "scripts/setup-windows-static-env.ps1"
+        & powershell -ExecutionPolicy Bypass -File $setupScript -Architecture $resolvedArchitecture -Run "Set-Location src-tauri; cargo test recovery_smoke -- --nocapture"
     }
 
     if (-not $SkipAppLaunch) {
         Invoke-SmokeStep "Launch packaged app executable" {
             if (-not (Test-Path $artifactPath)) {
-                throw "Packaged app not found. Run scripts/build-windows-arm64-static.ps1 first: $artifactPath"
+                throw "Packaged app not found. Run scripts/build-windows-static.ps1 first: $artifactPath"
             }
 
             $process = Start-Process -FilePath $artifactPath -PassThru -WindowStyle Hidden
@@ -67,7 +90,7 @@ try {
         $appendScript = Join-Path $repoRoot "scripts/append-platform-smoke-test-result.ps1"
         $artifact = if (Test-Path $installerPath) { $installerPath } elseif (Test-Path $artifactPath) { $artifactPath } else { "Not built" }
         & powershell -ExecutionPolicy Bypass -File $appendScript `
-            -Platform "Windows ARM64" `
+            -Platform $platformLabel `
             -OS "Windows" `
             -Artifact $artifact `
             -InstallStep "Packaged exe launch smoke" `

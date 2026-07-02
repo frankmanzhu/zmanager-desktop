@@ -41,26 +41,58 @@ cargo check
 cargo test
 ```
 
-On ARM64 Windows/MSVC development machines, `cargo check` and `cargo test` may need the same native dependency environment as the Windows CI script. Use the ARM64 vcpkg triplet and put Strawberry Perl on `PATH` before running Cargo:
+On Windows/MSVC development machines, `cargo check`, `cargo test`, and Tauri packaging may need the same native dependency environment as the Windows CI script. The helper scripts auto-detect the host CPU and choose `x64-windows-static-md` on x64 Windows or `arm64-windows-static-md` on ARM64 Windows. They also put Strawberry Perl and the selected vcpkg triplet libraries on `PATH` before running Cargo.
+
+For a fresh Windows machine:
+
+1. Install Node.js 20 and run `npm install`.
+2. Install Visual Studio 2022 Build Tools with the C++ desktop workload and the Windows SDK.
+3. Install Rust with the MSVC toolchain, then confirm `cargo --version` works.
+4. Install Git, clone vcpkg to `C:\vcpkg`, and bootstrap it:
+
+```powershell
+git clone https://github.com/microsoft/vcpkg C:\vcpkg
+C:\vcpkg\bootstrap-vcpkg.bat
+```
+
+5. Install the native libraries for your host architecture:
+
+```powershell
+C:\vcpkg\vcpkg.exe install zlib bzip2 liblzma zstd lz4 openssl --triplet x64-windows-static-md
+```
+
+On ARM64 Windows, use:
+
+```powershell
+C:\vcpkg\vcpkg.exe install zlib bzip2 liblzma zstd lz4 openssl --triplet arm64-windows-static-md
+```
+
+6. Install Strawberry Perl so `C:\Strawberry\perl\bin` exists. This is needed by OpenSSL's build fallback.
 
 The helper script form is:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-arm64-static.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-static.ps1
 ```
 
-The build script prefers an installed Node.js under `C:\Program Files\nodejs`, falls back to PATH/Codex runtime Node, and accepts `-NodePath C:\path\to\node.exe` if the shell exposes the wrong Node executable.
+On x64 Windows, this explicit wrapper is equivalent:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-x64-static.ps1
+```
+
+The build script prefers an installed Node.js under `C:\Program Files\nodejs`, falls back to PATH/Codex runtime Node, and accepts `-NodePath C:\path\to\node.exe` if the shell exposes the wrong Node executable. It accepts `-Architecture x64` or `-Architecture arm64` when auto-detection is not what you want, and `-Triplet custom-triplet-name` when testing a custom vcpkg triplet.
 
 For other commands, use the environment helper with `-Run`:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-arm64-static-env.ps1 -Run "cargo test"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-windows-static-env.ps1 -Run "cargo test"
 ```
 
 Or set it up manually:
 
 ```powershell
-$triplet = "arm64-windows-static-md"
+$triplet = "x64-windows-static-md" # Use "arm64-windows-static-md" on ARM64 Windows.
 $env:VCPKG_INSTALLATION_ROOT = "C:\vcpkg"
 $env:VCPKG_ROOT = "C:\vcpkg"
 $env:CMAKE_TOOLCHAIN_FILE = "C:\vcpkg\scripts\buildsystems\vcpkg.cmake"

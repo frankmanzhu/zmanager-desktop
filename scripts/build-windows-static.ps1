@@ -1,6 +1,9 @@
 param(
     [string]$VcpkgRoot = "C:\vcpkg",
     [string]$PerlBin = "C:\Strawberry\perl\bin",
+    [ValidateSet("Auto", "x64", "arm64")]
+    [string]$Architecture = "Auto",
+    [string]$Triplet = "",
     [string]$NodePath = ""
 )
 
@@ -163,9 +166,11 @@ exit /b 1
     $runCommand = "& '$resolvedNodePath' '$tauriCli' build"
 }
 
-& (Join-Path $PSScriptRoot "setup-windows-arm64-static-env.ps1") `
+& (Join-Path $PSScriptRoot "setup-windows-static-env.ps1") `
     -VcpkgRoot $VcpkgRoot `
     -PerlBin $PerlBin `
+    -Architecture $Architecture `
+    -Triplet $Triplet `
     -Run $runCommand
 
 exit $LASTEXITCODE

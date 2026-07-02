@@ -1,6 +1,8 @@
 param(
     [switch]$SkipInstallerInstall,
-    [switch]$SkipAppLaunch
+    [switch]$SkipAppLaunch,
+    [ValidateSet("Auto", "x64", "arm64")]
+    [string]$Architecture = "Auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,8 +10,29 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 $logDir = Join-Path $repoRoot "target/release-gate"
 $installDir = Join-Path $logDir "installed-app"
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$transcriptPath = Join-Path $logDir "release-gate-windows-arm64-$timestamp.log"
-$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_arm64-setup.exe"
+
+function Resolve-WindowsStaticArchitecture {
+    param([string]$RequestedArchitecture)
+
+    if ($RequestedArchitecture -ne "Auto") {
+        return $RequestedArchitecture
+    }
+
+    $architecture = $env:PROCESSOR_ARCHITECTURE
+    if ($architecture -eq "ARM64") {
+        return "arm64"
+    }
+    if ($architecture -eq "AMD64") {
+        return "x64"
+    }
+
+    throw "Could not determine Windows build architecture from PROCESSOR_ARCHITECTURE='$architecture'. Pass -Architecture x64 or -Architecture arm64."
+}
+
+$resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
+$platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
+$transcriptPath = Join-Path $logDir "release-gate-windows-static-$resolvedArchitecture-$timestamp.log"
+$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_$resolvedArchitecture-setup.exe"
 $artifactPath = Join-Path $repoRoot "src-tauri/target/release/zmanager-desktop.exe"
 $gateResult = "Pass"
 $gateNotes = "Release gate passed. Log: $transcriptPath"
@@ -36,23 +59,25 @@ try {
         & "C:\Program Files\nodejs\npm.cmd" run test:frontend
     }
 
-    Invoke-GateStep "Rust command tests in Windows ARM64 static environment" {
-        $setupScript = Join-Path $repoRoot "scripts/setup-windows-arm64-static-env.ps1"
-        & powershell -ExecutionPolicy Bypass -File $setupScript -Run "Set-Location src-tauri; cargo test"
+    Invoke-GateStep "Rust command tests in Windows static environment" {
+        $setupScript = Join-Path $repoRoot "scripts/setup-windows-static-env.ps1"
+        & powershell -ExecutionPolicy Bypass -File $setupScript -Architecture $resolvedArchitecture -Run "Set-Location src-tauri; cargo test"
     }
 
-    Invoke-GateStep "Windows ARM64 static package build" {
-        $buildScript = Join-Path $repoRoot "scripts/build-windows-arm64-static.ps1"
-        & powershell -ExecutionPolicy Bypass -File $buildScript
+    Invoke-GateStep "Windows static package build" {
+        $buildScript = Join-Path $repoRoot "scripts/build-windows-static.ps1"
+        & powershell -ExecutionPolicy Bypass -File $buildScript -Architecture $resolvedArchitecture
     }
 
     Invoke-GateStep "Recovery smoke" {
-        $smokeScript = Join-Path $repoRoot "scripts/smoke-windows-arm64.ps1"
+        $smokeScript = Join-Path $repoRoot "scripts/smoke-windows-static.ps1"
         $smokeArgs = @(
             "-ExecutionPolicy",
             "Bypass",
             "-File",
             $smokeScript,
+            "-Architecture",
+            $resolvedArchitecture,
             "-SkipResultAppend",
             "-LogDir",
             $logDir
@@ -121,7 +146,7 @@ try {
     $appendScript = Join-Path $repoRoot "scripts/append-platform-smoke-test-result.ps1"
     $artifact = if (Test-Path $installerPath) { $installerPath } elseif (Test-Path $artifactPath) { $artifactPath } else { "Not built" }
     & powershell -ExecutionPolicy Bypass -File $appendScript `
-        -Platform "Windows ARM64" `
+        -Platform $platformLabel `
         -OS "Windows" `
         -Artifact $artifact `
         -InstallStep $(if ($SkipInstallerInstall) { "Installer install skipped; packaged exe launch checked" } else { "Silent installer install and launch" }) `
