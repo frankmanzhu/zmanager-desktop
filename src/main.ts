@@ -1261,7 +1261,9 @@ function closeAppWindow() {
     return;
   }
 
-  void getCurrentWindow().close();
+  void getCurrentWindow().close().catch(() => {
+    setOperationalStatus("Quick action completed. Close this window.");
+  });
 }
 
 function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
@@ -1294,8 +1296,12 @@ async function revealNormalAppWindow() {
     return;
   }
 
-  await restoreWindowGeometry();
-  await getCurrentWindow().show();
+  try {
+    await restoreWindowGeometry();
+    await getCurrentWindow().show();
+  } catch {
+    // The Rust setup path already shows the main window. Window APIs are best-effort here.
+  }
   quickActionWindowShown = true;
 }
 
@@ -1316,16 +1322,20 @@ async function revealQuickActionJobWindow() {
   }
 
   const currentWindow = getCurrentWindow();
-  await currentWindow.setMinSize(new LogicalSize(
-    QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
-    QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
-  ));
-  await currentWindow.setSize(new LogicalSize(
-    QUICK_ACTION_WINDOW_WIDTH_PX,
-    QUICK_ACTION_WINDOW_HEIGHT_PX,
-  ));
-  await currentWindow.center();
-  await currentWindow.show();
+  try {
+    await currentWindow.setMinSize(new LogicalSize(
+      QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
+      QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
+    ));
+    await currentWindow.setSize(new LogicalSize(
+      QUICK_ACTION_WINDOW_WIDTH_PX,
+      QUICK_ACTION_WINDOW_HEIGHT_PX,
+    ));
+    await currentWindow.center();
+    await currentWindow.show();
+  } catch {
+    // Do not block job tracking on window-manager or permission failures.
+  }
   quickActionWindowShown = true;
 }
 
@@ -4785,7 +4795,28 @@ async function pollJobs() {
             jobs.delete(jobId);
             jobRetryContexts.delete(jobId);
             promptedPasswordRetryJobs.delete(jobId);
+            return;
           }
+
+          const message = commandError?.message ?? "Unable to read job progress.";
+          const failedEvent = {
+            eventType: "failed" as const,
+            code: commandError?.code,
+            hint: commandError?.hint,
+            severity: "error" as const,
+            retryable: true,
+            message,
+          };
+          jobs.set(jobId, {
+            snapshot: {
+              ...state.snapshot,
+              status: "failed",
+              canDismiss: true,
+              events: [failedEvent],
+            },
+            events: [...state.events, failedEvent],
+          });
+          setOperationalStatus(message);
         }
       }),
     );

@@ -12,6 +12,10 @@ type QuickActionStartupState = {
   error: null;
 };
 
+type QuickActionStubOptions = {
+  rejectWindowCommands?: string[];
+};
+
 declare global {
   interface Window {
     __zmanagerE2E?: {
@@ -87,11 +91,43 @@ test("extract-here context actions start extraction without listing the archive"
   await expectWindowCommand(page, "plugin:window|close");
 });
 
+test("quick action jobs still activate when window sizing is rejected", async ({ page }) => {
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      }],
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    rejectWindowCommands: ["plugin:window|set_min_size"],
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("#quick-progress")).toBeVisible();
+  await expectWindowCommand(page, "poll_job_events");
+  await expectWindowCommand(page, "plugin:window|close");
+});
+
 async function installQuickActionTauriStub(
   page: Page,
   startupStates: QuickActionStartupState[],
+  options: QuickActionStubOptions = {},
 ) {
-  await page.addInitScript((states: QuickActionStartupState[]) => {
+  await page.addInitScript((payload: {
+    startupStates: QuickActionStartupState[];
+    options: QuickActionStubOptions;
+  }) => {
+    const states = payload.startupStates;
+    const rejectedWindowCommands = new Set(payload.options.rejectWindowCommands ?? []);
     const ipcCalls: IpcCall[] = [];
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
@@ -105,6 +141,10 @@ async function installQuickActionTauriStub(
 
     const invoke = async (cmd: string, args: Record<string, unknown> = {}) => {
       ipcCalls.push({ cmd, args });
+
+      if (rejectedWindowCommands.has(cmd)) {
+        throw new Error(`Rejected ${cmd}`);
+      }
 
       if (cmd === "healthcheck") {
         return {
@@ -239,7 +279,7 @@ async function installQuickActionTauriStub(
       transformCallback,
       unregisterCallback,
     };
-  }, startupStates);
+  }, { startupStates, options });
 }
 
 async function ipcCalls(page: Page): Promise<IpcCall[]> {

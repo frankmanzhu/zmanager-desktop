@@ -1484,4 +1484,50 @@ mod tests {
 
         let _ = fs::remove_dir_all(workspace);
     }
+
+    #[test]
+    fn startup_state_starts_tzap_extract_here_job_and_writes_file() {
+        let workspace = create_temp_workspace("tzap-extract-here");
+        let source = workspace.join("payload.txt");
+        fs::write(&source, b"quick action tzap extract").expect("source should be written");
+        let registry = JobRegistry::new();
+
+        let create_response = startup_state_to_dto(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressTzap,
+                paths: vec![source.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let create_job = create_response
+            .quick_action_jobs
+            .first()
+            .expect("tzap create job should be started");
+        let create_terminal = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_terminal.status, JobStatusDto::Completed);
+
+        fs::remove_file(&source).expect("source should be removed before extract");
+        let archive = workspace.join("payload.txt.tzap");
+        assert!(archive.exists(), "tzap quick action should create archive");
+
+        let extract_response = startup_state_to_dto(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::ExtractHere,
+                paths: vec![archive.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let extract_job = extract_response
+            .quick_action_jobs
+            .first()
+            .expect("tzap extract-here job should be started");
+        let extract_terminal = wait_for_job_terminal(&registry, &extract_job.job_id);
+        assert_eq!(extract_terminal.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&source).expect("extracted file should exist"),
+            b"quick action tzap extract"
+        );
+
+        let _ = fs::remove_dir_all(workspace);
+    }
 }

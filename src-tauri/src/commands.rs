@@ -381,7 +381,7 @@ pub(crate) fn start_create_internal(
 
         match result {
             Ok(summary) => {
-                registry_for_thread.set_terminal_summary(&job_id, summary);
+                complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary);
             }
             Err(error) => {
                 registry_for_thread.emit_direct_event(
@@ -519,7 +519,7 @@ pub(crate) fn start_extract_internal(
 
         match result {
             Ok(summary) => {
-                registry_for_thread.set_terminal_summary(&job_id, summary);
+                complete_job_if_needed(&registry_for_thread, &job_id, kind, summary);
             }
             Err(error) => {
                 registry_for_thread.emit_direct_event(
@@ -531,6 +531,42 @@ pub(crate) fn start_extract_internal(
     });
 
     Ok(response)
+}
+
+fn complete_job_if_needed(
+    registry: &JobRegistry,
+    job_id: &str,
+    kind: JobKindDto,
+    summary: JobTerminalSummaryDto,
+) {
+    let written_entries = summary.written_entries;
+    let written_bytes = summary.written_bytes;
+    registry.set_terminal_summary(job_id, summary);
+
+    if registry
+        .snapshot(job_id)
+        .is_some_and(|snapshot| snapshot.status.is_terminal())
+    {
+        return;
+    }
+
+    registry.emit_direct_event(
+        job_id,
+        JobEventDto {
+            event_type: JobEventKindDto::Completed,
+            job_kind: Some(kind),
+            code: None,
+            hint: None,
+            severity: None,
+            retryable: None,
+            path: None,
+            bytes: Some(written_bytes),
+            total_bytes: None,
+            total_bytes_processed: Some(written_bytes),
+            entries: Some(written_entries),
+            message: None,
+        },
+    );
 }
 
 #[tauri::command]
@@ -1992,6 +2028,85 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use zmanager_core::safety::ExtractionSafetyError;
+
+    #[test]
+    fn completion_fallback_marks_successful_job_terminal_without_core_completed_event() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::TzapExtract);
+
+        complete_job_if_needed(
+            &registry,
+            &response.job_id,
+            JobKindDto::TzapExtract,
+            JobTerminalSummaryDto {
+                written_entries: 2,
+                skipped_entries: None,
+                written_bytes: 42,
+                warnings: Vec::new(),
+            },
+        );
+
+        let poll = registry
+            .poll_events(&response.job_id)
+            .expect("fallback-completed job should remain pollable");
+        assert_eq!(poll.status, JobStatusDto::Completed);
+        assert!(poll.can_dismiss);
+        assert_eq!(
+            poll.terminal_summary
+                .expect("terminal summary should be retained")
+                .written_bytes,
+            42
+        );
+        assert!(poll.events.iter().any(|event| {
+            event.event_type == JobEventKindDto::Completed
+                && event.total_bytes_processed == Some(42)
+                && event.entries == Some(2)
+        }));
+    }
+
+    #[test]
+    fn completion_fallback_does_not_override_cancelled_job() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+        registry.emit_direct_event(
+            &response.job_id,
+            JobEventDto {
+                event_type: JobEventKindDto::Cancelled,
+                job_kind: Some(JobKindDto::ZipExtract),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: None,
+                bytes: None,
+                total_bytes: None,
+                total_bytes_processed: None,
+                entries: None,
+                message: Some("cancelled".to_string()),
+            },
+        );
+
+        complete_job_if_needed(
+            &registry,
+            &response.job_id,
+            JobKindDto::ZipExtract,
+            JobTerminalSummaryDto {
+                written_entries: 1,
+                skipped_entries: None,
+                written_bytes: 12,
+                warnings: Vec::new(),
+            },
+        );
+
+        let poll = registry
+            .poll_events(&response.job_id)
+            .expect("cancelled job should remain pollable");
+        assert_eq!(poll.status, JobStatusDto::Cancelled);
+        assert!(!poll
+            .events
+            .iter()
+            .any(|event| event.event_type == JobEventKindDto::Completed));
+    }
 
     #[test]
     fn virtual_drag_display_path_uses_current_folder_depth() {
