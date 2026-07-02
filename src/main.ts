@@ -120,6 +120,7 @@ import {
   canRetryJobWithPassword as canRetryJobWithPasswordState,
   createInitialJobState,
   getLatestPasswordFailureEvent,
+  isTerminalJobStatus,
   mergePolledJobState,
   type JobRetryContext,
 } from "./app/jobs";
@@ -208,6 +209,13 @@ type ArchiveTreeFolder = {
   hasChildren: boolean;
   isExpanded: boolean;
 };
+type QuickActionWindowMode = "normal" | "jobOnly";
+
+const QUICK_ACTION_WINDOW_WIDTH_PX = 680;
+const QUICK_ACTION_WINDOW_HEIGHT_PX = 430;
+const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 560;
+const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 340;
+const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 type ArchiveFixture = {
   archivePath: string;
   entries: ArchiveEntryDto[];
@@ -1153,6 +1161,10 @@ const promptedPasswordRetryJobs = new Set<string>();
 let pollTimer: number | null = null;
 let pollInFlight = false;
 let pollAgainRequested = false;
+let quickActionWindowMode: QuickActionWindowMode = "normal";
+let quickActionWindowShown = false;
+let quickActionAutoCloseTimer: number | null = null;
+const quickActionJobIds = new Set<string>();
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let focusedBeforeDialog: HTMLElement | null = null;
@@ -1210,6 +1222,112 @@ function closeAppWindow() {
   }
 
   void getCurrentWindow().close();
+}
+
+function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
+  return Boolean(request && request.kind !== "open");
+}
+
+function clearQuickActionAutoCloseTimer() {
+  if (quickActionAutoCloseTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(quickActionAutoCloseTimer);
+  quickActionAutoCloseTimer = null;
+}
+
+async function revealNormalAppWindow() {
+  if (!isDesktopRuntime() || quickActionWindowShown) {
+    return;
+  }
+
+  await restoreWindowGeometry();
+  await getCurrentWindow().show();
+  quickActionWindowShown = true;
+}
+
+async function revealQuickActionJobWindow() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  quickActionWindowMode = "jobOnly";
+  workspaceElement.dataset.quickActionMode = "job-only";
+  openJobDrawer();
+
+  if (quickActionWindowShown) {
+    return;
+  }
+
+  const currentWindow = getCurrentWindow();
+  await currentWindow.setMinSize(new LogicalSize(
+    QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
+    QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
+  ));
+  await currentWindow.setSize(new LogicalSize(
+    QUICK_ACTION_WINDOW_WIDTH_PX,
+    QUICK_ACTION_WINDOW_HEIGHT_PX,
+  ));
+  await currentWindow.center();
+  await currentWindow.show();
+  quickActionWindowShown = true;
+}
+
+async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
+  if (
+    state.launchedForQuickAction &&
+    !state.error &&
+    isJobOnlyQuickActionRequest(state.quickAction)
+  ) {
+    await revealQuickActionJobWindow();
+    return;
+  }
+
+  await revealNormalAppWindow();
+}
+
+function trackQuickActionJob(jobId: string) {
+  if (quickActionWindowMode !== "jobOnly") {
+    return;
+  }
+
+  clearQuickActionAutoCloseTimer();
+  quickActionJobIds.add(jobId);
+}
+
+function maybeCloseCompletedQuickActionWindow() {
+  if (
+    !isDesktopRuntime() ||
+    quickActionWindowMode !== "jobOnly" ||
+    quickActionAutoCloseTimer !== null ||
+    quickActionJobIds.size === 0
+  ) {
+    return;
+  }
+
+  const trackedJobs: JobState[] = [];
+  for (const jobId of quickActionJobIds) {
+    const job = jobs.get(jobId);
+    if (!job) {
+      return;
+    }
+    trackedJobs.push(job);
+  }
+
+  if (!trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status))) {
+    return;
+  }
+
+  if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
+    setOperationalStatus("Quick action needs attention.");
+    return;
+  }
+
+  setOperationalStatus("Quick action completed.");
+  quickActionAutoCloseTimer = window.setTimeout(() => {
+    closeAppWindow();
+  }, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
 }
 
 function clearTrackedPreviewState() {
@@ -3002,6 +3120,10 @@ function openJobDrawer() {
 }
 
 function closeJobDrawer() {
+  if (quickActionWindowMode === "jobOnly") {
+    return;
+  }
+
   jobDrawer.setAttribute("aria-hidden", "true");
   workspaceElement.dataset.jobDrawer = "closed";
 }
@@ -4101,6 +4223,7 @@ function addSources(paths: string[]) {
 
 function addJobState(response: StartJobResponseDto, retryContext?: JobRetryContext) {
   jobs.set(response.jobId, createInitialJobState(response));
+  trackQuickActionJob(response.jobId);
 
   if (retryContext) {
     jobRetryContexts.set(response.jobId, retryContext);
@@ -4136,30 +4259,36 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
     return;
   }
 
-  showCreateWorkspace();
-  createSources = sources;
-  createFormatSelect.value = format;
-  createCleanSourceCheckbox.checked = cleanSource;
-  createReplaceExistingCheckbox.checked = false;
-  createDestinationInput.value = buildQuickCreateDestination(
+  const destinationPath = buildQuickCreateDestination(
     sources,
     format,
     appPreferences,
     { nativeParentPath, joinNativePath },
   );
-  currentPlan = null;
-  cancelQueuedPlanRun();
-  renderCreateSources();
-  renderCompressSources();
 
-  setOperationalStatus("Planning quick create...");
-  await runPlan();
-  if (createPlanState !== "ready" || currentPlan === null) {
-    setOperationalStatus("Quick create needs review before it can start.");
+  if (!destinationPath) {
+    setOperationalStatus("Quick create needs a destination archive path.");
     return;
   }
 
-  await runCreate({ destinationCollisionStrategy: "rename" });
+  setOperationalStatus("Starting quick create...");
+  try {
+    const response = await runStartCreate(buildStartCreateRequest({
+      sources,
+      destinationPath,
+      format,
+      cleanSource,
+      replaceExisting: false,
+      destinationCollisionStrategy: "rename",
+      preserveMetadata: true,
+    }));
+    recordCreateDestinationHistory(destinationPath);
+    addJobState(response);
+    setOperationalStatus("Quick create started.");
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? "Unable to start quick create.");
+  }
 }
 
 async function openQuickCreateReview(
@@ -4302,9 +4431,14 @@ async function handleStartupQuickAction() {
     return;
   }
 
+  let revealedWindow = false;
   try {
     while (true) {
       const state = await fetchQuickActionStartupState();
+      if (!revealedWindow) {
+        await revealWindowForStartupQuickAction(state);
+        revealedWindow = true;
+      }
       await handleQuickActionStartupState(state);
       if (!state.launchedForQuickAction || state.error) {
         break;
@@ -4312,6 +4446,9 @@ async function handleStartupQuickAction() {
     }
   } catch (error) {
     setOperationalStatus(unknownErrorMessage(error, "Unable to read quick-action startup state."));
+    if (!revealedWindow) {
+      await revealNormalAppWindow();
+    }
   }
 }
 
@@ -4345,6 +4482,15 @@ async function bindQuickActionLaunchEvents() {
   await listen<QuickActionStartupStateDto>("zmanager-quick-action", (event) => {
     void handleQuickActionStartupState(event.payload);
   });
+}
+
+async function initializeDesktopRuntime() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  await bindQuickActionLaunchEvents();
+  await handleStartupQuickAction();
 }
 
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {
@@ -4418,6 +4564,7 @@ async function pollJobs() {
   if (!pollableJobs.length) {
     stopPolling();
     renderJobs();
+    maybeCloseCompletedQuickActionWindow();
     return;
   }
 
@@ -4447,6 +4594,7 @@ async function pollJobs() {
     );
 
     renderJobs();
+    maybeCloseCompletedQuickActionWindow();
   } finally {
     pollInFlight = false;
     if (pollAgainRequested) {
@@ -4646,7 +4794,7 @@ async function restoreWindowGeometry(): Promise<void> {
 }
 
 async function persistWindowGeometry(): Promise<void> {
-  if (!isDesktopRuntime()) {
+  if (!isDesktopRuntime() || quickActionWindowMode === "jobOnly") {
     return;
   }
 
@@ -6146,7 +6294,6 @@ bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
 bindBrowserFileDropFallback();
-void restoreWindowGeometry();
 bindWindowLifecycleHandlers();
 loadExtractDestinationHistory();
 renderExtractDestinationHistory();
@@ -6199,5 +6346,4 @@ if (isLocalDevHost()) {
 loadLocalDevFixtureFromUrl();
 void loadBootstrapState();
 void bindTauriFileDrop();
-void bindQuickActionLaunchEvents();
-void handleStartupQuickAction();
+void initializeDesktopRuntime();

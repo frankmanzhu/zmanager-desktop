@@ -250,6 +250,22 @@ p {
   display: none;
 }
 
+.workspace[data-quick-action-mode="job-only"] {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "body";
+  min-height: 100vh;
+  background: var(--content-bg);
+}
+
+.workspace[data-quick-action-mode="job-only"] .app-menu,
+.workspace[data-quick-action-mode="job-only"] .command-toolbar,
+.workspace[data-quick-action-mode="job-only"] .path-bar,
+.workspace[data-quick-action-mode="job-only"] .browser-shell,
+.workspace[data-quick-action-mode="job-only"] .status-bar,
+.workspace[data-quick-action-mode="job-only"] .drop-overlay {
+  display: none;
+}
+
 .topbar {
   min-height: 48px;
   display: flex;
@@ -1834,6 +1850,30 @@ progress {
   min-height: 0;
   padding: 10px;
   overflow: auto;
+}
+
+.workspace[data-quick-action-mode="job-only"] .job-drawer,
+.workspace[data-quick-action-mode="job-only"] .job-drawer[aria-hidden="true"] {
+  position: static;
+  grid-area: body;
+  max-height: none;
+  min-height: 0;
+  height: 100vh;
+  display: grid;
+  border-top: 0;
+  box-shadow: none;
+}
+
+.workspace[data-quick-action-mode="job-only"] .job-drawer-header {
+  min-height: 52px;
+}
+
+.workspace[data-quick-action-mode="job-only"] #job-drawer-close {
+  display: none;
+}
+
+.workspace[data-quick-action-mode="job-only"] .job-drawer > .jobs-list {
+  padding: 10px;
 }
 
 .context-menu {
