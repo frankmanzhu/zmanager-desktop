@@ -133,7 +133,7 @@ if (-not (Test-Path $tauriCli)) {
 Assert-ReleaseExecutableIsNotRunning
 
 if ($npmCommand) {
-    $runCommand = "& '$npmCommand' run tauri build"
+    $runCommand = "& '$resolvedNodePath' '$tauriCli' build"
 } else {
     $shimDir = Join-Path $env:TEMP "zmanager-desktop-build-shims"
     New-Item -ItemType Directory -Force -Path $shimDir | Out-Null

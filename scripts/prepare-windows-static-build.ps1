@@ -283,6 +283,7 @@ function Assert-Cargo {
     $cargo = Resolve-OptionalCommand -Names @("cargo.exe", "cargo")
     if ($cargo) {
         Write-Host "Cargo found: $cargo"
+        $env:PATH = "$(Split-Path $cargo -Parent);" + $env:PATH
         return
     }
 
@@ -291,6 +292,7 @@ function Assert-Cargo {
     )
     if ($cargo) {
         Write-Host "Cargo found: $cargo"
+        $env:PATH = "$(Split-Path $cargo -Parent);" + $env:PATH
         return
     }
 
@@ -312,6 +314,7 @@ function Assert-Cargo {
     )
     if ($cargo) {
         Write-Host "Cargo found: $cargo"
+        $env:PATH = "$(Split-Path $cargo -Parent);" + $env:PATH
         return
     }
 

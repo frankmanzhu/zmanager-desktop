@@ -63,9 +63,27 @@ function Resolve-PerlBin {
     throw "Perl was not found at $RequestedPerlBin or on PATH. Install Strawberry Perl, or pass -PerlBin C:\path\to\perl\bin."
 }
 
+function Resolve-CargoBin {
+    $cargo = Get-Command "cargo.exe" -ErrorAction SilentlyContinue
+    if (-not $cargo) {
+        $cargo = Get-Command "cargo" -ErrorAction SilentlyContinue
+    }
+    if ($cargo) {
+        return (Split-Path $cargo.Source -Parent)
+    }
+
+    $defaultCargo = Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe"
+    if (Test-Path $defaultCargo) {
+        return (Split-Path (Resolve-Path $defaultCargo).Path -Parent)
+    }
+
+    throw "Rust Cargo was not found on PATH or at $defaultCargo. Install Rust with the MSVC toolchain, then reopen the shell."
+}
+
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $Triplet = Resolve-WindowsStaticTriplet -RequestedTriplet $Triplet -ResolvedArchitecture $resolvedArchitecture
 $resolvedPerlBin = Resolve-PerlBin -RequestedPerlBin $PerlBin
+$resolvedCargoBin = Resolve-CargoBin
 
 $toolchainFile = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $debugLib = Join-Path $VcpkgRoot "installed\$Triplet\debug\lib"
@@ -90,12 +108,13 @@ $env:VCPKG_DEFAULT_TRIPLET = $Triplet
 $env:VCPKG_TARGET_TRIPLET = $Triplet
 $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
-$env:PATH = "$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
+$env:PATH = "$resolvedCargoBin;$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
 
 Write-Host "Configured Windows static native build environment."
 Write-Host "Architecture: $resolvedArchitecture"
 Write-Host "Triplet: $Triplet"
 Write-Host "Perl bin: $resolvedPerlBin"
+Write-Host "Cargo bin: $resolvedCargoBin"
 Write-Host "VCPKG_ROOT: $env:VCPKG_ROOT"
 Write-Host "CMAKE_TOOLCHAIN_FILE: $env:CMAKE_TOOLCHAIN_FILE"
 
