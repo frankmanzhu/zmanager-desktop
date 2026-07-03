@@ -271,7 +271,7 @@ p {
   grid-area: body;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto auto auto auto;
+  grid-template-rows: auto auto auto auto auto auto;
   align-content: start;
   gap: 10px;
   padding: 14px;
@@ -282,6 +282,59 @@ p {
 
 .quick-progress[hidden] {
   display: none;
+}
+
+.quick-progress-heading {
+  min-width: 0;
+}
+
+.quick-progress-heading h2,
+.quick-progress-heading p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-progress-heading h2 {
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+.quick-progress-heading p {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.quick-progress-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+  padding: 8px 0;
+  border-block: 1px solid var(--border);
+}
+
+.quick-progress-context[hidden] {
+  display: none;
+}
+
+.quick-progress-context div {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.4fr) minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.quick-progress-context dt,
+.quick-progress-context dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.quick-progress-context dt {
+  color: var(--muted);
 }
 
 .quick-progress-grid {

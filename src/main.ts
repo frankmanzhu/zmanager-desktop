@@ -179,6 +179,7 @@ import type {
   QuickActionRequestDto,
   QuickActionStartupStateDto,
   StartCreateRequest,
+  StartExtractRequest,
   StartJobResponseDto,
   SystemFileIconRequestEntry,
 } from "./api/types";
@@ -214,6 +215,12 @@ type ArchiveTreeFolder = {
   isExpanded: boolean;
 };
 type QuickActionWindowMode = "normal" | "jobOnly" | "background";
+type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
+type FocusedJobProgressContext = {
+  title: string;
+  subtitle?: string;
+  rows: { label: string; value: string }[];
+};
 
 const QUICK_ACTION_WINDOW_WIDTH_PX = 560;
 const QUICK_ACTION_WINDOW_HEIGHT_PX = 300;
@@ -625,7 +632,14 @@ appRoot.innerHTML = `
       <div id="jobs-list" class="jobs-list"></div>
     </aside>
 
-    <section id="quick-progress" class="quick-progress" aria-label="Quick action progress" hidden>
+    <section id="quick-progress" class="quick-progress" aria-label="Job progress" hidden>
+      <div class="quick-progress-heading">
+        <div>
+          <h2 id="quick-title">Preparing job</h2>
+          <p id="quick-subtitle"></p>
+        </div>
+      </div>
+      <dl id="quick-context" class="quick-progress-context" hidden></dl>
       <div class="quick-progress-grid">
         <div class="quick-progress-metric"><span>Elapsed time:</span><strong id="quick-elapsed">00:00:00</strong></div>
         <div class="quick-progress-metric"><span>Total size:</span><strong id="quick-total-size"></strong></div>
@@ -1085,6 +1099,9 @@ const jobDrawer = document.querySelector<HTMLElement>("#job-drawer")!;
 const statusJobButton = document.querySelector<HTMLButtonElement>("#status-job-button")!;
 const jobDrawerCloseButton = document.querySelector<HTMLButtonElement>("#job-drawer-close")!;
 const quickProgressElement = document.querySelector<HTMLElement>("#quick-progress")!;
+const quickTitleElement = document.querySelector<HTMLHeadingElement>("#quick-title")!;
+const quickSubtitleElement = document.querySelector<HTMLParagraphElement>("#quick-subtitle")!;
+const quickContextElement = document.querySelector<HTMLDListElement>("#quick-context")!;
 const quickElapsedElement = document.querySelector<HTMLElement>("#quick-elapsed")!;
 const quickRemainingElement = document.querySelector<HTMLElement>("#quick-remaining")!;
 const quickFilesElement = document.querySelector<HTMLElement>("#quick-files")!;
@@ -1210,7 +1227,9 @@ let pollAgainRequested = false;
 let quickActionWindowMode: QuickActionWindowMode = "normal";
 let quickActionWindowShown = false;
 let quickActionAutoCloseTimer: number | null = null;
+let quickActionAutoCloseAction: FocusedJobAutoCloseAction = "closeWindow";
 const quickActionJobIds = new Set<string>();
+const focusedJobProgressContexts = new Map<string, FocusedJobProgressContext>();
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let focusedBeforeDialog: HTMLElement | null = null;
@@ -1301,6 +1320,10 @@ function isQuickActionJobMode(): boolean {
   return quickActionWindowMode === "jobOnly" || quickActionWindowMode === "background";
 }
 
+function setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction) {
+  quickActionAutoCloseAction = action;
+}
+
 async function revealNormalAppWindow() {
   if (!isDesktopRuntime() || quickActionWindowShown) {
     return;
@@ -1315,11 +1338,16 @@ async function revealNormalAppWindow() {
   quickActionWindowShown = true;
 }
 
-async function revealQuickActionJobWindow() {
-  if (!isDesktopRuntime()) {
-    return;
+async function revealQuickActionJobWindow(
+  autoCloseAction: FocusedJobAutoCloseAction = "closeWindow",
+) {
+  const wasInJobMode = isQuickActionJobMode();
+  if (!wasInJobMode || autoCloseAction === "closeWindow") {
+    setFocusedJobAutoCloseAction(autoCloseAction);
   }
-
+  if (!wasInJobMode && autoCloseAction === "returnToWorkspace") {
+    void persistWindowGeometry();
+  }
   quickActionWindowMode = "jobOnly";
   workspaceElement.dataset.quickActionMode = "job-only";
   quickProgressElement.hidden = false;
@@ -1327,12 +1355,13 @@ async function revealQuickActionJobWindow() {
   workspaceElement.dataset.jobDrawer = "closed";
   renderQuickProgress();
 
-  if (quickActionWindowShown) {
+  if (!isDesktopRuntime()) {
     return;
   }
 
   const currentWindow = getCurrentWindow();
   try {
+    await currentWindow.unminimize();
     await currentWindow.setMinSize(new LogicalSize(
       QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
       QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
@@ -1351,37 +1380,63 @@ async function revealQuickActionJobWindow() {
 
 async function sendQuickActionJobsToBackground() {
   clearQuickActionAutoCloseTimer();
+  if (quickActionAutoCloseAction === "returnToWorkspace") {
+    await closeFocusedJobProgress();
+    setOperationalStatus("Job running in background.");
+    openJobDrawer();
+    renderJobs();
+    return;
+  }
+
   if (isDesktopRuntime()) {
     const currentWindow = getCurrentWindow();
     quickActionWindowMode = "background";
     quickBackgroundButton.disabled = true;
-    setOperationalStatus("Quick action running in background.");
-    try {
-      await currentWindow.hide();
-      quickActionWindowShown = false;
-      return;
-    } catch {
-      // Some window managers or stale capabilities can reject hide; keep the
-      // compact job window state and try to get it out of the way.
-    }
-
+    setOperationalStatus("Job running in background.");
     try {
       await currentWindow.minimize();
       quickActionWindowShown = false;
       return;
     } catch {
-      setOperationalStatus("Quick action is still running. Use the window controls to hide it.");
+      setOperationalStatus("Job is still running. Unable to minimize the window.");
       renderQuickProgress();
       return;
     }
   }
 
   quickActionJobIds.clear();
+  focusedJobProgressContexts.clear();
   quickActionWindowMode = "normal";
+  quickActionAutoCloseAction = "closeWindow";
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
-  setOperationalStatus("Quick action running in background.");
+  setOperationalStatus("Job running in background.");
   openJobDrawer();
+  renderJobs();
+}
+
+async function closeFocusedJobProgress() {
+  clearQuickActionAutoCloseTimer();
+  quickActionJobIds.clear();
+  focusedJobProgressContexts.clear();
+  quickActionWindowMode = "normal";
+  quickActionAutoCloseAction = "closeWindow";
+  delete workspaceElement.dataset.quickActionMode;
+  quickProgressElement.hidden = true;
+  quickBackgroundButton.disabled = true;
+  quickContinueButton.disabled = true;
+  quickCancelButton.disabled = true;
+  jobDrawer.setAttribute("aria-hidden", "true");
+  workspaceElement.dataset.jobDrawer = "closed";
+
+  if (isDesktopRuntime()) {
+    try {
+      await restoreWindowGeometry();
+    } catch {
+      // Window restoration is best-effort after a focused job view.
+    }
+  }
+  quickActionWindowShown = true;
   renderJobs();
 }
 
@@ -1398,13 +1453,16 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
   await revealNormalAppWindow();
 }
 
-function trackQuickActionJob(jobId: string) {
+function trackQuickActionJob(jobId: string, context?: FocusedJobProgressContext) {
   if (!isQuickActionJobMode()) {
     return;
   }
 
   clearQuickActionAutoCloseTimer();
   quickActionJobIds.add(jobId);
+  if (context) {
+    focusedJobProgressContexts.set(jobId, context);
+  }
   renderQuickProgress();
 }
 
@@ -1441,11 +1499,11 @@ async function toggleQuickActionPause() {
         }
       }),
     );
-    setOperationalStatus(shouldResume ? "Quick action continued." : "Quick action paused.");
+    setOperationalStatus(shouldResume ? "Job continued." : "Job paused.");
     await pollJobs();
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to update quick action.");
+    setOperationalStatus(commandError?.message ?? "Unable to update job.");
     renderJobs();
   }
 }
@@ -1474,7 +1532,7 @@ function maybeCloseCompletedQuickActionWindow() {
   }
 
   if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
-    setOperationalStatus("Quick action needs attention.");
+    setOperationalStatus("Job needs attention.");
     if (quickActionWindowMode === "background") {
       void revealQuickActionJobWindow();
     } else {
@@ -1483,10 +1541,14 @@ function maybeCloseCompletedQuickActionWindow() {
     return;
   }
 
-  setOperationalStatus("Quick action completed.");
+  setOperationalStatus("Job completed.");
   renderQuickProgress();
   quickActionAutoCloseTimer = window.setTimeout(() => {
-    closeAppWindow();
+    if (quickActionAutoCloseAction === "returnToWorkspace") {
+      void closeFocusedJobProgress();
+    } else {
+      closeAppWindow();
+    }
   }, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
 }
 
@@ -1595,6 +1657,24 @@ function quickActionOperationLabel(kind?: JobKind): string {
   }
 }
 
+function renderFocusedJobContext(context?: FocusedJobProgressContext) {
+  if (!context || context.rows.length === 0) {
+    quickContextElement.hidden = true;
+    quickContextElement.innerHTML = "";
+    return;
+  }
+
+  quickContextElement.hidden = false;
+  quickContextElement.innerHTML = context.rows
+    .map((row) => `
+      <div>
+        <dt>${escapeHtml(row.label)}</dt>
+        <dd>${escapeHtml(row.value)}</dd>
+      </div>
+    `)
+    .join("");
+}
+
 function renderQuickProgress() {
   if (!isQuickActionJobMode()) {
     return;
@@ -1605,6 +1685,9 @@ function renderQuickProgress() {
   );
 
   if (!trackedJobs.length) {
+    quickTitleElement.textContent = "Preparing job";
+    quickSubtitleElement.textContent = "";
+    renderFocusedJobContext();
     quickElapsedElement.textContent = "00:00:00";
     quickRemainingElement.textContent = "--:--:--";
     quickFilesElement.textContent = "0";
@@ -1629,6 +1712,7 @@ function renderQuickProgress() {
   const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job, nowMs));
   const latestJob = trackedJobs.at(-1);
   const latestProgress = progressSnapshots.at(-1);
+  const latestContext = latestJob ? focusedJobProgressContexts.get(latestJob.snapshot.jobId) : undefined;
   const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
   const anyActive = trackedJobs.some((job) => isLiveJobStatus(job.snapshot.status));
   const anyPaused = trackedJobs.some((job) => job.snapshot.status === "paused");
@@ -1670,6 +1754,11 @@ function renderQuickProgress() {
       ? "Paused"
     : quickActionOperationLabel(latestJob?.snapshot.kind);
 
+  quickTitleElement.textContent = trackedJobs.length > 1
+    ? `${trackedJobs.length} jobs`
+    : latestContext?.title ?? (latestJob ? formatJobKind(latestJob.snapshot.kind) : "Job progress");
+  quickSubtitleElement.textContent = latestContext?.subtitle ?? "";
+  renderFocusedJobContext(latestContext);
   quickElapsedElement.textContent = formatDurationClock(elapsedMs);
   quickRemainingElement.textContent = formatDurationClock(remainingMs);
   quickFilesElement.textContent = totalFiles === null ? String(processedFiles) : `${processedFiles} / ${totalFiles}`;
@@ -1819,6 +1908,45 @@ function truncatedPathPreview(paths: string[], maxItems = 3, maxLength = 140): s
 
 function normalizeEntryPath(path: string): string {
   return normalizeArchivePath(path);
+}
+
+function progressContextRows(rows: Array<{ label: string; value?: string | null }>): FocusedJobProgressContext["rows"] {
+  return rows
+    .filter((row): row is { label: string; value: string } => Boolean(row.value))
+    .map((row) => ({ label: row.label, value: row.value }));
+}
+
+function createJobProgressContext(request: StartCreateRequest): FocusedJobProgressContext {
+  const sourcePreview = truncatedPathPreview(request.sources, 3, 180);
+  const sourceLabel = request.sources.length === 1 ? "Source" : "Sources";
+  return {
+    title: "Create archive",
+    subtitle: getPathBasename(request.destinationPath) || request.destinationPath,
+    rows: progressContextRows([
+      { label: sourceLabel, value: sourcePreview },
+      { label: "Destination", value: request.destinationPath },
+      { label: "Format", value: request.format },
+      { label: "Clean source", value: request.cleanSource ? "Yes" : "No" },
+    ]),
+  };
+}
+
+function extractJobProgressContext(
+  request: StartExtractRequest,
+  label = "Extract archive",
+): FocusedJobProgressContext {
+  const entryCount = request.entryPaths?.length ?? 0;
+  const entryPreview = request.entryPaths ? truncatedPathPreview(request.entryPaths, 3, 180) : null;
+  return {
+    title: label,
+    subtitle: getPathBasename(request.archivePath) || request.archivePath,
+    rows: progressContextRows([
+      { label: "Archive", value: request.archivePath },
+      { label: "Destination", value: request.destinationPath },
+      { label: "Entries", value: entryCount > 0 ? `${entryCount} selected${entryPreview ? `: ${entryPreview}` : ""}` : "All entries" },
+      { label: "Overwrite", value: request.overwrite },
+    ]),
+  };
 }
 
 function normalizeFolderPath(path: string): string {
@@ -4526,12 +4654,23 @@ function addSources(paths: string[]) {
   queuePlanRun();
 }
 
-function addJobState(response: StartJobResponseDto, retryContext?: JobRetryContext) {
+function addJobState(
+  response: StartJobResponseDto,
+  options: {
+    retryContext?: JobRetryContext;
+    focusProgress?: boolean;
+    autoCloseAction?: FocusedJobAutoCloseAction;
+    progressContext?: FocusedJobProgressContext;
+  } = {},
+) {
+  if (options.focusProgress) {
+    void revealQuickActionJobWindow(options.autoCloseAction ?? "returnToWorkspace");
+  }
   jobs.set(response.jobId, createInitialJobState(response));
-  trackQuickActionJob(response.jobId);
+  trackQuickActionJob(response.jobId, options.progressContext);
 
-  if (retryContext) {
-    jobRetryContexts.set(response.jobId, retryContext);
+  if (options.retryContext) {
+    jobRetryContexts.set(response.jobId, options.retryContext);
   }
 
   schedulePolling();
@@ -4578,7 +4717,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
 
   setOperationalStatus("Starting quick create...");
   try {
-    const response = await runStartCreate(buildStartCreateRequest({
+    const request = buildStartCreateRequest({
       sources,
       destinationPath,
       format,
@@ -4586,9 +4725,14 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
       replaceExisting: false,
       destinationCollisionStrategy: "rename",
       preserveMetadata: true,
-    }));
+    });
+    const response = await runStartCreate(request);
     recordCreateDestinationHistory(destinationPath);
-    addJobState(response);
+    addJobState(response, {
+      focusProgress: true,
+      autoCloseAction: "closeWindow",
+      progressContext: createJobProgressContext(request),
+    });
     setOperationalStatus("Quick create started.");
   } catch (error) {
     const commandError = asCommandError(error);
@@ -4681,22 +4825,28 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
           break;
         }
 
-        const response = await runStartExtract(buildStartExtractRequest({
+        const request = buildStartExtractRequest({
           archivePath,
           destinationPath: destinationPlan.destinationPath,
           overwrite: "rename",
           destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
           stripComponents: destinationPlan.stripComponents,
           ...(password ? { password } : {}),
-        }));
+        });
+        const response = await runStartExtract(request);
         recordExtractDestinationHistory(destinationPlan.destinationPath);
         addJobState(response, {
-          retryKind: "extractArchive",
-          archivePath,
-          destinationPath: destinationPlan.destinationPath,
-          overwrite: "rename",
-          destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
-          stripComponents: destinationPlan.stripComponents,
+          retryContext: {
+            retryKind: "extractArchive",
+            archivePath,
+            destinationPath: destinationPlan.destinationPath,
+            overwrite: "rename",
+            destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
+            stripComponents: destinationPlan.stripComponents,
+          },
+          focusProgress: true,
+          autoCloseAction: "closeWindow",
+          progressContext: extractJobProgressContext(request),
         });
         break;
       } catch (error) {
@@ -4856,7 +5006,7 @@ async function retryJobWithPasswordPrompt(jobId: string) {
 
   try {
     const response = await startPasswordRetryJob(context, password);
-    addJobState(response, context);
+    addJobState(response, { retryContext: context });
     setOperationalStatus("Password retry started.");
   } catch (error) {
     const commandError = asCommandError(error);
@@ -4909,6 +5059,8 @@ async function pollJobs() {
           if (commandError?.code === "not_found") {
             jobs.delete(jobId);
             jobRetryContexts.delete(jobId);
+            focusedJobProgressContexts.delete(jobId);
+            quickActionJobIds.delete(jobId);
             promptedPasswordRetryJobs.delete(jobId);
             return;
           }
@@ -5023,8 +5175,10 @@ async function onTestArchive() {
         ...(password ? { password } : {}),
       });
       addJobState(response, {
-        retryKind: "testArchive",
-        archivePath: currentArchivePath,
+        retryContext: {
+          retryKind: "testArchive",
+          archivePath: currentArchivePath,
+        },
       });
       return;
     } catch (error) {
@@ -5272,22 +5426,28 @@ async function startExtract(destinationMode: ExtractMode) {
 
     while (true) {
       try {
-        const response = await runStartExtract(buildStartExtractRequest({
+        const request = buildStartExtractRequest({
           archivePath: currentArchivePath,
           destinationPath: destination,
           overwrite,
           stripComponents,
           password,
-        }));
+        });
+        const response = await runStartExtract(request);
         recordExtractDestinationHistory(destination);
         closeModal(extractDialog);
         addJobState(response, {
-          retryKind: "extractArchive",
-          archivePath: currentArchivePath,
-          destinationPath: destination,
-          overwrite,
-          entryPaths: undefined,
-          stripComponents,
+          retryContext: {
+            retryKind: "extractArchive",
+            archivePath: currentArchivePath,
+            destinationPath: destination,
+            overwrite,
+            entryPaths: undefined,
+            stripComponents,
+          },
+          focusProgress: true,
+          autoCloseAction: "returnToWorkspace",
+          progressContext: extractJobProgressContext(request),
         });
         return;
       } catch (error) {
@@ -5325,23 +5485,29 @@ async function startExtract(destinationMode: ExtractMode) {
 
   while (true) {
     try {
-      const response = await runStartExtract(buildStartExtractRequest({
+      const request = buildStartExtractRequest({
         archivePath: currentArchivePath,
         destinationPath: destination,
         overwrite,
         entryPaths: entries,
         stripComponents,
-          password,
-      }));
+        password,
+      });
+      const response = await runStartExtract(request);
       recordExtractDestinationHistory(destination);
       closeModal(extractDialog);
       addJobState(response, {
-        retryKind: "extractArchive",
-        archivePath: currentArchivePath,
-        destinationPath: destination,
-        overwrite,
-        entryPaths: entries,
-        stripComponents,
+        retryContext: {
+          retryKind: "extractArchive",
+          archivePath: currentArchivePath,
+          destinationPath: destination,
+          overwrite,
+          entryPaths: entries,
+          stripComponents,
+        },
+        focusProgress: true,
+        autoCloseAction: "returnToWorkspace",
+        progressContext: extractJobProgressContext(request, "Extract selected entries"),
       });
       return;
     } catch (error) {
@@ -5557,7 +5723,11 @@ async function runCreate(
     createPasswordConfirmInput.type = "password";
     recordCreateDestinationHistory(destinationPath);
     closeModal(createDialog);
-    addJobState(response);
+    addJobState(response, {
+      focusProgress: true,
+      autoCloseAction: "returnToWorkspace",
+      progressContext: createJobProgressContext(request),
+    });
   } catch (error) {
     const commandError = asCommandError(error);
     setCreatePlanState("error", commandError?.message ?? "Unable to start create job.");
@@ -5584,6 +5754,8 @@ async function onDismissJob(jobId: string) {
     await dismissJobCommand({ jobId });
     jobs.delete(jobId);
     jobRetryContexts.delete(jobId);
+    focusedJobProgressContexts.delete(jobId);
+    quickActionJobIds.delete(jobId);
     promptedPasswordRetryJobs.delete(jobId);
     renderJobs();
     if (jobs.size === 0) {

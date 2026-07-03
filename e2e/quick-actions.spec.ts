@@ -156,12 +156,12 @@ test("quick action controls pause resume and background the job", async ({ page 
   await expect(page.locator("#quick-continue")).toHaveText("Pause");
 
   await page.locator("#quick-background").click();
-  await expectWindowCommand(page, "plugin:window|hide");
+  await expectWindowCommand(page, "plugin:window|minimize");
   await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
-test("quick action background never opens the normal workspace when hide is rejected", async ({ page }) => {
+test("quick action background never opens the normal workspace when minimize is rejected", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -177,7 +177,7 @@ test("quick action background never opens the normal workspace when hide is reje
     notRequestedState,
   ], {
     completeOnPoll: false,
-    rejectWindowCommands: ["plugin:window|hide"],
+    rejectWindowCommands: ["plugin:window|minimize"],
   });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -185,10 +185,31 @@ test("quick action background never opens the normal workspace when hide is reje
   await expect(page.locator("#quick-progress")).toBeVisible();
   await page.locator("#quick-background").click();
 
-  await expectWindowCommand(page, "plugin:window|hide");
   await expectWindowCommand(page, "plugin:window|minimize");
   await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
+});
+
+test("extract dialog uses the focused job progress view and returns to the workspace", async ({ page }) => {
+  await installQuickActionTauriStub(page, [notRequestedState]);
+
+  await page.goto("/?fixture=archive", { waitUntil: "domcontentloaded" });
+
+  await page.locator("#extract-toolbar").click();
+  await expect(page.getByRole("dialog", { name: "Extract Archive" })).toBeVisible();
+  await page.locator("#extract-destination").fill("C:/fixtures/output");
+  await page.locator("#extract-start").click();
+
+  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("#quick-progress")).toBeVisible();
+  await expect(page.locator("#quick-title")).toHaveText("Extract archive");
+  await expect(page.locator("#quick-context")).toContainText("C:/Users/Frank/Downloads/photos.zip");
+  await expect(page.locator("#quick-context")).toContainText("C:/fixtures/output");
+  await expectWindowCommand(page, "start_extract");
+
+  await expect(page.locator("#quick-progress")).toBeHidden({ timeout: 4_000 });
+  await expect(page.locator(".workspace")).not.toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator(".browser-shell")).toBeVisible();
 });
 
 async function installQuickActionTauriStub(
@@ -209,6 +230,7 @@ async function installQuickActionTauriStub(
     const jobCreatedAts = new Map<string, string>();
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
+    let startedJobCount = 0;
 
     Object.defineProperty(window, "isTauri", {
       configurable: true,
@@ -263,6 +285,22 @@ async function installQuickActionTauriStub(
           jobCreatedAts.set(job.jobId, job.createdAt);
         }
         return state;
+      }
+
+      if (cmd === "start_create" || cmd === "start_extract") {
+        startedJobCount += 1;
+        const jobId = `started-job-${startedJobCount}`;
+        const kind = cmd === "start_create" ? "zipCreate" : "zipExtract";
+        const createdAt = String(Math.floor(Date.now() / 1000));
+        jobStatuses.set(jobId, "queued");
+        jobKinds.set(jobId, kind);
+        jobCreatedAts.set(jobId, createdAt);
+        return {
+          jobId,
+          kind,
+          status: "queued",
+          createdAt,
+        };
       }
 
       if (cmd === "poll_job_events") {
@@ -348,7 +386,13 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "system_file_icons") {
-        return { icons: [] };
+        const request = args.request as { entries?: Array<{ key: string }> };
+        return {
+          icons: (request.entries ?? []).map((entry) => ({
+            key: entry.key,
+            dataUrl: null,
+          })),
+        };
       }
 
       if (cmd === "cleanup_preview_roots") {
