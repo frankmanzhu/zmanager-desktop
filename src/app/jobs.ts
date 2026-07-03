@@ -82,6 +82,7 @@ export type JobProgressSnapshot = {
   elapsedMs: number;
   remainingMs: number | null;
   processedFiles: number;
+  totalFiles: number | null;
   errorCount: number;
   warningCount: number;
   totalBytes: number | null;
@@ -103,6 +104,7 @@ export function deriveJobProgress(
   let processedBytes = 0;
   let totalBytes: number | null = null;
   let processedFiles = 0;
+  let totalFiles: number | null = null;
   let errorCount = 0;
   let warningCount = 0;
   let currentFile = "";
@@ -119,6 +121,9 @@ export function deriveJobProgress(
       processedBytes = Math.max(processedBytes, event.totalBytesProcessed);
     } else if (typeof event.bytes === "number") {
       processedBytes += event.bytes;
+    }
+    if (typeof event.totalEntries === "number") {
+      totalFiles = Math.max(totalFiles ?? 0, event.totalEntries);
     }
     if (typeof event.entries === "number") {
       processedFiles = Math.max(processedFiles, event.entries);
@@ -137,6 +142,7 @@ export function deriveJobProgress(
   const terminalSummary = state.snapshot.terminalSummary;
   if (terminalSummary) {
     processedFiles = Math.max(processedFiles, terminalSummary.writtenEntries);
+    totalFiles = Math.max(totalFiles ?? 0, terminalSummary.writtenEntries);
     processedBytes = Math.max(processedBytes, terminalSummary.writtenBytes);
     warningCount = Math.max(warningCount, terminalSummary.warnings.length);
   }
@@ -144,12 +150,20 @@ export function deriveJobProgress(
   const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
     ? processedBytes / (elapsedMs / 1000)
     : null;
+  const filesPerSecond = elapsedMs > 0 && processedFiles > 0
+    ? processedFiles / (elapsedMs / 1000)
+    : null;
   const remainingBytes = totalBytes !== null ? Math.max(0, totalBytes - processedBytes) : null;
+  const remainingFiles = totalFiles !== null ? Math.max(0, totalFiles - processedFiles) : null;
   const remainingMs = remainingBytes !== null && speedBytesPerSecond && speedBytesPerSecond > 0
     ? (remainingBytes / speedBytesPerSecond) * 1000
-    : null;
+    : remainingFiles !== null && filesPerSecond && filesPerSecond > 0
+      ? (remainingFiles / filesPerSecond) * 1000
+      : null;
   const measuredProgressPercent = totalBytes !== null && totalBytes > 0
     ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
+    : totalFiles !== null && totalFiles > 0
+      ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
     : null;
   const progressPercent = state.snapshot.status === "completed"
     ? 100
@@ -164,6 +178,7 @@ export function deriveJobProgress(
     elapsedMs,
     remainingMs,
     processedFiles,
+    totalFiles,
     errorCount,
     warningCount,
     totalBytes,

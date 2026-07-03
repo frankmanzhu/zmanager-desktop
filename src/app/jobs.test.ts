@@ -113,9 +113,28 @@ describe("job state helpers", () => {
     expect(progress.totalBytes).toBe(100);
     expect(progress.progressPercent).toBe(25);
     expect(progress.processedFiles).toBe(1);
+    expect(progress.totalFiles).toBeNull();
     expect(progress.warningCount).toBe(1);
     expect(progress.currentFile).toBe("docs/readme.txt");
     expect(progress.speedBytesPerSecond).toBe(5);
+  });
+
+  it("derives file totals and ETA from entry counts when bytes are unavailable", () => {
+    const state: JobState = {
+      snapshot: pollResponse({ status: "running" }),
+      events: [
+        { eventType: "started", entries: 0, totalEntries: 4 },
+        { eventType: "entryFinished", path: "one.txt", entries: 1, totalEntries: 4 },
+        { eventType: "entryFinished", path: "two.txt", entries: 2, totalEntries: 4 },
+      ],
+    };
+
+    const progress = deriveJobProgress(state, Date.parse(startedAt) + 4000);
+
+    expect(progress.processedFiles).toBe(2);
+    expect(progress.totalFiles).toBe(4);
+    expect(progress.progressPercent).toBe(50);
+    expect(progress.remainingMs).toBe(4000);
   });
 
   it("makes completed jobs determinate even when total bytes are unknown", () => {

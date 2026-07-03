@@ -7,6 +7,7 @@ use crate::error::{CommandErrorDto, ErrorSeverityDto};
 pub enum JobStatusDto {
     Queued,
     Running,
+    Paused,
     Completed,
     Failed,
     Cancelled,
@@ -42,6 +43,8 @@ pub enum JobEventKindDto {
     EntryStarted,
     BytesProcessed,
     EntryFinished,
+    Paused,
+    Resumed,
     Warning,
     Completed,
     Failed,
@@ -62,6 +65,7 @@ pub struct JobEventDto {
     pub total_bytes: Option<u64>,
     pub total_bytes_processed: Option<u64>,
     pub entries: Option<usize>,
+    pub total_entries: Option<usize>,
     pub message: Option<String>,
 }
 
@@ -79,6 +83,7 @@ impl JobEventDto {
             total_bytes: None,
             total_bytes_processed: None,
             entries: None,
+            total_entries: None,
             message: Some(error.message),
         }
     }
@@ -99,6 +104,7 @@ impl JobEventDto {
             total_bytes: None,
             total_bytes_processed: None,
             entries: None,
+            total_entries: None,
             message: None,
         }
     }
@@ -137,6 +143,13 @@ pub struct PollJobEventsResponseDto {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelJobResponseDto {
+    pub job_id: String,
+    pub status: JobStatusDto,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobControlResponseDto {
     pub job_id: String,
     pub status: JobStatusDto,
 }

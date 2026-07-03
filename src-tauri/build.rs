@@ -13,6 +13,8 @@ fn main() {
             "test_archive",
             "poll_job_events",
             "cancel_job",
+            "pause_job",
+            "resume_job",
             "dismiss_job",
         ]),
     ))

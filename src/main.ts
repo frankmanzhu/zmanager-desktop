@@ -149,8 +149,10 @@ import {
   listArchive as listArchiveCommand,
   cleanupPreviewRoots,
   pollJobEvents as pollJobEventsCommand,
+  pauseJob as pauseJobCommand,
   runPlanCreate,
   runPreviewEntry,
+  resumeJob as resumeJobCommand,
   runStartNativeFileDrag,
   runStartCreate,
   runStartExtract,
@@ -212,10 +214,10 @@ type ArchiveTreeFolder = {
 };
 type QuickActionWindowMode = "normal" | "jobOnly";
 
-const QUICK_ACTION_WINDOW_WIDTH_PX = 680;
-const QUICK_ACTION_WINDOW_HEIGHT_PX = 430;
-const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 560;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 340;
+const QUICK_ACTION_WINDOW_WIDTH_PX = 560;
+const QUICK_ACTION_WINDOW_HEIGHT_PX = 300;
+const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 460;
+const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 240;
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 type ArchiveFixture = {
   archivePath: string;
@@ -642,7 +644,7 @@ appRoot.innerHTML = `
       <progress id="quick-progress-bar" aria-label="Quick action progress"></progress>
       <div class="quick-progress-actions">
         <button id="quick-background" type="button" disabled>Background</button>
-        <button id="quick-continue" type="button" disabled>Continue</button>
+        <button id="quick-continue" type="button" disabled>Pause</button>
         <button id="quick-cancel" type="button">Cancel</button>
       </div>
     </section>
@@ -1094,6 +1096,8 @@ const quickRatioElement = document.querySelector<HTMLElement>("#quick-ratio")!;
 const quickOperationElement = document.querySelector<HTMLElement>("#quick-operation")!;
 const quickCurrentPathElement = document.querySelector<HTMLElement>("#quick-current-path")!;
 const quickProgressBar = document.querySelector<HTMLProgressElement>("#quick-progress-bar")!;
+const quickBackgroundButton = document.querySelector<HTMLButtonElement>("#quick-background")!;
+const quickContinueButton = document.querySelector<HTMLButtonElement>("#quick-continue")!;
 const quickCancelButton = document.querySelector<HTMLButtonElement>("#quick-cancel")!;
 const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
 const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
@@ -1199,6 +1203,7 @@ const jobs = new Map<string, JobState>();
 const jobRetryContexts = new Map<string, JobRetryContext>();
 const promptedPasswordRetryJobs = new Set<string>();
 let pollTimer: number | null = null;
+let progressClockTimer: number | null = null;
 let pollInFlight = false;
 let pollAgainRequested = false;
 let quickActionWindowMode: QuickActionWindowMode = "normal";
@@ -1339,6 +1344,32 @@ async function revealQuickActionJobWindow() {
   quickActionWindowShown = true;
 }
 
+async function sendQuickActionJobsToBackground() {
+  clearQuickActionAutoCloseTimer();
+  quickActionJobIds.clear();
+  quickActionWindowMode = "normal";
+  delete workspaceElement.dataset.quickActionMode;
+  quickProgressElement.hidden = true;
+
+  if (isDesktopRuntime()) {
+    const currentWindow = getCurrentWindow();
+    try {
+      await currentWindow.setMinSize(new LogicalSize(
+        APP_MIN_WINDOW_WIDTH_PX,
+        APP_MIN_WINDOW_HEIGHT_PX,
+      ));
+      await restoreWindowGeometry();
+      await currentWindow.show();
+    } catch {
+      // Window geometry is best-effort; job tracking continues in the app UI.
+    }
+  }
+
+  setOperationalStatus("Quick action running in background.");
+  openJobDrawer();
+  renderJobs();
+}
+
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
   if (
     state.launchedForQuickAction &&
@@ -1360,6 +1391,48 @@ function trackQuickActionJob(jobId: string) {
   clearQuickActionAutoCloseTimer();
   quickActionJobIds.add(jobId);
   renderQuickProgress();
+}
+
+function quickActionControllableJobIds(): string[] {
+  return Array.from(quickActionJobIds).filter((jobId) => {
+    const state = jobs.get(jobId);
+    return state ? isLiveJobStatus(state.snapshot.status) : false;
+  });
+}
+
+async function toggleQuickActionPause() {
+  const jobIds = quickActionControllableJobIds();
+  if (!jobIds.length) {
+    return;
+  }
+
+  const shouldResume = jobIds.some((jobId) => jobs.get(jobId)?.snapshot.status === "paused");
+  const command = shouldResume ? resumeJobCommand : pauseJobCommand;
+  quickContinueButton.disabled = true;
+
+  try {
+    await Promise.all(
+      jobIds.map(async (jobId) => {
+        const response = await command({ jobId });
+        const state = jobs.get(jobId);
+        if (state) {
+          jobs.set(jobId, {
+            ...state,
+            snapshot: {
+              ...state.snapshot,
+              status: response.status,
+            },
+          });
+        }
+      }),
+    );
+    setOperationalStatus(shouldResume ? "Quick action continued." : "Quick action paused.");
+    await pollJobs();
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? "Unable to update quick action.");
+    renderJobs();
+  }
 }
 
 function maybeCloseCompletedQuickActionWindow() {
@@ -1526,6 +1599,9 @@ function renderQuickProgress() {
     quickCurrentPathElement.textContent = "";
     quickProgressBar.removeAttribute("value");
     quickProgressBar.removeAttribute("max");
+    quickBackgroundButton.disabled = true;
+    quickContinueButton.disabled = true;
+    quickContinueButton.textContent = "Pause";
     quickCancelButton.disabled = true;
     return;
   }
@@ -1534,23 +1610,29 @@ function renderQuickProgress() {
   const latestJob = trackedJobs.at(-1);
   const latestProgress = progressSnapshots.at(-1);
   const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
-  const anyActive = trackedJobs.some((job) =>
-    job.snapshot.status === "queued" || job.snapshot.status === "running",
-  );
+  const anyActive = trackedJobs.some((job) => isLiveJobStatus(job.snapshot.status));
+  const anyPaused = trackedJobs.some((job) => job.snapshot.status === "paused");
   const elapsedMs = Math.max(...progressSnapshots.map((progress) => progress.elapsedMs), 0);
   const processedBytes = progressSnapshots.reduce((total, progress) => total + progress.processedBytes, 0);
   const totalBytes = progressSnapshots.every((progress) => progress.totalBytes !== null)
     ? progressSnapshots.reduce((total, progress) => total + (progress.totalBytes ?? 0), 0)
     : null;
   const processedFiles = progressSnapshots.reduce((total, progress) => total + progress.processedFiles, 0);
+  const totalFiles = progressSnapshots.every((progress) => progress.totalFiles !== null)
+    ? progressSnapshots.reduce((total, progress) => total + (progress.totalFiles ?? 0), 0)
+    : null;
   const remainingMs = totalBytes !== null && processedBytes > 0 && elapsedMs > 0
     ? Math.max(0, ((totalBytes - processedBytes) / (processedBytes / elapsedMs)))
+    : totalFiles !== null && processedFiles > 0 && elapsedMs > 0
+      ? Math.max(0, ((totalFiles - processedFiles) / (processedFiles / elapsedMs)))
     : null;
   const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
     ? processedBytes / (elapsedMs / 1000)
     : null;
   const progressPercent = totalBytes !== null && totalBytes > 0
     ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
+    : totalFiles !== null && totalFiles > 0
+      ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
     : allTerminal && trackedJobs.every((job) => job.snapshot.status === "completed")
       ? 100
       : null;
@@ -1561,11 +1643,13 @@ function renderQuickProgress() {
       : latestJob?.snapshot.status === "cancelled"
         ? "Cancelled"
         : "Failed"
+    : anyPaused
+      ? "Paused"
     : quickActionOperationLabel(latestJob?.snapshot.kind);
 
   quickElapsedElement.textContent = formatDurationClock(elapsedMs);
   quickRemainingElement.textContent = formatDurationClock(remainingMs);
-  quickFilesElement.textContent = String(processedFiles);
+  quickFilesElement.textContent = totalFiles === null ? String(processedFiles) : `${processedFiles} / ${totalFiles}`;
   quickTotalFilesElement.textContent = trackedJobs.length > 1 ? `/ ${trackedJobs.length} job(s)` : "";
   quickTotalSizeElement.textContent = totalBytes === null ? "" : formatBytes(totalBytes);
   quickSpeedElement.textContent = speedBytesPerSecond === null ? "" : `${formatBytes(speedBytesPerSecond)}/s`;
@@ -1574,6 +1658,9 @@ function renderQuickProgress() {
   quickRatioElement.textContent = progressPercent === null ? "" : `${Math.round(progressPercent)}%`;
   quickOperationElement.textContent = operation;
   quickCurrentPathElement.textContent = currentFile;
+  quickBackgroundButton.disabled = allTerminal || anyPaused;
+  quickContinueButton.disabled = !anyActive;
+  quickContinueButton.textContent = anyPaused ? "Continue" : "Pause";
   quickCancelButton.disabled = !anyActive;
 
   if (progressPercent === null) {
@@ -2912,6 +2999,7 @@ function renderJobs() {
   });
   renderJobStatusBar();
   renderQuickProgress();
+  syncProgressClock();
 }
 
 function queuePlanRun() {
@@ -3326,10 +3414,12 @@ function toggleJobDrawer() {
   }
 }
 
+function isLiveJobStatus(status: JobState["snapshot"]["status"]): boolean {
+  return status === "queued" || status === "running" || status === "paused";
+}
+
 function hasActiveJob(): boolean {
-  return Array.from(jobs.values()).some((state) =>
-    state.snapshot.status === "queued" || state.snapshot.status === "running",
-  );
+  return Array.from(jobs.values()).some((state) => isLiveJobStatus(state.snapshot.status));
 }
 
 function currentDropSurface(): DropIntentSurface {
@@ -4840,6 +4930,33 @@ function schedulePolling() {
   pollTimer = window.setInterval(() => {
     void pollJobs();
   }, JOB_POLL_INTERVAL_MS);
+}
+
+function scheduleProgressClock() {
+  if (progressClockTimer !== null) {
+    return;
+  }
+
+  progressClockTimer = window.setInterval(() => {
+    renderJobs();
+  }, 1000);
+}
+
+function stopProgressClock() {
+  if (progressClockTimer === null) {
+    return;
+  }
+
+  window.clearInterval(progressClockTimer);
+  progressClockTimer = null;
+}
+
+function syncProgressClock() {
+  if (hasActiveJob()) {
+    scheduleProgressClock();
+  } else {
+    stopProgressClock();
+  }
 }
 
 function stopPolling() {
@@ -6485,6 +6602,12 @@ tableBody.addEventListener("click", (event) => {
     }
   });
 
+  quickBackgroundButton.addEventListener("click", () => {
+    void sendQuickActionJobsToBackground();
+  });
+  quickContinueButton.addEventListener("click", () => {
+    void toggleQuickActionPause();
+  });
   quickCancelButton.addEventListener("click", () => {
     for (const jobId of quickActionJobIds) {
       const state = jobs.get(jobId);

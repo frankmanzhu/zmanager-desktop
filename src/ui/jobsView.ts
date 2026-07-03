@@ -18,7 +18,7 @@ export function sortedJobStates(jobs: Map<string, JobState>): JobState[] {
 
 export function activeJobStatusText(jobs: Map<string, JobState>, formatJobKind: (kind: JobKind) => string): string {
   const active = sortedJobStates(jobs).find((state) =>
-    state.snapshot.status === "queued" || state.snapshot.status === "running",
+    state.snapshot.status === "queued" || state.snapshot.status === "running" || state.snapshot.status === "paused",
   ) ?? sortedJobStates(jobs)[0];
 
   if (!active) {
@@ -45,6 +45,9 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       const canRetryPassword = formatters.canRetryJobWithPassword(snapshot.jobId, state);
       const progress = deriveJobProgress(state);
       const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
+      const filesText = progress.totalFiles === null
+        ? String(progress.processedFiles)
+        : `${progress.processedFiles} / ${progress.totalFiles}`;
       const progressValue = progress.progressPercent ?? 0;
       const progressAttributes = progress.progressPercent === null && !isTerminalJobStatus(snapshot.status)
         ? ""
@@ -68,7 +71,7 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
           <div class="job-progress-grid">
             <div><dt>Elapsed time</dt><dd>${formatters.escapeHtml(formatDuration(progress.elapsedMs))}</dd></div>
             <div><dt>Remaining time</dt><dd>${formatters.escapeHtml(formatDuration(progress.remainingMs))}</dd></div>
-            <div><dt>Files</dt><dd>${progress.processedFiles}</dd></div>
+            <div><dt>Files</dt><dd>${filesText}</dd></div>
             <div><dt>Errors</dt><dd>${progress.errorCount}</dd></div>
             <div><dt>Warnings</dt><dd>${progress.warningCount}</dd></div>
             <div><dt>Total size</dt><dd>${progress.totalBytes === null ? "" : formatters.formatBytes(progress.totalBytes)}</dd></div>

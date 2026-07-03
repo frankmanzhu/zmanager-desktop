@@ -8,9 +8,11 @@ import type {
   CreatePlanResponse,
   DismissJobRequest,
   HealthcheckResponse,
+  JobControlResponseDto,
   ListArchiveRequest,
   NativeFileDragRequest,
   NativeFileDragResponse,
+  PauseJobRequest,
   PollJobEventsRequest,
   PollJobEventsResponseDto,
   PlanCreateRequest,
@@ -18,6 +20,7 @@ import type {
   PreviewEntryResponse,
   ProjectContract,
   QuickActionStartupStateDto,
+  ResumeJobRequest,
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
@@ -104,6 +107,18 @@ export async function pollJobEvents(
 
 export async function cancelJob(request: CancelJobRequest): Promise<CancelJobResponseDto> {
   return invoke<CancelJobResponseDto>("cancel_job", {
+    request,
+  });
+}
+
+export async function pauseJob(request: PauseJobRequest): Promise<JobControlResponseDto> {
+  return invoke<JobControlResponseDto>("pause_job", {
+    request,
+  });
+}
+
+export async function resumeJob(request: ResumeJobRequest): Promise<JobControlResponseDto> {
+  return invoke<JobControlResponseDto>("resume_job", {
     request,
   });
 }

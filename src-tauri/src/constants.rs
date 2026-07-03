@@ -15,6 +15,8 @@ pub const COMMAND_START_NATIVE_FILE_DRAG: &str = "start_native_file_drag";
 pub const COMMAND_CLEANUP_PREVIEW_ROOTS: &str = "cleanup_preview_roots";
 pub const COMMAND_POLL_JOB_EVENTS: &str = "poll_job_events";
 pub const COMMAND_CANCEL_JOB: &str = "cancel_job";
+pub const COMMAND_PAUSE_JOB: &str = "pause_job";
+pub const COMMAND_RESUME_JOB: &str = "resume_job";
 pub const COMMAND_DISMISS_JOB: &str = "dismiss_job";
 
 pub const COMMAND_ERROR_INVALID_REQUEST: &str = "invalid_request";
@@ -40,5 +42,7 @@ pub const PLANNED_COMMANDS: &[&str] = &[
     COMMAND_CLEANUP_PREVIEW_ROOTS,
     COMMAND_POLL_JOB_EVENTS,
     COMMAND_CANCEL_JOB,
+    COMMAND_PAUSE_JOB,
+    COMMAND_RESUME_JOB,
     COMMAND_DISMISS_JOB,
 ];

@@ -194,6 +194,14 @@ export type CancelJobRequest = {
   jobId: string;
 };
 
+export type PauseJobRequest = {
+  jobId: string;
+};
+
+export type ResumeJobRequest = {
+  jobId: string;
+};
+
 export type DismissJobRequest = {
   jobId: string;
 };
@@ -220,12 +228,19 @@ export type CancelJobResponseDto = {
   status: JobStatus;
 };
 
+export type JobControlResponseDto = {
+  jobId: string;
+  status: JobStatus;
+};
+
 export type JobEventDto = {
   eventType:
     | "started"
     | "entryStarted"
     | "bytesProcessed"
     | "entryFinished"
+    | "paused"
+    | "resumed"
     | "warning"
     | "completed"
     | "failed"
@@ -240,6 +255,7 @@ export type JobEventDto = {
   totalBytes?: number;
   totalBytesProcessed?: number;
   entries?: number;
+  totalEntries?: number;
   message?: string;
 };
 
@@ -264,7 +280,7 @@ export type JobKind =
   | "rawStreamExtract"
   | "testArchive";
 
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type JobStatus = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
 
 export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";

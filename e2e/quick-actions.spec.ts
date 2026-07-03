@@ -14,6 +14,7 @@ type QuickActionStartupState = {
 
 type QuickActionStubOptions = {
   rejectWindowCommands?: string[];
+  completeOnPoll?: boolean;
 };
 
 declare global {
@@ -117,6 +118,43 @@ test("quick action jobs still activate when window sizing is rejected", async ({
   await expectWindowCommand(page, "plugin:window|close");
 });
 
+test("quick action controls pause resume and background the job", async ({ page }) => {
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: new Date().toISOString(),
+      }],
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    completeOnPoll: false,
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("#quick-progress")).toBeVisible();
+  await expect(page.locator("#quick-files")).toContainText("0 / 4");
+
+  await page.locator("#quick-continue").click();
+  await expectWindowCommand(page, "pause_job");
+  await expect(page.locator("#quick-continue")).toHaveText("Continue");
+
+  await page.locator("#quick-continue").click();
+  await expectWindowCommand(page, "resume_job");
+  await expect(page.locator("#quick-continue")).toHaveText("Pause");
+
+  await page.locator("#quick-background").click();
+  await expect(page.locator(".workspace")).not.toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("#quick-progress")).toBeHidden();
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+});
+
 async function installQuickActionTauriStub(
   page: Page,
   startupStates: QuickActionStartupState[],
@@ -128,7 +166,9 @@ async function installQuickActionTauriStub(
   }) => {
     const states = payload.startupStates;
     const rejectedWindowCommands = new Set(payload.options.rejectWindowCommands ?? []);
+    const completeOnPoll = payload.options.completeOnPoll ?? true;
     const ipcCalls: IpcCall[] = [];
+    const jobStatuses = new Map<string, string>();
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
 
@@ -159,7 +199,7 @@ async function installQuickActionTauriStub(
 
       if (cmd === "project_contract") {
         return {
-          commands: ["start_create", "start_extract", "poll_job_events"],
+          commands: ["start_create", "start_extract", "poll_job_events", "pause_job", "resume_job"],
           platformStrategy: "e2e",
           coreDependency: "stub",
           platformIntegration: {
@@ -173,16 +213,35 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "quick_action_startup_state") {
-        return states.shift() ?? {
+        const state = states.shift() ?? {
           launchedForQuickAction: false,
           quickAction: null,
           quickActionJobs: [],
           error: null,
         };
+        for (const job of state.quickActionJobs ?? []) {
+          jobStatuses.set(job.jobId, job.status);
+        }
+        return state;
       }
 
       if (cmd === "poll_job_events") {
         const request = args.request as { jobId: string };
+        if (!completeOnPoll) {
+          const status = jobStatuses.get(request.jobId) ?? "running";
+          return {
+            jobId: request.jobId,
+            kind: "tzapCreate",
+            status,
+            createdAt: new Date().toISOString(),
+            canDismiss: false,
+            events: [
+              { eventType: "started", entries: 0, totalEntries: 4, totalBytes: 128, message: "started" },
+            ],
+            terminalSummary: null,
+          };
+        }
+        jobStatuses.set(request.jobId, "completed");
         return {
           jobId: request.jobId,
           kind: "tzapCreate",
@@ -198,6 +257,24 @@ async function installQuickActionTauriStub(
             writtenBytes: 32,
             warnings: [],
           },
+        };
+      }
+
+      if (cmd === "pause_job") {
+        const request = args.request as { jobId: string };
+        jobStatuses.set(request.jobId, "paused");
+        return {
+          jobId: request.jobId,
+          status: "paused",
+        };
+      }
+
+      if (cmd === "resume_job") {
+        const request = args.request as { jobId: string };
+        jobStatuses.set(request.jobId, "running");
+        return {
+          jobId: request.jobId,
+          status: "running",
         };
       }
 

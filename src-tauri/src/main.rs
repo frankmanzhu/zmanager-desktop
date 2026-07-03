@@ -12,10 +12,10 @@ mod quick_action;
 
 use tauri::{LogicalSize, Manager, Size};
 
-const QUICK_ACTION_WINDOW_WIDTH: f64 = 680.0;
-const QUICK_ACTION_WINDOW_HEIGHT: f64 = 430.0;
-const QUICK_ACTION_WINDOW_MIN_WIDTH: f64 = 560.0;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT: f64 = 340.0;
+const QUICK_ACTION_WINDOW_WIDTH: f64 = 560.0;
+const QUICK_ACTION_WINDOW_HEIGHT: f64 = 300.0;
+const QUICK_ACTION_WINDOW_MIN_WIDTH: f64 = 460.0;
+const QUICK_ACTION_WINDOW_MIN_HEIGHT: f64 = 240.0;
 
 fn main() {
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
@@ -25,10 +25,8 @@ fn main() {
             if quick_action::is_direct_job_quick_action(request.kind)
     );
     let job_registry = job_registry::JobRegistry::new();
-    let startup_state = quick_action::prestart_direct_quick_action(
-        startup_window_state,
-        &job_registry,
-    );
+    let startup_state =
+        quick_action::prestart_direct_quick_action(startup_window_state, &job_registry);
     let quick_action_launch_coordinator =
         quick_action::QuickActionLaunchCoordinator::from_startup_state(startup_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
@@ -84,6 +82,8 @@ fn main() {
             commands::test_archive,
             commands::poll_job_events,
             commands::cancel_job,
+            commands::pause_job,
+            commands::resume_job,
             commands::dismiss_job
         ])
         .run(tauri::generate_context!())

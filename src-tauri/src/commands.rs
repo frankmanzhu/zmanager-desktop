@@ -11,15 +11,15 @@ use crate::{
     dto::{
         ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
         DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
-        NativeFileDragResponse, PlanCreateRequest, PollJobEventsRequest, PreviewEntryRequest,
-        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
-        ProjectIntegrationShellActionDto, StartCreateRequest, StartExtractRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PollJobEventsRequest,
+        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ProjectIntegrationShellActionDto, ResumeJobRequest, StartCreateRequest,
+        StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
-        JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
-        StartJobResponseDto,
+        JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto,
+        PollJobEventsResponseDto, StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry},
     quick_action::QuickActionLaunchCoordinator,
@@ -255,6 +255,9 @@ pub(crate) fn start_create_internal(
     } else {
         PlanOptions::default()
     };
+    let create_progress_estimate = plan_archives(sources.clone(), &plan_options)
+        .ok()
+        .map(|manifest| (manifest.included_count(), manifest.total_bytes));
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -265,6 +268,26 @@ pub(crate) fn start_create_internal(
     };
 
     let (response, token) = registry.create_job(kind);
+    if let Some((total_entries, total_bytes)) = create_progress_estimate {
+        registry.emit_direct_event(
+            &response.job_id,
+            JobEventDto {
+                event_type: JobEventKindDto::Started,
+                job_kind: Some(kind),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: None,
+                bytes: None,
+                total_bytes: Some(total_bytes),
+                total_bytes_processed: Some(0),
+                entries: Some(0),
+                total_entries: Some(total_entries),
+                message: Some("Planning archive.".to_string()),
+            },
+        );
+    }
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
@@ -417,6 +440,15 @@ pub(crate) fn start_extract_internal(
             requested_destination_path
         };
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
+    let password = request
+        .password
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    let extract_progress_estimate = if entry_paths.is_empty() {
+        archive_extract_progress_estimate(&archive_path, password.as_deref())
+    } else {
+        Some((entry_paths.len(), None))
+    };
 
     let family = detect_archive_family(&archive_path);
     let kind = match family {
@@ -429,13 +461,29 @@ pub(crate) fn start_extract_internal(
     };
 
     let (response, token) = registry.create_job(kind);
+    if let Some((total_entries, total_bytes)) = extract_progress_estimate {
+        registry.emit_direct_event(
+            &response.job_id,
+            JobEventDto {
+                event_type: JobEventKindDto::Started,
+                job_kind: Some(kind),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: None,
+                bytes: None,
+                total_bytes,
+                total_bytes_processed: Some(0),
+                entries: Some(0),
+                total_entries: Some(total_entries),
+                message: Some("Planning extraction.".to_string()),
+            },
+        );
+    }
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
     let family_for_thread = family;
-    let password = request
-        .password
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
     let policy = extraction_policy(request.overwrite, request.strip_components);
     let archive_path = archive_path;
     let destination_path = destination_path;
@@ -564,9 +612,41 @@ fn complete_job_if_needed(
             total_bytes: None,
             total_bytes_processed: Some(written_bytes),
             entries: Some(written_entries),
+            total_entries: Some(written_entries),
             message: None,
         },
     );
+}
+
+fn archive_extract_progress_estimate(
+    archive_path: &str,
+    password: Option<&str>,
+) -> Option<(usize, Option<u64>)> {
+    let listing = archive_browser::list_entries_with_options(
+        Path::new(archive_path),
+        BrowserListOptions { password },
+    )
+    .ok()?;
+    let mut total_entries = 0usize;
+    let mut total_bytes = 0u64;
+    let mut has_size = false;
+
+    for entry in listing.entries {
+        if matches!(
+            entry.kind,
+            zmanager_core::archive_browser::BrowserEntryKind::Directory
+        ) {
+            continue;
+        }
+
+        total_entries = total_entries.saturating_add(1);
+        if let Some(size) = entry.size {
+            total_bytes = total_bytes.saturating_add(size);
+            has_size = true;
+        }
+    }
+
+    Some((total_entries, has_size.then_some(total_bytes)))
 }
 
 #[tauri::command]
@@ -686,6 +766,7 @@ fn start_test_archive_internal(
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: None,
             },
         );
@@ -736,6 +817,7 @@ fn start_test_archive_internal(
                         total_bytes: None,
                         total_bytes_processed: None,
                         entries: Some(written_entries),
+                        total_entries: Some(written_entries),
                         message: None,
                     },
                 );
@@ -773,7 +855,8 @@ fn run_selected_extract_job(
         bytes: None,
         total_bytes: None,
         total_bytes_processed: None,
-        entries: Some(entry_paths.len()),
+        entries: Some(0),
+        total_entries: Some(entry_paths.len()),
         message: None,
     });
 
@@ -788,6 +871,7 @@ fn run_selected_extract_job(
                 Some(entry_path.clone()),
                 written_entries,
                 written_bytes,
+                entry_paths.len(),
             ));
         }
 
@@ -803,6 +887,7 @@ fn run_selected_extract_job(
             total_bytes: None,
             total_bytes_processed: Some(written_bytes),
             entries: Some(written_entries),
+            total_entries: Some(entry_paths.len()),
             message: None,
         });
 
@@ -832,6 +917,7 @@ fn run_selected_extract_job(
             total_bytes: None,
             total_bytes_processed: Some(written_bytes),
             entries: Some(written_entries),
+            total_entries: Some(entry_paths.len()),
             message: None,
         });
 
@@ -842,6 +928,7 @@ fn run_selected_extract_job(
                 Some(entry_path.clone()),
                 written_entries,
                 written_bytes,
+                entry_paths.len(),
             ));
         }
     }
@@ -853,6 +940,7 @@ fn run_selected_extract_job(
             None,
             written_entries,
             written_bytes,
+            entry_paths.len(),
         ));
     }
 
@@ -868,6 +956,7 @@ fn run_selected_extract_job(
         total_bytes: None,
         total_bytes_processed: Some(written_bytes),
         entries: Some(written_entries),
+        total_entries: Some(entry_paths.len()),
         message: None,
     });
 
@@ -885,6 +974,7 @@ fn cancel_selected_extract_job(
     path: Option<String>,
     written_entries: usize,
     written_bytes: u64,
+    total_entries: usize,
 ) -> JobTerminalSummaryDto {
     sink.emit_direct(JobEventDto {
         event_type: JobEventKindDto::Cancelled,
@@ -898,6 +988,7 @@ fn cancel_selected_extract_job(
         total_bytes: None,
         total_bytes_processed: Some(written_bytes),
         entries: Some(written_entries),
+        total_entries: Some(total_entries),
         message: Some("Extraction cancelled.".to_string()),
     });
 
@@ -941,6 +1032,42 @@ pub fn cancel_job(
         CommandErrorDto::not_found(
             format!("job not found: {job_id}"),
             Some("The job may have already completed and can be dismissed.".to_string()),
+        )
+    })
+}
+
+#[tauri::command]
+pub fn pause_job(
+    request: PauseJobRequest,
+    registry: State<'_, JobRegistry>,
+) -> Result<JobControlResponseDto, CommandErrorDto> {
+    let job_id = request.job_id.trim().to_string();
+    if job_id.is_empty() {
+        return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
+    }
+
+    registry.request_pause(&job_id).ok_or_else(|| {
+        CommandErrorDto::not_found(
+            format!("job not found: {job_id}"),
+            Some("Start a new job command before pausing.".to_string()),
+        )
+    })
+}
+
+#[tauri::command]
+pub fn resume_job(
+    request: ResumeJobRequest,
+    registry: State<'_, JobRegistry>,
+) -> Result<JobControlResponseDto, CommandErrorDto> {
+    let job_id = request.job_id.trim().to_string();
+    if job_id.is_empty() {
+        return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
+    }
+
+    registry.request_resume(&job_id).ok_or_else(|| {
+        CommandErrorDto::not_found(
+            format!("job not found: {job_id}"),
+            Some("Only jobs that still exist in this session can be resumed.".to_string()),
         )
     })
 }
@@ -2082,6 +2209,7 @@ mod tests {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: Some("cancelled".to_string()),
             },
         );
@@ -2102,10 +2230,12 @@ mod tests {
             .poll_events(&response.job_id)
             .expect("cancelled job should remain pollable");
         assert_eq!(poll.status, JobStatusDto::Cancelled);
-        assert!(!poll
-            .events
-            .iter()
-            .any(|event| event.event_type == JobEventKindDto::Completed));
+        assert!(
+            !poll
+                .events
+                .iter()
+                .any(|event| event.event_type == JobEventKindDto::Completed)
+        );
     }
 
     #[test]
@@ -2312,14 +2442,9 @@ mod tests {
     #[test]
     fn quick_action_startup_state_command_exposes_pending_intent() {
         let state = QuickActionStartupState::from_args(
-            [
-                "--quick-action",
-                "open",
-                "--path",
-                "C:/tmp/one.zip",
-            ]
-            .into_iter()
-            .map(OsString::from),
+            ["--quick-action", "open", "--path", "C:/tmp/one.zip"]
+                .into_iter()
+                .map(OsString::from),
         );
 
         let registry = JobRegistry::new();
@@ -2330,10 +2455,7 @@ mod tests {
         let quick_action = response
             .quick_action
             .expect("quick action intent should be present");
-        assert_eq!(
-            quick_action.kind,
-            crate::dto::QuickActionKindDto::Open
-        );
+        assert_eq!(quick_action.kind, crate::dto::QuickActionKindDto::Open);
         assert_eq!(quick_action.paths, ["C:/tmp/one.zip"]);
     }
 
@@ -3105,13 +3227,12 @@ mod tests {
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
         assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
-        assert!(
-            !extract_events.iter().any(|event| matches!(
-                event.event_type,
-                JobEventKindDto::EntryStarted | JobEventKindDto::EntryFinished
-            )),
-            "selected extract should not expose per-entry lifecycle chatter",
-        );
+        let finished_event = extract_events
+            .iter()
+            .find(|event| matches!(event.event_type, JobEventKindDto::EntryFinished))
+            .expect("selected extract should retain the latest finished entry for file counts");
+        assert_eq!(finished_event.entries, Some(1));
+        assert_eq!(finished_event.total_entries, Some(1));
         assert!(
             extract_events
                 .iter()

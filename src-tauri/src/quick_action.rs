@@ -429,9 +429,12 @@ fn start_direct_extract_jobs(
     let mut responses = Vec::new();
     let action = request.kind;
     for archive_path in unique_paths(request.paths.clone()) {
-        let destination_path = quick_extract_destination(&archive_path, action).ok_or_else(|| {
-            CommandErrorDto::invalid_request("extract quick actions require archive paths with parent folders")
-        })?;
+        let destination_path =
+            quick_extract_destination(&archive_path, action).ok_or_else(|| {
+                CommandErrorDto::invalid_request(
+                    "extract quick actions require archive paths with parent folders",
+                )
+            })?;
 
         let response = start_extract_internal(
             StartExtractRequest {
@@ -618,7 +621,11 @@ fn join_native_path(parent: &str, child: &str) -> String {
         return child.to_string();
     }
 
-    let separator = if parent.contains('\\') || parent.ends_with(':') { '\\' } else { '/' };
+    let separator = if parent.contains('\\') || parent.ends_with(':') {
+        '\\'
+    } else {
+        '/'
+    };
     format!("{parent}{separator}{child}")
 }
 
@@ -1021,10 +1028,7 @@ mod tests {
         base
     }
 
-    fn wait_for_job_terminal(
-        registry: &JobRegistry,
-        job_id: &str,
-    ) -> PollJobEventsResponseDto {
+    fn wait_for_job_terminal(registry: &JobRegistry, job_id: &str) -> PollJobEventsResponseDto {
         for _ in 0..400 {
             let poll = registry
                 .poll_events(job_id)

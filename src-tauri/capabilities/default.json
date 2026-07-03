@@ -19,6 +19,8 @@
     "allow-test-archive",
     "allow-poll-job-events",
     "allow-cancel-job",
+    "allow-pause-job",
+    "allow-resume-job",
     "allow-dismiss-job",
     "core:default",
     "core:window:allow-center",

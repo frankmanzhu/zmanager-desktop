@@ -61,4 +61,29 @@ describe("jobs view", () => {
 
     expect(renderJobsListHtml(jobs, formatters)).toContain('value="0" max="100"');
   });
+
+  it("renders processed files against known totals", () => {
+    const jobs = new Map<string, JobState>([
+      [
+        "job-create",
+        {
+          snapshot: {
+            jobId: "job-create",
+            kind: "zipCreate",
+            status: "running",
+            createdAt: "2026-06-11T00:00:00Z",
+            canDismiss: false,
+            events: [],
+            terminalSummary: null,
+          },
+          events: [
+            { eventType: "started", entries: 0, totalEntries: 4 },
+            { eventType: "entryFinished", entries: 2, totalEntries: 4 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(renderJobsListHtml(jobs, formatters)).toContain("<dd>2 / 4</dd>");
+  });
 });

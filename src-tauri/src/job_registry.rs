@@ -2,12 +2,13 @@ use std::{
     collections::{HashMap, VecDeque},
     fs,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Condvar, Mutex},
 };
 
 use crate::job_dto::{
-    CancelJobResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobRecordSnapshot,
-    JobStatusDto, JobTerminalSummaryDto, PollJobEventsResponseDto, StartJobResponseDto,
+    CancelJobResponseDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
+    JobRecordSnapshot, JobStatusDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
+    StartJobResponseDto,
 };
 use zmanager_core::{jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind};
 
@@ -19,9 +20,69 @@ struct JobRecord {
     kind: JobKindDto,
     created_at: String,
     status: JobStatusDto,
+    paused_from_status: Option<JobStatusDto>,
     events: VecDeque<JobEventDto>,
     terminal_summary: Option<JobTerminalSummaryDto>,
     cancellation_token: Option<CancellationToken>,
+    pause_control: PauseControl,
+    processed_entries: usize,
+    total_entries: Option<usize>,
+}
+
+#[derive(Debug)]
+struct PauseState {
+    paused: Mutex<bool>,
+    changed: Condvar,
+}
+
+#[derive(Debug, Clone)]
+struct PauseControl {
+    state: Arc<PauseState>,
+}
+
+impl PauseControl {
+    fn new() -> Self {
+        Self {
+            state: Arc::new(PauseState {
+                paused: Mutex::new(false),
+                changed: Condvar::new(),
+            }),
+        }
+    }
+
+    fn pause(&self) {
+        let mut paused = self
+            .state
+            .paused
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        *paused = true;
+    }
+
+    fn resume(&self) {
+        let mut paused = self
+            .state
+            .paused
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        *paused = false;
+        self.state.changed.notify_all();
+    }
+
+    fn wait_if_paused(&self) {
+        let mut paused = self
+            .state
+            .paused
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        while *paused {
+            paused = self
+                .state
+                .changed
+                .wait(paused)
+                .unwrap_or_else(|error| error.into_inner());
+        }
+    }
 }
 
 #[derive(Default)]
@@ -63,9 +124,13 @@ impl JobRegistry {
                     kind,
                     created_at: created_at.clone(),
                     status: JobStatusDto::Queued,
+                    paused_from_status: None,
                     events: VecDeque::new(),
                     terminal_summary: None,
                     cancellation_token: Some(token.clone()),
+                    pause_control: PauseControl::new(),
+                    processed_entries: 0,
+                    total_entries: None,
                 },
             );
 
@@ -110,6 +175,7 @@ impl JobRegistry {
 
             if let Some(token) = record.cancellation_token.as_ref() {
                 token.cancel();
+                record.pause_control.resume();
                 Some(CancelJobResponseDto {
                     job_id: job_id.to_string(),
                     status: record.status,
@@ -118,6 +184,102 @@ impl JobRegistry {
                 None
             }
         })
+    }
+
+    pub fn request_pause(&self, job_id: &str) -> Option<JobControlResponseDto> {
+        self.with_lock(|state| {
+            let record = state.jobs.get_mut(job_id)?;
+            if record.status.is_terminal() {
+                return Some(JobControlResponseDto {
+                    job_id: job_id.to_string(),
+                    status: record.status,
+                });
+            }
+
+            if record.status != JobStatusDto::Paused {
+                record.paused_from_status = Some(record.status);
+                record.status = JobStatusDto::Paused;
+                record.pause_control.pause();
+                let kind = record.kind;
+                let processed_entries = record.processed_entries;
+                let total_entries = record.total_entries;
+                push_recorded_event(
+                    record,
+                    JobEventDto {
+                        event_type: JobEventKindDto::Paused,
+                        job_kind: Some(kind),
+                        code: None,
+                        hint: None,
+                        severity: None,
+                        retryable: Some(true),
+                        path: None,
+                        bytes: None,
+                        total_bytes: None,
+                        total_bytes_processed: None,
+                        entries: Some(processed_entries),
+                        total_entries,
+                        message: Some("Paused.".to_string()),
+                    },
+                );
+            }
+
+            Some(JobControlResponseDto {
+                job_id: job_id.to_string(),
+                status: record.status,
+            })
+        })
+    }
+
+    pub fn request_resume(&self, job_id: &str) -> Option<JobControlResponseDto> {
+        self.with_lock(|state| {
+            let record = state.jobs.get_mut(job_id)?;
+            if record.status == JobStatusDto::Paused {
+                record.pause_control.resume();
+                record.status = record
+                    .paused_from_status
+                    .take()
+                    .unwrap_or(JobStatusDto::Running);
+                let kind = record.kind;
+                let processed_entries = record.processed_entries;
+                let total_entries = record.total_entries;
+                push_recorded_event(
+                    record,
+                    JobEventDto {
+                        event_type: JobEventKindDto::Resumed,
+                        job_kind: Some(kind),
+                        code: None,
+                        hint: None,
+                        severity: None,
+                        retryable: Some(true),
+                        path: None,
+                        bytes: None,
+                        total_bytes: None,
+                        total_bytes_processed: None,
+                        entries: Some(processed_entries),
+                        total_entries,
+                        message: Some("Resumed.".to_string()),
+                    },
+                );
+            }
+
+            Some(JobControlResponseDto {
+                job_id: job_id.to_string(),
+                status: record.status,
+            })
+        })
+    }
+
+    pub fn wait_if_paused(&self, job_id: &str) {
+        let pause_control = self.with_lock(|state| {
+            state
+                .jobs
+                .get(job_id)
+                .map(|record| record.pause_control.clone())
+        });
+
+        if let Some(pause_control) = pause_control {
+            pause_control.wait_if_paused();
+        }
     }
 
     pub fn poll_events(&self, job_id: &str) -> Option<PollJobEventsResponseDto> {
@@ -143,7 +305,7 @@ impl JobRegistry {
             _ => None,
         };
 
-        let event_dto = match &event {
+        let mut event_dto = match &event {
             JobEvent::Started {
                 kind: _,
                 total_bytes,
@@ -159,6 +321,7 @@ impl JobRegistry {
                 total_bytes: *total_bytes,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: None,
             },
             JobEvent::EntryStarted { path, bytes } => JobEventDto {
@@ -173,6 +336,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: None,
             },
             JobEvent::BytesProcessed {
@@ -191,6 +355,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: Some(*total_bytes_processed),
                 entries: None,
+                total_entries: None,
                 message: None,
             },
             JobEvent::EntryFinished { path, bytes } => JobEventDto {
@@ -205,6 +370,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: None,
             },
             JobEvent::Warning { message } => JobEventDto {
@@ -219,6 +385,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: Some(message.clone()),
             },
             JobEvent::Completed { entries, bytes } => JobEventDto {
@@ -233,6 +400,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: Some(*entries),
+                total_entries: Some(*entries),
                 message: None,
             },
             JobEvent::Failed { message } => JobEventDto {
@@ -247,6 +415,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: Some(message.clone()),
             },
             JobEvent::Cancelled { message } => JobEventDto {
@@ -261,6 +430,7 @@ impl JobRegistry {
                 total_bytes: None,
                 total_bytes_processed: None,
                 entries: None,
+                total_entries: None,
                 message: Some(message.clone()),
             },
         };
@@ -269,6 +439,21 @@ impl JobRegistry {
             let Some(record) = state.jobs.get_mut(job_id) else {
                 return;
             };
+
+            if matches!(event, JobEvent::EntryFinished { .. }) {
+                record.processed_entries = record.processed_entries.saturating_add(1);
+            }
+            if matches!(event, JobEvent::Completed { .. }) {
+                if let Some(entries) = event_dto.entries {
+                    record.processed_entries = record.processed_entries.max(entries);
+                }
+            }
+            if event_dto.entries.is_none() && record.processed_entries > 0 {
+                event_dto.entries = Some(record.processed_entries);
+            }
+            if event_dto.total_entries.is_none() {
+                event_dto.total_entries = record.total_entries;
+            }
 
             if let Some(kind) = mapped_kind {
                 let dto_kind = JobKindDto::from(kind);
@@ -297,6 +482,23 @@ impl JobRegistry {
                 return;
             };
 
+            let mut event = event;
+            if matches!(event.event_type, JobEventKindDto::EntryFinished) {
+                record.processed_entries = record.processed_entries.saturating_add(1);
+            }
+            if let Some(entries) = event.entries {
+                record.processed_entries = record.processed_entries.max(entries);
+            }
+            if let Some(total_entries) = event.total_entries {
+                record.total_entries = Some(total_entries);
+            }
+            if event.entries.is_none() && record.processed_entries > 0 {
+                event.entries = Some(record.processed_entries);
+            }
+            if event.total_entries.is_none() {
+                event.total_entries = record.total_entries;
+            }
+
             match event.event_type {
                 JobEventKindDto::Started => record.status = JobStatusDto::Running,
                 JobEventKindDto::Completed => {
@@ -306,6 +508,12 @@ impl JobRegistry {
                 }
                 JobEventKindDto::Failed => record.status = JobStatusDto::Failed,
                 JobEventKindDto::Cancelled => record.status = JobStatusDto::Cancelled,
+                JobEventKindDto::Paused => record.status = JobStatusDto::Paused,
+                JobEventKindDto::Resumed => {
+                    if record.status == JobStatusDto::Paused {
+                        record.status = JobStatusDto::Running;
+                    }
+                }
                 _ => {}
             }
 
@@ -341,7 +549,16 @@ impl JobRegistry {
 
 fn push_recorded_event(record: &mut JobRecord, event: JobEventDto) {
     match event.event_type {
-        JobEventKindDto::EntryStarted | JobEventKindDto::EntryFinished => return,
+        JobEventKindDto::EntryStarted => {
+            record
+                .events
+                .retain(|existing| existing.event_type != JobEventKindDto::EntryStarted);
+        }
+        JobEventKindDto::EntryFinished => {
+            record
+                .events
+                .retain(|existing| existing.event_type != JobEventKindDto::EntryFinished);
+        }
         JobEventKindDto::BytesProcessed => {
             record
                 .events
@@ -501,7 +718,12 @@ mod tests {
                 .iter()
                 .map(|event| event.event_type)
                 .collect::<Vec<_>>(),
-            [JobEventKindDto::Started, JobEventKindDto::BytesProcessed]
+            [
+                JobEventKindDto::Started,
+                JobEventKindDto::EntryStarted,
+                JobEventKindDto::EntryFinished,
+                JobEventKindDto::BytesProcessed
+            ]
         );
         let progress = snapshot
             .events
@@ -509,6 +731,12 @@ mod tests {
             .expect("progress event should remain");
         assert_eq!(progress.path.as_deref(), Some("docs/two.txt"));
         assert_eq!(progress.total_bytes_processed, Some(30));
+        let finished = snapshot
+            .events
+            .iter()
+            .find(|event| event.event_type == JobEventKindDto::EntryFinished)
+            .expect("latest finished entry should remain for file counts");
+        assert_eq!(finished.entries, Some(1));
     }
 
     #[test]
@@ -524,6 +752,52 @@ mod tests {
         assert!(
             token.is_cancelled(),
             "cancel request should set the job cancellation token"
+        );
+    }
+
+    #[test]
+    fn pause_and_resume_update_status_and_emit_events() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::Started {
+                kind: zmanager_core::jobs::JobKind::ZipExtract,
+                total_bytes: Some(100),
+            },
+        );
+
+        let paused = registry
+            .request_pause(&response.job_id)
+            .expect("pause should target an existing job");
+        assert!(matches!(paused.status, JobStatusDto::Paused));
+
+        let pause_poll = registry
+            .poll_events(&response.job_id)
+            .expect("paused job should remain pollable");
+        assert!(matches!(pause_poll.status, JobStatusDto::Paused));
+        assert!(
+            pause_poll
+                .events
+                .iter()
+                .any(|event| event.event_type == JobEventKindDto::Paused)
+        );
+
+        let resumed = registry
+            .request_resume(&response.job_id)
+            .expect("resume should target an existing job");
+        assert!(matches!(resumed.status, JobStatusDto::Running));
+
+        let resume_poll = registry
+            .poll_events(&response.job_id)
+            .expect("resumed job should remain pollable");
+        assert!(matches!(resume_poll.status, JobStatusDto::Running));
+        assert!(
+            resume_poll
+                .events
+                .iter()
+                .any(|event| event.event_type == JobEventKindDto::Resumed)
         );
     }
 
@@ -592,12 +866,14 @@ impl JobEventCollector {
     }
 
     pub fn emit_direct(&mut self, event: JobEventDto) {
+        self.registry.wait_if_paused(&self.job_id);
         self.registry.emit_direct_event(&self.job_id, event);
     }
 }
 
 impl JobEventSink for JobEventCollector {
     fn emit(&mut self, event: JobEvent) {
+        self.registry.wait_if_paused(&self.job_id);
         self.registry.emit_job_event(&self.job_id, event);
     }
 }
