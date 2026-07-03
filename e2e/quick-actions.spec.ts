@@ -156,9 +156,9 @@ test("quick action controls pause resume and background the job", async ({ page 
   await expect(page.locator("#quick-continue")).toHaveText("Pause");
 
   await page.locator("#quick-background").click();
-  await expect(page.locator(".workspace")).not.toHaveAttribute("data-quick-action-mode", "job-only");
-  await expect(page.locator("#quick-progress")).toBeHidden();
-  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+  await expectWindowCommand(page, "plugin:window|hide");
+  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
 async function installQuickActionTauriStub(

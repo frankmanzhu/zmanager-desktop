@@ -213,7 +213,7 @@ type ArchiveTreeFolder = {
   hasChildren: boolean;
   isExpanded: boolean;
 };
-type QuickActionWindowMode = "normal" | "jobOnly";
+type QuickActionWindowMode = "normal" | "jobOnly" | "background";
 
 const QUICK_ACTION_WINDOW_WIDTH_PX = 560;
 const QUICK_ACTION_WINDOW_HEIGHT_PX = 300;
@@ -1297,6 +1297,10 @@ function clearQuickActionAutoCloseTimer() {
   quickActionAutoCloseTimer = null;
 }
 
+function isQuickActionJobMode(): boolean {
+  return quickActionWindowMode === "jobOnly" || quickActionWindowMode === "background";
+}
+
 async function revealNormalAppWindow() {
   if (!isDesktopRuntime() || quickActionWindowShown) {
     return;
@@ -1347,25 +1351,24 @@ async function revealQuickActionJobWindow() {
 
 async function sendQuickActionJobsToBackground() {
   clearQuickActionAutoCloseTimer();
+  if (isDesktopRuntime()) {
+    const currentWindow = getCurrentWindow();
+    try {
+      quickActionWindowMode = "background";
+      quickBackgroundButton.disabled = true;
+      setOperationalStatus("Quick action running in background.");
+      await currentWindow.hide();
+      quickActionWindowShown = false;
+      return;
+    } catch {
+      // Fall through to the in-window job drawer if hiding is unavailable.
+    }
+  }
+
   quickActionJobIds.clear();
   quickActionWindowMode = "normal";
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
-
-  if (isDesktopRuntime()) {
-    const currentWindow = getCurrentWindow();
-    try {
-      await currentWindow.setMinSize(new LogicalSize(
-        APP_MIN_WINDOW_WIDTH_PX,
-        APP_MIN_WINDOW_HEIGHT_PX,
-      ));
-      await restoreWindowGeometry();
-      await currentWindow.show();
-    } catch {
-      // Window geometry is best-effort; job tracking continues in the app UI.
-    }
-  }
-
   setOperationalStatus("Quick action running in background.");
   openJobDrawer();
   renderJobs();
@@ -1385,7 +1388,7 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
 }
 
 function trackQuickActionJob(jobId: string) {
-  if (quickActionWindowMode !== "jobOnly") {
+  if (!isQuickActionJobMode()) {
     return;
   }
 
@@ -1439,7 +1442,7 @@ async function toggleQuickActionPause() {
 function maybeCloseCompletedQuickActionWindow() {
   if (
     !isDesktopRuntime() ||
-    quickActionWindowMode !== "jobOnly" ||
+    !isQuickActionJobMode() ||
     quickActionAutoCloseTimer !== null ||
     quickActionJobIds.size === 0
   ) {
@@ -1461,7 +1464,11 @@ function maybeCloseCompletedQuickActionWindow() {
 
   if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
     setOperationalStatus("Quick action needs attention.");
-    renderQuickProgress();
+    if (quickActionWindowMode === "background") {
+      void revealQuickActionJobWindow();
+    } else {
+      renderQuickProgress();
+    }
     return;
   }
 
@@ -1578,7 +1585,7 @@ function quickActionOperationLabel(kind?: JobKind): string {
 }
 
 function renderQuickProgress() {
-  if (quickActionWindowMode !== "jobOnly") {
+  if (!isQuickActionJobMode()) {
     return;
   }
 
@@ -1665,7 +1672,7 @@ function renderQuickProgress() {
     : formatCompressionRatio(totalBytes, compressedBytes, { emptyValue: "", fractionDigits: 0 });
   quickOperationElement.textContent = operation;
   quickCurrentPathElement.textContent = currentFile;
-  quickBackgroundButton.disabled = allTerminal || anyPaused;
+  quickBackgroundButton.disabled = allTerminal || anyPaused || quickActionWindowMode === "background";
   quickContinueButton.disabled = !anyActive;
   quickContinueButton.textContent = anyPaused ? "Continue" : "Pause";
   quickCancelButton.disabled = !anyActive;
@@ -3394,7 +3401,7 @@ function closeModal(dialog: HTMLElement) {
 }
 
 function openJobDrawer() {
-  if (quickActionWindowMode === "jobOnly") {
+  if (isQuickActionJobMode()) {
     void pollJobs();
     return;
   }
@@ -3405,7 +3412,7 @@ function openJobDrawer() {
 }
 
 function closeJobDrawer() {
-  if (quickActionWindowMode === "jobOnly") {
+  if (isQuickActionJobMode()) {
     return;
   }
 
@@ -5146,7 +5153,7 @@ async function restoreWindowGeometry(): Promise<void> {
 }
 
 async function persistWindowGeometry(): Promise<void> {
-  if (!isDesktopRuntime() || quickActionWindowMode === "jobOnly") {
+  if (!isDesktopRuntime() || isQuickActionJobMode()) {
     return;
   }
 
