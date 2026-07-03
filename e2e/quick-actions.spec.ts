@@ -37,6 +37,8 @@ const notRequestedState: QuickActionStartupState = {
   error: null,
 };
 
+const epochSecondsAgo = (seconds: number) => String(Math.floor(Date.now() / 1000) - seconds);
+
 test("fixed create context actions use the compact job window and close after completion", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
@@ -46,7 +48,7 @@ test("fixed create context actions use the compact job window and close after co
         jobId: "job-1",
         kind: "tzapCreate",
         status: "queued",
-        createdAt: new Date().toISOString(),
+        createdAt: epochSecondsAgo(5),
       }],
       error: null,
     },
@@ -62,6 +64,7 @@ test("fixed create context actions use the compact job window and close after co
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
   await expect(page.locator("#quick-progress")).toBeVisible();
+  await expect(page.locator("#quick-ratio")).toHaveText("25%");
 
   await expectWindowCommand(page, "plugin:window|close");
 });
@@ -75,7 +78,7 @@ test("extract-here context actions start extraction without listing the archive"
         jobId: "job-1",
         kind: "tzapExtract",
         status: "queued",
-        createdAt: new Date().toISOString(),
+        createdAt: epochSecondsAgo(5),
       }],
       error: null,
     },
@@ -101,7 +104,7 @@ test("quick action jobs still activate when window sizing is rejected", async ({
         jobId: "job-1",
         kind: "tzapCreate",
         status: "queued",
-        createdAt: new Date().toISOString(),
+        createdAt: epochSecondsAgo(5),
       }],
       error: null,
     },
@@ -127,7 +130,7 @@ test("quick action controls pause resume and background the job", async ({ page 
         jobId: "job-1",
         kind: "tzapCreate",
         status: "queued",
-        createdAt: new Date().toISOString(),
+        createdAt: epochSecondsAgo(5),
       }],
       error: null,
     },
@@ -139,7 +142,10 @@ test("quick action controls pause resume and background the job", async ({ page 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(page.locator("#quick-progress")).toBeVisible();
-  await expect(page.locator("#quick-files")).toContainText("0 / 4");
+  await expect(page.locator("#quick-elapsed")).not.toHaveText("00:00:00");
+  await expect(page.locator("#quick-remaining")).not.toHaveText("--:--:--");
+  await expect(page.locator("#quick-files")).toContainText("2 / 4");
+  await expect(page.locator("#quick-ratio")).toHaveText("");
 
   await page.locator("#quick-continue").click();
   await expectWindowCommand(page, "pause_job");
@@ -169,6 +175,8 @@ async function installQuickActionTauriStub(
     const completeOnPoll = payload.options.completeOnPoll ?? true;
     const ipcCalls: IpcCall[] = [];
     const jobStatuses = new Map<string, string>();
+    const jobKinds = new Map<string, string>();
+    const jobCreatedAts = new Map<string, string>();
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
 
@@ -221,22 +229,36 @@ async function installQuickActionTauriStub(
         };
         for (const job of state.quickActionJobs ?? []) {
           jobStatuses.set(job.jobId, job.status);
+          jobKinds.set(job.jobId, job.kind);
+          jobCreatedAts.set(job.jobId, job.createdAt);
         }
         return state;
       }
 
       if (cmd === "poll_job_events") {
         const request = args.request as { jobId: string };
+        const createdAt = jobCreatedAts.get(request.jobId) ?? String(Math.floor(Date.now() / 1000));
+        const kind = jobKinds.get(request.jobId) ?? "tzapCreate";
         if (!completeOnPoll) {
-          const status = jobStatuses.get(request.jobId) ?? "running";
+          const previousStatus = jobStatuses.get(request.jobId);
+          const status = previousStatus === "paused" ? "paused" : "running";
+          jobStatuses.set(request.jobId, status);
           return {
             jobId: request.jobId,
-            kind: "tzapCreate",
+            kind,
             status,
-            createdAt: new Date().toISOString(),
+            createdAt,
             canDismiss: false,
             events: [
               { eventType: "started", entries: 0, totalEntries: 4, totalBytes: 128, message: "started" },
+              {
+                eventType: "bytesProcessed",
+                totalBytesProcessed: 64,
+                totalBytes: 128,
+                entries: 2,
+                totalEntries: 4,
+                message: "processed",
+              },
             ],
             terminalSummary: null,
           };
@@ -244,13 +266,20 @@ async function installQuickActionTauriStub(
         jobStatuses.set(request.jobId, "completed");
         return {
           jobId: request.jobId,
-          kind: "tzapCreate",
+          kind,
           status: "completed",
-          createdAt: new Date().toISOString(),
+          createdAt,
           canDismiss: true,
           events: [
-            { eventType: "started", message: "started" },
-            { eventType: "completed", entries: 1, totalBytesProcessed: 32, message: "completed" },
+            { eventType: "started", entries: 0, totalEntries: 1, totalBytes: 128, message: "started" },
+            {
+              eventType: "completed",
+              entries: 1,
+              totalEntries: 1,
+              totalBytes: 128,
+              totalBytesProcessed: 128,
+              message: "completed",
+            },
           ],
           terminalSummary: {
             writtenEntries: 1,

@@ -81,6 +81,7 @@ import {
   formatCompressionRatio,
   formatDate as formatDateValue,
   getPathBasename,
+  parseDateValue,
 } from "./app/formatting";
 import {
   getArchiveBreadcrumbs,
@@ -1606,7 +1607,8 @@ function renderQuickProgress() {
     return;
   }
 
-  const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job));
+  const nowMs = Date.now();
+  const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job, nowMs));
   const latestJob = trackedJobs.at(-1);
   const latestProgress = progressSnapshots.at(-1);
   const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
@@ -1620,6 +1622,9 @@ function renderQuickProgress() {
   const processedFiles = progressSnapshots.reduce((total, progress) => total + progress.processedFiles, 0);
   const totalFiles = progressSnapshots.every((progress) => progress.totalFiles !== null)
     ? progressSnapshots.reduce((total, progress) => total + (progress.totalFiles ?? 0), 0)
+    : null;
+  const compressedBytes = progressSnapshots.every((progress) => progress.compressedBytes !== null)
+    ? progressSnapshots.reduce((total, progress) => total + (progress.compressedBytes ?? 0), 0)
     : null;
   const remainingMs = totalBytes !== null && processedBytes > 0 && elapsedMs > 0
     ? Math.max(0, ((totalBytes - processedBytes) / (processedBytes / elapsedMs)))
@@ -1654,8 +1659,10 @@ function renderQuickProgress() {
   quickTotalSizeElement.textContent = totalBytes === null ? "" : formatBytes(totalBytes);
   quickSpeedElement.textContent = speedBytesPerSecond === null ? "" : `${formatBytes(speedBytesPerSecond)}/s`;
   quickProcessedElement.textContent = processedBytes > 0 ? formatBytes(processedBytes) : "";
-  quickCompressedSizeElement.textContent = "";
-  quickRatioElement.textContent = progressPercent === null ? "" : `${Math.round(progressPercent)}%`;
+  quickCompressedSizeElement.textContent = compressedBytes === null ? "" : formatBytes(compressedBytes);
+  quickRatioElement.textContent = compressedBytes === null || totalBytes === null
+    ? ""
+    : formatCompressionRatio(totalBytes, compressedBytes, { emptyValue: "", fractionDigits: 0 });
   quickOperationElement.textContent = operation;
   quickCurrentPathElement.textContent = currentFile;
   quickBackgroundButton.disabled = allTerminal || anyPaused;
@@ -1737,15 +1744,15 @@ function formatLastTestStatusForCurrentArchive(): string | null {
       return context?.retryKind === "testArchive" && context.archivePath === currentArchivePath;
     })
     .sort((lhs, rhs) => {
-      const lhsTime = Date.parse(lhs.state.snapshot.createdAt);
-      const rhsTime = Date.parse(rhs.state.snapshot.createdAt);
-      if (Number.isNaN(lhsTime) && Number.isNaN(rhsTime)) {
+      const lhsTime = parseDateValue(lhs.state.snapshot.createdAt)?.getTime();
+      const rhsTime = parseDateValue(rhs.state.snapshot.createdAt)?.getTime();
+      if (typeof lhsTime !== "number" && typeof rhsTime !== "number") {
         return 0;
       }
-      if (Number.isNaN(lhsTime)) {
+      if (typeof lhsTime !== "number") {
         return 1;
       }
-      if (Number.isNaN(rhsTime)) {
+      if (typeof rhsTime !== "number") {
         return -1;
       }
       return rhsTime - lhsTime;

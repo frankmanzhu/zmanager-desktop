@@ -40,6 +40,39 @@ describe("jobs view", () => {
     expect(renderJobsListHtml(jobs, formatters)).toContain('value="100" max="100"');
   });
 
+  it("renders create compressed size and compression ratio separately from progress", () => {
+    const jobs = new Map<string, JobState>([
+      [
+        "job-create",
+        {
+          snapshot: {
+            jobId: "job-create",
+            kind: "zipCreate",
+            status: "completed",
+            createdAt: "2026-06-11T00:00:00Z",
+            canDismiss: true,
+            events: [],
+            terminalSummary: {
+              writtenEntries: 1,
+              skippedEntries: null,
+              writtenBytes: 42,
+              warnings: [],
+            },
+          },
+          events: [
+            { eventType: "started", totalBytes: 168, entries: 0, totalEntries: 1 },
+            { eventType: "completed", jobKind: "zipCreate" },
+          ],
+        },
+      ],
+    ]);
+
+    const html = renderJobsListHtml(jobs, formatters);
+
+    expect(html).toContain("<dt>Compressed size</dt><dd>42 B</dd>");
+    expect(html).toContain("<dt>Compression ratio</dt><dd>25%</dd>");
+  });
+
   it("renders failed terminal jobs with a determinate stopped progress bar", () => {
     const jobs = new Map<string, JobState>([
       [

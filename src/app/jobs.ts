@@ -1,4 +1,5 @@
 import { COMMAND_INVALID_PASSWORD, COMMAND_PASSWORD_REQUIRED } from "./constants";
+import { calculateCompressionRatio, parseDateValue } from "./formatting";
 import type {
   JobEventDto,
   JobKind,
@@ -30,6 +31,15 @@ export function isPasswordErrorCode(code?: string | null): boolean {
 
 export function isTerminalJobStatus(status: JobStatus): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+export function isCreateJobKind(kind: JobKind): boolean {
+  return (
+    kind === "zipCreate" ||
+    kind === "sevenZCreate" ||
+    kind === "tarZstdCreate" ||
+    kind === "tzapCreate"
+  );
 }
 
 export function getLatestPasswordFailureEvent(state: JobState): JobEventDto | null {
@@ -99,10 +109,12 @@ export function deriveJobProgress(
   state: JobState,
   nowMs = Date.now(),
 ): JobProgressSnapshot {
-  const createdAtMs = Date.parse(state.snapshot.createdAt);
-  const elapsedMs = Number.isNaN(createdAtMs) ? 0 : Math.max(0, nowMs - createdAtMs);
+  const createdAtMs = parseDateValue(state.snapshot.createdAt)?.getTime();
+  const elapsedMs = typeof createdAtMs === "number" ? Math.max(0, nowMs - createdAtMs) : 0;
+  const isCreateJob = isCreateJobKind(state.snapshot.kind);
   let processedBytes = 0;
   let totalBytes: number | null = null;
+  let compressedBytes: number | null = null;
   let processedFiles = 0;
   let totalFiles: number | null = null;
   let errorCount = 0;
@@ -143,7 +155,14 @@ export function deriveJobProgress(
   if (terminalSummary) {
     processedFiles = Math.max(processedFiles, terminalSummary.writtenEntries);
     totalFiles = Math.max(totalFiles ?? 0, terminalSummary.writtenEntries);
-    processedBytes = Math.max(processedBytes, terminalSummary.writtenBytes);
+    if (isCreateJob) {
+      compressedBytes = terminalSummary.writtenBytes;
+      if (totalBytes !== null) {
+        processedBytes = Math.max(processedBytes, totalBytes);
+      }
+    } else {
+      processedBytes = Math.max(processedBytes, terminalSummary.writtenBytes);
+    }
     warningCount = Math.max(warningCount, terminalSummary.warnings.length);
   }
 
@@ -170,6 +189,9 @@ export function deriveJobProgress(
     : isTerminalJobStatus(state.snapshot.status)
       ? measuredProgressPercent ?? 0
       : measuredProgressPercent;
+  const compressionRatio = isCreateJob
+    ? calculateCompressionRatio(totalBytes, compressedBytes)
+    : null;
 
   return {
     id: state.snapshot.jobId,
@@ -183,9 +205,9 @@ export function deriveJobProgress(
     warningCount,
     totalBytes,
     processedBytes,
-    compressedBytes: null,
+    compressedBytes,
     speedBytesPerSecond,
-    compressionRatio: null,
+    compressionRatio,
     currentFile,
     progressPercent,
     latestStatusMessage,

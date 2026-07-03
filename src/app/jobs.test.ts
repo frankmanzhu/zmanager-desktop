@@ -119,6 +119,17 @@ describe("job state helpers", () => {
     expect(progress.speedBytesPerSecond).toBe(5);
   });
 
+  it("derives elapsed time from epoch-second timestamps", () => {
+    const state: JobState = {
+      snapshot: pollResponse({ createdAt: String(Date.parse(startedAt) / 1000) }),
+      events: [{ eventType: "started" }],
+    };
+
+    const progress = deriveJobProgress(state, Date.parse(startedAt) + 3500);
+
+    expect(progress.elapsedMs).toBe(3500);
+  });
+
   it("derives file totals and ETA from entry counts when bytes are unavailable", () => {
     const state: JobState = {
       snapshot: pollResponse({ status: "running" }),
@@ -135,6 +146,34 @@ describe("job state helpers", () => {
     expect(progress.totalFiles).toBe(4);
     expect(progress.progressPercent).toBe(50);
     expect(progress.remainingMs).toBe(4000);
+  });
+
+  it("derives create compression ratio from terminal output bytes", () => {
+    const state: JobState = {
+      snapshot: pollResponse({
+        kind: "zipCreate",
+        status: "completed",
+        canDismiss: true,
+        terminalSummary: {
+          writtenEntries: 1,
+          skippedEntries: null,
+          writtenBytes: 25,
+          warnings: [],
+        },
+      }),
+      events: [
+        { eventType: "started", totalBytes: 100, entries: 0, totalEntries: 1 },
+        { eventType: "bytesProcessed", totalBytesProcessed: 100, totalBytes: 100 },
+        { eventType: "completed", jobKind: "zipCreate" },
+      ],
+    };
+
+    const progress = deriveJobProgress(state, Date.parse(startedAt) + 5000);
+
+    expect(progress.processedBytes).toBe(100);
+    expect(progress.compressedBytes).toBe(25);
+    expect(progress.compressionRatio).toBe(0.25);
+    expect(progress.progressPercent).toBe(100);
   });
 
   it("makes completed jobs determinate even when total bytes are unknown", () => {
