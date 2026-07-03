@@ -39,7 +39,9 @@ use zmanager_core::jobs::{
     run_zip_extract_job_with_password_and_policy,
 };
 use zmanager_core::libarchive_backend::LibarchiveError;
-use zmanager_core::manifest::{PlanError, PlanOptions, plan_archives};
+use zmanager_core::manifest::{
+    ArchiveManifest, ManifestFileType, PlanError, PlanOptions, plan_archives,
+};
 use zmanager_core::rar_backend::RarBackendError;
 use zmanager_core::raw_stream_backend::RawStreamError;
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
@@ -205,6 +207,24 @@ pub fn start_create(
     start_create_internal(request, &registry)
 }
 
+fn create_progress_estimate_for_format(
+    manifest: &ArchiveManifest,
+    format: crate::dto::ArchiveFormatDto,
+) -> (usize, u64) {
+    let total_entries = match format {
+        crate::dto::ArchiveFormatDto::Tzap => manifest
+            .entries
+            .iter()
+            .filter(|entry| matches!(entry.file_type, ManifestFileType::File))
+            .count(),
+        crate::dto::ArchiveFormatDto::Zip
+        | crate::dto::ArchiveFormatDto::TarZst
+        | crate::dto::ArchiveFormatDto::SevenZ => manifest.included_count(),
+    };
+
+    (total_entries, manifest.total_bytes)
+}
+
 pub(crate) fn start_create_internal(
     request: StartCreateRequest,
     registry: &JobRegistry,
@@ -257,7 +277,7 @@ pub(crate) fn start_create_internal(
     };
     let create_progress_estimate = plan_archives(sources.clone(), &plan_options)
         .ok()
-        .map(|manifest| (manifest.included_count(), manifest.total_bytes));
+        .map(|manifest| create_progress_estimate_for_format(&manifest, request.format));
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -2946,8 +2966,11 @@ mod tests {
         let destination = workspace.join("created.tzap");
         fs::create_dir_all(&sources).expect("source directory should exist");
 
-        fs::write(sources.join("hello.txt"), b"hello from tzap create")
-            .expect("fixture file should write");
+        let first_payload = vec![b'a'; 256 * 1024];
+        let second_payload = vec![b'b'; 256 * 1024];
+        fs::write(sources.join("one.bin"), &first_payload).expect("first fixture should write");
+        fs::write(sources.join("two.bin"), &second_payload).expect("second fixture should write");
+        let source_total_bytes = (first_payload.len() + second_payload.len()) as u64;
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -2982,8 +3005,23 @@ mod tests {
                 .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
             "create lifecycle should emit a completed event",
         );
-        assert!(create_poll.terminal_summary.is_some());
         assert!(destination.is_file());
+        let finished_event = create_events
+            .iter()
+            .find(|event| matches!(event.event_type, JobEventKindDto::EntryFinished))
+            .expect("tzap create should emit finished entries for file counts");
+        assert!(finished_event.entries.unwrap_or_default() > 0);
+        assert_eq!(finished_event.total_entries, Some(2));
+        let summary = create_poll
+            .terminal_summary
+            .as_ref()
+            .expect("tzap create should return a terminal summary");
+        assert_eq!(summary.written_entries, 2);
+        assert_eq!(
+            summary.written_bytes,
+            fs::metadata(&destination).unwrap().len()
+        );
+        assert_ne!(summary.written_bytes, source_total_bytes);
         let _ = fs::remove_dir_all(&workspace);
     }
 

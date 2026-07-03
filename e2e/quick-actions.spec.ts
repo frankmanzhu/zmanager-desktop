@@ -161,6 +161,36 @@ test("quick action controls pause resume and background the job", async ({ page 
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
+test("quick action background never opens the normal workspace when hide is rejected", async ({ page }) => {
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: epochSecondsAgo(5),
+      }],
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    completeOnPoll: false,
+    rejectWindowCommands: ["plugin:window|hide"],
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("#quick-progress")).toBeVisible();
+  await page.locator("#quick-background").click();
+
+  await expectWindowCommand(page, "plugin:window|hide");
+  await expectWindowCommand(page, "plugin:window|minimize");
+  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
+});
+
 async function installQuickActionTauriStub(
   page: Page,
   startupStates: QuickActionStartupState[],

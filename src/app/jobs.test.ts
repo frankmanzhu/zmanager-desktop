@@ -148,6 +148,49 @@ describe("job state helpers", () => {
     expect(progress.remainingMs).toBe(4000);
   });
 
+  it("derives tzap create file progress and final archive-byte ratio", () => {
+    const runningState: JobState = {
+      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      events: [
+        { eventType: "started", totalBytes: 1000, entries: 0, totalEntries: 2 },
+        { eventType: "bytesProcessed", totalBytesProcessed: 500, totalBytes: 1000 },
+        { eventType: "entryFinished", path: "one.bin", entries: 1, totalEntries: 2 },
+      ],
+    };
+
+    const runningProgress = deriveJobProgress(runningState, Date.parse(startedAt) + 5000);
+
+    expect(runningProgress.processedFiles).toBe(1);
+    expect(runningProgress.totalFiles).toBe(2);
+    expect(runningProgress.progressPercent).toBe(50);
+    expect(runningProgress.compressionRatio).toBeNull();
+
+    const completedState: JobState = {
+      snapshot: pollResponse({
+        kind: "tzapCreate",
+        status: "completed",
+        canDismiss: true,
+        terminalSummary: {
+          writtenEntries: 2,
+          skippedEntries: null,
+          writtenBytes: 420,
+          warnings: [],
+        },
+      }),
+      events: [
+        { eventType: "started", totalBytes: 1000, entries: 0, totalEntries: 2 },
+        { eventType: "bytesProcessed", totalBytesProcessed: 1000, totalBytes: 1000 },
+        { eventType: "completed", jobKind: "tzapCreate" },
+      ],
+    };
+
+    const completedProgress = deriveJobProgress(completedState, Date.parse(startedAt) + 5000);
+
+    expect(completedProgress.compressedBytes).toBe(420);
+    expect(completedProgress.compressionRatio).toBe(0.42);
+    expect(completedProgress.progressPercent).toBe(100);
+  });
+
   it("derives create compression ratio from terminal output bytes", () => {
     const state: JobState = {
       snapshot: pollResponse({

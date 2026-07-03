@@ -6164,7 +6164,7 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-core"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6219,7 +6219,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6239,7 +6239,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#5c71176535f7fe168f33868f3770c764b2196928"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
 dependencies = [
  "cc",
  "zeroize",

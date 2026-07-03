@@ -1353,15 +1353,26 @@ async function sendQuickActionJobsToBackground() {
   clearQuickActionAutoCloseTimer();
   if (isDesktopRuntime()) {
     const currentWindow = getCurrentWindow();
+    quickActionWindowMode = "background";
+    quickBackgroundButton.disabled = true;
+    setOperationalStatus("Quick action running in background.");
     try {
-      quickActionWindowMode = "background";
-      quickBackgroundButton.disabled = true;
-      setOperationalStatus("Quick action running in background.");
       await currentWindow.hide();
       quickActionWindowShown = false;
       return;
     } catch {
-      // Fall through to the in-window job drawer if hiding is unavailable.
+      // Some window managers or stale capabilities can reject hide; keep the
+      // compact job window state and try to get it out of the way.
+    }
+
+    try {
+      await currentWindow.minimize();
+      quickActionWindowShown = false;
+      return;
+    } catch {
+      setOperationalStatus("Quick action is still running. Use the window controls to hide it.");
+      renderQuickProgress();
+      return;
     }
   }
 
