@@ -319,6 +319,7 @@ pub(crate) fn start_create_internal(
     let preserve_metadata = request.preserve_metadata;
     let compression_level = request.compression_level;
     let volume_size = request.volume_size;
+    let tzap_recovery_percentage = request.tzap_recovery_percentage.unwrap_or(5).min(100);
     let format = request.format;
 
     let request_sources = sources;
@@ -383,7 +384,7 @@ pub(crate) fn start_create_internal(
                     preserve_metadata,
                     replace_existing,
                     volume_size,
-                    recovery_percentage: 0,
+                    recovery_percentage: tzap_recovery_percentage,
                     volume_loss_tolerance: 0,
                     x509_signing: None,
                 };
@@ -2660,6 +2661,7 @@ mod tests {
                 password: None,
                 compression_level: None,
                 volume_size: None,
+                tzap_recovery_percentage: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2752,6 +2754,7 @@ mod tests {
                 password: Some("smoke-secret".to_string()),
                 compression_level: None,
                 volume_size: None,
+                tzap_recovery_percentage: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2892,6 +2895,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -2941,6 +2945,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -2983,6 +2988,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -3047,6 +3053,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3117,6 +3124,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3175,6 +3183,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3238,6 +3247,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3314,6 +3324,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
 
@@ -3341,6 +3352,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
 
@@ -3418,6 +3430,7 @@ mod tests {
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: None,
             preserve_metadata: false,
         };
         let create_job =

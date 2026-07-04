@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildStartCreateRequest,
   commonSourceParentDirectory,
+  createFormatSupportsPassword,
   createStateAfterDestinationEdit,
   getCreateArchiveExtension,
+  normalizeTzapRecoveryPercentage,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
 } from "./createFlow";
@@ -80,6 +82,52 @@ describe("create flow helpers", () => {
       replaceExisting: true,
       preserveMetadata: false,
     });
+  });
+
+  it("scopes passwords to formats that support archive passwords", () => {
+    expect(createFormatSupportsPassword("zip")).toBe(true);
+    expect(createFormatSupportsPassword("tzap")).toBe(true);
+    expect(createFormatSupportsPassword("sevenZ")).toBe(true);
+    expect(createFormatSupportsPassword("tarZst")).toBe(false);
+
+    expect(
+      buildStartCreateRequest({
+        sources: ["C:/work/source"],
+        destinationPath: "C:/tmp/output",
+        format: "tarZst",
+        cleanSource: false,
+        replaceExisting: true,
+        preserveMetadata: false,
+        password: "secret",
+      }),
+    ).not.toHaveProperty("password");
+  });
+
+  it("adds clamped recovery percentage only for TZAP requests", () => {
+    expect(normalizeTzapRecoveryPercentage(105)).toBe(100);
+    expect(normalizeTzapRecoveryPercentage(-1)).toBe(0);
+
+    const tzapRequest = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapRecoveryPercentage: 12,
+    });
+    const zipRequest = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "zip",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapRecoveryPercentage: 12,
+    });
+
+    expect(tzapRequest.tzapRecoveryPercentage).toBe(12);
+    expect(zipRequest).not.toHaveProperty("tzapRecoveryPercentage");
   });
 
   it("includes destination collision strategy when requested", () => {

@@ -142,6 +142,7 @@ export type StartCreateRequest = {
   password?: string;
   compressionLevel?: number;
   volumeSize?: number;
+  tzapRecoveryPercentage?: number;
   preserveMetadata: boolean;
 };
 

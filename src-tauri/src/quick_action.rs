@@ -414,6 +414,11 @@ fn start_direct_create_job(
             password: None,
             compression_level: None,
             volume_size: None,
+            tzap_recovery_percentage: if format == ArchiveFormatDto::Tzap {
+                Some(5)
+            } else {
+                None
+            },
             preserve_metadata: true,
         },
         registry,

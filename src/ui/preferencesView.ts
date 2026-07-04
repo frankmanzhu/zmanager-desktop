@@ -1,4 +1,7 @@
-import type { CreateArchiveFormat } from "../app/createFlow";
+import {
+  createFormatSupportsPassword,
+  type CreateArchiveFormat,
+} from "../app/createFlow";
 import {
   createDefaultsForFormat,
   preferencesWithPatch,
@@ -73,6 +76,7 @@ export function renderCreateDefaultsForSelectedFormat(
 ): void {
   const format = elements.createFormatSelect.value as CreateArchiveFormat;
   const createDefaults = createDefaultsForFormat(preferences, format);
+  const supportsPassword = createFormatSupportsPassword(format);
   elements.createCompressionLevelSelect.value = createDefaults.compressionLevel === null
     ? ""
     : String(createDefaults.compressionLevel);
@@ -82,7 +86,8 @@ export function renderCreateDefaultsForSelectedFormat(
   elements.createCleanSourceCheckbox.checked = createDefaults.cleanSource;
   elements.createPreserveMetadataCheckbox.checked = createDefaults.preserveMetadata;
   elements.createReplaceExistingCheckbox.checked = createDefaults.replaceExisting;
-  elements.createPromptPasswordCheckbox.checked = createDefaults.promptForPassword;
+  elements.createPromptPasswordCheckbox.checked = supportsPassword && createDefaults.promptForPassword;
+  elements.createPromptPasswordCheckbox.disabled = !supportsPassword;
 }
 
 export function collectPreferencesFromDialog(
@@ -101,7 +106,8 @@ export function collectPreferencesFromDialog(
       volumeSize,
       preserveMetadata: elements.createPreserveMetadataCheckbox.checked,
       replaceExisting: elements.createReplaceExistingCheckbox.checked,
-      promptForPassword: elements.createPromptPasswordCheckbox.checked,
+      promptForPassword:
+        createFormatSupportsPassword(selectedFormat) && elements.createPromptPasswordCheckbox.checked,
     },
   };
 

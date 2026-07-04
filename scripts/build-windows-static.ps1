@@ -128,7 +128,7 @@ function Resolve-LatestNsisInstaller {
         throw "NSIS bundle directory was not found after build: $nsisBundleDir"
     }
 
-    $installer = Get-ChildItem -Path $nsisBundleDir -Filter "ZManager_*_setup.exe" |
+    $installer = Get-ChildItem -Path $nsisBundleDir -Filter "ZManager_*-setup.exe" |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if ($null -eq $installer) {

@@ -206,6 +206,7 @@ pub struct StartCreateRequest {
     pub password: Option<String>,
     pub compression_level: Option<u32>,
     pub volume_size: Option<u64>,
+    pub tzap_recovery_percentage: Option<u8>,
     #[serde(default)]
     pub preserve_metadata: bool,
 }

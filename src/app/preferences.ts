@@ -1,4 +1,7 @@
-import type { CreateArchiveFormat } from "./createFlow";
+import {
+  createFormatSupportsPassword,
+  type CreateArchiveFormat,
+} from "./createFlow";
 import {
   DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
@@ -190,7 +193,9 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
             volumeSize: storedNumber(raw?.volumeSize, fallback.volumeSize),
             preserveMetadata: storedObjectBool(raw?.preserveMetadata, fallback.preserveMetadata),
             replaceExisting: storedObjectBool(raw?.replaceExisting, fallback.replaceExisting),
-            promptForPassword: storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
+            promptForPassword:
+              createFormatSupportsPassword(format) &&
+              storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
           },
         ];
       }),
@@ -406,7 +411,7 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           volumeSize: storedNumber(value.volumeSize, fallback.volumeSize),
           preserveMetadata: Boolean(value.preserveMetadata),
           replaceExisting: Boolean(value.replaceExisting),
-          promptForPassword: Boolean(value.promptForPassword),
+          promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),
         },
       ];
     }),

@@ -93,8 +93,12 @@ import {
   CREATE_ARCHIVE_FILTERS,
   buildStartCreateRequest,
   commonSourceParentDirectory,
+  createFormatSupportsPassword,
   createStateAfterDestinationEdit,
   getArchiveName,
+  TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+  TZAP_RECOVERY_PERCENTAGE_MAX,
+  TZAP_RECOVERY_PERCENTAGE_MIN,
   suggestedCreateArchiveName as buildSuggestedCreateArchiveName,
   withCreateArchiveExtension,
   type CreateArchiveFormat,
@@ -794,6 +798,10 @@ appRoot.innerHTML = `
               <span>Split to volumes, bytes</span>
               <input id="create-volume" type="number" min="0" placeholder="Optional" />
             </label>
+            <label id="create-tzap-recovery-field" hidden>
+              <span>TZAP recovery, %</span>
+              <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
+            </label>
           </div>
           <div class="toggle-grid">
             <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> Clean source</label>
@@ -803,7 +811,7 @@ appRoot.innerHTML = `
           </div>
           <details class="advanced-options">
             <summary>Advanced options</summary>
-            <div class="form-grid form-grid-compact">
+            <div id="create-password-options" class="form-grid form-grid-compact">
               <label>
                 <span>Enter password</span>
                 <input id="create-password" type="password" autocomplete="off" />
@@ -1069,8 +1077,11 @@ const createRespectGitignoreCheckbox = document.querySelector<HTMLInputElement>(
 const createPasswordInput = document.querySelector<HTMLInputElement>("#create-password")!;
 const createPasswordConfirmInput = document.querySelector<HTMLInputElement>("#create-password-confirm")!;
 const createShowPasswordInput = document.querySelector<HTMLInputElement>("#create-show-password")!;
+const createPasswordOptions = document.querySelector<HTMLDivElement>("#create-password-options")!;
 const createCompressionInput = document.querySelector<HTMLSelectElement>("#create-compression-level")!;
 const createVolumeInput = document.querySelector<HTMLInputElement>("#create-volume")!;
+const createTzapRecoveryField = document.querySelector<HTMLLabelElement>("#create-tzap-recovery-field")!;
+const createTzapRecoveryInput = document.querySelector<HTMLInputElement>("#create-tzap-recovery")!;
 const createPlanMeta = document.querySelector<HTMLParagraphElement>("#create-plan-meta")!;
 const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary")!;
 const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create")!;
@@ -1939,6 +1950,12 @@ function createJobProgressContext(request: StartCreateRequest): FocusedJobProgre
       { label: "Destination", value: request.destinationPath },
       { label: "Format", value: request.format },
       { label: "Clean source", value: request.cleanSource ? "Yes" : "No" },
+      {
+        label: "Recovery",
+        value: request.format === "tzap" && request.tzapRecoveryPercentage !== undefined
+          ? `${request.tzapRecoveryPercentage}%`
+          : null,
+      },
     ]),
   };
 }
@@ -4352,6 +4369,30 @@ function applyCreateDefaultsForFormat(format: CreateArchiveFormat) {
   createShowPasswordInput.checked = false;
   createPasswordInput.type = "password";
   createPasswordConfirmInput.type = "password";
+  createTzapRecoveryInput.value = String(TZAP_RECOVERY_PERCENTAGE_DEFAULT);
+  syncCreateFormatOptions(format);
+}
+
+function syncCreateFormatOptions(format: CreateArchiveFormat) {
+  const supportsPassword = createFormatSupportsPassword(format);
+  createPasswordOptions.hidden = !supportsPassword;
+  createPasswordInput.disabled = !supportsPassword;
+  createPasswordConfirmInput.disabled = !supportsPassword;
+  createShowPasswordInput.disabled = !supportsPassword;
+  if (!supportsPassword) {
+    createPasswordInput.value = "";
+    createPasswordConfirmInput.value = "";
+    createShowPasswordInput.checked = false;
+    createPasswordInput.type = "password";
+    createPasswordConfirmInput.type = "password";
+  }
+
+  const supportsTzapRecovery = format === "tzap";
+  createTzapRecoveryField.hidden = !supportsTzapRecovery;
+  createTzapRecoveryInput.disabled = !supportsTzapRecovery;
+  if (!supportsTzapRecovery) {
+    createTzapRecoveryInput.value = String(TZAP_RECOVERY_PERCENTAGE_DEFAULT);
+  }
 }
 
 function updatePreferencesDialogDraft() {
@@ -4769,7 +4810,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
   try {
     const defaults = createDefaultsForFormat(appPreferences, format);
     let password: string | undefined;
-    if (defaults.promptForPassword) {
+    if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
       const promptedPassword = promptForArchivePassword("Enter password for the new archive.");
       if (!promptedPassword) {
         setOperationalStatus("Quick create cancelled.");
@@ -5764,6 +5805,9 @@ async function runCreate(
   }
   const compressionLevel = parseNonNegativeInteger(createCompressionInput.value);
   const volumeSize = parseNonNegativeInteger(createVolumeInput.value);
+  const tzapRecoveryPercentage = format === "tzap"
+    ? parseNonNegativeInteger(createTzapRecoveryInput.value) ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT
+    : undefined;
 
   createSubmissionInFlight = true;
   setCreatePlanState(createPlanState, currentPlanError);
@@ -5780,6 +5824,7 @@ async function runCreate(
       password: passwordValue,
       compressionLevel,
       volumeSize,
+      tzapRecoveryPercentage,
     });
 
     const response = await runStartCreate(request);

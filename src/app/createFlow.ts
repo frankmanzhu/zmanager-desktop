@@ -24,6 +24,11 @@ const CREATE_FORMAT_ALLOWED_EXTENSIONS = {
 } satisfies Record<CreateArchiveFormat, string[]>;
 
 const RECOGNIZED_CREATE_EXTENSIONS = ["tar.zst", "zip", "tzst", "tzap", "7z"];
+const CREATE_PASSWORD_FORMATS = new Set<CreateArchiveFormat>(["zip", "tzap", "sevenZ"]);
+
+export const TZAP_RECOVERY_PERCENTAGE_DEFAULT = 5;
+export const TZAP_RECOVERY_PERCENTAGE_MIN = 0;
+export const TZAP_RECOVERY_PERCENTAGE_MAX = 100;
 
 export type CreatePathHelpers = {
   nativeParentPath: (path: string) => string;
@@ -77,6 +82,23 @@ export function suggestedCreateArchiveName(
   const sourceName = firstSource ? getArchiveName(firstSource, fallback) : fallback;
   const safeName = sourceName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").trim() || fallback;
   return `${safeName}.${getCreateFormatExtension(format)}`;
+}
+
+export function createFormatSupportsPassword(format: CreateArchiveFormat): boolean {
+  return CREATE_PASSWORD_FORMATS.has(format);
+}
+
+export function normalizeTzapRecoveryPercentage(value?: number): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.min(
+    TZAP_RECOVERY_PERCENTAGE_MAX,
+    Math.max(TZAP_RECOVERY_PERCENTAGE_MIN, Math.floor(value)),
+  );
 }
 
 function parseDirectoryPath(directory: string): ParsedDirectoryPath | null {
@@ -206,6 +228,7 @@ export type BuildStartCreateRequestInput = {
   password?: string;
   compressionLevel?: number;
   volumeSize?: number;
+  tzapRecoveryPercentage?: number;
 };
 
 export function buildStartCreateRequest(input: BuildStartCreateRequestInput): StartCreateRequest {
@@ -219,8 +242,14 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
       ? { destinationCollisionStrategy: input.destinationCollisionStrategy }
       : {}),
     preserveMetadata: input.preserveMetadata,
-    ...(input.password ? { password: input.password } : {}),
+    ...(input.password && createFormatSupportsPassword(input.format) ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),
     ...(input.volumeSize !== undefined ? { volumeSize: input.volumeSize } : {}),
+    ...(input.format === "tzap"
+      ? {
+          tzapRecoveryPercentage:
+            normalizeTzapRecoveryPercentage(input.tzapRecoveryPercentage) ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+        }
+      : {}),
   };
 }
