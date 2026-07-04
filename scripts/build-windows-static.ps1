@@ -4,7 +4,9 @@ param(
     [ValidateSet("Auto", "x64", "arm64")]
     [string]$Architecture = "Auto",
     [string]$Triplet = "",
-    [string]$NodePath = ""
+    [string]$NodePath = "",
+    [switch]$Install,
+    [string]$InstallDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -120,6 +122,54 @@ function Assert-ReleaseExecutableIsNotRunning {
     }
 }
 
+function Resolve-LatestNsisInstaller {
+    $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
+    if (-not (Test-Path $nsisBundleDir)) {
+        throw "NSIS bundle directory was not found after build: $nsisBundleDir"
+    }
+
+    $installer = Get-ChildItem -Path $nsisBundleDir -Filter "ZManager_*_setup.exe" |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($null -eq $installer) {
+        throw "NSIS installer was not found after build under: $nsisBundleDir"
+    }
+
+    return $installer.FullName
+}
+
+function Install-NsisBuild {
+    param(
+        [string]$InstallerPath,
+        [string]$RequestedInstallDir
+    )
+
+    $arguments = @("/S")
+    if (-not [string]::IsNullOrWhiteSpace($RequestedInstallDir)) {
+        $resolvedInstallDir = [System.IO.Path]::GetFullPath($RequestedInstallDir)
+        if (Test-Path $RequestedInstallDir) {
+            $resolvedInstallDir = (Resolve-Path $RequestedInstallDir).Path
+        }
+        $arguments += "/D=$resolvedInstallDir"
+    }
+
+    Write-Host "Installing built NSIS package: $InstallerPath"
+    if (-not [string]::IsNullOrWhiteSpace($RequestedInstallDir)) {
+        Write-Host "Install directory: $($arguments[-1].Substring(3))"
+    }
+
+    $installer = Start-Process `
+        -FilePath $InstallerPath `
+        -ArgumentList $arguments `
+        -Wait `
+        -PassThru `
+        -WindowStyle Hidden
+    if ($installer.ExitCode -ne 0) {
+        throw "Installer failed with exit code $($installer.ExitCode)"
+    }
+    Write-Host "Install completed."
+}
+
 $resolvedNodePath = Resolve-NodePath -RequestedNodePath $NodePath
 $npmCommand = Resolve-NpmCommand -ResolvedNodePath $resolvedNodePath
 $tauriCli = Join-Path $repoRoot "node_modules\@tauri-apps\cli\tauri.js"
@@ -173,4 +223,14 @@ exit /b 1
     -Triplet $Triplet `
     -Run $runCommand
 
-exit $LASTEXITCODE
+$buildExitCode = $LASTEXITCODE
+if ($buildExitCode -ne 0) {
+    exit $buildExitCode
+}
+
+if ($Install) {
+    $installerPath = Resolve-LatestNsisInstaller
+    Install-NsisBuild -InstallerPath $installerPath -RequestedInstallDir $InstallDir
+}
+
+exit 0

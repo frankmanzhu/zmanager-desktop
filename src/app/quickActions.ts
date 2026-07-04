@@ -8,6 +8,7 @@ import {
   type CreateArchiveFormat,
 } from "./createFlow";
 import {
+  createDefaultsForFormat,
   defaultCreateDirectory,
   type AppPreferences,
   type DefaultExtractionBehavior,
@@ -159,11 +160,14 @@ export async function runQuickActionRequest(
       await handlers.openArchive(request.paths);
       break;
     case "compress":
-      await handlers.openCreateReview(
-        request.paths,
-        preferences.defaultArchiveFormat,
-        preferences.defaultCleanSourceEnabled,
-      );
+      {
+        const createDefaults = createDefaultsForFormat(preferences, preferences.defaultArchiveFormat);
+        await handlers.openCreateReview(
+          request.paths,
+          preferences.defaultArchiveFormat,
+          createDefaults.cleanSource,
+        );
+      }
       break;
     case "extract":
       if (preferences.defaultExtractionBehavior === "askEveryTime") {
@@ -173,16 +177,32 @@ export async function runQuickActionRequest(
       }
       break;
     case "compressZip":
-      await handlers.startCreate(request.paths, "zip", false);
+      await handlers.startCreate(
+        request.paths,
+        "zip",
+        createDefaultsForFormat(preferences, "zip").cleanSource,
+      );
       break;
     case "compressTzap":
-      await handlers.startCreate(request.paths, "tzap", false);
+      await handlers.startCreate(
+        request.paths,
+        "tzap",
+        createDefaultsForFormat(preferences, "tzap").cleanSource,
+      );
       break;
     case "compressSevenZ":
-      await handlers.startCreate(request.paths, "sevenZ", false);
+      await handlers.startCreate(
+        request.paths,
+        "sevenZ",
+        createDefaultsForFormat(preferences, "sevenZ").cleanSource,
+      );
       break;
     case "compressTarZst":
-      await handlers.startCreate(request.paths, "tarZst", false);
+      await handlers.startCreate(
+        request.paths,
+        "tarZst",
+        createDefaultsForFormat(preferences, "tarZst").cleanSource,
+      );
       break;
     case "compressCleanSource":
       await handlers.startCreate(request.paths, "tarZst", true);

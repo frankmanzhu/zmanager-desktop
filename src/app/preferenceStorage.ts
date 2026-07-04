@@ -7,6 +7,7 @@ export type PreferenceStorage = {
 export type PreferenceStorageKey =
   | "defaultArchiveFormat"
   | "defaultCleanSourceEnabled"
+  | "createFormatDefaults"
   | "defaultOutputLocation"
   | "customOutputFolderPath"
   | "defaultExtractionBehavior"
@@ -30,6 +31,7 @@ export type PreferenceStorageKey =
 export const PREFERENCE_KEYS = {
   defaultArchiveFormat: "zmanager.defaultArchiveFormat",
   defaultCleanSourceEnabled: "zmanager.defaultCleanSourceEnabled",
+  createFormatDefaults: "zmanager.createFormatDefaults",
   defaultOutputLocation: "zmanager.defaultOutputLocation",
   customOutputFolderPath: "zmanager.customOutputFolderPath",
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",

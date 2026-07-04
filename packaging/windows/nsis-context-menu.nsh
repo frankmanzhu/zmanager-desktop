@@ -232,7 +232,6 @@
   !insertmacro ZM_DELETE_CASCADE_MENU "Software\Classes\*\shell"
   !insertmacro ZM_DELETE_CASCADE_MENU "Software\Classes\Directory\shell"
   !insertmacro ZM_DELETE_CASCADE_MENU "Software\Classes\Directory\Background\shell"
-  !insertmacro ZM_WRITE_FILTERED_CREATE_CASCADE_MENU "Software\Classes\*\shell"
   !insertmacro ZM_WRITE_CREATE_CASCADE_MENU "Software\Classes\Directory\shell"
   !insertmacro ZM_WRITE_BACKGROUND_CREATE_CASCADE_MENU "Software\Classes\Directory\Background\shell"
   !insertmacro ZM_REGISTER_ARCHIVE_EXTENSIONS

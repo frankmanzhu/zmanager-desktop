@@ -5,6 +5,7 @@ import {
   defaultCreateDirectory,
   loadAppPreferences,
   preferencesWithPatch,
+  createDefaultsForFormat,
   saveAppPreferences,
 } from "./preferences";
 import type { PreferenceStorage } from "./preferenceStorage";
@@ -32,6 +33,16 @@ describe("preferences helpers", () => {
     const storage = memoryStorage({
       "zmanager.defaultArchiveFormat": "zip",
       "zmanager.defaultCleanSourceEnabled": "false",
+      "zmanager.createFormatDefaults": JSON.stringify({
+        zip: {
+          cleanSource: false,
+          compressionLevel: 9,
+          volumeSize: 1048576,
+          preserveMetadata: false,
+          replaceExisting: true,
+          promptForPassword: true,
+        },
+      }),
       "zmanager.defaultOutputLocation": "customFolder",
       "zmanager.customOutputFolderPath": " C:/Archives ",
       "zmanager.defaultExtractionBehavior": "extractToFolder",
@@ -56,6 +67,40 @@ describe("preferences helpers", () => {
     expect(loadAppPreferences(storage)).toEqual({
       defaultArchiveFormat: "zip",
       defaultCleanSourceEnabled: false,
+      createFormatDefaults: {
+        zip: {
+          cleanSource: false,
+          compressionLevel: 9,
+          volumeSize: 1048576,
+          preserveMetadata: false,
+          replaceExisting: true,
+          promptForPassword: true,
+        },
+        tarZst: {
+          cleanSource: false,
+          compressionLevel: null,
+          volumeSize: null,
+          preserveMetadata: true,
+          replaceExisting: false,
+          promptForPassword: false,
+        },
+        tzap: {
+          cleanSource: false,
+          compressionLevel: null,
+          volumeSize: null,
+          preserveMetadata: true,
+          replaceExisting: false,
+          promptForPassword: false,
+        },
+        sevenZ: {
+          cleanSource: false,
+          compressionLevel: null,
+          volumeSize: null,
+          preserveMetadata: true,
+          replaceExisting: false,
+          promptForPassword: false,
+        },
+      },
       defaultOutputLocation: "customFolder",
       customOutputFolderPath: "C:/Archives",
       defaultExtractionBehavior: "extractToFolder",
@@ -114,6 +159,17 @@ describe("preferences helpers", () => {
       {
         defaultArchiveFormat: "sevenZ",
         defaultCleanSourceEnabled: false,
+        createFormatDefaults: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+          sevenZ: {
+            cleanSource: false,
+            compressionLevel: 22,
+            volumeSize: 4096,
+            preserveMetadata: true,
+            replaceExisting: true,
+            promptForPassword: true,
+          },
+        },
         defaultOutputLocation: "sourceFolder",
         customOutputFolderPath: "   ",
         defaultExtractionBehavior: "extractHere",
@@ -140,6 +196,17 @@ describe("preferences helpers", () => {
     expect(Object.fromEntries(storage.values)).toEqual({
       "zmanager.defaultArchiveFormat": "sevenZ",
       "zmanager.defaultCleanSourceEnabled": "false",
+      "zmanager.createFormatDefaults": JSON.stringify({
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        sevenZ: {
+          cleanSource: false,
+          compressionLevel: 22,
+          volumeSize: 4096,
+          preserveMetadata: true,
+          replaceExisting: true,
+          promptForPassword: true,
+        },
+      }),
       "zmanager.defaultOutputLocation": "sourceFolder",
       "zmanager.defaultExtractionBehavior": "extractHere",
       "zmanager.previewCleanupPolicy": "whenAppCloses",
@@ -165,9 +232,28 @@ describe("preferences helpers", () => {
     const preferences = preferencesWithPatch(DEFAULT_APP_PREFERENCES, {
       defaultOutputLocation: "customFolder",
       customOutputFolderPath: " /tmp/archives ",
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        zip: {
+          cleanSource: false,
+          compressionLevel: 9,
+          volumeSize: 1024,
+          preserveMetadata: true,
+          replaceExisting: false,
+          promptForPassword: true,
+        },
+      },
     });
 
     expect(preferences.customOutputFolderPath).toBe("/tmp/archives");
+    expect(createDefaultsForFormat(preferences, "zip")).toEqual({
+      cleanSource: false,
+      compressionLevel: 9,
+      volumeSize: 1024,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: true,
+    });
     expect(defaultCreateDirectory(preferences)).toBe("/tmp/archives");
     expect(defaultCreateDirectory(DEFAULT_APP_PREFERENCES)).toBeNull();
   });

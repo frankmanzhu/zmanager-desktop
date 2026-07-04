@@ -39,15 +39,21 @@ Windows registration covers `.001`, `.7z`, `.apk`, `.appx`, `.br`, `.bz2`,
 
 ## Non-Archive File And Folder Selection
 
-Right-clicking a non-archive file shows `ZManager` with only the create actions:
+Right-clicking a non-archive file does not register a generic `ZManager`
+`*\shell` cascade. Windows 11's compact context menu can surface that static
+cascade as an empty `ZManager` submenu during archive multi-selection, while the
+classic `Show more options` menu resolves the archive submenu correctly. Retiring
+the generic file cascade removes the broken compact-menu entry until ZManager has
+a future ExplorerCommand/COM handler that can receive the full selected-item data
+object.
+
+Right-clicking a selected folder shows `ZManager` with the create actions:
 
 1. `Add to archive...`
 2. `Add to .tzap`
 3. `Add to .zip`
 4. `Add to .7z`
 5. `Add to .tzst`
-
-Right-clicking a selected folder shows the same create actions.
 
 Right-clicking a folder background also shows the same create actions, using the
 current folder as the target.

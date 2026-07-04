@@ -20,8 +20,11 @@ quick-action CLI contract:
 Explorer shows a single `ZManager` cascaded menu. Supported archive extensions show
 `Extract Here`, `Extract to Archive Folder`, and `Open archive` first, followed by `Add to archive...`,
 `Add to .tzap`, `Add to .zip`, `Add to .7z`, and `Add to .tzst`, so archive files
-can also be archived again. Other files, selected folders, and folder backgrounds
-show the same add actions. The hook uses explicit ordered per-user
+can also be archived again. Selected folders and folder backgrounds show the same
+add actions. Generic file selection does not register a `*\shell` cascade because
+Windows 11's compact context menu can surface that static cascade as an empty
+`ZManager` submenu for multi-file archive selections; archive extension verbs keep
+the correct classic `Show more options` menu. The hook uses explicit ordered per-user
 `ExtendedSubCommandsKey` entries so Explorer does not choose the
 submenu order. The generic `Add to archive...` action opens the regular Create
 Archive dialog with the selected item preloaded. Fixed-format actions use the same

@@ -68,6 +68,11 @@ describe("Windows context menu installer hook", () => {
     expect(script).not.toContain("--shell-multi-select");
   });
 
+  it("cleans up the retired generic file cascade without writing it again", () => {
+    expect(script).toContain('!insertmacro ZM_DELETE_CASCADE_MENU "Software\\Classes\\*\\shell"');
+    expect(script).not.toContain('!insertmacro ZM_WRITE_FILTERED_CREATE_CASCADE_MENU "Software\\Classes\\*\\shell"');
+  });
+
   it("keeps Windows archive extension registration aligned with frontend archive support", () => {
     expect(registeredArchiveExtensions("ZM_REGISTER_ARCHIVE_EXTENSIONS")).toEqual(
       expectedWindowsArchiveExtensions,

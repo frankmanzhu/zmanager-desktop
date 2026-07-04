@@ -16,10 +16,20 @@ import {
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
 export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extractToFolder";
 export type PreviewCleanupPolicy = "beforeNextPreview" | "whenAppCloses";
+export type FormatCreateDefaults = {
+  cleanSource: boolean;
+  compressionLevel: number | null;
+  volumeSize: number | null;
+  preserveMetadata: boolean;
+  replaceExisting: boolean;
+  promptForPassword: boolean;
+};
+export type CreateFormatDefaultsMap = Record<CreateArchiveFormat, FormatCreateDefaults>;
 
 export type AppPreferences = {
   defaultArchiveFormat: CreateArchiveFormat;
   defaultCleanSourceEnabled: boolean;
+  createFormatDefaults: CreateFormatDefaultsMap;
   defaultOutputLocation: DefaultOutputLocation;
   customOutputFolderPath: string;
   defaultExtractionBehavior: DefaultExtractionBehavior;
@@ -44,6 +54,40 @@ export type AppPreferences = {
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultArchiveFormat: "tarZst",
   defaultCleanSourceEnabled: true,
+  createFormatDefaults: {
+    zip: {
+      cleanSource: true,
+      compressionLevel: null,
+      volumeSize: null,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: false,
+    },
+    tarZst: {
+      cleanSource: true,
+      compressionLevel: null,
+      volumeSize: null,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: false,
+    },
+    tzap: {
+      cleanSource: true,
+      compressionLevel: null,
+      volumeSize: null,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: false,
+    },
+    sevenZ: {
+      cleanSource: true,
+      compressionLevel: null,
+      volumeSize: null,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: false,
+    },
+  },
   defaultOutputLocation: "sourceFolder",
   customOutputFolderPath: "",
   defaultExtractionBehavior: "askEveryTime",
@@ -100,6 +144,62 @@ function storedBool(value: string | null, fallback: boolean): boolean {
   return fallback;
 }
 
+function storedNumber(value: unknown, fallback: number | null): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return fallback;
+  }
+  return Math.floor(value);
+}
+
+function storedObjectBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function defaultCreateFormatDefaults(cleanSource: boolean): CreateFormatDefaultsMap {
+  return Object.fromEntries(
+    ARCHIVE_FORMATS.map((format) => [
+      format,
+      {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults[format],
+        cleanSource,
+      },
+    ]),
+  ) as CreateFormatDefaultsMap;
+}
+
+function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boolean): CreateFormatDefaultsMap {
+  const defaults = defaultCreateFormatDefaults(cleanSourceFallback);
+  if (!value) {
+    return defaults;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return Object.fromEntries(
+      ARCHIVE_FORMATS.map((format) => {
+        const raw = parsed[format] as Partial<Record<keyof FormatCreateDefaults, unknown>> | undefined;
+        const fallback = defaults[format];
+        return [
+          format,
+          {
+            cleanSource: storedObjectBool(raw?.cleanSource, fallback.cleanSource),
+            compressionLevel: storedNumber(raw?.compressionLevel, fallback.compressionLevel),
+            volumeSize: storedNumber(raw?.volumeSize, fallback.volumeSize),
+            preserveMetadata: storedObjectBool(raw?.preserveMetadata, fallback.preserveMetadata),
+            replaceExisting: storedObjectBool(raw?.replaceExisting, fallback.replaceExisting),
+            promptForPassword: storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
+          },
+        ];
+      }),
+    ) as CreateFormatDefaultsMap;
+  } catch {
+    return defaults;
+  }
+}
+
 function cleanPath(value: string | null): string {
   return value?.trim() ?? "";
 }
@@ -151,14 +251,19 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   const defaultExtractionBehavior = storage.getItem(PREFERENCE_KEYS.defaultExtractionBehavior);
   const previewCleanupPolicy = storage.getItem(PREFERENCE_KEYS.previewCleanupPolicy);
   const tableSortKey = storage.getItem(PREFERENCE_KEYS.tableSortKey);
+  const defaultCleanSourceEnabled = storedBool(
+    storage.getItem(PREFERENCE_KEYS.defaultCleanSourceEnabled),
+    DEFAULT_APP_PREFERENCES.defaultCleanSourceEnabled,
+  );
 
   return {
     defaultArchiveFormat: isOneOf(ARCHIVE_FORMATS, defaultArchiveFormat)
       ? defaultArchiveFormat
       : DEFAULT_APP_PREFERENCES.defaultArchiveFormat,
-    defaultCleanSourceEnabled: storedBool(
-      storage.getItem(PREFERENCE_KEYS.defaultCleanSourceEnabled),
-      DEFAULT_APP_PREFERENCES.defaultCleanSourceEnabled,
+    defaultCleanSourceEnabled,
+    createFormatDefaults: loadCreateFormatDefaults(
+      storage.getItem(PREFERENCE_KEYS.createFormatDefaults),
+      defaultCleanSourceEnabled,
     ),
     defaultOutputLocation: isOneOf(OUTPUT_LOCATIONS, defaultOutputLocation)
       ? defaultOutputLocation
@@ -230,6 +335,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
 
   storage.setItem(PREFERENCE_KEYS.defaultArchiveFormat, preferences.defaultArchiveFormat);
   storage.setItem(PREFERENCE_KEYS.defaultCleanSourceEnabled, String(preferences.defaultCleanSourceEnabled));
+  storage.setItem(PREFERENCE_KEYS.createFormatDefaults, JSON.stringify(preferences.createFormatDefaults));
   storage.setItem(PREFERENCE_KEYS.defaultOutputLocation, preferences.defaultOutputLocation);
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
@@ -270,11 +376,41 @@ export function preferencesWithPatch(
     ...preferences,
     ...patch,
     ...normalizePreferenceTablePatch(preferences, patch),
+    createFormatDefaults: normalizeCreateFormatDefaults(
+      patch.createFormatDefaults ?? preferences.createFormatDefaults,
+    ),
     customOutputFolderPath:
       patch.customOutputFolderPath !== undefined
         ? patch.customOutputFolderPath.trim()
         : preferences.customOutputFolderPath,
   };
+}
+
+export function createDefaultsForFormat(
+  preferences: AppPreferences,
+  format: CreateArchiveFormat,
+): FormatCreateDefaults {
+  return preferences.createFormatDefaults[format] ?? DEFAULT_APP_PREFERENCES.createFormatDefaults[format];
+}
+
+function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): CreateFormatDefaultsMap {
+  return Object.fromEntries(
+    ARCHIVE_FORMATS.map((format) => {
+      const fallback = DEFAULT_APP_PREFERENCES.createFormatDefaults[format];
+      const value = defaults[format] ?? fallback;
+      return [
+        format,
+        {
+          cleanSource: Boolean(value.cleanSource),
+          compressionLevel: storedNumber(value.compressionLevel, fallback.compressionLevel),
+          volumeSize: storedNumber(value.volumeSize, fallback.volumeSize),
+          preserveMetadata: Boolean(value.preserveMetadata),
+          replaceExisting: Boolean(value.replaceExisting),
+          promptForPassword: Boolean(value.promptForPassword),
+        },
+      ];
+    }),
+  ) as CreateFormatDefaultsMap;
 }
 
 function normalizePreferenceTablePatch(

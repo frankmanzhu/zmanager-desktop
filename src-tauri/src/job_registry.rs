@@ -176,6 +176,30 @@ impl JobRegistry {
             if let Some(token) = record.cancellation_token.as_ref() {
                 token.cancel();
                 record.pause_control.resume();
+                if !record.status.is_terminal() {
+                    record.status = JobStatusDto::Cancelled;
+                    let kind = record.kind;
+                    let processed_entries = record.processed_entries;
+                    let total_entries = record.total_entries;
+                    push_recorded_event(
+                        record,
+                        JobEventDto {
+                            event_type: JobEventKindDto::Cancelled,
+                            job_kind: Some(kind),
+                            code: None,
+                            hint: None,
+                            severity: None,
+                            retryable: Some(false),
+                            path: None,
+                            bytes: None,
+                            total_bytes: None,
+                            total_bytes_processed: None,
+                            entries: Some(processed_entries),
+                            total_entries,
+                            message: Some("Cancelled.".to_string()),
+                        },
+                    );
+                }
                 Some(CancelJobResponseDto {
                     job_id: job_id.to_string(),
                     status: record.status,
@@ -748,10 +772,41 @@ mod tests {
             .request_cancel(&response.job_id)
             .expect("cancel should target an existing job");
 
-        assert!(matches!(cancel_response.status, JobStatusDto::Queued));
+        assert!(matches!(cancel_response.status, JobStatusDto::Cancelled));
         assert!(
             token.is_cancelled(),
             "cancel request should set the job cancellation token"
+        );
+    }
+
+    #[test]
+    fn cancel_request_moves_paused_job_to_cancelled() {
+        let registry = JobRegistry::new();
+        let (response, token) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry
+            .request_pause(&response.job_id)
+            .expect("pause should target an existing job");
+
+        let cancel_response = registry
+            .request_cancel(&response.job_id)
+            .expect("cancel should target a paused job");
+
+        assert!(matches!(cancel_response.status, JobStatusDto::Cancelled));
+        assert!(
+            token.is_cancelled(),
+            "cancel request should set the paused job cancellation token"
+        );
+
+        let poll = registry
+            .poll_events(&response.job_id)
+            .expect("cancelled job should remain pollable");
+        assert!(matches!(poll.status, JobStatusDto::Cancelled));
+        assert!(poll.can_dismiss);
+        assert!(
+            poll.events
+                .iter()
+                .any(|event| event.event_type == JobEventKindDto::Cancelled)
         );
     }
 

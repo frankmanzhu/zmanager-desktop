@@ -15,6 +15,7 @@ type QuickActionStartupState = {
 type QuickActionStubOptions = {
   rejectWindowCommands?: string[];
   completeOnPoll?: boolean;
+  startupStateDelayMs?: number;
 };
 
 declare global {
@@ -121,7 +122,35 @@ test("quick action jobs still activate when window sizing is rejected", async ({
   await expectWindowCommand(page, "plugin:window|close");
 });
 
-test("quick action controls pause resume and background the job", async ({ page }) => {
+test("quick action startup waits for job state before showing the workspace", async ({ page }) => {
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: epochSecondsAgo(5),
+      }],
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    completeOnPoll: false,
+    startupStateDelayMs: 750,
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator(".workspace")).not.toHaveAttribute("data-mode", /.+/);
+  expect((await ipcCalls(page)).some((call) => call.cmd === "plugin:window|show")).toBe(false);
+
+  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expectWindowCommand(page, "plugin:window|show");
+});
+
+test("quick action controls pause resume cancel and background the job", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -154,6 +183,36 @@ test("quick action controls pause resume and background the job", async ({ page 
   await page.locator("#quick-continue").click();
   await expectWindowCommand(page, "resume_job");
   await expect(page.locator("#quick-continue")).toHaveText("Pause");
+
+  await page.locator("#quick-continue").click();
+  await expect(page.locator("#quick-continue")).toHaveText("Continue");
+
+  await page.locator("#quick-cancel").click();
+  await expectWindowCommand(page, "cancel_job");
+  await expect(page.locator("#quick-operation")).toHaveText("Cancelled");
+  await expect(page.locator("#quick-cancel")).toBeDisabled();
+  await expect(page.locator("#quick-background")).toBeDisabled();
+});
+
+test("quick action background keeps the job-only window active", async ({ page }) => {
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      quickAction: null,
+      quickActionJobs: [{
+        jobId: "job-1",
+        kind: "tzapCreate",
+        status: "queued",
+        createdAt: epochSecondsAgo(5),
+      }],
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    completeOnPoll: false,
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.locator("#quick-background").click();
   await expectWindowCommand(page, "plugin:window|minimize");
@@ -224,6 +283,7 @@ async function installQuickActionTauriStub(
     const states = payload.startupStates;
     const rejectedWindowCommands = new Set(payload.options.rejectWindowCommands ?? []);
     const completeOnPoll = payload.options.completeOnPoll ?? true;
+    const startupStateDelayMs = payload.options.startupStateDelayMs ?? 0;
     const ipcCalls: IpcCall[] = [];
     const jobStatuses = new Map<string, string>();
     const jobKinds = new Map<string, string>();
@@ -231,6 +291,7 @@ async function installQuickActionTauriStub(
     const callbacks = new Map<number, { callback: unknown; once: boolean }>();
     let callbackId = 1;
     let startedJobCount = 0;
+    let startupDelayConsumed = false;
 
     Object.defineProperty(window, "isTauri", {
       configurable: true,
@@ -259,7 +320,7 @@ async function installQuickActionTauriStub(
 
       if (cmd === "project_contract") {
         return {
-          commands: ["start_create", "start_extract", "poll_job_events", "pause_job", "resume_job"],
+          commands: ["start_create", "start_extract", "poll_job_events", "cancel_job", "pause_job", "resume_job"],
           platformStrategy: "e2e",
           coreDependency: "stub",
           platformIntegration: {
@@ -273,6 +334,10 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "quick_action_startup_state") {
+        if (startupStateDelayMs > 0 && !startupDelayConsumed) {
+          startupDelayConsumed = true;
+          await new Promise((resolve) => setTimeout(resolve, startupStateDelayMs));
+        }
         const state = states.shift() ?? {
           launchedForQuickAction: false,
           quickAction: null,
@@ -309,8 +374,23 @@ async function installQuickActionTauriStub(
         const kind = jobKinds.get(request.jobId) ?? "tzapCreate";
         if (!completeOnPoll) {
           const previousStatus = jobStatuses.get(request.jobId);
-          const status = previousStatus === "paused" ? "paused" : "running";
+          const status = previousStatus === "paused" || previousStatus === "cancelled"
+            ? previousStatus
+            : "running";
           jobStatuses.set(request.jobId, status);
+          if (status === "cancelled") {
+            return {
+              jobId: request.jobId,
+              kind,
+              status,
+              createdAt,
+              canDismiss: true,
+              events: [
+                { eventType: "cancelled", entries: 2, totalEntries: 4, message: "Cancelled." },
+              ],
+              terminalSummary: null,
+            };
+          }
           return {
             jobId: request.jobId,
             kind,
@@ -354,6 +434,15 @@ async function installQuickActionTauriStub(
             writtenBytes: 32,
             warnings: [],
           },
+        };
+      }
+
+      if (cmd === "cancel_job") {
+        const request = args.request as { jobId: string };
+        jobStatuses.set(request.jobId, "cancelled");
+        return {
+          jobId: request.jobId,
+          status: "cancelled",
         };
       }
 

@@ -97,6 +97,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows-x64-
 
 The build script prefers an installed Node.js under `C:\Program Files\nodejs`, falls back to PATH/Codex runtime Node, and accepts `-NodePath C:\path\to\node.exe` if the shell exposes the wrong Node executable. It accepts `-Architecture x64` or `-Architecture arm64` when auto-detection is not what you want, and `-Triplet custom-triplet-name` when testing a custom vcpkg triplet.
 
+Add `-Install` to silently install the built NSIS package after a successful build. Pass `-InstallDir C:\path\to\ZManager` to override the installer default.
+
 For other commands, use the environment helper with `-Run`:
 
 ```powershell

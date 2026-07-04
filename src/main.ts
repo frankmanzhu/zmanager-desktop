@@ -127,6 +127,7 @@ import {
   type JobRetryContext,
 } from "./app/jobs";
 import {
+  createDefaultsForFormat,
   defaultCreateDirectory,
   loadAppPreferences,
   saveAppPreferences,
@@ -201,6 +202,7 @@ import {
 } from "./ui/jobsView";
 import {
   collectPreferencesFromDialog as collectPreferencesFromView,
+  renderCreateDefaultsForSelectedFormat,
   renderPreferencesDialog as renderPreferencesView,
   syncPreferenceOutputState as syncPreferenceOutputViewState,
   type PreferencesViewElements,
@@ -789,50 +791,8 @@ appRoot.innerHTML = `
               </select>
             </label>
             <label>
-              <span>Compression method</span>
-              <select disabled>
-                <option>Backend default</option>
-              </select>
-            </label>
-            <label>
-              <span>Dictionary size</span>
-              <select disabled>
-                <option>Auto</option>
-              </select>
-            </label>
-            <label>
-              <span>Word size</span>
-              <select disabled>
-                <option>Auto</option>
-              </select>
-            </label>
-            <label>
-              <span>Solid block size</span>
-              <select disabled>
-                <option>Auto</option>
-              </select>
-            </label>
-            <label>
-              <span>CPU threads</span>
-              <select disabled>
-                <option>Auto</option>
-              </select>
-            </label>
-            <label>
               <span>Split to volumes, bytes</span>
               <input id="create-volume" type="number" min="0" placeholder="Optional" />
-            </label>
-            <label>
-              <span>Update mode</span>
-              <select disabled>
-                <option>Add and replace files</option>
-              </select>
-            </label>
-            <label>
-              <span>Path mode</span>
-              <select disabled>
-                <option>Relative paths</option>
-              </select>
             </label>
           </div>
           <div class="toggle-grid">
@@ -855,16 +815,6 @@ appRoot.innerHTML = `
               <label class="checkbox-row">
                 <input id="create-show-password" type="checkbox" />
                 <span>Show Password</span>
-              </label>
-              <label>
-                <span>Encryption method</span>
-                <select disabled>
-                  <option>Backend default</option>
-                </select>
-              </label>
-              <label class="checkbox-row">
-                <input type="checkbox" disabled />
-                <span>Encrypt file names</span>
               </label>
             </div>
           </details>
@@ -935,7 +885,7 @@ appRoot.innerHTML = `
               </div>
             </section>
             <section class="options-page">
-              <h3>Settings</h3>
+              <h3>Archive defaults</h3>
               <div class="form-grid form-grid-compact">
                 <label>
                   <span>Default archive format</span>
@@ -945,6 +895,30 @@ appRoot.innerHTML = `
                     <option value="tzap">TZAP</option>
                     <option value="sevenZ">7Z</option>
                   </select>
+                </label>
+                <label>
+                  <span>Edit defaults for</span>
+                  <select id="pref-create-format">
+                    <option value="zip">ZIP</option>
+                    <option value="tarZst">TZST</option>
+                    <option value="tzap">TZAP</option>
+                    <option value="sevenZ">7Z</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Compression level</span>
+                  <select id="pref-create-compression-level">
+                    <option value="">Backend default</option>
+                    <option value="0">Store</option>
+                    <option value="1">Fastest</option>
+                    <option value="3">Fast</option>
+                    <option value="9">Maximum</option>
+                    <option value="22">Ultra</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Split to volumes, bytes</span>
+                  <input id="pref-create-volume" type="number" min="0" placeholder="No split" />
                 </label>
                 <label>
                   <span>Default extraction</span>
@@ -963,6 +937,15 @@ appRoot.innerHTML = `
                 </label>
               </div>
               <div class="toggle-grid">
+                <label class="toggle-line"><input id="pref-create-clean-source" type="checkbox" /> Clean source</label>
+                <label class="toggle-line"><input id="pref-create-preserve-metadata" type="checkbox" /> Preserve metadata</label>
+                <label class="toggle-line"><input id="pref-create-replace-existing" type="checkbox" /> Replace existing</label>
+                <label class="toggle-line"><input id="pref-create-prompt-password" type="checkbox" /> Prompt for password</label>
+              </div>
+            </section>
+            <section class="options-page">
+              <h3>Interface</h3>
+              <div class="toggle-grid">
                 <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> Show .. item</label>
                 <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> Show real file icons</label>
                 <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> Full row select</label>
@@ -973,7 +956,6 @@ appRoot.innerHTML = `
                 <label class="toggle-line"><input id="pref-large-toolbar" type="checkbox" /> Large toolbar buttons</label>
                 <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> Show toolbar labels</label>
                 <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> Flat view</label>
-                <label class="toggle-line"><input id="pref-clean-source" type="checkbox" /> Clean source by default</label>
               </div>
             </section>
             <section class="options-page">
@@ -1132,7 +1114,13 @@ const preferencesOutputLocationSelect = document.querySelector<HTMLSelectElement
 const preferencesPreviewCleanupSelect = document.querySelector<HTMLSelectElement>("#pref-preview-cleanup")!;
 const preferencesCustomOutputInput = document.querySelector<HTMLInputElement>("#pref-custom-output")!;
 const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>("#pref-choose-output")!;
-const preferencesCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-clean-source")!;
+const preferencesCreateFormatSelect = document.querySelector<HTMLSelectElement>("#pref-create-format")!;
+const preferencesCreateCompressionSelect = document.querySelector<HTMLSelectElement>("#pref-create-compression-level")!;
+const preferencesCreateVolumeInput = document.querySelector<HTMLInputElement>("#pref-create-volume")!;
+const preferencesCreateCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-create-clean-source")!;
+const preferencesCreatePreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#pref-create-preserve-metadata")!;
+const preferencesCreateReplaceExistingCheckbox = document.querySelector<HTMLInputElement>("#pref-create-replace-existing")!;
+const preferencesCreatePromptPasswordCheckbox = document.querySelector<HTMLInputElement>("#pref-create-prompt-password")!;
 const preferencesShowParentCheckbox = document.querySelector<HTMLInputElement>("#pref-show-parent")!;
 const preferencesRealFileIconsCheckbox = document.querySelector<HTMLInputElement>("#pref-real-file-icons")!;
 const preferencesShowGridCheckbox = document.querySelector<HTMLInputElement>("#pref-show-grid")!;
@@ -1152,7 +1140,13 @@ const preferencesViewElements: PreferencesViewElements = {
   previewCleanupSelect: preferencesPreviewCleanupSelect,
   customOutputInput: preferencesCustomOutputInput,
   chooseOutputButton: preferencesChooseOutputButton,
-  cleanSourceCheckbox: preferencesCleanSourceCheckbox,
+  createFormatSelect: preferencesCreateFormatSelect,
+  createCompressionLevelSelect: preferencesCreateCompressionSelect,
+  createVolumeInput: preferencesCreateVolumeInput,
+  createCleanSourceCheckbox: preferencesCreateCleanSourceCheckbox,
+  createPreserveMetadataCheckbox: preferencesCreatePreserveMetadataCheckbox,
+  createReplaceExistingCheckbox: preferencesCreateReplaceExistingCheckbox,
+  createPromptPasswordCheckbox: preferencesCreatePromptPasswordCheckbox,
   showParentFolderItemCheckbox: preferencesShowParentCheckbox,
   showRealFileIconsCheckbox: preferencesRealFileIconsCheckbox,
   showGridLinesCheckbox: preferencesShowGridCheckbox,
@@ -1180,6 +1174,7 @@ let browseEntries: ArchiveEntryDto[] = [];
 let selectedEntries = new Set<string>();
 let navigationHistory: string[] = [];
 let appPreferences: AppPreferences = loadAppPreferences();
+let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
 let systemIconRequestRevision = 0;
 let tableColumnSettings: ArchiveTableColumnSettings = normalizeColumnSettings({
@@ -1230,6 +1225,7 @@ let quickActionAutoCloseTimer: number | null = null;
 let quickActionAutoCloseAction: FocusedJobAutoCloseAction = "closeWindow";
 const quickActionJobIds = new Set<string>();
 const focusedJobProgressContexts = new Map<string, FocusedJobProgressContext>();
+let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let focusedBeforeDialog: HTMLElement | null = null;
@@ -1324,7 +1320,22 @@ function setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction) {
   quickActionAutoCloseAction = action;
 }
 
+function renderNormalWorkspaceOnce() {
+  if (normalWorkspaceRendered) {
+    return;
+  }
+
+  renderExtractDestinationHistory();
+  renderCreateDestinationHistory();
+  renderCreateSources();
+  renderCompressSources();
+  renderBrowse();
+  renderJobs();
+  normalWorkspaceRendered = true;
+}
+
 async function revealNormalAppWindow() {
+  renderNormalWorkspaceOnce();
   if (!isDesktopRuntime() || quickActionWindowShown) {
     return;
   }
@@ -1333,7 +1344,7 @@ async function revealNormalAppWindow() {
     await restoreWindowGeometry();
     await getCurrentWindow().show();
   } catch {
-    // The Rust setup path already shows the main window. Window APIs are best-effort here.
+    // Window APIs are best-effort; the app is still usable if the window was already shown.
   }
   quickActionWindowShown = true;
 }
@@ -1428,6 +1439,7 @@ async function closeFocusedJobProgress() {
   quickCancelButton.disabled = true;
   jobDrawer.setAttribute("aria-hidden", "true");
   workspaceElement.dataset.jobDrawer = "closed";
+  renderNormalWorkspaceOnce();
 
   if (isDesktopRuntime()) {
     try {
@@ -4297,25 +4309,62 @@ function syncPreferenceOutputState() {
   syncPreferenceOutputViewState(preferencesViewElements);
 }
 
+function onPreferencesCreateFormatChange() {
+  const draft = preferencesDialogDraft ?? appPreferences;
+  renderCreateDefaultsForSelectedFormat(preferencesViewElements, draft);
+}
+
+function onPreferencesDefaultFormatChange() {
+  updatePreferencesDialogDraft();
+  preferencesCreateFormatSelect.value = preferencesDefaultFormatSelect.value;
+  onPreferencesCreateFormatChange();
+}
+
 function renderPreferencesDialog() {
-  renderPreferencesView(preferencesViewElements, appPreferences);
+  renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences);
 }
 
 function collectPreferencesFromDialog(): AppPreferences {
-  return collectPreferencesFromView(preferencesViewElements, appPreferences);
+  return collectPreferencesFromView(preferencesViewElements, preferencesDialogDraft ?? appPreferences);
 }
 
 function applyCreatePreferenceDefaults() {
-  createFormatSelect.value = appPreferences.defaultArchiveFormat;
-  createCleanSourceCheckbox.checked = appPreferences.defaultCleanSourceEnabled;
+  const format = appPreferences.defaultArchiveFormat;
+  createFormatSelect.value = format;
+  applyCreateDefaultsForFormat(format);
   if (!createDestinationInput.value.trim() && createSources.length > 0) {
     createDestinationInput.value = suggestedCreateArchiveDefaultPath();
   }
   setCreatePlanState(createPlanState, currentPlanError);
 }
 
+function applyCreateDefaultsForFormat(format: CreateArchiveFormat) {
+  const defaults = createDefaultsForFormat(appPreferences, format);
+  createCleanSourceCheckbox.checked = defaults.cleanSource;
+  createPreserveMetadataCheckbox.checked = defaults.preserveMetadata;
+  createReplaceExistingCheckbox.checked = defaults.replaceExisting;
+  createCompressionInput.value = defaults.compressionLevel === null
+    ? ""
+    : String(defaults.compressionLevel);
+  createVolumeInput.value = defaults.volumeSize === null ? "" : String(defaults.volumeSize);
+  createPasswordInput.value = "";
+  createPasswordConfirmInput.value = "";
+  createShowPasswordInput.checked = false;
+  createPasswordInput.type = "password";
+  createPasswordConfirmInput.type = "password";
+}
+
+function updatePreferencesDialogDraft() {
+  preferencesDialogDraft = collectPreferencesFromView(
+    preferencesViewElements,
+    preferencesDialogDraft ?? appPreferences,
+  );
+}
+
 function savePreferencesFromDialog() {
-  appPreferences = collectPreferencesFromDialog();
+  updatePreferencesDialogDraft();
+  appPreferences = preferencesDialogDraft ?? collectPreferencesFromDialog();
+  preferencesDialogDraft = null;
   saveAppPreferences(appPreferences);
   isFlatView = appPreferences.flatViewDefault;
   preferencesStatusElement.textContent = "Preferences saved.";
@@ -4327,6 +4376,7 @@ function savePreferencesFromDialog() {
 }
 
 function openPreferencesDialog() {
+  preferencesDialogDraft = appPreferences;
   renderPreferencesDialog();
   openModal(preferencesDialog, "#pref-default-format");
 }
@@ -4551,7 +4601,7 @@ function isLocalDevHost() {
 }
 
 function loadLocalDevFixtureFromUrl() {
-  if (!isLocalDevHost()) {
+  if (!isLocalDevHost() || !normalWorkspaceRendered || isQuickActionJobMode()) {
     return;
   }
 
@@ -4717,14 +4767,27 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
 
   setOperationalStatus("Starting quick create...");
   try {
+    const defaults = createDefaultsForFormat(appPreferences, format);
+    let password: string | undefined;
+    if (defaults.promptForPassword) {
+      const promptedPassword = promptForArchivePassword("Enter password for the new archive.");
+      if (!promptedPassword) {
+        setOperationalStatus("Quick create cancelled.");
+        return;
+      }
+      password = promptedPassword;
+    }
     const request = buildStartCreateRequest({
       sources,
       destinationPath,
       format,
       cleanSource,
-      replaceExisting: false,
+      replaceExisting: defaults.replaceExisting,
       destinationCollisionStrategy: "rename",
-      preserveMetadata: true,
+      preserveMetadata: defaults.preserveMetadata,
+      password,
+      compressionLevel: defaults.compressionLevel ?? undefined,
+      volumeSize: defaults.volumeSize ?? undefined,
     });
     const response = await runStartCreate(request);
     recordCreateDestinationHistory(destinationPath);
@@ -4754,8 +4817,8 @@ async function openQuickCreateReview(
   showCreateWorkspace();
   createSources = sources;
   createFormatSelect.value = format;
+  applyCreateDefaultsForFormat(format);
   createCleanSourceCheckbox.checked = cleanSource;
-  createReplaceExistingCheckbox.checked = false;
   createDestinationInput.value = buildQuickCreateDestination(
     sources,
     format,
@@ -4961,8 +5024,13 @@ async function initializeDesktopRuntime() {
     return;
   }
 
-  await bindQuickActionLaunchEvents();
-  await handleStartupQuickAction();
+  try {
+    await bindQuickActionLaunchEvents();
+    await handleStartupQuickAction();
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, "Unable to initialize desktop integration."));
+    await revealNormalAppWindow();
+  }
 }
 
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {
@@ -5780,7 +5848,9 @@ async function loadBootstrapState() {
     latestContract = contract;
     setOperationalStatus(healthcheck.ready ? "Ready." : "Backend unavailable.");
     renderAboutDiagnostics();
-    renderBrowse();
+    if (normalWorkspaceRendered && !isQuickActionJobMode()) {
+      renderBrowse();
+    }
   } catch (error) {
     latestHealthcheck = null;
     latestContract = null;
@@ -5791,18 +5861,22 @@ async function loadBootstrapState() {
       setOperationalStatus("Ready in browser preview.");
     }
     renderAboutDiagnostics();
-    renderBrowse();
+    if (normalWorkspaceRendered && !isQuickActionJobMode()) {
+      renderBrowse();
+    }
   }
 }
 
 function onCreateFormatChange() {
+  const format = createFormatSelect.value as CreateArchiveFormat;
   const destination = createDestinationInput.value.trim();
   if (destination) {
     createDestinationInput.value = withCreateArchiveExtension(
       destination,
-      createFormatSelect.value as CreateArchiveFormat,
+      format,
     );
   }
+  applyCreateDefaultsForFormat(format);
 
   queuePlanRun();
 }
@@ -6754,6 +6828,18 @@ tableBody.addEventListener("click", (event) => {
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
   startCreateButton.addEventListener("click", () => void runCreate());
   preferencesOutputLocationSelect.addEventListener("change", syncPreferenceOutputState);
+  preferencesCreateFormatSelect.addEventListener("change", onPreferencesCreateFormatChange);
+  preferencesDefaultFormatSelect.addEventListener("change", onPreferencesDefaultFormatChange);
+  for (const input of [
+    preferencesCreateCompressionSelect,
+    preferencesCreateVolumeInput,
+    preferencesCreateCleanSourceCheckbox,
+    preferencesCreatePreserveMetadataCheckbox,
+    preferencesCreateReplaceExistingCheckbox,
+    preferencesCreatePromptPasswordCheckbox,
+  ]) {
+    input.addEventListener("change", updatePreferencesDialogDraft);
+  }
   preferencesChooseOutputButton.addEventListener("click", () => void onSelectPreferenceOutputFolder());
   preferencesSaveButton.addEventListener("click", savePreferencesFromDialog);
 
@@ -6854,16 +6940,10 @@ bindActions();
 bindBrowserFileDropFallback();
 bindWindowLifecycleHandlers();
 loadExtractDestinationHistory();
-renderExtractDestinationHistory();
 loadCreateDestinationHistory();
-renderCreateDestinationHistory();
 applyCreatePreferenceDefaults();
-renderCreateSources();
-renderCompressSources();
 setCreatePlanState("idle");
 setBrowseState("idle", BROWSE_STATUS_IDLE);
-renderBrowse();
-renderJobs();
 if (isLocalDevHost()) {
   window.__zmanagerDev = {
     loadArchiveFixture: loadArchiveListingIntoState,
@@ -6901,7 +6981,14 @@ if (isLocalDevHost()) {
     },
   };
 }
-loadLocalDevFixtureFromUrl();
-void loadBootstrapState();
 void bindTauriFileDrop();
-void initializeDesktopRuntime();
+if (isDesktopRuntime()) {
+  void initializeDesktopRuntime().finally(() => {
+    loadLocalDevFixtureFromUrl();
+    void loadBootstrapState();
+  });
+} else {
+  renderNormalWorkspaceOnce();
+  loadLocalDevFixtureFromUrl();
+  void loadBootstrapState();
+}

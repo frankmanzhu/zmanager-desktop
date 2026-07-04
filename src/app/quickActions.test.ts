@@ -144,12 +144,18 @@ describe("quick action helpers", () => {
       {
         ...DEFAULT_APP_PREFERENCES,
         defaultArchiveFormat: "tzap",
-        defaultCleanSourceEnabled: true,
+        createFormatDefaults: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+          tzap: {
+            ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+            cleanSource: false,
+          },
+        },
       },
       handlers,
     );
 
-    expect(handlers.openCreateReview).toHaveBeenCalledWith(["/tmp/source"], "tzap", true);
+    expect(handlers.openCreateReview).toHaveBeenCalledWith(["/tmp/source"], "tzap", false);
     expect(handlers.startCreate).not.toHaveBeenCalled();
 
     await runQuickActionRequest(
@@ -211,10 +217,10 @@ describe("quick action helpers", () => {
       handlers,
     );
 
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", false);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", false);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", false);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", true);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", true);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", true);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", true);
   });
 
   it("routes associated archive opens to browsing regardless of extraction defaults", async () => {

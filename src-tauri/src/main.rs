@@ -63,7 +63,6 @@ fn main() {
                     let _ = window.set_size(quick_action_size);
                     let _ = window.center();
                 }
-                let _ = window.show();
             }
             Ok(())
         })

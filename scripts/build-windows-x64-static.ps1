@@ -2,7 +2,9 @@ param(
     [string]$VcpkgRoot = "C:\vcpkg",
     [string]$PerlBin = "C:\Strawberry\perl\bin",
     [string]$Triplet = "",
-    [string]$NodePath = ""
+    [string]$NodePath = "",
+    [switch]$Install,
+    [string]$InstallDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +14,8 @@ $ErrorActionPreference = "Stop"
     -PerlBin $PerlBin `
     -Architecture x64 `
     -Triplet $Triplet `
-    -NodePath $NodePath
+    -NodePath $NodePath `
+    -Install:$Install `
+    -InstallDir $InstallDir
 
 exit $LASTEXITCODE
