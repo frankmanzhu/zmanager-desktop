@@ -157,6 +157,11 @@ function storedNumber(value: unknown, fallback: number | null): number | null {
   return Math.floor(value);
 }
 
+function storedPositiveNumber(value: unknown, fallback: number | null): number | null {
+  const stored = storedNumber(value, fallback);
+  return stored !== null && stored > 0 ? stored : null;
+}
+
 function storedObjectBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -190,7 +195,7 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
           {
             cleanSource: storedObjectBool(raw?.cleanSource, fallback.cleanSource),
             compressionLevel: storedNumber(raw?.compressionLevel, fallback.compressionLevel),
-            volumeSize: storedNumber(raw?.volumeSize, fallback.volumeSize),
+            volumeSize: storedPositiveNumber(raw?.volumeSize, fallback.volumeSize),
             preserveMetadata: storedObjectBool(raw?.preserveMetadata, fallback.preserveMetadata),
             replaceExisting: storedObjectBool(raw?.replaceExisting, fallback.replaceExisting),
             promptForPassword:
@@ -408,7 +413,7 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
         {
           cleanSource: Boolean(value.cleanSource),
           compressionLevel: storedNumber(value.compressionLevel, fallback.compressionLevel),
-          volumeSize: storedNumber(value.volumeSize, fallback.volumeSize),
+          volumeSize: storedPositiveNumber(value.volumeSize, fallback.volumeSize),
           preserveMetadata: Boolean(value.preserveMetadata),
           replaceExisting: Boolean(value.replaceExisting),
           promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),

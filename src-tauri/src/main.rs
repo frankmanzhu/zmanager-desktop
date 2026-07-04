@@ -12,10 +12,10 @@ mod quick_action;
 
 use tauri::{LogicalSize, Manager, Size};
 
-const QUICK_ACTION_WINDOW_WIDTH: f64 = 560.0;
-const QUICK_ACTION_WINDOW_HEIGHT: f64 = 300.0;
-const QUICK_ACTION_WINDOW_MIN_WIDTH: f64 = 460.0;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT: f64 = 240.0;
+const QUICK_ACTION_WINDOW_WIDTH: f64 = 620.0;
+const QUICK_ACTION_WINDOW_HEIGHT: f64 = 420.0;
+const QUICK_ACTION_WINDOW_MIN_WIDTH: f64 = 540.0;
+const QUICK_ACTION_WINDOW_MIN_HEIGHT: f64 = 360.0;
 
 fn main() {
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();

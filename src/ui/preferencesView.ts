@@ -96,7 +96,7 @@ export function collectPreferencesFromDialog(
 ): AppPreferences {
   const selectedFormat = elements.createFormatSelect.value as CreateArchiveFormat;
   const compressionLevel = parseOptionalNonNegativeInteger(elements.createCompressionLevelSelect.value);
-  const volumeSize = parseOptionalNonNegativeInteger(elements.createVolumeInput.value);
+  const volumeSize = parseOptionalPositiveInteger(elements.createVolumeInput.value);
   const createFormatDefaults = preferences.createFormatDefaults;
   const nextCreateFormatDefaults = {
     ...createFormatDefaults,
@@ -143,4 +143,9 @@ function parseOptionalNonNegativeInteger(value: string): number | null {
     return null;
   }
   return Math.floor(parsed);
+}
+
+function parseOptionalPositiveInteger(value: string): number | null {
+  const parsed = parseOptionalNonNegativeInteger(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
 }

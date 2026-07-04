@@ -89,6 +89,10 @@ body {
   overflow: hidden;
 }
 
+body.quick-action-job-mode {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -251,9 +255,11 @@ p {
 }
 
 .workspace[data-quick-action-mode="job-only"] {
+  height: 100vh;
+  min-height: 0;
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "body";
-  min-height: 100vh;
+  overflow: hidden;
   background: var(--content-bg);
 }
 
@@ -269,12 +275,14 @@ p {
 
 .quick-progress {
   grid-area: body;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto auto auto auto;
   align-content: start;
-  gap: 10px;
-  padding: 14px;
+  overflow: hidden;
+  gap: 8px;
+  padding: 12px;
   background: var(--content-bg);
   color: var(--text);
   font-size: 13px;
@@ -361,7 +369,7 @@ p {
 .quick-progress-current {
   display: grid;
   gap: 4px;
-  min-height: 42px;
+  min-height: 34px;
   padding-top: 2px;
 }
 

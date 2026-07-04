@@ -257,4 +257,18 @@ describe("preferences helpers", () => {
     expect(defaultCreateDirectory(preferences)).toBe("/tmp/archives");
     expect(defaultCreateDirectory(DEFAULT_APP_PREFERENCES)).toBeNull();
   });
+
+  it("treats zero volume defaults as no split", () => {
+    const preferences = preferencesWithPatch(DEFAULT_APP_PREFERENCES, {
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        tzap: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+          volumeSize: 0,
+        },
+      },
+    });
+
+    expect(createDefaultsForFormat(preferences, "tzap").volumeSize).toBeNull();
+  });
 });

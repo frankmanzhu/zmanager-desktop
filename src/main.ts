@@ -228,10 +228,10 @@ type FocusedJobProgressContext = {
   rows: { label: string; value: string }[];
 };
 
-const QUICK_ACTION_WINDOW_WIDTH_PX = 560;
-const QUICK_ACTION_WINDOW_HEIGHT_PX = 300;
-const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 460;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 240;
+const QUICK_ACTION_WINDOW_WIDTH_PX = 620;
+const QUICK_ACTION_WINDOW_HEIGHT_PX = 420;
+const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 540;
+const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 360;
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 type ArchiveFixture = {
   archivePath: string;
@@ -1372,6 +1372,7 @@ async function revealQuickActionJobWindow(
   }
   quickActionWindowMode = "jobOnly";
   workspaceElement.dataset.quickActionMode = "job-only";
+  document.body.classList.add("quick-action-job-mode");
   quickProgressElement.hidden = false;
   jobDrawer.setAttribute("aria-hidden", "true");
   workspaceElement.dataset.jobDrawer = "closed";
@@ -1430,6 +1431,7 @@ async function sendQuickActionJobsToBackground() {
   focusedJobProgressContexts.clear();
   quickActionWindowMode = "normal";
   quickActionAutoCloseAction = "closeWindow";
+  document.body.classList.remove("quick-action-job-mode");
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
   setOperationalStatus("Job running in background.");
@@ -1443,6 +1445,7 @@ async function closeFocusedJobProgress() {
   focusedJobProgressContexts.clear();
   quickActionWindowMode = "normal";
   quickActionAutoCloseAction = "closeWindow";
+  document.body.classList.remove("quick-action-job-mode");
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
   quickBackgroundButton.disabled = true;
@@ -1527,6 +1530,32 @@ async function toggleQuickActionPause() {
   } catch (error) {
     const commandError = asCommandError(error);
     setOperationalStatus(commandError?.message ?? "Unable to update job.");
+    renderJobs();
+  }
+}
+
+async function cancelFocusedQuickActionJobs() {
+  const jobIds = quickActionControllableJobIds();
+  if (!jobIds.length) {
+    return;
+  }
+
+  quickCancelButton.disabled = true;
+  quickContinueButton.disabled = true;
+  quickBackgroundButton.disabled = true;
+
+  try {
+    await Promise.all(jobIds.map((jobId) => cancelJobCommand({ jobId })));
+    await pollJobs();
+    setOperationalStatus("Job cancelled.");
+    if (quickActionAutoCloseAction === "returnToWorkspace") {
+      await closeFocusedJobProgress();
+    } else {
+      closeAppWindow();
+    }
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? "Unable to cancel job.");
     renderJobs();
   }
 }
@@ -6937,13 +6966,7 @@ tableBody.addEventListener("click", (event) => {
     void toggleQuickActionPause();
   });
   quickCancelButton.addEventListener("click", () => {
-    for (const jobId of quickActionJobIds) {
-      const state = jobs.get(jobId);
-      if (!state || isTerminalJobStatus(state.snapshot.status)) {
-        continue;
-      }
-      void onCancelJob(jobId);
-    }
+    void cancelFocusedQuickActionJobs();
   });
 
   refreshJobsButton.addEventListener("click", () => void pollJobs());

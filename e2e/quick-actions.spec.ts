@@ -189,6 +189,7 @@ test("quick action controls pause resume cancel and background the job", async (
 
   await page.locator("#quick-cancel").click();
   await expectWindowCommand(page, "cancel_job");
+  await expectWindowCommand(page, "plugin:window|close");
   await expect(page.locator("#quick-operation")).toHaveText("Cancelled");
   await expect(page.locator("#quick-cancel")).toBeDisabled();
   await expect(page.locator("#quick-background")).toBeDisabled();
@@ -251,6 +252,7 @@ test("quick action background never opens the normal workspace when minimize is 
 
 test("extract dialog uses the focused job progress view and returns to the workspace", async ({ page }) => {
   await installQuickActionTauriStub(page, [notRequestedState]);
+  await page.setViewportSize({ width: 620, height: 420 });
 
   await page.goto("/?fixture=archive", { waitUntil: "domcontentloaded" });
 
@@ -265,6 +267,15 @@ test("extract dialog uses the focused job progress view and returns to the works
   await expect(page.locator("#quick-context")).toContainText("C:/Users/Frank/Downloads/photos.zip");
   await expect(page.locator("#quick-context")).toContainText("C:/fixtures/output");
   await expectWindowCommand(page, "start_extract");
+  await expect.poll(async () => page.evaluate(() => ({
+    bodyOverflow: getComputedStyle(document.body).overflow,
+    scrollHeight: document.documentElement.scrollHeight,
+    viewportHeight: window.innerHeight,
+  }))).toEqual({
+    bodyOverflow: "hidden",
+    scrollHeight: 420,
+    viewportHeight: 420,
+  });
 
   await expect(page.locator("#quick-progress")).toBeHidden({ timeout: 4_000 });
   await expect(page.locator(".workspace")).not.toHaveAttribute("data-quick-action-mode", "job-only");

@@ -6,6 +6,7 @@ import {
   createFormatSupportsPassword,
   createStateAfterDestinationEdit,
   getCreateArchiveExtension,
+  normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
@@ -128,6 +129,26 @@ describe("create flow helpers", () => {
 
     expect(tzapRequest.tzapRecoveryPercentage).toBe(12);
     expect(zipRequest).not.toHaveProperty("tzapRecoveryPercentage");
+  });
+
+  it("treats zero volume size as no split request", () => {
+    expect(normalizeCreateVolumeSize(0)).toBeUndefined();
+    expect(normalizeCreateVolumeSize(-1)).toBeUndefined();
+    expect(normalizeCreateVolumeSize(1024.8)).toBe(1024);
+
+    const request = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      volumeSize: 0,
+      tzapRecoveryPercentage: 0,
+    });
+
+    expect(request).not.toHaveProperty("volumeSize");
+    expect(request.tzapRecoveryPercentage).toBe(0);
   });
 
   it("includes destination collision strategy when requested", () => {

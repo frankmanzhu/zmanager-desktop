@@ -101,6 +101,16 @@ export function normalizeTzapRecoveryPercentage(value?: number): number | undefi
   );
 }
 
+export function normalizeCreateVolumeSize(value?: number): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return Math.floor(value);
+}
+
 function parseDirectoryPath(directory: string): ParsedDirectoryPath | null {
   const trimmed = directory.trim().replace(/[\\/]+$/, "");
   if (!trimmed) {
@@ -232,6 +242,8 @@ export type BuildStartCreateRequestInput = {
 };
 
 export function buildStartCreateRequest(input: BuildStartCreateRequestInput): StartCreateRequest {
+  const volumeSize = normalizeCreateVolumeSize(input.volumeSize);
+
   return {
     sources: [...input.sources],
     destinationPath: withCreateArchiveExtension(input.destinationPath, input.format),
@@ -244,7 +256,7 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     preserveMetadata: input.preserveMetadata,
     ...(input.password && createFormatSupportsPassword(input.format) ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),
-    ...(input.volumeSize !== undefined ? { volumeSize: input.volumeSize } : {}),
+    ...(volumeSize !== undefined ? { volumeSize } : {}),
     ...(input.format === "tzap"
       ? {
           tzapRecoveryPercentage:

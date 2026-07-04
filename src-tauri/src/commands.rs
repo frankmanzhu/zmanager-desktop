@@ -318,7 +318,7 @@ pub(crate) fn start_create_internal(
     let replace_existing = request.replace_existing;
     let preserve_metadata = request.preserve_metadata;
     let compression_level = request.compression_level;
-    let volume_size = request.volume_size;
+    let volume_size = request.volume_size.filter(|value| *value > 0);
     let tzap_recovery_percentage = request.tzap_recovery_percentage.unwrap_or(5).min(100);
     let format = request.format;
 
@@ -3028,6 +3028,38 @@ mod tests {
             fs::metadata(&destination).unwrap().len()
         );
         assert_ne!(summary.written_bytes, source_total_bytes);
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_tzap_create_accepts_explicit_zero_recovery_fast_path() {
+        let workspace = create_temp_workspace("start-create-tzap-zero-recovery");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("one.bin"), vec![b'a'; 16 * 1024]).expect("fixture should write");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: Some(0),
+            tzap_recovery_percentage: Some(0),
+            preserve_metadata: false,
+        };
+
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("zero-recovery create command should start a job");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert!(destination.is_file());
         let _ = fs::remove_dir_all(&workspace);
     }
 
