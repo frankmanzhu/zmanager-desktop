@@ -969,6 +969,7 @@ appRoot.innerHTML = `
               <select id="pref-language">
                 <option value="system" data-i18n-text="preferences.language.systemDefault">System default</option>
                 <option value="en" data-i18n-text="preferences.language.english">English</option>
+                <option value="zh-CN" data-i18n-text="preferences.language.chineseSimplified">Simplified Chinese</option>
               </select>
             </section>
           </div>

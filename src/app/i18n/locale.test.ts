@@ -22,22 +22,23 @@ describe("locale helpers", () => {
   });
 
   it("falls back to English for unsupported languages", () => {
-    expect(resolveBestLocale(["de-DE", "zh-CN"])).toBe("en");
+    expect(resolveBestLocale(["de-DE", "ja-JP"])).toBe("en");
   });
 
-  it("can resolve an injected experimental locale without production preference support", () => {
-    expect(resolveBestLocale(["zh-Hans-CN"], ["en", "zh-CN"] as const)).toBe("zh-CN");
-    expect(resolveBestLocale(["zh-SG"], ["en", "zh-CN"] as const)).toBe("zh-CN");
-    expect(resolveBestLocale(["ja-JP"], ["en", "zh-CN"] as const)).toBe("en");
+  it("resolves supported Simplified Chinese tags and aliases", () => {
+    expect(resolveBestLocale(["zh-CN"])).toBe("zh-CN");
+    expect(resolveBestLocale(["zh-Hans-CN"])).toBe("zh-CN");
+    expect(resolveBestLocale(["zh-SG"])).toBe("zh-CN");
   });
 
   it("keeps stored system separate from the resolved locale", () => {
     expect(resolveLocalePreference("system", ["en-US"])).toBe("en");
   });
 
-  it("rejects production-unsupported locale preferences", () => {
+  it("accepts supported locale preferences", () => {
     expect(isLocalePreference("system")).toBe(true);
     expect(isLocalePreference("en")).toBe(true);
-    expect(isLocalePreference("zh-CN")).toBe(false);
+    expect(isLocalePreference("zh-CN")).toBe(true);
+    expect(isLocalePreference("ja-JP")).toBe(false);
   });
 });

@@ -6,7 +6,7 @@ import { zhCnMessages } from "./messages.zh-CN";
 const PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
 
 describe("message catalog parity", () => {
-  it("keeps experimental zh-CN keys in parity with English", () => {
+  it("keeps zh-CN keys in parity with English", () => {
     expect(Object.keys(zhCnMessages).sort()).toEqual(Object.keys(enMessages).sort());
   });
 

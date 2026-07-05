@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE, type SupportedLocale } from "./locale";
 import { enMessages, type EnMessageKey } from "./messages.en";
+import { zhCnMessages } from "./messages.zh-CN";
 
 export type MessageKey = EnMessageKey;
 export type MessageCatalog = Record<MessageKey, string>;
@@ -13,6 +14,7 @@ const INTERPOLATION_PATTERN = /\{([A-Za-z0-9_]+)\}/g;
 
 const catalogs = {
   en: enMessages,
+  "zh-CN": zhCnMessages,
 } as const satisfies Record<SupportedLocale, MessageCatalog>;
 
 export function createTranslator(

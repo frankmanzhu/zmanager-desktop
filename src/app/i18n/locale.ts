@@ -1,4 +1,4 @@
-export type SupportedLocale = "en";
+export type SupportedLocale = "en" | "zh-CN";
 export type LocalePreference = "system" | SupportedLocale;
 export type TextDirection = "ltr" | "rtl";
 
@@ -12,13 +12,18 @@ export type LocaleAliasMap = Record<string, string>;
 export const DEFAULT_LOCALE: SupportedLocale = "en";
 export const SYSTEM_LOCALE_PREFERENCE: LocalePreference = "system";
 
-export const SUPPORTED_LOCALES = ["en"] as const satisfies readonly SupportedLocale[];
+export const SUPPORTED_LOCALES = ["en", "zh-CN"] as const satisfies readonly SupportedLocale[];
 
 export const LOCALE_METADATA = {
   en: {
     labelKey: "preferences.language.english",
     direction: "ltr",
     aliases: ["en-US", "en-GB", "en-AU", "en-CA", "en-NZ"],
+  },
+  "zh-CN": {
+    labelKey: "preferences.language.chineseSimplified",
+    direction: "ltr",
+    aliases: ["zh-Hans", "zh-Hans-CN", "zh-SG"],
   },
 } as const satisfies Record<SupportedLocale, LocaleMetadata>;
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_APP_PREFERENCES } from "../app/preferences";
-import { createTranslator, createTranslatorFromCatalog } from "../app/i18n/translator";
-import { zhCnMessages } from "../app/i18n/messages.zh-CN";
+import { createTranslator } from "../app/i18n/translator";
 import {
   collectPreferencesFromDialog,
   renderPreferencesDialog,
@@ -26,13 +25,13 @@ describe("preferences view", () => {
     expect(collectPreferencesFromDialog(elements, DEFAULT_APP_PREFERENCES).locale).toBe("system");
   });
 
-  it("renders translated dialog-owned text from an injected experimental catalog", () => {
+  it("renders translated dialog-owned text from the zh-CN catalog", () => {
     const elements = createPreferenceElements();
 
     renderPreferencesDialog(
       elements,
       DEFAULT_APP_PREFERENCES,
-      createTranslatorFromCatalog("zh-CN", zhCnMessages),
+      createTranslator("zh-CN"),
     );
 
     expect(elements.statusElement.textContent).toBe("偏好设置仅存储在本机，绝不会包含密码。");

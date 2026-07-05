@@ -142,7 +142,7 @@ describe("preferences helpers", () => {
 
   it("falls back when stored values are invalid", () => {
     const storage = memoryStorage({
-      "zmanager.locale": "zh-CN",
+      "zmanager.locale": "ja-JP",
       "zmanager.defaultArchiveFormat": "rar",
       "zmanager.defaultCleanSourceEnabled": "yes",
       "zmanager.defaultOutputLocation": "downloads",
@@ -151,6 +151,14 @@ describe("preferences helpers", () => {
     });
 
     expect(loadAppPreferences(storage)).toEqual(DEFAULT_APP_PREFERENCES);
+  });
+
+  it("loads the supported Simplified Chinese locale preference", () => {
+    const storage = memoryStorage({
+      "zmanager.locale": "zh-CN",
+    });
+
+    expect(loadAppPreferences(storage).locale).toBe("zh-CN");
   });
 
   it("saves non-sensitive preference fields and removes blank custom output", () => {

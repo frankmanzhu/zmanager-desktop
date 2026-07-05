@@ -457,6 +457,7 @@ export const enMessages = {
   "preferences.language.title": "Language",
   "preferences.language.systemDefault": "System default",
   "preferences.language.english": "English",
+  "preferences.language.chineseSimplified": "Simplified Chinese",
   "preferences.saved": "Preferences saved.",
   "preferences.status.localOnly": "Preferences are stored locally and never include passwords.",
   "preferences.extraction.askEveryTime": "Ask every time",
