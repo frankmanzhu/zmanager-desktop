@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { renderJobsListHtml } from "./jobsView";
 import type { JobKind, JobState } from "../api/types";
+import { createTranslator } from "../app/i18n/translator";
 
 const formatters = {
+  i18n: createTranslator("en"),
   escapeHtml: (value: string) => value,
   formatBytes: (value = 0) => `${value} B`,
-  formatEventCode: (code: string) => code,
   formatJobKind: (kind: JobKind) => kind,
   canRetryJobWithPassword: () => false,
   formatDuration: () => "0s",
@@ -118,5 +119,12 @@ describe("jobs view", () => {
     ]);
 
     expect(renderJobsListHtml(jobs, formatters)).toContain("<dd>2 / 4</dd>");
+  });
+
+  it("renders translated empty state text from the translator", () => {
+    const html = renderJobsListHtml(new Map(), formatters);
+
+    expect(html).toContain("No running or terminal jobs.");
+    expect(html).toContain("Start create, extract, or test actions to watch progress.");
   });
 });

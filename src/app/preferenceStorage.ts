@@ -5,6 +5,7 @@ export type PreferenceStorage = {
 };
 
 export type PreferenceStorageKey =
+  | "locale"
   | "defaultArchiveFormat"
   | "defaultCleanSourceEnabled"
   | "createFormatDefaults"
@@ -29,6 +30,7 @@ export type PreferenceStorageKey =
   | "tableSortAscending";
 
 export const PREFERENCE_KEYS = {
+  locale: "zmanager.locale",
   defaultArchiveFormat: "zmanager.defaultArchiveFormat",
   defaultCleanSourceEnabled: "zmanager.defaultCleanSourceEnabled",
   createFormatDefaults: "zmanager.createFormatDefaults",

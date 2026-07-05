@@ -15,6 +15,11 @@ import {
   resolvePreferenceStorage,
   type PreferenceStorage,
 } from "./preferenceStorage";
+import {
+  SYSTEM_LOCALE_PREFERENCE,
+  isLocalePreference,
+  type LocalePreference,
+} from "./i18n/locale";
 
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
 export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extractToFolder";
@@ -30,6 +35,7 @@ export type FormatCreateDefaults = {
 export type CreateFormatDefaultsMap = Record<CreateArchiveFormat, FormatCreateDefaults>;
 
 export type AppPreferences = {
+  locale: LocalePreference;
   defaultArchiveFormat: CreateArchiveFormat;
   defaultCleanSourceEnabled: boolean;
   createFormatDefaults: CreateFormatDefaultsMap;
@@ -55,6 +61,7 @@ export type AppPreferences = {
 };
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  locale: SYSTEM_LOCALE_PREFERENCE,
   defaultArchiveFormat: "tarZst",
   defaultCleanSourceEnabled: true,
   createFormatDefaults: {
@@ -257,6 +264,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   }
 
   const defaultArchiveFormat = storage.getItem(PREFERENCE_KEYS.defaultArchiveFormat);
+  const locale = storage.getItem(PREFERENCE_KEYS.locale);
   const defaultOutputLocation = storage.getItem(PREFERENCE_KEYS.defaultOutputLocation);
   const defaultExtractionBehavior = storage.getItem(PREFERENCE_KEYS.defaultExtractionBehavior);
   const previewCleanupPolicy = storage.getItem(PREFERENCE_KEYS.previewCleanupPolicy);
@@ -267,6 +275,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   );
 
   return {
+    locale: isLocalePreference(locale) ? locale : DEFAULT_APP_PREFERENCES.locale,
     defaultArchiveFormat: isOneOf(ARCHIVE_FORMATS, defaultArchiveFormat)
       ? defaultArchiveFormat
       : DEFAULT_APP_PREFERENCES.defaultArchiveFormat,
@@ -344,6 +353,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   }
 
   storage.setItem(PREFERENCE_KEYS.defaultArchiveFormat, preferences.defaultArchiveFormat);
+  storage.setItem(PREFERENCE_KEYS.locale, preferences.locale);
   storage.setItem(PREFERENCE_KEYS.defaultCleanSourceEnabled, String(preferences.defaultCleanSourceEnabled));
   storage.setItem(PREFERENCE_KEYS.createFormatDefaults, JSON.stringify(preferences.createFormatDefaults));
   storage.setItem(PREFERENCE_KEYS.defaultOutputLocation, preferences.defaultOutputLocation);

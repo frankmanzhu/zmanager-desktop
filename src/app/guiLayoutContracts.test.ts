@@ -40,7 +40,7 @@ describe("GUI layout contracts", () => {
   });
 
   it("renders the classic menu and command toolbar visibly", () => {
-    expect(mainSource).toContain('<nav class="app-menu" aria-label="Application menu">');
+    expect(mainSource).toContain('<nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">');
     expect(mainSource).toContain('<div class="legacy-command-buttons">');
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
   });

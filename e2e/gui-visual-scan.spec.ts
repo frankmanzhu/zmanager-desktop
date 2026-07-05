@@ -284,7 +284,8 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await captureAndScan(page, "20-search-empty-results");
 
   await page.locator("#search-entries").fill("");
-  await page.locator("#flat-view-toggle").check();
+  await page.locator("summary", { hasText: "View" }).click();
+  await page.locator("#menu-command-flatView").click();
   await captureAndScan(page, "31-flat-view-with-icons");
 });
 

@@ -8,7 +8,7 @@ import {
   createDefaultsForFormat,
   saveAppPreferences,
 } from "./preferences";
-import type { PreferenceStorage } from "./preferenceStorage";
+import { PREFERENCE_KEYS, type PreferenceStorage } from "./preferenceStorage";
 
 function memoryStorage(initial: Record<string, string> = {}): PreferenceStorage & { values: Map<string, string> } {
   const values = new Map(Object.entries(initial));
@@ -31,6 +31,7 @@ describe("preferences helpers", () => {
 
   it("loads valid stored preferences", () => {
     const storage = memoryStorage({
+      "zmanager.locale": "en",
       "zmanager.defaultArchiveFormat": "zip",
       "zmanager.defaultCleanSourceEnabled": "false",
       "zmanager.createFormatDefaults": JSON.stringify({
@@ -65,6 +66,7 @@ describe("preferences helpers", () => {
     });
 
     expect(loadAppPreferences(storage)).toEqual({
+      locale: "en",
       defaultArchiveFormat: "zip",
       defaultCleanSourceEnabled: false,
       createFormatDefaults: {
@@ -140,6 +142,7 @@ describe("preferences helpers", () => {
 
   it("falls back when stored values are invalid", () => {
     const storage = memoryStorage({
+      "zmanager.locale": "zh-CN",
       "zmanager.defaultArchiveFormat": "rar",
       "zmanager.defaultCleanSourceEnabled": "yes",
       "zmanager.defaultOutputLocation": "downloads",
@@ -189,11 +192,13 @@ describe("preferences helpers", () => {
         tableColumnWidths: { name: 240 },
         tableSortKey: "size",
         tableSortAscending: false,
+        locale: "en",
       },
       storage,
     );
 
     expect(Object.fromEntries(storage.values)).toEqual({
+      "zmanager.locale": "en",
       "zmanager.defaultArchiveFormat": "sevenZ",
       "zmanager.defaultCleanSourceEnabled": "false",
       "zmanager.createFormatDefaults": JSON.stringify({
@@ -270,5 +275,9 @@ describe("preferences helpers", () => {
     });
 
     expect(createDefaultsForFormat(preferences, "tzap").volumeSize).toBeNull();
+  });
+
+  it("declares locale storage through the tracked preference key map", () => {
+    expect(PREFERENCE_KEYS.locale).toBe("zmanager.locale");
   });
 });

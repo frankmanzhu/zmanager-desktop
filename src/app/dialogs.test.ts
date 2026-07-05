@@ -7,6 +7,11 @@ import {
   unknownErrorMessage,
 } from "./dialogs";
 
+const dialogMessages = {
+  unavailableInBrowser: "Native dialogs are unavailable in browser preview.",
+  failed: "Native dialog failed.",
+};
+
 describe("dialog helpers", () => {
   it("formats unknown errors with useful fallbacks", () => {
     expect(unknownErrorMessage(new Error("permission denied"), "fallback")).toBe("permission denied");
@@ -15,10 +20,10 @@ describe("dialog helpers", () => {
   });
 
   it("only uses the browser preview message outside desktop mode", () => {
-    expect(nativeDialogErrorMessage(false, new Error("denied"))).toBe(
+    expect(nativeDialogErrorMessage(false, new Error("denied"), dialogMessages)).toBe(
       "Native dialogs are unavailable in browser preview.",
     );
-    expect(nativeDialogErrorMessage(true, new Error("denied"))).toBe("denied");
+    expect(nativeDialogErrorMessage(true, new Error("denied"), dialogMessages)).toBe("denied");
   });
 
   it("reports failed open dialogs and returns null", async () => {
@@ -30,6 +35,7 @@ describe("dialog helpers", () => {
       { multiple: false },
       true,
       (message) => messages.push(message),
+      dialogMessages,
     );
 
     expect(result).toBeNull();
@@ -44,6 +50,7 @@ describe("dialog helpers", () => {
       () => {
         throw new Error("should not report status");
       },
+      dialogMessages,
     );
 
     expect(result).toBe("C:/tmp/archive.zip");

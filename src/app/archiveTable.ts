@@ -1,4 +1,5 @@
 import type { ArchiveEntryDto, ArchiveEntryKind } from "../api/types";
+import type { MessageKey, Translator } from "./i18n/translator";
 import {
   formatBytes,
   formatCompressionRatio,
@@ -28,6 +29,7 @@ export type ArchiveSortKey = ArchiveTableColumnId;
 export type ArchiveTableColumn = {
   id: ArchiveTableColumnId;
   label: string;
+  labelKey: MessageKey;
   width: number;
   minWidth?: number;
   align: "left" | "right" | "center";
@@ -72,20 +74,20 @@ const DEFAULT_MIN_COLUMN_WIDTH = 64;
 const MAX_COLUMN_WIDTH = 520;
 
 export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
-  { id: "name", label: "Name", width: 190, minWidth: 140, align: "left", defaultVisible: true, alwaysVisible: true },
-  { id: "size", label: "Size", width: 100, align: "right", defaultVisible: true },
-  { id: "compressedSize", label: "Packed Size", width: 110, align: "right", defaultVisible: true },
-  { id: "modified", label: "Modified", width: 150, align: "left", defaultVisible: true },
-  { id: "created", label: "Created", width: 140, align: "left", defaultVisible: false },
-  { id: "accessed", label: "Accessed", width: 140, align: "left", defaultVisible: false },
-  { id: "attributes", label: "Attributes", width: 90, align: "left", defaultVisible: false },
-  { id: "encrypted", label: "Encrypted", width: 80, align: "center", defaultVisible: false },
-  { id: "method", label: "Method", width: 120, align: "left", defaultVisible: false },
-  { id: "crc", label: "CRC", width: 90, align: "right", defaultVisible: false },
-  { id: "block", label: "Block", width: 70, align: "right", defaultVisible: false },
-  { id: "comment", label: "Comment", width: 120, align: "left", defaultVisible: false },
-  { id: "kind", label: "Type", width: 90, align: "left", defaultVisible: false },
-  { id: "ratio", label: "Ratio", width: 70, align: "right", defaultVisible: false },
+  { id: "name", label: "Name", labelKey: "table.name", width: 190, minWidth: 140, align: "left", defaultVisible: true, alwaysVisible: true },
+  { id: "size", label: "Size", labelKey: "table.size", width: 100, align: "right", defaultVisible: true },
+  { id: "compressedSize", label: "Packed Size", labelKey: "table.packedSize", width: 110, align: "right", defaultVisible: true },
+  { id: "modified", label: "Modified", labelKey: "table.modified", width: 150, align: "left", defaultVisible: true },
+  { id: "created", label: "Created", labelKey: "table.created", width: 140, align: "left", defaultVisible: false },
+  { id: "accessed", label: "Accessed", labelKey: "table.accessed", width: 140, align: "left", defaultVisible: false },
+  { id: "attributes", label: "Attributes", labelKey: "table.attributes", width: 90, align: "left", defaultVisible: false },
+  { id: "encrypted", label: "Encrypted", labelKey: "table.encrypted", width: 80, align: "center", defaultVisible: false },
+  { id: "method", label: "Method", labelKey: "table.method", width: 120, align: "left", defaultVisible: false },
+  { id: "crc", label: "CRC", labelKey: "table.crc", width: 90, align: "right", defaultVisible: false },
+  { id: "block", label: "Block", labelKey: "table.block", width: 70, align: "right", defaultVisible: false },
+  { id: "comment", label: "Comment", labelKey: "table.comment", width: 120, align: "left", defaultVisible: false },
+  { id: "kind", label: "Type", labelKey: "table.type", width: 90, align: "left", defaultVisible: false },
+  { id: "ratio", label: "Ratio", labelKey: "table.ratio", width: 70, align: "right", defaultVisible: false },
 ];
 
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
@@ -242,6 +244,7 @@ function clampColumnWidth(width: number, column: ArchiveTableColumn): number {
 export function formatArchiveTableValue(
   entry: ArchiveEntryDto | undefined,
   columnId: ArchiveTableColumnId,
+  i18n?: Translator,
 ): string {
   if (!entry) {
     return EMPTY_VALUE;
@@ -251,15 +254,15 @@ export function formatArchiveTableValue(
     case "name":
       return getPathBasename(entry.path, entry.path);
     case "size":
-      return formatBytes(entry.size, { emptyValue: EMPTY_VALUE });
+      return formatBytes(entry.size, { emptyValue: EMPTY_VALUE, locale: i18n?.locale });
     case "compressedSize":
-      return formatBytes(entry.compressedSize, { emptyValue: EMPTY_VALUE });
+      return formatBytes(entry.compressedSize, { emptyValue: EMPTY_VALUE, locale: i18n?.locale });
     case "modified":
-      return formatDate(entry.modified, TABLE_DATE_FORMAT);
+      return formatDate(entry.modified, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "created":
-      return formatDate(entry.created, TABLE_DATE_FORMAT);
+      return formatDate(entry.created, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "accessed":
-      return formatDate(entry.accessed, TABLE_DATE_FORMAT);
+      return formatDate(entry.accessed, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "attributes":
       return entry.attributes ?? EMPTY_VALUE;
     case "encrypted":
@@ -273,13 +276,18 @@ export function formatArchiveTableValue(
     case "comment":
       return entry.comment ?? EMPTY_VALUE;
     case "kind":
-      return formatKind(entry.kind);
+      return formatKind(entry.kind, i18n);
     case "ratio":
       return formatCompressionRatio(entry.size, entry.compressedSize, {
         emptyValue: EMPTY_VALUE,
         fractionDigits: 0,
+        locale: i18n?.locale,
       });
   }
+}
+
+export function archiveTableColumnLabel(column: ArchiveTableColumn, i18n?: Translator): string {
+  return i18n?.t(column.labelKey) ?? column.label;
 }
 
 export function compareOptionalNumbers(left?: number | null, right?: number | null): number {
@@ -364,13 +372,21 @@ export function compareArchiveRows(
       break;
     default:
       result = compareStrings(
-        formatArchiveTableValue(leftEntry, sortKey),
-        formatArchiveTableValue(rightEntry, sortKey),
+        archiveSortTextValue(leftEntry, sortKey),
+        archiveSortTextValue(rightEntry, sortKey),
       );
       break;
   }
 
   return direction * (result || compareStrings(left.path, right.path));
+}
+
+function archiveSortTextValue(entry: ArchiveEntryDto, sortKey: ArchiveSortKey): string {
+  if (sortKey === "kind") {
+    return entry.kind;
+  }
+
+  return formatArchiveTableValue(entry, sortKey);
 }
 
 export function sortArchiveRows(
@@ -403,17 +419,17 @@ function compareStrings(left: string, right: string): number {
   });
 }
 
-function formatKind(kind: ArchiveEntryKind): string {
+function formatKind(kind: ArchiveEntryKind, i18n?: Translator): string {
   switch (kind) {
     case "directory":
-      return "Folder";
+      return i18n?.t("entryKind.directory") ?? "Folder";
     case "hardlink":
-      return "Hard link";
+      return i18n?.t("entryKind.hardlink") ?? "Hard link";
     case "symlink":
-      return "Symbolic link";
+      return i18n?.t("entryKind.symlink") ?? "Symbolic link";
     case "special":
-      return "Special";
+      return i18n?.t("entryKind.special") ?? "Special";
     case "file":
-      return "File";
+      return i18n?.t("entryKind.file") ?? "File";
   }
 }

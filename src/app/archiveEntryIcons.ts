@@ -24,6 +24,7 @@ import type { IconNode } from "lucide";
 import type { ArchiveEntryDto } from "../api/types";
 import { getKnownArchiveSuffix, isSupportedArchivePath } from "./archiveFileTypes";
 import type { ArchiveTableRow } from "./archiveTable";
+import type { Translator } from "./i18n/translator";
 
 export type ArchiveEntryIconKind =
   | "archive"
@@ -179,39 +180,40 @@ const VIDEO_EXTENSIONS = new Set([
   "wmv",
 ]);
 
-export function archiveRowIconDescriptor(row: ArchiveTableRow): ArchiveEntryIconDescriptor {
+export function archiveRowIconDescriptor(row: ArchiveTableRow, i18n?: Translator): ArchiveEntryIconDescriptor {
   if (row.rowType === "parent") {
-    return { kind: "parent", label: "Parent folder", icon: FolderUp };
+    return { kind: "parent", label: i18n?.t("icon.parentFolder") ?? "Parent folder", icon: FolderUp };
   }
 
   if (row.rowType === "folder") {
-    return { kind: "folder", label: "Folder", icon: FolderClosed };
+    return { kind: "folder", label: i18n?.t("icon.folder") ?? "Folder", icon: FolderClosed };
   }
 
-  return archiveEntryIconDescriptor(row.entry);
+  return archiveEntryIconDescriptor(row.entry, i18n);
 }
 
-export function archiveEntryIconDescriptor(entry: ArchiveEntryDto): ArchiveEntryIconDescriptor {
+export function archiveEntryIconDescriptor(entry: ArchiveEntryDto, i18n?: Translator): ArchiveEntryIconDescriptor {
   switch (entry.kind) {
     case "directory":
-      return { kind: "folder", label: "Folder", icon: FolderClosed };
+      return { kind: "folder", label: i18n?.t("icon.folder") ?? "Folder", icon: FolderClosed };
     case "symlink":
-      return { kind: "symlink", label: "Symbolic link", icon: FileSymlink };
+      return { kind: "symlink", label: i18n?.t("icon.symbolicLink") ?? "Symbolic link", icon: FileSymlink };
     case "hardlink":
-      return { kind: "hardlink", label: "Hard link", icon: FileStack };
+      return { kind: "hardlink", label: i18n?.t("icon.hardLink") ?? "Hard link", icon: FileStack };
     case "special":
-      return { kind: "special", label: "Special file", icon: FileCog };
+      return { kind: "special", label: i18n?.t("icon.specialFile") ?? "Special file", icon: FileCog };
     case "file":
-      return archiveFileIconDescriptor(entry.path, entry.encrypted);
+      return archiveFileIconDescriptor(entry.path, entry.encrypted, i18n);
   }
 }
 
 export function archiveFileIconDescriptor(
   path: string,
   encrypted = false,
+  i18n?: Translator,
 ): ArchiveEntryIconDescriptor {
   if (encrypted) {
-    return { kind: "locked", label: "Encrypted file", icon: FileLock };
+    return { kind: "locked", label: i18n?.t("icon.encryptedFile") ?? "Encrypted file", icon: FileLock };
   }
 
   const archiveSuffix = getKnownArchiveSuffix(path);
@@ -225,40 +227,40 @@ export function archiveFileIconDescriptor(
 
   const extension = fileExtensionForIcon(path);
   if (!extension) {
-    return { kind: "file", label: "File", icon: File };
+    return { kind: "file", label: i18n?.t("entryKind.file") ?? "File", icon: File };
   }
 
   if (DISK_IMAGE_EXTENSIONS.has(extension)) {
-    return { kind: "disk", label: "Disk image", icon: Disc3 };
+    return { kind: "disk", label: i18n?.t("icon.diskImage") ?? "Disk image", icon: Disc3 };
   }
   if (IMAGE_EXTENSIONS.has(extension)) {
-    return { kind: "image", label: "Image file", icon: FileImage };
+    return { kind: "image", label: i18n?.t("icon.imageFile") ?? "Image file", icon: FileImage };
   }
   if (SPREADSHEET_EXTENSIONS.has(extension)) {
-    return { kind: "spreadsheet", label: "Spreadsheet file", icon: FileSpreadsheet };
+    return { kind: "spreadsheet", label: i18n?.t("icon.spreadsheetFile") ?? "Spreadsheet file", icon: FileSpreadsheet };
   }
   if (AUDIO_EXTENSIONS.has(extension)) {
-    return { kind: "audio", label: "Audio file", icon: FileHeadphone };
+    return { kind: "audio", label: i18n?.t("icon.audioFile") ?? "Audio file", icon: FileHeadphone };
   }
   if (VIDEO_EXTENSIONS.has(extension)) {
-    return { kind: "video", label: "Video file", icon: FileVideoCamera };
+    return { kind: "video", label: i18n?.t("icon.videoFile") ?? "Video file", icon: FileVideoCamera };
   }
   if (DATABASE_EXTENSIONS.has(extension)) {
-    return { kind: "database", label: "Database file", icon: Database };
+    return { kind: "database", label: i18n?.t("icon.databaseFile") ?? "Database file", icon: Database };
   }
   if (PACKAGE_EXTENSIONS.has(extension)) {
-    return { kind: "package", label: "Package file", icon: Package };
+    return { kind: "package", label: i18n?.t("icon.packageFile") ?? "Package file", icon: Package };
   }
   if (CODE_EXTENSIONS.has(extension)) {
-    return { kind: "code", label: "Code file", icon: FileCode };
+    return { kind: "code", label: i18n?.t("icon.codeFile") ?? "Code file", icon: FileCode };
   }
   if (TEXT_EXTENSIONS.has(extension)) {
-    return { kind: "text", label: "Document file", icon: FileText };
+    return { kind: "text", label: i18n?.t("icon.documentFile") ?? "Document file", icon: FileText };
   }
 
   return {
     kind: isSupportedArchivePath(path) ? "archive" : "file",
-    label: isSupportedArchivePath(path) ? "Archive file" : "File",
+    label: isSupportedArchivePath(path) ? i18n?.t("icon.archiveFile") ?? "Archive file" : i18n?.t("entryKind.file") ?? "File",
     icon: isSupportedArchivePath(path) ? FileArchive : File,
   };
 }
@@ -266,14 +268,15 @@ export function archiveFileIconDescriptor(
 export function archiveTreeIconDescriptor(
   isRoot: boolean,
   isActive: boolean,
+  i18n?: Translator,
 ): ArchiveEntryIconDescriptor {
   if (isRoot) {
-    return { kind: "archive", label: "Archive root", icon: FolderArchive };
+    return { kind: "archive", label: i18n?.t("icon.archiveRoot") ?? "Archive root", icon: FolderArchive };
   }
 
   return {
     kind: "folder",
-    label: isActive ? "Open folder" : "Folder",
+    label: isActive ? i18n?.t("icon.openFolder") ?? "Open folder" : i18n?.t("icon.folder") ?? "Folder",
     icon: isActive ? FolderOpen : FolderClosed,
   };
 }

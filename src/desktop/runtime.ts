@@ -13,6 +13,7 @@ import {
 import {
   runNativeOpenDialog,
   runNativeSaveDialog,
+  type NativeDialogErrorMessages,
 } from "../app/dialogs";
 import { normalizeDroppedPaths } from "./paths";
 
@@ -28,15 +29,17 @@ export function isDesktopRuntime(): boolean {
 export async function openNativeDialog(
   options: OpenDialogOptions,
   reportStatus: StatusReporter,
+  messages: NativeDialogErrorMessages,
 ) {
-  return runNativeOpenDialog(openDialog, options, isDesktopRuntime(), reportStatus);
+  return runNativeOpenDialog(openDialog, options, isDesktopRuntime(), reportStatus, messages);
 }
 
 export async function saveNativeDialog(
   options: SaveDialogOptions,
   reportStatus: StatusReporter,
+  messages: NativeDialogErrorMessages,
 ) {
-  return runNativeSaveDialog(saveDialog, options, isDesktopRuntime(), reportStatus);
+  return runNativeSaveDialog(saveDialog, options, isDesktopRuntime(), reportStatus, messages);
 }
 
 export async function bindDesktopFileDrop(

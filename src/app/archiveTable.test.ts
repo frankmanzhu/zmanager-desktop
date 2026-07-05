@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARCHIVE_TABLE_COLUMNS,
+  archiveTableColumnLabel,
   compareOptionalDates,
   DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   formatArchiveTableValue,
@@ -13,6 +15,8 @@ import {
   visibleColumns,
 } from "./archiveTable";
 import type { ArchiveTableRow } from "./archiveTable";
+import { createTranslatorFromCatalog } from "./i18n/translator";
+import { zhCnMessages } from "./i18n/messages.zh-CN";
 
 describe("archive table columns and formatters", () => {
   it("uses the required default details columns", () => {
@@ -55,6 +59,21 @@ describe("archive table columns and formatters", () => {
     };
 
     expect(formatArchiveTableValue(entry, "modified")).not.toBe("");
+  });
+
+  it("localizes labels and kind display without changing sort order", () => {
+    const zhCn = createTranslatorFromCatalog("zh-CN", zhCnMessages);
+    const kindColumn = ARCHIVE_TABLE_COLUMNS.find((column) => column.id === "kind")!;
+    const rows: ArchiveTableRow[] = [
+      { rowType: "entry", path: "file.txt", name: "file.txt", entry: { path: "file.txt", kind: "file" } },
+      { rowType: "entry", path: "folder", name: "folder", entry: { path: "folder", kind: "directory" } },
+    ];
+
+    expect(archiveTableColumnLabel(kindColumn, zhCn)).toBe("类型");
+    const fileRow = rows[0];
+    expect(fileRow.rowType).toBe("entry");
+    expect(formatArchiveTableValue(fileRow.rowType === "entry" ? fileRow.entry : undefined, "kind", zhCn)).toBe("文件");
+    expect(sortArchiveRows(rows, "kind", true).map((row) => row.path)).toEqual(["folder", "file.txt"]);
   });
 
   it("uppercases checksums and marks encrypted entries", () => {

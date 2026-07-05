@@ -1716,6 +1716,19 @@ tbody tr.is-selected {
   grid-column: auto;
 }
 
+#create-password-options {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+#create-password-options > label:first-child {
+  grid-column: auto;
+}
+
+#create-password-options .checkbox-row {
+  white-space: nowrap;
+}
+
 .field-row {
   display: grid;
   gap: 4px;
@@ -2260,7 +2273,7 @@ progress {
 @media (max-width: 760px) {
   .workspace {
     min-height: 100vh;
-    --zmanager-status-bar-parts: 1;
+    --zmanager-statusbar-parts: 1;
   }
 
   .topbar,
@@ -2276,6 +2289,10 @@ progress {
     gap: 6px;
     align-items: center;
     padding: 2px 6px;
+  }
+
+  .workspace-status {
+    display: none;
   }
 
   .status-part:nth-child(2),
@@ -2332,6 +2349,10 @@ progress {
     grid-column: auto;
   }
 
+  #create-password-options {
+    grid-template-columns: 1fr;
+  }
+
   .compress-create-row {
     grid-template-columns: 1fr;
   }
@@ -2349,6 +2370,17 @@ progress {
 
   .compress-create-actions .primary-action {
     grid-column: 1 / -1;
+  }
+
+  #compress-source-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #compress-source-table th:nth-child(4),
+  #compress-source-table td:nth-child(4) {
+    width: 72px;
   }
 
   .compress-action-divider {
@@ -2426,6 +2458,23 @@ progress {
 
 .status-part {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#status-job-button {
+  min-height: 20px;
+  height: 22px;
+  min-width: 0;
+  max-width: 100%;
+  margin-right: 2px;
+  padding-block: 0;
+  overflow: hidden;
+}
+
+#active-job-text {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

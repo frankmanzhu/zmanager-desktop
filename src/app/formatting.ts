@@ -19,6 +19,7 @@ const HTML_ESCAPE_REPLACEMENTS: Record<string, string> = {
 export type FormatBytesOptions = {
   emptyValue?: string;
   fractionDigits?: number;
+  locale?: string | string[];
 };
 
 export type FormatDateOptions = {
@@ -31,6 +32,7 @@ export type FormatDateOptions = {
 export type FormatCompressionRatioOptions = {
   emptyValue?: string;
   fractionDigits?: number;
+  locale?: string | string[];
 };
 
 export function formatBytes(
@@ -43,7 +45,7 @@ export function formatBytes(
   }
 
   if (value < BINARY_UNIT_SIZE) {
-    return `${value} B`;
+    return `${formatNumber(value, 0, options.locale)} B`;
   }
 
   const fractionDigits = options.fractionDigits ?? 1;
@@ -55,7 +57,7 @@ export function formatBytes(
     unitIndex += 1;
   }
 
-  return `${scaled.toFixed(fractionDigits)} ${BYTE_UNITS[unitIndex]}`;
+  return `${formatNumber(scaled, fractionDigits, options.locale)} ${BYTE_UNITS[unitIndex]}`;
 }
 
 export function formatDate(
@@ -160,8 +162,19 @@ export function formatCompressionRatio(
   }
 
   const fractionDigits = options.fractionDigits ?? 1;
-  const percentage = (ratio * 100).toFixed(fractionDigits).replace(/\.0$/, "");
+  const percentage = formatNumber(ratio * 100, fractionDigits, options.locale);
   return `${percentage}%`;
+}
+
+function formatNumber(
+  value: number,
+  fractionDigits: number,
+  locale?: string | string[],
+): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
 }
 
 export function escapeHtml(value: string | number | boolean | null | undefined): string {

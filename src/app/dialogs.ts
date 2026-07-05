@@ -3,6 +3,10 @@ import type { OpenDialogOptions, SaveDialogOptions } from "@tauri-apps/plugin-di
 type OpenDialogFn = (options: OpenDialogOptions) => Promise<string | string[] | null>;
 type SaveDialogFn = (options: SaveDialogOptions) => Promise<string | null>;
 type StatusReporter = (message: string) => void;
+export type NativeDialogErrorMessages = {
+  unavailableInBrowser: string;
+  failed: string;
+};
 
 export function unknownErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
@@ -16,12 +20,16 @@ export function unknownErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function nativeDialogErrorMessage(isDesktop: boolean, error: unknown): string {
+export function nativeDialogErrorMessage(
+  isDesktop: boolean,
+  error: unknown,
+  messages: NativeDialogErrorMessages,
+): string {
   if (!isDesktop) {
-    return "Native dialogs are unavailable in browser preview.";
+    return messages.unavailableInBrowser;
   }
 
-  return unknownErrorMessage(error, "Native dialog failed.");
+  return unknownErrorMessage(error, messages.failed);
 }
 
 export async function runNativeOpenDialog(
@@ -29,11 +37,12 @@ export async function runNativeOpenDialog(
   options: OpenDialogOptions,
   isDesktop: boolean,
   reportStatus: StatusReporter,
+  messages: NativeDialogErrorMessages,
 ) {
   try {
     return await openDialog(options);
   } catch (error) {
-    reportStatus(nativeDialogErrorMessage(isDesktop, error));
+    reportStatus(nativeDialogErrorMessage(isDesktop, error, messages));
     return null;
   }
 }
@@ -43,11 +52,12 @@ export async function runNativeSaveDialog(
   options: SaveDialogOptions,
   isDesktop: boolean,
   reportStatus: StatusReporter,
+  messages: NativeDialogErrorMessages,
 ) {
   try {
     return await saveDialog(options);
   } catch (error) {
-    reportStatus(nativeDialogErrorMessage(isDesktop, error));
+    reportStatus(nativeDialogErrorMessage(isDesktop, error, messages));
     return null;
   }
 }

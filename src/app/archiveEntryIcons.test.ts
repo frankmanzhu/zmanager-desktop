@@ -8,6 +8,8 @@ import {
   fileExtensionForIcon,
 } from "./archiveEntryIcons";
 import type { ArchiveTableRow } from "./archiveTable";
+import { createTranslatorFromCatalog } from "./i18n/translator";
+import { zhCnMessages } from "./i18n/messages.zh-CN";
 
 describe("archive entry icon descriptors", () => {
   it("uses folder artwork for navigable archive folders", () => {
@@ -82,6 +84,15 @@ describe("archive entry icon descriptors", () => {
     expect(archiveTreeIconDescriptor(false, true)).toMatchObject({
       kind: "folder",
       label: "Open folder",
+    });
+  });
+
+  it("localizes descriptor labels without changing stable icon kinds", () => {
+    const zhCn = createTranslatorFromCatalog("zh-CN", zhCnMessages);
+
+    expect(archiveEntryIconDescriptor({ path: "photos/cover.png", kind: "file" }, zhCn)).toMatchObject({
+      kind: "image",
+      label: "图像文件",
     });
   });
 });

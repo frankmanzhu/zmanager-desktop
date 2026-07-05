@@ -3,17 +3,6 @@ import {
   APP_TITLE,
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
-  BROWSE_ACTION_PASSWORD_INVALID,
-  BROWSE_ACTION_PASSWORD_REQUIRED,
-  BROWSE_EMPTY_STATE_DESCRIPTION,
-  BROWSE_EMPTY_STATE_DROP_HINT,
-  BROWSE_EMPTY_STATE_OPEN_ACTION,
-  BROWSE_EMPTY_STATE_TITLE,
-  BROWSE_STATUS_EMPTY,
-  BROWSE_STATUS_IDLE,
-  BROWSE_STATUS_LOADING,
-  BROWSE_STATUS_UNKNOWN,
-  BROWSE_STATUS_READY,
   JOB_POLL_INTERVAL_MS,
   APP_MIN_WINDOW_WIDTH_PX,
   APP_MIN_WINDOW_HEIGHT_PX,
@@ -26,13 +15,6 @@ import {
   APP_DETAILS_PANE_MIN_WIDTH_PX,
   APP_DETAILS_PANE_MAX_WIDTH_PX,
   APP_STATUS_BAR_PARTS,
-  COMPRESS_EMPTY_TABLE_MESSAGE,
-  COMPRESS_TABLE_DESCRIPTION,
-  COMPRESS_TABLE_TITLE,
-  EXTRACT_TABLE_DESCRIPTION,
-  EXTRACT_TABLE_TITLE,
-  MODE_COMPRESS_LABEL,
-  MODE_EXTRACT_LABEL,
 } from "./app/constants";
 import {
   CLASSIC_MENU_GROUPS,
@@ -40,13 +22,17 @@ import {
   COMMAND_DEFINITIONS,
   SINGLE_FILE_REQUIRED_MESSAGE,
   UNSUPPORTED_OPERATION_MESSAGE,
+  commandLabel,
   commandTooltip,
+  commandTooltipText,
+  menuGroupLabel,
   selectCommandState,
   type CommandId,
   type MenuItem,
 } from "./app/classicCommands";
 import {
   ARCHIVE_TABLE_COLUMNS,
+  archiveTableColumnLabel,
   formatArchiveTableValue,
   moveColumn,
   normalizeColumnSettings,
@@ -137,6 +123,17 @@ import {
   saveAppPreferences,
   type AppPreferences,
 } from "./app/preferences";
+import {
+  localeDirection,
+  resolveLocalePreference,
+  type SupportedLocale,
+} from "./app/i18n/locale";
+import {
+  applyTranslations,
+  createTranslator,
+  type MessageKey,
+  type Translator,
+} from "./app/i18n/translator";
 import {
   quickCreateDestination as buildQuickCreateDestination,
   quickExtractDestinationPlan,
@@ -393,7 +390,7 @@ function renderMenuItem(item: MenuItem): string {
   if (item.kind === "submenu") {
     return `
       <div class="menu-submenu">
-        <span>${escapeHtmlValue(item.label)}</span>
+        <span ${item.labelKey ? `data-command-submenu-label="${escapeHtmlValue(item.labelKey)}"` : ""}>${escapeHtmlValue(item.label)}</span>
         <div class="menu-submenu-popover">
           ${item.items.map(renderMenuItem).join("")}
         </div>
@@ -420,7 +417,7 @@ function renderMenuBar(): string {
   return CLASSIC_MENU_GROUPS
     .map((group) => `
       <details class="menu">
-        <summary>${escapeHtmlValue(group.label)}</summary>
+        <summary data-menu-group-label="${escapeHtmlValue(group.label)}">${escapeHtmlValue(group.label)}</summary>
         <div class="menu-popover">
           ${group.items.map(renderMenuItem).join("")}
         </div>
@@ -478,93 +475,93 @@ function renderToolbar(): string {
 
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
-    <nav class="app-menu" aria-label="Application menu">
+    <nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">
       ${renderMenuBar()}
     </nav>
 
-    <header class="command-toolbar mode-toolbar" role="toolbar" aria-label="Workspace modes">
-      <div class="mode-switch" role="tablist" aria-label="Workspace mode">
-        <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress">${MODE_COMPRESS_LABEL}</button>
-        <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract">${MODE_EXTRACT_LABEL}</button>
+    <header class="command-toolbar mode-toolbar" role="toolbar" data-i18n-aria-label="workspace.toolbar.aria" aria-label="Workspace modes">
+      <div class="mode-switch" role="tablist" data-i18n-aria-label="workspace.mode.aria" aria-label="Workspace mode">
+        <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress" data-i18n-text="workspace.mode.compress">Compress</button>
+        <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract" data-i18n-text="workspace.mode.extract">Extract</button>
       </div>
       <div class="legacy-command-buttons">
         ${renderToolbar()}
-        <button id="open-archive" type="button" data-command-id="open" aria-label="Open archive">${toolbarIcon("open")}</button>
-        <button id="new-archive" type="button" data-command-id="createFile" aria-label="New archive">${toolbarIcon("new")}</button>
-        <button id="preferences-toolbar" type="button" data-command-id="options" aria-label="Options">${toolbarIcon("settings")}</button>
-        <button id="jobs-drawer-open" type="button">${toolbarIcon("jobs")}<span class="tool-label">Jobs</span></button>
+        <button id="open-archive" type="button" data-command-id="open" data-i18n-aria-label="commands.openArchive" aria-label="Open archive">${toolbarIcon("open")}</button>
+        <button id="new-archive" type="button" data-command-id="createFile" data-i18n-aria-label="commands.newArchive" aria-label="New archive">${toolbarIcon("new")}</button>
+        <button id="preferences-toolbar" type="button" data-command-id="options" data-i18n-aria-label="commands.options" aria-label="Options">${toolbarIcon("settings")}</button>
+        <button id="jobs-drawer-open" type="button">${toolbarIcon("jobs")}<span class="tool-label" data-i18n-text="jobs.title">Jobs</span></button>
       </div>
       <div class="toolbar-spacer"></div>
-      <p id="workspace-status" class="workspace-status">Ready</p>
+      <p id="workspace-status" class="workspace-status" data-i18n-text="workspace.ready">Ready</p>
     </header>
 
-    <section class="path-bar" aria-label="Archive location">
-      <button id="nav-back" type="button" disabled>Back</button>
-      <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
-      <input id="path-field" class="path-field" type="text" aria-label="Archive path" value="${BROWSE_STATUS_EMPTY}" disabled />
-      <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden>${BROWSE_STATUS_EMPTY}</div>
+    <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
+      <button id="nav-back" type="button" data-i18n-text="navigation.back" disabled>Back</button>
+      <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" data-i18n-title="commands.upOneLevel.tooltip" data-i18n-aria-label="commands.upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
+      <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." disabled />
+      <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</div>
       <label class="search-field">
-        <span class="sr-only">Search entries</span>
-        <input id="search-entries" type="search" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
+        <span class="sr-only" data-i18n-text="search.entries">Search entries</span>
+        <input id="search-entries" type="search" data-i18n-placeholder="search.placeholder" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
       </label>
     </section>
 
-    <section class="browser-shell" aria-label="Archive workspace">
-      <aside class="navigation-pane" aria-label="Archive navigation">
+    <section class="browser-shell" data-i18n-aria-label="workspace.archiveWorkspace.aria" aria-label="Archive workspace">
+      <aside class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
         <div class="pane-header">
-          <h2>Folders</h2>
+          <h2 data-i18n-text="pane.folders">Folders</h2>
         </div>
         <div id="tree-content" class="tree-content"></div>
       </aside>
 
-      <section class="archive-table-pane" aria-label="Archive entries">
+      <section class="archive-table-pane" data-i18n-aria-label="workspace.archiveEntries.aria" aria-label="Archive entries">
         <div class="table-pane-header">
           <div>
             <h1 id="workspace-title">${APP_TITLE}</h1>
-            <p id="browse-meta">${BROWSE_STATUS_READY}</p>
+            <p id="browse-meta" data-i18n-text="browse.statusReady">Open an archive to browse entries.</p>
           </div>
-          <button id="refresh-archive" type="button" data-command-id="refresh" disabled>Refresh</button>
+          <button id="refresh-archive" type="button" data-command-id="refresh" data-i18n-text="common.refresh" disabled>Refresh</button>
         </div>
-        <p id="browse-message" class="status status-idle">${BROWSE_STATUS_IDLE}</p>
+        <p id="browse-message" class="status status-idle" data-i18n-text="browse.statusIdle">No archive selected.</p>
         <div id="compress-surface" class="compress-surface" hidden>
-          <div class="compress-create-panel" aria-label="Create archive">
+          <div class="compress-create-panel" data-i18n-aria-label="compress.createArchive.aria" aria-label="Create archive">
             <div class="compress-create-row">
               <label class="compress-destination-field">
-                <span>Destination</span>
+                <span data-i18n-text="compress.destination">Destination</span>
                 <div class="inline-field">
-                  <input id="create-destination" type="text" placeholder="Choose output archive" list="create-destination-history" />
+                  <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" list="create-destination-history" />
                   <button id="browse-create-destination" type="button">...</button>
                 </div>
                 <datalist id="create-destination-history"></datalist>
               </label>
               <div class="compress-create-actions">
-                <button id="add-source" class="secondary-action" type="button">Add Sources</button>
-                <button id="clear-sources" class="quiet-action" type="button" hidden>Clear</button>
+                <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
+                <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="common.clear" hidden>Clear</button>
                 <span class="compress-action-divider" aria-hidden="true"></span>
-                <button id="create-options-open" class="secondary-action" type="button">Options</button>
-                <button id="start-create" class="primary-action" type="button" disabled>Create Archive</button>
+                <button id="create-options-open" class="secondary-action" type="button" data-i18n-text="compress.options">Options</button>
+                <button id="start-create" class="primary-action" type="button" data-i18n-text="compress.createArchive" disabled>Create Archive</button>
               </div>
             </div>
             <div class="compress-plan-row">
-              <p id="create-plan-meta">Drop files or folders here, or add sources from disk.</p>
+              <p id="create-plan-meta" data-i18n-text="compress.dropSourcesHint">Drop files or folders here, or add sources from disk.</p>
             </div>
           </div>
           <div class="compress-table-shell">
             <table id="compress-source-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Location</th>
-                  <th>Kind</th>
-                  <th class="action-column">Action</th>
+                  <th data-i18n-text="table.name">Name</th>
+                  <th data-i18n-text="table.location">Location</th>
+                  <th data-i18n-text="table.kind">Kind</th>
+                  <th class="action-column" data-i18n-text="table.action">Action</th>
                 </tr>
               </thead>
               <tbody id="compress-source-body">
                 <tr>
                   <td colspan="4" class="compress-empty-cell">
                     <div class="compress-empty-state">
-                      <strong>${COMPRESS_EMPTY_TABLE_MESSAGE}</strong>
-                      <span>Drag files or folders anywhere in this window, or use Add Sources.</span>
+                      <strong data-i18n-text="compress.emptyTable">Drop files or folders to build a new archive.</strong>
+                      <span data-i18n-text="compress.dragSourcesHint">Drag files or folders anywhere in this window, or use Add Sources.</span>
                     </div>
                   </td>
                 </tr>
@@ -578,103 +575,103 @@ appRoot.innerHTML = `
             <div class="archive-empty-state-inner">
               <span class="archive-empty-state-icon" aria-hidden="true">${toolbarIcon("open")}</span>
               <div class="archive-empty-copy">
-                <h2>${BROWSE_EMPTY_STATE_TITLE}</h2>
-                <p>${BROWSE_EMPTY_STATE_DESCRIPTION}</p>
+                <h2 data-i18n-text="browse.emptyTitle">Archive contents</h2>
+                <p data-i18n-text="browse.emptyDescription">Drop an archive here to inspect its files and folders.</p>
               </div>
-              <p class="archive-empty-hint">${BROWSE_EMPTY_STATE_DROP_HINT}</p>
+              <p class="archive-empty-hint" data-i18n-text="browse.emptyDropHint">Drag entries out of this table to extract selected items.</p>
             </div>
           </div>
           <table id="entry-table">
             <thead id="entry-table-head">
               <tr>
                 <th class="selection-column">
-                  <input id="select-all" type="checkbox" aria-label="Select visible entries" disabled />
+                  <input id="select-all" type="checkbox" data-i18n-aria-label="table.selectVisibleEntries" aria-label="Select visible entries" disabled />
                 </th>
-                <th data-sort-key="name">Name</th>
-                <th data-sort-key="size" class="align-right">Size</th>
-                <th data-sort-key="compressedSize" class="align-right">Packed Size</th>
-                <th data-sort-key="modified">Modified</th>
+                <th data-sort-key="name" data-i18n-text="table.name">Name</th>
+                <th data-sort-key="size" class="align-right" data-i18n-text="table.size">Size</th>
+                <th data-sort-key="compressedSize" class="align-right" data-i18n-text="table.packedSize">Packed Size</th>
+                <th data-sort-key="modified" data-i18n-text="table.modified">Modified</th>
               </tr>
             </thead>
             <tbody id="entry-table-body">
               <tr>
-                <td colspan="5" class="empty">${BROWSE_STATUS_EMPTY}</td>
+                <td colspan="5" class="empty" data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <aside class="details-pane" aria-label="Details and actions">
+      <aside class="details-pane" data-i18n-aria-label="workspace.details.aria" aria-label="Details and actions">
         <div class="pane-header">
-          <h2>Details</h2>
+          <h2 data-i18n-text="pane.details">Details</h2>
         </div>
         <div id="details-content" class="details-content"></div>
       </aside>
     </section>
 
     <footer class="status-bar" aria-live="polite">
-      <span id="status-selection-count" class="status-part">0 / 0 object(s) selected</span>
+      <span id="status-selection-count" class="status-part" data-i18n-text="status.initialSelection">0 / 0 object(s) selected</span>
       <span id="status-selection-size" class="status-part"></span>
       <span id="status-focused-size" class="status-part"></span>
       <span id="status-focused-modified" class="status-part"></span>
-      <span id="status-text" class="sr-only">Ready.</span>
+      <span id="status-text" class="sr-only" data-i18n-text="workspace.readyWithPeriod">Ready.</span>
       <button id="status-job-button" type="button">
-        <span id="active-job-text">No jobs</span>
+        <span id="active-job-text" data-i18n-text="status.noJobs">No jobs</span>
       </button>
     </footer>
 
-    <aside id="job-drawer" class="job-drawer" aria-label="Job details" aria-hidden="true">
+    <aside id="job-drawer" class="job-drawer" data-i18n-aria-label="jobs.drawer.aria" aria-label="Job details" aria-hidden="true">
       <div class="job-drawer-header">
         <div>
-          <h2>Jobs</h2>
-          <p>Live create, extract, preview, and test work.</p>
+          <h2 data-i18n-text="jobs.title">Jobs</h2>
+          <p data-i18n-text="jobs.description">Live create, extract, preview, and test work.</p>
         </div>
         <div class="job-drawer-actions">
-          <button id="refresh-jobs" type="button">Refresh</button>
-          <button id="job-drawer-close" type="button">Close</button>
+          <button id="refresh-jobs" type="button" data-i18n-text="common.refresh">Refresh</button>
+          <button id="job-drawer-close" type="button" data-i18n-text="common.close">Close</button>
         </div>
       </div>
       <div id="jobs-list" class="jobs-list"></div>
     </aside>
 
-    <section id="quick-progress" class="quick-progress" aria-label="Job progress" hidden>
+    <section id="quick-progress" class="quick-progress" data-i18n-aria-label="quick.progress.aria" aria-label="Job progress" hidden>
       <div class="quick-progress-heading">
         <div>
-          <h2 id="quick-title">Preparing job</h2>
+          <h2 id="quick-title" data-i18n-text="quick.progress.title">Preparing job</h2>
           <p id="quick-subtitle"></p>
         </div>
       </div>
       <dl id="quick-context" class="quick-progress-context" hidden></dl>
       <div class="quick-progress-grid">
-        <div class="quick-progress-metric"><span>Elapsed time:</span><strong id="quick-elapsed">00:00:00</strong></div>
-        <div class="quick-progress-metric"><span>Total size:</span><strong id="quick-total-size"></strong></div>
-        <div class="quick-progress-metric"><span>Remaining time:</span><strong id="quick-remaining">--:--:--</strong></div>
-        <div class="quick-progress-metric"><span>Speed:</span><strong id="quick-speed"></strong></div>
-        <div class="quick-progress-metric"><span>Files:</span><strong id="quick-files">0</strong></div>
-        <div class="quick-progress-metric"><span>Processed:</span><strong id="quick-processed"></strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.elapsedTime">Elapsed time:</span><strong id="quick-elapsed">00:00:00</strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.totalSize">Total size:</span><strong id="quick-total-size"></strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.remainingTime">Remaining time:</span><strong id="quick-remaining">--:--:--</strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.speed">Speed:</span><strong id="quick-speed"></strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.files">Files:</span><strong id="quick-files">0</strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.processed">Processed:</span><strong id="quick-processed"></strong></div>
         <div class="quick-progress-metric"><span></span><strong id="quick-total-files"></strong></div>
-        <div class="quick-progress-metric"><span>Compressed size:</span><strong id="quick-compressed-size"></strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.compressedSize">Compressed size:</span><strong id="quick-compressed-size"></strong></div>
         <div class="quick-progress-metric"><span></span><strong></strong></div>
-        <div class="quick-progress-metric"><span>Compression ratio:</span><strong id="quick-ratio"></strong></div>
+        <div class="quick-progress-metric"><span data-i18n-text="quick.compressionRatio">Compression ratio:</span><strong id="quick-ratio"></strong></div>
       </div>
       <div class="quick-progress-current">
-        <p id="quick-operation">Starting</p>
+        <p id="quick-operation" data-i18n-text="quick.operation.starting">Starting</p>
         <p id="quick-current-path"></p>
       </div>
-      <progress id="quick-progress-bar" aria-label="Quick action progress"></progress>
+      <progress id="quick-progress-bar" data-i18n-aria-label="quick.progressBar.aria" aria-label="Quick action progress"></progress>
       <div class="quick-progress-actions">
-        <button id="quick-background" type="button" disabled>Background</button>
-        <button id="quick-continue" type="button" disabled>Pause</button>
-        <button id="quick-cancel" type="button">Cancel</button>
+        <button id="quick-background" type="button" data-i18n-text="quick.background" disabled>Background</button>
+        <button id="quick-continue" type="button" data-i18n-text="quick.pause" disabled>Pause</button>
+        <button id="quick-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
       </div>
     </section>
 
     <div id="context-menu" class="context-menu" role="menu" hidden></div>
     <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
       <div>
-        <strong id="drop-overlay-title">Drop files</strong>
-        <span id="drop-overlay-message">Open an archive or add files to a new archive.</span>
+        <strong id="drop-overlay-title" data-i18n-text="drop.title">Drop files</strong>
+        <span id="drop-overlay-message" data-i18n-text="drop.message">Open an archive or add files to a new archive.</span>
       </div>
     </div>
 
@@ -682,18 +679,19 @@ appRoot.innerHTML = `
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title">
         <div class="dialog-header">
           <div>
-            <h2 id="extract-title">Extract</h2>
-            <p id="extract-dialog-message">Choose a destination before starting.</p>
+            <h2 id="extract-title" data-i18n-text="extract.title">Extract</h2>
+            <p id="extract-dialog-message" data-i18n-text="extract.description">Choose a destination before starting.</p>
           </div>
-          <button id="extract-dialog-close" class="icon-button" type="button" aria-label="Close extract dialog">Close</button>
+          <button id="extract-dialog-close" class="icon-button" type="button" data-i18n-aria-label="extract.close.aria" data-i18n-text="common.close" aria-label="Close extract dialog">Close</button>
         </div>
         <div class="dialog-body">
           <label class="field-row">
-            <span>Extract to</span>
+            <span data-i18n-text="extract.destination">Extract to</span>
             <div class="inline-field">
               <input
                 id="extract-destination"
                 type="text"
+                data-i18n-placeholder="extract.destination.placeholder"
                 placeholder="Select a destination folder"
                 list="extract-destination-history"
               />
@@ -704,60 +702,60 @@ appRoot.innerHTML = `
           <div class="form-grid form-grid-compact">
             <label class="checkbox-row">
               <input id="extract-use-subfolder" type="checkbox" />
-              <span>Extract to subfolder</span>
+              <span data-i18n-text="extract.toSubfolder">Extract to subfolder</span>
             </label>
             <label>
-              <span>Subfolder</span>
-              <input id="extract-subfolder" type="text" placeholder="Optional" />
+              <span data-i18n-text="extract.subfolder">Subfolder</span>
+              <input id="extract-subfolder" type="text" data-i18n-placeholder="common.optional" placeholder="Optional" />
             </label>
             <label>
-              <span>Path mode</span>
+              <span data-i18n-text="extract.pathMode">Path mode</span>
               <select id="extract-path-mode">
-                <option value="full">Full paths</option>
-                <option value="current">Current folder</option>
-                <option value="none">No paths</option>
+                <option value="full" data-i18n-text="extract.pathMode.full">Full paths</option>
+                <option value="current" data-i18n-text="extract.pathMode.current">Current folder</option>
+                <option value="none" data-i18n-text="extract.pathMode.none">No paths</option>
               </select>
             </label>
             <label class="checkbox-row">
               <input id="extract-deduplicate-root" type="checkbox" />
-              <span>Eliminate duplicated root folder</span>
+              <span data-i18n-text="extract.deduplicateRoot">Eliminate duplicated root folder</span>
             </label>
           </div>
           <div class="form-grid form-grid-compact">
             <label>
-              <span>Overwrite policy</span>
+              <span data-i18n-text="extract.overwritePolicy">Overwrite policy</span>
               <select id="browse-overwrite">
-                <option value="ask">Ask</option>
-                <option value="refuse">Refuse</option>
-                <option value="rename">Rename</option>
-                <option value="replace">Replace</option>
+                <option value="ask" data-i18n-text="extract.overwrite.ask">Ask</option>
+                <option value="refuse" data-i18n-text="extract.overwrite.refuse">Refuse</option>
+                <option value="rename" data-i18n-text="extract.overwrite.rename">Rename</option>
+                <option value="replace" data-i18n-text="extract.overwrite.replace">Replace</option>
               </select>
             </label>
             <label>
-              <span>Password</span>
+              <span data-i18n-text="extract.password">Password</span>
               <input id="browse-password" type="password" autocomplete="off" />
             </label>
             <label class="checkbox-row">
               <input id="browse-show-password" type="checkbox" />
-              <span>Show Password</span>
+              <span data-i18n-text="extract.showPassword">Show Password</span>
             </label>
             <label class="checkbox-row">
               <input id="extract-restore-security" type="checkbox" disabled />
-              <span>Restore file security</span>
+              <span data-i18n-text="extract.restoreSecurity">Restore file security</span>
             </label>
           </div>
           <details class="advanced-options">
-            <summary>Advanced options</summary>
+            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
             <label>
-              <span>Strip components</span>
+              <span data-i18n-text="extract.stripComponents">Strip components</span>
               <input id="browse-strip-components" type="number" min="0" max="8" value="0" />
             </label>
           </details>
         </div>
         <div class="dialog-actions">
-          <button id="extract-start" type="button">OK</button>
-          <button type="button" data-command-id="helpContents">Help</button>
-          <button id="extract-cancel" type="button">Cancel</button>
+          <button id="extract-start" type="button" data-i18n-text="common.ok">OK</button>
+          <button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>
+          <button id="extract-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
         </div>
       </section>
     </div>
@@ -766,16 +764,16 @@ appRoot.innerHTML = `
       <section class="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="create-title">
         <div class="dialog-header">
           <div>
-            <h2 id="create-title">Archive Options</h2>
-            <p>Format, compression, password, and archive safety settings.</p>
+            <h2 id="create-title" data-i18n-text="create.options.title">Archive Options</h2>
+            <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
           </div>
-          <button id="create-dialog-close" class="icon-button" type="button" aria-label="Close archive options">Close</button>
+          <button id="create-dialog-close" class="icon-button" type="button" data-i18n-aria-label="create.options.close.aria" data-i18n-text="common.close" aria-label="Close archive options">Close</button>
         </div>
         <div class="dialog-body">
           <ul id="source-list" class="list-box" hidden></ul>
           <div class="form-grid create-options-grid">
             <label>
-              <span>Archive format</span>
+              <span data-i18n-text="create.archiveFormat">Archive format</span>
               <select id="create-format">
                 <option value="zip">ZIP</option>
                 <option value="tarZst">TZST</option>
@@ -784,61 +782,61 @@ appRoot.innerHTML = `
               </select>
             </label>
             <label>
-              <span>Compression level</span>
+              <span data-i18n-text="create.compressionLevel">Compression level</span>
               <select id="create-compression-level">
-                <option value="">Normal</option>
-                <option value="0">Store</option>
-                <option value="1">Fastest</option>
-                <option value="3">Fast</option>
-                <option value="9">Maximum</option>
-                <option value="22">Ultra</option>
+                <option value="" data-i18n-text="create.compression.normal">Normal</option>
+                <option value="0" data-i18n-text="common.store">Store</option>
+                <option value="1" data-i18n-text="common.fastest">Fastest</option>
+                <option value="3" data-i18n-text="common.fast">Fast</option>
+                <option value="9" data-i18n-text="common.maximum">Maximum</option>
+                <option value="22" data-i18n-text="common.ultra">Ultra</option>
               </select>
             </label>
             <label>
-              <span>Split to volumes, bytes</span>
-              <input id="create-volume" type="number" min="0" placeholder="Optional" />
+              <span data-i18n-text="create.splitVolumes">Split to volumes, bytes</span>
+              <input id="create-volume" type="number" min="0" data-i18n-placeholder="common.optional" placeholder="Optional" />
             </label>
             <label id="create-tzap-recovery-field" hidden>
-              <span>TZAP recovery, %</span>
+              <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
               <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
             </label>
           </div>
           <div class="toggle-grid">
-            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> Clean source</label>
-            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> Preserve metadata</label>
-            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> Replace existing</label>
-            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> Respect .gitignore</label>
+            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
+            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
+            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
+            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> <span data-i18n-text="create.respectGitignore">Respect .gitignore</span></label>
           </div>
           <details class="advanced-options">
-            <summary>Advanced options</summary>
+            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
             <div id="create-password-options" class="form-grid form-grid-compact">
               <label>
-                <span>Enter password</span>
+                <span data-i18n-text="create.enterPassword">Enter password</span>
                 <input id="create-password" type="password" autocomplete="off" />
               </label>
               <label>
-                <span>Reenter password</span>
+                <span data-i18n-text="create.reenterPassword">Reenter password</span>
                 <input id="create-password-confirm" type="password" autocomplete="off" />
               </label>
               <label class="checkbox-row">
                 <input id="create-show-password" type="checkbox" />
-                <span>Show Password</span>
+                <span data-i18n-text="extract.showPassword">Show Password</span>
               </label>
             </div>
           </details>
           <div class="plan-header">
             <div>
-              <h3>Plan</h3>
-              <p>Detailed inclusion preview for the staged sources.</p>
+              <h3 data-i18n-text="create.plan.title">Plan</h3>
+              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
             </div>
           </div>
           <div id="create-plan-summary" class="summary-card">
-            <p>No plan available yet.</p>
+            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
           </div>
         </div>
         <div class="dialog-actions">
-          <button type="button" data-command-id="helpContents">Help</button>
-          <button id="create-cancel" type="button">Close</button>
+          <button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>
+          <button id="create-cancel" type="button" data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
@@ -847,17 +845,17 @@ appRoot.innerHTML = `
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="dialog-header">
           <div>
-            <h2 id="about-title">About ZManager</h2>
-            <p>Diagnostics for support and bug reports.</p>
+            <h2 id="about-title" data-i18n-text="about.title">About ZManager</h2>
+            <p data-i18n-text="about.description">Diagnostics for support and bug reports.</p>
           </div>
-          <button id="about-dialog-close" class="icon-button" type="button" aria-label="Close about dialog">Close</button>
+          <button id="about-dialog-close" class="icon-button" type="button" data-i18n-aria-label="about.close.aria" data-i18n-text="common.close" aria-label="Close about dialog">Close</button>
         </div>
         <div class="dialog-body">
           <div id="about-diagnostics" class="diagnostics"></div>
         </div>
         <div class="dialog-actions">
-          <button id="copy-diagnostics" type="button">Copy Diagnostics</button>
-          <button id="about-close" type="button">Close</button>
+          <button id="copy-diagnostics" type="button" data-i18n-text="about.copyDiagnostics">Copy Diagnostics</button>
+          <button id="about-close" type="button" data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
@@ -866,37 +864,37 @@ appRoot.innerHTML = `
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="preferences-title">
         <div class="dialog-header">
           <div>
-            <h2 id="preferences-title">Options</h2>
-            <p>Safe desktop preferences for archive workflows.</p>
+            <h2 id="preferences-title" data-i18n-text="preferences.title">Options</h2>
+            <p data-i18n-text="preferences.description">Safe desktop preferences for archive workflows.</p>
           </div>
-          <button id="preferences-dialog-close" class="icon-button" type="button" aria-label="Close preferences dialog">Close</button>
+          <button id="preferences-dialog-close" class="icon-button" type="button" data-i18n-aria-label="preferences.close.aria" data-i18n-text="common.close" aria-label="Close preferences dialog">Close</button>
         </div>
         <div class="dialog-body">
           <div class="options-pages">
             <section class="options-page">
-              <h3>Folders</h3>
+              <h3 data-i18n-text="preferences.folders.title">Folders</h3>
               <div class="form-grid form-grid-compact">
                 <label>
-                  <span>Working/output folder</span>
+                  <span data-i18n-text="preferences.folders.workingOutput">Working/output folder</span>
                   <select id="pref-output-location">
-                    <option value="sourceFolder">Current/source folder</option>
-                    <option value="customFolder">Specified path</option>
+                    <option value="sourceFolder" data-i18n-text="preferences.folders.sourceFolder">Current/source folder</option>
+                    <option value="customFolder" data-i18n-text="preferences.folders.customFolder">Specified path</option>
                   </select>
                 </label>
                 <label class="span-2">
-                  <span>Specified path</span>
+                  <span data-i18n-text="preferences.folders.customFolder">Specified path</span>
                   <div class="inline-field">
-                    <input id="pref-custom-output" type="text" placeholder="Optional folder for new archives" />
+                    <input id="pref-custom-output" type="text" data-i18n-placeholder="preferences.folders.customPlaceholder" placeholder="Optional folder for new archives" />
                     <button id="pref-choose-output" type="button">...</button>
                   </div>
                 </label>
               </div>
             </section>
             <section class="options-page">
-              <h3>Archive defaults</h3>
+              <h3 data-i18n-text="preferences.archiveDefaults.title">Archive defaults</h3>
               <div class="form-grid form-grid-compact">
                 <label>
-                  <span>Default archive format</span>
+                  <span data-i18n-text="preferences.archiveDefaults.defaultFormat">Default archive format</span>
                   <select id="pref-default-format">
                     <option value="zip">ZIP</option>
                     <option value="tarZst">TZST</option>
@@ -905,7 +903,7 @@ appRoot.innerHTML = `
                   </select>
                 </label>
                 <label>
-                  <span>Edit defaults for</span>
+                  <span data-i18n-text="preferences.archiveDefaults.editFormat">Edit defaults for</span>
                   <select id="pref-create-format">
                     <option value="zip">ZIP</option>
                     <option value="tarZst">TZST</option>
@@ -914,70 +912,71 @@ appRoot.innerHTML = `
                   </select>
                 </label>
                 <label>
-                  <span>Compression level</span>
+                  <span data-i18n-text="preferences.archiveDefaults.compressionLevel">Compression level</span>
                   <select id="pref-create-compression-level">
-                    <option value="">Backend default</option>
-                    <option value="0">Store</option>
-                    <option value="1">Fastest</option>
-                    <option value="3">Fast</option>
-                    <option value="9">Maximum</option>
-                    <option value="22">Ultra</option>
+                    <option value="" data-i18n-text="preferences.archiveDefaults.backendDefault">Backend default</option>
+                    <option value="0" data-i18n-text="common.store">Store</option>
+                    <option value="1" data-i18n-text="common.fastest">Fastest</option>
+                    <option value="3" data-i18n-text="common.fast">Fast</option>
+                    <option value="9" data-i18n-text="common.maximum">Maximum</option>
+                    <option value="22" data-i18n-text="common.ultra">Ultra</option>
                   </select>
                 </label>
                 <label>
-                  <span>Split to volumes, bytes</span>
-                  <input id="pref-create-volume" type="number" min="0" placeholder="No split" />
+                  <span data-i18n-text="preferences.archiveDefaults.splitVolumes">Split to volumes, bytes</span>
+                  <input id="pref-create-volume" type="number" min="0" data-i18n-placeholder="preferences.archiveDefaults.noSplit" placeholder="No split" />
                 </label>
                 <label>
-                  <span>Default extraction</span>
+                  <span data-i18n-text="preferences.archiveDefaults.defaultExtraction">Default extraction</span>
                   <select id="pref-default-extraction">
-                    <option value="askEveryTime">Ask every time</option>
-                    <option value="extractHere">Extract here</option>
-                    <option value="extractToFolder">Extract to folder</option>
+                    <option value="askEveryTime" data-i18n-text="preferences.extraction.askEveryTime">Ask every time</option>
+                    <option value="extractHere" data-i18n-text="preferences.extraction.extractHere">Extract here</option>
+                    <option value="extractToFolder" data-i18n-text="preferences.extraction.extractToFolder">Extract to folder</option>
                   </select>
                 </label>
                 <label>
-                  <span>Preview cleanup</span>
+                  <span data-i18n-text="preferences.archiveDefaults.previewCleanup">Preview cleanup</span>
                   <select id="pref-preview-cleanup">
-                    <option value="beforeNextPreview">Before next preview</option>
-                    <option value="whenAppCloses">When app closes</option>
+                    <option value="beforeNextPreview" data-i18n-text="preferences.previewCleanup.beforeNextPreview">Before next preview</option>
+                    <option value="whenAppCloses" data-i18n-text="preferences.previewCleanup.whenAppCloses">When app closes</option>
                   </select>
                 </label>
               </div>
               <div class="toggle-grid">
-                <label class="toggle-line"><input id="pref-create-clean-source" type="checkbox" /> Clean source</label>
-                <label class="toggle-line"><input id="pref-create-preserve-metadata" type="checkbox" /> Preserve metadata</label>
-                <label class="toggle-line"><input id="pref-create-replace-existing" type="checkbox" /> Replace existing</label>
-                <label class="toggle-line"><input id="pref-create-prompt-password" type="checkbox" /> Prompt for password</label>
+                <label class="toggle-line"><input id="pref-create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
+                <label class="toggle-line"><input id="pref-create-preserve-metadata" type="checkbox" /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
+                <label class="toggle-line"><input id="pref-create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
+                <label class="toggle-line"><input id="pref-create-prompt-password" type="checkbox" /> <span data-i18n-text="create.promptForPassword">Prompt for password</span></label>
               </div>
             </section>
             <section class="options-page">
-              <h3>Interface</h3>
+              <h3 data-i18n-text="preferences.interface.title">Interface</h3>
               <div class="toggle-grid">
-                <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> Show .. item</label>
-                <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> Show real file icons</label>
-                <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> Full row select</label>
-                <label class="toggle-line"><input id="pref-show-grid" type="checkbox" /> Show grid lines</label>
-                <label class="toggle-line"><input id="pref-single-click" type="checkbox" /> Single-click to open</label>
-                <label class="toggle-line"><input id="pref-alternative-selection" type="checkbox" /> Alternative selection mode</label>
-                <label class="toggle-line"><input id="pref-toolbar-visible" type="checkbox" /> Archive toolbar</label>
-                <label class="toggle-line"><input id="pref-large-toolbar" type="checkbox" /> Large toolbar buttons</label>
-                <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> Show toolbar labels</label>
-                <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> Flat view</label>
+                <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> <span data-i18n-text="preferences.interface.showParent">Show .. item</span></label>
+                <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> <span data-i18n-text="preferences.interface.realFileIcons">Show real file icons</span></label>
+                <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> <span data-i18n-text="preferences.interface.fullRowSelect">Full row select</span></label>
+                <label class="toggle-line"><input id="pref-show-grid" type="checkbox" /> <span data-i18n-text="preferences.interface.showGrid">Show grid lines</span></label>
+                <label class="toggle-line"><input id="pref-single-click" type="checkbox" /> <span data-i18n-text="preferences.interface.singleClick">Single-click to open</span></label>
+                <label class="toggle-line"><input id="pref-alternative-selection" type="checkbox" /> <span data-i18n-text="preferences.interface.alternativeSelection">Alternative selection mode</span></label>
+                <label class="toggle-line"><input id="pref-toolbar-visible" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarVisible">Archive toolbar</span></label>
+                <label class="toggle-line"><input id="pref-large-toolbar" type="checkbox" /> <span data-i18n-text="preferences.interface.largeToolbar">Large toolbar buttons</span></label>
+                <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarLabels">Show toolbar labels</span></label>
+                <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> <span data-i18n-text="preferences.interface.flatView">Flat view</span></label>
               </div>
             </section>
             <section class="options-page">
-              <h3>Language</h3>
-              <select disabled>
-                <option>System default</option>
+              <h3 data-i18n-text="preferences.language.title">Language</h3>
+              <select id="pref-language">
+                <option value="system" data-i18n-text="preferences.language.systemDefault">System default</option>
+                <option value="en" data-i18n-text="preferences.language.english">English</option>
               </select>
             </section>
           </div>
-          <p id="preferences-status" class="status status-idle">Preferences are stored locally and never include passwords.</p>
+          <p id="preferences-status" class="status status-idle" data-i18n-text="preferences.status.localOnly">Preferences are stored locally and never include passwords.</p>
         </div>
         <div class="dialog-actions">
-          <button id="preferences-save" type="button">Save</button>
-          <button id="preferences-cancel" type="button">Cancel</button>
+          <button id="preferences-save" type="button" data-i18n-text="common.save">Save</button>
+          <button id="preferences-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
         </div>
       </section>
     </div>
@@ -986,14 +985,14 @@ appRoot.innerHTML = `
       <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="info-title">
         <div class="dialog-header">
           <div>
-            <h2 id="info-title">Info</h2>
-            <p>Archive or entry details.</p>
+            <h2 id="info-title" data-i18n-text="info.title">Info</h2>
+            <p data-i18n-text="info.description">Archive or entry details.</p>
           </div>
-          <button id="info-dialog-close" class="icon-button" type="button" aria-label="Close info dialog">Close</button>
+          <button id="info-dialog-close" class="icon-button" type="button" data-i18n-aria-label="info.close.aria" data-i18n-text="common.close" aria-label="Close info dialog">Close</button>
         </div>
         <div id="info-dialog-body" class="diagnostics"></div>
         <div class="dialog-actions">
-          <button id="info-close" type="button">Close</button>
+          <button id="info-close" type="button" data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
@@ -1119,6 +1118,7 @@ const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
 const copyDiagnosticsButton = document.querySelector<HTMLButtonElement>("#copy-diagnostics")!;
 const preferencesDialog = document.querySelector<HTMLDivElement>("#preferences-dialog")!;
+const preferencesLocaleSelect = document.querySelector<HTMLSelectElement>("#pref-language")!;
 const preferencesDefaultFormatSelect = document.querySelector<HTMLSelectElement>("#pref-default-format")!;
 const preferencesDefaultExtractionSelect = document.querySelector<HTMLSelectElement>("#pref-default-extraction")!;
 const preferencesOutputLocationSelect = document.querySelector<HTMLSelectElement>("#pref-output-location")!;
@@ -1145,6 +1145,7 @@ const preferencesFlatViewCheckbox = document.querySelector<HTMLInputElement>("#p
 const preferencesStatusElement = document.querySelector<HTMLParagraphElement>("#preferences-status")!;
 const preferencesSaveButton = document.querySelector<HTMLButtonElement>("#preferences-save")!;
 const preferencesViewElements: PreferencesViewElements = {
+  localeSelect: preferencesLocaleSelect,
   defaultFormatSelect: preferencesDefaultFormatSelect,
   defaultExtractionSelect: preferencesDefaultExtractionSelect,
   outputLocationSelect: preferencesOutputLocationSelect,
@@ -1185,6 +1186,8 @@ let browseEntries: ArchiveEntryDto[] = [];
 let selectedEntries = new Set<string>();
 let navigationHistory: string[] = [];
 let appPreferences: AppPreferences = loadAppPreferences();
+let resolvedLocale: SupportedLocale = resolveLocalePreference(appPreferences.locale);
+let i18n: Translator = createTranslator(resolvedLocale);
 let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
 let systemIconRequestRevision = 0;
@@ -1289,12 +1292,12 @@ function applySortCommand(nextSortKey: ArchiveSortKey) {
 
 function closeAppWindow() {
   if (!isDesktopRuntime()) {
-    setOperationalStatus("Use the browser window controls to close ZManager.");
+    setOperationalMessage("status.closeInBrowser");
     return;
   }
 
   void getCurrentWindow().close().catch(() => {
-    setOperationalStatus("Quick action completed. Close this window.");
+    setOperationalMessage("quick.completed.closeWindow");
   });
 }
 
@@ -1405,7 +1408,7 @@ async function sendQuickActionJobsToBackground() {
   clearQuickActionAutoCloseTimer();
   if (quickActionAutoCloseAction === "returnToWorkspace") {
     await closeFocusedJobProgress();
-    setOperationalStatus("Job running in background.");
+    setOperationalMessage("jobs.background");
     openJobDrawer();
     renderJobs();
     return;
@@ -1415,13 +1418,13 @@ async function sendQuickActionJobsToBackground() {
     const currentWindow = getCurrentWindow();
     quickActionWindowMode = "background";
     quickBackgroundButton.disabled = true;
-    setOperationalStatus("Job running in background.");
+    setOperationalMessage("jobs.background");
     try {
       await currentWindow.minimize();
       quickActionWindowShown = false;
       return;
     } catch {
-      setOperationalStatus("Job is still running. Unable to minimize the window.");
+      setOperationalMessage("jobs.minimizeFailed");
       renderQuickProgress();
       return;
     }
@@ -1434,7 +1437,7 @@ async function sendQuickActionJobsToBackground() {
   document.body.classList.remove("quick-action-job-mode");
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
-  setOperationalStatus("Job running in background.");
+  setOperationalMessage("jobs.background");
   openJobDrawer();
   renderJobs();
 }
@@ -1525,11 +1528,11 @@ async function toggleQuickActionPause() {
         }
       }),
     );
-    setOperationalStatus(shouldResume ? "Job continued." : "Job paused.");
+    setOperationalMessage(shouldResume ? "jobs.continued" : "jobs.paused");
     await pollJobs();
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to update job.");
+    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
     renderJobs();
   }
 }
@@ -1547,7 +1550,7 @@ async function cancelFocusedQuickActionJobs() {
   try {
     await Promise.all(jobIds.map((jobId) => cancelJobCommand({ jobId })));
     await pollJobs();
-    setOperationalStatus("Job cancelled.");
+    setOperationalMessage("jobs.cancelled");
     if (quickActionAutoCloseAction === "returnToWorkspace") {
       await closeFocusedJobProgress();
     } else {
@@ -1555,7 +1558,7 @@ async function cancelFocusedQuickActionJobs() {
     }
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to cancel job.");
+    setOperationalStatus(commandError?.message ?? message("jobs.cancelFailed"));
     renderJobs();
   }
 }
@@ -1584,7 +1587,7 @@ function maybeCloseCompletedQuickActionWindow() {
   }
 
   if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
-    setOperationalStatus("Job needs attention.");
+    setOperationalMessage("jobs.needsAttention");
     if (quickActionWindowMode === "background") {
       void revealQuickActionJobWindow();
     } else {
@@ -1593,7 +1596,7 @@ function maybeCloseCompletedQuickActionWindow() {
     return;
   }
 
-  setOperationalStatus("Job completed.");
+  setOperationalMessage("jobs.completed");
   renderQuickProgress();
   quickActionAutoCloseTimer = window.setTimeout(() => {
     if (quickActionAutoCloseAction === "returnToWorkspace") {
@@ -1616,13 +1619,20 @@ function updateStatusBar() {
   const selectedBytes = getSelectedEntryDtos().reduce((total, entry) => total + (entry.size ?? 0), 0);
   const focusedEntry = focusedEntryPath ? getEntryByPath(focusedEntryPath) : null;
 
-  statusSelectionCountElement.textContent = `${selectedTotal} / ${visibleEntries.length} object(s) selected`;
+  statusSelectionCountElement.textContent = message("status.selectionCount", {
+    selected: selectedTotal,
+    total: visibleEntries.length,
+  });
   statusSelectionSizeElement.textContent = selectedTotal > 0
-    ? `Selected: ${formatBytes(selectedBytes)}`
+    ? message("status.selectedSize", { size: formatBytes(selectedBytes) })
     : "";
 
-  statusFocusedSizeElement.textContent = focusedEntry ? `Focused: ${formatBytes(focusedEntry.size)}` : "";
-  statusFocusedModifiedElement.textContent = focusedEntry ? `Modified: ${formatDate(focusedEntry.modified)}` : "";
+  statusFocusedSizeElement.textContent = focusedEntry
+    ? message("status.focusedSize", { size: formatBytes(focusedEntry.size) })
+    : "";
+  statusFocusedModifiedElement.textContent = focusedEntry
+    ? message("status.focusedModified", { date: formatDate(focusedEntry.modified) })
+    : "";
 }
 
 function applyPreferenceClasses() {
@@ -1635,44 +1645,54 @@ function applyPreferenceClasses() {
 }
 
 function formatBytes(value?: number): string {
-  return formatBytesValue(value);
+  return formatBytesValue(value, { locale: resolvedLocale });
 }
 
 function escapeHtml(value: string): string {
   return escapeHtmlValue(value);
 }
 
+function message(key: MessageKey, params?: Parameters<Translator["t"]>[1]): string {
+  return i18n.t(key, params);
+}
+
+function setOperationalMessage(key: MessageKey, params?: Parameters<Translator["t"]>[1]): void {
+  setOperationalStatus(message(key, params));
+}
+
 function formatJobKind(kind: JobKind): string {
   switch (kind) {
     case "zipCreate":
-      return "ZIP create";
+      return i18n.t("jobs.kind.zipCreate");
     case "zipExtract":
-      return "ZIP extract";
+      return i18n.t("jobs.kind.zipExtract");
     case "sevenZCreate":
-      return "7Z create";
+      return i18n.t("jobs.kind.sevenZCreate");
     case "sevenZExtract":
-      return "7Z extract";
+      return i18n.t("jobs.kind.sevenZExtract");
     case "rarExtract":
-      return "RAR extract";
+      return i18n.t("jobs.kind.rarExtract");
     case "tarZstdCreate":
-      return "TZST create";
+      return i18n.t("jobs.kind.tarZstdCreate");
     case "tarZstdExtract":
-      return "TZST extract";
+      return i18n.t("jobs.kind.tarZstdExtract");
     case "tzapCreate":
-      return "TZAP create";
+      return i18n.t("jobs.kind.tzapCreate");
     case "tzapExtract":
-      return "TZAP extract";
+      return i18n.t("jobs.kind.tzapExtract");
     case "archiveExtract":
-      return "Archive extract";
+      return i18n.t("jobs.kind.archiveExtract");
     case "rawStreamExtract":
-      return "Raw stream extract";
+      return i18n.t("jobs.kind.rawStreamExtract");
     case "testArchive":
-      return "Archive test";
+      return i18n.t("jobs.kind.testArchive");
+    default:
+      return String(kind);
   }
 }
 
 function formatDate(value?: string): string {
-  return formatDateValue(value, { emptyValue: "" });
+  return formatDateValue(value, { emptyValue: "", locale: resolvedLocale });
 }
 
 function formatDurationClock(milliseconds: number | null): string {
@@ -1693,7 +1713,7 @@ function quickActionOperationLabel(kind?: JobKind): string {
     case "sevenZCreate":
     case "tarZstdCreate":
     case "tzapCreate":
-      return "Adding";
+      return message("quick.operation.adding");
     case "zipExtract":
     case "sevenZExtract":
     case "rarExtract":
@@ -1701,11 +1721,11 @@ function quickActionOperationLabel(kind?: JobKind): string {
     case "tzapExtract":
     case "archiveExtract":
     case "rawStreamExtract":
-      return "Extracting";
+      return message("quick.operation.extracting");
     case "testArchive":
-      return "Testing";
+      return message("quick.operation.testing");
     default:
-      return "Starting";
+      return message("quick.operation.starting");
   }
 }
 
@@ -1737,7 +1757,7 @@ function renderQuickProgress() {
   );
 
   if (!trackedJobs.length) {
-    quickTitleElement.textContent = "Preparing job";
+    quickTitleElement.textContent = message("quick.progress.title");
     quickSubtitleElement.textContent = "";
     renderFocusedJobContext();
     quickElapsedElement.textContent = "00:00:00";
@@ -1749,13 +1769,13 @@ function renderQuickProgress() {
     quickProcessedElement.textContent = "";
     quickCompressedSizeElement.textContent = "";
     quickRatioElement.textContent = "";
-    quickOperationElement.textContent = "Starting";
+    quickOperationElement.textContent = message("quick.operation.starting");
     quickCurrentPathElement.textContent = "";
     quickProgressBar.removeAttribute("value");
     quickProgressBar.removeAttribute("max");
     quickBackgroundButton.disabled = true;
     quickContinueButton.disabled = true;
-    quickContinueButton.textContent = "Pause";
+    quickContinueButton.textContent = message("quick.pause");
     quickCancelButton.disabled = true;
     return;
   }
@@ -1798,35 +1818,37 @@ function renderQuickProgress() {
   const currentFile = latestProgress?.currentFile || latestProgress?.latestStatusMessage || "";
   const operation = allTerminal
     ? latestJob?.snapshot.status === "completed"
-      ? "Completed"
+      ? message("quick.operation.completed")
       : latestJob?.snapshot.status === "cancelled"
-        ? "Cancelled"
-        : "Failed"
+        ? message("quick.operation.cancelled")
+        : message("quick.operation.failed")
     : anyPaused
-      ? "Paused"
+      ? message("quick.operation.paused")
     : quickActionOperationLabel(latestJob?.snapshot.kind);
 
   quickTitleElement.textContent = trackedJobs.length > 1
-    ? `${trackedJobs.length} jobs`
-    : latestContext?.title ?? (latestJob ? formatJobKind(latestJob.snapshot.kind) : "Job progress");
+    ? message("quick.progress.multipleJobs", { count: trackedJobs.length })
+    : latestContext?.title ?? (latestJob ? formatJobKind(latestJob.snapshot.kind) : message("quick.progress.jobTitle"));
   quickSubtitleElement.textContent = latestContext?.subtitle ?? "";
   renderFocusedJobContext(latestContext);
   quickElapsedElement.textContent = formatDurationClock(elapsedMs);
   quickRemainingElement.textContent = formatDurationClock(remainingMs);
   quickFilesElement.textContent = totalFiles === null ? String(processedFiles) : `${processedFiles} / ${totalFiles}`;
-  quickTotalFilesElement.textContent = trackedJobs.length > 1 ? `/ ${trackedJobs.length} job(s)` : "";
+  quickTotalFilesElement.textContent = trackedJobs.length > 1
+    ? message("quick.progress.totalJobs", { count: trackedJobs.length })
+    : "";
   quickTotalSizeElement.textContent = totalBytes === null ? "" : formatBytes(totalBytes);
   quickSpeedElement.textContent = speedBytesPerSecond === null ? "" : `${formatBytes(speedBytesPerSecond)}/s`;
   quickProcessedElement.textContent = processedBytes > 0 ? formatBytes(processedBytes) : "";
   quickCompressedSizeElement.textContent = compressedBytes === null ? "" : formatBytes(compressedBytes);
   quickRatioElement.textContent = compressedBytes === null || totalBytes === null
     ? ""
-    : formatCompressionRatio(totalBytes, compressedBytes, { emptyValue: "", fractionDigits: 0 });
+    : formatCompressionRatio(totalBytes, compressedBytes, { emptyValue: "", fractionDigits: 0, locale: resolvedLocale });
   quickOperationElement.textContent = operation;
   quickCurrentPathElement.textContent = currentFile;
   quickBackgroundButton.disabled = allTerminal || anyPaused || quickActionWindowMode === "background";
   quickContinueButton.disabled = !anyActive;
-  quickContinueButton.textContent = anyPaused ? "Continue" : "Pause";
+  quickContinueButton.textContent = anyPaused ? message("common.continue") : message("quick.pause");
   quickCancelButton.disabled = !anyActive;
 
   if (progressPercent === null) {
@@ -1839,7 +1861,7 @@ function renderQuickProgress() {
 }
 
 function formatRatio(entry: ArchiveEntryDto): string {
-  return formatCompressionRatio(entry.size, entry.compressedSize, { fractionDigits: 0 });
+  return formatCompressionRatio(entry.size, entry.compressedSize, { fractionDigits: 0, locale: resolvedLocale });
 }
 
 function addDetailRow(label: string, value?: string | null): string {
@@ -1847,6 +1869,10 @@ function addDetailRow(label: string, value?: string | null): string {
     return "";
   }
   return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function addDetailMessageRow(key: MessageKey, value?: string | null): string {
+  return addDetailRow(message(key), value);
 }
 
 function formatOptionalBytes(value?: number): string | null {
@@ -1860,11 +1886,11 @@ function formatOptionalBoolean(value?: boolean): string | null {
   if (typeof value !== "boolean") {
     return null;
   }
-  return value ? "Yes" : "No";
+  return value ? message("detail.booleanYes") : message("detail.booleanNo");
 }
 
 function normalizeArchiveKindLabel(kind: ArchiveEntryDto["kind"]): string {
-  return kind === "directory" ? "Directory" : kind;
+  return kind === "directory" ? message("detail.directory") : kind;
 }
 
 function sumKnownBytes(
@@ -1924,17 +1950,34 @@ function formatLastTestStatusForCurrentArchive(): string | null {
   const state = testJobs[0].state;
   const latestEvent = state.events[state.events.length - 1];
   const status = state.snapshot.status;
-  const statusLabel = `${status[0].toUpperCase()}${status.slice(1)}`;
+  const statusLabel = message(jobStatusMessageKey(status));
 
   if (!latestEvent?.message) {
-    return `Last test: ${statusLabel}`;
+    return message("detail.lastTest", { status: statusLabel });
   }
 
   if (latestEvent.message === status || latestEvent.message.length > 120) {
-    return `Last test: ${statusLabel}`;
+    return message("detail.lastTest", { status: statusLabel });
   }
 
-  return `Last test: ${statusLabel} (${latestEvent.message})`;
+  return message("detail.lastTestWithMessage", { status: statusLabel, message: latestEvent.message });
+}
+
+function jobStatusMessageKey(status: JobState["snapshot"]["status"]): MessageKey {
+  switch (status) {
+    case "queued":
+      return "jobs.status.queued";
+    case "running":
+      return "jobs.status.running";
+    case "paused":
+      return "jobs.status.paused";
+    case "completed":
+      return "jobs.status.completed";
+    case "failed":
+      return "jobs.status.failed";
+    case "cancelled":
+      return "jobs.status.cancelled";
+  }
 }
 
 function truncatedPathPreview(paths: string[], maxItems = 3, maxLength = 140): string | null {
@@ -2316,7 +2359,7 @@ async function startNativeDragOut(entryPath: string) {
   }
 
   if (!isDesktopRuntime()) {
-    setOperationalStatus("Native drag-out is available in the desktop app.");
+    setOperationalMessage("preview.nativeDragDesktopOnly");
     return;
   }
 
@@ -2330,21 +2373,21 @@ async function startNativeDragOut(entryPath: string) {
   let password = browsePasswordInput.value.trim() || undefined;
   const request = nativeDragRequestForEntry(entryPath, password);
   if (!request) {
-    setOperationalStatus("Select at least one entry to drag out.");
+    setOperationalMessage("preview.selectEntryToDrag");
     return;
   }
 
-  setOperationalStatus(`Preparing ${request.entryPaths.length} item(s) for drag-out...`);
+  setOperationalMessage("preview.preparingDrag", { count: request.entryPaths.length });
 
   while (true) {
     try {
       const response = await runStartNativeFileDrag(request);
       if (response.outcome === "cancelled") {
-        setOperationalStatus("Drag-out cancelled.");
+        setOperationalMessage("preview.dragCancelled");
       } else if (response.outcome === "noDrop") {
-        setOperationalStatus("Drag-out ended without a drop.");
+        setOperationalMessage("preview.dragNoDrop");
       } else {
-        setOperationalStatus(`Dragged out ${response.draggedEntries.length} item(s).`);
+        setOperationalMessage("preview.draggedOut", { count: response.draggedEntries.length });
       }
       return;
     } catch (error) {
@@ -2361,14 +2404,14 @@ async function startNativeDragOut(entryPath: string) {
         password = nextPassword;
         const retryRequest = nativeDragRequestForEntry(entryPath, password);
         if (!retryRequest) {
-          setOperationalStatus("Select at least one entry to drag out.");
+          setOperationalMessage("preview.selectEntryToDrag");
           return;
         }
         Object.assign(request, retryRequest);
         continue;
       }
 
-      setOperationalStatus(commandError?.message ?? "Unable to start native drag-out.");
+      setOperationalStatus(commandError?.message ?? message("preview.unableStartDrag"));
       return;
     }
   }
@@ -2529,11 +2572,11 @@ function setBrowseState(next: BrowseState, message = "") {
   }
 
   if (next === "loading") {
-    setOperationalStatus("Loading archive.");
+    setOperationalMessage("status.loadingArchive");
   } else if (next === "error") {
-    setOperationalStatus("Failed.");
+    setOperationalMessage("status.failed");
   } else {
-    setOperationalStatus("Ready.");
+    setOperationalMessage("status.ready");
   }
 
   updateCommandState();
@@ -2551,8 +2594,8 @@ function promptForArchivePassword(promptMessage: string): string | null {
 
 function getArchivePasswordPrompt(commandCode: string): string {
   return commandCode === COMMAND_PASSWORD_REQUIRED
-    ? BROWSE_ACTION_PASSWORD_REQUIRED
-    : BROWSE_ACTION_PASSWORD_INVALID;
+    ? i18n.t("browse.passwordRequired")
+    : i18n.t("browse.passwordInvalid");
 }
 
 function isPasswordCommandError(commandError: ReturnType<typeof asCommandError>): boolean {
@@ -2560,13 +2603,6 @@ function isPasswordCommandError(commandError: ReturnType<typeof asCommandError>)
     commandError?.code === COMMAND_PASSWORD_REQUIRED ||
     commandError?.code === COMMAND_INVALID_PASSWORD
   );
-}
-
-function formatEventCode(code: string): string {
-  return code
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function canRetryJobWithPassword(jobId: string, state: JobState): boolean {
@@ -2612,7 +2648,7 @@ function updateCommandState() {
     const state = commandState[commandId];
     const command = COMMAND_DEFINITIONS[commandId];
     button.disabled = !state.enabled;
-    button.title = state.reason ?? commandTooltip(commandId);
+    button.title = localizedCommandStateReason(state.reason) ?? commandTooltipText(commandId, i18n);
     button.setAttribute("aria-disabled", String(!state.enabled));
     if (commandId === "flatView") {
       button.setAttribute("aria-pressed", String(isFlatView));
@@ -2636,7 +2672,7 @@ function updateCommandState() {
 
 function updateMeta() {
   if (!currentArchivePath) {
-    metaElement.textContent = BROWSE_STATUS_READY;
+    metaElement.textContent = i18n.t("browse.statusReady");
     return;
   }
 
@@ -2663,16 +2699,19 @@ function renderWorkspaceMode() {
   messageElement.hidden = isCompress;
 
   if (isCompress) {
-    workspaceTitleElement.textContent = COMPRESS_TABLE_TITLE;
-    metaElement.textContent = COMPRESS_TABLE_DESCRIPTION;
-    statusSelectionCountElement.textContent = `${createSources.length} source${createSources.length === 1 ? "" : "s"} staged`;
+    workspaceTitleElement.textContent = i18n.t("compress.tableTitle");
+    metaElement.textContent = i18n.t("compress.tableDescription");
+    statusSelectionCountElement.textContent = i18n.t("compress.sourceStaged", {
+      count: createSources.length,
+      sourceLabel: i18n.t(createSources.length === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+    });
     statusSelectionSizeElement.textContent = "";
     statusFocusedSizeElement.textContent = "";
     statusFocusedModifiedElement.textContent = "";
   } else {
-    workspaceTitleElement.textContent = EXTRACT_TABLE_TITLE;
+    workspaceTitleElement.textContent = i18n.t("extract.tableTitle");
     if (!currentArchivePath) {
-      metaElement.textContent = EXTRACT_TABLE_DESCRIPTION;
+      metaElement.textContent = i18n.t("extract.tableDescription");
     }
   }
 }
@@ -2685,14 +2724,14 @@ function setWorkspaceMode(mode: WorkspaceDropMode) {
 
   workspaceMode = mode;
   renderWorkspaceMode();
-  setOperationalStatus(mode === "compress" ? "Compress mode." : "Extract mode.");
+  setOperationalMessage(mode === "compress" ? "workspace.mode.compressStatus" : "workspace.mode.extractStatus");
 }
 
 function renderPathBar() {
   if (!currentArchivePath) {
-    pathFieldInput.value = BROWSE_STATUS_EMPTY;
+    pathFieldInput.value = i18n.t("browse.statusEmpty");
     pathFieldInput.disabled = true;
-    pathCrumbsElement.textContent = BROWSE_STATUS_EMPTY;
+    pathCrumbsElement.textContent = i18n.t("browse.statusEmpty");
     document.title = APP_TITLE;
     return;
   }
@@ -2720,7 +2759,7 @@ function renderTree() {
   if (!currentArchivePath) {
     treeContentElement.innerHTML = `
       <div class="empty-pane">
-        <p>No archive open.</p>
+        <p>${escapeHtml(i18n.t("browse.noArchiveOpen"))}</p>
       </div>
     `;
     return;
@@ -2737,7 +2776,7 @@ function renderTree() {
           folder.isExpanded ? "Collapse" : "Expand"
         } ${escapeHtml(folder.name)}" aria-hidden="true">${folder.isExpanded ? "-" : "+"}</span>`
         : `<span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>`;
-      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder);
+      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder, i18n);
       const iconDataUrl = systemIconDataUrlForRequest(
         isRoot
           ? systemIconRequestForPath(currentArchivePath, false)
@@ -2775,7 +2814,7 @@ function renderTableHeader() {
   tableHead.innerHTML = `
     <tr>
       <th class="selection-column">
-        <input id="select-all" type="checkbox" aria-label="Select visible entries" ${browseState === "loaded" ? "" : "disabled"} />
+        <input id="select-all" type="checkbox" aria-label="${escapeHtml(i18n.t("table.selectVisibleEntries"))}" ${browseState === "loaded" ? "" : "disabled"} />
       </th>
       ${columns.map((column) => `
         <th
@@ -2785,7 +2824,7 @@ function renderTableHeader() {
           style="width: ${column.width}px; min-width: ${column.minWidth ?? 64}px"
           aria-sort="${sortKey === column.id ? (sortAscending ? "ascending" : "descending") : "none"}"
         >
-          <span class="column-header-label">${escapeHtml(column.label)}</span>
+          <span class="column-header-label">${escapeHtml(archiveTableColumnLabel(column, i18n))}</span>
           ${sortKey === column.id ? `<span class="sort-indicator" aria-hidden="true">${sortAscending ? "^" : "v"}</span>` : ""}
           <span class="column-resizer" data-column-resizer="${column.id}" aria-hidden="true"></span>
         </th>
@@ -2803,7 +2842,7 @@ function setArchiveEmptyStateVisible(visible: boolean) {
 
 function renderNameCell(row: BrowserRow, showFullPath: boolean): string {
   const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
-  const icon = archiveRowIconDescriptor(row);
+  const icon = archiveRowIconDescriptor(row, i18n);
   const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForRow(row));
   return `
     <span class="row-primary">
@@ -2830,7 +2869,7 @@ function renderCell(row: BrowserRow, column: ArchiveTableColumn, showFullPath: b
     return `<td class="${className}"></td>`;
   }
 
-  return `<td class="${className}">${escapeHtml(formatArchiveTableValue(entry, column.id))}</td>`;
+  return `<td class="${className}">${escapeHtml(formatArchiveTableValue(entry, column.id, i18n))}</td>`;
 }
 
 function renderBrowseRows() {
@@ -2840,7 +2879,7 @@ function renderBrowseRows() {
   if (browseState === "loading") {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="${tableColspan()}" class="empty">${BROWSE_STATUS_LOADING}</td>
+        <td colspan="${tableColspan()}" class="empty">${escapeHtml(i18n.t("browse.statusLoading"))}</td>
       </tr>
     `;
     selectAllInput.checked = false;
@@ -2851,7 +2890,7 @@ function renderBrowseRows() {
   if (browseState === "error") {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="${tableColspan()}" class="empty">${escapeHtml(browseError || BROWSE_STATUS_UNKNOWN)}</td>
+        <td colspan="${tableColspan()}" class="empty">${escapeHtml(browseError || i18n.t("browse.statusUnknown"))}</td>
       </tr>
     `;
     selectAllInput.checked = false;
@@ -2870,11 +2909,11 @@ function renderBrowseRows() {
   const rows = visibleRows();
   if (!rows.length) {
     const emptyMessage = searchInput.value.trim()
-      ? "No entries match the search."
-      : "This folder has no visible entries.";
+      ? i18n.t("browse.noEntriesMatchSearch")
+      : i18n.t("browse.folderEmpty");
     tableBody.innerHTML = `
       <tr>
-        <td colspan="${tableColspan()}" class="empty">${emptyMessage}</td>
+        <td colspan="${tableColspan()}" class="empty">${escapeHtml(emptyMessage)}</td>
       </tr>
     `;
     selectAllInput.checked = false;
@@ -2894,7 +2933,7 @@ function renderBrowseRows() {
     .map((row) => {
       if (row.rowType === "parent") {
         return `
-          <tr class="folder-row parent-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="Open parent folder">
+          <tr class="folder-row parent-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}">
             <td class="selection-column"></td>
             ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
           </tr>
@@ -2910,14 +2949,14 @@ function renderBrowseRows() {
             data-entry-path="${escapeHtml(row.path)}"
             tabindex="0"
             ${nativeDragAttributes}
-            aria-label="Open folder ${escapeHtml(row.name)}"
+            aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}"
             aria-selected="${selected ? "true" : "false"}"
           >
             <td class="selection-column">
               <input
                 data-entry-path="${escapeHtml(row.path)}"
                 type="checkbox"
-                aria-label="Select ${escapeHtml(row.name)}"
+                aria-label="${escapeHtml(i18n.t("browse.selectEntry.aria", { name: row.name }))}"
                 ${selected ? "checked" : ""}
               />
             </td>
@@ -2939,7 +2978,7 @@ function renderBrowseRows() {
             <input
               data-entry-path="${escapeHtml(row.path)}"
               type="checkbox"
-              aria-label="Select ${escapeHtml(row.name)}"
+              aria-label="${escapeHtml(i18n.t("browse.selectEntry.aria", { name: row.name }))}"
               ${selected ? "checked" : ""}
             />
           </td>
@@ -2956,8 +2995,8 @@ function renderDetails() {
   if (!currentArchivePath) {
     detailsElement.innerHTML = `
       <div class="details-empty">
-        <h3>No selection</h3>
-        <p>Details appear after an archive is open.</p>
+        <h3>${escapeHtml(message("detail.noSelection"))}</h3>
+        <p>${escapeHtml(message("detail.openArchiveFirst"))}</p>
       </div>
     `;
     return;
@@ -2972,21 +3011,21 @@ function renderDetails() {
     const format = formatArchiveTypeFromPath(currentArchivePath);
 
     const list: string = [
-      addDetailRow("Archive name", getArchiveName(currentArchivePath, APP_TITLE)),
-      addDetailRow("Full path", currentArchivePath),
-      addDetailRow("Format", format),
-      addDetailRow("Entry count", String(currentArchiveEntryCount)),
-      addDetailRow("Total unpacked size", unpackedSize),
-      addDetailRow("Packed size", packedSize === null ? null : formatBytes(packedSize)),
-      addDetailRow("Last test status", formatLastTestStatusForCurrentArchive()),
-      addDetailRow("Folder", currentArchiveFolder || "/"),
+      addDetailMessageRow("detail.archiveName", getArchiveName(currentArchivePath, APP_TITLE)),
+      addDetailMessageRow("detail.fullPath", currentArchivePath),
+      addDetailMessageRow("detail.format", format),
+      addDetailMessageRow("detail.entryCount", String(currentArchiveEntryCount)),
+      addDetailMessageRow("detail.totalUnpackedSize", unpackedSize),
+      addDetailMessageRow("detail.packedSize", packedSize === null ? null : formatBytes(packedSize)),
+      addDetailMessageRow("detail.lastTestStatus", formatLastTestStatusForCurrentArchive()),
+      addDetailMessageRow("detail.folder", currentArchiveFolder || "/"),
     ].filter(Boolean).join("");
 
     detailsElement.innerHTML = `
       <div class="detail-block">
         <h3 class="detail-title">
           ${renderEntryIcon(
-            archiveFileIconDescriptor(currentArchivePath),
+            archiveFileIconDescriptor(currentArchivePath, false, i18n),
             "detail-icon",
             systemIconDataUrlForRequest(systemIconRequestForPath(currentArchivePath, false)),
           )}
@@ -3006,7 +3045,7 @@ function renderDetails() {
     const modified = formatDate(entry.modified);
     const packed = formatOptionalBytes(entry.compressedSize);
     const size = formatOptionalBytes(entry.size);
-    const icon = archiveEntryIconDescriptor(entry);
+    const icon = archiveEntryIconDescriptor(entry, i18n);
     detailsElement.innerHTML = `
       <div class="detail-block">
         <h3 class="detail-title">
@@ -3014,19 +3053,19 @@ function renderDetails() {
           <span>${escapeHtml(getBaseName(entry.path))}</span>
         </h3>
         <dl class="detail-list">
-          <div><dt>Name</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
-          <div><dt>Type</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
-          <div><dt>Path</dt><dd>${escapeHtml(entry.path)}</dd></div>
-          ${addDetailRow("Size", size)}
-          ${addDetailRow("Packed", packed)}
-          ${addDetailRow("Modified", modified)}
-          ${addDetailRow("Created", created)}
-          ${addDetailRow("Attributes", entry.attributes)}
-          ${addDetailRow("Method", entry.method)}
+          <div><dt>${escapeHtml(message("detail.name"))}</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
+          <div><dt>${escapeHtml(message("detail.type"))}</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
+          <div><dt>${escapeHtml(message("detail.path"))}</dt><dd>${escapeHtml(entry.path)}</dd></div>
+          ${addDetailMessageRow("detail.size", size)}
+          ${addDetailMessageRow("detail.packed", packed)}
+          ${addDetailMessageRow("detail.modified", modified)}
+          ${addDetailMessageRow("detail.created", created)}
+          ${addDetailMessageRow("detail.attributes", entry.attributes)}
+          ${addDetailMessageRow("detail.method", entry.method)}
           ${addDetailRow("CRC", entry.crc)}
-          ${addDetailRow("Encrypted", formatOptionalBoolean(entry.encrypted))}
-          ${addDetailRow("Solid", formatOptionalBoolean(entry.solid))}
-          ${addDetailRow("Link target", entry.linkTarget)}
+          ${addDetailMessageRow("detail.encrypted", formatOptionalBoolean(entry.encrypted))}
+          ${addDetailMessageRow("detail.solid", formatOptionalBoolean(entry.solid))}
+          ${addDetailMessageRow("detail.linkTarget", entry.linkTarget)}
         </dl>
       </div>
     `;
@@ -3040,12 +3079,12 @@ function renderDetails() {
 
   detailsElement.innerHTML = `
     <div class="detail-block">
-        <h3>${selected.length} entries selected</h3>
+        <h3>${escapeHtml(message("detail.selectedEntries", { count: selected.length }))}</h3>
       <dl class="detail-list">
-        <div><dt>Selected files</dt><dd>${selectedFiles}</dd></div>
-        <div><dt>Selected folders</dt><dd>${selectedFolders}</dd></div>
-        ${addDetailRow("Total size", selectedTotal === null ? null : formatBytes(selectedTotal))}
-        ${addDetailRow("Path preview", pathPreview)}
+        <div><dt>${escapeHtml(message("detail.selectedFiles"))}</dt><dd>${selectedFiles}</dd></div>
+        <div><dt>${escapeHtml(message("detail.selectedFolders"))}</dt><dd>${selectedFolders}</dd></div>
+        ${addDetailMessageRow("detail.totalSize", selectedTotal === null ? null : formatBytes(selectedTotal))}
+        ${addDetailMessageRow("detail.pathPreview", pathPreview)}
       </dl>
     </div>
   `;
@@ -3061,7 +3100,7 @@ function renderBrowse() {
   renderWorkspaceMode();
 
   if (browseState === "loaded" && selectedEntries.size > 0) {
-    messageElement.textContent = `${selectedEntries.size} selected entries.`;
+    messageElement.textContent = i18n.t("browse.selectedEntries", { count: selectedEntries.size });
   }
 
   queueSystemIconRefresh();
@@ -3084,7 +3123,7 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
   const warnings =
     plan.warnings.length > 0
       ? `<ul>${plan.warnings.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`
-      : "<p>No warnings.</p>";
+      : `<p>${escapeHtml(i18n.t("create.plan.noWarnings"))}</p>`;
 
   const sampleRows = plan.entries
     .slice(0, 8)
@@ -3093,13 +3132,13 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
 
   return `
     <div class="plan-grid">
-      <p><strong>Included:</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
-      <p><strong>Excluded:</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
-      <p><strong>Warnings:</strong> ${plan.warnings.length}</p>
+      <p><strong>${escapeHtml(i18n.t("create.plan.included"))}</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
+      <p><strong>${escapeHtml(i18n.t("create.plan.excluded"))}</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
+      <p><strong>${escapeHtml(i18n.t("create.plan.warnings"))}</strong> ${plan.warnings.length}</p>
     </div>
     <div class="plan-list">
-      <p>Included sample:</p>
-      <ul>${sampleRows || "<li>(none)</li>"}</ul>
+      <p>${escapeHtml(i18n.t("create.plan.includedSample"))}</p>
+      <ul>${sampleRows || `<li>${escapeHtml(i18n.t("create.plan.none"))}</li>`}</ul>
     </div>
     <div class="plan-warnings">
       ${warnings}
@@ -3112,18 +3151,21 @@ function renderCreateSources() {
   clearSourcesButton.disabled = createSources.length === 0;
 
   createPlanMeta.textContent = createSources.length
-    ? `${createSources.length} source${createSources.length === 1 ? "" : "s"} selected.`
-    : "Drop files or folders here, or add sources from disk.";
+    ? i18n.t("compress.sourceSelected", {
+      count: createSources.length,
+      sourceLabel: i18n.t(createSources.length === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+    })
+    : i18n.t("compress.dropSourcesHint");
 
   if (createSources.length === 0) {
-    sourceListElement.innerHTML = `<li class="empty">No sources yet.</li>`;
+    sourceListElement.innerHTML = `<li class="empty">${escapeHtml(i18n.t("compress.noSources"))}</li>`;
   } else {
     sourceListElement.innerHTML = createSources
       .map(
         (path) => `
           <li data-source-path="${escapeHtml(path)}">
             <span>${escapeHtml(path)}</span>
-            <button type="button" data-source-remove>Remove</button>
+            <button type="button" data-source-remove>${escapeHtml(i18n.t("compress.removeSource"))}</button>
           </li>
         `,
       )
@@ -3148,10 +3190,10 @@ function renderCreateSources() {
 
 function sourceKindLabel(path: string): string {
   if (isSupportedArchivePath(path)) {
-    return "Archive";
+    return i18n.t("compress.sourceKind.archive");
   }
 
-  return "File or folder";
+  return i18n.t("compress.sourceKind.fileOrFolder");
 }
 
 function renderCompressSources() {
@@ -3160,8 +3202,8 @@ function renderCompressSources() {
       <tr>
         <td colspan="4" class="compress-empty-cell">
           <div class="compress-empty-state">
-            <strong>${COMPRESS_EMPTY_TABLE_MESSAGE}</strong>
-            <span>Drag files or folders anywhere in this window, or use Add Sources.</span>
+            <strong>${escapeHtml(i18n.t("compress.emptyTable"))}</strong>
+            <span>${escapeHtml(i18n.t("compress.dragSourcesHint"))}</span>
           </div>
         </td>
       </tr>
@@ -3176,7 +3218,7 @@ function renderCompressSources() {
         <td>${escapeHtml(nativeParentPath(path) || path)}</td>
         <td>${escapeHtml(sourceKindLabel(path))}</td>
         <td class="action-column">
-          <button type="button" data-compress-source-remove="${escapeHtml(path)}">Remove</button>
+          <button type="button" data-compress-source-remove="${escapeHtml(path)}">${escapeHtml(i18n.t("compress.removeSource"))}</button>
         </td>
       </tr>
     `)
@@ -3197,14 +3239,14 @@ function renderCompressSources() {
 }
 
 function renderJobStatusBar() {
-  activeJobElement.textContent = activeJobStatusText(jobs, formatJobKind);
+  activeJobElement.textContent = activeJobStatusText(jobs, formatJobKind, i18n);
 }
 
 function renderJobs() {
   jobsListElement.innerHTML = renderJobsListHtml(jobs, {
+    i18n,
     escapeHtml,
     formatBytes,
-    formatEventCode,
     formatJobKind,
     canRetryJobWithPassword,
   });
@@ -3223,13 +3265,13 @@ function queuePlanRun() {
   if (createSources.length === 0) {
     currentPlan = null;
     setCreatePlanState("idle");
-    createPlanSummary.innerHTML = "<p>No sources selected.</p>";
+    createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.noSources"))}</p>`;
     return;
   }
 
   currentPlan = null;
-  setCreatePlanState("loading", "Planning selected sources...");
-  createPlanSummary.innerHTML = "<p>Planning selected sources...</p>";
+  setCreatePlanState("loading", i18n.t("create.plan.planning"));
+  createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.planning"))}</p>`;
 
   planDebounce = window.setTimeout(() => {
     planDebounce = null;
@@ -3519,11 +3561,17 @@ function bindMenuBehavior() {
 }
 
 async function openNativeDialog(options: OpenDialogOptions) {
-  return openRuntimeDialog(options, setOperationalStatus);
+  return openRuntimeDialog(options, setOperationalStatus, {
+    unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
+    failed: message("nativeDialog.failed"),
+  });
 }
 
 async function saveNativeDialog(options: SaveDialogOptions) {
-  return saveRuntimeDialog(options, setOperationalStatus);
+  return saveRuntimeDialog(options, setOperationalStatus, {
+    unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
+    failed: message("nativeDialog.failed"),
+  });
 }
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -3637,31 +3685,35 @@ function currentDropSurface(): DropIntentSurface {
   return dropSurfaceForWorkspace({ createDialogOpen: !createDialog.hidden, mode: workspaceMode });
 }
 
-function setDropOverlay(active: boolean, title = "Drop files", message = "Drop files into Compress or archives into Extract.") {
+function setDropOverlay(
+  active: boolean,
+  title = message("drop.title"),
+  dropMessage = message("drop.defaultMessage"),
+) {
   workspaceElement.dataset.dropState = active ? "active" : "idle";
   dropOverlay.setAttribute("aria-hidden", active ? "false" : "true");
   dropOverlayTitle.textContent = title;
-  dropOverlayMessage.textContent = message;
+  dropOverlayMessage.textContent = dropMessage;
 }
 
 function dropCopyForSurface(surface: DropIntentSurface): { title: string; message: string } {
   if (surface === "create") {
     return {
-      title: "Add sources",
-      message: "Drop files or folders to add them to the Compress table.",
+      title: message("drop.addSources.title"),
+      message: message("drop.addSources.message"),
     };
   }
 
   if (currentArchivePath) {
     return {
-      title: "Open archive",
-      message: "Drop another archive to browse it, or drop files to create a new archive.",
+      title: message("drop.openArchive.title"),
+      message: message("drop.openArchive.message"),
     };
   }
 
   return {
-    title: "Choose a mode",
-    message: "Use Compress for files and folders, or Extract for an archive.",
+    title: message("drop.chooseMode.title"),
+    message: message("drop.chooseMode.message"),
   };
 }
 
@@ -3673,16 +3725,16 @@ function setDropOverlayForSurface(surface: DropIntentSurface) {
 function rejectDrop(reason: string) {
   switch (reason) {
     case "emptyDrop":
-      setOperationalStatus("No files were dropped.");
+      setOperationalMessage("drop.empty");
       break;
     case "openRequiresSingleArchive":
-      setOperationalStatus("Drop one archive to open it, or use Create for multiple sources.");
+      setOperationalMessage("drop.openRequiresSingleArchive");
       break;
     case "browseRequiresArchive":
-      setOperationalStatus("Drop an archive to browse, or use New to create an archive from files.");
+      setOperationalMessage("drop.browseRequiresArchive");
       break;
     default:
-      setOperationalStatus("Unsupported drop.");
+      setOperationalMessage("drop.unsupported");
   }
 }
 
@@ -3691,14 +3743,17 @@ function addDroppedSources(paths: string[]) {
   addSources(paths);
   setWorkspaceMode("compress");
   createDestinationInput.focus();
-  setOperationalStatus(`${paths.length} source${paths.length === 1 ? "" : "s"} added.`);
+  setOperationalMessage("drop.sourcesAdded", {
+    count: paths.length,
+    sourceLabel: message(paths.length === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+  });
 }
 
 function handleDroppedPaths(paths: string[]) {
   setDropOverlay(false);
   const trimmedPaths = paths.map((path) => path.trim()).filter(Boolean);
   if (hasActiveJob() || createSubmissionInFlight) {
-    setOperationalStatus("Finish the current job before dropping more files.");
+    setOperationalMessage("drop.finishCurrentJob");
     return;
   }
 
@@ -3707,9 +3762,10 @@ function handleDroppedPaths(paths: string[]) {
   switch (decision.kind) {
     case "openArchive":
       if (decision.extraArchivePaths?.length) {
-        setOperationalStatus(
-          `Opened ${decision.archivePath}; ${decision.extraArchivePaths.length} additional archive(s) were not opened.`,
-        );
+        setOperationalMessage("drop.openedWithSkipped", {
+          archivePath: decision.archivePath,
+          count: decision.extraArchivePaths.length,
+        });
       }
       if (!createDialog.hidden) {
         closeModal(createDialog);
@@ -4107,7 +4163,7 @@ function showStartupContextMenu(x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = "";
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${BROWSE_EMPTY_STATE_OPEN_ACTION}</span></button>
+    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${escapeHtml(i18n.t("browse.emptyOpenAction"))}</span></button>
   `);
 }
 
@@ -4115,11 +4171,11 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
   contextEntryPath = entryPath;
   contextSourcePath = "";
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Open</span></button>
-    <button type="button" role="menuitem" data-context-action="open-inside" ${entryPath ? "" : "disabled"}><span class="context-menu-label">Open Inside</span></button>
-    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">Extract...</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
-    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
+    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="open-inside" ${entryPath ? "" : "disabled"}><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
   `);
 }
 
@@ -4136,16 +4192,16 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   const canOpenInside = entry?.kind === "directory";
   const hasSingleSelection = getSelectedEntryPaths().length === 1;
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open</span></button>
-    <button type="button" role="menuitem" data-context-action="open-inside" ${!canOpenInside || !hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open Inside</span></button>
-    <button type="button" role="menuitem" data-context-action="open-outside" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">Open Outside</span></button>
-    <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">View</span></button>
-    <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">Extract...</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">Test</span></button>
-    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">Properties</span></button>
+    <button type="button" role="menuitem" data-context-action="open-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="open-inside" ${!canOpenInside || !hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="open-outside" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openOutside"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.view"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
     <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">Select by Type</span></button>
-    <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">Deselect by Type</span></button>
+    <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">${escapeHtml(message("command.selectByType"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.deselectByType"))}</span></button>
   `);
 }
 
@@ -4159,7 +4215,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
     ? visibleColumnOrder.indexOf(selectedColumnId)
     : -1;
   const selectedColumnMenu = selectedColumn ? `
-    <div class="context-menu-caption">Column: ${escapeHtml(selectedColumn.label)}</div>
+    <div class="context-menu-caption">${escapeHtml(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, i18n) }))}</div>
     <button
       type="button"
       role="menuitem"
@@ -4167,7 +4223,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
       data-column-id="${escapeHtml(selectedColumn.id)}"
       ${selectedColumn.id === "name" || selectedColumnIndex <= 1 ? "disabled" : ""}
     >
-      <span class="context-menu-label">Move Left</span>
+      <span class="context-menu-label">${escapeHtml(message("command.moveLeft"))}</span>
     </button>
     <button
       type="button"
@@ -4176,16 +4232,16 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
       data-column-id="${escapeHtml(selectedColumn.id)}"
       ${selectedColumn.id === "name" || selectedColumnIndex < 1 || selectedColumnIndex >= visibleColumnOrder.length - 1 ? "disabled" : ""}
     >
-      <span class="context-menu-label">Move Right</span>
+      <span class="context-menu-label">${escapeHtml(message("command.moveRight"))}</span>
     </button>
     <button type="button" role="menuitem" data-context-action="narrow-column" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">Narrower</span>
+      <span class="context-menu-label">${escapeHtml(message("command.narrower"))}</span>
     </button>
     <button type="button" role="menuitem" data-context-action="widen-column" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">Wider</span>
+      <span class="context-menu-label">${escapeHtml(message("command.wider"))}</span>
     </button>
     <button type="button" role="menuitem" data-context-action="reset-column-width" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">Reset Width</span>
+      <span class="context-menu-label">${escapeHtml(message("command.resetWidth"))}</span>
     </button>
     <div class="context-menu-separator" role="separator"></div>
   ` : "";
@@ -4204,7 +4260,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
         ${isNameColumn ? 'disabled aria-disabled="true"' : ""}
       >
         <span class="context-check" aria-hidden="true"></span>
-        <span class="context-menu-label">${escapeHtml(column.label)}</span>
+        <span class="context-menu-label">${escapeHtml(archiveTableColumnLabel(column, i18n))}</span>
       </button>
     `;
   }).join("");
@@ -4214,7 +4270,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
     y,
     `${selectedColumnMenu}${menuRows}
       <div class="context-menu-separator" role="separator"></div>
-      <button type="button" role="menuitem" data-context-action="reset-columns">Reset columns</button>
+      <button type="button" role="menuitem" data-context-action="reset-columns">${escapeHtml(message("command.resetColumns"))}</button>
     `,
   );
 }
@@ -4222,10 +4278,10 @@ function showSourceContextMenu(sourcePath: string, x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = sourcePath;
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="reveal-source">Reveal in File Manager</button>
-    <button type="button" role="menuitem" data-context-action="remove-source">Remove Source</button>
+    <button type="button" role="menuitem" data-context-action="reveal-source">${escapeHtml(message("command.revealInFileManager"))}</button>
+    <button type="button" role="menuitem" data-context-action="remove-source">${escapeHtml(message("command.removeSource"))}</button>
     <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="clear-sources">Clear All Sources</button>
+    <button type="button" role="menuitem" data-context-action="clear-sources">${escapeHtml(message("command.clearAllSources"))}</button>
   `);
 }
 
@@ -4234,8 +4290,8 @@ function showAddSourcesMenu(anchor: HTMLElement) {
   contextEntryPath = "";
   contextSourcePath = "";
   showContextMenu(rect.left, rect.bottom + 4, `
-    <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">Files...</span></button>
-    <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">Folder...</span></button>
+    <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">${escapeHtml(message("command.filesWithEllipsis"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">${escapeHtml(message("command.folderWithEllipsis"))}</span></button>
   `);
 }
 
@@ -4247,7 +4303,7 @@ function hideContextMenu() {
 }
 
 function showArchiveInfo() {
-  infoTitle.textContent = "Archive Info";
+  infoTitle.textContent = message("info.archiveTitle");
   const knownTotalSize = currentArchiveTotalSize !== null
     ? currentArchiveTotalSize
     : (sumKnownBytes(browseEntries, (entry) => entry.size) ?? null);
@@ -4255,13 +4311,13 @@ function showArchiveInfo() {
   const packedSize = sumKnownBytes(browseEntries, (entry) => entry.compressedSize);
 
   const rows = [
-    addDetailRow("Archive name", getArchiveName(currentArchivePath, APP_TITLE)),
-    addDetailRow("Path", currentArchivePath),
-    addDetailRow("Format", formatArchiveTypeFromPath(currentArchivePath)),
-    addDetailRow("Entries", String(currentArchiveEntryCount)),
-    addDetailRow("Total unpacked size", formattedTotalSize),
-    addDetailRow("Packed size", packedSize === null ? null : formatBytes(packedSize)),
-    addDetailRow("Last test status", formatLastTestStatusForCurrentArchive()),
+    addDetailMessageRow("detail.archiveName", getArchiveName(currentArchivePath, APP_TITLE)),
+    addDetailMessageRow("detail.path", currentArchivePath),
+    addDetailMessageRow("detail.format", formatArchiveTypeFromPath(currentArchivePath)),
+    addDetailMessageRow("detail.entries", String(currentArchiveEntryCount)),
+    addDetailMessageRow("detail.totalUnpackedSize", formattedTotalSize),
+    addDetailMessageRow("detail.packedSize", packedSize === null ? null : formatBytes(packedSize)),
+    addDetailMessageRow("detail.lastTestStatus", formatLastTestStatusForCurrentArchive()),
   ].filter(Boolean).join("");
 
   infoDialogBody.innerHTML = `
@@ -4278,27 +4334,27 @@ function showEntryInfo(path: string) {
     return;
   }
 
-  infoTitle.textContent = "Entry Info";
+  infoTitle.textContent = message("info.entryTitle");
   const created = formatDate(entry.created);
   const modified = formatDate(entry.modified);
   const packed = formatOptionalBytes(entry.compressedSize);
   const size = formatOptionalBytes(entry.size);
   infoDialogBody.innerHTML = `
     <dl class="detail-list">
-      <div><dt>Name</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
-      <div><dt>Path</dt><dd>${escapeHtml(entry.path)}</dd></div>
-      <div><dt>Type</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
-      ${addDetailRow("Size", size)}
-      ${addDetailRow("Packed", packed)}
-      ${addDetailRow("Modified", modified)}
-      ${addDetailRow("Created", created)}
-      ${addDetailRow("Attributes", entry.attributes)}
-      ${addDetailRow("Method", entry.method)}
+      <div><dt>${escapeHtml(message("detail.name"))}</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
+      <div><dt>${escapeHtml(message("detail.path"))}</dt><dd>${escapeHtml(entry.path)}</dd></div>
+      <div><dt>${escapeHtml(message("detail.type"))}</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
+      ${addDetailMessageRow("detail.size", size)}
+      ${addDetailMessageRow("detail.packed", packed)}
+      ${addDetailMessageRow("detail.modified", modified)}
+      ${addDetailMessageRow("detail.created", created)}
+      ${addDetailMessageRow("detail.attributes", entry.attributes)}
+      ${addDetailMessageRow("detail.method", entry.method)}
       ${addDetailRow("CRC", entry.crc)}
-      ${addDetailRow("Encrypted", formatOptionalBoolean(entry.encrypted))}
-      ${addDetailRow("Solid", formatOptionalBoolean(entry.solid))}
-      ${addDetailRow("Link target", entry.linkTarget)}
-      <div><dt>Ratio</dt><dd>${formatRatio(entry)}</dd></div>
+      ${addDetailMessageRow("detail.encrypted", formatOptionalBoolean(entry.encrypted))}
+      ${addDetailMessageRow("detail.solid", formatOptionalBoolean(entry.solid))}
+      ${addDetailMessageRow("detail.linkTarget", entry.linkTarget)}
+      <div><dt>${escapeHtml(message("detail.ratio"))}</dt><dd>${formatRatio(entry)}</dd></div>
     </dl>
   `;
   openModal(infoDialog, "#info-close");
@@ -4322,15 +4378,15 @@ function renderAboutDiagnostics() {
       .join(", ") ?? "-";
   aboutDiagnostics.innerHTML = `
     <dl class="detail-list">
-      <div><dt>Status</dt><dd>${escapeHtml(healthcheck?.status ?? "frontend-only")}</dd></div>
-      <div><dt>Shell</dt><dd>${escapeHtml(healthcheck?.shell ?? "browser preview")}</dd></div>
-      <div><dt>Engine</dt><dd>${escapeHtml(healthcheck ? `${healthcheck.engine} ${healthcheck.version}` : "unavailable")}</dd></div>
-      <div><dt>Core dependency</dt><dd>${escapeHtml(contract?.coreDependency ?? "unavailable")}</dd></div>
-      <div><dt>Platform</dt><dd>${escapeHtml(contract?.platformIntegration.platform ?? "unknown")}</dd></div>
-      <div><dt>Explorer integration</dt><dd>${contract?.platformIntegration.explorerIntegrationEnabled ? "enabled" : "disabled"}</dd></div>
-      <div><dt>Desktop actions</dt><dd>${contract?.platformIntegration.desktopActionsEnabled ? "enabled" : "disabled"}</dd></div>
-      <div><dt>Extensions</dt><dd>${escapeHtml(contract?.platformIntegration.associatedExtensions.join(", ") ?? "-")}</dd></div>
-      <div><dt>Shell actions</dt><dd>${escapeHtml(shellActions)}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.status"))}</dt><dd>${escapeHtml(healthcheck?.status ?? message("about.diagnostics.frontendOnly"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.shell"))}</dt><dd>${escapeHtml(healthcheck?.shell ?? message("about.shell.browserPreview"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.engine"))}</dt><dd>${escapeHtml(healthcheck ? `${healthcheck.engine} ${healthcheck.version}` : message("about.diagnostics.unavailable"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.coreDependency"))}</dt><dd>${escapeHtml(contract?.coreDependency ?? message("about.diagnostics.unavailable"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.platform"))}</dt><dd>${escapeHtml(contract?.platformIntegration.platform ?? message("about.diagnostics.unknown"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.explorerIntegration"))}</dt><dd>${escapeHtml(contract?.platformIntegration.explorerIntegrationEnabled ? message("about.diagnostics.enabled") : message("about.diagnostics.disabled"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.desktopActions"))}</dt><dd>${escapeHtml(contract?.platformIntegration.desktopActionsEnabled ? message("about.diagnostics.enabled") : message("about.diagnostics.disabled"))}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.extensions"))}</dt><dd>${escapeHtml(contract?.platformIntegration.associatedExtensions.join(", ") ?? "-")}</dd></div>
+      <div><dt>${escapeHtml(message("about.diagnostics.shellActions"))}</dt><dd>${escapeHtml(shellActions)}</dd></div>
     </dl>
   `;
 }
@@ -4355,6 +4411,58 @@ function syncPreferenceOutputState() {
   syncPreferenceOutputViewState(preferencesViewElements);
 }
 
+function applyLocaleFromPreferences() {
+  resolvedLocale = resolveLocalePreference(appPreferences.locale);
+  i18n = createTranslator(resolvedLocale);
+  document.documentElement.lang = resolvedLocale;
+  document.documentElement.dir = localeDirection(resolvedLocale);
+  applyTranslations(document.body, i18n);
+  refreshCommandDisplayText();
+}
+
+function refreshCommandDisplayText() {
+  for (const summary of document.querySelectorAll<HTMLElement>("[data-menu-group-label]")) {
+    const label = summary.dataset.menuGroupLabel as Parameters<typeof menuGroupLabel>[0] | undefined;
+    if (label) {
+      summary.textContent = menuGroupLabel(label, i18n);
+    }
+  }
+
+  for (const submenu of document.querySelectorAll<HTMLElement>("[data-command-submenu-label]")) {
+    const key = submenu.dataset.commandSubmenuLabel as Parameters<Translator["t"]>[0] | undefined;
+    if (key) {
+      submenu.textContent = i18n.t(key);
+    }
+  }
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
+    const commandId = button.dataset.commandId as CommandId | undefined;
+    if (!commandId) {
+      continue;
+    }
+    const label = commandLabel(commandId, i18n);
+    const textElement = button.querySelector<HTMLElement>(".tool-label, .context-menu-label")
+      ?? button.querySelector<HTMLElement>("span:not(.sort-indicator)");
+    if (textElement) {
+      textElement.textContent = label;
+    } else if (!button.querySelector("svg")) {
+      button.textContent = label;
+    }
+    button.setAttribute("aria-label", label);
+    button.title = commandTooltipText(commandId, i18n);
+  }
+}
+
+function localizedCommandStateReason(reason?: string): string | undefined {
+  if (reason === UNSUPPORTED_OPERATION_MESSAGE) {
+    return i18n.t("command.unsupported");
+  }
+  if (reason === SINGLE_FILE_REQUIRED_MESSAGE) {
+    return i18n.t("command.singleFileRequired");
+  }
+  return reason;
+}
+
 function onPreferencesCreateFormatChange() {
   const draft = preferencesDialogDraft ?? appPreferences;
   renderCreateDefaultsForSelectedFormat(preferencesViewElements, draft);
@@ -4367,7 +4475,7 @@ function onPreferencesDefaultFormatChange() {
 }
 
 function renderPreferencesDialog() {
-  renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences);
+  renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences, i18n);
 }
 
 function collectPreferencesFromDialog(): AppPreferences {
@@ -4436,8 +4544,9 @@ function savePreferencesFromDialog() {
   appPreferences = preferencesDialogDraft ?? collectPreferencesFromDialog();
   preferencesDialogDraft = null;
   saveAppPreferences(appPreferences);
+  applyLocaleFromPreferences();
   isFlatView = appPreferences.flatViewDefault;
-  preferencesStatusElement.textContent = "Preferences saved.";
+  preferencesStatusElement.textContent = i18n.t("preferences.saved");
   preferencesStatusElement.className = "status status-success";
   applyCreatePreferenceDefaults();
   applyPreferenceClasses();
@@ -4453,7 +4562,7 @@ function openPreferencesDialog() {
 
 async function onSelectPreferenceOutputFolder() {
   const selected = await openNativeDialog({
-    title: "Choose default output folder",
+    title: i18n.t("nativeDialog.chooseDefaultOutput"),
     directory: true,
     multiple: false,
   });
@@ -4472,11 +4581,14 @@ function openExtractDialog(mode: ExtractMode) {
 
   activeExtractMode = mode;
   const selectedCount = selectedEntries.size;
-  extractTitle.textContent = mode === "selection" ? "Extract Selected" : "Extract Archive";
+  extractTitle.textContent = message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle");
   extractDialogMessage.textContent = mode === "selection"
-    ? `${selectedCount} selected entr${selectedCount === 1 ? "y" : "ies"} will be extracted.`
-    : "Extract every entry in the archive.";
-  extractStartButton.textContent = mode === "selection" ? "Extract Selected" : "Extract All";
+    ? message("extract.selectedMessage", {
+      count: selectedCount,
+      entryLabel: message(selectedCount === 1 ? "extract.entrySingular" : "extract.entryPlural"),
+    })
+    : message("extract.archiveMessage");
+  extractStartButton.textContent = message(mode === "selection" ? "extract.selectedAction" : "extract.allAction");
   if (!extractDestinationInput.value.trim() && extractDestinationHistory[0]) {
     extractDestinationInput.value = extractDestinationHistory[0];
   }
@@ -4498,8 +4610,8 @@ function openExtractHereDialog(mode: ExtractMode) {
   if (parent) {
     extractDestinationInput.value = parent;
     extractDialogMessage.textContent = mode === "selection"
-      ? `Extract selected entries beside ${getArchiveName(currentArchivePath, APP_TITLE)}.`
-      : `Extract archive beside ${getArchiveName(currentArchivePath, APP_TITLE)}.`;
+      ? message("extract.hereSelected", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) })
+      : message("extract.hereArchive", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) });
   }
 }
 
@@ -4545,7 +4657,7 @@ async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOpti
       ...(password ? { password } : {}),
     };
 
-    setBrowseState("loading", BROWSE_STATUS_LOADING);
+    setBrowseState("loading", i18n.t("browse.statusLoading"));
     renderBrowse();
 
     try {
@@ -4571,7 +4683,7 @@ async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOpti
           "error",
           commandError
             ? `${commandError.message}${commandError.hint ? `\n${commandError.hint}` : ""}`
-            : "Failed to list archive entries.",
+            : message("browse.failedList"),
         );
         renderBrowse();
         return;
@@ -4647,11 +4759,11 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
     selectionAnchorPath = selectedEntries.values().next().value ?? "";
   }
 
-  setBrowseState(listing.entries.length > 0 ? "loaded" : "empty", "Archive loaded.");
+  setBrowseState(listing.entries.length > 0 ? "loaded" : "empty", message("archive.loaded"));
 
   messageElement.textContent = listing.entries.length > 0
-    ? `Loaded ${listing.entries.length} entries.`
-    : "Archive is valid but contains no entries.";
+    ? message("browse.loadedEntries", { count: listing.entries.length })
+    : message("browse.validEmpty");
 
   renderBrowse();
   if (focusedEntryPath) {
@@ -4732,8 +4844,8 @@ async function runPlan(revision = ++createPlanRevision) {
   }
 
   currentPlan = null;
-  setCreatePlanState("loading", "Planning selected sources...");
-  createPlanSummary.innerHTML = "<p>Planning selected sources...</p>";
+  setCreatePlanState("loading", i18n.t("create.plan.planning"));
+  createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.planning"))}</p>`;
 
   try {
     const result = await runPlanCreate(request);
@@ -4801,14 +4913,14 @@ function addJobState(
 async function openQuickActionArchive(paths: string[]) {
   const archives = uniqueQuickActionPaths(paths);
   if (archives.length !== 1) {
-    setBrowseState("error", "Open one archive at a time.");
+    setBrowseState("error", message("archive.openSingle"));
     renderBrowse();
     return;
   }
 
   const archivePath = archives[0];
   if (!isSupportedArchivePath(archivePath)) {
-    setBrowseState("error", `Unsupported archive: ${archivePath}`);
+    setBrowseState("error", message("archive.unsupported", { archivePath }));
     renderBrowse();
     return;
   }
@@ -4819,7 +4931,7 @@ async function openQuickActionArchive(paths: string[]) {
 async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cleanSource: boolean) {
   const sources = uniqueQuickActionPaths(paths);
   if (!sources.length) {
-    setOperationalStatus("Quick create needs at least one source.");
+    setOperationalMessage("quickCreate.needsSource");
     return;
   }
 
@@ -4831,18 +4943,18 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
   );
 
   if (!destinationPath) {
-    setOperationalStatus("Quick create needs a destination archive path.");
+    setOperationalMessage("quickCreate.needsDestination");
     return;
   }
 
-  setOperationalStatus("Starting quick create...");
+  setOperationalMessage("quickCreate.starting");
   try {
     const defaults = createDefaultsForFormat(appPreferences, format);
     let password: string | undefined;
     if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
-      const promptedPassword = promptForArchivePassword("Enter password for the new archive.");
+      const promptedPassword = promptForArchivePassword(message("create.prompt.newArchivePassword"));
       if (!promptedPassword) {
-        setOperationalStatus("Quick create cancelled.");
+        setOperationalMessage("quickCreate.cancelled");
         return;
       }
       password = promptedPassword;
@@ -4866,10 +4978,10 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
       autoCloseAction: "closeWindow",
       progressContext: createJobProgressContext(request),
     });
-    setOperationalStatus("Quick create started.");
+    setOperationalMessage("quickCreate.started");
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to start quick create.");
+    setOperationalStatus(commandError?.message ?? message("quickCreate.unableStart"));
   }
 }
 
@@ -4880,7 +4992,7 @@ async function openQuickCreateReview(
 ) {
   const sources = uniqueQuickActionPaths(paths);
   if (!sources.length) {
-    setOperationalStatus("Quick create needs at least one source.");
+    setOperationalMessage("quickCreate.needsSource");
     return;
   }
 
@@ -4900,25 +5012,25 @@ async function openQuickCreateReview(
   renderCreateSources();
   renderCompressSources();
 
-  setOperationalStatus("Planning quick create...");
+  setOperationalMessage("quickCreate.planning");
   await runPlan();
   if (createPlanState === "ready" && currentPlan !== null) {
-    setOperationalStatus("Review the archive options, then create the archive.");
+    setOperationalMessage("quickCreate.review");
   } else {
-    setOperationalStatus("Quick create needs review before it can start.");
+    setOperationalMessage("quickCreate.needsReview");
   }
 }
 
 async function openQuickExtractReview(paths: string[]) {
   const archives = uniqueQuickActionPaths(paths);
   if (archives.length !== 1) {
-    setOperationalStatus("Open one archive at a time when extraction is set to ask every time.");
+    setOperationalMessage("quickExtract.oneArchiveAtATime");
     return;
   }
 
   const archivePath = archives[0];
   if (!isSupportedArchivePath(archivePath)) {
-    setOperationalStatus(`Unsupported archive: ${archivePath}`);
+    setOperationalMessage("archive.unsupported", { archivePath });
     return;
   }
 
@@ -4928,20 +5040,20 @@ async function openQuickExtractReview(paths: string[]) {
     return;
   }
 
-  setOperationalStatus("Choose extraction options.");
+  setOperationalMessage("quickExtract.chooseOptions");
   openExtractDialog("archive");
 }
 
 async function startQuickExtract(paths: string[], action: QuickActionExtractMode) {
   const archives = uniqueQuickActionPaths(paths);
   if (!archives.length) {
-    setOperationalStatus("Quick extract needs at least one archive.");
+    setOperationalMessage("quickExtract.needsArchive");
     return;
   }
 
   for (const archivePath of archives) {
     if (!isSupportedArchivePath(archivePath)) {
-      setOperationalStatus(`Unsupported archive: ${archivePath}`);
+      setOperationalMessage("archive.unsupported", { archivePath });
       continue;
     }
 
@@ -4954,7 +5066,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
           { nativeParentPath, joinNativePath },
         );
         if (!destinationPlan.destinationPath) {
-          setOperationalStatus(`Choose a destination before extracting ${archivePath}.`);
+          setOperationalMessage("quickExtract.chooseDestination", { archivePath });
           break;
         }
 
@@ -4994,7 +5106,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
           continue;
         }
 
-        setOperationalStatus(commandError?.message ?? `Unable to extract ${archivePath}.`);
+        setOperationalStatus(commandError?.message ?? message("quickExtract.unableExtract", { archivePath }));
         if (commandError?.hint) {
           setBrowseState("error", `${commandError.message}\n${commandError.hint}`);
         }
@@ -5023,7 +5135,7 @@ async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
   for (const response of responses) {
     addJobState(response);
   }
-  setOperationalStatus("Quick action started.");
+  setOperationalMessage("jobs.quickActionStarted");
 }
 
 async function handleStartupQuickAction() {
@@ -5045,7 +5157,7 @@ async function handleStartupQuickAction() {
       }
     }
   } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, "Unable to read quick-action startup state."));
+    setOperationalStatus(unknownErrorMessage(error, message("jobs.quickActionStartupReadFailed")));
     if (!revealedWindow) {
       await revealNormalAppWindow();
     }
@@ -5072,8 +5184,8 @@ async function handleQuickActionStartupState(state: QuickActionStartupStateDto) 
 
   if (state.quickAction) {
     const startupStatus = state.quickAction.kind === "open"
-      ? "Opening archive..."
-      : "Starting quick action...";
+      ? message("quickAction.openingArchive")
+      : message("quickAction.starting");
     setOperationalStatus(startupStatus);
     await handleQuickActionRequest(state.quickAction);
   }
@@ -5098,7 +5210,7 @@ async function initializeDesktopRuntime() {
     await bindQuickActionLaunchEvents();
     await handleStartupQuickAction();
   } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, "Unable to initialize desktop integration."));
+    setOperationalStatus(unknownErrorMessage(error, message("desktopIntegration.initFailed")));
     await revealNormalAppWindow();
   }
 }
@@ -5126,29 +5238,29 @@ async function retryJobWithPasswordPrompt(jobId: string) {
   const state = jobs.get(jobId);
   const context = jobRetryContexts.get(jobId);
   if (!state || !context) {
-    setOperationalStatus("Retry is unavailable for this job.");
+    setOperationalMessage("jobs.retryUnavailable");
     return;
   }
 
   const failure = getLatestPasswordFailureEvent(state);
   if (!failure?.code) {
-    setOperationalStatus("Retry is unavailable for this job.");
+    setOperationalMessage("jobs.retryUnavailable");
     return;
   }
 
   const password = promptForArchivePassword(getArchivePasswordPrompt(failure.code));
   if (!password) {
-    setOperationalStatus("Password retry cancelled.");
+    setOperationalMessage("jobs.passwordRetryCancelled");
     return;
   }
 
   try {
     const response = await startPasswordRetryJob(context, password);
     addJobState(response, { retryContext: context });
-    setOperationalStatus("Password retry started.");
+    setOperationalMessage("jobs.passwordRetryStarted");
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to start password retry.");
+    setOperationalStatus(commandError?.message ?? message("jobs.passwordRetryFailed"));
   }
 }
 
@@ -5203,14 +5315,14 @@ async function pollJobs() {
             return;
           }
 
-          const message = commandError?.message ?? "Unable to read job progress.";
+          const messageText = commandError?.message ?? message("jobs.readProgressFailed");
           const failedEvent = {
             eventType: "failed" as const,
             code: commandError?.code,
             hint: commandError?.hint,
             severity: "error" as const,
             retryable: true,
-            message,
+            message: messageText,
           };
           jobs.set(jobId, {
             snapshot: {
@@ -5221,7 +5333,7 @@ async function pollJobs() {
             },
             events: [...state.events, failedEvent],
           });
-          setOperationalStatus(message);
+          setOperationalStatus(messageText);
         }
       }),
     );
@@ -5284,7 +5396,7 @@ function stopPolling() {
 
 async function onOpenArchive() {
   const selected = await openNativeDialog({
-    title: "Open archive",
+    title: i18n.t("nativeDialog.openArchive"),
     directory: false,
     multiple: false,
     filters: [ARCHIVE_OPEN_FILTER],
@@ -5322,7 +5434,7 @@ async function onTestArchive() {
     } catch (error) {
       const commandError = asCommandError(error);
       if (!commandError) {
-        setBrowseState("error", "Unable to start archive test.");
+        setBrowseState("error", message("test.unableStart"));
         return;
       }
 
@@ -5348,22 +5460,22 @@ async function onTestArchive() {
 
 async function onDeleteTemporaryFiles() {
   if (!isDesktopRuntime()) {
-    setOperationalStatus("Temporary cleanup is available in desktop mode only.");
+    setOperationalMessage("preview.cleanupDesktopOnly");
     return;
   }
 
   if (!currentPreviewCleanupRoot && !currentPreviewPath) {
-    setOperationalStatus("No temporary preview files are currently tracked.");
+    setOperationalMessage("preview.cleanupNoneTracked");
     return;
   }
 
   try {
     await cleanupPreviewRoots();
     clearTrackedPreviewState();
-    setOperationalStatus("Deleted temporary preview files.");
+    setOperationalMessage("preview.cleanupDeleted");
   } catch (error) {
     const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? "Unable to delete temporary preview files.");
+    setOperationalStatus(commandError?.message ?? message("preview.cleanupFailed"));
   }
 }
 
@@ -5524,7 +5636,7 @@ async function onRefreshArchive() {
 
 async function onSelectDestinationForExtract() {
   const selected = await openNativeDialog({
-    title: "Choose extract destination",
+    title: i18n.t("nativeDialog.chooseExtractDestination"),
     directory: true,
     multiple: false,
   });
@@ -5543,7 +5655,7 @@ async function startExtract(destinationMode: ExtractMode) {
 
   const destination = resolveExtractDestination(extractDestinationInput.value);
   if (!destination) {
-    extractDialogMessage.textContent = "Choose an extract destination folder first.";
+    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
     extractDestinationInput.focus();
     return;
   }
@@ -5603,7 +5715,7 @@ async function startExtract(destinationMode: ExtractMode) {
           password = nextPassword;
           continue;
         }
-        setBrowseState("error", commandError?.message ?? "Unable to start extraction.");
+        setBrowseState("error", commandError?.message ?? message("extract.unableStart"));
         return;
       }
     }
@@ -5611,7 +5723,7 @@ async function startExtract(destinationMode: ExtractMode) {
 
   const entries = getSelectedExtractEntryPaths();
   if (!entries.length) {
-    extractDialogMessage.textContent = "Select at least one entry to extract.";
+    extractDialogMessage.textContent = message("extract.selectEntryFirst");
     return;
   }
   const stripComponents = resolveExtractStripComponents(
@@ -5645,7 +5757,7 @@ async function startExtract(destinationMode: ExtractMode) {
         },
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
-        progressContext: extractJobProgressContext(request, "Extract selected entries"),
+        progressContext: extractJobProgressContext(request, message("extract.selectedProgressTitle")),
       });
       return;
     } catch (error) {
@@ -5663,7 +5775,7 @@ async function startExtract(destinationMode: ExtractMode) {
         password = nextPassword;
         continue;
       }
-      setBrowseState("error", commandError?.message ?? "Unable to extract selected entries.");
+      setBrowseState("error", commandError?.message ?? message("extract.unableSelected"));
       return;
     }
   }
@@ -5686,24 +5798,24 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
 
   const selected = getSelectedEntryPaths();
   if (selected.length !== 1) {
-    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
+    setOperationalMessage("command.singleFileRequired");
     return;
   }
   const selectedEntry = getEntryByPath(selected[0]);
   if (!selectedEntry) {
-    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
+    setOperationalMessage("command.singleFileRequired");
     return;
   }
 
   if (selectedEntry.kind === "directory") {
-    setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
+    setOperationalMessage("command.singleFileRequired");
     return;
   }
 
   if (openOutside && currentPreviewEntryPath === selected[0] && currentPreviewPath) {
     try {
       await openDesktopPath(currentPreviewPath);
-      setBrowseState("loaded", "Opened outside (cached preview).");
+      setBrowseState("loaded", message("preview.openedCached"));
       renderBrowse();
       return;
     } catch (error) {
@@ -5730,9 +5842,9 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
       currentPreviewPath = response.previewPath;
       currentPreviewEntryPath = selected[0];
       if (openOutside) {
-        setBrowseState("loaded", `Opened outside: ${formatBytes(response.writtenBytes)}.`);
+        setBrowseState("loaded", message("preview.openedOutside", { size: formatBytes(response.writtenBytes) }));
       } else {
-        setBrowseState("loaded", `Preview ready: ${formatBytes(response.writtenBytes)}.`);
+        setBrowseState("loaded", message("preview.ready", { size: formatBytes(response.writtenBytes) }));
       }
       renderBrowse();
       return;
@@ -5752,7 +5864,7 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
         continue;
       }
 
-      setBrowseState("error", commandError?.message ?? "Unable to preview entry.");
+      setBrowseState("error", commandError?.message ?? message("preview.unablePreview"));
       return;
     }
   }
@@ -5760,7 +5872,7 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
 
 async function addSourcePathsFromDialog(mode: "files" | "folder") {
   const selected = await openNativeDialog({
-    title: mode === "files" ? "Add source files" : "Add source folder",
+    title: i18n.t(mode === "files" ? "nativeDialog.addSourceFiles" : "nativeDialog.addSourceFolder"),
     directory: mode === "folder",
     multiple: mode === "files",
   });
@@ -5779,7 +5891,7 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 
 async function onSelectCreateDestination() {
   const selected = await saveNativeDialog({
-    title: "Choose destination archive",
+    title: i18n.t("nativeDialog.chooseDestinationArchive"),
     defaultPath: createDestinationInput.value.trim()
       ? withCreateArchiveExtension(
           createDestinationInput.value,
@@ -5813,13 +5925,13 @@ async function runCreate(
   const format = createFormatSelect.value as CreateArchiveFormat;
   const destinationPath = withCreateArchiveExtension(createDestinationInput.value, format);
   if (!destinationPath) {
-    setCreatePlanState("error", "Pick a destination archive path.");
+    setCreatePlanState("error", message("create.error.pickDestination"));
     return;
   }
   createDestinationInput.value = destinationPath;
 
   if (createPlanState !== "ready" || currentPlan === null) {
-    setCreatePlanState("error", "Refresh the plan before creating.");
+    setCreatePlanState("error", message("create.error.refreshPlan"));
     return;
   }
 
@@ -5829,7 +5941,7 @@ async function runCreate(
   const passwordValue = createPasswordInput.value.trim();
   const passwordConfirmValue = createPasswordConfirmInput.value.trim();
   if ((passwordValue || passwordConfirmValue) && passwordValue !== passwordConfirmValue) {
-    setCreatePlanState("error", "Password confirmation does not match.");
+    setCreatePlanState("error", message("create.error.passwordMismatch"));
     return;
   }
   const compressionLevel = parseNonNegativeInteger(createCompressionInput.value);
@@ -5872,7 +5984,7 @@ async function runCreate(
     });
   } catch (error) {
     const commandError = asCommandError(error);
-    setCreatePlanState("error", commandError?.message ?? "Unable to start create job.");
+    setCreatePlanState("error", commandError?.message ?? message("create.error.unableStart"));
   } finally {
     createSubmissionInFlight = false;
     setCreatePlanState(createPlanState, currentPlanError);
@@ -5920,7 +6032,7 @@ async function loadBootstrapState() {
 
     latestHealthcheck = healthcheck;
     latestContract = contract;
-    setOperationalStatus(healthcheck.ready ? "Ready." : "Backend unavailable.");
+    setOperationalStatus(healthcheck.ready ? message("status.ready") : message("status.backendUnavailable"));
     renderAboutDiagnostics();
     if (normalWorkspaceRendered && !isQuickActionJobMode()) {
       renderBrowse();
@@ -5930,9 +6042,9 @@ async function loadBootstrapState() {
     latestContract = null;
     if (isDesktopRuntime()) {
       const commandError = asCommandError(error);
-      setOperationalStatus(commandError?.message ?? unknownErrorMessage(error, "Backend unavailable."));
+      setOperationalStatus(commandError?.message ?? unknownErrorMessage(error, message("status.backendUnavailable")));
     } else {
-      setOperationalStatus("Ready in browser preview.");
+      setOperationalMessage("status.readyBrowserPreview");
     }
     renderAboutDiagnostics();
     if (normalWorkspaceRendered && !isQuickActionJobMode()) {
@@ -6112,7 +6224,7 @@ function bindActions() {
   bindMenuItem("properties", showCurrentInfo);
   bindMenuItem("refresh", () => void onRefreshArchive());
   bindMenuItem("exit", closeAppWindow);
-  bindMenuItem("detailsView", () => setOperationalStatus("Details view is active."));
+  bindMenuItem("detailsView", () => setOperationalMessage("status.detailsViewActive"));
   bindMenuItem("sortName", () => applySortCommand("name"));
   bindMenuItem("sortType", () => applySortCommand("kind"));
   bindMenuItem("sortDate", () => applySortCommand("modified"));
@@ -6138,7 +6250,7 @@ function bindActions() {
   bindMenuItem("openInside", () => {
     const selected = getSelectedEntryPaths();
     if (selected.length !== 1) {
-      setOperationalStatus(SINGLE_FILE_REQUIRED_MESSAGE);
+      setOperationalMessage("command.singleFileRequired");
       return;
     }
     navigateToFolder(selected[0]);
@@ -6769,7 +6881,7 @@ tableBody.addEventListener("click", (event) => {
           return;
         }
         if (entry.kind !== "directory") {
-          setOperationalStatus("You must select one folder.");
+          setOperationalMessage("command.singleFolderRequired");
           return;
         }
         navigateToFolder(entryPath);
@@ -6854,7 +6966,7 @@ tableBody.addEventListener("click", (event) => {
     }
     if (action === "reveal-source" && sourcePath) {
       void revealInFileManager(sourcePath).catch((error) => {
-        setOperationalStatus(unknownErrorMessage(error, "Unable to reveal source."));
+        setOperationalStatus(unknownErrorMessage(error, message("preview.unableRevealSource")));
       });
       return;
     }
@@ -6911,6 +7023,7 @@ tableBody.addEventListener("click", (event) => {
     preferencesCreatePreserveMetadataCheckbox,
     preferencesCreateReplaceExistingCheckbox,
     preferencesCreatePromptPasswordCheckbox,
+    preferencesLocaleSelect,
   ]) {
     input.addEventListener("change", updatePreferencesDialogDraft);
   }
@@ -6978,12 +7091,12 @@ tableBody.addEventListener("click", (event) => {
   copyDiagnosticsButton.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(diagnosticsText());
-      copyDiagnosticsButton.textContent = "Copied";
+      copyDiagnosticsButton.textContent = message("status.copied");
       window.setTimeout(() => {
-        copyDiagnosticsButton.textContent = "Copy Diagnostics";
+        copyDiagnosticsButton.textContent = message("about.copyDiagnostics");
       }, 1400);
     } catch {
-      setOperationalStatus("Could not copy diagnostics.");
+      setOperationalMessage("status.copyDiagnosticsFailed");
     }
   });
 
@@ -7007,11 +7120,12 @@ bindDialogCloseButtons();
 bindActions();
 bindBrowserFileDropFallback();
 bindWindowLifecycleHandlers();
+applyLocaleFromPreferences();
 loadExtractDestinationHistory();
 loadCreateDestinationHistory();
 applyCreatePreferenceDefaults();
 setCreatePlanState("idle");
-setBrowseState("idle", BROWSE_STATUS_IDLE);
+setBrowseState("idle", i18n.t("browse.statusIdle"));
 if (isLocalDevHost()) {
   window.__zmanagerDev = {
     loadArchiveFixture: loadArchiveListingIntoState,

@@ -4,11 +4,15 @@ import {
   CLASSIC_MENU_GROUPS,
   CLASSIC_TOOLBAR_ORDER,
   COMMAND_DEFINITIONS,
+  commandLabel,
+  commandTooltipText,
   type CommandId,
   type MenuItem,
   UNSUPPORTED_OPERATION_MESSAGE,
   selectCommandState,
 } from "./classicCommands";
+import { createTranslatorFromCatalog } from "./i18n/translator";
+import { zhCnMessages } from "./i18n/messages.zh-CN";
 
 function collectMenuCommandIds(items: readonly MenuItem[]): CommandId[] {
   return items.flatMap((item) => {
@@ -65,6 +69,14 @@ describe("classic command definitions", () => {
       "Test",
       "Info",
     ]);
+  });
+
+  it("localizes labels and composes tooltips with stable shortcuts", () => {
+    const zhCn = createTranslatorFromCatalog("zh-CN", zhCnMessages);
+
+    expect(commandLabel("open", zhCn)).toBe("打开...");
+    expect(commandTooltipText("open", zhCn)).toBe("打开... (Ctrl+O)");
+    expect(COMMAND_DEFINITIONS.open.shortcut).toBe("Ctrl+O");
   });
 });
 

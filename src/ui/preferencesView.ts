@@ -10,8 +10,11 @@ import {
   type DefaultOutputLocation,
   type PreviewCleanupPolicy,
 } from "../app/preferences";
+import type { LocalePreference } from "../app/i18n/locale";
+import type { Translator } from "../app/i18n/translator";
 
 export type PreferencesViewElements = {
+  localeSelect: HTMLSelectElement;
   defaultFormatSelect: HTMLSelectElement;
   defaultExtractionSelect: HTMLSelectElement;
   outputLocationSelect: HTMLSelectElement;
@@ -47,7 +50,9 @@ export function syncPreferenceOutputState(elements: PreferencesViewElements): vo
 export function renderPreferencesDialog(
   elements: PreferencesViewElements,
   preferences: AppPreferences,
+  i18n: Translator,
 ): void {
+  elements.localeSelect.value = preferences.locale;
   elements.defaultFormatSelect.value = preferences.defaultArchiveFormat;
   elements.defaultExtractionSelect.value = preferences.defaultExtractionBehavior;
   elements.outputLocationSelect.value = preferences.defaultOutputLocation;
@@ -65,7 +70,7 @@ export function renderPreferencesDialog(
   elements.largeToolbarButtonsCheckbox.checked = preferences.largeToolbarButtons;
   elements.showToolbarLabelsCheckbox.checked = preferences.showToolbarLabels;
   elements.flatViewDefaultCheckbox.checked = preferences.flatViewDefault;
-  elements.statusElement.textContent = "Preferences are stored locally and never include passwords.";
+  elements.statusElement.textContent = i18n.t("preferences.status.localOnly");
   elements.statusElement.className = "status status-idle";
   syncPreferenceOutputState(elements);
 }
@@ -112,6 +117,7 @@ export function collectPreferencesFromDialog(
   };
 
   return preferencesWithPatch(preferences, {
+    locale: elements.localeSelect.value as LocalePreference,
     defaultArchiveFormat: elements.defaultFormatSelect.value as CreateArchiveFormat,
     defaultCleanSourceEnabled:
       nextCreateFormatDefaults[elements.defaultFormatSelect.value as CreateArchiveFormat].cleanSource,
