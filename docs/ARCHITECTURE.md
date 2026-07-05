@@ -49,6 +49,11 @@ Owns long-running job handles, cancellation, event polling, and cleanup. The fro
 
 Owns the main tabs: Browse, Create, Jobs, Settings. It renders state and dispatches Tauri commands.
 
+User-visible text belongs at the display boundary. Keep internal state, command DTOs,
+job events, and archive behavior language-neutral, then render labels and messages
+through the frontend localization layer. See
+[`I18N_DISPLAY_ISOLATION_PLAN.md`](I18N_DISPLAY_ISOLATION_PLAN.md).
+
 ### Windows Shell Integration
 
 Owns Explorer context menu registration, file associations, installer hooks, and Windows path integration.

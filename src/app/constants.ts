@@ -7,9 +7,9 @@ export const JOB_POLL_INTERVAL_MS = 800;
 export const APP_MIN_WINDOW_WIDTH_PX = 720;
 export const APP_MIN_WINDOW_HEIGHT_PX = 480;
 export const APP_MENU_BAR_HEIGHT_PX = 30;
-export const APP_TOOLBAR_HEIGHT_PX = 54;
+export const APP_TOOLBAR_HEIGHT_PX = 48;
 export const APP_PATH_BAR_HEIGHT_PX = 44;
-export const APP_STATUS_BAR_HEIGHT_PX = 28;
+export const APP_STATUS_BAR_HEIGHT_PX = 26;
 
 export const APP_NAV_PANE_MIN_WIDTH_PX = 150;
 export const APP_NAV_PANE_MAX_WIDTH_PX = 180;

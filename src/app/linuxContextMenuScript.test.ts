@@ -44,7 +44,7 @@ const createActions: ExpectedAction[] = [
 const windowsOrderedActions = [...archiveActions, ...createActions];
 
 function readWorkspaceFile(...parts: string[]): string {
-  return readFileSync(join(process.cwd(), ...parts), "utf8");
+  return readFileSync(join(process.cwd(), ...parts), "utf8").replace(/\r\n/g, "\n");
 }
 
 function listedActions(entry: string): string[] {

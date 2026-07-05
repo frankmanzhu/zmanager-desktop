@@ -1,32 +1,54 @@
 :root {
   color-scheme: light;
-  --app-bg: #ececec;
-  --chrome-bg: #f0f0f0;
-  --chrome-bg-strong: #e5e5e5;
+  --native-window-bg: #f3f3f3;
+  --native-chrome-bg: #f9f9f9;
+  --native-chrome-bg-strong: #eeeeee;
+  --native-layer-bg: #ffffff;
+  --native-layer-bg-subtle: #fbfbfb;
+  --native-control-bg: #ffffff;
+  --native-control-bg-hover: #f6f6f6;
+  --native-control-bg-pressed: #efefef;
+  --native-control-border: #c7c7c7;
+  --native-control-border-strong: #8f8f8f;
+  --native-control-radius: 4px;
+  --native-menu-radius: 7px;
+  --native-selection-bg: #cfe8ff;
+  --native-selection-bg-hover: #dcebff;
+  --native-selection-border: #78aee8;
+  --native-row-hover: #eff6ff;
+  --native-row-selected: #dceeff;
+  --native-accent: #0067c0;
+  --native-accent-hover: #005a9e;
+  --native-accent-pressed: #004578;
+  --native-shadow-flyout: 0 8px 20px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.12);
+  --native-shadow-dialog: 0 24px 56px rgba(0, 0, 0, 0.24), 0 2px 8px rgba(0, 0, 0, 0.14);
+  --app-bg: var(--native-window-bg);
+  --chrome-bg: var(--native-chrome-bg);
+  --chrome-bg-strong: var(--native-chrome-bg-strong);
   --content-bg: #ffffff;
-  --content-bg-subtle: #f7f7f7;
-  --content-bg-hover: #e7f1ff;
-  --selected-bg: #cfe8ff;
-  --selected-border: #77a7dc;
-  --border: #d5d5d5;
-  --border-strong: #b8b8b8;
-  --text: #111111;
-  --muted: #666666;
-  --muted-strong: #333333;
-  --accent: #0067c0;
-  --accent-hover: #005aa6;
+  --content-bg-subtle: var(--native-layer-bg-subtle);
+  --content-bg-hover: var(--native-row-hover);
+  --selected-bg: var(--native-selection-bg);
+  --selected-border: var(--native-selection-border);
+  --border: #e5e5e5;
+  --border-strong: var(--native-control-border);
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --muted-strong: #3d3d3d;
+  --accent: var(--native-accent);
+  --accent-hover: var(--native-accent-hover);
   --danger: #b3261e;
   --danger-bg: #fff1f0;
   --warning: #7a4f00;
   --warning-bg: #fff7df;
   --success: #15703a;
   --success-bg: #edf8f0;
-  --focus-ring: 0 0 0 3px rgba(10, 102, 194, 0.2);
-  --radius-sm: 2px;
-  --radius-md: 2px;
-  --radius-lg: 3px;
-  --shadow-control: none;
-  --shadow-popover: 0 8px 22px rgba(0, 0, 0, 0.22);
+  --focus-ring: 0 0 0 2px rgba(0, 103, 192, 0.28);
+  --radius-sm: var(--native-control-radius);
+  --radius-md: var(--native-control-radius);
+  --radius-lg: var(--native-menu-radius);
+  --shadow-control: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  --shadow-popover: var(--native-shadow-flyout);
   --font-ui: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Ubuntu,
     Cantarell, "Noto Sans", Arial, sans-serif;
   --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono",
@@ -41,30 +63,50 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --app-bg: #202020;
-    --chrome-bg: #26282b;
-    --chrome-bg-strong: #2e3237;
-    --content-bg: #2b2b2b;
-    --content-bg-subtle: #25272a;
-    --content-bg-hover: #173555;
-    --selected-bg: #123b61;
-    --selected-border: #4aa3ff;
-    --border: #3a3a3a;
-    --border-strong: #525252;
-    --text: #f0f0f0;
+    --native-window-bg: #202020;
+    --native-chrome-bg: #272727;
+    --native-chrome-bg-strong: #303030;
+    --native-layer-bg: #1f1f1f;
+    --native-layer-bg-subtle: #2b2b2b;
+    --native-control-bg: #2d2d2d;
+    --native-control-bg-hover: #383838;
+    --native-control-bg-pressed: #333333;
+    --native-control-border: #515151;
+    --native-control-border-strong: #757575;
+    --native-selection-bg: #123b61;
+    --native-selection-bg-hover: #16466f;
+    --native-selection-border: #4aa3ff;
+    --native-row-hover: #29394a;
+    --native-row-selected: #193f63;
+    --native-accent: #60cdff;
+    --native-accent-hover: #8bdcff;
+    --native-accent-pressed: #4fb6e4;
+    --native-shadow-flyout: 0 10px 28px rgba(0, 0, 0, 0.46), 0 1px 2px rgba(0, 0, 0, 0.42);
+    --native-shadow-dialog: 0 28px 70px rgba(0, 0, 0, 0.58), 0 2px 10px rgba(0, 0, 0, 0.45);
+    --app-bg: var(--native-window-bg);
+    --chrome-bg: var(--native-chrome-bg);
+    --chrome-bg-strong: var(--native-chrome-bg-strong);
+    --content-bg: var(--native-layer-bg);
+    --content-bg-subtle: var(--native-layer-bg-subtle);
+    --content-bg-hover: var(--native-row-hover);
+    --selected-bg: var(--native-selection-bg);
+    --selected-border: var(--native-selection-border);
+    --border: #3d3d3d;
+    --border-strong: var(--native-control-border);
+    --text: #f3f3f3;
     --muted: #b8b8b8;
-    --muted-strong: #d0d0d0;
-    --accent: #4aa3ff;
-    --accent-hover: #79bbff;
+    --muted-strong: #d6d6d6;
+    --accent: var(--native-accent);
+    --accent-hover: var(--native-accent-hover);
     --danger: #ffb4ab;
     --danger-bg: #4b1715;
     --warning: #ffd689;
     --warning-bg: #3d2b0d;
     --success: #8fdaa8;
     --success-bg: #17351f;
-    --focus-ring: 0 0 0 3px rgba(74, 163, 255, 0.32);
-    --shadow-control: 0 1px 1px rgba(0, 0, 0, 0.24);
-    --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.42);
+    --focus-ring: 0 0 0 2px rgba(96, 205, 255, 0.34);
+    --shadow-control: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-popover: var(--native-shadow-flyout);
   }
 }
 
@@ -104,9 +146,9 @@ button,
 input,
 select,
 textarea {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--native-control-border);
   border-radius: var(--radius-md);
-  background: var(--content-bg-subtle);
+  background: var(--native-control-bg);
   color: var(--text);
   box-shadow: var(--shadow-control);
 }
@@ -119,8 +161,8 @@ input[type="radio"] {
 }
 
 button {
-  min-height: 24px;
-  padding: 2px 8px;
+  min-height: 30px;
+  padding: 4px 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -130,13 +172,13 @@ button {
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--content-bg-hover);
+  border-color: var(--native-control-border-strong);
+  background: var(--native-control-bg-hover);
 }
 
 button:active:not(:disabled) {
-  background: var(--selected-bg);
-  box-shadow: inset 0 1px 2px rgba(31, 35, 40, 0.12);
+  background: var(--native-control-bg-pressed);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 button:disabled,
@@ -158,6 +200,7 @@ select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible,
 .tab:focus-visible,
+.menu summary:focus-visible,
 .menu-item:focus-visible,
 .context-menu [role="menuitem"]:focus-visible {
   outline: 0;
@@ -167,22 +210,22 @@ textarea:focus-visible,
 input,
 select,
 textarea {
-  min-height: 24px;
-  padding: 2px 6px;
+  min-height: 30px;
+  padding: 4px 8px;
   line-height: 1.25;
 }
 
 input,
 textarea {
-  background: var(--content-bg);
-  box-shadow: inset 0 1px 1px rgba(31, 35, 40, 0.04);
+  background: var(--native-layer-bg);
+  box-shadow: inset 0 -1px 0 var(--native-control-border);
 }
 
 input[type="checkbox"],
 input[type="radio"] {
-  width: 14px;
-  height: 14px;
-  min-height: 14px;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
   margin: 0;
   padding: 0;
   accent-color: var(--accent);
@@ -433,7 +476,7 @@ p {
   align-items: center;
   justify-content: flex-start;
   gap: 2px;
-  padding: 2px 8px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--border);
   background: var(--chrome-bg);
   text-align: left;
@@ -449,7 +492,7 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -462,8 +505,8 @@ p {
 
 .menu[open] summary,
 .menu summary:hover {
-  border-color: var(--border);
-  background: var(--content-bg-hover);
+  border-color: transparent;
+  background: var(--native-control-bg-hover);
 }
 
 .menu-popover {
@@ -474,10 +517,10 @@ p {
   min-width: 220px;
   display: grid;
   gap: 0;
-  padding: 5px;
-  border: 1px solid var(--border-strong);
+  padding: 4px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   box-shadow: var(--shadow-popover);
   text-align: left;
 }
@@ -487,7 +530,7 @@ p {
   width: 100%;
   min-height: 28px;
   justify-content: flex-start;
-  padding: 4px 28px 4px 12px;
+  padding: 4px 28px 4px 10px;
   border-color: transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -498,8 +541,8 @@ p {
 
 .menu-item:hover,
 .app-menu button:hover:not(:disabled) {
-  border-color: var(--border);
-  background: var(--content-bg-hover);
+  border-color: transparent;
+  background: var(--native-control-bg-hover);
 }
 
 .toolbar,
@@ -512,10 +555,10 @@ p {
 
 .command-toolbar {
   grid-area: toolbar;
-  min-height: 54px;
-  padding: 10px 14px;
+  min-height: 48px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--chrome-bg) 92%, var(--content-bg));
+  background: var(--chrome-bg);
 }
 
 .mode-toolbar {
@@ -525,7 +568,11 @@ p {
 .mode-switch {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--native-layer-bg);
 }
 
 .legacy-command-buttons {
@@ -536,28 +583,31 @@ p {
 }
 
 .mode-button {
-  min-width: 120px;
-  min-height: 34px;
-  padding-inline: 18px;
-  font-weight: 650;
+  min-width: 110px;
+  min-height: 30px;
+  padding-inline: 16px;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 600;
 }
 
 .mode-button.is-active,
 .mode-button[aria-selected="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: #ffffff;
+  border-color: var(--selected-border);
+  background: var(--selected-bg);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .mode-button.is-active:hover:not(:disabled),
 .mode-button[aria-selected="true"]:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  border-color: var(--selected-border);
+  background: var(--native-selection-bg-hover);
 }
 
 .command-toolbar.large .tool-button {
   min-height: 32px;
-  padding: 8px 11px;
+  padding: 5px 9px;
 }
 
 .command-toolbar.show-labels .tool-label {
@@ -580,8 +630,8 @@ p {
 }
 
 .command-toolbar .tool-button:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: var(--content-bg-hover);
+  border-color: transparent;
+  background: var(--native-control-bg-hover);
 }
 
 .toolbar-brand {
@@ -663,10 +713,10 @@ button svg {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) minmax(190px, 280px);
   align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
+  gap: 6px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
-  background: var(--content-bg);
+  background: var(--chrome-bg);
 }
 
 .path-bar input,
@@ -688,7 +738,7 @@ button svg {
 }
 
 .path-crumbs button {
-  min-height: 24px;
+  min-height: 28px;
   padding: 2px 6px;
   font-family: inherit;
 }
@@ -725,7 +775,7 @@ button svg {
   grid-template-columns: minmax(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-max)) minmax(520px, 1fr) minmax(var(--zmanager-details-pane-min), var(--zmanager-details-pane-max));
   min-height: 0;
   overflow: hidden;
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
 }
 
 .tabs,
@@ -735,7 +785,7 @@ button svg {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px;
+  padding: 8px 6px;
   border-right: 1px solid var(--border);
   background: var(--chrome-bg);
   overflow: auto;
@@ -767,9 +817,9 @@ button svg {
 
 .table-pane-header {
   min-height: 31px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--border);
-  background: var(--chrome-bg);
+  background: var(--native-layer-bg-subtle);
 }
 
 .table-pane-header p {
@@ -817,7 +867,7 @@ button svg {
 .tab,
 .tree-item,
 .nav-item {
-  min-height: 30px;
+  min-height: 28px;
   justify-content: flex-start;
   text-align: left;
   border-color: transparent;
@@ -856,7 +906,7 @@ button svg {
 .nav-item.is-active,
 .tree-item[aria-selected="true"],
 .nav-item[aria-selected="true"] {
-  border-color: var(--selected-border);
+  border-color: transparent;
   background: var(--selected-bg);
   color: var(--text);
 }
@@ -880,7 +930,7 @@ button svg {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
 }
 
 .details-pane {
@@ -889,7 +939,7 @@ button svg {
   display: grid;
   align-content: start;
   gap: 6px;
-  padding: 8px;
+  padding: 8px 10px;
   border-left: 1px solid var(--border);
   background: var(--chrome-bg);
   overflow: auto;
@@ -1043,7 +1093,7 @@ input[type="search"] {
   border: 0;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   -webkit-user-select: none;
   user-select: none;
   touch-action: none;
@@ -1088,15 +1138,15 @@ input[type="search"] {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
 }
 
 .compress-create-panel {
   display: grid;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--chrome-bg) 72%, var(--content-bg));
+  background: var(--native-layer-bg-subtle);
 }
 
 .compress-create-row {
@@ -1133,10 +1183,10 @@ input[type="search"] {
 .compress-create-actions {
   justify-content: flex-end;
   flex-wrap: nowrap;
-  padding: 4px;
+  padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--content-bg);
+  border-radius: var(--radius-lg);
+  background: var(--native-layer-bg);
 }
 
 .compress-plan-row {
@@ -1153,15 +1203,21 @@ input[type="search"] {
 }
 
 .primary-action {
-  border-color: var(--accent);
+  border-color: var(--native-accent);
   background: var(--accent);
   color: #ffffff;
-  font-weight: 650;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  font-weight: 600;
 }
 
 .primary-action:hover:not(:disabled) {
-  border-color: var(--accent-hover);
+  border-color: var(--native-accent-hover);
   background: var(--accent-hover);
+}
+
+.primary-action:active:not(:disabled) {
+  border-color: var(--native-accent-pressed);
+  background: var(--native-accent-pressed);
 }
 
 .primary-action:disabled {
@@ -1171,7 +1227,7 @@ input[type="search"] {
 }
 
 .secondary-action {
-  background: var(--content-bg-subtle);
+  background: var(--native-control-bg);
 }
 
 .quiet-action {
@@ -1182,7 +1238,8 @@ input[type="search"] {
 }
 
 .quiet-action:hover:not(:disabled) {
-  border-color: var(--border);
+  border-color: transparent;
+  background: var(--native-control-bg-hover);
 }
 
 .compress-table-shell {
@@ -1203,7 +1260,7 @@ input[type="search"] {
   justify-items: center;
   gap: 6px;
   border: 1px dashed var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--content-bg-subtle) 76%, transparent);
   color: var(--muted);
   text-align: center;
@@ -1253,7 +1310,7 @@ input[type="search"] {
   display: grid;
   place-items: center;
   padding: 26px;
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   color: var(--muted-strong);
 }
 
@@ -1272,7 +1329,7 @@ input[type="search"] {
   place-items: center;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--content-bg-subtle);
+  background: var(--native-layer-bg-subtle);
   color: var(--accent);
 }
 
@@ -1304,13 +1361,13 @@ table {
   min-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 th,
 td {
-  height: 24px;
-  padding: 2px 6px;
+  height: 28px;
+  padding: 3px 8px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: middle;
@@ -1323,8 +1380,8 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
-  height: 25px;
-  background: var(--chrome-bg);
+  height: 29px;
+  background: var(--native-layer-bg-subtle);
   color: var(--text);
   font-weight: 400;
   user-select: none;
@@ -1336,7 +1393,7 @@ th[data-sort-key] {
 }
 
 th[data-sort-key]:hover {
-  background: #e8e8e8;
+  background: var(--native-control-bg-hover);
 }
 
 .column-header-label {
@@ -1388,13 +1445,13 @@ body.is-marquee-selecting {
 }
 
 tbody tr {
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   content-visibility: auto;
-  contain-intrinsic-size: 0 36px;
+  contain-intrinsic-size: 0 28px;
 }
 
 tbody tr:hover {
-  background: var(--content-bg-hover);
+  background: var(--native-row-hover);
 }
 
 table.single-click-open tbody tr[data-entry-path],
@@ -1409,7 +1466,7 @@ table:not(.show-grid) tbody td {
 
 table.full-row-select tbody tr.is-selected,
 table.full-row-select tbody tr[aria-selected="true"] {
-  background: var(--selected-bg);
+  background: var(--native-row-selected);
 }
 
 tbody tr:focus-visible {
@@ -1419,7 +1476,7 @@ tbody tr:focus-visible {
 
 tbody tr[aria-selected="true"],
 tbody tr.is-selected {
-  background: var(--selected-bg);
+  background: var(--native-row-selected);
 }
 
 #entry-table td:first-child,
@@ -1579,7 +1636,7 @@ tbody tr.is-selected {
 .status-bar {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--content-bg-subtle);
+  background: var(--native-layer-bg-subtle);
   color: var(--muted-strong);
 }
 
@@ -1590,12 +1647,12 @@ tbody tr.is-selected {
 
 .status-bar {
   grid-area: status;
-  min-height: 28px;
+  min-height: 26px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-right: 0;
   border-bottom: 0;
   border-left: 0;
@@ -1626,7 +1683,7 @@ tbody tr.is-selected {
 .status-idle,
 .status-loaded {
   border-color: var(--border);
-  background: var(--content-bg-subtle);
+  background: var(--native-layer-bg-subtle);
   color: var(--muted-strong);
 }
 
@@ -1677,7 +1734,7 @@ tbody tr.is-selected {
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--content-bg-subtle);
+  background: var(--native-layer-bg-subtle);
 }
 
 .advanced-options summary {
@@ -1699,7 +1756,7 @@ tbody tr.is-selected {
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
 }
 
 .toggle-line {
@@ -1727,7 +1784,7 @@ tbody tr.is-selected {
   list-style: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
 }
 
 .list-box li {
@@ -1888,8 +1945,8 @@ progress {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 35, 40, 0.38);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: none;
 }
 
 .dialog-backdrop[hidden],
@@ -1903,11 +1960,11 @@ progress {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent);
-  border-radius: 10px;
-  background: var(--content-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--native-layer-bg);
   color: var(--text);
-  box-shadow: var(--shadow-popover);
+  box-shadow: var(--native-shadow-dialog);
 }
 
 .dialog-wide {
@@ -1921,8 +1978,8 @@ progress {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 11px 12px;
-  background: var(--content-bg);
+  padding: 10px 12px;
+  background: var(--native-layer-bg);
 }
 
 .dialog-header {
@@ -1933,7 +1990,7 @@ progress {
 .dialog-actions {
   justify-content: flex-end;
   border-top: 1px solid var(--border);
-  background: var(--content-bg-subtle);
+  background: var(--native-layer-bg-subtle);
 }
 
 .dialog-body {
@@ -1955,7 +2012,7 @@ progress {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   border-top: 1px solid var(--border-strong);
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   box-shadow: var(--shadow-popover);
 }
 
@@ -1991,21 +2048,21 @@ progress {
   width: 220px;
   max-width: calc(100vw - 16px);
   min-width: 198px;
-  padding: 2px;
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  background: var(--content-bg);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--native-layer-bg);
   box-shadow: var(--shadow-popover);
 }
 
 .context-menu button,
 .context-menu [role="menuitem"] {
   width: 100%;
-  min-height: 22px;
+  min-height: 28px;
   justify-content: flex-start;
-  padding: 2px 22px 2px 24px;
+  padding: 4px 22px 4px 28px;
   border-color: transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   box-shadow: none;
   color: var(--text);
@@ -2014,7 +2071,7 @@ progress {
 
 .context-menu button:hover:not(:disabled),
 .context-menu [role="menuitem"]:hover {
-  background: var(--content-bg-hover);
+  background: var(--native-control-bg-hover);
 }
 
 .context-menu button:disabled {
@@ -2023,8 +2080,8 @@ progress {
 }
 
 .context-menu-caption {
-  min-height: 22px;
-  padding: 3px 8px;
+  min-height: 24px;
+  padding: 4px 8px;
   color: var(--muted);
   font-size: 11px;
 }
@@ -2065,7 +2122,7 @@ progress {
 
 .context-menu-separator {
   height: 1px;
-  margin: 3px 0;
+  margin: 4px 6px;
   background: var(--border);
 }
 
@@ -2078,7 +2135,7 @@ progress {
   pointer-events: none;
   border: 2px dashed var(--accent);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--content-bg) 84%, transparent);
+  background: color-mix(in srgb, var(--native-layer-bg) 84%, transparent);
   color: var(--text);
 }
 
@@ -2093,7 +2150,7 @@ progress {
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--content-bg);
+  background: var(--native-layer-bg);
   box-shadow: var(--shadow-popover);
   text-align: center;
 }
@@ -2316,14 +2373,14 @@ progress {
   }
 }
 
-/* Milestone 1 static shell hardening: bind layout to runtime constants */
+/* Native shell foundation: keep these fallbacks aligned with app/constants.ts. */
 :root {
   --zmanager-min-window-width: 720px;
   --zmanager-min-window-height: 480px;
   --zmanager-menu-height: 30px;
-  --zmanager-toolbar-height: 54px;
+  --zmanager-toolbar-height: 48px;
   --zmanager-pathbar-height: 44px;
-  --zmanager-statusbar-height: 28px;
+  --zmanager-statusbar-height: 26px;
   --zmanager-nav-pane-min: 150px;
   --zmanager-nav-pane-max: 180px;
   --zmanager-details-pane-min: 220px;

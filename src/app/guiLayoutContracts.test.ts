@@ -15,10 +15,30 @@ declare function require(id: "path"): {
 const { readFileSync } = require("fs");
 const { join } = require("path");
 
-const styles = readFileSync(join(process.cwd(), "src", "styles.css"), "utf8");
-const mainSource = readFileSync(join(process.cwd(), "src", "main.ts"), "utf8");
+function normalizedWorkspaceFile(...parts: string[]): string {
+  return readFileSync(join(process.cwd(), ...parts), "utf8").replace(/\r\n/g, "\n");
+}
+
+const styles = normalizedWorkspaceFile("src", "styles.css");
+const mainSource = normalizedWorkspaceFile("src", "main.ts");
+const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 describe("GUI layout contracts", () => {
+  it("keeps the Windows 11 native look foundation explicit", () => {
+    expect(styles).toContain("--native-window-bg");
+    expect(styles).toContain("--native-control-bg-hover");
+    expect(styles).toContain("--native-selection-bg");
+    expect(styles).toContain("--native-row-selected");
+    expect(styles).toContain("--native-shadow-dialog");
+  });
+
+  it("keeps runtime chrome constants aligned with CSS fallbacks", () => {
+    expect(styles).toContain("--zmanager-toolbar-height: 48px");
+    expect(styles).toContain("--zmanager-statusbar-height: 26px");
+    expect(constantsSource).toContain("APP_TOOLBAR_HEIGHT_PX = 48");
+    expect(constantsSource).toContain("APP_STATUS_BAR_HEIGHT_PX = 26");
+  });
+
   it("renders the classic menu and command toolbar visibly", () => {
     expect(mainSource).toContain('<nav class="app-menu" aria-label="Application menu">');
     expect(mainSource).toContain('<div class="legacy-command-buttons">');
