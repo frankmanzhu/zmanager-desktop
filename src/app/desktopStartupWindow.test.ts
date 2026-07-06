@@ -35,8 +35,8 @@ describe("desktop startup window", () => {
     ) as { app?: { windows?: Array<{ width?: number; height?: number }> } };
     const mainWindow = config.app?.windows?.[0];
 
-    expect(mainWindow?.width).toBeGreaterThanOrEqual(1240);
-    expect(mainWindow?.height).toBeGreaterThanOrEqual(820);
+    expect(mainWindow?.width).toBeGreaterThanOrEqual(1280);
+    expect(mainWindow?.height).toBeGreaterThanOrEqual(900);
   });
 
   it("does not show the native window from Rust setup before frontend startup routing", () => {
@@ -54,6 +54,15 @@ describe("desktop startup window", () => {
 
     expect(mainRs).toContain("#[cfg(target_os = \"linux\")]\n                let _ = window.set_decorations(false);");
     expect(mainRs).not.toContain("#[cfg(target_os = \"windows\")]\n                let _ = window.set_decorations(false);");
+  });
+
+  it("provides Linux custom chrome resize handles for undecorated windows", () => {
+    const mainTs = readWorkspaceFile("src", "main.ts");
+    const styles = readWorkspaceFile("src", "styles.css");
+
+    expect(mainTs).toContain("function renderWindowResizeHandles()");
+    expect(mainTs).toContain("startResizeDragging(direction)");
+    expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {

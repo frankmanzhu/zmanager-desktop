@@ -2570,6 +2570,80 @@ body.linux-window-chrome .window-titlebar {
   height: 15px;
 }
 
+.window-resize-handle {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+}
+
+body.linux-window-chrome .window-resize-handle {
+  display: block;
+}
+
+.window-resize-handle-north,
+.window-resize-handle-south {
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.window-resize-handle-north {
+  top: 0;
+}
+
+.window-resize-handle-south {
+  bottom: 0;
+}
+
+.window-resize-handle-east,
+.window-resize-handle-west {
+  top: 12px;
+  bottom: 12px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.window-resize-handle-east {
+  right: 0;
+}
+
+.window-resize-handle-west {
+  left: 0;
+}
+
+.window-resize-handle-northeast,
+.window-resize-handle-southeast,
+.window-resize-handle-southwest,
+.window-resize-handle-northwest {
+  width: 12px;
+  height: 12px;
+}
+
+.window-resize-handle-northeast {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.window-resize-handle-southeast {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+.window-resize-handle-southwest {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.window-resize-handle-northwest {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
 body.linux-window-chrome .workspace {
   grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:

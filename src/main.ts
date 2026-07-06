@@ -250,6 +250,15 @@ type CompressPlanRow =
   };
 type QuickActionWindowMode = "normal" | "jobOnly" | "background";
 type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
+type AppWindowResizeDirection =
+  | "North"
+  | "East"
+  | "South"
+  | "West"
+  | "NorthEast"
+  | "SouthEast"
+  | "SouthWest"
+  | "NorthWest";
 type FocusedJobProgressContext = {
   title: string;
   subtitle?: string;
@@ -529,9 +538,27 @@ function renderWindowTitlebar(): string {
   `;
 }
 
+function renderWindowResizeHandles(): string {
+  const directions: AppWindowResizeDirection[] = [
+    "North",
+    "East",
+    "South",
+    "West",
+    "NorthEast",
+    "SouthEast",
+    "SouthWest",
+    "NorthWest",
+  ];
+
+  return directions
+    .map((direction) => `<div class="window-resize-handle window-resize-handle-${direction.toLowerCase()}" data-window-resize-direction="${direction}" aria-hidden="true"></div>`)
+    .join("");
+}
+
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
     ${renderWindowTitlebar()}
+    ${renderWindowResizeHandles()}
 
     <nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">
       ${renderMenuBar()}
@@ -1089,6 +1116,7 @@ const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
 const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
 const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
 const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-close")!;
+const windowResizeHandleElements = document.querySelectorAll<HTMLElement>("[data-window-resize-direction]");
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
 const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#workspace-title")!;
@@ -6642,6 +6670,22 @@ function bindActions() {
   windowMinimizeButton.addEventListener("click", minimizeAppWindow);
   windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
   windowCloseButton.addEventListener("click", closeAppWindow);
+  if (useLinuxWindowChrome) {
+    for (const handle of windowResizeHandleElements) {
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) {
+          return;
+        }
+        const direction = handle.dataset.windowResizeDirection as AppWindowResizeDirection | undefined;
+        if (!direction) {
+          return;
+        }
+
+        event.preventDefault();
+        void getCurrentWindow().startResizeDragging(direction);
+      });
+    }
+  }
 
   const bindMenuItem = (id: CommandId, handler: () => void) => {
     const button = menuItemButton(id);
