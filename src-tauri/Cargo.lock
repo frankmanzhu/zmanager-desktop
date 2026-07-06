@@ -94,6 +94,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambient-authority"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d4ee0d472d1cd2e28c97dfa124b3d8d992e10eb0a035f33f5d12e3a177ba3b"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -536,6 +542,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ce8d3bd5823c7504d3f579f13e7b2f3da252fcb938c594d5680ee508bf846f"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "cap-fs-ext"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78e5a3368ae89b7cb68186411452b4b9fac8b41be9c19bf3f47c2d2c8e36e6b"
+dependencies = [
+ "cap-primitives",
+ "cap-std",
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "cap-primitives"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdadbd7c002d3a484b35243669abdae85a0ebaded5a61117169dc3400f9a7ff0"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes 3.0.1",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "rustix-linux-procfs",
+ "windows-sys 0.60.2",
+ "winx",
+]
+
+[[package]]
+name = "cap-std"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7281235d6e96d3544ca18bba9049be92f4190f8d923e3caef1b5f66cfa752608"
+dependencies = [
+ "cap-primitives",
+ "io-extras",
+ "io-lifetimes 3.0.1",
+ "rustix",
 ]
 
 [[package]]
@@ -1110,7 +1158,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1340,7 +1388,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1493,6 +1541,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs-set-times"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
+dependencies = [
+ "io-lifetimes 2.0.4",
+ "rustix",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2274,6 +2333,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "io-lifetimes"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
+name = "io-lifetimes"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
+
+[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2552,6 +2633,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "maybe-owned"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4facc753ae494aeb6e3c22f839b158aebd4f9270f55cd3c79906c45476c47ab4"
+
+[[package]]
 name = "memchr"
 version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2617,7 +2704,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3610,7 +3697,17 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "rustix-linux-procfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
+dependencies = [
+ "once_cell",
+ "rustix",
 ]
 
 [[package]]
@@ -4017,7 +4114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4571,7 +4668,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4922,7 +5019,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4958,11 +5055,13 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
  "argon2",
+ "cap-fs-ext",
+ "cap-std",
  "chacha20poly1305",
  "crc32c",
  "hkdf",
@@ -4981,7 +5080,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-keywrap"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "hpke",
  "openssl",
@@ -4994,7 +5093,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-signing"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#8da80be710b1ac70949aa5d2f5653d253dc3fdd2"
+source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "ed25519-dalek",
  "openssl",
@@ -5011,7 +5110,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5399,7 +5498,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5837,6 +5936,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "winx"
+version = "0.36.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
+dependencies = [
+ "bitflags 2.13.0",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6162,9 +6271,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 
 [[package]]
+name = "zmanager-apple-archive"
+version = "1.0.5"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "zmanager-core"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6188,6 +6305,7 @@ dependencies = [
  "x509-parser",
  "zeroize",
  "zip",
+ "zmanager-apple-archive",
  "zmanager-libarchive",
  "zmanager-unrar",
  "zstd",
@@ -6219,7 +6337,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6239,7 +6357,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#d5151c77f6b6b746e6acb6698c4dc845a91155a6"
+source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "cc",
  "zeroize",
