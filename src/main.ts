@@ -175,6 +175,7 @@ import { listen } from "@tauri-apps/api/event";
 import type {
   ArchiveEntryDto,
   BrowseState,
+  CreatePlanEntryDto,
   CreatePlanResponse,
   CreateState,
   HealthcheckResponse,
@@ -222,6 +223,24 @@ type ArchiveTreeFolder = {
   hasChildren: boolean;
   isExpanded: boolean;
 };
+type CompressPlanRow =
+  | {
+    rowType: "parent";
+    path: string;
+    name: string;
+  }
+  | {
+    rowType: "folder";
+    path: string;
+    name: string;
+    entry?: CreatePlanEntryDto;
+  }
+  | {
+    rowType: "entry";
+    path: string;
+    name: string;
+    entry: CreatePlanEntryDto;
+  };
 type QuickActionWindowMode = "normal" | "jobOnly" | "background";
 type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
 type FocusedJobProgressContext = {
@@ -583,9 +602,9 @@ appRoot.innerHTML = `
               <thead>
                 <tr>
                   <th data-i18n-text="table.name">Name</th>
-                  <th data-i18n-text="table.location">Location</th>
+                  <th data-i18n-text="table.size">Size</th>
+                  <th data-i18n-text="table.modified">Modified</th>
                   <th data-i18n-text="table.kind">Kind</th>
-                  <th class="action-column" data-i18n-text="table.action">Action</th>
                 </tr>
               </thead>
               <tbody id="compress-source-body">
@@ -1250,6 +1269,8 @@ let archiveTreeChildrenByParent = new Map<string, string[]>();
 let createSources: string[] = [];
 let createPlanState: CreateState = "idle";
 let currentPlan: CreatePlanResponse | null = null;
+let currentCompressFolder = "";
+const expandedCompressTreeFolders = new Set<string>([archiveTreeRootPath]);
 let currentPlanError = "";
 let planDebounce: number | null = null;
 let createPlanRevision = 0;
@@ -1399,7 +1420,7 @@ function renderNormalWorkspaceOnce() {
   renderExtractDestinationHistory();
   renderCreateDestinationHistory();
   renderCreateSources();
-  renderCompressSources();
+  renderCompressBrowser();
   renderBrowse();
   renderJobs();
   normalWorkspaceRendered = true;
@@ -2740,8 +2761,7 @@ function updateMeta() {
 function renderWorkspaceMode() {
   const isCompress = workspaceMode === "compress";
   if (isCompress) {
-    renderCompressSources();
-    renderCompressSourceTree();
+    renderCompressBrowser();
   }
   workspaceElement.dataset.mode = workspaceMode;
   modeCompressButton.classList.toggle("is-active", isCompress);
@@ -2880,30 +2900,129 @@ function renderCompressSourceTree() {
     return;
   }
 
-  treeContentElement.innerHTML = createSources
-    .map((path) => {
-      const icon = archiveFileIconDescriptor(path, false, i18n);
-      const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForPath(path, false));
+  const planEntries = currentPlan?.planEntries ?? [];
+  if (createPlanState === "loading" || !currentPlan) {
+    treeContentElement.innerHTML = `
+      <div class="empty-pane">
+        <p>${escapeHtml(currentPlanError || i18n.t("create.plan.planning"))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!planEntries.length) {
+    treeContentElement.innerHTML = `
+      <div class="empty-pane">
+        <p>${escapeHtml(i18n.t("create.plan.none"))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const folders = getKnownCompressFolderPaths(planEntries);
+  treeContentElement.innerHTML = folders
+    .map((folder) => {
+      const isRoot = folder.path === archiveTreeRootPath;
+      const disclosure = folder.hasChildren && !isRoot
+        ? `<span class="tree-disclosure" data-compress-tree-toggle data-compress-folder-path="${escapeHtml(folder.path)}" aria-label="${
+          folder.isExpanded ? "Collapse" : "Expand"
+        } ${escapeHtml(folder.name)}" aria-hidden="true">${folder.isExpanded ? "-" : "+"}</span>`
+        : `<span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>`;
+      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentCompressFolder, i18n);
+      const iconDataUrl = systemIconDataUrlForRequest(
+        isRoot
+          ? systemIconRequestForPath(createSources[0] ?? "folder", true)
+          : systemIconRequestForPath("folder", true),
+      );
       return `
         <button
-          class="tree-item"
+          class="tree-item ${folder.path === currentCompressFolder ? "is-active" : ""}"
           type="button"
-          data-compress-source-path="${escapeHtml(path)}"
-          style="--depth: 0"
+          data-compress-folder-path="${escapeHtml(folder.path)}"
+          style="--depth: ${folder.depth}"
         >
-          <span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>
+          ${disclosure}
           ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
-          <span class="tree-label">${escapeHtml(getPathBasename(path) || path)}</span>
+          <span class="tree-label">${escapeHtml(folder.name)}</span>
         </button>
       `;
     })
     .join("");
 }
 
-function focusCompressSource(path: string) {
-  const row = compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-source-path="${CSS.escape(path)}"]`);
-  row?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  row?.focus();
+function getKnownCompressFolderPaths(entries: CreatePlanEntryDto[]): ArchiveTreeFolder[] {
+  const childrenByParent = buildArchiveTreeChildren(entries);
+  const currentFolder = normalizeFolderPath(currentCompressFolder);
+  const folders: ArchiveTreeFolder[] = [{
+    path: archiveTreeRootPath,
+    name: suggestedCreateArchiveName() || APP_TITLE,
+    depth: 0,
+    hasChildren: childrenByParent.has(archiveTreeRootPath),
+    isExpanded: true,
+  }];
+
+  const addChildFolders = (parentPath: string, depth: number) => {
+    const children = childrenByParent.get(parentPath);
+    if (!children?.length) {
+      return;
+    }
+
+    for (const childName of children) {
+      const childPath = parentPath ? `${parentPath}/${childName}` : childName;
+      const childHasChildren = childrenByParent.has(childPath);
+      const isExpanded = expandedCompressTreeFolders.has(childPath);
+      folders.push({
+        path: childPath,
+        name: childName,
+        depth,
+        hasChildren: childHasChildren,
+        isExpanded,
+      });
+      if (childHasChildren && isExpanded) {
+        addChildFolders(childPath, depth + 1);
+      }
+    }
+  };
+
+  expandCompressTreeFolderAndAncestors(currentFolder);
+  addChildFolders(archiveTreeRootPath, 1);
+  return folders;
+}
+
+function expandCompressTreeFolderAndAncestors(folderPath: string) {
+  let current = normalizeFolderPath(folderPath);
+  while (current) {
+    expandedCompressTreeFolders.add(current);
+    const parent = getParentPath(current);
+    if (!parent) {
+      break;
+    }
+    current = parent;
+  }
+}
+
+function compressFolderExists(entries: CreatePlanEntryDto[], folderPath: string): boolean {
+  const normalizedFolder = normalizeFolderPath(folderPath);
+  if (!normalizedFolder) {
+    return true;
+  }
+  return entries.some((entry) => {
+    const path = normalizeEntryPath(entry.path);
+    return path === normalizedFolder || path.startsWith(`${normalizedFolder}/`);
+  });
+}
+
+function navigateToCompressFolder(folderPath: string) {
+  const entries = currentPlan?.planEntries ?? [];
+  const nextFolder = normalizeFolderPath(folderPath);
+  if (!compressFolderExists(entries, nextFolder)) {
+    return;
+  }
+  currentCompressFolder = nextFolder;
+  expandCompressTreeFolderAndAncestors(nextFolder);
+  renderCompressSourceTree();
+  renderCompressSources();
+  focusFirstCompressRow();
 }
 
 function tableColspan(): number {
@@ -3259,6 +3378,34 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
   `;
 }
 
+function browserCreatePlanPreview(paths: string[]): CreatePlanResponse {
+  const planEntries: CreatePlanEntryDto[] = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
+    .map((path) => {
+      const name = getPathBasename(path) || path;
+      const looksLikeFile = Boolean(pathExtension(path)) || isSupportedArchivePath(path);
+      return {
+        path: name,
+        kind: looksLikeFile ? "file" : "directory",
+        size: looksLikeFile ? 0 : undefined,
+        sourcePath: path,
+      };
+    });
+  return {
+    includedCount: planEntries.length,
+    excludedCount: 0,
+    totalBytes: 0,
+    excludedBytes: 0,
+    entries: planEntries.map((entry) => entry.path),
+    planEntries,
+    excludedEntries: [],
+    warnings: [],
+  };
+}
+
+function canUseBrowserCreatePlanPreview(): boolean {
+  return !isDesktopRuntime();
+}
+
 function renderCreateSources() {
   clearSourcesButton.hidden = createSources.length === 0;
   clearSourcesButton.disabled = createSources.length === 0;
@@ -3293,21 +3440,12 @@ function renderCreateSources() {
       }
       createSources = createSources.filter((item) => item !== path);
       renderCreateSources();
-      renderCompressSources();
-      renderCompressSourceTree();
+      renderCompressBrowser();
       queuePlanRun();
     });
   }
 
   setCreatePlanState(createPlanState, currentPlanError);
-}
-
-function sourceKindLabel(path: string): string {
-  if (isSupportedArchivePath(path)) {
-    return i18n.t("compress.sourceKind.archive");
-  }
-
-  return i18n.t("compress.sourceKind.fileOrFolder");
 }
 
 function renderCompressSources() {
@@ -3328,36 +3466,171 @@ function renderCompressSources() {
     return;
   }
 
-  compressSourceBody.innerHTML = createSources
-    .map((path) => `
-      <tr data-source-path="${escapeHtml(path)}" tabindex="0">
-        <td class="name-cell">${escapeHtml(getPathBasename(path) || path)}</td>
-        <td>${escapeHtml(nativeParentPath(path) || path)}</td>
-        <td>${escapeHtml(sourceKindLabel(path))}</td>
-        <td class="action-column">
-          <button type="button" data-compress-source-remove="${escapeHtml(path)}">${escapeHtml(i18n.t("compress.removeSource"))}</button>
-        </td>
+  if (createPlanState === "loading" || !currentPlan) {
+    compressSourceBody.innerHTML = `
+      <tr>
+        <td colspan="4" class="empty">${escapeHtml(currentPlanError || i18n.t("create.plan.planning"))}</td>
       </tr>
-    `)
-    .join("");
-
-  for (const button of compressSourceBody.querySelectorAll<HTMLButtonElement>("[data-compress-source-remove]")) {
-    button.addEventListener("click", () => {
-      const path = button.dataset.compressSourceRemove;
-      if (!path) {
-        return;
-      }
-      createSources = createSources.filter((item) => item !== path);
-      renderCreateSources();
-      renderCompressSources();
+    `;
+    if (workspaceMode === "compress") {
       renderCompressSourceTree();
-      queuePlanRun();
-    });
+    }
+    return;
   }
+
+  const rows = visibleCompressRows();
+  if (!rows.length) {
+    compressSourceBody.innerHTML = `
+      <tr>
+        <td colspan="4" class="empty">${escapeHtml(i18n.t("browse.folderEmpty"))}</td>
+      </tr>
+    `;
+    if (workspaceMode === "compress") {
+      renderCompressSourceTree();
+    }
+    return;
+  }
+
+  compressSourceBody.innerHTML = rows
+    .map((row) => renderCompressPlanRow(row))
+    .join("");
 
   if (workspaceMode === "compress") {
     renderCompressSourceTree();
   }
+}
+
+function visibleCompressRows(): CompressPlanRow[] {
+  const entries = currentPlan?.planEntries ?? [];
+  const currentFolder = normalizeFolderPath(currentCompressFolder);
+  const rows: CompressPlanRow[] = [];
+  const folderRows = new Map<string, CompressPlanRow>();
+  const entryRows: CompressPlanRow[] = [];
+
+  if (currentFolder) {
+    rows.push({
+      rowType: "parent",
+      path: getParentPath(currentFolder),
+      name: "..",
+    });
+  }
+
+  for (const entry of entries) {
+    const entryPath = normalizeEntryPath(entry.path);
+    if (!entryPath || !entryIsUnderFolder(entryPath, currentFolder)) {
+      continue;
+    }
+
+    const relativePath = currentFolder
+      ? entryPath.slice(currentFolder.length).replace(/^\/+/, "")
+      : entryPath;
+    if (!relativePath) {
+      continue;
+    }
+
+    const segments = relativePath.split("/").filter(Boolean);
+    if (segments.length === 0) {
+      continue;
+    }
+
+    if (segments.length > 1) {
+      const folderPath = currentFolder ? `${currentFolder}/${segments[0]}` : segments[0];
+      if (!folderRows.has(folderPath)) {
+        folderRows.set(folderPath, {
+          rowType: "folder",
+          path: folderPath,
+          name: segments[0],
+        });
+      }
+      continue;
+    }
+
+    if (entry.kind === "directory") {
+      folderRows.set(entryPath, {
+        rowType: "folder",
+        path: entryPath,
+        name: segments[0],
+        entry,
+      });
+      continue;
+    }
+
+    entryRows.push({
+      rowType: "entry",
+      path: entryPath,
+      name: segments[0],
+      entry,
+    });
+  }
+
+  const sortedFolders = Array.from(folderRows.values())
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const sortedEntries = entryRows
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return [...rows, ...sortedFolders, ...sortedEntries];
+}
+
+function renderCompressPlanRow(row: CompressPlanRow): string {
+  if (row.rowType === "parent") {
+    return `
+      <tr class="folder-row parent-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}">
+        <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
+        <td></td>
+        <td></td>
+        <td>${escapeHtml(i18n.t("icon.parentFolder"))}</td>
+      </tr>
+    `;
+  }
+
+  if (row.rowType === "folder") {
+    return `
+      <tr class="folder-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}">
+        <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
+        <td>${row.entry?.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
+        <td>${row.entry?.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
+        <td>${escapeHtml(i18n.t("detail.directory"))}</td>
+      </tr>
+    `;
+  }
+
+  return `
+    <tr data-compress-entry-row="${escapeHtml(row.path)}" tabindex="0">
+      <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
+      <td>${row.entry.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
+      <td>${row.entry.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
+      <td>${escapeHtml(normalizeArchiveKindLabel(row.entry.kind))}</td>
+    </tr>
+  `;
+}
+
+function renderCompressPlanNameCell(row: CompressPlanRow): string {
+  const icon = row.rowType === "parent"
+    ? archiveRowIconDescriptor({ rowType: "parent", path: row.path, name: ".." }, i18n)
+    : row.rowType === "folder"
+      ? archiveTreeIconDescriptor(false, row.path === currentCompressFolder, i18n)
+      : archiveEntryIconDescriptor(row.entry, i18n);
+  const iconDataUrl = row.rowType === "folder" || row.rowType === "parent"
+    ? systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))
+    : systemIconDataUrlForRequest(systemIconRequestForPath(row.entry.sourcePath || row.entry.path, false));
+  return `
+    <span class="row-primary">
+      ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
+      <span class="sr-only">${escapeHtml(icon.label)}:</span>
+      <span class="row-name">${escapeHtml(row.name)}</span>
+    </span>
+  `;
+}
+
+function focusFirstCompressRow() {
+  compressSourceBody.querySelector<HTMLTableRowElement>("tr[tabindex='0']")?.focus();
+}
+
+function renderCompressBrowser() {
+  if (currentPlan && !compressFolderExists(currentPlan.planEntries, currentCompressFolder)) {
+    currentCompressFolder = "";
+  }
+  renderCompressSourceTree();
+  renderCompressSources();
 }
 
 function renderJobStatusBar() {
@@ -3386,14 +3659,17 @@ function queuePlanRun() {
   const revision = ++createPlanRevision;
   if (createSources.length === 0) {
     currentPlan = null;
+    currentCompressFolder = "";
     setCreatePlanState("idle");
     createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.noSources"))}</p>`;
+    renderCompressBrowser();
     return;
   }
 
   currentPlan = null;
   setCreatePlanState("loading", i18n.t("create.plan.planning"));
   createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.planning"))}</p>`;
+  renderCompressBrowser();
 
   planDebounce = window.setTimeout(() => {
     planDebounce = null;
@@ -4788,7 +5064,7 @@ function showCreateWorkspace() {
   setWorkspaceMode("compress");
   setCreatePlanState(createPlanState, currentPlanError);
   renderCreateSources();
-  renderCompressSources();
+  renderCompressBrowser();
   renderCreateDestinationHistory();
   createDestinationInput.focus();
 }
@@ -4997,6 +5273,19 @@ async function runPlan(revision = ++createPlanRevision) {
   currentPlan = null;
   setCreatePlanState("loading", i18n.t("create.plan.planning"));
   createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.planning"))}</p>`;
+  renderCompressBrowser();
+
+  if (canUseBrowserCreatePlanPreview()) {
+    const result = browserCreatePlanPreview(createSources);
+    currentPlan = result;
+    if (!compressFolderExists(result.planEntries, currentCompressFolder)) {
+      currentCompressFolder = "";
+    }
+    createPlanSummary.innerHTML = formatPlanSummary(result);
+    setCreatePlanState("ready", "Plan generated.");
+    renderCompressBrowser();
+    return;
+  }
 
   try {
     const result = await runPlanCreate(request);
@@ -5006,8 +5295,12 @@ async function runPlan(revision = ++createPlanRevision) {
     }
 
     currentPlan = result;
+    if (!compressFolderExists(result.planEntries, currentCompressFolder)) {
+      currentCompressFolder = "";
+    }
     createPlanSummary.innerHTML = formatPlanSummary(result);
     setCreatePlanState("ready", "Plan generated.");
+    renderCompressBrowser();
   } catch (error) {
     if (revision !== createPlanRevision) {
       return;
@@ -5018,6 +5311,7 @@ async function runPlan(revision = ++createPlanRevision) {
     const message = commandError?.message ?? "Could not create archive plan.";
     setCreatePlanState("error", message);
     createPlanSummary.innerHTML = `<p>${escapeHtml(message)}</p>`;
+    renderCompressBrowser();
   }
 }
 
@@ -5033,7 +5327,7 @@ function addSources(paths: string[]) {
     createDestinationInput.value = suggestedCreateArchiveDefaultPath();
   }
   renderCreateSources();
-  renderCompressSources();
+  renderCompressBrowser();
   queuePlanRun();
 }
 
@@ -5161,7 +5455,7 @@ async function openQuickCreateReview(
   currentPlan = null;
   cancelQueuedPlanRun();
   renderCreateSources();
-  renderCompressSources();
+  renderCompressBrowser();
 
   setOperationalMessage("quickCreate.planning");
   await runPlan();
@@ -6478,9 +6772,22 @@ function bindActions() {
   });
 
   treeContentElement.addEventListener("click", (event) => {
-    const sourceTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-compress-source-path]");
-    if (sourceTarget) {
-      focusCompressSource(sourceTarget.dataset.compressSourcePath ?? "");
+    const compressToggleTarget = (event.target as HTMLElement).closest<HTMLElement>("[data-compress-tree-toggle]");
+    if (compressToggleTarget) {
+      event.preventDefault();
+      const folderPath = compressToggleTarget.dataset.compressFolderPath ?? "";
+      if (!expandedCompressTreeFolders.has(folderPath)) {
+        expandedCompressTreeFolders.add(folderPath);
+      } else {
+        expandedCompressTreeFolders.delete(folderPath);
+      }
+      renderCompressSourceTree();
+      return;
+    }
+
+    const compressFolderTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-compress-folder-path]");
+    if (compressFolderTarget) {
+      navigateToCompressFolder(compressFolderTarget.dataset.compressFolderPath ?? "");
       return;
     }
 
@@ -7132,7 +7439,7 @@ tableBody.addEventListener("click", (event) => {
     if (action === "remove-source" && sourcePath) {
       createSources = createSources.filter((item) => item !== sourcePath);
       renderCreateSources();
-      renderCompressSources();
+      renderCompressBrowser();
       queuePlanRun();
       return;
     }
@@ -7140,7 +7447,7 @@ tableBody.addEventListener("click", (event) => {
       createSources = [];
       currentPlan = null;
       renderCreateSources();
-      renderCompressSources();
+      renderCompressBrowser();
       queuePlanRun();
     }
   });
@@ -7156,7 +7463,7 @@ tableBody.addEventListener("click", (event) => {
     createSources = [];
     currentPlan = null;
     renderCreateSources();
-    renderCompressSources();
+    renderCompressBrowser();
     queuePlanRun();
   });
   sourceListElement.addEventListener("contextmenu", (event) => {
@@ -7166,6 +7473,39 @@ tableBody.addEventListener("click", (event) => {
     }
     event.preventDefault();
     showSourceContextMenu(row.dataset.sourcePath, event.clientX, event.clientY);
+  });
+
+  compressSourceBody.addEventListener("click", (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row]");
+    if (!row?.dataset.compressFolderRow) {
+      return;
+    }
+    if (event.detail >= 2 || appPreferences.singleClickOpen) {
+      navigateToCompressFolder(row.dataset.compressFolderRow);
+    }
+  });
+
+  compressSourceBody.addEventListener("keydown", (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
+    if (!row) {
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const rows = Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>("tr[tabindex='0']"));
+      const currentIndex = Math.max(0, rows.indexOf(row));
+      const nextIndex = event.key === "ArrowDown"
+        ? Math.min(rows.length - 1, currentIndex + 1)
+        : Math.max(0, currentIndex - 1);
+      rows[nextIndex]?.focus();
+      return;
+    }
+
+    if (event.key === "Enter" && row.dataset.compressFolderRow !== undefined) {
+      event.preventDefault();
+      navigateToCompressFolder(row.dataset.compressFolderRow);
+    }
   });
 
   createFormatSelect.addEventListener("change", onCreateFormatChange);

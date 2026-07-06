@@ -1340,28 +1340,22 @@ input[type="search"] {
 
 #compress-source-table th:nth-child(1),
 #compress-source-table td:nth-child(1) {
-  width: 32%;
+  width: 46%;
 }
 
 #compress-source-table th:nth-child(2),
 #compress-source-table td:nth-child(2) {
-  width: 44%;
+  width: 16%;
 }
 
 #compress-source-table th:nth-child(3),
 #compress-source-table td:nth-child(3) {
-  width: 14%;
+  width: 22%;
 }
 
 #compress-source-table th:nth-child(4),
 #compress-source-table td:nth-child(4) {
-  width: 112px;
-}
-
-#compress-source-table [data-compress-source-remove] {
-  width: 68px;
-  min-width: 68px;
-  padding-inline: 8px;
+  width: 16%;
 }
 
 .table-shell.has-start-empty {
@@ -2449,11 +2443,6 @@ progress {
     min-width: 0;
     width: 100%;
     table-layout: fixed;
-  }
-
-  #compress-source-table th:nth-child(4),
-  #compress-source-table td:nth-child(4) {
-    width: 88px;
   }
 
   .compress-action-divider {

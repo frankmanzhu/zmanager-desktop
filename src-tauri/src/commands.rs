@@ -3,18 +3,20 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::State;
 
 use crate::{
     constants,
     dto::{
-        ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanResponse,
-        DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
-        NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PollJobEventsRequest,
-        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
-        ProjectIntegrationShellActionDto, ResumeJobRequest, StartCreateRequest,
-        StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanEntryDto,
+        CreatePlanResponse, DestinationCollisionStrategyDto, NativeFileDragOutcomeDto,
+        NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest,
+        PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
+        ProjectIntegrationContract, ProjectIntegrationShellActionDto, ResumeJobRequest,
+        StartCreateRequest, StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse,
+        TestArchiveRequest,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -172,10 +174,15 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
     let manifest = plan_archives(sources, &options).map_err(map_plan_error)?;
     let included_count = manifest.included_count();
     let excluded_count = manifest.excluded_count();
+    let plan_entries: Vec<CreatePlanEntryDto> = manifest
+        .entries
+        .iter()
+        .map(create_plan_entry_to_dto)
+        .collect();
     let entries = manifest
         .entries
-        .into_iter()
-        .map(|entry| entry.archive_path)
+        .iter()
+        .map(|entry| entry.archive_path.clone())
         .collect();
     let excluded_entries = manifest
         .excluded_entries
@@ -194,9 +201,35 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
         total_bytes: manifest.total_bytes,
         excluded_bytes: manifest.excluded_bytes,
         entries,
+        plan_entries,
         excluded_entries,
         warnings,
     })
+}
+
+fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> CreatePlanEntryDto {
+    CreatePlanEntryDto {
+        path: entry.archive_path.clone(),
+        kind: map_manifest_file_type(entry.file_type),
+        size: matches!(entry.file_type, ManifestFileType::File).then_some(entry.size),
+        modified: entry.modified.and_then(system_time_to_epoch_seconds_string),
+        source_path: entry.source_path.to_string_lossy().to_string(),
+    }
+}
+
+fn map_manifest_file_type(file_type: ManifestFileType) -> ArchiveEntryKindDto {
+    match file_type {
+        ManifestFileType::File => ArchiveEntryKindDto::File,
+        ManifestFileType::Directory => ArchiveEntryKindDto::Directory,
+        ManifestFileType::Symlink => ArchiveEntryKindDto::Symlink,
+        ManifestFileType::Other => ArchiveEntryKindDto::Special,
+    }
+}
+
+fn system_time_to_epoch_seconds_string(time: SystemTime) -> Option<String> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs().to_string())
 }
 
 #[tauri::command]

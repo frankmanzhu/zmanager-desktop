@@ -150,8 +150,19 @@ pub struct CreatePlanResponse {
     pub total_bytes: u64,
     pub excluded_bytes: u64,
     pub entries: Vec<String>,
+    pub plan_entries: Vec<CreatePlanEntryDto>,
     pub excluded_entries: Vec<String>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePlanEntryDto {
+    pub path: String,
+    pub kind: ArchiveEntryKindDto,
+    pub size: Option<u64>,
+    pub modified: Option<String>,
+    pub source_path: String,
 }
 
 #[derive(Debug, Deserialize)]

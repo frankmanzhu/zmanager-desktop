@@ -128,8 +128,17 @@ export type CreatePlanResponse = {
   totalBytes: number;
   excludedBytes: number;
   entries: string[];
+  planEntries: CreatePlanEntryDto[];
   excludedEntries: string[];
   warnings: string[];
+};
+
+export type CreatePlanEntryDto = {
+  path: string;
+  kind: ArchiveEntryKind;
+  size?: number;
+  modified?: string;
+  sourcePath: string;
 };
 
 export type StartCreateRequest = {
