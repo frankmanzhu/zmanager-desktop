@@ -20,6 +20,7 @@ ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. K
 - `cd src-tauri && cargo check`: check the Rust command layer.
 - `cd src-tauri && cargo test`: run Rust tests.
 - `scripts/build-linux-ubuntu-deb.sh`: build Ubuntu/Debian `.deb`.
+- `scripts/build-linux-fedora-rpm.sh`: build Fedora `.rpm`.
 - `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1`: run the Windows ARM64 release gate.
 
 Use package scripts instead of direct `tsc`, `vite`, or Tauri CLI calls unless debugging requires it.

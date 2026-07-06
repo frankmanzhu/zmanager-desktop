@@ -135,11 +135,11 @@ describe("Linux context menu packaging", () => {
       expect(extension).toContain(`"${action.quickAction}"`);
     }
 
-    for (const packageConfig of [
-      tauriConfig.bundle.linux.deb,
-      tauriConfig.bundle.linux.rpm,
-    ]) {
-      expect(packageConfig.depends).toContain("python3-nautilus");
+    for (const [packageConfig, nautilusDependency] of [
+      [tauriConfig.bundle.linux.deb, "python3-nautilus"],
+      [tauriConfig.bundle.linux.rpm, "nautilus-python"],
+    ] as const) {
+      expect(packageConfig.depends).toContain(nautilusDependency);
       expect(packageConfig.files["/usr/share/nautilus-python/extensions/zmanager_nautilus.py"])
         .toBe("../packaging/linux/nautilus/zmanager_nautilus.py");
     }

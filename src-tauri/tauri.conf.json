@@ -121,7 +121,7 @@
         }
       },
       "rpm": {
-        "depends": ["python3-nautilus"],
+        "depends": ["nautilus-python"],
         "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
