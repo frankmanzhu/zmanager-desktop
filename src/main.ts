@@ -1434,7 +1434,7 @@ async function revealNormalAppWindow() {
   }
 
   try {
-    await restoreWindowGeometry();
+    await placeNormalAppWindowBeforeShow();
     await getCurrentWindow().show();
   } catch {
     // Window APIs are best-effort; the app is still usable if the window was already shown.
@@ -1539,7 +1539,7 @@ async function closeFocusedJobProgress() {
 
   if (isDesktopRuntime()) {
     try {
-      await restoreWindowGeometry();
+      await placeNormalAppWindowBeforeShow();
     } catch {
       // Window restoration is best-effort after a focused job view.
     }
@@ -5930,6 +5930,7 @@ type WindowGeometry = {
   height?: number;
   x?: number;
   y?: number;
+  unit?: "logical";
 };
 
 const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";
@@ -5994,22 +5995,45 @@ function saveWindowGeometryToStorage(geometry: WindowGeometry): void {
   saveJsonToStorage(WINDOW_GEOMETRY_KEY, geometry);
 }
 
-async function restoreWindowGeometry(): Promise<void> {
-  if (!isDesktopRuntime()) {
-    return;
+function geometryInLogicalPixels(geometry: WindowGeometry, scaleFactor: number): WindowGeometry {
+  if (geometry.unit === "logical" || scaleFactor <= 0) {
+    return geometry;
   }
 
-  const geometry = loadWindowGeometryFromStorage();
-  if (!geometry) {
-    return;
+  return {
+    width: geometry.width === undefined ? undefined : Math.max(APP_MIN_WINDOW_WIDTH_PX, Math.floor(geometry.width / scaleFactor)),
+    height: geometry.height === undefined ? undefined : Math.max(APP_MIN_WINDOW_HEIGHT_PX, Math.floor(geometry.height / scaleFactor)),
+    x: geometry.x === undefined ? undefined : Math.floor(geometry.x / scaleFactor),
+    y: geometry.y === undefined ? undefined : Math.floor(geometry.y / scaleFactor),
+    unit: "logical",
+  };
+}
+
+async function restoreWindowGeometry(): Promise<boolean> {
+  if (!isDesktopRuntime()) {
+    return false;
+  }
+
+  const storedGeometry = loadWindowGeometryFromStorage();
+  if (!storedGeometry) {
+    return false;
   }
 
   const currentWindow = getCurrentWindow();
+  const geometry = geometryInLogicalPixels(storedGeometry, await currentWindow.scaleFactor());
   if (geometry.width && geometry.height) {
     await currentWindow.setSize(new LogicalSize(geometry.width, geometry.height));
   }
   if (isFiniteNumber(geometry.x) && isFiniteNumber(geometry.y)) {
     await currentWindow.setPosition(new LogicalPosition(geometry.x, geometry.y));
+  }
+  return true;
+}
+
+async function placeNormalAppWindowBeforeShow(): Promise<void> {
+  const restored = await restoreWindowGeometry();
+  if (!restored) {
+    await getCurrentWindow().center();
   }
 }
 
@@ -6019,8 +6043,9 @@ async function persistWindowGeometry(): Promise<void> {
   }
 
   const currentWindow = getCurrentWindow();
-  const size = await currentWindow.innerSize();
-  const position = await currentWindow.innerPosition();
+  const scaleFactor = await currentWindow.scaleFactor();
+  const size = (await currentWindow.innerSize()).toLogical(scaleFactor);
+  const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);
 
   const width = Math.floor(size.width);
   const height = Math.floor(size.height);
@@ -6032,6 +6057,7 @@ async function persistWindowGeometry(): Promise<void> {
     height,
     x,
     y,
+    unit: "logical",
   });
 }
 

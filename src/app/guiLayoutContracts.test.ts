@@ -71,6 +71,11 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("#entry-table th:first-child");
   });
 
+  it("centers the empty archive message inside the whole drop surface", () => {
+    expect(styles).toContain(".table-shell.has-start-empty {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);");
+    expect(styles).toContain(".archive-empty-state {\n  min-height: 0;\n  height: 100%;");
+  });
+
   it("declares stable Compress source table columns", () => {
     expect(styles).toContain("#compress-source-table th:nth-child(1)");
     expect(styles).toContain("#compress-source-table th:nth-child(2)");
