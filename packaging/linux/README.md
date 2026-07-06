@@ -51,6 +51,27 @@ desktop launchers, MIME associations, and the post-install hooks in this
 directory. AppImage remains useful for portable manual installs, but `.deb` is
 the primary Ubuntu distribution artifact.
 
+Fedora RPM package build:
+
+```sh
+scripts/build-linux-fedora-rpm.sh
+```
+
+Release `.rpm` artifacts should be built on Fedora. Linux builds inherit the
+build machine's glibc floor, so use the oldest Fedora release you intend to
+support for release packages. The build script enforces Fedora by default; use
+`--allow-non-baseline` only for local test packages.
+
+The RPM script prints both the canonical bundle artifact and a dnf-readable copy
+staged under `/tmp/zmanager-desktop-rpm/`, then installs or reinstalls the
+staged copy through dnf:
+
+```sh
+scripts/build-linux-fedora-rpm.sh
+```
+
+Use `--no-install` when you only want to build and stage the `.rpm` artifact.
+
 Fresh Ubuntu builders must install Tauri's native GTK/WebKit dependencies and
 native archive/link dependencies:
 
@@ -84,6 +105,17 @@ and Rust through rustup, then reloads Cargo's environment before checking
 versions. The script expects Rust 1.85 or newer because the Tauri crate uses the
 Rust 2024 edition.
 
+Fresh Fedora builders must install Tauri's native GTK/WebKit dependencies,
+RPM build tooling, and native archive/link dependencies:
+
+```sh
+sudo dnf install ca-certificates cmake curl file gcc gcc-c++ make pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libsoup3-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel bzip2-devel expat-devel libacl-devel lz4-devel libxml2-devel rpm-build patchelf nodejs nautilus-python
+```
+
+You can also run `scripts/build-linux-fedora-rpm.sh --install-deps`. The script
+uses Fedora's `nodejs` package and installs or updates Rust through rustup when
+needed.
+
 The repository includes `.cargo/config.toml` to append `-lexpat` on Linux. Keep
 `libexpat1-dev` in the dependency list; it avoids ARM64 GNU ld ordering
 failures when test or release binaries link bundled libarchive.
@@ -110,13 +142,14 @@ verb contract; Linux desktop and KDE metadata use single-file tokens for those
 actions, and the Nautilus extension disables them for multi-selection.
 
 GNOME Files/Nautilus consumes the packaged Python extension from
-`/usr/share/nautilus-python/extensions/zmanager_nautilus.py`. The deb/rpm package
-depends on `python3-nautilus` so the extension host is present. Install `.deb`
-packages through `apt-get install ./ZManager_...deb` rather than bare `dpkg -i`
-unless dependencies are already installed; `dpkg` can unpack ZManager without
-installing `python3-nautilus`, leaving GNOME Files with no Python extension host.
-On Ubuntu 22.04, `python3-nautilus` is in the `universe` repository, so a clean
-VM may need:
+`/usr/share/nautilus-python/extensions/zmanager_nautilus.py`. The deb package
+depends on Ubuntu/Debian's `python3-nautilus`; the Fedora RPM depends on
+Fedora's `nautilus-python`. Install `.deb` packages through
+`apt-get install ./ZManager_...deb` rather than bare `dpkg -i` unless
+dependencies are already installed; `dpkg` can unpack ZManager without installing
+`python3-nautilus`, leaving GNOME Files with no Python extension host. On Ubuntu
+22.04, `python3-nautilus` is in the `universe` repository, so a clean VM may
+need:
 
 ```sh
 sudo add-apt-repository universe
@@ -187,9 +220,12 @@ Distribution expectations:
 - Debian GNOME: package shape is similar, but dependency names and Nautilus API
   version can vary by release. Validate on the target Debian stable release
   before publishing Debian-specific artifacts.
-- Fedora/openSUSE/RHEL-family: use `.rpm`, but dependency names differ. The
-  current package metadata names `python3-nautilus`, which is Ubuntu/Debian
-  naming and may need distro-specific rpm dependency mapping before release.
+- Fedora: primary `.rpm` target. Build with `scripts/build-linux-fedora-rpm.sh`
+  and validate GNOME Files and KDE/Dolphin integration on the target Fedora
+  release before publishing.
+- openSUSE/RHEL-family: use `.rpm`, but dependency names differ. The checked-in
+  RPM metadata is Fedora-oriented and may need distro-specific dependency
+  mapping before publishing to those distributions.
 - KDE/Dolphin: service-menu files are packaged, but should be smoke-tested on
   each target distro because KIO service-menu cache behavior differs by KDE
   version.

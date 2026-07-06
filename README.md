@@ -94,6 +94,18 @@ from a private home/project directory:
 sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_0.1.0_amd64.deb
 ```
 
+Fedora RPM builds use Fedora package names and stage installable artifacts under
+`/tmp/zmanager-desktop-rpm/`:
+
+```sh
+scripts/build-linux-fedora-rpm.sh
+```
+
+On a fresh Fedora machine, `scripts/build-linux-fedora-rpm.sh --install-deps`
+installs Tauri's Fedora GTK/WebKit packages, RPM build tooling, Node.js, the
+native archive/link dependencies, and Rust through rustup when needed. Use
+`--no-install` when you only want to build and stage the `.rpm` artifact.
+
 ## Layout
 
 ```text
