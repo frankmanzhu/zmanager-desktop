@@ -1759,6 +1759,10 @@ function formatJobKind(kind: JobKind): string {
       return i18n.t("jobs.kind.tzapCreate");
     case "tzapExtract":
       return i18n.t("jobs.kind.tzapExtract");
+    case "appleArchiveCreate":
+      return i18n.t("jobs.kind.appleArchiveCreate");
+    case "appleArchiveExtract":
+      return i18n.t("jobs.kind.appleArchiveExtract");
     case "archiveExtract":
       return i18n.t("jobs.kind.archiveExtract");
     case "rawStreamExtract":
@@ -1792,12 +1796,14 @@ function quickActionOperationLabel(kind?: JobKind): string {
     case "sevenZCreate":
     case "tarZstdCreate":
     case "tzapCreate":
+    case "appleArchiveCreate":
       return message("quick.operation.adding");
     case "zipExtract":
     case "sevenZExtract":
     case "rarExtract":
     case "tarZstdExtract":
     case "tzapExtract":
+    case "appleArchiveExtract":
     case "archiveExtract":
     case "rawStreamExtract":
       return message("quick.operation.extracting");

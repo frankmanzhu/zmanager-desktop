@@ -17,6 +17,9 @@ tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 zmanager-core = { git = "https://github.com/tzap-org/zmanager", branch = "main", package = "zmanager-core" }
 
+[patch."https://github.com/tzap-org/zmanager"]
+zmanager-core = { path = "vendor/zmanager/crates/zmanager-core" }
+
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22.1"
 png = "0.18.1"

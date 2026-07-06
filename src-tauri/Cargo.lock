@@ -553,7 +553,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes 3.0.1",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -570,7 +570,7 @@ dependencies = [
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
  "winx",
 ]
 
@@ -1158,7 +1158,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1388,7 +1388,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2704,7 +2704,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3697,7 +3697,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4114,7 +4114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4668,7 +4668,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5019,7 +5019,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.18",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5055,7 +5055,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
+source = "git+https://github.com/tzap-org/tzap?rev=0b37b1e977969bde84fb0bca4d0f706bfadd817b#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -5080,7 +5080,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-keywrap"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
+source = "git+https://github.com/tzap-org/tzap?rev=0b37b1e977969bde84fb0bca4d0f706bfadd817b#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "hpke",
  "openssl",
@@ -5093,7 +5093,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-signing"
 version = "0.1.9"
-source = "git+https://github.com/tzap-org/tzap?rev=8da80be710b1ac70949aa5d2f5653d253dc3fdd2#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
+source = "git+https://github.com/tzap-org/tzap?rev=0b37b1e977969bde84fb0bca4d0f706bfadd817b#0b37b1e977969bde84fb0bca4d0f706bfadd817b"
 dependencies = [
  "ed25519-dalek",
  "openssl",
@@ -5110,7 +5110,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5498,7 +5498,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6273,7 +6273,6 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "libc",
 ]
@@ -6281,7 +6280,6 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6337,7 +6335,6 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6357,7 +6354,6 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.5"
-source = "git+https://github.com/tzap-org/zmanager?branch=main#71095efd550061fd535a219155ccbde4d7ce2bed"
 dependencies = [
  "cc",
  "zeroize",

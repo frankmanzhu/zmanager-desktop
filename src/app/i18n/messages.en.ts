@@ -299,6 +299,8 @@ export const enMessages = {
   "jobs.kind.tarZstdExtract": "TZST extract",
   "jobs.kind.tzapCreate": "TZAP create",
   "jobs.kind.tzapExtract": "TZAP extract",
+  "jobs.kind.appleArchiveCreate": "AppleArchive create",
+  "jobs.kind.appleArchiveExtract": "AppleArchive extract",
   "jobs.kind.archiveExtract": "Archive extract",
   "jobs.kind.rawStreamExtract": "Raw stream extract",
   "jobs.kind.testArchive": "Archive test",

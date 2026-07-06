@@ -31,6 +31,8 @@ pub enum JobKindDto {
     TarZstdExtract,
     TzapCreate,
     TzapExtract,
+    AppleArchiveCreate,
+    AppleArchiveExtract,
     ArchiveExtract,
     RawStreamExtract,
     TestArchive,

@@ -1,0 +1,21 @@
+[package]
+name = "zmanager-libarchive"
+version.workspace = true
+description = "Safe, narrow read-side libarchive wrapper used by zmanager-core and zmanager-cli."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+libc = "0.2.186"
+zmanager-libarchive-sys = "1.0.5"
+
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

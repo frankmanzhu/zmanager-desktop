@@ -202,6 +202,8 @@ export const zhCnMessages = {
   "jobs.kind.tarZstdExtract": "TZST 解压",
   "jobs.kind.tzapCreate": "TZAP 创建",
   "jobs.kind.tzapExtract": "TZAP 解压",
+  "jobs.kind.appleArchiveCreate": "AppleArchive 创建",
+  "jobs.kind.appleArchiveExtract": "AppleArchive 解压",
   "jobs.kind.archiveExtract": "归档解压",
   "jobs.kind.rawStreamExtract": "原始流解压",
   "jobs.kind.testArchive": "归档测试",

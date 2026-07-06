@@ -286,6 +286,8 @@ export type JobKind =
   | "tarZstdExtract"
   | "tzapCreate"
   | "tzapExtract"
+  | "appleArchiveCreate"
+  | "appleArchiveExtract"
   | "archiveExtract"
   | "rawStreamExtract"
   | "testArchive";
