@@ -236,6 +236,7 @@ export const enMessages = {
   "status.failed": "Failed.",
   "status.ready": "Ready.",
   "status.backendUnavailable": "Backend unavailable.",
+  "status.windowControlFailed": "Unable to change the window state.",
   "status.readyBrowserPreview": "Ready in browser preview.",
   "status.closeInBrowser": "Use the browser window controls to close ZManager.",
   "status.detailsViewActive": "Details view is active.",

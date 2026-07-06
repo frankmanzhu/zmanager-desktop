@@ -34,4 +34,11 @@ describe("desktop startup window", () => {
 
     expect(mainRs.slice(setupStart, invokeHandlerStart)).not.toContain(".show()");
   });
+
+  it("uses app-owned Linux chrome without changing Windows native decorations", () => {
+    const mainRs = readFileSync(join(process.cwd(), "src-tauri", "src", "main.rs"), "utf8");
+
+    expect(mainRs).toContain("#[cfg(target_os = \"linux\")]\n                let _ = window.set_decorations(false);");
+    expect(mainRs).not.toContain("#[cfg(target_os = \"windows\")]\n                let _ = window.set_decorations(false);");
+  });
 });

@@ -389,6 +389,7 @@ export const zhCnMessages = {
   "status.failed": "失败。",
   "status.ready": "就绪。",
   "status.backendUnavailable": "后端不可用。",
+  "status.windowControlFailed": "无法更改窗口状态。",
   "status.readyBrowserPreview": "浏览器预览中已就绪。",
   "status.closeInBrowser": "请使用浏览器窗口控件关闭 ZManager。",
   "status.detailsViewActive": "详细信息视图已激活。",

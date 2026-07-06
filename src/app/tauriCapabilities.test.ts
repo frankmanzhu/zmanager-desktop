@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 
 const nativeDragPermission = "allow-start-native-file-drag";
 const nativeDragCommand = "start_native_file_drag";
+const linuxWindowControlPermissions = [
+  "core:window:allow-close",
+  "core:window:allow-minimize",
+  "core:window:allow-start-dragging",
+  "core:window:allow-toggle-maximize",
+  "core:window:allow-internal-toggle-maximize",
+];
 
 declare const process: {
   cwd(): string;
@@ -24,16 +31,22 @@ function readWorkspaceFile(...parts: string[]): string {
 }
 
 describe("Tauri command capabilities", () => {
-  it("allows native file drag from the main window capability", () => {
+  function mainWindowPermissionIds(): string[] {
     const capability = JSON.parse(
       readWorkspaceFile("src-tauri", "capabilities", "default.json"),
     ) as { permissions: Array<string | { identifier: string }> };
 
-    const permissionIds = capability.permissions.map((permission) =>
+    return capability.permissions.map((permission) =>
       typeof permission === "string" ? permission : permission.identifier,
     );
+  }
 
-    expect(permissionIds).toContain(nativeDragPermission);
+  it("allows native file drag from the main window capability", () => {
+    expect(mainWindowPermissionIds()).toContain(nativeDragPermission);
+  });
+
+  it("allows Linux app-owned titlebar window controls", () => {
+    expect(mainWindowPermissionIds()).toEqual(expect.arrayContaining(linuxWindowControlPermissions));
   });
 
   it("defines the native file drag command permission", () => {

@@ -1300,6 +1300,12 @@ input[type="search"] {
   width: 112px;
 }
 
+#compress-source-table [data-compress-source-remove] {
+  width: 68px;
+  min-width: 68px;
+  padding-inline: 8px;
+}
+
 .table-shell.has-start-empty {
   display: grid;
   overflow: hidden;
@@ -2380,7 +2386,7 @@ progress {
 
   #compress-source-table th:nth-child(4),
   #compress-source-table td:nth-child(4) {
-    width: 72px;
+    width: 88px;
   }
 
   .compress-action-divider {
@@ -2409,6 +2415,7 @@ progress {
 :root {
   --zmanager-min-window-width: 720px;
   --zmanager-min-window-height: 480px;
+  --zmanager-titlebar-height: 34px;
   --zmanager-menu-height: 30px;
   --zmanager-toolbar-height: 48px;
   --zmanager-pathbar-height: 44px;
@@ -2418,6 +2425,130 @@ progress {
   --zmanager-details-pane-min: 220px;
   --zmanager-details-pane-max: 280px;
   --zmanager-statusbar-parts: 4;
+}
+
+.window-titlebar {
+  grid-area: title;
+  display: none;
+  height: var(--zmanager-titlebar-height);
+  min-height: var(--zmanager-titlebar-height);
+  align-items: center;
+  justify-content: space-between;
+  background: var(--native-chrome-bg-strong);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.linux-window-chrome .window-titlebar {
+  display: flex;
+}
+
+.window-titlebar-brand {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-inline: 12px;
+}
+
+.window-titlebar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.window-titlebar-controls {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+.window-control {
+  width: 44px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.window-control:hover:not(:disabled) {
+  background: var(--native-control-bg-hover);
+  border-color: transparent;
+}
+
+.window-control:active:not(:disabled) {
+  background: var(--native-control-bg-pressed);
+  box-shadow: none;
+}
+
+.window-control-close:hover:not(:disabled) {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.window-control-icon {
+  width: 15px;
+  height: 15px;
+}
+
+body.linux-window-chrome .workspace {
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "title"
+    "menu"
+    "toolbar"
+    "path"
+    "body"
+    "status";
+}
+
+body.linux-window-chrome .workspace.toolbar-hidden {
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "title"
+    "menu"
+    "path"
+    "body"
+    "status";
+}
+
+body.linux-window-chrome .workspace[data-mode="compress"] {
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "title"
+    "menu"
+    "toolbar"
+    "body"
+    "status";
+}
+
+body.linux-window-chrome .workspace[data-mode="compress"].toolbar-hidden {
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-areas:
+    "title"
+    "menu"
+    "body"
+    "status";
+}
+
+body.linux-window-chrome .workspace[data-quick-action-mode="job-only"] {
+  grid-template-rows: var(--zmanager-titlebar-height) minmax(0, 1fr);
+  grid-template-areas:
+    "title"
+    "body";
+}
+
+body.linux-window-chrome .quick-progress {
+  height: auto;
 }
 
 .app-menu {

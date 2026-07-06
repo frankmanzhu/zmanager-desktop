@@ -50,6 +50,9 @@ fn main() {
         ))
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "linux")]
+                let _ = window.set_decorations(false);
+
                 if startup_job_only_window {
                     let quick_action_min_size = Size::Logical(LogicalSize {
                         width: QUICK_ACTION_WINDOW_MIN_WIDTH,

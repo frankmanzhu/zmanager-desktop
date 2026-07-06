@@ -54,7 +54,12 @@ import {
   archiveTreeIconDescriptor,
   type ArchiveEntryIconDescriptor,
 } from "./app/archiveEntryIcons";
-import type { IconNode } from "lucide";
+import {
+  Minus,
+  Square,
+  X,
+  type IconNode,
+} from "lucide";
 import {
   applyRowSelectionIntent,
   invertVisibleSelection,
@@ -291,6 +296,10 @@ if (!app) {
   throw new Error("missing app root");
 }
 const appRoot = app;
+const useLinuxWindowChrome = isDesktopRuntime() && /\bLinux\b/i.test(navigator.userAgent);
+if (useLinuxWindowChrome) {
+  document.body.classList.add("linux-window-chrome");
+}
 document.documentElement.style.setProperty("--zmanager-min-window-width", `${APP_MIN_WINDOW_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-min-window-height", `${APP_MIN_WINDOW_HEIGHT_PX}px`);
 document.documentElement.style.setProperty("--zmanager-menu-height", `${APP_MENU_BAR_HEIGHT_PX}px`);
@@ -473,8 +482,31 @@ function renderToolbar(): string {
     .join(`<div class="toolbar-separator" aria-hidden="true"></div>`);
 }
 
+function renderWindowTitlebar(): string {
+  return `
+    <header class="window-titlebar" data-tauri-drag-region>
+      <div class="window-titlebar-brand" data-tauri-drag-region>
+        <span class="window-titlebar-title" data-tauri-drag-region>${APP_TITLE}</span>
+      </div>
+      <div class="window-titlebar-controls">
+        <button id="window-minimize" class="window-control" type="button" aria-label="Minimize window" title="Minimize">
+          ${renderIconNode(Minus, "window-control-icon")}
+        </button>
+        <button id="window-maximize" class="window-control" type="button" aria-label="Maximize or restore window" title="Maximize or restore">
+          ${renderIconNode(Square, "window-control-icon")}
+        </button>
+        <button id="window-close" class="window-control window-control-close" type="button" aria-label="Close window" title="Close">
+          ${renderIconNode(X, "window-control-icon")}
+        </button>
+      </div>
+    </header>
+  `;
+}
+
 appRoot.innerHTML = `
   <main class="workspace" data-job-drawer="closed">
+    ${renderWindowTitlebar()}
+
     <nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">
       ${renderMenuBar()}
     </nav>
@@ -1029,6 +1061,9 @@ const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
 const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
+const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
+const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
+const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-close")!;
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
 const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#workspace-title")!;
@@ -1299,6 +1334,26 @@ function closeAppWindow() {
 
   void getCurrentWindow().close().catch(() => {
     setOperationalMessage("quick.completed.closeWindow");
+  });
+}
+
+function minimizeAppWindow() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  void getCurrentWindow().minimize().catch(() => {
+    setOperationalMessage("jobs.minimizeFailed");
+  });
+}
+
+function toggleAppWindowMaximize() {
+  if (!isDesktopRuntime()) {
+    return;
+  }
+
+  void getCurrentWindow().toggleMaximize().catch(() => {
+    setOperationalMessage("status.windowControlFailed");
   });
 }
 
@@ -6197,6 +6252,9 @@ function bindActions() {
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
   navUpButton.addEventListener("click", navigateUp);
+  windowMinimizeButton.addEventListener("click", minimizeAppWindow);
+  windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
+  windowCloseButton.addEventListener("click", closeAppWindow);
 
   const bindMenuItem = (id: CommandId, handler: () => void) => {
     const button = menuItemButton(id);
