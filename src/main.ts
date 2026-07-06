@@ -558,6 +558,28 @@ appRoot.innerHTML = `
     </section>
 
     <section class="browser-shell" data-i18n-aria-label="workspace.archiveWorkspace.aria" aria-label="Archive workspace">
+      <div class="compress-create-panel" data-i18n-aria-label="compress.createArchive.aria" aria-label="Create archive">
+        <div class="compress-create-row">
+          <label class="compress-destination-field">
+            <span data-i18n-text="compress.destination">Destination</span>
+            <div class="inline-field">
+              <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" list="create-destination-history" />
+              <button id="browse-create-destination" type="button">...</button>
+            </div>
+            <datalist id="create-destination-history"></datalist>
+          </label>
+          <div class="compress-create-actions">
+            <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
+            <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="common.clear" hidden>Clear</button>
+            <span class="compress-action-divider" aria-hidden="true"></span>
+            <button id="start-create" class="primary-action" type="button" data-i18n-text="compress.createArchive" disabled>Create Archive</button>
+          </div>
+        </div>
+        <div class="compress-plan-row">
+          <p id="create-plan-meta" data-i18n-text="compress.dropSourcesHint">Drop files or folders here, or add sources from disk.</p>
+        </div>
+      </div>
+
       <aside class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
         <div class="pane-header">
           <h2 data-i18n-text="pane.folders">Folders</h2>
@@ -576,27 +598,6 @@ appRoot.innerHTML = `
         </div>
         <p id="browse-message" class="status status-idle" data-i18n-text="browse.statusIdle">No archive selected.</p>
         <div id="compress-surface" class="compress-surface" hidden>
-          <div class="compress-create-panel" data-i18n-aria-label="compress.createArchive.aria" aria-label="Create archive">
-            <div class="compress-create-row">
-              <label class="compress-destination-field">
-                <span data-i18n-text="compress.destination">Destination</span>
-                <div class="inline-field">
-                  <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" list="create-destination-history" />
-                  <button id="browse-create-destination" type="button">...</button>
-                </div>
-                <datalist id="create-destination-history"></datalist>
-              </label>
-              <div class="compress-create-actions">
-                <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
-                <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="common.clear" hidden>Clear</button>
-                <span class="compress-action-divider" aria-hidden="true"></span>
-                <button id="start-create" class="primary-action" type="button" data-i18n-text="compress.createArchive" disabled>Create Archive</button>
-              </div>
-            </div>
-            <div class="compress-plan-row">
-              <p id="create-plan-meta" data-i18n-text="compress.dropSourcesHint">Drop files or folders here, or add sources from disk.</p>
-            </div>
-          </div>
           <div class="compress-table-shell">
             <table id="compress-source-table">
               <thead>

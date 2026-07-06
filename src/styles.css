@@ -766,6 +766,7 @@ button svg {
 .browser-shell {
   grid-area: body;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns:
     clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 180px), var(--zmanager-nav-pane-max))
     5px
@@ -775,6 +776,10 @@ button svg {
   min-height: 0;
   overflow: hidden;
   background: var(--native-layer-bg);
+}
+
+.workspace:not([data-mode="compress"]) .compress-create-panel {
+  display: none;
 }
 
 .pane-resizer {
@@ -1194,12 +1199,13 @@ input[type="search"] {
 .compress-surface {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--native-layer-bg);
 }
 
 .compress-create-panel {
+  grid-column: 1 / -1;
   display: grid;
   gap: 10px;
   padding: 8px 10px;
@@ -2625,6 +2631,7 @@ body.linux-window-chrome .quick-progress {
 }
 
 .browser-shell {
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns:
     clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 180px), var(--zmanager-nav-pane-max))
     5px
