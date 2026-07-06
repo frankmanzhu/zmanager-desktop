@@ -29,6 +29,16 @@ describe("desktop startup window", () => {
     expect(mainWindow?.visible).toBe(false);
   });
 
+  it("defaults to a size that fits the desktop panes without initial scrollbars", () => {
+    const config = JSON.parse(
+      readWorkspaceFile("src-tauri", "tauri.conf.json"),
+    ) as { app?: { windows?: Array<{ width?: number; height?: number }> } };
+    const mainWindow = config.app?.windows?.[0];
+
+    expect(mainWindow?.width).toBeGreaterThanOrEqual(1240);
+    expect(mainWindow?.height).toBeGreaterThanOrEqual(820);
+  });
+
   it("does not show the native window from Rust setup before frontend startup routing", () => {
     const mainRs = readWorkspaceFile("src-tauri", "src", "main.rs");
     const setupStart = mainRs.indexOf(".setup(move |app|");

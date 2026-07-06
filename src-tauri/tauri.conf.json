@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "ZManager",
-        "width": 1180,
-        "height": 760,
+        "width": 1240,
+        "height": 820,
         "minWidth": 720,
         "minHeight": 480,
         "visible": false

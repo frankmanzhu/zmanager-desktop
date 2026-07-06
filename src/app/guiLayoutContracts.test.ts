@@ -72,6 +72,9 @@ describe("GUI layout contracts", () => {
   });
 
   it("centers the empty archive message inside the whole drop surface", () => {
+    expect(styles).toContain(".browser-shell {\n  grid-area: body;\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .browser-shell {\n  grid-template-rows: auto minmax(0, 1fr);");
+    expect(styles).toContain(".archive-table-pane {\n  min-width: 0;\n  min-height: 0;\n  display: grid;\n  grid-template-rows: auto minmax(0, 1fr);");
     expect(styles).toContain(".table-shell.has-start-empty {\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);");
     expect(styles).toContain(".archive-empty-state {\n  min-height: 0;\n  height: 100%;");
   });
