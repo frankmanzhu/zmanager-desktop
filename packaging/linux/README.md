@@ -14,7 +14,9 @@ Packaged materials:
   the `zmanager-desktop` hicolor app icon in indexed sizes for desktop shells.
 - `com.frankmanzhu.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
   package managers and software centers.
-- `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon caches.
+- `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon
+  caches, then reload running Nautilus instances so Python extension changes
+  take effect after install, upgrade, or removal.
 - `nautilus/zmanager_nautilus.py`: GNOME Files/Nautilus Python extension that
   adds the real right-click `ZManager` submenu for selected files, folders, and
   folder backgrounds.
@@ -157,12 +159,11 @@ sudo apt-get update
 ```
 
 The extension supports both Nautilus 4.0 and older Nautilus 3.0 Python APIs.
-Restart Nautilus after install or upgrade because Nautilus does not reload Python
-extensions while it is running:
-
-```sh
-nautilus -q
-```
+The package scripts ask running Nautilus instances to quit after install,
+upgrade, or removal because Nautilus does not reload Python extensions while it
+is running. The next time GNOME Files opens, it loads the current ZManager
+extension. If a locked-down session prevents the package script from reaching
+the user's session bus, logging out and back in refreshes Nautilus.
 
 After restart, selected files, selected folders, and folder backgrounds show a
 top-level `ZManager` submenu. Supported archive selections show extract/open
@@ -184,10 +185,9 @@ print("ZManager Nautilus extension imports")
 PY
 ```
 
-For a verbose load check, quit Nautilus and launch it from a terminal:
+For a verbose load check, launch Nautilus from a terminal:
 
 ```sh
-nautilus -q
 ZMANAGER_NAUTILUS_DEBUG_LOG=/tmp/zmanager-nautilus-debug.log \
   NAUTILUS_PYTHON_DEBUG=misc nautilus "$HOME"
 ```

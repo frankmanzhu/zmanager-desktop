@@ -120,6 +120,24 @@ fedora_packages=(
   nautilus-python
 )
 
+collect_missing_fedora_packages() {
+  local package_name
+  missing_fedora_packages=()
+  for package_name in "${fedora_packages[@]}"; do
+    if ! rpm -q "$package_name" >/dev/null 2>&1; then
+      missing_fedora_packages+=("$package_name")
+    fi
+  done
+}
+
+run_dnf_install() {
+  if ((EUID == 0)); then
+    dnf install -y "$@"
+  else
+    sudo dnf install -y "$@"
+  fi
+}
+
 source_cargo_env() {
   if [[ -f "$HOME/.cargo/env" ]]; then
     # shellcheck disable=SC1091
@@ -171,20 +189,23 @@ if ((install_deps)); then
     exit 1
   fi
 
-  if ((EUID != 0)) && ! sudo -n true 2>/dev/null; then
-    echo "Installing Fedora packages requires sudo access." >&2
-    echo "Run this command in a terminal first, then rerun the build:" >&2
-    echo "  sudo dnf install ${fedora_packages[*]}" >&2
-    exit 1
-  fi
+  collect_missing_fedora_packages
+  if ((${#missing_fedora_packages[@]})); then
+    if ((EUID != 0)) && ! command -v sudo >/dev/null 2>&1; then
+      echo "Installing Fedora packages requires sudo or a root shell." >&2
+      echo "Run as root or install these packages first:" >&2
+      echo "  dnf install ${missing_fedora_packages[*]}" >&2
+      exit 1
+    fi
 
-  if ((EUID == 0)); then
-    dnf install -y "${fedora_packages[@]}"
+    echo "Installing missing Fedora package(s): ${missing_fedora_packages[*]}"
+    run_dnf_install "${missing_fedora_packages[@]}"
   else
-    sudo dnf install -y "${fedora_packages[@]}"
+    echo "Fedora build packages are already installed."
   fi
 
   if rust_install_required; then
+    echo "Installing or updating Rust with rustup."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source_cargo_env
   fi
@@ -241,12 +262,30 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
+cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
+if [[ -e "$cargo_target_dir" && ! -w "$cargo_target_dir" ]]; then
+  if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+    echo "Cargo target directory is not writable: $cargo_target_dir" >&2
+    echo "Choose a writable CARGO_TARGET_DIR or fix its ownership, then rerun." >&2
+    exit 1
+  fi
+
+  cargo_target_dir="/tmp/zmanager-desktop-cargo-target-${UID:-$(id -u)}"
+  echo "Default Cargo target directory is not writable; using $cargo_target_dir"
+fi
+install -d -m 0755 "$cargo_target_dir"
+export CARGO_TARGET_DIR="$cargo_target_dir"
+export OPENSSL_NO_VENDOR="${OPENSSL_NO_VENDOR:-1}"
+
 if ((!skip_tests)); then
   npm run test:frontend
   (cd src-tauri && cargo test)
 fi
 
-npm run tauri -- build --bundles rpm
+# Use Vite's runner config loader for Fedora packaging so a root-owned
+# node_modules/.vite-temp cache from a previous sudo build does not break Tauri's
+# beforeBuildCommand.
+npm run tauri -- build --bundles rpm --config '{"build":{"beforeBuildCommand":"npm run build -- --configLoader runner"}}'
 
 dnf_stage_dir="/tmp/zmanager-desktop-rpm"
 install -d -m 0755 "$dnf_stage_dir"
@@ -260,10 +299,10 @@ while IFS= read -r artifact; do
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Dnf-readable package: $staged_artifact"
-done < <(find src-tauri/target/release/bundle/rpm -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)
+done < <(find "$CARGO_TARGET_DIR/release/bundle/rpm" -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)
 
 if ((rpm_count == 0)); then
-  echo "Tauri build completed, but no .rpm package was found under src-tauri/target/release/bundle/rpm." >&2
+  echo "Tauri build completed, but no .rpm package was found under $CARGO_TARGET_DIR/release/bundle/rpm." >&2
   exit 1
 fi
 
@@ -277,7 +316,7 @@ if ((install_package)); then
   fi
 
   echo "Installing staged package(s): ${staged_artifacts[*]}"
-  if ((EUID == 0)); then
+  if [[ "$EUID" -eq 0 ]]; then
     dnf "$dnf_action" -y "${staged_artifacts[@]}"
   else
     sudo dnf "$dnf_action" -y "${staged_artifacts[@]}"
