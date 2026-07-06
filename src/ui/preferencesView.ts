@@ -1,5 +1,8 @@
 import {
   createFormatSupportsPassword,
+  TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+  TZAP_RECOVERY_PERCENTAGE_MAX,
+  TZAP_RECOVERY_PERCENTAGE_MIN,
   type CreateArchiveFormat,
 } from "../app/createFlow";
 import {
@@ -24,6 +27,8 @@ export type PreferencesViewElements = {
   createFormatSelect: HTMLSelectElement;
   createCompressionLevelSelect: HTMLSelectElement;
   createVolumeInput: HTMLInputElement;
+  createTzapRecoveryField: HTMLElement;
+  createTzapRecoveryInput: HTMLInputElement;
   createCleanSourceCheckbox: HTMLInputElement;
   createPreserveMetadataCheckbox: HTMLInputElement;
   createReplaceExistingCheckbox: HTMLInputElement;
@@ -88,6 +93,12 @@ export function renderCreateDefaultsForSelectedFormat(
   elements.createVolumeInput.value = createDefaults.volumeSize === null
     ? ""
     : String(createDefaults.volumeSize);
+  const supportsTzapRecovery = format === "tzap";
+  elements.createTzapRecoveryField.hidden = !supportsTzapRecovery;
+  elements.createTzapRecoveryInput.disabled = !supportsTzapRecovery;
+  elements.createTzapRecoveryInput.value = supportsTzapRecovery
+    ? String(createDefaults.tzapRecoveryPercentage ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT)
+    : "";
   elements.createCleanSourceCheckbox.checked = createDefaults.cleanSource;
   elements.createPreserveMetadataCheckbox.checked = createDefaults.preserveMetadata;
   elements.createReplaceExistingCheckbox.checked = createDefaults.replaceExisting;
@@ -102,6 +113,9 @@ export function collectPreferencesFromDialog(
   const selectedFormat = elements.createFormatSelect.value as CreateArchiveFormat;
   const compressionLevel = parseOptionalNonNegativeInteger(elements.createCompressionLevelSelect.value);
   const volumeSize = parseOptionalPositiveInteger(elements.createVolumeInput.value);
+  const tzapRecoveryPercentage = selectedFormat === "tzap"
+    ? parseTzapRecoveryPercentage(elements.createTzapRecoveryInput.value)
+    : null;
   const createFormatDefaults = preferences.createFormatDefaults;
   const nextCreateFormatDefaults = {
     ...createFormatDefaults,
@@ -109,6 +123,7 @@ export function collectPreferencesFromDialog(
       cleanSource: elements.createCleanSourceCheckbox.checked,
       compressionLevel,
       volumeSize,
+      tzapRecoveryPercentage,
       preserveMetadata: elements.createPreserveMetadataCheckbox.checked,
       replaceExisting: elements.createReplaceExistingCheckbox.checked,
       promptForPassword:
@@ -154,4 +169,12 @@ function parseOptionalNonNegativeInteger(value: string): number | null {
 function parseOptionalPositiveInteger(value: string): number | null {
   const parsed = parseOptionalNonNegativeInteger(value);
   return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+function parseTzapRecoveryPercentage(value: string): number {
+  const parsed = parseOptionalNonNegativeInteger(value);
+  if (parsed === null) {
+    return TZAP_RECOVERY_PERCENTAGE_DEFAULT;
+  }
+  return Math.min(TZAP_RECOVERY_PERCENTAGE_MAX, Math.max(TZAP_RECOVERY_PERCENTAGE_MIN, parsed));
 }

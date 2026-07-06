@@ -37,6 +37,33 @@ describe("preferences view", () => {
     expect(elements.statusElement.textContent).toBe("偏好设置仅存储在本机，绝不会包含密码。");
     expect(elements.localeSelect.value).toBe("system");
   });
+
+  it("renders and collects TZAP recovery defaults", () => {
+    const elements = createPreferenceElements();
+
+    renderPreferencesDialog(elements, {
+      ...DEFAULT_APP_PREFERENCES,
+      defaultArchiveFormat: "tzap",
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        tzap: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+          tzapRecoveryPercentage: 12,
+        },
+      },
+    }, createTranslator("en"));
+
+    expect(elements.createTzapRecoveryField.hidden).toBe(false);
+    expect(elements.createTzapRecoveryInput.disabled).toBe(false);
+    expect(elements.createTzapRecoveryInput.value).toBe("12");
+
+    elements.createTzapRecoveryInput.value = "18";
+
+    expect(
+      collectPreferencesFromDialog(elements, DEFAULT_APP_PREFERENCES)
+        .createFormatDefaults.tzap.tzapRecoveryPercentage,
+    ).toBe(18);
+  });
 });
 
 function createPreferenceElements(): PreferencesViewElements {
@@ -51,6 +78,8 @@ function createPreferenceElements(): PreferencesViewElements {
     createFormatSelect: select(DEFAULT_APP_PREFERENCES.defaultArchiveFormat),
     createCompressionLevelSelect: select(""),
     createVolumeInput: input(""),
+    createTzapRecoveryField: element(),
+    createTzapRecoveryInput: input(""),
     createCleanSourceCheckbox: checkbox(true),
     createPreserveMetadataCheckbox: checkbox(true),
     createReplaceExistingCheckbox: checkbox(false),
@@ -83,6 +112,10 @@ function checkbox(checked: boolean): HTMLInputElement {
 
 function button(): HTMLButtonElement {
   return { disabled: false } as HTMLButtonElement;
+}
+
+function element(): HTMLElement {
+  return { hidden: false } as HTMLElement;
 }
 
 function paragraph(): HTMLParagraphElement {

@@ -1,5 +1,7 @@
 import {
   createFormatSupportsPassword,
+  normalizeTzapRecoveryPercentage,
+  TZAP_RECOVERY_PERCENTAGE_DEFAULT,
   type CreateArchiveFormat,
 } from "./createFlow";
 import {
@@ -28,6 +30,7 @@ export type FormatCreateDefaults = {
   cleanSource: boolean;
   compressionLevel: number | null;
   volumeSize: number | null;
+  tzapRecoveryPercentage: number | null;
   preserveMetadata: boolean;
   replaceExisting: boolean;
   promptForPassword: boolean;
@@ -69,6 +72,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       cleanSource: true,
       compressionLevel: null,
       volumeSize: null,
+      tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
@@ -77,6 +81,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       cleanSource: true,
       compressionLevel: null,
       volumeSize: null,
+      tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
@@ -85,6 +90,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       cleanSource: true,
       compressionLevel: null,
       volumeSize: null,
+      tzapRecoveryPercentage: TZAP_RECOVERY_PERCENTAGE_DEFAULT,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
@@ -93,6 +99,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       cleanSource: true,
       compressionLevel: null,
       volumeSize: null,
+      tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
@@ -169,6 +176,13 @@ function storedPositiveNumber(value: unknown, fallback: number | null): number |
   return stored !== null && stored > 0 ? stored : null;
 }
 
+function storedTzapRecoveryPercentage(value: unknown, fallback: number | null): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return normalizeTzapRecoveryPercentage(value) ?? fallback;
+}
+
 function storedObjectBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -203,6 +217,9 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
             cleanSource: storedObjectBool(raw?.cleanSource, fallback.cleanSource),
             compressionLevel: storedNumber(raw?.compressionLevel, fallback.compressionLevel),
             volumeSize: storedPositiveNumber(raw?.volumeSize, fallback.volumeSize),
+            tzapRecoveryPercentage: format === "tzap"
+              ? storedTzapRecoveryPercentage(raw?.tzapRecoveryPercentage, fallback.tzapRecoveryPercentage)
+              : null,
             preserveMetadata: storedObjectBool(raw?.preserveMetadata, fallback.preserveMetadata),
             replaceExisting: storedObjectBool(raw?.replaceExisting, fallback.replaceExisting),
             promptForPassword:
@@ -424,6 +441,9 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           cleanSource: Boolean(value.cleanSource),
           compressionLevel: storedNumber(value.compressionLevel, fallback.compressionLevel),
           volumeSize: storedPositiveNumber(value.volumeSize, fallback.volumeSize),
+          tzapRecoveryPercentage: format === "tzap"
+            ? storedTzapRecoveryPercentage(value.tzapRecoveryPercentage, fallback.tzapRecoveryPercentage)
+            : null,
           preserveMetadata: Boolean(value.preserveMetadata),
           replaceExisting: Boolean(value.replaceExisting),
           promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),

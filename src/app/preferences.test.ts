@@ -39,6 +39,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: 9,
           volumeSize: 1048576,
+          tzapRecoveryPercentage: null,
           preserveMetadata: false,
           replaceExisting: true,
           promptForPassword: true,
@@ -74,6 +75,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: 9,
           volumeSize: 1048576,
+          tzapRecoveryPercentage: null,
           preserveMetadata: false,
           replaceExisting: true,
           promptForPassword: true,
@@ -82,6 +84,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: null,
           volumeSize: null,
+          tzapRecoveryPercentage: null,
           preserveMetadata: true,
           replaceExisting: false,
           promptForPassword: false,
@@ -90,6 +93,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: null,
           volumeSize: null,
+          tzapRecoveryPercentage: 5,
           preserveMetadata: true,
           replaceExisting: false,
           promptForPassword: false,
@@ -98,6 +102,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: null,
           volumeSize: null,
+          tzapRecoveryPercentage: null,
           preserveMetadata: true,
           replaceExisting: false,
           promptForPassword: false,
@@ -176,6 +181,7 @@ describe("preferences helpers", () => {
             cleanSource: false,
             compressionLevel: 22,
             volumeSize: 4096,
+            tzapRecoveryPercentage: null,
             preserveMetadata: true,
             replaceExisting: true,
             promptForPassword: true,
@@ -215,6 +221,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: 22,
           volumeSize: 4096,
+          tzapRecoveryPercentage: null,
           preserveMetadata: true,
           replaceExisting: true,
           promptForPassword: true,
@@ -251,6 +258,7 @@ describe("preferences helpers", () => {
           cleanSource: false,
           compressionLevel: 9,
           volumeSize: 1024,
+          tzapRecoveryPercentage: null,
           preserveMetadata: true,
           replaceExisting: false,
           promptForPassword: true,
@@ -263,6 +271,7 @@ describe("preferences helpers", () => {
       cleanSource: false,
       compressionLevel: 9,
       volumeSize: 1024,
+      tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: true,
@@ -278,11 +287,13 @@ describe("preferences helpers", () => {
         tzap: {
           ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
           volumeSize: 0,
+          tzapRecoveryPercentage: 250,
         },
       },
     });
 
     expect(createDefaultsForFormat(preferences, "tzap").volumeSize).toBeNull();
+    expect(createDefaultsForFormat(preferences, "tzap").tzapRecoveryPercentage).toBe(100);
   });
 
   it("declares locale storage through the tracked preference key map", () => {

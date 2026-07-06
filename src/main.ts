@@ -958,6 +958,10 @@ appRoot.innerHTML = `
                   <span data-i18n-text="preferences.archiveDefaults.splitVolumes">Split to volumes, bytes</span>
                   <input id="pref-create-volume" type="number" min="0" data-i18n-placeholder="preferences.archiveDefaults.noSplit" placeholder="No split" />
                 </label>
+                <label id="pref-create-tzap-recovery-field" hidden>
+                  <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
+                  <input id="pref-create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" />
+                </label>
                 <label>
                   <span data-i18n-text="preferences.archiveDefaults.defaultExtraction">Default extraction</span>
                   <select id="pref-default-extraction">
@@ -1164,6 +1168,8 @@ const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>(
 const preferencesCreateFormatSelect = document.querySelector<HTMLSelectElement>("#pref-create-format")!;
 const preferencesCreateCompressionSelect = document.querySelector<HTMLSelectElement>("#pref-create-compression-level")!;
 const preferencesCreateVolumeInput = document.querySelector<HTMLInputElement>("#pref-create-volume")!;
+const preferencesCreateTzapRecoveryField = document.querySelector<HTMLLabelElement>("#pref-create-tzap-recovery-field")!;
+const preferencesCreateTzapRecoveryInput = document.querySelector<HTMLInputElement>("#pref-create-tzap-recovery")!;
 const preferencesCreateCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#pref-create-clean-source")!;
 const preferencesCreatePreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#pref-create-preserve-metadata")!;
 const preferencesCreateReplaceExistingCheckbox = document.querySelector<HTMLInputElement>("#pref-create-replace-existing")!;
@@ -1191,6 +1197,8 @@ const preferencesViewElements: PreferencesViewElements = {
   createFormatSelect: preferencesCreateFormatSelect,
   createCompressionLevelSelect: preferencesCreateCompressionSelect,
   createVolumeInput: preferencesCreateVolumeInput,
+  createTzapRecoveryField: preferencesCreateTzapRecoveryField,
+  createTzapRecoveryInput: preferencesCreateTzapRecoveryInput,
   createCleanSourceCheckbox: preferencesCreateCleanSourceCheckbox,
   createPreserveMetadataCheckbox: preferencesCreatePreserveMetadataCheckbox,
   createReplaceExistingCheckbox: preferencesCreateReplaceExistingCheckbox,
@@ -4557,12 +4565,12 @@ function applyCreateDefaultsForFormat(format: CreateArchiveFormat) {
     ? ""
     : String(defaults.compressionLevel);
   createVolumeInput.value = defaults.volumeSize === null ? "" : String(defaults.volumeSize);
+  createTzapRecoveryInput.value = String(defaults.tzapRecoveryPercentage ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT);
   createPasswordInput.value = "";
   createPasswordConfirmInput.value = "";
   createShowPasswordInput.checked = false;
   createPasswordInput.type = "password";
   createPasswordConfirmInput.type = "password";
-  createTzapRecoveryInput.value = String(TZAP_RECOVERY_PERCENTAGE_DEFAULT);
   syncCreateFormatOptions(format);
 }
 
@@ -7078,6 +7086,7 @@ tableBody.addEventListener("click", (event) => {
   for (const input of [
     preferencesCreateCompressionSelect,
     preferencesCreateVolumeInput,
+    preferencesCreateTzapRecoveryInput,
     preferencesCreateCleanSourceCheckbox,
     preferencesCreatePreserveMetadataCheckbox,
     preferencesCreateReplaceExistingCheckbox,
