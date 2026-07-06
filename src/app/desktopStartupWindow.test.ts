@@ -58,11 +58,19 @@ describe("desktop startup window", () => {
   it("persists desktop window geometry in logical pixels", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
 
-    expect(mainTs).toContain("function geometryInLogicalPixels(geometry: WindowGeometry, scaleFactor: number): WindowGeometry");
-    expect(mainTs).toContain("Math.floor(geometry.width / scaleFactor)");
+    expect(mainTs).toContain("restorableWindowGeometry");
     expect(mainTs).toContain("const scaleFactor = await currentWindow.scaleFactor();");
+    expect(mainTs).toContain("monitors = await availableMonitors();");
     expect(mainTs).toContain("const size = (await currentWindow.innerSize()).toLogical(scaleFactor);");
     expect(mainTs).toContain("const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);");
     expect(mainTs).toContain('unit: "logical"');
+  });
+
+  it("falls back to centering when saved geometry is not restorable on the current monitors", () => {
+    const mainTs = readWorkspaceFile("src", "main.ts");
+
+    expect(mainTs).toContain("const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);");
+    expect(mainTs).toContain("if (!geometry) {\n    return false;\n  }");
+    expect(mainTs).toContain("if (!restored) {\n    await getCurrentWindow().center();\n  }");
   });
 });

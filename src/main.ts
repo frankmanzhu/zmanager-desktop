@@ -167,6 +167,7 @@ import {
   runTestArchive,
 } from "./api/commands";
 import {
+  availableMonitors,
   getCurrentWindow,
   LogicalPosition,
   LogicalSize,
@@ -207,6 +208,12 @@ import {
   activeJobStatusText,
   renderJobsListHtml,
 } from "./ui/jobsView";
+import {
+  isFiniteNumber,
+  normalizeStoredWindowGeometry,
+  restorableWindowGeometry,
+  type WindowGeometry,
+} from "./app/windowGeometry";
 import {
   collectPreferencesFromDialog as collectPreferencesFromView,
   renderCreateDefaultsForSelectedFormat,
@@ -5931,19 +5938,7 @@ async function onDeleteTemporaryFiles() {
   }
 }
 
-type WindowGeometry = {
-  width?: number;
-  height?: number;
-  x?: number;
-  y?: number;
-  unit?: "logical";
-};
-
 const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
 
 function readJsonFromStorage<T>(key: string, fallback: T | null = null): T | null {
   try {
@@ -5966,32 +5961,7 @@ function saveJsonToStorage<T>(key: string, value: T): void {
 }
 
 function loadWindowGeometryFromStorage(): WindowGeometry | null {
-  const parsed = readJsonFromStorage<WindowGeometry>(WINDOW_GEOMETRY_KEY);
-  if (!parsed || typeof parsed !== "object") {
-    return null;
-  }
-
-  const rawWidth = (parsed as { width?: unknown }).width;
-  const rawHeight = (parsed as { height?: unknown }).height;
-  if (!isFiniteNumber(rawWidth) || !isFiniteNumber(rawHeight)) {
-    return null;
-  }
-
-  const geometry: WindowGeometry = {
-    width: Math.max(APP_MIN_WINDOW_WIDTH_PX, Math.floor(rawWidth)),
-    height: Math.max(APP_MIN_WINDOW_HEIGHT_PX, Math.floor(rawHeight)),
-  };
-
-  const x = (parsed as { x?: unknown }).x;
-  const y = (parsed as { y?: unknown }).y;
-  if (isFiniteNumber(x)) {
-    geometry.x = Math.floor(x);
-  }
-  if (isFiniteNumber(y)) {
-    geometry.y = Math.floor(y);
-  }
-
-  return geometry;
+  return normalizeStoredWindowGeometry(readJsonFromStorage<WindowGeometry>(WINDOW_GEOMETRY_KEY));
 }
 
 function saveWindowGeometryToStorage(geometry: WindowGeometry): void {
@@ -5999,20 +5969,6 @@ function saveWindowGeometryToStorage(geometry: WindowGeometry): void {
     return;
   }
   saveJsonToStorage(WINDOW_GEOMETRY_KEY, geometry);
-}
-
-function geometryInLogicalPixels(geometry: WindowGeometry, scaleFactor: number): WindowGeometry {
-  if (geometry.unit === "logical" || scaleFactor <= 0) {
-    return geometry;
-  }
-
-  return {
-    width: geometry.width === undefined ? undefined : Math.max(APP_MIN_WINDOW_WIDTH_PX, Math.floor(geometry.width / scaleFactor)),
-    height: geometry.height === undefined ? undefined : Math.max(APP_MIN_WINDOW_HEIGHT_PX, Math.floor(geometry.height / scaleFactor)),
-    x: geometry.x === undefined ? undefined : Math.floor(geometry.x / scaleFactor),
-    y: geometry.y === undefined ? undefined : Math.floor(geometry.y / scaleFactor),
-    unit: "logical",
-  };
 }
 
 async function restoreWindowGeometry(): Promise<boolean> {
@@ -6026,7 +5982,17 @@ async function restoreWindowGeometry(): Promise<boolean> {
   }
 
   const currentWindow = getCurrentWindow();
-  const geometry = geometryInLogicalPixels(storedGeometry, await currentWindow.scaleFactor());
+  const scaleFactor = await currentWindow.scaleFactor();
+  let monitors: Awaited<ReturnType<typeof availableMonitors>>;
+  try {
+    monitors = await availableMonitors();
+  } catch {
+    return false;
+  }
+  const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);
+  if (!geometry) {
+    return false;
+  }
   if (geometry.width && geometry.height) {
     await currentWindow.setSize(new LogicalSize(geometry.width, geometry.height));
   }
