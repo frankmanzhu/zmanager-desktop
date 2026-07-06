@@ -283,14 +283,8 @@ p {
     "status";
 }
 
-.workspace[data-mode="compress"] .path-bar,
-.workspace[data-mode="compress"] .navigation-pane,
-.workspace[data-mode="compress"] .details-pane {
+.workspace[data-mode="compress"] .path-bar {
   display: none;
-}
-
-.workspace[data-mode="compress"] .browser-shell {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspace.toolbar-hidden .command-toolbar {
@@ -772,10 +766,33 @@ button svg {
 .browser-shell {
   grid-area: body;
   display: grid;
-  grid-template-columns: minmax(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-max)) minmax(520px, 1fr) minmax(var(--zmanager-details-pane-min), var(--zmanager-details-pane-max));
+  grid-template-columns:
+    clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 180px), var(--zmanager-nav-pane-max))
+    5px
+    minmax(360px, 1fr)
+    5px
+    clamp(var(--zmanager-details-pane-min), var(--zmanager-details-pane-width, 280px), var(--zmanager-details-pane-max));
   min-height: 0;
   overflow: hidden;
   background: var(--native-layer-bg);
+}
+
+.pane-resizer {
+  min-width: 5px;
+  cursor: col-resize;
+  background: var(--border);
+  touch-action: none;
+}
+
+.pane-resizer:hover,
+.pane-resizer:focus-visible,
+body.is-resizing-pane .pane-resizer {
+  background: var(--native-accent);
+}
+
+body.is-resizing-pane {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .tabs,
@@ -966,6 +983,47 @@ button svg {
 .details-content {
   display: grid;
   gap: 10px;
+}
+
+.compress-options-panel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.compress-options-panel[hidden] {
+  display: none !important;
+}
+
+.compress-options-intro {
+  display: grid;
+  gap: 3px;
+}
+
+.compress-options-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compress-options-panel .create-options-grid,
+.compress-options-panel #create-password-options {
+  grid-template-columns: 1fr;
+}
+
+.compress-options-panel .form-grid > label:first-child,
+.compress-options-panel #create-password-options > label:first-child {
+  grid-column: auto;
+}
+
+.compress-options-panel .toggle-grid {
+  grid-template-columns: 1fr;
+}
+
+.compress-options-panel .summary-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .details-group {
@@ -2254,6 +2312,15 @@ progress {
     padding-inline: 6px;
     min-height: 32px;
   }
+
+  .compress-create-row {
+    grid-template-columns: 1fr;
+  }
+
+  .compress-create-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 740px), (max-height: 520px) {
@@ -2421,9 +2488,11 @@ progress {
   --zmanager-pathbar-height: 44px;
   --zmanager-statusbar-height: 26px;
   --zmanager-nav-pane-min: 150px;
-  --zmanager-nav-pane-max: 180px;
+  --zmanager-nav-pane-width: 180px;
+  --zmanager-nav-pane-max: 360px;
   --zmanager-details-pane-min: 220px;
-  --zmanager-details-pane-max: 280px;
+  --zmanager-details-pane-width: 280px;
+  --zmanager-details-pane-max: 520px;
   --zmanager-statusbar-parts: 4;
 }
 
@@ -2567,18 +2636,21 @@ body.linux-window-chrome .quick-progress {
 }
 
 .browser-shell {
-  grid-template-columns: minmax(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-max)) 1fr minmax(var(--zmanager-details-pane-min), var(--zmanager-details-pane-max));
+  grid-template-columns:
+    clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 180px), var(--zmanager-nav-pane-max))
+    5px
+    minmax(360px, 1fr)
+    5px
+    clamp(var(--zmanager-details-pane-min), var(--zmanager-details-pane-width, 280px), var(--zmanager-details-pane-max));
   min-height: 0;
 }
 
 .navigation-pane {
   min-width: var(--zmanager-nav-pane-min);
-  max-width: var(--zmanager-nav-pane-max);
 }
 
 .details-pane {
   min-width: var(--zmanager-details-pane-min);
-  max-width: var(--zmanager-details-pane-max);
 }
 
 .status-bar {
@@ -2609,4 +2681,40 @@ body.linux-window-chrome .quick-progress {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .browser-shell {
+    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  }
+
+  .pane-resizer {
+    display: none;
+  }
+
+  .details-pane {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 760px), (max-height: 520px) {
+  .shell,
+  .browser-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs,
+  .navigation-pane {
+    max-height: 120px;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .details-pane {
+    grid-column: auto;
+  }
 }

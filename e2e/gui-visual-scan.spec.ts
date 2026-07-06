@@ -175,18 +175,16 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
   await captureAndScan(page, "04-compress-with-sources");
 
-  await page.locator("#create-options-open").click();
-  await expect(page.getByRole("dialog", { name: "Archive Options" })).toBeVisible();
+  await expect(page.locator("#compress-options-panel")).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
 
-  await page.locator("#create-dialog details.advanced-options summary").click();
+  await page.locator("#compress-options-panel details.advanced-options summary").click();
   await page.locator("#create-format").selectOption("sevenZ");
   await page.locator("#create-volume").fill("1048576");
   await page.locator("#create-password").fill("correct horse battery staple");
   await page.locator("#create-password-confirm").fill("correct horse battery staple");
   await page.locator("#create-show-password").check();
   await captureAndScan(page, "27-create-dialog-advanced-options");
-  await page.locator("#create-cancel").click();
 
   await page.getByRole("tab", { name: "Extract" }).click();
   await captureAndScan(page, "06-extract-empty");
@@ -315,9 +313,8 @@ test("minimum-size visual surfaces stay within the app bounds", async ({ page })
   ]);
   await captureAndScan(page, "33-min-compress-long-sources");
 
-  await page.locator("#create-options-open").click();
+  await expect(page.locator("#compress-options-panel")).toBeVisible();
   await captureAndScan(page, "34-min-create-dialog");
-  await page.locator("#create-cancel").click();
 
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);

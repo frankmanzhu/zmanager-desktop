@@ -545,6 +545,7 @@ appRoot.innerHTML = `
         </div>
         <div id="tree-content" class="tree-content"></div>
       </aside>
+      <div class="pane-resizer" data-pane-resizer="navigation" role="separator" aria-orientation="vertical" aria-label="Resize folder pane"></div>
 
       <section class="archive-table-pane" data-i18n-aria-label="workspace.archiveEntries.aria" aria-label="Archive entries">
         <div class="table-pane-header">
@@ -570,7 +571,6 @@ appRoot.innerHTML = `
                 <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
                 <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="common.clear" hidden>Clear</button>
                 <span class="compress-action-divider" aria-hidden="true"></span>
-                <button id="create-options-open" class="secondary-action" type="button" data-i18n-text="compress.options">Options</button>
                 <button id="start-create" class="primary-action" type="button" data-i18n-text="compress.createArchive" disabled>Create Archive</button>
               </div>
             </div>
@@ -633,12 +633,82 @@ appRoot.innerHTML = `
           </table>
         </div>
       </section>
+      <div class="pane-resizer" data-pane-resizer="details" role="separator" aria-orientation="vertical" aria-label="Resize details pane"></div>
 
       <aside class="details-pane" data-i18n-aria-label="workspace.details.aria" aria-label="Details and actions">
         <div class="pane-header">
-          <h2 data-i18n-text="pane.details">Details</h2>
+          <h2 id="details-pane-title" data-i18n-text="pane.details">Details</h2>
         </div>
         <div id="details-content" class="details-content"></div>
+        <div id="compress-options-panel" class="compress-options-panel" hidden>
+          <div class="compress-options-intro">
+            <h3 data-i18n-text="create.options.title">Archive Options</h3>
+            <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
+          </div>
+          <ul id="source-list" class="list-box" hidden></ul>
+          <div class="form-grid create-options-grid">
+            <label>
+              <span data-i18n-text="create.archiveFormat">Archive format</span>
+              <select id="create-format">
+                <option value="zip">ZIP</option>
+                <option value="tarZst">TZST</option>
+                <option value="tzap">TZAP</option>
+                <option value="sevenZ">7Z</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n-text="create.compressionLevel">Compression level</span>
+              <select id="create-compression-level">
+                <option value="" data-i18n-text="create.compression.normal">Normal</option>
+                <option value="0" data-i18n-text="common.store">Store</option>
+                <option value="1" data-i18n-text="common.fastest">Fastest</option>
+                <option value="3" data-i18n-text="common.fast">Fast</option>
+                <option value="9" data-i18n-text="common.maximum">Maximum</option>
+                <option value="22" data-i18n-text="common.ultra">Ultra</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n-text="create.splitVolumes">Split to volumes, bytes</span>
+              <input id="create-volume" type="number" min="0" data-i18n-placeholder="common.optional" placeholder="Optional" />
+            </label>
+            <label id="create-tzap-recovery-field" hidden>
+              <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
+              <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
+            </label>
+          </div>
+          <div class="toggle-grid">
+            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
+            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
+            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
+            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> <span data-i18n-text="create.respectGitignore">Respect .gitignore</span></label>
+          </div>
+          <details class="advanced-options">
+            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
+            <div id="create-password-options" class="form-grid form-grid-compact">
+              <label>
+                <span data-i18n-text="create.enterPassword">Enter password</span>
+                <input id="create-password" type="password" autocomplete="off" />
+              </label>
+              <label>
+                <span data-i18n-text="create.reenterPassword">Reenter password</span>
+                <input id="create-password-confirm" type="password" autocomplete="off" />
+              </label>
+              <label class="checkbox-row">
+                <input id="create-show-password" type="checkbox" />
+                <span data-i18n-text="extract.showPassword">Show Password</span>
+              </label>
+            </div>
+          </details>
+          <div class="plan-header">
+            <div>
+              <h3 data-i18n-text="create.plan.title">Plan</h3>
+              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
+            </div>
+          </div>
+          <div id="create-plan-summary" class="summary-card">
+            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
+          </div>
+        </div>
       </aside>
     </section>
 
@@ -788,87 +858,6 @@ appRoot.innerHTML = `
           <button id="extract-start" type="button" data-i18n-text="common.ok">OK</button>
           <button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>
           <button id="extract-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
-        </div>
-      </section>
-    </div>
-
-    <div id="create-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="create-title">
-        <div class="dialog-header">
-          <div>
-            <h2 id="create-title" data-i18n-text="create.options.title">Archive Options</h2>
-            <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
-          </div>
-          <button id="create-dialog-close" class="icon-button" type="button" data-i18n-aria-label="create.options.close.aria" data-i18n-text="common.close" aria-label="Close archive options">Close</button>
-        </div>
-        <div class="dialog-body">
-          <ul id="source-list" class="list-box" hidden></ul>
-          <div class="form-grid create-options-grid">
-            <label>
-              <span data-i18n-text="create.archiveFormat">Archive format</span>
-              <select id="create-format">
-                <option value="zip">ZIP</option>
-                <option value="tarZst">TZST</option>
-                <option value="tzap">TZAP</option>
-                <option value="sevenZ">7Z</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.compressionLevel">Compression level</span>
-              <select id="create-compression-level">
-                <option value="" data-i18n-text="create.compression.normal">Normal</option>
-                <option value="0" data-i18n-text="common.store">Store</option>
-                <option value="1" data-i18n-text="common.fastest">Fastest</option>
-                <option value="3" data-i18n-text="common.fast">Fast</option>
-                <option value="9" data-i18n-text="common.maximum">Maximum</option>
-                <option value="22" data-i18n-text="common.ultra">Ultra</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.splitVolumes">Split to volumes, bytes</span>
-              <input id="create-volume" type="number" min="0" data-i18n-placeholder="common.optional" placeholder="Optional" />
-            </label>
-            <label id="create-tzap-recovery-field" hidden>
-              <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
-              <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
-            </label>
-          </div>
-          <div class="toggle-grid">
-            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
-            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
-            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
-            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> <span data-i18n-text="create.respectGitignore">Respect .gitignore</span></label>
-          </div>
-          <details class="advanced-options">
-            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
-            <div id="create-password-options" class="form-grid form-grid-compact">
-              <label>
-                <span data-i18n-text="create.enterPassword">Enter password</span>
-                <input id="create-password" type="password" autocomplete="off" />
-              </label>
-              <label>
-                <span data-i18n-text="create.reenterPassword">Reenter password</span>
-                <input id="create-password-confirm" type="password" autocomplete="off" />
-              </label>
-              <label class="checkbox-row">
-                <input id="create-show-password" type="checkbox" />
-                <span data-i18n-text="extract.showPassword">Show Password</span>
-              </label>
-            </div>
-          </details>
-          <div class="plan-header">
-            <div>
-              <h3 data-i18n-text="create.plan.title">Plan</h3>
-              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
-            </div>
-          </div>
-          <div id="create-plan-summary" class="summary-card">
-            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
-          </div>
-        </div>
-        <div class="dialog-actions">
-          <button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>
-          <button id="create-cancel" type="button" data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
@@ -1049,8 +1038,14 @@ const statusFocusedModifiedElement = document.querySelector<HTMLSpanElement>("#s
 const activeJobElement = document.querySelector<HTMLSpanElement>("#active-job-text")!;
 const pathFieldInput = document.querySelector<HTMLInputElement>("#path-field")!;
 const pathCrumbsElement = document.querySelector<HTMLDivElement>("#path-crumbs")!;
+const browserShellElement = document.querySelector<HTMLElement>(".browser-shell")!;
+const navigationPaneElement = document.querySelector<HTMLElement>(".navigation-pane")!;
+const detailsPaneElement = document.querySelector<HTMLElement>(".details-pane")!;
+const paneResizerElements = document.querySelectorAll<HTMLElement>("[data-pane-resizer]");
+const detailsPaneTitleElement = document.querySelector<HTMLHeadingElement>("#details-pane-title")!;
 const treeContentElement = document.querySelector<HTMLDivElement>("#tree-content")!;
 const detailsElement = document.querySelector<HTMLDivElement>("#details-content")!;
+const compressOptionsPanel = document.querySelector<HTMLDivElement>("#compress-options-panel")!;
 
 const openArchiveButton = document.querySelector<HTMLButtonElement>("#open-archive")!;
 const newArchiveButton = document.querySelector<HTMLButtonElement>("#new-archive")!;
@@ -1060,7 +1055,6 @@ const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archi
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
 const jobsDrawerOpenButton = document.querySelector<HTMLButtonElement>("#jobs-drawer-open")!;
 const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
-const createOptionsOpenButton = document.querySelector<HTMLButtonElement>("#create-options-open")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
@@ -1101,7 +1095,6 @@ const extractPathModeSelect = document.querySelector<HTMLSelectElement>("#extrac
 const extractDeduplicateRootCheckbox = document.querySelector<HTMLInputElement>("#extract-deduplicate-root")!;
 const extractRestoreSecurityCheckbox = document.querySelector<HTMLInputElement>("#extract-restore-security")!;
 
-const createDialog = document.querySelector<HTMLDivElement>("#create-dialog")!;
 const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
 const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
 const sourceListElement = document.querySelector<HTMLUListElement>("#source-list")!;
@@ -2748,6 +2741,7 @@ function renderWorkspaceMode() {
   const isCompress = workspaceMode === "compress";
   if (isCompress) {
     renderCompressSources();
+    renderCompressSourceTree();
   }
   workspaceElement.dataset.mode = workspaceMode;
   modeCompressButton.classList.toggle("is-active", isCompress);
@@ -2761,6 +2755,10 @@ function renderWorkspaceMode() {
   tableShellElement.hidden = isCompress;
   refreshArchiveButton.hidden = isCompress;
   messageElement.hidden = isCompress;
+  detailsElement.hidden = isCompress;
+  compressOptionsPanel.hidden = !isCompress;
+  detailsPaneTitleElement.textContent = i18n.t(isCompress ? "compress.options" : "pane.details");
+  detailsPaneTitleElement.dataset.i18nText = isCompress ? "compress.options" : "pane.details";
 
   if (isCompress) {
     workspaceTitleElement.textContent = i18n.t("compress.tableTitle");
@@ -2787,6 +2785,11 @@ function setWorkspaceMode(mode: WorkspaceDropMode) {
   }
 
   workspaceMode = mode;
+  if (mode === "extract") {
+    renderTree();
+    renderDetails();
+    updateMeta();
+  }
   renderWorkspaceMode();
   setOperationalMessage(mode === "compress" ? "workspace.mode.compressStatus" : "workspace.mode.extractStatus");
 }
@@ -2820,6 +2823,11 @@ function renderPathBar() {
 }
 
 function renderTree() {
+  if (workspaceMode === "compress") {
+    renderCompressSourceTree();
+    return;
+  }
+
   if (!currentArchivePath) {
     treeContentElement.innerHTML = `
       <div class="empty-pane">
@@ -2860,6 +2868,42 @@ function renderTree() {
       `;
     })
     .join("");
+}
+
+function renderCompressSourceTree() {
+  if (createSources.length === 0) {
+    treeContentElement.innerHTML = `
+      <div class="empty-pane">
+        <p>${escapeHtml(i18n.t("compress.noSources"))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  treeContentElement.innerHTML = createSources
+    .map((path) => {
+      const icon = archiveFileIconDescriptor(path, false, i18n);
+      const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForPath(path, false));
+      return `
+        <button
+          class="tree-item"
+          type="button"
+          data-compress-source-path="${escapeHtml(path)}"
+          style="--depth: 0"
+        >
+          <span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>
+          ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
+          <span class="tree-label">${escapeHtml(getPathBasename(path) || path)}</span>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function focusCompressSource(path: string) {
+  const row = compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-source-path="${CSS.escape(path)}"]`);
+  row?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  row?.focus();
 }
 
 function tableColspan(): number {
@@ -3054,6 +3098,11 @@ function renderBrowseRows() {
 }
 
 function renderDetails() {
+  if (workspaceMode === "compress") {
+    detailsElement.innerHTML = "";
+    return;
+  }
+
   const selected = getSelectedEntryDtos();
 
   if (!currentArchivePath) {
@@ -3245,6 +3294,7 @@ function renderCreateSources() {
       createSources = createSources.filter((item) => item !== path);
       renderCreateSources();
       renderCompressSources();
+      renderCompressSourceTree();
       queuePlanRun();
     });
   }
@@ -3272,12 +3322,15 @@ function renderCompressSources() {
         </td>
       </tr>
     `;
+    if (workspaceMode === "compress") {
+      renderCompressSourceTree();
+    }
     return;
   }
 
   compressSourceBody.innerHTML = createSources
     .map((path) => `
-      <tr data-source-path="${escapeHtml(path)}">
+      <tr data-source-path="${escapeHtml(path)}" tabindex="0">
         <td class="name-cell">${escapeHtml(getPathBasename(path) || path)}</td>
         <td>${escapeHtml(nativeParentPath(path) || path)}</td>
         <td>${escapeHtml(sourceKindLabel(path))}</td>
@@ -3297,8 +3350,13 @@ function renderCompressSources() {
       createSources = createSources.filter((item) => item !== path);
       renderCreateSources();
       renderCompressSources();
+      renderCompressSourceTree();
       queuePlanRun();
     });
+  }
+
+  if (workspaceMode === "compress") {
+    renderCompressSourceTree();
   }
 }
 
@@ -3654,7 +3712,7 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
 }
 
 function getOpenModal(): HTMLElement | null {
-  for (const dialog of [extractDialog, createDialog, aboutDialog, preferencesDialog, infoDialog]) {
+  for (const dialog of [extractDialog, aboutDialog, preferencesDialog, infoDialog]) {
     if (!dialog.hidden) {
       return dialog;
     }
@@ -3698,15 +3756,16 @@ function closeModal(dialog: HTMLElement) {
   if (dialog === extractDialog) {
     browsePasswordInput.value = "";
   }
-  if (dialog === createDialog) {
-    createPasswordInput.value = "";
-    createPasswordConfirmInput.value = "";
-    createPasswordInput.type = "password";
-    createPasswordConfirmInput.type = "password";
-    createShowPasswordInput.checked = false;
-  }
   focusedBeforeDialog?.focus();
   focusedBeforeDialog = null;
+}
+
+function clearCreatePasswordFields() {
+  createPasswordInput.value = "";
+  createPasswordConfirmInput.value = "";
+  createPasswordInput.type = "password";
+  createPasswordConfirmInput.type = "password";
+  createShowPasswordInput.checked = false;
 }
 
 function openJobDrawer() {
@@ -3746,7 +3805,7 @@ function hasActiveJob(): boolean {
 }
 
 function currentDropSurface(): DropIntentSurface {
-  return dropSurfaceForWorkspace({ createDialogOpen: !createDialog.hidden, mode: workspaceMode });
+  return dropSurfaceForWorkspace({ createDialogOpen: false, mode: workspaceMode });
 }
 
 function setDropOverlay(
@@ -3831,9 +3890,6 @@ function handleDroppedPaths(paths: string[]) {
           count: decision.extraArchivePaths.length,
         });
       }
-      if (!createDialog.hidden) {
-        closeModal(createDialog);
-      }
       void loadArchive({ archivePath: decision.archivePath });
       break;
     case "addCreateSources":
@@ -3844,9 +3900,6 @@ function handleDroppedPaths(paths: string[]) {
         "This drop includes archives and regular files. Open the first archive instead of creating a new archive?",
       );
       if (openArchive) {
-        if (!createDialog.hidden) {
-          closeModal(createDialog);
-        }
         void loadArchive({ archivePath: decision.archivePaths[0] });
       } else {
         addDroppedSources([...decision.archivePaths, ...decision.sourcePaths]);
@@ -4195,6 +4248,54 @@ function startColumnResize(event: PointerEvent, columnId: ArchiveTableColumnId) 
     tableColumnSettings = setColumnWidth(tableColumnSettings, columnId, latestWidth);
     saveTablePreferences();
     renderBrowse();
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp, { once: true });
+}
+
+type ResizablePane = "navigation" | "details";
+
+const PANE_RESIZE_CENTER_MIN_WIDTH_PX = 360;
+const PANE_RESIZE_GUTTER_TOTAL_PX = 10;
+
+function paneWidthBounds(pane: ResizablePane): { min: number; max: number } {
+  return pane === "navigation"
+    ? { min: APP_NAV_PANE_MIN_WIDTH_PX, max: APP_NAV_PANE_MAX_WIDTH_PX }
+    : { min: APP_DETAILS_PANE_MIN_WIDTH_PX, max: APP_DETAILS_PANE_MAX_WIDTH_PX };
+}
+
+function setResizablePaneWidth(pane: ResizablePane, width: number) {
+  const { min, max } = paneWidthBounds(pane);
+  const shellWidth = browserShellElement.getBoundingClientRect().width;
+  const otherPaneWidth = pane === "navigation"
+    ? detailsPaneElement.getBoundingClientRect().width
+    : navigationPaneElement.getBoundingClientRect().width;
+  const maxWidthFromShell = shellWidth - otherPaneWidth - PANE_RESIZE_CENTER_MIN_WIDTH_PX - PANE_RESIZE_GUTTER_TOTAL_PX;
+  const nextWidth = Math.max(min, Math.min(width, max, Math.max(min, maxWidthFromShell)));
+  const variableName = pane === "navigation" ? "--zmanager-nav-pane-width" : "--zmanager-details-pane-width";
+  document.documentElement.style.setProperty(variableName, `${Math.round(nextWidth)}px`);
+}
+
+function startPaneResize(event: PointerEvent, pane: ResizablePane) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.body.classList.add("is-resizing-pane");
+
+  const startX = event.clientX;
+  const startWidth = pane === "navigation"
+    ? navigationPaneElement.getBoundingClientRect().width
+    : detailsPaneElement.getBoundingClientRect().width;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    const delta = moveEvent.clientX - startX;
+    setResizablePaneWidth(pane, pane === "navigation" ? startWidth + delta : startWidth - delta);
+  };
+
+  const onPointerUp = () => {
+    document.body.classList.remove("is-resizing-pane");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
   };
 
   document.addEventListener("pointermove", onPointerMove);
@@ -4690,20 +4791,6 @@ function showCreateWorkspace() {
   renderCompressSources();
   renderCreateDestinationHistory();
   createDestinationInput.focus();
-}
-
-function openCreateOptionsDialog() {
-  setWorkspaceMode("compress");
-  setCreatePlanState(createPlanState, currentPlanError);
-  renderCreateSources();
-  renderCompressSources();
-  renderCreateDestinationHistory();
-  createPasswordInput.value = "";
-  createPasswordConfirmInput.value = "";
-  createPasswordInput.type = "password";
-  createPasswordConfirmInput.type = "password";
-  createShowPasswordInput.checked = false;
-  openModal(createDialog, "#create-format");
 }
 
 type LoadArchiveOptions = {
@@ -6034,13 +6121,8 @@ async function runCreate(
 
     const response = await runStartCreate(request);
 
-    createPasswordInput.value = "";
-    createPasswordConfirmInput.value = "";
-    createShowPasswordInput.checked = false;
-    createPasswordInput.type = "password";
-    createPasswordConfirmInput.type = "password";
+    clearCreatePasswordFields();
     recordCreateDestinationHistory(destinationPath);
-    closeModal(createDialog);
     addJobState(response, {
       focusProgress: true,
       autoCloseAction: "returnToWorkspace",
@@ -6154,7 +6236,6 @@ function handleShortcut(event: KeyboardEvent) {
 
     hideContextMenu();
     if (!extractDialog.hidden) closeModal(extractDialog);
-    else if (!createDialog.hidden) closeModal(createDialog);
     else if (!aboutDialog.hidden) closeModal(aboutDialog);
     else if (!preferencesDialog.hidden) closeModal(preferencesDialog);
     else if (!infoDialog.hidden) closeModal(infoDialog);
@@ -6235,8 +6316,6 @@ function handleShortcut(event: KeyboardEvent) {
 function bindDialogCloseButtons() {
   document.querySelector<HTMLButtonElement>("#extract-dialog-close")!.addEventListener("click", () => closeModal(extractDialog));
   document.querySelector<HTMLButtonElement>("#extract-cancel")!.addEventListener("click", () => closeModal(extractDialog));
-  document.querySelector<HTMLButtonElement>("#create-dialog-close")!.addEventListener("click", () => closeModal(createDialog));
-  document.querySelector<HTMLButtonElement>("#create-cancel")!.addEventListener("click", () => closeModal(createDialog));
   document.querySelector<HTMLButtonElement>("#about-dialog-close")!.addEventListener("click", () => closeModal(aboutDialog));
   document.querySelector<HTMLButtonElement>("#about-close")!.addEventListener("click", () => closeModal(aboutDialog));
   document.querySelector<HTMLButtonElement>("#preferences-dialog-close")!.addEventListener("click", () => closeModal(preferencesDialog));
@@ -6254,12 +6333,19 @@ function bindActions() {
   extractToolbarButton.addEventListener("click", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
   testArchiveButton.addEventListener("click", () => void onTestArchive());
   infoToolbarButton.addEventListener("click", showCurrentInfo);
-  createOptionsOpenButton.addEventListener("click", openCreateOptionsDialog);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
   navUpButton.addEventListener("click", navigateUp);
+  for (const resizer of paneResizerElements) {
+    resizer.addEventListener("pointerdown", (event) => {
+      const pane = resizer.dataset.paneResizer as ResizablePane | undefined;
+      if (pane === "navigation" || pane === "details") {
+        startPaneResize(event, pane);
+      }
+    });
+  }
   windowMinimizeButton.addEventListener("click", minimizeAppWindow);
   windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
   windowCloseButton.addEventListener("click", closeAppWindow);
@@ -6392,6 +6478,12 @@ function bindActions() {
   });
 
   treeContentElement.addEventListener("click", (event) => {
+    const sourceTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-compress-source-path]");
+    if (sourceTarget) {
+      focusCompressSource(sourceTarget.dataset.compressSourcePath ?? "");
+      return;
+    }
+
     const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-action]");
     if (actionTarget?.dataset.treeAction === "open") {
       void onOpenArchive();
