@@ -1,6 +1,7 @@
 import "./styles.css";
 import {
   APP_TITLE,
+  APP_VERSION,
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
   JOB_POLL_INTERVAL_MS,
@@ -92,6 +93,7 @@ import {
   CREATE_ARCHIVE_FILTERS,
   buildStartCreateRequest,
   commonSourceParentDirectory,
+  createArchiveUnavailableReason,
   createFormatSupportsPassword,
   createStateAfterDestinationEdit,
   getArchiveName,
@@ -100,6 +102,7 @@ import {
   TZAP_RECOVERY_PERCENTAGE_MIN,
   suggestedCreateArchiveName as buildSuggestedCreateArchiveName,
   withCreateArchiveExtension,
+  type CreateArchiveUnavailableReason,
   type CreateArchiveFormat,
 } from "./app/createFlow";
 import {
@@ -117,6 +120,8 @@ import {
 import {
   classifyDropIntent,
   dropSurfaceForWorkspace,
+  type DroppedPath,
+  type DropIntentDecision,
   type DropIntentSurface,
   type WorkspaceDropMode,
 } from "./app/dropIntent";
@@ -173,6 +178,7 @@ import {
   runStartCreate,
   runStartExtract,
   runTestArchive,
+  validateDirectory,
 } from "./api/commands";
 import {
   availableMonitors,
@@ -215,6 +221,7 @@ import {
 import {
   activeJobStatusText,
   renderJobsListHtml,
+  type JobOutputAction,
 } from "./ui/jobsView";
 import {
   isFiniteNumber,
@@ -224,13 +231,18 @@ import {
 } from "./app/windowGeometry";
 import {
   collectPreferencesFromDialog as collectPreferencesFromView,
+  fullCustomOutputPath,
+  renderCustomOutputPathDisplay,
   renderCreateDefaultsForSelectedFormat,
   renderPreferencesDialog as renderPreferencesView,
+  restoreFullCustomOutputPathForEdit,
+  syncCustomOutputPathFromInput,
   syncPreferenceOutputState as syncPreferenceOutputViewState,
   type PreferencesViewElements,
 } from "./ui/preferencesView";
 
 type BrowserRow = ArchiveTableRow;
+type SelectableBrowserRow = Extract<BrowserRow, { rowType: "folder" | "entry" }>;
 type ArchiveTreeFolder = {
   path: string;
   name: string;
@@ -315,6 +327,9 @@ type ViewportRect = {
 };
 
 type DevDialogName = "about" | "preferences" | "info" | "jobs";
+type DevJobFixture = JobState & {
+  outputActions?: JobOutputAction[];
+};
 
 declare global {
   interface ImportMeta {
@@ -327,7 +342,7 @@ declare global {
     __zmanagerDev?: {
       loadArchiveFixture: (fixture: ArchiveFixture) => void;
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
-      setJobFixtures: (fixtures: JobState[]) => void;
+      setJobFixtures: (fixtures: DevJobFixture[]) => void;
       openSurface: (surface: DevDialogName) => void;
       closeModal: () => void;
     };
@@ -650,7 +665,7 @@ appRoot.innerHTML = `
     <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
       <button id="nav-back" type="button" data-i18n-text="navigation.back" disabled>Back</button>
       <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" data-i18n-title="commands.upOneLevel.tooltip" data-i18n-aria-label="commands.upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
-      <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." disabled />
+      <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." readonly disabled />
       <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</div>
       <label class="search-field">
         <span class="sr-only" data-i18n-text="search.entries">Search entries</span>
@@ -665,15 +680,18 @@ appRoot.innerHTML = `
             <span data-i18n-text="compress.destination">Destination</span>
             <div class="inline-field">
               <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" list="create-destination-history" />
-              <button id="browse-create-destination" type="button">...</button>
+              <button id="browse-create-destination" type="button" data-i18n-text="common.browse" data-i18n-title="create.destination.browse.title" title="Browse for archive path">Browse...</button>
+              <select id="create-destination-recent" class="recent-location-select" data-i18n-aria-label="create.destination.recent.aria" data-i18n-title="create.destination.recent.title" aria-label="Recent destinations" title="Recent destinations" disabled>
+                <option value="" data-i18n-text="create.destination.recent">Recent</option>
+              </select>
             </div>
             <datalist id="create-destination-history"></datalist>
           </label>
           <div class="compress-create-actions">
             <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
-            <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="common.clear" hidden>Clear</button>
+            <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources" hidden>Clear All Sources</button>
             <span class="compress-action-divider" aria-hidden="true"></span>
-            <button id="start-create" class="primary-action" type="button" data-i18n-text="compress.createArchive" disabled>Create Archive</button>
+            <button id="start-create" class="secondary-action" type="button" data-i18n-text="compress.createArchive" aria-describedby="create-plan-meta" disabled>Create Archive</button>
           </div>
         </div>
         <div class="compress-plan-row">
@@ -707,7 +725,7 @@ appRoot.innerHTML = `
             <h1 id="workspace-title">${APP_TITLE}</h1>
             <p id="browse-meta" data-i18n-text="browse.statusReady">Open an archive to browse entries.</p>
           </div>
-          <button id="refresh-archive" type="button" data-command-id="refresh" data-i18n-text="common.refresh" disabled>Refresh</button>
+          <button id="refresh-archive" class="quiet-action" type="button" data-command-id="refresh" data-i18n-text="common.refresh" disabled>Refresh</button>
         </div>
         <p id="browse-message" class="status status-idle" data-i18n-text="browse.statusIdle">No archive selected.</p>
         <div id="compress-surface" class="compress-surface" hidden>
@@ -743,6 +761,7 @@ appRoot.innerHTML = `
                 <h2 data-i18n-text="browse.emptyTitle">Archive contents</h2>
                 <p data-i18n-text="browse.emptyDescription">Drop an archive here to inspect its files and folders.</p>
               </div>
+              <button class="primary-action" type="button" data-empty-action="open-archive" data-i18n-text="browse.emptyOpenAction">Open Archive</button>
               <p class="archive-empty-hint" data-i18n-text="browse.emptyDropHint">Drag entries out of this table to extract selected items.</p>
             </div>
           </div>
@@ -789,6 +808,15 @@ appRoot.innerHTML = `
           <div class="compress-options-intro">
             <h3 data-i18n-text="create.options.title">Archive Options</h3>
             <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
+          </div>
+          <div class="plan-header">
+            <div>
+              <h3 data-i18n-text="create.plan.title">Plan</h3>
+              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
+            </div>
+          </div>
+          <div id="create-plan-summary" class="summary-card">
+            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
           </div>
           <ul id="source-list" class="list-box" hidden></ul>
           <div class="form-grid create-options-grid">
@@ -844,15 +872,6 @@ appRoot.innerHTML = `
               </label>
             </div>
           </details>
-          <div class="plan-header">
-            <div>
-              <h3 data-i18n-text="create.plan.title">Plan</h3>
-              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
-            </div>
-          </div>
-          <div id="create-plan-summary" class="summary-card">
-            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
-          </div>
         </div>
       </aside>
     </section>
@@ -917,14 +936,20 @@ appRoot.innerHTML = `
 
     <div id="context-menu" class="context-menu" role="menu" hidden></div>
     <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
-      <div>
+      <div class="drop-overlay-card" role="status" aria-live="polite">
         <strong id="drop-overlay-title" data-i18n-text="drop.title">Drop files</strong>
         <span id="drop-overlay-message" data-i18n-text="drop.message">Open an archive or add files to a new archive.</span>
+        <span id="drop-overlay-support" class="drop-overlay-support"></span>
+        <div id="drop-overlay-actions" class="drop-overlay-actions" hidden>
+          <button id="drop-open-archive" type="button" data-drop-choice="open-archive" data-i18n-text="drop.action.openArchive">Open Archive</button>
+          <button id="drop-add-compress" type="button" data-drop-choice="add-compress" data-i18n-text="drop.action.addCompress">Add to Compress</button>
+          <button id="drop-cancel" type="button" data-drop-choice="cancel" data-i18n-text="common.cancel">Cancel</button>
+        </div>
       </div>
     </div>
 
     <div id="extract-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title">
+      <section class="dialog task-dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title" tabindex="-1" data-dialog-default="#extract-start" data-dialog-cancel="#extract-cancel">
         <div class="dialog-header">
           <div>
             <h2 id="extract-title" data-i18n-text="extract.title">Extract</h2>
@@ -933,83 +958,91 @@ appRoot.innerHTML = `
           <button id="extract-dialog-close" class="icon-button" type="button" data-i18n-aria-label="extract.close.aria" data-i18n-text="common.close" aria-label="Close extract dialog">Close</button>
         </div>
         <div class="dialog-body">
-          <label class="field-row">
-            <span data-i18n-text="extract.destination">Extract to</span>
-            <div class="inline-field">
-              <input
-                id="extract-destination"
-                type="text"
-                data-i18n-placeholder="extract.destination.placeholder"
-                placeholder="Select a destination folder"
-                list="extract-destination-history"
-              />
-              <datalist id="extract-destination-history"></datalist>
-              <button id="browse-extract-destination" type="button">...</button>
+          <section class="dialog-section">
+            <h3 data-i18n-text="extract.destination">Extract to</h3>
+            <label class="field-row">
+              <span data-i18n-text="extract.destination">Extract to</span>
+              <div class="inline-field">
+                <input
+                  id="extract-destination"
+                  type="text"
+                  data-i18n-placeholder="extract.destination.placeholder"
+                  placeholder="Select a destination folder"
+                  list="extract-destination-history"
+                />
+                <datalist id="extract-destination-history"></datalist>
+                <button id="browse-extract-destination" type="button" data-i18n-text="common.browse" data-i18n-title="nativeDialog.chooseExtractDestination" title="Choose extract destination">Browse...</button>
+              </div>
+            </label>
+            <div class="form-grid form-grid-compact">
+              <label class="checkbox-row">
+                <input id="extract-use-subfolder" type="checkbox" />
+                <span data-i18n-text="extract.toSubfolder">Extract to subfolder</span>
+              </label>
+              <label>
+                <span data-i18n-text="extract.subfolder">Subfolder</span>
+                <input id="extract-subfolder" type="text" data-i18n-placeholder="common.optional" placeholder="Optional" />
+              </label>
             </div>
-          </label>
-          <div class="form-grid form-grid-compact">
-            <label class="checkbox-row">
-              <input id="extract-use-subfolder" type="checkbox" />
-              <span data-i18n-text="extract.toSubfolder">Extract to subfolder</span>
-            </label>
-            <label>
-              <span data-i18n-text="extract.subfolder">Subfolder</span>
-              <input id="extract-subfolder" type="text" data-i18n-placeholder="common.optional" placeholder="Optional" />
-            </label>
-            <label>
-              <span data-i18n-text="extract.pathMode">Path mode</span>
-              <select id="extract-path-mode">
-                <option value="full" data-i18n-text="extract.pathMode.full">Full paths</option>
-                <option value="current" data-i18n-text="extract.pathMode.current">Current folder</option>
-                <option value="none" data-i18n-text="extract.pathMode.none">No paths</option>
-              </select>
-            </label>
-            <label class="checkbox-row">
-              <input id="extract-deduplicate-root" type="checkbox" />
-              <span data-i18n-text="extract.deduplicateRoot">Eliminate duplicated root folder</span>
-            </label>
-          </div>
-          <div class="form-grid form-grid-compact">
-            <label>
-              <span data-i18n-text="extract.overwritePolicy">Overwrite policy</span>
-              <select id="browse-overwrite">
-                <option value="ask" data-i18n-text="extract.overwrite.ask">Ask</option>
-                <option value="refuse" data-i18n-text="extract.overwrite.refuse">Refuse</option>
-                <option value="rename" data-i18n-text="extract.overwrite.rename">Rename</option>
-                <option value="replace" data-i18n-text="extract.overwrite.replace">Replace</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="extract.password">Password</span>
-              <input id="browse-password" type="password" autocomplete="off" />
-            </label>
-            <label class="checkbox-row">
-              <input id="browse-show-password" type="checkbox" />
-              <span data-i18n-text="extract.showPassword">Show Password</span>
-            </label>
-            <label class="checkbox-row">
-              <input id="extract-restore-security" type="checkbox" disabled />
-              <span data-i18n-text="extract.restoreSecurity">Restore file security</span>
-            </label>
-          </div>
-          <details class="advanced-options">
-            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
-            <label>
-              <span data-i18n-text="extract.stripComponents">Strip components</span>
-              <input id="browse-strip-components" type="number" min="0" max="8" value="0" />
-            </label>
-          </details>
+          </section>
+          <section class="dialog-section extract-options-section">
+            <h3 data-i18n-text="extract.advancedOptions">Advanced options</h3>
+            <div class="form-grid form-grid-compact">
+              <label>
+                <span data-i18n-text="extract.pathMode">Path mode</span>
+                <select id="extract-path-mode">
+                  <option value="full" data-i18n-text="extract.pathMode.full">Full paths</option>
+                  <option value="current" data-i18n-text="extract.pathMode.current">Current folder</option>
+                  <option value="none" data-i18n-text="extract.pathMode.none">No paths</option>
+                </select>
+              </label>
+              <label>
+                <span data-i18n-text="extract.overwritePolicy">Overwrite policy</span>
+                <select id="browse-overwrite">
+                  <option value="ask" data-i18n-text="extract.overwrite.ask">Ask</option>
+                  <option value="refuse" data-i18n-text="extract.overwrite.refuse">Refuse</option>
+                  <option value="rename" data-i18n-text="extract.overwrite.rename">Rename</option>
+                  <option value="replace" data-i18n-text="extract.overwrite.replace">Replace</option>
+                </select>
+              </label>
+            </div>
+            <details class="advanced-options">
+              <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
+              <div class="form-grid form-grid-compact">
+                <label>
+                  <span data-i18n-text="extract.stripComponents">Strip components</span>
+                  <input id="browse-strip-components" type="number" min="0" max="8" value="0" />
+                </label>
+                <label class="checkbox-row">
+                  <input id="extract-deduplicate-root" type="checkbox" />
+                  <span data-i18n-text="extract.deduplicateRoot">Eliminate duplicated root folder</span>
+                </label>
+              </div>
+            </details>
+            <details class="advanced-options extract-password-options">
+              <summary data-i18n-text="extract.password">Password</summary>
+              <div class="form-grid form-grid-compact">
+                <label>
+                  <span data-i18n-text="extract.password">Password</span>
+                  <input id="browse-password" type="password" autocomplete="off" />
+                </label>
+              <label class="checkbox-row">
+                <input id="browse-show-password" type="checkbox" />
+                <span data-i18n-text="extract.showPassword">Show Password</span>
+              </label>
+              </div>
+            </details>
+          </section>
         </div>
         <div class="dialog-actions">
-          <button id="extract-start" type="button" data-i18n-text="common.ok">OK</button>
-          <button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>
-          <button id="extract-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
+          <button id="extract-start" type="button" data-dialog-default-button data-i18n-text="command.extract" disabled>Extract</button>
+          <button id="extract-cancel" type="button" data-dialog-cancel-button data-i18n-text="common.cancel">Cancel</button>
         </div>
       </section>
     </div>
 
     <div id="about-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <section class="dialog property-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1" data-dialog-default="#about-close" data-dialog-cancel="#about-close">
         <div class="dialog-header">
           <div>
             <h2 id="about-title" data-i18n-text="about.title">About ZManager</h2>
@@ -1017,18 +1050,18 @@ appRoot.innerHTML = `
           </div>
           <button id="about-dialog-close" class="icon-button" type="button" data-i18n-aria-label="about.close.aria" data-i18n-text="common.close" aria-label="Close about dialog">Close</button>
         </div>
-        <div class="dialog-body">
-          <div id="about-diagnostics" class="diagnostics"></div>
+        <div class="dialog-body property-dialog-body about-property-body">
+          <div id="about-diagnostics" class="diagnostics diagnostics-groups"></div>
         </div>
         <div class="dialog-actions">
           <button id="copy-diagnostics" type="button" data-i18n-text="about.copyDiagnostics">Copy Diagnostics</button>
-          <button id="about-close" type="button" data-i18n-text="common.close">Close</button>
+          <button id="about-close" type="button" data-dialog-default-button data-dialog-cancel-button data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
 
     <div id="preferences-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="preferences-title">
+      <section class="dialog property-dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="preferences-title" tabindex="-1" data-dialog-default="#preferences-save" data-dialog-cancel="#preferences-cancel">
         <div class="dialog-header">
           <div>
             <h2 id="preferences-title" data-i18n-text="preferences.title">Options</h2>
@@ -1036,135 +1069,181 @@ appRoot.innerHTML = `
           </div>
           <button id="preferences-dialog-close" class="icon-button" type="button" data-i18n-aria-label="preferences.close.aria" data-i18n-text="common.close" aria-label="Close preferences dialog">Close</button>
         </div>
-        <div class="dialog-body">
-          <div class="options-pages">
-            <section class="options-page">
-              <h3 data-i18n-text="preferences.folders.title">Folders</h3>
-              <div class="form-grid form-grid-compact">
-                <label>
-                  <span data-i18n-text="preferences.folders.workingOutput">Working/output folder</span>
-                  <select id="pref-output-location">
-                    <option value="sourceFolder" data-i18n-text="preferences.folders.sourceFolder">Current/source folder</option>
-                    <option value="customFolder" data-i18n-text="preferences.folders.customFolder">Specified path</option>
-                  </select>
-                </label>
-                <label class="span-2">
-                  <span data-i18n-text="preferences.folders.customFolder">Specified path</span>
-                  <div class="inline-field">
-                    <input id="pref-custom-output" type="text" data-i18n-placeholder="preferences.folders.customPlaceholder" placeholder="Optional folder for new archives" />
-                    <button id="pref-choose-output" type="button">...</button>
+        <div class="dialog-body property-dialog-body preferences-property-body">
+          <div class="property-sheet">
+            <nav class="property-nav" aria-label="Preference categories">
+              <button type="button" class="property-nav-item" data-pref-page-target="folders" aria-selected="true" data-i18n-text="preferences.folders.title">Folders</button>
+              <button type="button" class="property-nav-item" data-pref-page-target="archive" aria-selected="false" data-i18n-text="preferences.archiveDefaults.title">Archive Defaults</button>
+              <button type="button" class="property-nav-item" data-pref-page-target="extraction" aria-selected="false" data-i18n-text="preferences.extraction.title">Extraction Defaults</button>
+              <button type="button" class="property-nav-item" data-pref-page-target="interface" aria-selected="false" data-i18n-text="preferences.interface.title">Interface</button>
+              <button type="button" class="property-nav-item" data-pref-page-target="safety" aria-selected="false" data-i18n-text="preferences.safety.title">Safety</button>
+            </nav>
+            <div class="options-pages">
+              <section class="options-page property-section" data-pref-page="folders">
+                <h3 data-i18n-text="preferences.folders.title">Folders</h3>
+                <p class="section-description" data-i18n-text="preferences.folders.description">Choose where quick create actions and new archives start.</p>
+                <div class="setting-row">
+                  <label for="pref-output-location" data-i18n-text="preferences.folders.workingOutput">Working/output folder</label>
+                  <div class="setting-control">
+                    <select id="pref-output-location">
+                      <option value="sourceFolder" data-i18n-text="preferences.folders.sourceFolder">Current/source folder</option>
+                      <option value="customFolder" data-i18n-text="preferences.folders.customFolder">Specified path</option>
+                    </select>
+                    <p class="setting-description"><span class="quick-action-badge" data-i18n-text="preferences.quickActions.badge">Quick actions</span> <span data-i18n-text="preferences.folders.quickDescription">Used by Compress quick actions and suggested create destinations.</span></p>
                   </div>
-                </label>
-              </div>
-            </section>
-            <section class="options-page">
-              <h3 data-i18n-text="preferences.archiveDefaults.title">Archive defaults</h3>
-              <div class="form-grid form-grid-compact">
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.defaultFormat">Default archive format</span>
-                  <select id="pref-default-format">
-                    <option value="zip">ZIP</option>
-                    <option value="tarZst">TZST</option>
-                    <option value="tzap">TZAP</option>
-                    <option value="sevenZ">7Z</option>
-                  </select>
-                </label>
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.editFormat">Edit defaults for</span>
-                  <select id="pref-create-format">
-                    <option value="zip">ZIP</option>
-                    <option value="tarZst">TZST</option>
-                    <option value="tzap">TZAP</option>
-                    <option value="sevenZ">7Z</option>
-                  </select>
-                </label>
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.compressionLevel">Compression level</span>
-                  <select id="pref-create-compression-level">
-                    <option value="" data-i18n-text="preferences.archiveDefaults.backendDefault">Backend default</option>
-                    <option value="0" data-i18n-text="common.store">Store</option>
-                    <option value="1" data-i18n-text="common.fastest">Fastest</option>
-                    <option value="3" data-i18n-text="common.fast">Fast</option>
-                    <option value="9" data-i18n-text="common.maximum">Maximum</option>
-                    <option value="22" data-i18n-text="common.ultra">Ultra</option>
-                  </select>
-                </label>
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.splitVolumes">Split to volumes, bytes</span>
-                  <input id="pref-create-volume" type="number" min="0" data-i18n-placeholder="preferences.archiveDefaults.noSplit" placeholder="No split" />
-                </label>
-                <label id="pref-create-tzap-recovery-field" hidden>
-                  <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
-                  <input id="pref-create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" />
-                </label>
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.defaultExtraction">Default extraction</span>
-                  <select id="pref-default-extraction">
-                    <option value="askEveryTime" data-i18n-text="preferences.extraction.askEveryTime">Ask every time</option>
-                    <option value="extractHere" data-i18n-text="preferences.extraction.extractHere">Extract here</option>
-                    <option value="extractToFolder" data-i18n-text="preferences.extraction.extractToFolder">Extract to folder</option>
-                  </select>
-                </label>
-                <label>
-                  <span data-i18n-text="preferences.archiveDefaults.previewCleanup">Preview cleanup</span>
-                  <select id="pref-preview-cleanup">
-                    <option value="beforeNextPreview" data-i18n-text="preferences.previewCleanup.beforeNextPreview">Before next preview</option>
-                    <option value="whenAppCloses" data-i18n-text="preferences.previewCleanup.whenAppCloses">When app closes</option>
-                  </select>
-                </label>
-              </div>
-              <div class="toggle-grid">
-                <label class="toggle-line"><input id="pref-create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
-                <label class="toggle-line"><input id="pref-create-preserve-metadata" type="checkbox" /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
-                <label class="toggle-line"><input id="pref-create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
-                <label class="toggle-line"><input id="pref-create-prompt-password" type="checkbox" /> <span data-i18n-text="create.promptForPassword">Prompt for password</span></label>
-              </div>
-            </section>
-            <section class="options-page">
-              <h3 data-i18n-text="preferences.interface.title">Interface</h3>
-              <div class="toggle-grid">
-                <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> <span data-i18n-text="preferences.interface.showParent">Show .. item</span></label>
-                <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> <span data-i18n-text="preferences.interface.realFileIcons">Show real file icons</span></label>
-                <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> <span data-i18n-text="preferences.interface.fullRowSelect">Full row select</span></label>
-                <label class="toggle-line"><input id="pref-show-grid" type="checkbox" /> <span data-i18n-text="preferences.interface.showGrid">Show grid lines</span></label>
-                <label class="toggle-line"><input id="pref-single-click" type="checkbox" /> <span data-i18n-text="preferences.interface.singleClick">Single-click to open</span></label>
-                <label class="toggle-line"><input id="pref-alternative-selection" type="checkbox" /> <span data-i18n-text="preferences.interface.alternativeSelection">Alternative selection mode</span></label>
-                <label class="toggle-line"><input id="pref-toolbar-visible" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarVisible">Archive toolbar</span></label>
-                <label class="toggle-line"><input id="pref-large-toolbar" type="checkbox" /> <span data-i18n-text="preferences.interface.largeToolbar">Large toolbar buttons</span></label>
-                <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarLabels">Show toolbar labels</span></label>
-                <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> <span data-i18n-text="preferences.interface.flatView">Flat view</span></label>
-              </div>
-            </section>
-            <section class="options-page">
-              <h3 data-i18n-text="preferences.language.title">Language</h3>
-              <select id="pref-language">
-                <option value="system" data-i18n-text="preferences.language.systemDefault">System default</option>
-                <option value="en" data-i18n-text="preferences.language.english">English</option>
-                <option value="zh-CN" data-i18n-text="preferences.language.chineseSimplified">Simplified Chinese</option>
-              </select>
-            </section>
+                </div>
+                <div class="setting-row">
+                  <label for="pref-custom-output" data-i18n-text="preferences.folders.customFolder">Specified path</label>
+                  <div class="setting-control">
+                    <div class="inline-field">
+                      <input id="pref-custom-output" class="path-input" type="text" aria-describedby="pref-custom-output-help pref-custom-output-validation" data-i18n-placeholder="preferences.folders.customPlaceholder" placeholder="Optional folder for new archives" />
+                      <button id="pref-choose-output" type="button" data-i18n-text="common.browse">Browse...</button>
+                    </div>
+                    <p id="pref-custom-output-help" class="setting-description" data-i18n-text="preferences.folders.customHelp">Choose an existing folder with the native folder picker, or paste a full local path.</p>
+                    <p id="pref-custom-output-validation" class="setting-validation" aria-live="polite" hidden></p>
+                  </div>
+                </div>
+              </section>
+              <section class="options-page property-section" data-pref-page="archive" hidden>
+                <h3 data-i18n-text="preferences.archiveDefaults.title">Archive Defaults</h3>
+                <p class="section-description" data-i18n-text="preferences.archiveDefaults.description">Defaults used when creating archives from the workspace or quick actions.</p>
+                <div class="setting-grid">
+                  <div class="setting-row">
+                    <label for="pref-default-format" data-i18n-text="preferences.archiveDefaults.defaultFormat">Default archive format</label>
+                    <div class="setting-control">
+                      <select id="pref-default-format">
+                        <option value="zip">ZIP</option>
+                        <option value="tarZst">TZST</option>
+                        <option value="tzap">TZAP</option>
+                        <option value="sevenZ">7Z</option>
+                      </select>
+                      <p class="setting-description"><span class="quick-action-badge" data-i18n-text="preferences.quickActions.badge">Quick actions</span> <span data-i18n-text="preferences.archiveDefaults.formatQuickDescription">Used when Compress quick actions need a default format.</span></p>
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <label for="pref-create-format" data-i18n-text="preferences.archiveDefaults.editFormat">Edit defaults for</label>
+                    <div class="setting-control">
+                      <select id="pref-create-format">
+                        <option value="zip">ZIP</option>
+                        <option value="tarZst">TZST</option>
+                        <option value="tzap">TZAP</option>
+                        <option value="sevenZ">7Z</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <label for="pref-create-compression-level" data-i18n-text="preferences.archiveDefaults.compressionLevel">Compression level</label>
+                    <div class="setting-control">
+                      <select id="pref-create-compression-level">
+                        <option value="" data-i18n-text="preferences.archiveDefaults.backendDefault">Backend default</option>
+                        <option value="0" data-i18n-text="common.store">Store</option>
+                        <option value="1" data-i18n-text="common.fastest">Fastest</option>
+                        <option value="3" data-i18n-text="common.fast">Fast</option>
+                        <option value="9" data-i18n-text="common.maximum">Maximum</option>
+                        <option value="22" data-i18n-text="common.ultra">Ultra</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="setting-row">
+                    <label for="pref-create-volume" data-i18n-text="preferences.archiveDefaults.splitVolumes">Split to volumes, bytes</label>
+                    <div class="setting-control">
+                      <input id="pref-create-volume" type="number" min="0" data-i18n-placeholder="preferences.archiveDefaults.noSplit" placeholder="No split" />
+                    </div>
+                  </div>
+                  <div id="pref-create-tzap-recovery-field" class="setting-row" hidden>
+                    <label for="pref-create-tzap-recovery" data-i18n-text="create.tzapRecovery">TZAP recovery, %</label>
+                    <div class="setting-control">
+                      <input id="pref-create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" />
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="options-page property-section" data-pref-page="extraction" hidden>
+                <h3 data-i18n-text="preferences.extraction.title">Extraction Defaults</h3>
+                <p class="section-description" data-i18n-text="preferences.extraction.description">Defaults used by Extract commands and Explorer quick extract actions.</p>
+                <div class="setting-row">
+                  <label for="pref-default-extraction" data-i18n-text="preferences.archiveDefaults.defaultExtraction">Default extraction</label>
+                  <div class="setting-control">
+                    <select id="pref-default-extraction">
+                      <option value="askEveryTime" data-i18n-text="preferences.extraction.askEveryTime">Ask every time</option>
+                      <option value="extractHere" data-i18n-text="preferences.extraction.extractHere">Extract here</option>
+                      <option value="extractToFolder" data-i18n-text="preferences.extraction.extractToFolder">Extract to folder</option>
+                    </select>
+                    <p class="setting-description"><span class="quick-action-badge" data-i18n-text="preferences.quickActions.badge">Quick actions</span> <span data-i18n-text="preferences.extraction.quickDescription">Controls default Explorer quick extract behavior.</span></p>
+                  </div>
+                </div>
+              </section>
+              <section class="options-page property-section" data-pref-page="interface" hidden>
+                <h3 data-i18n-text="preferences.interface.title">Interface</h3>
+                <p class="section-description" data-i18n-text="preferences.interface.description">File list, toolbar, and language preferences for the desktop shell.</p>
+                <div class="toggle-grid settings-toggle-grid">
+                  <label class="toggle-line"><input id="pref-show-parent" type="checkbox" /> <span data-i18n-text="preferences.interface.showParent">Show .. item</span></label>
+                  <label class="toggle-line"><input id="pref-real-file-icons" type="checkbox" /> <span data-i18n-text="preferences.interface.realFileIcons">Show real file icons</span></label>
+                  <label class="toggle-line"><input id="pref-full-row-select" type="checkbox" /> <span data-i18n-text="preferences.interface.fullRowSelect">Full row select</span></label>
+                  <label class="toggle-line"><input id="pref-show-grid" type="checkbox" /> <span data-i18n-text="preferences.interface.showGrid">Show grid lines</span></label>
+                  <label class="toggle-line"><input id="pref-single-click" type="checkbox" /> <span data-i18n-text="preferences.interface.singleClick">Single-click to open</span></label>
+                  <label class="toggle-line"><input id="pref-alternative-selection" type="checkbox" /> <span data-i18n-text="preferences.interface.alternativeSelection">Alternative selection mode</span></label>
+                  <label class="toggle-line"><input id="pref-toolbar-visible" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarVisible">Archive toolbar</span></label>
+                  <label class="toggle-line"><input id="pref-large-toolbar" type="checkbox" /> <span data-i18n-text="preferences.interface.largeToolbar">Large toolbar buttons</span></label>
+                  <label class="toggle-line"><input id="pref-toolbar-labels" type="checkbox" /> <span data-i18n-text="preferences.interface.toolbarLabels">Show toolbar labels</span></label>
+                  <label class="toggle-line"><input id="pref-flat-view" type="checkbox" /> <span data-i18n-text="preferences.interface.flatView">Flat view</span></label>
+                </div>
+                <div class="setting-row">
+                  <label for="pref-language" data-i18n-text="preferences.language.title">Language</label>
+                  <div class="setting-control">
+                    <select id="pref-language">
+                      <option value="system" data-i18n-text="preferences.language.systemDefault">System default</option>
+                      <option value="en" data-i18n-text="preferences.language.english">English</option>
+                      <option value="zh-CN" data-i18n-text="preferences.language.chineseSimplified">Simplified Chinese</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+              <section class="options-page property-section" data-pref-page="safety" hidden>
+                <h3 data-i18n-text="preferences.safety.title">Safety</h3>
+                <p class="section-description" data-i18n-text="preferences.safety.description">Defaults that affect cleanup, overwrite, metadata, and password prompts.</p>
+                <div class="toggle-grid settings-toggle-grid">
+                  <label class="toggle-line"><input id="pref-create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
+                  <label class="toggle-line"><input id="pref-create-preserve-metadata" type="checkbox" /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
+                  <label class="toggle-line"><input id="pref-create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
+                  <label class="toggle-line"><input id="pref-create-prompt-password" type="checkbox" /> <span data-i18n-text="create.promptForPassword">Prompt for password</span></label>
+                </div>
+                <p class="setting-description"><span class="quick-action-badge" data-i18n-text="preferences.quickActions.badge">Quick actions</span> <span data-i18n-text="preferences.safety.quickDescription">Clean source applies to Compress clean-source quick actions.</span></p>
+                <div class="setting-row">
+                  <label for="pref-preview-cleanup" data-i18n-text="preferences.archiveDefaults.previewCleanup">Preview cleanup</label>
+                  <div class="setting-control">
+                    <select id="pref-preview-cleanup">
+                      <option value="beforeNextPreview" data-i18n-text="preferences.previewCleanup.beforeNextPreview">Before next preview</option>
+                      <option value="whenAppCloses" data-i18n-text="preferences.previewCleanup.whenAppCloses">When app closes</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
           <p id="preferences-status" class="status status-idle" data-i18n-text="preferences.status.localOnly">Preferences are stored locally and never include passwords.</p>
         </div>
         <div class="dialog-actions">
-          <button id="preferences-save" type="button" data-i18n-text="common.save">Save</button>
-          <button id="preferences-cancel" type="button" data-i18n-text="common.cancel">Cancel</button>
+          <button id="preferences-save" type="button" data-dialog-default-button data-i18n-text="common.save">Save</button>
+          <button id="preferences-cancel" type="button" data-dialog-cancel-button data-i18n-text="common.cancel">Cancel</button>
         </div>
       </section>
     </div>
 
     <div id="info-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="info-title">
+      <section class="dialog property-dialog" role="dialog" aria-modal="true" aria-labelledby="info-title" tabindex="-1" data-dialog-default="#info-close" data-dialog-cancel="#info-close">
         <div class="dialog-header">
           <div>
             <h2 id="info-title" data-i18n-text="info.title">Info</h2>
             <p data-i18n-text="info.description">Archive or entry details.</p>
           </div>
-          <button id="info-dialog-close" class="icon-button" type="button" data-i18n-aria-label="info.close.aria" data-i18n-text="common.close" aria-label="Close info dialog">Close</button>
         </div>
-        <div id="info-dialog-body" class="diagnostics"></div>
+        <div class="dialog-body property-dialog-body">
+          <div id="info-dialog-body" class="diagnostics"></div>
+        </div>
         <div class="dialog-actions">
-          <button id="info-close" type="button" data-i18n-text="common.close">Close</button>
+          <div id="info-action-group" class="dialog-action-group"></div>
+          <button id="info-close" type="button" data-dialog-default-button data-dialog-cancel-button data-i18n-text="common.close">Close</button>
         </div>
       </section>
     </div>
@@ -1215,6 +1294,7 @@ const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#works
 const messageElement = document.querySelector<HTMLParagraphElement>("#browse-message")!;
 const compressSurfaceElement = document.querySelector<HTMLDivElement>("#compress-surface")!;
 const compressSourceBody = document.querySelector<HTMLTableSectionElement>("#compress-source-body")!;
+const compressSourceTable = document.querySelector<HTMLTableElement>("#compress-source-table")!;
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
@@ -1234,13 +1314,13 @@ const extractDestinationHistoryList = document.querySelector<HTMLDataListElement
 const browseExtractDestinationButton = document.querySelector<HTMLButtonElement>("#browse-extract-destination")!;
 const browsePasswordInput = document.querySelector<HTMLInputElement>("#browse-password")!;
 const browseShowPasswordInput = document.querySelector<HTMLInputElement>("#browse-show-password")!;
+const extractPasswordOptions = document.querySelector<HTMLDetailsElement>(".extract-password-options")!;
 const browseOverwriteSelect = document.querySelector<HTMLSelectElement>("#browse-overwrite")!;
 const browseStripInput = document.querySelector<HTMLInputElement>("#browse-strip-components")!;
 const extractUseSubfolderCheckbox = document.querySelector<HTMLInputElement>("#extract-use-subfolder")!;
 const extractSubfolderInput = document.querySelector<HTMLInputElement>("#extract-subfolder")!;
 const extractPathModeSelect = document.querySelector<HTMLSelectElement>("#extract-path-mode")!;
 const extractDeduplicateRootCheckbox = document.querySelector<HTMLInputElement>("#extract-deduplicate-root")!;
-const extractRestoreSecurityCheckbox = document.querySelector<HTMLInputElement>("#extract-restore-security")!;
 
 const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
 const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
@@ -1248,6 +1328,7 @@ const sourceListElement = document.querySelector<HTMLUListElement>("#source-list
 const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format")!;
 const createDestinationInput = document.querySelector<HTMLInputElement>("#create-destination")!;
 const createDestinationHistoryList = document.querySelector<HTMLDataListElement>("#create-destination-history")!;
+const createDestinationRecentSelect = document.querySelector<HTMLSelectElement>("#create-destination-recent")!;
 const browseCreateDestinationButton = document.querySelector<HTMLButtonElement>("#browse-create-destination")!;
 const createCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#create-clean-source")!;
 const createPreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#create-preserve-metadata")!;
@@ -1293,6 +1374,11 @@ const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
 const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
 const dropOverlayTitle = document.querySelector<HTMLElement>("#drop-overlay-title")!;
 const dropOverlayMessage = document.querySelector<HTMLElement>("#drop-overlay-message")!;
+const dropOverlaySupport = document.querySelector<HTMLElement>("#drop-overlay-support")!;
+const dropOverlayActions = document.querySelector<HTMLDivElement>("#drop-overlay-actions")!;
+const dropOpenArchiveButton = document.querySelector<HTMLButtonElement>("#drop-open-archive")!;
+const dropAddCompressButton = document.querySelector<HTMLButtonElement>("#drop-add-compress")!;
+const dropCancelButton = document.querySelector<HTMLButtonElement>("#drop-cancel")!;
 
 const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
@@ -1305,6 +1391,9 @@ const preferencesOutputLocationSelect = document.querySelector<HTMLSelectElement
 const preferencesPreviewCleanupSelect = document.querySelector<HTMLSelectElement>("#pref-preview-cleanup")!;
 const preferencesCustomOutputInput = document.querySelector<HTMLInputElement>("#pref-custom-output")!;
 const preferencesChooseOutputButton = document.querySelector<HTMLButtonElement>("#pref-choose-output")!;
+const preferencesCustomOutputValidation = document.querySelector<HTMLElement>("#pref-custom-output-validation")!;
+const preferencesPageButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-pref-page-target]"));
+const preferencesPages = Array.from(document.querySelectorAll<HTMLElement>("[data-pref-page]"));
 const preferencesCreateFormatSelect = document.querySelector<HTMLSelectElement>("#pref-create-format")!;
 const preferencesCreateCompressionSelect = document.querySelector<HTMLSelectElement>("#pref-create-compression-level")!;
 const preferencesCreateVolumeInput = document.querySelector<HTMLInputElement>("#pref-create-volume")!;
@@ -1334,6 +1423,7 @@ const preferencesViewElements: PreferencesViewElements = {
   previewCleanupSelect: preferencesPreviewCleanupSelect,
   customOutputInput: preferencesCustomOutputInput,
   chooseOutputButton: preferencesChooseOutputButton,
+  customOutputValidation: preferencesCustomOutputValidation,
   createFormatSelect: preferencesCreateFormatSelect,
   createCompressionLevelSelect: preferencesCreateCompressionSelect,
   createVolumeInput: preferencesCreateVolumeInput,
@@ -1358,8 +1448,10 @@ const preferencesViewElements: PreferencesViewElements = {
 const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
 const infoDialogBody = document.querySelector<HTMLDivElement>("#info-dialog-body")!;
 const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
+const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-group")!;
 
 let workspaceMode: WorkspaceDropMode = "compress";
+let pendingDropChoice: Extract<DropIntentDecision, { kind: "askAction" }> | null = null;
 let currentArchivePath = "";
 let currentArchiveFolder = "";
 let currentArchiveEntryCount = 0;
@@ -1368,6 +1460,7 @@ let browseState: BrowseState = "idle";
 let browseError = "";
 let browseEntries: ArchiveEntryDto[] = [];
 let selectedEntries = new Set<string>();
+let selectedCompressRows = new Set<string>();
 let navigationHistory: string[] = [];
 let appPreferences: AppPreferences = loadAppPreferences();
 let resolvedLocale: SupportedLocale = resolveLocalePreference(appPreferences.locale);
@@ -1385,11 +1478,15 @@ let sortAscending = appPreferences.tableSortAscending;
 let isFlatView = appPreferences.flatViewDefault;
 let focusedEntryPath = "";
 let selectionAnchorPath = "";
+let focusedCompressRowPath = "";
+let compressSelectionAnchorPath = "";
 let activeExtractMode: ExtractMode = "archive";
 let contextEntryPath = "";
 let contextSourcePath = "";
+let contextMenuReturnFocus: HTMLElement | null = null;
 let extractDestinationHistory: string[] = [];
 let createDestinationHistory: string[] = [];
+let recentArchiveHistory: string[] = [];
 const archiveTreeRootPath = "";
 const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
 let archiveTreeChildrenByParent = new Map<string, string[]>();
@@ -1414,6 +1511,7 @@ let suppressNextTableClick = false;
 
 const jobs = new Map<string, JobState>();
 const jobRetryContexts = new Map<string, JobRetryContext>();
+const jobOutputActions = new Map<string, JobOutputAction[]>();
 const promptedPasswordRetryJobs = new Set<string>();
 let pollTimer: number | null = null;
 let progressClockTimer: number | null = null;
@@ -1472,6 +1570,13 @@ function applySortCommand(nextSortKey: ArchiveSortKey) {
     sortAscending = true;
   }
 
+  saveTablePreferences();
+  renderBrowse();
+}
+
+function applySortDirection(nextSortKey: ArchiveSortKey, ascending: boolean) {
+  sortKey = nextSortKey;
+  sortAscending = ascending;
   saveTablePreferences();
   renderBrowse();
 }
@@ -1821,9 +1926,12 @@ function clearTrackedPreviewState() {
 
 function updateStatusBar() {
   const visibleEntries = getVisibleSelectablePaths();
-  const selectedTotal = selectedEntries.size;
-  const selectedBytes = getSelectedEntryDtos().reduce((total, entry) => total + (entry.size ?? 0), 0);
-  const focusedEntry = focusedEntryPath ? getEntryByPath(focusedEntryPath) : null;
+  const visibleSelectedRows = getVisibleSelectedRows();
+  const selectedTotal = visibleSelectedRows.length;
+  const selectedBytes = visibleSelectedRows.reduce((total, row) => total + (row.entry?.size ?? 0), 0);
+  const focusedEntry = focusedEntryPath && visibleEntries.includes(focusedEntryPath)
+    ? getEntryByPath(focusedEntryPath)
+    : null;
 
   statusSelectionCountElement.textContent = message("status.selectionCount", {
     selected: selectedTotal,
@@ -1848,6 +1956,9 @@ function applyPreferenceClasses() {
   entryTable.classList.toggle("show-grid", appPreferences.showGridLines);
   entryTable.classList.toggle("full-row-select", appPreferences.fullRowSelect);
   entryTable.classList.toggle("single-click-open", appPreferences.singleClickOpen);
+  compressSourceTable.classList.toggle("show-grid", appPreferences.showGridLines);
+  compressSourceTable.classList.toggle("full-row-select", appPreferences.fullRowSelect);
+  compressSourceTable.classList.toggle("single-click-open", appPreferences.singleClickOpen);
 }
 
 function formatBytes(value?: number): string {
@@ -2076,15 +2187,135 @@ function formatRatio(entry: ArchiveEntryDto): string {
   return formatCompressionRatio(entry.size, entry.compressedSize, { fractionDigits: 0, locale: resolvedLocale });
 }
 
-function addDetailRow(label: string, value?: string | null): string {
+type DetailValueMode = "wrap" | "middle";
+
+type DetailRow = {
+  label: string;
+  value?: string | null;
+  mode?: DetailValueMode;
+};
+
+type InfoAction = {
+  label: string;
+  action?: string;
+  copyValue?: string;
+  primary?: boolean;
+};
+
+function middleTruncateDetailValue(value: string, maxLength = 88): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const headLength = Math.max(12, Math.ceil((maxLength - 3) * 0.52));
+  const tailLength = Math.max(12, maxLength - headLength - 3);
+  return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
+}
+
+function detailValueMode(value: string): DetailValueMode {
+  return /[\\/]/.test(value) && value.length > 48 ? "middle" : "wrap";
+}
+
+function renderDetailDefinition(label: string, value?: string | null, mode?: DetailValueMode): string {
   if (!value) {
     return "";
   }
-  return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+
+  const valueMode = mode ?? detailValueMode(value);
+  const displayValue = valueMode === "middle" ? middleTruncateDetailValue(value) : value;
+  const visibleValue = valueMode === "middle"
+    ? `<span class="detail-value detail-value-${valueMode}" aria-hidden="true">${escapeHtml(displayValue)}</span><span class="sr-only">${escapeHtml(value)}</span>`
+    : `<span class="detail-value detail-value-${valueMode}">${escapeHtml(displayValue)}</span>`;
+  return `
+    <div>
+      <dt>${escapeHtml(label)}</dt>
+      <dd class="detail-copyable" title="${escapeHtmlValue(value)}" aria-label="${escapeHtmlValue(`${label}: ${value}`)}">
+        ${visibleValue}
+        <button class="detail-copy-button" type="button" data-copy-value="${escapeHtmlValue(value)}" aria-label="${escapeHtmlValue(`${message("command.copy")} ${label}`)}" title="${escapeHtmlValue(message("command.copy"))}">
+          ${toolbarIcon("copy")}
+        </button>
+      </dd>
+    </div>
+  `;
+}
+
+function addDetailRow(label: string, value?: string | null): string {
+  return renderDetailDefinition(label, value);
 }
 
 function addDetailMessageRow(key: MessageKey, value?: string | null): string {
   return addDetailRow(message(key), value);
+}
+
+function renderDetailRows(rows: readonly DetailRow[]): string {
+  return rows
+    .map((row) => renderDetailDefinition(row.label, row.value, row.mode))
+    .filter(Boolean)
+    .join("");
+}
+
+function detailRowsToText(rows: readonly DetailRow[]): string {
+  return rows
+    .filter((row): row is DetailRow & { value: string } => Boolean(row.value))
+    .map((row) => `${row.label}: ${row.value}`)
+    .join("\n");
+}
+
+function entryPropertyRows(entry: ArchiveEntryDto): DetailRow[] {
+  return [
+    { label: message("detail.name"), value: getBaseName(entry.path) },
+    { label: message("detail.type"), value: normalizeArchiveKindLabel(entry.kind) },
+    { label: message("detail.path"), value: entry.path },
+    { label: message("detail.size"), value: formatOptionalBytes(entry.size) },
+    { label: message("detail.packed"), value: formatOptionalBytes(entry.compressedSize) },
+    { label: message("detail.modified"), value: formatDate(entry.modified) },
+    { label: message("detail.ratio"), value: formatRatio(entry) },
+    { label: message("detail.created"), value: formatDate(entry.created) },
+    { label: message("detail.attributes"), value: entry.attributes },
+    { label: message("detail.method"), value: entry.method },
+    { label: "CRC", value: entry.crc },
+    { label: message("detail.encrypted"), value: formatOptionalBoolean(entry.encrypted) },
+    { label: message("detail.solid"), value: formatOptionalBoolean(entry.solid) },
+    { label: message("detail.linkTarget"), value: entry.linkTarget },
+  ];
+}
+
+function selectionPropertyRows(selectedRows: readonly SelectableBrowserRow[]): DetailRow[] {
+  const selected = selectedRows
+    .map((row) => row.entry ?? getEntryByPath(row.path))
+    .filter((entry): entry is ArchiveEntryDto => entry !== null);
+  const selectedTotal = sumKnownBytes(selected, (entry) => entry.size);
+  const selectedPacked = sumKnownBytes(selected, (entry) => entry.compressedSize);
+  const selectedFiles = selectedRows.filter((row) => row.rowType === "entry" && row.entry?.kind !== "directory").length;
+  const selectedFolders = selectedRows.filter((row) => row.rowType === "folder" || row.entry?.kind === "directory").length;
+  const pathPreview = truncatedPathPreview(selectedRows.map((row) => row.path));
+
+  return [
+    { label: message("detail.entries"), value: String(selectedRows.length) },
+    { label: message("detail.selectedFiles"), value: String(selectedFiles) },
+    { label: message("detail.selectedFolders"), value: String(selectedFolders) },
+    { label: message("detail.totalSize"), value: selectedTotal === null ? null : formatBytes(selectedTotal) },
+    { label: message("detail.packedSize"), value: selectedPacked === null ? null : formatBytes(selectedPacked) },
+    { label: message("detail.pathPreview"), value: pathPreview },
+  ];
+}
+
+function infoActionButton(action: InfoAction): string {
+  const actionAttribute = action.action ? ` data-info-action="${escapeHtmlValue(action.action)}"` : "";
+  const copyAttribute = action.copyValue ? ` data-copy-value="${escapeHtmlValue(action.copyValue)}"` : "";
+  return `<button type="button" class="${action.primary ? "primary-action" : ""}"${actionAttribute}${copyAttribute}>${escapeHtml(action.label)}</button>`;
+}
+
+function setInfoActions(actions: readonly InfoAction[]) {
+  infoActionGroup.innerHTML = actions.map(infoActionButton).join("");
+}
+
+function infoReturnFocusForCurrentSelection(): HTMLElement | null {
+  const selectedPath = focusedEntryPath || getSelectedEntryPaths()[0] || "";
+  if (!selectedPath) {
+    return null;
+  }
+  return tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(selectedPath)}"]`);
 }
 
 function formatOptionalBytes(value?: number): string | null {
@@ -2246,6 +2477,10 @@ function createJobProgressContext(request: StartCreateRequest): FocusedJobProgre
   };
 }
 
+function createJobOutputActions(request: StartCreateRequest): JobOutputAction[] {
+  return request.destinationPath ? [{ kind: "reveal", path: request.destinationPath }] : [];
+}
+
 function extractJobProgressContext(
   request: StartExtractRequest,
   label = "Extract archive",
@@ -2262,6 +2497,18 @@ function extractJobProgressContext(
       { label: "Overwrite", value: request.overwrite },
     ]),
   };
+}
+
+function extractJobOutputActions(request: StartExtractRequest): JobOutputAction[] {
+  return request.destinationPath ? [{ kind: "open", path: request.destinationPath }] : [];
+}
+
+function retryJobOutputActions(context: JobRetryContext): JobOutputAction[] {
+  if (context.retryKind === "extractArchive") {
+    return context.destinationPath ? [{ kind: "open", path: context.destinationPath }] : [];
+  }
+
+  return [];
 }
 
 function normalizeFolderPath(path: string): string {
@@ -2418,6 +2665,21 @@ function getSelectedEntryDtos(): ArchiveEntryDto[] {
   return [...selectedEntries]
     .map((path) => getEntryByPath(path))
     .filter((entry): entry is ArchiveEntryDto => entry !== null);
+}
+
+function getVisibleSelectedEntryDtos(): ArchiveEntryDto[] {
+  return getVisibleSelectedRows()
+    .map((row) => row.entry ?? getEntryByPath(row.path))
+    .filter((entry): entry is ArchiveEntryDto => entry !== null);
+}
+
+function getVisibleSelectedRows(): SelectableBrowserRow[] {
+  return visibleRows().filter((row): row is SelectableBrowserRow => {
+    if (row.rowType !== "entry" && row.rowType !== "folder") {
+      return false;
+    }
+    return selectedEntries.has(row.path);
+  });
 }
 
 function getSelectedEntryPaths(): string[] {
@@ -2776,6 +3038,16 @@ function setOperationalStatus(message: string) {
   statusTextElement.textContent = message;
 }
 
+function currentArchiveDisplayPath(): string {
+  if (!currentArchivePath) {
+    return "";
+  }
+
+  return currentArchiveFolder
+    ? `${currentArchivePath}\\${currentArchiveFolder.replace(/\//g, "\\")}\\`
+    : `${currentArchivePath}\\`;
+}
+
 function setBrowseState(next: BrowseState, message = "") {
   browseState = next;
   browseError = message;
@@ -2794,6 +3066,14 @@ function setBrowseState(next: BrowseState, message = "") {
   }
 
   updateCommandState();
+}
+
+function updateCommandVisualClasses(hasArchive = Boolean(currentArchivePath)) {
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
+    const commandId = button.dataset.commandId as CommandId | undefined;
+    button.classList.toggle("is-primary-command", commandId === "open" && workspaceMode === "extract" && !hasArchive);
+    button.classList.toggle("is-secondary-command", commandId === "refresh");
+  }
 }
 
 function promptForArchivePassword(promptMessage: string): string | null {
@@ -2843,7 +3123,8 @@ function updateCommandState() {
     jobRunning: hasActiveJob(),
   });
 
-  searchInput.disabled = !canUseArchive;
+  searchInput.disabled = !hasArchive || isLoading;
+  searchInput.setAttribute("aria-disabled", String(searchInput.disabled));
   selectAllInput.disabled = !canListEntries || visibleSelectableCount === 0;
   refreshArchiveButton.disabled = !hasArchive || isLoading;
   navBackButton.disabled = navigationHistory.length === 0;
@@ -2881,6 +3162,7 @@ function updateCommandState() {
   }
 
   applyPreferenceClasses();
+  updateCommandVisualClasses(hasArchive);
   updateStatusBar();
 }
 
@@ -2933,6 +3215,7 @@ function renderWorkspaceMode() {
     }
     updateStatusBar();
   }
+  updateCommandVisualClasses();
 }
 
 function setWorkspaceMode(mode: WorkspaceDropMode) {
@@ -2955,16 +3238,17 @@ function renderPathBar() {
   if (!currentArchivePath) {
     pathFieldInput.value = i18n.t("browse.statusEmpty");
     pathFieldInput.disabled = true;
+    pathFieldInput.readOnly = true;
     pathCrumbsElement.textContent = i18n.t("browse.statusEmpty");
+    pathCrumbsElement.hidden = true;
     document.title = APP_TITLE;
     return;
   }
 
-  const archiveDisplayPath = currentArchiveFolder
-    ? `${currentArchivePath}\\${currentArchiveFolder.replace(/\//g, "\\")}\\`
-    : `${currentArchivePath}\\`;
-  pathFieldInput.value = archiveDisplayPath;
+  pathFieldInput.value = currentArchiveDisplayPath();
   pathFieldInput.disabled = false;
+  pathFieldInput.readOnly = true;
+  pathCrumbsElement.hidden = false;
   document.title = currentArchiveFolder
     ? `${getArchiveName(currentArchivePath, APP_TITLE)}\\${currentArchiveFolder.replace(/\//g, "\\")} - ${APP_TITLE}`
     : `${getArchiveName(currentArchivePath, APP_TITLE)} - ${APP_TITLE}`;
@@ -2972,7 +3256,7 @@ function renderPathBar() {
   const crumbs = getArchiveBreadcrumbs(currentArchiveFolder, {
     rootName: getArchiveName(currentArchivePath, APP_TITLE),
   }).flatMap((crumb, index) => {
-    const button = `<button type="button" data-crumb-path="${escapeHtml(crumb.path)}">${escapeHtml(crumb.name)}</button>`;
+    const button = `<button type="button" data-crumb-path="${escapeHtml(crumb.path)}" aria-keyshortcuts="Enter Space">${escapeHtml(crumb.name)}</button>`;
     return index === 0 ? [button] : [`<span aria-hidden="true">&gt;</span>`, button];
   });
 
@@ -3187,6 +3471,9 @@ function renderTableHeader() {
           class="${column.align !== "left" ? `align-${column.align}` : ""}"
           style="width: ${column.width}px; min-width: ${column.minWidth ?? 64}px"
           aria-sort="${sortKey === column.id ? (sortAscending ? "ascending" : "descending") : "none"}"
+          aria-keyshortcuts="Enter Space ContextMenu Shift+F10"
+          tabindex="0"
+          title="${escapeHtmlValue(archiveTableColumnLabel(column, i18n))}"
         >
           <span class="column-header-label">${escapeHtml(archiveTableColumnLabel(column, i18n))}</span>
           ${sortKey === column.id ? `<span class="sort-indicator" aria-hidden="true">${sortAscending ? "^" : "v"}</span>` : ""}
@@ -3200,7 +3487,7 @@ function renderTableHeader() {
 
 function setArchiveEmptyStateVisible(visible: boolean) {
   archiveEmptyStateElement.hidden = !visible;
-  entryTable.hidden = visible;
+  entryTable.hidden = false;
   tableShellElement.classList.toggle("has-start-empty", visible);
 }
 
@@ -3263,7 +3550,11 @@ function renderBrowseRows() {
   }
 
   if (!currentArchivePath) {
-    tableBody.innerHTML = "";
+    tableBody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="${tableColspan()}" class="empty">${escapeHtml(i18n.t("browse.statusEmpty"))}</td>
+      </tr>
+    `;
     setArchiveEmptyStateVisible(true);
     selectAllInput.checked = false;
     selectAllInput.indeterminate = false;
@@ -3297,7 +3588,7 @@ function renderBrowseRows() {
     .map((row) => {
       if (row.rowType === "parent") {
         return `
-          <tr class="folder-row parent-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}">
+          <tr class="folder-row parent-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}" aria-keyshortcuts="Enter ContextMenu Shift+F10">
             <td class="selection-column"></td>
             ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
           </tr>
@@ -3306,15 +3597,17 @@ function renderBrowseRows() {
 
       if (row.rowType === "folder") {
         const selected = selectedEntries.has(row.path);
+        const focused = focusedEntryPath === row.path;
         return `
           <tr
-            class="folder-row ${selected ? "is-selected" : ""}"
+            class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
             data-folder-path="${escapeHtml(row.path)}"
             data-entry-path="${escapeHtml(row.path)}"
             tabindex="0"
             ${nativeDragAttributes}
             aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}"
             aria-selected="${selected ? "true" : "false"}"
+            aria-keyshortcuts="Space Enter ContextMenu Shift+F10"
           >
             <td class="selection-column">
               <input
@@ -3330,13 +3623,15 @@ function renderBrowseRows() {
       }
 
       const selected = selectedEntries.has(row.path);
+      const focused = focusedEntryPath === row.path;
       return `
         <tr
-          class="${selected ? "is-selected" : ""}"
+          class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
           data-entry-path="${escapeHtml(row.path)}"
           tabindex="0"
           ${nativeDragAttributes}
           aria-selected="${selected ? "true" : "false"}"
+          aria-keyshortcuts="Space Enter ContextMenu Shift+F10"
         >
           <td class="selection-column">
             <input
@@ -3359,19 +3654,20 @@ function renderDetails() {
     return;
   }
 
-  const selected = getSelectedEntryDtos();
+  const selectedRows = getVisibleSelectedRows();
 
   if (!currentArchivePath) {
     detailsElement.innerHTML = `
       <div class="details-empty">
-        <h3>${escapeHtml(message("detail.noSelection"))}</h3>
+        <h3>No archive open</h3>
         <p>${escapeHtml(message("detail.openArchiveFirst"))}</p>
+        <button class="primary-action" type="button" data-details-action="open-archive">${escapeHtml(message("browse.emptyOpenAction"))}</button>
       </div>
     `;
     return;
   }
 
-  if (selected.length === 0) {
+  if (selectedRows.length === 0) {
     const knownUnpackedSize = currentArchiveTotalSize !== null
       ? currentArchiveTotalSize
       : sumKnownBytes(browseEntries, (entry) => entry.size);
@@ -3381,10 +3677,10 @@ function renderDetails() {
 
     const list: string = [
       addDetailMessageRow("detail.archiveName", getArchiveName(currentArchivePath, APP_TITLE)),
-      addDetailMessageRow("detail.fullPath", currentArchivePath),
+      addDetailMessageRow("detail.path", currentArchivePath),
+      addDetailMessageRow("detail.size", unpackedSize),
       addDetailMessageRow("detail.format", format),
       addDetailMessageRow("detail.entryCount", String(currentArchiveEntryCount)),
-      addDetailMessageRow("detail.totalUnpackedSize", unpackedSize),
       addDetailMessageRow("detail.packedSize", packedSize === null ? null : formatBytes(packedSize)),
       addDetailMessageRow("detail.lastTestStatus", formatLastTestStatusForCurrentArchive()),
       addDetailMessageRow("detail.folder", currentArchiveFolder || "/"),
@@ -3408,52 +3704,64 @@ function renderDetails() {
     return;
   }
 
-  if (selected.length === 1) {
-    const entry = selected[0];
-    const created = formatDate(entry.created);
-    const modified = formatDate(entry.modified);
-    const packed = formatOptionalBytes(entry.compressedSize);
-    const size = formatOptionalBytes(entry.size);
+  if (selectedRows.length === 1) {
+    const row = selectedRows[0];
+    const entry = row.entry ?? getEntryByPath(row.path);
+    if (!entry) {
+      const icon = archiveTreeIconDescriptor(false, row.path === currentArchiveFolder, i18n);
+      const rows: DetailRow[] = [
+        { label: message("detail.name"), value: row.name },
+        { label: message("detail.type"), value: message("detail.directory") },
+        { label: message("detail.path"), value: row.path || "/" },
+      ];
+      detailsElement.innerHTML = `
+        <div class="detail-block">
+          <h3 class="detail-title">
+            ${renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForPath("folder", true)))}
+            <span>${escapeHtml(row.name)}</span>
+          </h3>
+          <dl class="detail-list">
+            ${renderDetailRows(rows)}
+          </dl>
+        </div>
+      `;
+      return;
+    }
     const icon = archiveEntryIconDescriptor(entry, i18n);
+    const rows = entryPropertyRows(entry);
+    const canPreview = entry.kind !== "directory";
     detailsElement.innerHTML = `
       <div class="detail-block">
         <h3 class="detail-title">
           ${renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForEntry(entry)))}
           <span>${escapeHtml(getBaseName(entry.path))}</span>
         </h3>
+        ${canPreview ? `
+          <div class="detail-actions">
+            <button type="button" class="primary-action" data-details-action="preview">${escapeHtml(message("command.view"))}</button>
+          </div>
+        ` : ""}
         <dl class="detail-list">
-          <div><dt>${escapeHtml(message("detail.name"))}</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
-          <div><dt>${escapeHtml(message("detail.type"))}</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
-          <div><dt>${escapeHtml(message("detail.path"))}</dt><dd>${escapeHtml(entry.path)}</dd></div>
-          ${addDetailMessageRow("detail.size", size)}
-          ${addDetailMessageRow("detail.packed", packed)}
-          ${addDetailMessageRow("detail.modified", modified)}
-          ${addDetailMessageRow("detail.created", created)}
-          ${addDetailMessageRow("detail.attributes", entry.attributes)}
-          ${addDetailMessageRow("detail.method", entry.method)}
-          ${addDetailRow("CRC", entry.crc)}
-          ${addDetailMessageRow("detail.encrypted", formatOptionalBoolean(entry.encrypted))}
-          ${addDetailMessageRow("detail.solid", formatOptionalBoolean(entry.solid))}
-          ${addDetailMessageRow("detail.linkTarget", entry.linkTarget)}
+          ${renderDetailRows(rows)}
         </dl>
       </div>
     `;
     return;
   }
 
-  const selectedTotal = sumKnownBytes(selected, (entry) => entry.size);
-  const selectedFiles = selected.filter((entry) => entry.kind !== "directory").length;
-  const selectedFolders = selected.filter((entry) => entry.kind === "directory").length;
-  const pathPreview = truncatedPathPreview(selected.map((entry) => entry.path));
+  const rows = selectionPropertyRows(selectedRows);
 
   detailsElement.innerHTML = `
     <div class="detail-block">
-        <h3>${escapeHtml(message("detail.selectedEntries", { count: selected.length }))}</h3>
+      <h3>${escapeHtml(message("detail.selectedEntries", { count: selectedRows.length }))}</h3>
+      <div class="detail-actions">
+        <button type="button" class="primary-action" data-details-action="extract-selected">${escapeHtml(message("extract.selectedAction"))}</button>
+        <button type="button" data-details-action="test-selected">${escapeHtml(message("test.selectedAction"))}</button>
+        <button type="button" data-details-action="properties">${escapeHtml(message("command.properties"))}</button>
+        <button type="button" data-details-action="archive-info">${escapeHtml(message("info.archiveTitle"))}</button>
+      </div>
       <dl class="detail-list">
-        <div><dt>${escapeHtml(message("detail.selectedFiles"))}</dt><dd>${selectedFiles}</dd></div>
-        <div><dt>${escapeHtml(message("detail.selectedFolders"))}</dt><dd>${selectedFolders}</dd></div>
-        ${addDetailMessageRow("detail.totalSize", selectedTotal === null ? null : formatBytes(selectedTotal))}
-        ${addDetailMessageRow("detail.pathPreview", pathPreview)}
+        ${renderDetailRows(rows)}
       </dl>
     </div>
   `;
@@ -3468,29 +3776,72 @@ function renderBrowse() {
   updateCommandState();
   renderWorkspaceMode();
 
-  if (browseState === "loaded" && selectedEntries.size > 0) {
-    messageElement.textContent = i18n.t("browse.selectedEntries", { count: selectedEntries.size });
+  const visibleSelectedCount = getVisibleSelectedRows().length;
+  if (browseState === "loaded" && visibleSelectedCount > 0) {
+    messageElement.textContent = i18n.t("browse.selectedEntries", { count: visibleSelectedCount });
   }
 
   queueSystemIconRefresh();
+}
+
+function createUnavailableReasonText(reason: CreateArchiveUnavailableReason): string {
+  switch (reason) {
+    case "needsSources":
+      return message("create.status.needsSources");
+    case "needsDestination":
+      return message("create.status.needsDestination");
+    case "planning":
+      return message("create.status.planning");
+    case "needsPlan":
+      return currentPlanError || message("create.status.needsPlan");
+    case "starting":
+      return message("create.status.starting");
+  }
+}
+
+function createReadyStatusText(): string {
+  const includedCount = currentPlan?.includedCount ?? 0;
+  const totalBytes = currentPlan ? formatBytes(currentPlan.totalBytes) : "";
+  return message("create.status.ready", {
+    count: includedCount,
+    size: totalBytes,
+  });
 }
 
 function setCreatePlanState(state: CreateState, statusMessage = "") {
   createPlanState = state;
   currentPlanError = statusMessage;
 
-  const hasReadyPlan = state === "ready" && currentPlan !== null;
-  startCreateButton.disabled =
-    createSubmissionInFlight ||
-    createSources.length === 0 ||
-    createDestinationInput.value.trim().length === 0 ||
-    state === "loading" ||
-    !hasReadyPlan;
+  const unavailableReason = createArchiveUnavailableReason({
+    sourceCount: createSources.length,
+    destinationPath: createDestinationInput.value,
+    planState: state,
+    hasPlan: currentPlan !== null,
+    submissionInFlight: createSubmissionInFlight,
+  });
+  const canCreate = unavailableReason === null;
+  const statusText = unavailableReason
+    ? createUnavailableReasonText(unavailableReason)
+    : createReadyStatusText();
+
+  startCreateButton.disabled = !canCreate;
+  startCreateButton.title = statusText;
+  startCreateButton.setAttribute("aria-label", canCreate
+    ? message("compress.createArchive")
+    : `${message("compress.createArchive")}: ${statusText}`);
+  addSourceButton.classList.toggle("primary-action", createSources.length === 0);
+  addSourceButton.classList.toggle("secondary-action", createSources.length > 0);
+  startCreateButton.classList.toggle("primary-action", canCreate);
+  startCreateButton.classList.toggle("secondary-action", !canCreate);
+  createPlanMeta.textContent = statusText;
+  createPlanMeta.classList.toggle("is-ready", canCreate);
+  createPlanMeta.classList.toggle("is-warning", unavailableReason !== null && unavailableReason !== "needsSources");
 }
 
 function formatPlanSummary(plan: CreatePlanResponse): string {
+  const hasWarnings = plan.warnings.length > 0;
   const warnings =
-    plan.warnings.length > 0
+    hasWarnings
       ? `<ul>${plan.warnings.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`
       : `<p>${escapeHtml(i18n.t("create.plan.noWarnings"))}</p>`;
 
@@ -3499,19 +3850,31 @@ function formatPlanSummary(plan: CreatePlanResponse): string {
     .map((entry) => `<li>${escapeHtml(entry)}</li>`)
     .join("");
 
+  const summaryText = i18n.t("create.plan.summary", {
+    count: plan.includedCount,
+    size: formatBytes(plan.totalBytes),
+    warnings: plan.warnings.length,
+  });
+
   return `
-    <div class="plan-grid">
-      <p><strong>${escapeHtml(i18n.t("create.plan.included"))}</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
-      <p><strong>${escapeHtml(i18n.t("create.plan.excluded"))}</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
-      <p><strong>${escapeHtml(i18n.t("create.plan.warnings"))}</strong> ${plan.warnings.length}</p>
+    <div class="plan-validation ${hasWarnings ? "has-warnings" : "is-ready"}">
+      <strong>${escapeHtml(summaryText)}</strong>
     </div>
-    <div class="plan-list">
-      <p>${escapeHtml(i18n.t("create.plan.includedSample"))}</p>
-      <ul>${sampleRows || `<li>${escapeHtml(i18n.t("create.plan.none"))}</li>`}</ul>
-    </div>
-    <div class="plan-warnings">
-      ${warnings}
-    </div>
+    <details class="plan-details" ${hasWarnings ? "open" : ""}>
+      <summary>${escapeHtml(i18n.t("create.plan.details"))}</summary>
+      <div class="plan-grid">
+        <p><strong>${escapeHtml(i18n.t("create.plan.included"))}</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
+        <p><strong>${escapeHtml(i18n.t("create.plan.excluded"))}</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
+        <p><strong>${escapeHtml(i18n.t("create.plan.warnings"))}</strong> ${plan.warnings.length}</p>
+      </div>
+      <div class="plan-list">
+        <p>${escapeHtml(i18n.t("create.plan.includedSample"))}</p>
+        <ul>${sampleRows || `<li>${escapeHtml(i18n.t("create.plan.none"))}</li>`}</ul>
+      </div>
+      <div class="plan-warnings">
+        ${warnings}
+      </div>
+    </details>
   `;
 }
 
@@ -3575,18 +3938,48 @@ function renderCreateSources() {
       if (!path) {
         return;
       }
-      createSources = createSources.filter((item) => item !== path);
-      renderCreateSources();
-      renderCompressBrowser();
-      queuePlanRun();
+      removeCreateSources([path]);
     });
   }
 
   setCreatePlanState(createPlanState, currentPlanError);
 }
 
+function clearCreateSources() {
+  createSources = [];
+  selectedCompressRows.clear();
+  focusedCompressRowPath = "";
+  compressSelectionAnchorPath = "";
+  currentPlan = null;
+  currentCompressFolder = "";
+  renderCreateSources();
+  renderCompressBrowser();
+  queuePlanRun();
+}
+
+function removeCreateSources(sourcePaths: string[]) {
+  const removals = new Set(sourcePaths.filter(Boolean));
+  if (removals.size === 0) {
+    return;
+  }
+  createSources = createSources.filter((item) => !removals.has(item));
+  selectedCompressRows.clear();
+  focusedCompressRowPath = "";
+  compressSelectionAnchorPath = "";
+  currentPlan = null;
+  if (!createSources.length) {
+    currentCompressFolder = "";
+  }
+  renderCreateSources();
+  renderCompressBrowser();
+  queuePlanRun();
+}
+
 function renderCompressSources() {
   if (createSources.length === 0) {
+    selectedCompressRows.clear();
+    focusedCompressRowPath = "";
+    compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
         <td colspan="4" class="compress-empty-cell">
@@ -3604,6 +3997,9 @@ function renderCompressSources() {
   }
 
   if (createPlanState === "loading" || !currentPlan) {
+    selectedCompressRows.clear();
+    focusedCompressRowPath = "";
+    compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
         <td colspan="4" class="empty">${escapeHtml(currentPlanError || i18n.t("create.plan.planning"))}</td>
@@ -3617,6 +4013,9 @@ function renderCompressSources() {
 
   const rows = visibleCompressRows();
   if (!rows.length) {
+    selectedCompressRows.clear();
+    focusedCompressRowPath = "";
+    compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
         <td colspan="4" class="empty">${escapeHtml(i18n.t("browse.folderEmpty"))}</td>
@@ -3626,6 +4025,17 @@ function renderCompressSources() {
       renderCompressSourceTree();
     }
     return;
+  }
+
+  const visibleSelectablePaths = new Set(rows
+    .filter((row) => row.rowType === "entry" || row.rowType === "folder")
+    .map((row) => row.path));
+  selectedCompressRows = new Set([...selectedCompressRows].filter((path) => visibleSelectablePaths.has(path)));
+  if (focusedCompressRowPath && !visibleSelectablePaths.has(focusedCompressRowPath)) {
+    focusedCompressRowPath = "";
+  }
+  if (compressSelectionAnchorPath && !visibleSelectablePaths.has(compressSelectionAnchorPath)) {
+    compressSelectionAnchorPath = focusedCompressRowPath || selectedCompressRows.values().next().value || "";
   }
 
   compressSourceBody.innerHTML = rows
@@ -3710,7 +4120,7 @@ function visibleCompressRows(): CompressPlanRow[] {
 function renderCompressPlanRow(row: CompressPlanRow): string {
   if (row.rowType === "parent") {
     return `
-      <tr class="folder-row parent-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}">
+      <tr class="folder-row parent-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}" aria-keyshortcuts="Enter ContextMenu Shift+F10">
         <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
         <td></td>
         <td></td>
@@ -3720,8 +4130,20 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
   }
 
   if (row.rowType === "folder") {
+    const selected = selectedCompressRows.has(row.path);
+    const focused = focusedCompressRowPath === row.path;
+    const sourcePath = sourcePathForCompressRow(row);
     return `
-      <tr class="folder-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}">
+      <tr
+        class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
+        data-compress-folder-row="${escapeHtml(row.path)}"
+        data-compress-path="${escapeHtml(row.path)}"
+        ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
+        tabindex="0"
+        aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}"
+        aria-selected="${selected ? "true" : "false"}"
+        aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
+      >
         <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
         <td>${row.entry?.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
         <td>${row.entry?.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
@@ -3730,14 +4152,47 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
     `;
   }
 
+  const selected = selectedCompressRows.has(row.path);
+  const focused = focusedCompressRowPath === row.path;
+  const sourcePath = sourcePathForCompressRow(row);
   return `
-    <tr data-compress-entry-row="${escapeHtml(row.path)}" tabindex="0">
+    <tr
+      class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
+      data-compress-entry-row="${escapeHtml(row.path)}"
+      data-compress-path="${escapeHtml(row.path)}"
+      ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
+      tabindex="0"
+      aria-selected="${selected ? "true" : "false"}"
+      aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
+    >
       <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
       <td>${row.entry.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
       <td>${row.entry.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
       <td>${escapeHtml(normalizeArchiveKindLabel(row.entry.kind))}</td>
     </tr>
   `;
+}
+
+function sourcePathForCompressRow(row: CompressPlanRow): string {
+  if (row.rowType === "parent") {
+    return "";
+  }
+  if (row.entry?.sourcePath && createSources.includes(row.entry.sourcePath)) {
+    return row.entry.sourcePath;
+  }
+
+  const matchingSources = new Set(
+    (currentPlan?.planEntries ?? [])
+      .filter((entry) => entryIsUnderFolder(entry.path, row.path))
+      .map((entry) => entry.sourcePath)
+      .filter((sourcePath) => createSources.includes(sourcePath)),
+  );
+  if (matchingSources.size === 1) {
+    return matchingSources.values().next().value ?? "";
+  }
+
+  const basenameMatch = createSources.find((sourcePath) => getPathBasename(sourcePath) === row.path);
+  return basenameMatch ?? "";
 }
 
 function renderCompressPlanNameCell(row: CompressPlanRow): string {
@@ -3754,6 +4209,7 @@ function renderCompressPlanNameCell(row: CompressPlanRow): string {
       ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
       <span class="sr-only">${escapeHtml(icon.label)}:</span>
       <span class="row-name">${escapeHtml(row.name)}</span>
+      ${row.rowType === "parent" ? "" : `<span class="source-stage-badge">${escapeHtml(message("compress.sourceBadge"))}</span>`}
     </span>
   `;
 }
@@ -3762,12 +4218,121 @@ function focusFirstCompressRow() {
   compressSourceBody.querySelector<HTMLTableRowElement>("tr[tabindex='0']")?.focus();
 }
 
+function getVisibleCompressSelectablePaths(): string[] {
+  return visibleCompressRows()
+    .filter((row) => row.rowType === "entry" || row.rowType === "folder")
+    .map((row) => row.path);
+}
+
+function getCompressRows(): HTMLTableRowElement[] {
+  return Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>(
+    "tr[data-compress-folder-row], tr[data-compress-entry-row]",
+  ));
+}
+
+function getCompressSelectableRows(): HTMLTableRowElement[] {
+  return Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>("tr[data-compress-path]"));
+}
+
+function selectedCompressSourcePaths(): string[] {
+  return Array.from(new Set(getCompressSelectableRows()
+    .filter((row) => selectedCompressRows.has(row.dataset.compressPath ?? ""))
+    .map((row) => row.dataset.compressSourcePath ?? "")
+    .filter(Boolean)));
+}
+
+function sourcePathsForCompressMenu(rowSourcePath: string): string[] {
+  const selectedSourcePaths = selectedCompressSourcePaths();
+  if (!rowSourcePath) {
+    return selectedSourcePaths;
+  }
+  return selectedSourcePaths.includes(rowSourcePath) && selectedSourcePaths.length > 1
+    ? selectedSourcePaths
+    : [rowSourcePath];
+}
+
+function updateCompressSelectionByIntent(
+  rowPath: string,
+  options?: { shift?: boolean; ctrl?: boolean; meta?: boolean },
+) {
+  const intentResult = applyRowSelectionIntent({
+    path: rowPath,
+    visiblePaths: getVisibleCompressSelectablePaths(),
+    currentSelection: selectedCompressRows,
+    anchorPath: compressSelectionAnchorPath,
+    shiftKey: Boolean(options?.shift),
+    ctrlKey: Boolean(options?.ctrl),
+    metaKey: Boolean(options?.meta),
+  });
+
+  selectedCompressRows = intentResult.selectedPaths;
+  compressSelectionAnchorPath = intentResult.anchorPath;
+  focusedCompressRowPath = rowPath;
+}
+
+function syncCompressSelectionUi() {
+  for (const row of getCompressSelectableRows()) {
+    const rowPath = row.dataset.compressPath ?? "";
+    const selected = selectedCompressRows.has(rowPath);
+    const focused = focusedCompressRowPath === rowPath;
+    row.classList.toggle("is-selected", selected);
+    row.classList.toggle("is-focused-row", focused);
+    row.setAttribute("aria-selected", String(selected));
+  }
+}
+
+function focusCompressRow(row: HTMLTableRowElement | null) {
+  if (!row) {
+    return;
+  }
+  row.focus();
+  focusedCompressRowPath = row.dataset.compressPath ?? "";
+  syncCompressSelectionUi();
+}
+
+function focusRelativeCompressRow(currentRow: HTMLTableRowElement, direction: 1 | -1) {
+  const rows = getCompressRows();
+  const currentIndex = rows.indexOf(currentRow);
+  if (currentIndex < 0) {
+    return;
+  }
+
+  const nextIndex = Math.max(0, Math.min(rows.length - 1, currentIndex + direction));
+  focusCompressRow(rows[nextIndex]);
+}
+
+function toggleCompressRowSelection(row: HTMLTableRowElement) {
+  const rowPath = row.dataset.compressPath;
+  if (!rowPath) {
+    return;
+  }
+
+  if (selectedCompressRows.has(rowPath)) {
+    selectedCompressRows.delete(rowPath);
+  } else {
+    selectedCompressRows.add(rowPath);
+  }
+  focusedCompressRowPath = rowPath;
+  compressSelectionAnchorPath = rowPath;
+  syncCompressSelectionUi();
+}
+
+function activateCompressRow(row: HTMLTableRowElement) {
+  const folderPath = row.dataset.compressFolderRow;
+  if (folderPath !== undefined) {
+    navigateToCompressFolder(folderPath);
+  }
+}
+
 function renderCompressBrowser() {
   if (currentPlan && !compressFolderExists(currentPlan.planEntries, currentCompressFolder)) {
     currentCompressFolder = "";
   }
-  renderCompressSourceTree();
-  renderCompressSources();
+  if (workspaceMode === "compress") {
+    renderCompressSourceTree();
+    renderCompressSources();
+  }
+  setCreatePlanState(createPlanState, currentPlanError);
 }
 
 function renderJobStatusBar() {
@@ -3781,6 +4346,7 @@ function renderJobs() {
     formatBytes,
     formatJobKind,
     canRetryJobWithPassword,
+    getOutputActions: (jobId) => jobOutputActions.get(jobId) ?? [],
   });
   renderJobStatusBar();
   renderQuickProgress();
@@ -3830,6 +4396,8 @@ const EXTRACT_DESTINATION_HISTORY_KEY = "zmanager.extractDestinationHistory";
 const EXTRACT_DESTINATION_HISTORY_MAX = 10;
 const CREATE_DESTINATION_HISTORY_KEY = "zmanager.createDestinationHistory";
 const CREATE_DESTINATION_HISTORY_MAX = 10;
+const RECENT_ARCHIVE_HISTORY_KEY = "zmanager.recentArchiveHistory";
+const RECENT_ARCHIVE_HISTORY_MAX = 8;
 
 type ExtractPathMode = "full" | "current" | "none";
 
@@ -3909,10 +4477,36 @@ function renderCreateDestinationHistory() {
   createDestinationHistoryList.innerHTML = createDestinationHistory
     .map((entry) => `<option value="${escapeHtml(entry)}"></option>`)
     .join("");
+  createDestinationRecentSelect.disabled = createDestinationHistory.length === 0;
+  createDestinationRecentSelect.innerHTML = `
+    <option value="">${escapeHtml(message("create.destination.recent"))}</option>
+    ${createDestinationHistory
+      .map((entry) => `<option value="${escapeHtml(entry)}">${escapeHtml(middleTruncateDetailValue(entry, 54))}</option>`)
+      .join("")}
+  `;
 }
 
 function loadCreateDestinationHistory() {
   createDestinationHistory = normalizeDestinationHistory(loadStringListFromStorage(CREATE_DESTINATION_HISTORY_KEY));
+}
+
+function setRecentArchiveHistory(entries: string[]): string[] {
+  recentArchiveHistory = normalizeDestinationHistory(entries).slice(0, RECENT_ARCHIVE_HISTORY_MAX);
+  saveStringListToStorage(RECENT_ARCHIVE_HISTORY_KEY, recentArchiveHistory);
+  return recentArchiveHistory;
+}
+
+function recordRecentArchiveHistory(archivePath: string): void {
+  const normalized = archivePath.trim();
+  if (!normalized) {
+    return;
+  }
+  const trimmed = recentArchiveHistory.filter((entry) => entry !== normalized);
+  setRecentArchiveHistory([normalized, ...trimmed]);
+}
+
+function loadRecentArchiveHistory() {
+  recentArchiveHistory = normalizeDestinationHistory(loadStringListFromStorage(RECENT_ARCHIVE_HISTORY_KEY));
 }
 
 function getExtractPathMode(): ExtractPathMode {
@@ -3946,6 +4540,72 @@ function resolveExtractDestination(baseDestination: string): string {
   }
   const subfolder = extractSubfolderInput.value.trim();
   return subfolder ? joinNativePath(baseDestination.trim(), subfolder) : baseDestination.trim();
+}
+
+function isExtractDestinationValid(): boolean {
+  return extractDestinationInput.value.trim().length > 0;
+}
+
+function extractDialogMessageForMode(mode: ExtractMode): string {
+  const selectedCount = selectedEntries.size;
+  return mode === "selection"
+    ? message("extract.selectedMessage", {
+      count: selectedCount,
+      entryLabel: message(selectedCount === 1 ? "extract.entrySingular" : "extract.entryPlural"),
+    })
+    : message("extract.archiveMessage");
+}
+
+function syncExtractDialogState() {
+  const canExtract = isExtractDestinationValid();
+  extractStartButton.disabled = !canExtract;
+  extractStartButton.classList.toggle("primary-action", canExtract);
+  extractStartButton.setAttribute("aria-disabled", String(!canExtract));
+  if (canExtract && extractDialogMessage.textContent === message("extract.chooseDestinationFirst")) {
+    extractDialogMessage.textContent = extractDialogMessageForMode(activeExtractMode);
+  }
+}
+
+function requestExtractPasswordInDialog(commandCode: string) {
+  extractDialogMessage.textContent = getArchivePasswordPrompt(commandCode);
+  extractPasswordOptions.open = true;
+  browsePasswordInput.value = "";
+  browsePasswordInput.type = "password";
+  browseShowPasswordInput.checked = false;
+  syncExtractDialogState();
+  browsePasswordInput.focus();
+}
+
+function handleExtractDialogEnter(event: KeyboardEvent) {
+  if (
+    event.key !== "Enter" ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  ) {
+    return;
+  }
+
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (
+    target?.closest("button, a, summary") ||
+    target instanceof HTMLSelectElement ||
+    !(target instanceof HTMLInputElement)
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (!isExtractDestinationValid()) {
+    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
+    syncExtractDialogState();
+    extractDestinationInput.focus();
+    return;
+  }
+
+  void startExtract(activeExtractMode);
 }
 
 function resolveExtractStripComponents(
@@ -4118,10 +4778,15 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
         "select:not(:disabled)",
         "textarea:not(:disabled)",
         "a[href]",
+        "summary",
         "[tabindex]:not([tabindex='-1'])",
       ].join(","),
     ),
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+  ).filter((element) => isVisibleElement(element) || element === document.activeElement);
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  return Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
 }
 
 function getOpenModal(): HTMLElement | null {
@@ -4133,11 +4798,16 @@ function getOpenModal(): HTMLElement | null {
   return null;
 }
 
+function getDialogSurface(dialog: HTMLElement): HTMLElement {
+  return dialog.querySelector<HTMLElement>("[role='dialog']") ?? dialog;
+}
+
 function trapModalFocus(event: KeyboardEvent, dialog: HTMLElement) {
-  const focusable = getFocusableElements(dialog);
+  const surface = getDialogSurface(dialog);
+  const focusable = getFocusableElements(surface);
   if (!focusable.length) {
     event.preventDefault();
-    dialog.focus();
+    surface.focus();
     return;
   }
 
@@ -4157,20 +4827,136 @@ function trapModalFocus(event: KeyboardEvent, dialog: HTMLElement) {
   }
 }
 
-function openModal(dialog: HTMLElement, focusSelector = "button, input, select") {
-  focusedBeforeDialog = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
+  if (dialog === extractDialog) {
+    const row = focusedEntryPath
+      ? tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(focusedEntryPath)}"]`)
+      : null;
+    return row ?? extractToolbarButton;
+  }
+
+  if (dialog === infoDialog) {
+    const row = focusedEntryPath
+      ? tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(focusedEntryPath)}"]`)
+      : null;
+    return row ?? infoToolbarButton;
+  }
+
+  if (dialog === preferencesDialog) {
+    return preferencesToolbarButton;
+  }
+
+  return document.querySelector<HTMLButtonElement>("#toolbar-about") ?? null;
+}
+
+function resolveDialogReturnFocus(dialog: HTMLElement): HTMLElement | null {
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLElement &&
+    !dialog.contains(active) &&
+    !contextMenu.contains(active) &&
+    isVisibleElement(active)
+  ) {
+    return active;
+  }
+  return fallbackFocusForDialog(dialog);
+}
+
+function openModal(dialog: HTMLElement, focusSelector = "button, input, select", returnFocusOverride: HTMLElement | null = null) {
+  focusedBeforeDialog = returnFocusOverride ?? resolveDialogReturnFocus(dialog);
   dialog.hidden = false;
-  const focusTarget = dialog.querySelector<HTMLElement>(focusSelector);
-  focusTarget?.focus();
+  const surface = getDialogSurface(dialog);
+  const focusTarget = surface.querySelector<HTMLElement>(focusSelector)
+    ?? getFocusableElements(surface)[0]
+    ?? surface;
+  focusTarget.focus();
+  focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 function closeModal(dialog: HTMLElement) {
   dialog.hidden = true;
   if (dialog === extractDialog) {
     browsePasswordInput.value = "";
+    browsePasswordInput.type = "password";
+    browseShowPasswordInput.checked = false;
   }
-  focusedBeforeDialog?.focus();
+  const restoreTarget = focusedBeforeDialog && isVisibleElement(focusedBeforeDialog)
+    ? focusedBeforeDialog
+    : fallbackFocusForDialog(dialog);
+  restoreTarget?.focus();
   focusedBeforeDialog = null;
+}
+
+function isTextEntryElement(element: HTMLElement): boolean {
+  if (element instanceof HTMLTextAreaElement || element.isContentEditable) {
+    return true;
+  }
+  if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+    return true;
+  }
+  return false;
+}
+
+function dialogButtonFromSelector(dialog: HTMLElement, selectorAttribute: "dialogDefault" | "dialogCancel"): HTMLButtonElement | null {
+  const surface = getDialogSurface(dialog);
+  const selector = surface.dataset[selectorAttribute];
+  if (selector) {
+    return surface.querySelector<HTMLButtonElement>(selector);
+  }
+
+  const dataAttribute = selectorAttribute === "dialogDefault"
+    ? "[data-dialog-default-button]"
+    : "[data-dialog-cancel-button]";
+  return surface.querySelector<HTMLButtonElement>(dataAttribute);
+}
+
+function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
+  }
+
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  const defaultSafeTextInput = dialog === extractDialog &&
+    target instanceof HTMLInputElement &&
+    !["button", "checkbox", "radio", "reset", "submit"].includes(target.type);
+  if (target?.closest("button, a, summary") || (target && isTextEntryElement(target) && !defaultSafeTextInput)) {
+    return false;
+  }
+
+  const button = dialogButtonFromSelector(dialog, "dialogDefault");
+  if (!button || button.disabled || !isVisibleElement(button)) {
+    return false;
+  }
+
+  event.preventDefault();
+  button.click();
+  return true;
+}
+
+function cancelDialog(event: KeyboardEvent, dialog: HTMLElement): boolean {
+  const button = dialogButtonFromSelector(dialog, "dialogCancel");
+  event.preventDefault();
+  if (button && !button.disabled && isVisibleElement(button)) {
+    button.click();
+  } else {
+    closeModal(dialog);
+  }
+  return true;
+}
+
+function keepFocusInsideOpenModal(event: FocusEvent) {
+  const openDialogElement = getOpenModal();
+  if (!openDialogElement || !(event.target instanceof HTMLElement)) {
+    return;
+  }
+
+  if (openDialogElement.contains(event.target)) {
+    return;
+  }
+
+  const surface = getDialogSurface(openDialogElement);
+  const focusTarget = getFocusableElements(surface)[0] ?? surface;
+  focusTarget.focus();
 }
 
 function clearCreatePasswordFields() {
@@ -4221,22 +5007,58 @@ function currentDropSurface(): DropIntentSurface {
   return dropSurfaceForWorkspace({ createDialogOpen: false, mode: workspaceMode });
 }
 
-function setDropOverlay(
-  active: boolean,
-  title = message("drop.title"),
-  dropMessage = message("drop.defaultMessage"),
-) {
-  workspaceElement.dataset.dropState = active ? "active" : "idle";
-  dropOverlay.setAttribute("aria-hidden", active ? "false" : "true");
-  dropOverlayTitle.textContent = title;
-  dropOverlayMessage.textContent = dropMessage;
+type DropOverlayMode = "idle" | "active" | "choosing";
+type DropOverlayTarget = "compress" | "extract" | "choose" | "blocked" | "unknown";
+
+type DropOverlayCopy = {
+  title: string;
+  message: string;
+  support?: string;
+  target: DropOverlayTarget;
+  showActions?: boolean;
+};
+
+function setDropOverlay(mode: DropOverlayMode, copy?: DropOverlayCopy) {
+  workspaceElement.dataset.dropState = mode;
+  if (copy?.target) {
+    workspaceElement.dataset.dropTarget = copy.target;
+  } else {
+    delete workspaceElement.dataset.dropTarget;
+  }
+
+  const visible = mode !== "idle";
+  dropOverlay.setAttribute("aria-hidden", visible ? "false" : "true");
+  dropOverlayTitle.textContent = copy?.title ?? message("drop.title");
+  dropOverlayMessage.textContent = copy?.message ?? message("drop.defaultMessage");
+  dropOverlaySupport.textContent = copy?.support ?? "";
+  dropOverlaySupport.hidden = !copy?.support;
+  dropOverlayActions.hidden = !copy?.showActions;
+  dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.setAttribute(
+    "role",
+    copy?.showActions ? "dialog" : "status",
+  );
+  if (copy?.showActions) {
+    dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.setAttribute("aria-modal", "false");
+  } else {
+    dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.removeAttribute("aria-modal");
+  }
+
+  if (!visible) {
+    pendingDropChoice = null;
+  }
 }
 
-function dropCopyForSurface(surface: DropIntentSurface): { title: string; message: string } {
+function clearDropOverlay() {
+  setDropOverlay("idle");
+}
+
+function dropCopyForSurface(surface: DropIntentSurface): DropOverlayCopy {
   if (surface === "create") {
     return {
       title: message("drop.addSources.title"),
-      message: message("drop.addSources.message"),
+      message: message("drop.addSources.copyMessage"),
+      support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+      target: "compress",
     };
   }
 
@@ -4244,18 +5066,78 @@ function dropCopyForSurface(surface: DropIntentSurface): { title: string; messag
     return {
       title: message("drop.openArchive.title"),
       message: message("drop.openArchive.message"),
+      support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+      target: "extract",
     };
   }
 
   return {
     title: message("drop.chooseMode.title"),
     message: message("drop.chooseMode.message"),
+    support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+    target: "choose",
   };
 }
 
+function dropCopyForDecision(decision: DropIntentDecision): DropOverlayCopy {
+  if (hasActiveJob() || createSubmissionInFlight) {
+    return {
+      title: message("drop.blocked.title"),
+      message: message("drop.blocked.message"),
+      target: "blocked",
+    };
+  }
+
+  switch (decision.kind) {
+    case "openArchive":
+      return {
+        title: message("drop.openArchive.title"),
+        message: message("drop.openArchive.actionMessage", { archiveName: getPathBasename(decision.archivePath) || decision.archivePath }),
+        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        target: "extract",
+      };
+    case "addCreateSources":
+      return {
+        title: message("drop.addSources.title"),
+        message: message("drop.addSources.copyMessage"),
+        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        target: "compress",
+      };
+    case "askAction":
+      return {
+        title: message("drop.chooseMode.title"),
+        message: message("drop.chooseMode.mixedMessage", {
+          archiveCount: decision.archivePaths.length,
+          sourceCount: decision.sourcePaths.length,
+        }),
+        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        target: "choose",
+        showActions: true,
+      };
+    case "rejectUnsupportedDrop":
+      return {
+        title: message("drop.blocked.title"),
+        message: message(decision.reason === "emptyDrop" ? "drop.empty" : "drop.browseRequiresArchive"),
+        target: "blocked",
+      };
+  }
+}
+
 function setDropOverlayForSurface(surface: DropIntentSurface) {
-  const copy = dropCopyForSurface(surface);
-  setDropOverlay(true, copy.title, copy.message);
+  setDropOverlay("active", dropCopyForSurface(surface));
+}
+
+function setDropOverlayForPaths(paths: readonly DroppedPath[]) {
+  const filteredPaths = paths
+    .map((path) => (typeof path === "string" ? path.trim() : path.path.trim()))
+    .filter(Boolean);
+  if (filteredPaths.length === 0) {
+    setDropOverlayForSurface(currentDropSurface());
+    return;
+  }
+
+  const decision = classifyDropIntent(paths, currentDropSurface());
+  setDropOverlay("active", dropCopyForDecision(decision));
 }
 
 function rejectDrop(reason: string) {
@@ -4285,16 +5167,19 @@ function addDroppedSources(paths: string[]) {
   });
 }
 
-function handleDroppedPaths(paths: string[]) {
-  setDropOverlay(false);
-  const trimmedPaths = paths.map((path) => path.trim()).filter(Boolean);
-  if (hasActiveJob() || createSubmissionInFlight) {
-    setOperationalMessage("drop.finishCurrentJob");
+function handleDropDecision(decision: DropIntentDecision, chosenAction?: "openArchive" | "addToCompress") {
+  if (chosenAction === "openArchive" && "archivePaths" in decision && decision.archivePaths.length > 0) {
+    void openArchiveFromPath(decision.archivePaths[0]);
+    clearDropOverlay();
     return;
   }
 
-  const surface = currentDropSurface();
-  const decision = classifyDropIntent(trimmedPaths, surface);
+  if (chosenAction === "addToCompress" && "sourcePaths" in decision && "archivePaths" in decision) {
+    addDroppedSources([...decision.archivePaths, ...decision.sourcePaths]);
+    clearDropOverlay();
+    return;
+  }
+
   switch (decision.kind) {
     case "openArchive":
       if (decision.extraArchivePaths?.length) {
@@ -4303,41 +5188,79 @@ function handleDroppedPaths(paths: string[]) {
           count: decision.extraArchivePaths.length,
         });
       }
-      void loadArchive({ archivePath: decision.archivePath });
+      void openArchiveFromPath(decision.archivePath);
+      clearDropOverlay();
       break;
     case "addCreateSources":
       addDroppedSources(decision.sourcePaths);
+      clearDropOverlay();
       break;
-    case "askAction": {
-      const openArchive = window.confirm(
-        "This drop includes archives and regular files. Open the first archive instead of creating a new archive?",
-      );
-      if (openArchive) {
-        void loadArchive({ archivePath: decision.archivePaths[0] });
-      } else {
-        addDroppedSources([...decision.archivePaths, ...decision.sourcePaths]);
-      }
+    case "askAction":
+      pendingDropChoice = decision;
+      setDropOverlay("choosing", dropCopyForDecision(decision));
+      dropOpenArchiveButton.focus();
       break;
-    }
     case "rejectUnsupportedDrop":
       rejectDrop(decision.reason);
+      clearDropOverlay();
       break;
   }
 }
 
+function handleDroppedPaths(paths: readonly DroppedPath[]) {
+  const trimmedPaths = paths
+    .map((path) => (typeof path === "string" ? path.trim() : path.path.trim()))
+    .filter(Boolean);
+  if (hasActiveJob() || createSubmissionInFlight) {
+    setOperationalMessage("drop.finishCurrentJob");
+    setDropOverlay("active", {
+      title: message("drop.blocked.title"),
+      message: message("drop.blocked.message"),
+      target: "blocked",
+    });
+    return;
+  }
+
+  const surface = currentDropSurface();
+  const decision = classifyDropIntent(trimmedPaths, surface);
+  handleDropDecision(decision);
+}
+
+function droppedPathsFromDataTransfer(dataTransfer: DataTransfer | null): DroppedPath[] {
+  const paths: DroppedPath[] = [];
+  for (const file of Array.from(dataTransfer?.files ?? [])) {
+    const fileWithPath = file as File & { path?: string };
+    const path = fileWithPath.path?.trim() || file.webkitRelativePath?.trim() || file.name.trim();
+    if (path) {
+      paths.push({ path, kind: "unknown" });
+    }
+  }
+  return paths;
+}
+
+function droppedPathsFromDesktopEvent(event: DesktopFileDropEvent): DroppedPath[] {
+  const eventWithPaths = event as DesktopFileDropEvent & { paths?: string[] };
+  return Array.isArray(eventWithPaths.paths) ? eventWithPaths.paths : [];
+}
+
 function handleTauriDropEvent(event: DesktopFileDropEvent) {
   if (event.type === "enter") {
-    setDropOverlayForSurface(currentDropSurface());
+    const paths = droppedPathsFromDesktopEvent(event);
+    if (paths.length) {
+      setDropOverlayForPaths(paths);
+    } else {
+      setDropOverlayForSurface(currentDropSurface());
+    }
     return;
   }
 
   if (event.type === "drop") {
-    handleDroppedPaths(event.paths);
+    handleDroppedPaths(droppedPathsFromDesktopEvent(event));
     return;
   }
 
   if (event.type === "leave") {
-    setDropOverlay(false);
+    clearDropOverlay();
   }
 }
 
@@ -4353,18 +5276,13 @@ async function bindTauriFileDrop() {
   }
 }
 
-function browserDroppedFilePath(file: File): string {
-  const fileWithPath = file as File & { path?: string };
-  return fileWithPath.path?.trim() || file.webkitRelativePath?.trim() || file.name;
-}
-
 function bindBrowserFileDropFallback() {
   appRoot.addEventListener("dragenter", (event) => {
     if (isDesktopRuntime()) {
       return;
     }
     event.preventDefault();
-    setDropOverlayForSurface(currentDropSurface());
+    setDropOverlayForPaths(droppedPathsFromDataTransfer(event.dataTransfer));
   });
 
   appRoot.addEventListener("dragover", (event) => {
@@ -4372,14 +5290,14 @@ function bindBrowserFileDropFallback() {
       return;
     }
     event.preventDefault();
-    setDropOverlayForSurface(currentDropSurface());
+    setDropOverlayForPaths(droppedPathsFromDataTransfer(event.dataTransfer));
   });
 
   appRoot.addEventListener("dragleave", (event) => {
     if (isDesktopRuntime() || (event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget))) {
       return;
     }
-    setDropOverlay(false);
+    clearDropOverlay();
   });
 
   appRoot.addEventListener("drop", (event) => {
@@ -4387,11 +5305,22 @@ function bindBrowserFileDropFallback() {
       return;
     }
     event.preventDefault();
-    const paths = Array.from(event.dataTransfer?.files ?? [])
-      .map(browserDroppedFilePath)
-      .filter(Boolean);
-    handleDroppedPaths(paths);
+    handleDroppedPaths(droppedPathsFromDataTransfer(event.dataTransfer));
   });
+}
+
+function activatePendingDropChoice(action: "openArchive" | "addToCompress" | "cancel") {
+  if (action === "cancel") {
+    clearDropOverlay();
+    return;
+  }
+
+  if (!pendingDropChoice) {
+    clearDropOverlay();
+    return;
+  }
+
+  handleDropDecision(pendingDropChoice, action);
 }
 
 function navigateToFolder(folderPath: string, pushHistory = true) {
@@ -4410,6 +5339,9 @@ function navigateToFolder(folderPath: string, pushHistory = true) {
   selectionAnchorPath = "";
   searchInput.value = "";
   renderBrowse();
+  if (currentArchivePath) {
+    messageElement.textContent = i18n.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+  }
   focusFirstVisibleRow();
 }
 
@@ -4424,6 +5356,9 @@ function navigateBack() {
   focusedEntryPath = "";
   selectionAnchorPath = "";
   renderBrowse();
+  if (currentArchivePath) {
+    messageElement.textContent = i18n.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+  }
   focusFirstVisibleRow();
 }
 
@@ -4467,7 +5402,9 @@ function syncVisibleSelectionUi() {
   for (const row of tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
     const path = row.dataset.entryPath ?? "";
     const selected = selectedEntries.has(path);
+    const focused = focusedEntryPath === path;
     row.classList.toggle("is-selected", selected);
+    row.classList.toggle("is-focused-row", focused);
     row.setAttribute("aria-selected", String(selected));
     const checkbox = row.querySelector<HTMLInputElement>("input[type='checkbox']");
     if (checkbox) {
@@ -4530,6 +5467,7 @@ function focusTableRow(row: HTMLTableRowElement | null) {
   }
   row.focus();
   focusedEntryPath = row.dataset.entryPath ?? "";
+  syncVisibleSelectionUi();
 }
 
 function focusFirstVisibleRow() {
@@ -4578,6 +5516,7 @@ function toggleTableRowSelection(row: HTMLTableRowElement) {
     selectedEntries.add(entryPath);
   }
   focusedEntryPath = entryPath;
+  selectionAnchorPath = entryPath;
   renderBrowse();
   focusTableRow(tableBody.querySelector<HTMLTableRowElement>(`tr[data-entry-path="${CSS.escape(entryPath)}"]`));
 }
@@ -4593,7 +5532,16 @@ function clearBrowseSelection() {
   renderBrowse();
 }
 
-function showContextMenu(x: number, y: number, html: string) {
+function contextMenuItems(): HTMLElement[] {
+  return Array.from(
+    contextMenu.querySelectorAll<HTMLElement>(
+      "button:not(:disabled), [role='menuitem']:not(:disabled):not([aria-disabled='true']), [role='menuitemcheckbox']:not(:disabled):not([aria-disabled='true'])",
+    ),
+  ).filter(isVisibleElement);
+}
+
+function showContextMenu(x: number, y: number, html: string, returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null) {
+  contextMenuReturnFocus = returnFocus;
   contextMenu.innerHTML = html;
   contextMenu.hidden = false;
   contextMenu.style.left = `${x}px`;
@@ -4603,6 +5551,7 @@ function showContextMenu(x: number, y: number, html: string) {
   const clampedY = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4));
   contextMenu.style.left = `${clampedX}px`;
   contextMenu.style.top = `${clampedY}px`;
+  contextMenuItems()[0]?.focus();
 }
 
 function tableColumnById(columnId: ArchiveTableColumnId): ArchiveTableColumn | undefined {
@@ -4796,18 +5745,47 @@ function selectFolderEntries(folderPath: string) {
 function showStartupContextMenu(x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = "";
+  const canPastePath = Boolean(navigator.clipboard?.readText);
+  const pastePath = canPastePath
+    ? `<button type="button" role="menuitem" data-context-action="paste-archive-path"><span class="context-menu-label">${escapeHtml(message("command.pastePath"))}</span></button>`
+    : "";
+  const recentRows = recentArchiveHistory.length
+    ? `
+      <div class="context-menu-separator" role="separator"></div>
+      <div class="context-menu-caption">${escapeHtml(message("command.openRecent"))}</div>
+      ${recentArchiveHistory.slice(0, 4).map((archivePath) => `
+        <button type="button" role="menuitem" data-context-action="open-recent-archive" data-archive-path="${escapeHtml(archivePath)}">
+          <span class="context-menu-label">${escapeHtml(middleTruncateDetailValue(archivePath, 46))}</span>
+        </button>
+      `).join("")}
+    `
+    : "";
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${escapeHtml(i18n.t("browse.emptyOpenAction"))}</span></button>
+    ${pastePath}
+    ${recentRows}
   `);
 }
 
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
   contextEntryPath = entryPath;
   contextSourcePath = "";
+  const selectedPaths = getSelectedEntryPaths();
+  if (selectedPaths.length > 1) {
+    showContextMenu(x, y, `
+      <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("extract.selectedAction"))}</span></button>
+      <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
+      <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
+      <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
+    `);
+    return;
+  }
+
   showContextMenu(x, y, `
     <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="open-inside" ${entryPath ? "" : "disabled"}><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="extract-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+    ${entryPath ? `<button type="button" role="menuitem" data-context-action="open-inside"><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>` : ""}
+    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
     <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
     <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
   `);
@@ -4825,14 +5803,26 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   const entry = getEntryByPath(entryPath);
   const canOpenInside = entry?.kind === "directory";
   const hasSingleSelection = getSelectedEntryPaths().length === 1;
-  showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="open-inside" ${!canOpenInside || !hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="open-outside" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.openOutside"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="view-entry" ${!hasSingleSelection ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.view"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="extract" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+  const optionalOpenOutside = hasSingleSelection && entry?.kind !== "directory"
+    ? `<button type="button" role="menuitem" data-context-action="open-outside"><span class="context-menu-label">${escapeHtml(message("command.openOutside"))}</span></button>`
+    : "";
+  const singleSelectionMenu = `
+    <button type="button" role="menuitem" data-context-action="open-entry"><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
+    ${canOpenInside ? `<button type="button" role="menuitem" data-context-action="open-inside"><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>` : ""}
+    ${optionalOpenOutside}
+    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
+  `;
+  const multiSelectionMenu = `
+    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("extract.selectedAction"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
     <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
     <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
+  `;
+  showContextMenu(x, y, `
+    ${hasSingleSelection ? singleSelectionMenu : multiSelectionMenu}
     <div class="context-menu-separator" role="separator"></div>
     <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">${escapeHtml(message("command.selectByType"))}</span></button>
     <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.deselectByType"))}</span></button>
@@ -4850,6 +5840,13 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
     : -1;
   const selectedColumnMenu = selectedColumn ? `
     <div class="context-menu-caption">${escapeHtml(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, i18n) }))}</div>
+    <button type="button" role="menuitem" data-context-action="sort-ascending" data-column-id="${escapeHtml(selectedColumn.id)}">
+      <span class="context-menu-label">${escapeHtml(message("command.sortAscending"))}</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="sort-descending" data-column-id="${escapeHtml(selectedColumn.id)}">
+      <span class="context-menu-label">${escapeHtml(message("command.sortDescending"))}</span>
+    </button>
+    <div class="context-menu-separator" role="separator"></div>
     <button
       type="button"
       role="menuitem"
@@ -4902,12 +5899,42 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
   showContextMenu(
     x,
     y,
-    `${selectedColumnMenu}${menuRows}
+    `${selectedColumnMenu}
+      <button type="button" role="menuitem" data-context-action="reset-columns"><span class="context-menu-label">${escapeHtml(message("command.resetColumns"))}</span></button>
       <div class="context-menu-separator" role="separator"></div>
-      <button type="button" role="menuitem" data-context-action="reset-columns">${escapeHtml(message("command.resetColumns"))}</button>
+      <div class="context-menu-caption">${escapeHtml(message("command.chooseColumns"))}</div>${menuRows}
     `,
   );
 }
+
+function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: number) {
+  const rowPath = row.dataset.compressPath ?? "";
+  const folderPath = row.dataset.compressFolderRow;
+  const sourcePath = row.dataset.compressSourcePath ?? (createSources.includes(rowPath) ? rowPath : "");
+  const removableSourcePaths = sourcePathsForCompressMenu(sourcePath);
+  const removeLabel = removableSourcePaths.length > 1
+    ? message("command.removeSelectedSources", { count: removableSourcePaths.length })
+    : message("command.removeSource");
+  contextEntryPath = "";
+  contextSourcePath = sourcePath;
+
+  showContextMenu(x, y, `
+    <button type="button" role="menuitem" data-context-action="compress-open-folder" data-folder-path="${escapeHtml(folderPath ?? "")}" ${folderPath === undefined ? "disabled" : ""}>
+      <span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="reveal-source" ${sourcePath ? "" : "disabled"}>
+      <span class="context-menu-label">${escapeHtml(message("command.revealInFileManager"))}</span>
+    </button>
+    <div class="context-menu-separator" role="separator"></div>
+    <button type="button" role="menuitem" data-context-action="remove-source" ${removableSourcePaths.length ? "" : "disabled"}>
+      <span class="context-menu-label">${escapeHtml(removeLabel)}</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="clear-sources" ${createSources.length ? "" : "disabled"}>
+      <span class="context-menu-label">${escapeHtml(message("command.clearAllSources"))}</span>
+    </button>
+  `);
+}
+
 function showSourceContextMenu(sourcePath: string, x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = sourcePath;
@@ -4930,10 +5957,21 @@ function showAddSourcesMenu(anchor: HTMLElement) {
 }
 
 function hideContextMenu() {
+  const restoreTarget = contextMenuReturnFocus;
+  const active = document.activeElement;
+  const shouldRestoreFocus = active instanceof HTMLElement && contextMenu.contains(active);
   contextMenu.hidden = true;
   contextMenu.innerHTML = "";
   contextEntryPath = "";
   contextSourcePath = "";
+  contextMenuReturnFocus = null;
+  if (
+    restoreTarget &&
+    shouldRestoreFocus &&
+    isVisibleElement(restoreTarget)
+  ) {
+    restoreTarget.focus();
+  }
 }
 
 function showArchiveInfo() {
@@ -4944,22 +5982,29 @@ function showArchiveInfo() {
   const formattedTotalSize = knownTotalSize === null ? null : formatBytes(knownTotalSize);
   const packedSize = sumKnownBytes(browseEntries, (entry) => entry.compressedSize);
 
-  const rows = [
-    addDetailMessageRow("detail.archiveName", getArchiveName(currentArchivePath, APP_TITLE)),
-    addDetailMessageRow("detail.path", currentArchivePath),
-    addDetailMessageRow("detail.format", formatArchiveTypeFromPath(currentArchivePath)),
-    addDetailMessageRow("detail.entries", String(currentArchiveEntryCount)),
-    addDetailMessageRow("detail.totalUnpackedSize", formattedTotalSize),
-    addDetailMessageRow("detail.packedSize", packedSize === null ? null : formatBytes(packedSize)),
-    addDetailMessageRow("detail.lastTestStatus", formatLastTestStatusForCurrentArchive()),
-  ].filter(Boolean).join("");
+  const rows: DetailRow[] = [
+    { label: message("detail.archiveName"), value: getArchiveName(currentArchivePath, APP_TITLE) },
+    { label: message("detail.path"), value: currentArchivePath, mode: "middle" },
+    { label: message("detail.format"), value: formatArchiveTypeFromPath(currentArchivePath) },
+    { label: message("detail.entries"), value: String(currentArchiveEntryCount) },
+    { label: message("detail.totalUnpackedSize"), value: formattedTotalSize },
+    { label: message("detail.packedSize"), value: packedSize === null ? null : formatBytes(packedSize) },
+    { label: message("detail.lastTestStatus"), value: formatLastTestStatusForCurrentArchive() },
+  ];
+  setInfoActions([
+    { label: message("info.copyPath"), copyValue: currentArchivePath },
+    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
+  ]);
 
   infoDialogBody.innerHTML = `
-    <dl class="detail-list">
-      ${rows}
-    </dl>
+    <section class="dialog-section property-section">
+      <h3>${escapeHtml(message("info.archiveTitle"))}</h3>
+      <dl class="detail-list">
+        ${renderDetailRows(rows)}
+      </dl>
+    </section>
   `;
-  openModal(infoDialog, "#info-close");
+  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
 }
 
 function showEntryInfo(path: string) {
@@ -4969,35 +6014,59 @@ function showEntryInfo(path: string) {
   }
 
   infoTitle.textContent = message("info.entryTitle");
-  const created = formatDate(entry.created);
-  const modified = formatDate(entry.modified);
-  const packed = formatOptionalBytes(entry.compressedSize);
-  const size = formatOptionalBytes(entry.size);
+  const rows = entryPropertyRows(entry);
+  const canPreview = entry.kind !== "directory";
+  setInfoActions([
+    ...(canPreview ? [{ label: message("command.view"), action: "preview", primary: true }] : []),
+    { label: message("info.copyPath"), copyValue: entry.path },
+    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
+    { label: message("info.archiveTitle"), action: "archive-info" },
+  ]);
   infoDialogBody.innerHTML = `
-    <dl class="detail-list">
-      <div><dt>${escapeHtml(message("detail.name"))}</dt><dd>${escapeHtml(getBaseName(entry.path))}</dd></div>
-      <div><dt>${escapeHtml(message("detail.path"))}</dt><dd>${escapeHtml(entry.path)}</dd></div>
-      <div><dt>${escapeHtml(message("detail.type"))}</dt><dd>${escapeHtml(normalizeArchiveKindLabel(entry.kind))}</dd></div>
-      ${addDetailMessageRow("detail.size", size)}
-      ${addDetailMessageRow("detail.packed", packed)}
-      ${addDetailMessageRow("detail.modified", modified)}
-      ${addDetailMessageRow("detail.created", created)}
-      ${addDetailMessageRow("detail.attributes", entry.attributes)}
-      ${addDetailMessageRow("detail.method", entry.method)}
-      ${addDetailRow("CRC", entry.crc)}
-      ${addDetailMessageRow("detail.encrypted", formatOptionalBoolean(entry.encrypted))}
-      ${addDetailMessageRow("detail.solid", formatOptionalBoolean(entry.solid))}
-      ${addDetailMessageRow("detail.linkTarget", entry.linkTarget)}
-      <div><dt>${escapeHtml(message("detail.ratio"))}</dt><dd>${formatRatio(entry)}</dd></div>
-    </dl>
+    <section class="dialog-section property-section">
+      <h3>${escapeHtml(message("info.entryTitle"))}</h3>
+      <dl class="detail-list">
+        ${renderDetailRows(rows)}
+      </dl>
+    </section>
   `;
-  openModal(infoDialog, "#info-close");
+  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
+}
+
+function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
+  if (selectedRows.length === 0) {
+    showArchiveInfo();
+    return;
+  }
+
+  const rows = selectionPropertyRows(selectedRows);
+  infoTitle.textContent = message("info.selectionTitle");
+  setInfoActions([
+    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
+    { label: message("info.archiveTitle"), action: "archive-info" },
+  ]);
+  infoDialogBody.innerHTML = `
+    <section class="dialog-section property-section">
+      <h3>${escapeHtml(message("info.selectionTitle"))}</h3>
+      <dl class="detail-list">
+        ${renderDetailRows(rows)}
+      </dl>
+    </section>
+  `;
+  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
 }
 
 function showCurrentInfo() {
-  const selected = getSelectedEntryDtos();
-  if (selected.length === 1) {
-    showEntryInfo(selected[0].path);
+  const selectedRows = getVisibleSelectedRows();
+  if (selectedRows.length === 1) {
+    const entry = selectedRows[0].entry ?? getEntryByPath(selectedRows[0].path);
+    if (entry) {
+      showEntryInfo(entry.path);
+      return;
+    }
+  }
+  if (selectedRows.length > 1) {
+    showSelectionInfo(selectedRows);
     return;
   }
   showArchiveInfo();
@@ -5010,39 +6079,167 @@ function renderAboutDiagnostics() {
     contract?.platformIntegration.shellActions
       .map((action) => `${action.label} (${action.quickAction})`)
       .join(", ") ?? "-";
-  aboutDiagnostics.innerHTML = `
-    <dl class="detail-list">
-      <div><dt>${escapeHtml(message("about.diagnostics.status"))}</dt><dd>${escapeHtml(healthcheck?.status ?? message("about.diagnostics.frontendOnly"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.shell"))}</dt><dd>${escapeHtml(healthcheck?.shell ?? message("about.shell.browserPreview"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.engine"))}</dt><dd>${escapeHtml(healthcheck ? `${healthcheck.engine} ${healthcheck.version}` : message("about.diagnostics.unavailable"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.coreDependency"))}</dt><dd>${escapeHtml(contract?.coreDependency ?? message("about.diagnostics.unavailable"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.platform"))}</dt><dd>${escapeHtml(contract?.platformIntegration.platform ?? message("about.diagnostics.unknown"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.explorerIntegration"))}</dt><dd>${escapeHtml(contract?.platformIntegration.explorerIntegrationEnabled ? message("about.diagnostics.enabled") : message("about.diagnostics.disabled"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.desktopActions"))}</dt><dd>${escapeHtml(contract?.platformIntegration.desktopActionsEnabled ? message("about.diagnostics.enabled") : message("about.diagnostics.disabled"))}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.extensions"))}</dt><dd>${escapeHtml(contract?.platformIntegration.associatedExtensions.join(", ") ?? "-")}</dd></div>
-      <div><dt>${escapeHtml(message("about.diagnostics.shellActions"))}</dt><dd>${escapeHtml(shellActions)}</dd></div>
-    </dl>
-  `;
+  const groups = [
+    {
+      title: message("about.group.product"),
+      rows: [
+        [message("about.diagnostics.appName"), APP_TITLE],
+        [message("about.diagnostics.appVersion"), APP_VERSION],
+      ],
+    },
+    {
+      title: message("about.group.runtime"),
+      rows: [
+        [message("about.diagnostics.shell"), healthcheck?.shell ?? message("about.shell.browserPreview")],
+        [
+          message("about.diagnostics.engine"),
+          healthcheck ? `${healthcheck.engine} ${healthcheck.version}` : message("about.diagnostics.unavailable"),
+        ],
+        [message("about.diagnostics.coreDependency"), contract?.coreDependency ?? message("about.diagnostics.unavailable")],
+      ],
+    },
+    {
+      title: message("about.group.integration"),
+      rows: [
+        [message("about.diagnostics.platform"), contract?.platformIntegration.platform ?? message("about.diagnostics.unknown")],
+        [
+          message("about.diagnostics.explorerIntegration"),
+          contract?.platformIntegration.explorerIntegrationEnabled
+            ? message("about.diagnostics.enabled")
+            : message("about.diagnostics.disabled"),
+        ],
+        [
+          message("about.diagnostics.desktopActions"),
+          contract?.platformIntegration.desktopActionsEnabled
+            ? message("about.diagnostics.enabled")
+            : message("about.diagnostics.disabled"),
+        ],
+      ],
+    },
+    {
+      title: message("about.group.support"),
+      rows: [
+        [message("about.diagnostics.status"), healthcheck?.status ?? message("about.diagnostics.frontendOnly")],
+        [message("about.diagnostics.extensions"), contract?.platformIntegration.associatedExtensions.join(", ") ?? "-"],
+        [message("about.diagnostics.shellActions"), shellActions],
+      ],
+    },
+  ];
+
+  aboutDiagnostics.innerHTML = groups.map((group) => `
+    <section class="diagnostic-group" data-diagnostics-group>
+      <h3>${escapeHtml(group.title)}</h3>
+      <dl class="detail-list">
+        ${group.rows.map(([label, value]) => `
+          <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+        `).join("")}
+      </dl>
+    </section>
+  `).join("");
 }
 
 function diagnosticsText(): string {
-  return JSON.stringify(
-    {
-      app: APP_TITLE,
-      healthcheck: latestHealthcheck,
-      contract: latestContract,
-      preferences: {
-        ...appPreferences,
-        customOutputFolderPath: appPreferences.customOutputFolderPath ? "(set)" : "",
-      },
-    },
-    null,
-    2,
-  );
+  const lines: string[] = [];
+  for (const group of aboutDiagnostics.querySelectorAll<HTMLElement>("[data-diagnostics-group]")) {
+    const title = group.querySelector("h3")?.textContent?.trim();
+    if (title) {
+      lines.push(title);
+    }
+    for (const row of group.querySelectorAll("dl > div")) {
+      const label = row.querySelector("dt")?.textContent?.trim();
+      const value = row.querySelector("dd")?.textContent?.trim();
+      if (label && value) {
+        lines.push(`${label}: ${value}`);
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trim();
 }
 
 function syncPreferenceOutputState() {
   syncPreferenceOutputViewState(preferencesViewElements);
+  syncPreferenceSaveState();
+}
+
+function showPreferencePage(pageName: string) {
+  for (const button of preferencesPageButtons) {
+    const selected = button.dataset.prefPageTarget === pageName;
+    button.setAttribute("aria-selected", String(selected));
+  }
+
+  for (const page of preferencesPages) {
+    page.hidden = page.dataset.prefPage !== pageName;
+  }
+}
+
+function setPreferenceCustomOutputMessage(kind: "idle" | "error", text = "") {
+  preferencesCustomOutputValidation.textContent = text;
+  preferencesCustomOutputValidation.hidden = !text;
+  preferencesCustomOutputValidation.className = kind === "error"
+    ? "setting-validation status-error"
+    : "setting-validation";
+}
+
+function syncPreferenceSaveState() {
+  const customOutputSelected = preferencesOutputLocationSelect.value === "customFolder";
+  const customOutputPath = fullCustomOutputPath(preferencesCustomOutputInput).trim();
+  const missingCustomOutput = customOutputSelected && !customOutputPath;
+  preferencesSaveButton.disabled = missingCustomOutput;
+  preferencesCustomOutputInput.setAttribute("aria-invalid", String(missingCustomOutput));
+  if (missingCustomOutput) {
+    setPreferenceCustomOutputMessage("error", message("preferences.validation.customOutputRequired"));
+  } else if (!customOutputSelected) {
+    setPreferenceCustomOutputMessage("idle");
+    preferencesCustomOutputInput.removeAttribute("aria-invalid");
+  } else if (preferencesCustomOutputValidation.textContent === message("preferences.validation.customOutputRequired")) {
+    setPreferenceCustomOutputMessage("idle");
+    preferencesCustomOutputInput.removeAttribute("aria-invalid");
+  }
+}
+
+async function validatePreferenceCustomOutputFolder(): Promise<boolean> {
+  const customOutputSelected = preferencesOutputLocationSelect.value === "customFolder";
+  const customOutputPath = fullCustomOutputPath(preferencesCustomOutputInput).trim();
+  if (!customOutputSelected) {
+    return true;
+  }
+  if (!customOutputPath) {
+    syncPreferenceSaveState();
+    return false;
+  }
+  if (!isDesktopRuntime()) {
+    setPreferenceCustomOutputMessage("idle");
+    preferencesCustomOutputInput.removeAttribute("aria-invalid");
+    return true;
+  }
+
+  try {
+    const validation = await validateDirectory({ path: customOutputPath });
+    const messageKey: MessageKey | null =
+      !validation.exists
+        ? "preferences.validation.customOutputMissing"
+        : !validation.isDirectory
+          ? "preferences.validation.customOutputNotFolder"
+          : !validation.accessible
+            ? "preferences.validation.customOutputInaccessible"
+            : null;
+    if (messageKey) {
+      preferencesSaveButton.disabled = true;
+      preferencesCustomOutputInput.setAttribute("aria-invalid", "true");
+      setPreferenceCustomOutputMessage("error", message(messageKey));
+      return false;
+    }
+  } catch {
+    preferencesCustomOutputInput.setAttribute("aria-invalid", "true");
+    setPreferenceCustomOutputMessage("error", message("preferences.validation.customOutputInaccessible"));
+    return false;
+  }
+
+  preferencesSaveButton.disabled = false;
+  preferencesCustomOutputInput.removeAttribute("aria-invalid");
+  setPreferenceCustomOutputMessage("idle");
+  return true;
 }
 
 function applyLocaleFromPreferences() {
@@ -5122,6 +6319,7 @@ function onPreferencesDefaultFormatChange() {
 
 function renderPreferencesDialog() {
   renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences, i18n);
+  syncPreferenceSaveState();
 }
 
 function collectPreferencesFromDialog(): AppPreferences {
@@ -5185,8 +6383,11 @@ function updatePreferencesDialogDraft() {
   );
 }
 
-function savePreferencesFromDialog() {
+async function savePreferencesFromDialog() {
   updatePreferencesDialogDraft();
+  if (!(await validatePreferenceCustomOutputFolder())) {
+    return;
+  }
   appPreferences = preferencesDialogDraft ?? collectPreferencesFromDialog();
   preferencesDialogDraft = null;
   saveAppPreferences(appPreferences);
@@ -5202,8 +6403,9 @@ function savePreferencesFromDialog() {
 
 function openPreferencesDialog() {
   preferencesDialogDraft = appPreferences;
+  showPreferencePage("folders");
   renderPreferencesDialog();
-  openModal(preferencesDialog, "#pref-default-format");
+  openModal(preferencesDialog, "#pref-output-location");
 }
 
 async function onSelectPreferenceOutputFolder() {
@@ -5218,6 +6420,10 @@ async function onSelectPreferenceOutputFolder() {
   }
 
   preferencesCustomOutputInput.value = selected;
+  syncCustomOutputPathFromInput(preferencesCustomOutputInput);
+  renderCustomOutputPathDisplay(preferencesCustomOutputInput);
+  syncPreferenceSaveState();
+  void validatePreferenceCustomOutputFolder();
 }
 
 function openExtractDialog(mode: ExtractMode) {
@@ -5226,14 +6432,8 @@ function openExtractDialog(mode: ExtractMode) {
   }
 
   activeExtractMode = mode;
-  const selectedCount = selectedEntries.size;
   extractTitle.textContent = message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle");
-  extractDialogMessage.textContent = mode === "selection"
-    ? message("extract.selectedMessage", {
-      count: selectedCount,
-      entryLabel: message(selectedCount === 1 ? "extract.entrySingular" : "extract.entryPlural"),
-    })
-    : message("extract.archiveMessage");
+  extractDialogMessage.textContent = extractDialogMessageForMode(mode);
   extractStartButton.textContent = message(mode === "selection" ? "extract.selectedAction" : "extract.allAction");
   if (!extractDestinationInput.value.trim() && extractDestinationHistory[0]) {
     extractDestinationInput.value = extractDestinationHistory[0];
@@ -5243,10 +6443,11 @@ function openExtractDialog(mode: ExtractMode) {
   extractSubfolderInput.disabled = true;
   extractPathModeSelect.value = "full";
   extractDeduplicateRootCheckbox.checked = false;
-  extractRestoreSecurityCheckbox.checked = false;
   browseShowPasswordInput.checked = false;
   browsePasswordInput.type = "password";
+  extractPasswordOptions.open = false;
   renderExtractDestinationHistory();
+  syncExtractDialogState();
   openModal(extractDialog, "#extract-destination");
 }
 
@@ -5258,6 +6459,7 @@ function openExtractHereDialog(mode: ExtractMode) {
     extractDialogMessage.textContent = mode === "selection"
       ? message("extract.hereSelected", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) })
       : message("extract.hereArchive", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) });
+    syncExtractDialogState();
   }
 }
 
@@ -5343,6 +6545,8 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
   const preservedSearchQuery = preserveState ? searchInput.value : "";
 
   clearTrackedPreviewState();
+  hideContextMenu();
+  workspaceMode = "extract";
   currentArchivePath = listing.archivePath;
   browseEntries = listing.entries;
   archiveTreeChildrenByParent = buildArchiveTreeChildren(listing.entries);
@@ -5379,7 +6583,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
   selectedEntries = nextSelection;
 
   const focusedEntryStillVisible = preserveState && preservedFocusPath
-    ? visibleRows().some((row) => row.rowType === "entry" && row.path === normalizeEntryPath(preservedFocusPath))
+    ? visibleRows().some((row) => row.path === normalizeEntryPath(preservedFocusPath))
     : false;
   if (focusedEntryStillVisible) {
     focusedEntryPath = normalizeEntryPath(preservedFocusPath);
@@ -5543,6 +6747,7 @@ function addJobState(
     focusProgress?: boolean;
     autoCloseAction?: FocusedJobAutoCloseAction;
     progressContext?: FocusedJobProgressContext;
+    outputActions?: JobOutputAction[];
   } = {},
 ) {
   if (options.focusProgress) {
@@ -5553,6 +6758,9 @@ function addJobState(
 
   if (options.retryContext) {
     jobRetryContexts.set(response.jobId, options.retryContext);
+  }
+  if (options.outputActions?.length) {
+    jobOutputActions.set(response.jobId, options.outputActions);
   }
 
   schedulePolling();
@@ -5627,6 +6835,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
       focusProgress: true,
       autoCloseAction: "closeWindow",
       progressContext: createJobProgressContext(request),
+      outputActions: createJobOutputActions(request),
     });
     setOperationalMessage("quickCreate.started");
   } catch (error) {
@@ -5742,6 +6951,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
           focusProgress: true,
           autoCloseAction: "closeWindow",
           progressContext: extractJobProgressContext(request),
+          outputActions: extractJobOutputActions(request),
         });
         break;
       } catch (error) {
@@ -5869,6 +7079,7 @@ async function startPasswordRetryJob(context: JobRetryContext, password: string)
   if (context.retryKind === "testArchive") {
     return runTestArchive({
       archivePath: context.archivePath,
+      entryPaths: context.entryPaths,
       password,
     });
   }
@@ -5906,7 +7117,10 @@ async function retryJobWithPasswordPrompt(jobId: string) {
 
   try {
     const response = await startPasswordRetryJob(context, password);
-    addJobState(response, { retryContext: context });
+    addJobState(response, {
+      retryContext: context,
+      outputActions: retryJobOutputActions(context),
+    });
     setOperationalMessage("jobs.passwordRetryStarted");
   } catch (error) {
     const commandError = asCommandError(error);
@@ -6058,7 +7272,38 @@ async function onOpenArchive() {
 
   clearTrackedPreviewState();
   currentArchivePath = selected;
+  recordRecentArchiveHistory(selected);
   await loadArchive({ archivePath: selected });
+}
+
+async function openArchiveFromPath(archivePath: string) {
+  const selected = archivePath.trim();
+  if (!selected) {
+    return;
+  }
+
+  clearTrackedPreviewState();
+  currentArchivePath = selected;
+  recordRecentArchiveHistory(selected);
+  await loadArchive({ archivePath: selected });
+}
+
+async function openArchiveFromClipboard() {
+  if (!navigator.clipboard?.readText) {
+    setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
+    return;
+  }
+
+  try {
+    const pastedPath = (await navigator.clipboard.readText()).trim().replace(/^["']|["']$/g, "");
+    if (!pastedPath) {
+      setOperationalMessage("browse.noArchiveOpen");
+      return;
+    }
+    await openArchiveFromPath(pastedPath);
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, i18n.t("nativeDialog.failed")));
+  }
 }
 
 async function onTestArchive() {
@@ -6066,18 +7311,21 @@ async function onTestArchive() {
     return;
   }
 
+  const entryPaths = getSelectedExtractEntryPaths();
   let password = browsePasswordInput.value.trim() || undefined;
 
   while (true) {
     try {
       const response = await runTestArchive({
         archivePath: currentArchivePath,
+        ...(entryPaths.length ? { entryPaths } : {}),
         ...(password ? { password } : {}),
       });
       addJobState(response, {
         retryContext: {
           retryKind: "testArchive",
           archivePath: currentArchivePath,
+          ...(entryPaths.length ? { entryPaths } : {}),
         },
       });
       return;
@@ -6141,6 +7389,19 @@ async function copySelectedEntryPathsToClipboard() {
     setOperationalStatus(`Copied ${selectedPaths.length} archive path${selectedPaths.length === 1 ? "" : "s"}.`);
   } catch {
     setOperationalStatus("Could not copy the selected archive paths.");
+  }
+}
+
+async function copyTextToClipboard(value: string) {
+  if (!value) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    setOperationalMessage("status.copied");
+  } catch {
+    setOperationalStatus("Could not copy.");
   }
 }
 
@@ -6296,6 +7557,8 @@ async function onSelectDestinationForExtract() {
   }
 
   extractDestinationInput.value = selected;
+  syncExtractDialogState();
+  extractDestinationInput.focus();
 }
 
 async function startExtract(destinationMode: ExtractMode) {
@@ -6304,8 +7567,9 @@ async function startExtract(destinationMode: ExtractMode) {
   }
 
   const destination = resolveExtractDestination(extractDestinationInput.value);
-  if (!destination) {
+  if (!isExtractDestinationValid() || !destination) {
     extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
+    syncExtractDialogState();
     extractDestinationInput.focus();
     return;
   }
@@ -6348,6 +7612,7 @@ async function startExtract(destinationMode: ExtractMode) {
           focusProgress: true,
           autoCloseAction: "returnToWorkspace",
           progressContext: extractJobProgressContext(request),
+          outputActions: extractJobOutputActions(request),
         });
         return;
       } catch (error) {
@@ -6356,14 +7621,8 @@ async function startExtract(destinationMode: ExtractMode) {
           commandError?.code === COMMAND_PASSWORD_REQUIRED ||
           commandError?.code === COMMAND_INVALID_PASSWORD
         ) {
-          const promptMessage = getArchivePasswordPrompt(commandError.code);
-          const nextPassword = promptForArchivePassword(promptMessage);
-          if (!nextPassword) {
-            setBrowseState("error", commandError.message);
-            return;
-          }
-          password = nextPassword;
-          continue;
+          requestExtractPasswordInDialog(commandError.code);
+          return;
         }
         setBrowseState("error", commandError?.message ?? message("extract.unableStart"));
         return;
@@ -6408,6 +7667,7 @@ async function startExtract(destinationMode: ExtractMode) {
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
         progressContext: extractJobProgressContext(request, message("extract.selectedProgressTitle")),
+        outputActions: extractJobOutputActions(request),
       });
       return;
     } catch (error) {
@@ -6416,14 +7676,8 @@ async function startExtract(destinationMode: ExtractMode) {
         commandError?.code === COMMAND_PASSWORD_REQUIRED ||
         commandError?.code === COMMAND_INVALID_PASSWORD
       ) {
-        const promptMessage = getArchivePasswordPrompt(commandError.code);
-        const nextPassword = promptForArchivePassword(promptMessage);
-        if (!nextPassword) {
-          setBrowseState("error", commandError.message);
-          return;
-        }
-        password = nextPassword;
-        continue;
+        requestExtractPasswordInDialog(commandError.code);
+        return;
       }
       setBrowseState("error", commandError?.message ?? message("extract.unableSelected"));
       return;
@@ -6626,6 +7880,7 @@ async function runCreate(
       focusProgress: true,
       autoCloseAction: "returnToWorkspace",
       progressContext: createJobProgressContext(request),
+      outputActions: createJobOutputActions(request),
     });
   } catch (error) {
     const commandError = asCommandError(error);
@@ -6648,11 +7903,50 @@ async function onCancelJob(jobId: string) {
   }
 }
 
+async function onPauseJob(jobId: string) {
+  try {
+    await pauseJobCommand({ jobId });
+    await pollJobs();
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
+  }
+}
+
+async function onResumeJob(jobId: string) {
+  try {
+    await resumeJobCommand({ jobId });
+    await pollJobs();
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
+  }
+}
+
+async function onJobOutputAction(jobId: string, index: number, kind: JobOutputAction["kind"]) {
+  const action = jobOutputActions.get(jobId)?.[index];
+  if (!action || action.kind !== kind || !action.path) {
+    setOperationalMessage("jobs.outputUnavailable");
+    return;
+  }
+
+  try {
+    if (kind === "open") {
+      await openDesktopPath(action.path);
+    } else {
+      await revealInFileManager(action.path);
+    }
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, message("jobs.outputOpenFailed")));
+  }
+}
+
 async function onDismissJob(jobId: string) {
   try {
     await dismissJobCommand({ jobId });
     jobs.delete(jobId);
     jobRetryContexts.delete(jobId);
+    jobOutputActions.delete(jobId);
     focusedJobProgressContexts.delete(jobId);
     quickActionJobIds.delete(jobId);
     promptedPasswordRetryJobs.delete(jobId);
@@ -6727,6 +8021,12 @@ function handleShortcut(event: KeyboardEvent) {
     return;
   }
 
+  if (event.key === "Enter" && openDialogElement) {
+    if (activateDialogDefault(event, openDialogElement)) {
+      return;
+    }
+  }
+
   if (event.key === "Escape") {
     if (hasOpenMenu()) {
       closeOpenMenus();
@@ -6734,10 +8034,7 @@ function handleShortcut(event: KeyboardEvent) {
     }
 
     hideContextMenu();
-    if (!extractDialog.hidden) closeModal(extractDialog);
-    else if (!aboutDialog.hidden) closeModal(aboutDialog);
-    else if (!preferencesDialog.hidden) closeModal(preferencesDialog);
-    else if (!infoDialog.hidden) closeModal(infoDialog);
+    if (openDialogElement) cancelDialog(event, openDialogElement);
     else if (workspaceElement.dataset.jobDrawer === "open") closeJobDrawer();
     else clearBrowseSelection();
     return;
@@ -6761,6 +8058,10 @@ function handleShortcut(event: KeyboardEvent) {
 
   if (event.ctrlKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
+    if (searchInput.disabled) {
+      setOperationalMessage("browse.noArchiveOpen");
+      return;
+    }
     searchInput.focus();
     searchInput.select();
     return;
@@ -6819,13 +8120,21 @@ function bindDialogCloseButtons() {
   document.querySelector<HTMLButtonElement>("#about-close")!.addEventListener("click", () => closeModal(aboutDialog));
   document.querySelector<HTMLButtonElement>("#preferences-dialog-close")!.addEventListener("click", () => closeModal(preferencesDialog));
   document.querySelector<HTMLButtonElement>("#preferences-cancel")!.addEventListener("click", () => closeModal(preferencesDialog));
-  document.querySelector<HTMLButtonElement>("#info-dialog-close")!.addEventListener("click", () => closeModal(infoDialog));
   document.querySelector<HTMLButtonElement>("#info-close")!.addEventListener("click", () => closeModal(infoDialog));
 }
 
 function bindActions() {
   modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
   modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
+  dropOpenArchiveButton.addEventListener("click", () => activatePendingDropChoice("openArchive"));
+  dropAddCompressButton.addEventListener("click", () => activatePendingDropChoice("addToCompress"));
+  dropCancelButton.addEventListener("click", () => activatePendingDropChoice("cancel"));
+  dropOverlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      activatePendingDropChoice("cancel");
+    }
+  });
   openArchiveButton.addEventListener("click", () => void onOpenArchive());
   newArchiveButton.addEventListener("click", showCreateWorkspace);
   addArchiveButton.addEventListener("click", showCreateWorkspace);
@@ -6844,6 +8153,27 @@ function bindActions() {
   document.querySelector<HTMLButtonElement>("#toolbar-about")?.addEventListener("click", () => {
     renderAboutDiagnostics();
     openModal(aboutDialog, "#about-close");
+  });
+  infoActionGroup.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
+    if (!button) {
+      return;
+    }
+
+    const copyValue = button.dataset.copyValue;
+    if (copyValue) {
+      void copyTextToClipboard(copyValue);
+      return;
+    }
+
+    const action = button.dataset.infoAction;
+    if (action === "preview") {
+      void onPreviewSelectedEntry();
+      return;
+    }
+    if (action === "archive-info") {
+      showArchiveInfo();
+    }
   });
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
@@ -6947,6 +8277,11 @@ function bindActions() {
   bindMenuItem("moveTo", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
 
   searchInput.addEventListener("input", () => {
+    if (!currentArchivePath) {
+      searchInput.value = "";
+      setOperationalMessage("browse.noArchiveOpen");
+      return;
+    }
     renderBrowse();
   });
 
@@ -6991,6 +8326,30 @@ function bindActions() {
     applySortCommand(key);
   });
 
+  tableHead.addEventListener("keydown", (event) => {
+    const header = (event.target as HTMLElement | null)?.closest<HTMLTableCellElement>("th[data-sort-key]");
+    const key = header?.dataset.sortKey as ArchiveSortKey | undefined;
+    if (!header || !key) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+      event.preventDefault();
+      applySortCommand(key);
+      return;
+    }
+
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      const rect = header.getBoundingClientRect();
+      showTableHeaderContextMenu(
+        rect.left + 12,
+        rect.bottom + 2,
+        header.dataset.columnId as ArchiveTableColumnId | undefined,
+      );
+    }
+  });
+
   tableHead.addEventListener("pointerdown", (event) => {
     const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-column-resizer]");
     const columnId = target?.dataset.columnResizer as ArchiveTableColumnId | undefined;
@@ -7007,6 +8366,27 @@ function bindActions() {
       return;
     }
     navigateToFolder(target.dataset.crumbPath ?? "");
+  });
+
+  pathCrumbsElement.addEventListener("keydown", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-crumb-path]");
+    if (!target || (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar")) {
+      return;
+    }
+    event.preventDefault();
+    navigateToFolder(target.dataset.crumbPath ?? "");
+  });
+
+  pathFieldInput.addEventListener("focus", () => {
+    if (currentArchivePath) {
+      pathFieldInput.select();
+    }
+  });
+
+  pathFieldInput.addEventListener("click", () => {
+    if (currentArchivePath) {
+      pathFieldInput.select();
+    }
   });
 
   treeContentElement.addEventListener("click", (event) => {
@@ -7062,6 +8442,48 @@ function bindActions() {
   archiveEmptyStateElement.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     showStartupContextMenu(event.clientX, event.clientY);
+  });
+
+  archiveEmptyStateElement.addEventListener("click", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-empty-action='open-archive']");
+    if (!target) {
+      return;
+    }
+    void onOpenArchive();
+  });
+
+  detailsElement.addEventListener("click", (event) => {
+    const copyTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-copy-value]");
+    if (copyTarget) {
+      void copyTextToClipboard(copyTarget.dataset.copyValue ?? "");
+      return;
+    }
+
+    const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-details-action]");
+    const action = actionTarget?.dataset.detailsAction;
+    if (action === "open-archive") {
+      void onOpenArchive();
+      return;
+    }
+    if (action === "preview") {
+      void onPreviewSelectedEntry();
+      return;
+    }
+    if (action === "extract-selected") {
+      openExtractDialog("selection");
+      return;
+    }
+    if (action === "test-selected") {
+      void onTestArchive();
+      return;
+    }
+    if (action === "properties") {
+      showCurrentInfo();
+      return;
+    }
+    if (action === "archive-info") {
+      showArchiveInfo();
+    }
   });
 
 function hasSelectionModifier(event: PointerEvent | MouseEvent): boolean {
@@ -7459,7 +8881,14 @@ tableBody.addEventListener("click", (event) => {
       const y = rect.top + Math.min(rect.height - 2, 24);
       const folderPath = row.dataset.folderPath;
       if (folderPath !== undefined) {
-        showFolderContextMenu(folderPath, x, y, row.dataset.entryPath);
+        const entryPath = row.dataset.entryPath;
+        if (entryPath && !selectedEntries.has(entryPath)) {
+          selectedEntries = new Set([entryPath]);
+          selectionAnchorPath = entryPath;
+          focusedEntryPath = entryPath;
+          renderBrowse();
+        }
+        showFolderContextMenu(folderPath, x, y, entryPath);
         return;
       }
       const entryPath = row.dataset.entryPath;
@@ -7532,12 +8961,21 @@ tableBody.addEventListener("click", (event) => {
     const action = target.dataset.contextAction;
     const folderPath = target.dataset.folderPath;
     const columnId = target.dataset.columnId as ArchiveTableColumnId | undefined;
+    const archivePath = target.dataset.archivePath;
     const entryPath = contextEntryPath;
     const sourcePath = contextSourcePath;
     hideContextMenu();
 
     if (action === "open-archive") {
       void onOpenArchive();
+      return;
+    }
+    if (action === "paste-archive-path") {
+      void openArchiveFromClipboard();
+      return;
+    }
+    if (action === "open-recent-archive" && archivePath) {
+      void openArchiveFromPath(archivePath);
       return;
     }
     if (action === "create-archive") {
@@ -7550,6 +8988,10 @@ tableBody.addEventListener("click", (event) => {
     }
     if (action === "add-source-folder") {
       void addSourcePathsFromDialog("folder");
+      return;
+    }
+    if (action === "compress-open-folder" && folderPath !== undefined) {
+      navigateToCompressFolder(folderPath);
       return;
     }
     if (action === "open-folder" && folderPath !== undefined) {
@@ -7616,6 +9058,14 @@ tableBody.addEventListener("click", (event) => {
       void onTestArchive();
       return;
     }
+    if (action === "sort-ascending" && columnId) {
+      applySortDirection(columnId, true);
+      return;
+    }
+    if (action === "sort-descending" && columnId) {
+      applySortDirection(columnId, false);
+      return;
+    }
     if (action === "toggle-column" && columnId) {
       tableColumnSettings = toggleColumnVisibility(tableColumnSettings, columnId);
       saveTablePreferences();
@@ -7660,6 +9110,10 @@ tableBody.addEventListener("click", (event) => {
       openExtractDialog("archive");
       return;
     }
+    if (action === "info" && getVisibleSelectedRows().length > 1) {
+      showSelectionInfo();
+      return;
+    }
     if (action === "info" && entryPath) {
       showEntryInfo(entryPath);
       return;
@@ -7674,35 +9128,69 @@ tableBody.addEventListener("click", (event) => {
       });
       return;
     }
-    if (action === "remove-source" && sourcePath) {
-      createSources = createSources.filter((item) => item !== sourcePath);
-      renderCreateSources();
-      renderCompressBrowser();
-      queuePlanRun();
+    if (action === "remove-source") {
+      removeCreateSources(sourcePathsForCompressMenu(sourcePath));
       return;
     }
     if (action === "clear-sources") {
-      createSources = [];
-      currentPlan = null;
-      renderCreateSources();
-      renderCompressBrowser();
-      queuePlanRun();
+      clearCreateSources();
     }
+  });
+
+  contextMenu.addEventListener("keydown", (event) => {
+    const items = contextMenuItems();
+    if (items.length === 0) {
+      return;
+    }
+
+    const activeIndex = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowDown") {
+      nextIndex = (activeIndex + 1) % items.length;
+    } else if (event.key === "ArrowUp") {
+      nextIndex = (activeIndex - 1 + items.length) % items.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = items.length - 1;
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      hideContextMenu();
+      return;
+    } else if (event.key === "Tab") {
+      event.stopPropagation();
+      hideContextMenu();
+      return;
+    }
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      items[nextIndex]?.focus();
+    }
+  });
+
+  contextMenu.addEventListener("focusout", () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && !contextMenu.hidden && !contextMenu.contains(active)) {
+        hideContextMenu();
+      }
+    }, 0);
   });
 
   browseExtractDestinationButton.addEventListener("click", () => void onSelectDestinationForExtract());
   extractStartButton.addEventListener("click", () => void startExtract(activeExtractMode));
+  extractDialog.addEventListener("keydown", handleExtractDialogEnter);
+  extractDestinationInput.addEventListener("input", syncExtractDialogState);
+  extractDestinationInput.addEventListener("change", syncExtractDialogState);
 
   addSourceButton.addEventListener("click", (event) => {
     event.stopPropagation();
     showAddSourcesMenu(addSourceButton);
   });
   clearSourcesButton.addEventListener("click", () => {
-    createSources = [];
-    currentPlan = null;
-    renderCreateSources();
-    renderCompressBrowser();
-    queuePlanRun();
+    clearCreateSources();
   });
   sourceListElement.addEventListener("contextmenu", (event) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>("li[data-source-path]");
@@ -7714,12 +9202,23 @@ tableBody.addEventListener("click", (event) => {
   });
 
   compressSourceBody.addEventListener("click", (event) => {
-    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row]");
-    if (!row?.dataset.compressFolderRow) {
+    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
+    if (!row) {
       return;
     }
-    if (event.detail >= 2 || appPreferences.singleClickOpen) {
-      navigateToCompressFolder(row.dataset.compressFolderRow);
+
+    const folderPath = row.dataset.compressFolderRow;
+    const rowPath = row.dataset.compressPath;
+    const plainPrimaryClick = !event.ctrlKey && !event.metaKey && !event.shiftKey;
+
+    if (rowPath) {
+      updateCompressSelectionByIntent(rowPath, { ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey });
+      renderCompressSources();
+      focusCompressRow(compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-compress-path="${CSS.escape(rowPath)}"]`));
+    }
+
+    if (folderPath !== undefined && (event.detail >= 2 || (appPreferences.singleClickOpen && plainPrimaryClick))) {
+      navigateToCompressFolder(folderPath);
     }
   });
 
@@ -7731,26 +9230,103 @@ tableBody.addEventListener("click", (event) => {
 
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      const rows = Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>("tr[tabindex='0']"));
-      const currentIndex = Math.max(0, rows.indexOf(row));
-      const nextIndex = event.key === "ArrowDown"
-        ? Math.min(rows.length - 1, currentIndex + 1)
-        : Math.max(0, currentIndex - 1);
-      rows[nextIndex]?.focus();
+      focusRelativeCompressRow(row, event.key === "ArrowDown" ? 1 : -1);
       return;
     }
 
-    if (event.key === "Enter" && row.dataset.compressFolderRow !== undefined) {
+    if (event.key === " " || event.key === "Spacebar") {
       event.preventDefault();
-      navigateToCompressFolder(row.dataset.compressFolderRow);
+      toggleCompressRowSelection(row);
+      event.stopPropagation();
+      return;
     }
+
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      const rowPath = row.dataset.compressPath;
+      if (rowPath && !selectedCompressRows.has(rowPath)) {
+        selectedCompressRows = new Set([rowPath]);
+        focusedCompressRowPath = rowPath;
+        compressSelectionAnchorPath = rowPath;
+        syncCompressSelectionUi();
+      }
+      const rect = row.getBoundingClientRect();
+      showCompressRowContextMenu(row, rect.left + 24, rect.top + Math.min(rect.height - 2, 24));
+      return;
+    }
+
+    if (event.key === "Delete") {
+      event.preventDefault();
+      const sourcePaths = selectedCompressSourcePaths();
+      const fallbackSourcePath = row.dataset.compressSourcePath;
+      removeCreateSources(sourcePaths.length > 0 ? sourcePaths : fallbackSourcePath ? [fallbackSourcePath] : []);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      activateCompressRow(row);
+    }
+  });
+
+  compressSourceBody.addEventListener("contextmenu", (event) => {
+    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
+    if (!row) {
+      return;
+    }
+
+    event.preventDefault();
+    const rowPath = row.dataset.compressPath;
+    if (rowPath && !selectedCompressRows.has(rowPath)) {
+      selectedCompressRows = new Set([rowPath]);
+      focusedCompressRowPath = rowPath;
+      compressSelectionAnchorPath = rowPath;
+      syncCompressSelectionUi();
+    }
+    showCompressRowContextMenu(row, event.clientX, event.clientY);
   });
 
   createFormatSelect.addEventListener("change", onCreateFormatChange);
   createDestinationInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
+  createDestinationRecentSelect.addEventListener("change", () => {
+    const destination = createDestinationRecentSelect.value;
+    if (destination) {
+      createDestinationInput.value = destination;
+      refreshCreateStateAfterDestinationEdit();
+    }
+    createDestinationRecentSelect.value = "";
+  });
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
   startCreateButton.addEventListener("click", () => void runCreate());
-  preferencesOutputLocationSelect.addEventListener("change", syncPreferenceOutputState);
+  createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
+  createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
+  preferencesOutputLocationSelect.addEventListener("change", () => {
+    syncPreferenceOutputState();
+    updatePreferencesDialogDraft();
+  });
+  preferencesCustomOutputInput.addEventListener("focus", () => {
+    restoreFullCustomOutputPathForEdit(preferencesCustomOutputInput);
+  });
+  preferencesCustomOutputInput.addEventListener("input", () => {
+    syncCustomOutputPathFromInput(preferencesCustomOutputInput);
+    setPreferenceCustomOutputMessage("idle");
+    syncPreferenceSaveState();
+    updatePreferencesDialogDraft();
+  });
+  preferencesCustomOutputInput.addEventListener("blur", () => {
+    syncCustomOutputPathFromInput(preferencesCustomOutputInput);
+    renderCustomOutputPathDisplay(preferencesCustomOutputInput);
+    syncPreferenceSaveState();
+  });
+  for (const button of preferencesPageButtons) {
+    button.addEventListener("click", () => {
+      const pageName = button.dataset.prefPageTarget;
+      if (pageName) {
+        showPreferencePage(pageName);
+      }
+    });
+  }
   preferencesCreateFormatSelect.addEventListener("change", onPreferencesCreateFormatChange);
   preferencesDefaultFormatSelect.addEventListener("change", onPreferencesDefaultFormatChange);
   for (const input of [
@@ -7762,11 +9338,23 @@ tableBody.addEventListener("click", (event) => {
     preferencesCreateReplaceExistingCheckbox,
     preferencesCreatePromptPasswordCheckbox,
     preferencesLocaleSelect,
+    preferencesDefaultExtractionSelect,
+    preferencesPreviewCleanupSelect,
+    preferencesShowParentCheckbox,
+    preferencesRealFileIconsCheckbox,
+    preferencesShowGridCheckbox,
+    preferencesFullRowSelectCheckbox,
+    preferencesSingleClickCheckbox,
+    preferencesAlternativeSelectionCheckbox,
+    preferencesToolbarVisibleCheckbox,
+    preferencesLargeToolbarCheckbox,
+    preferencesToolbarLabelsCheckbox,
+    preferencesFlatViewCheckbox,
   ]) {
     input.addEventListener("change", updatePreferencesDialogDraft);
   }
   preferencesChooseOutputButton.addEventListener("click", () => void onSelectPreferenceOutputFolder());
-  preferencesSaveButton.addEventListener("click", savePreferencesFromDialog);
+  preferencesSaveButton.addEventListener("click", () => void savePreferencesFromDialog());
 
   for (const button of [
     createCleanSourceCheckbox,
@@ -7787,22 +9375,44 @@ tableBody.addEventListener("click", (event) => {
   });
   extractUseSubfolderCheckbox.addEventListener("change", () => {
     extractSubfolderInput.disabled = !extractUseSubfolderCheckbox.checked;
+    syncExtractDialogState();
   });
 
   jobsListElement.addEventListener("click", (event) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
     const actionButton = target?.closest<HTMLButtonElement>(
-      "[data-cancel], [data-retry-password], [data-dismiss]",
+      "[data-cancel], [data-pause], [data-resume], [data-retry-password], [data-dismiss], [data-output-action]",
     );
     const cancelId = actionButton?.dataset.cancel;
+    const pauseId = actionButton?.dataset.pause;
+    const resumeId = actionButton?.dataset.resume;
     const retryPasswordId = actionButton?.dataset.retryPassword;
     const dismissId = actionButton?.dataset.dismiss;
+    const outputAction = actionButton?.dataset.outputAction as JobOutputAction["kind"] | undefined;
+    const outputJobId = actionButton?.dataset.outputJob;
+    const outputIndex = Number(actionButton?.dataset.outputIndex);
     if (cancelId) {
       void onCancelJob(cancelId);
       return;
     }
+    if (pauseId) {
+      void onPauseJob(pauseId);
+      return;
+    }
+    if (resumeId) {
+      void onResumeJob(resumeId);
+      return;
+    }
     if (retryPasswordId) {
       void retryJobWithPasswordPrompt(retryPasswordId);
+      return;
+    }
+    if (
+      outputJobId &&
+      (outputAction === "open" || outputAction === "reveal") &&
+      Number.isInteger(outputIndex)
+    ) {
+      void onJobOutputAction(outputJobId, outputIndex, outputAction);
       return;
     }
     if (dismissId) {
@@ -7850,6 +9460,7 @@ tableBody.addEventListener("click", (event) => {
     }
   });
 
+  document.addEventListener("focusin", keepFocusInsideOpenModal);
   appRoot.addEventListener("keydown", handleShortcut);
 }
 
@@ -7861,6 +9472,7 @@ bindWindowLifecycleHandlers();
 applyLocaleFromPreferences();
 loadExtractDestinationHistory();
 loadCreateDestinationHistory();
+loadRecentArchiveHistory();
 applyCreatePreferenceDefaults();
 setCreatePlanState("idle");
 setBrowseState("idle", i18n.t("browse.statusIdle"));
@@ -7871,12 +9483,16 @@ if (isLocalDevHost()) {
       systemIconDataUrls = new Map(Object.entries(fixtures));
       renderBrowse();
     },
-    setJobFixtures: (fixtures: JobState[]) => {
+    setJobFixtures: (fixtures: DevJobFixture[]) => {
       jobs.clear();
       jobRetryContexts.clear();
+      jobOutputActions.clear();
       promptedPasswordRetryJobs.clear();
       for (const fixture of fixtures) {
         jobs.set(fixture.snapshot.jobId, fixture);
+        if (fixture.outputActions?.length) {
+          jobOutputActions.set(fixture.snapshot.jobId, fixture.outputActions);
+        }
       }
       renderJobs();
     },

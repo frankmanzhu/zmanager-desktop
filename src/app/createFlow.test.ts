@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStartCreateRequest,
   commonSourceParentDirectory,
+  createArchiveUnavailableReason,
   createFormatSupportsPassword,
   createStateAfterDestinationEdit,
   getCreateArchiveExtension,
@@ -60,6 +61,58 @@ describe("create flow helpers", () => {
     expect(createStateAfterDestinationEdit("error", true)).toBe("ready");
     expect(createStateAfterDestinationEdit("error", false)).toBe("error");
     expect(createStateAfterDestinationEdit("loading", true)).toBe("loading");
+  });
+
+  it("explains why create archive is unavailable", () => {
+    expect(createArchiveUnavailableReason({
+      sourceCount: 0,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "ready",
+      hasPlan: true,
+      submissionInFlight: false,
+    })).toBe("needsSources");
+
+    expect(createArchiveUnavailableReason({
+      sourceCount: 1,
+      destinationPath: "",
+      planState: "ready",
+      hasPlan: true,
+      submissionInFlight: false,
+    })).toBe("needsDestination");
+
+    expect(createArchiveUnavailableReason({
+      sourceCount: 1,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "loading",
+      hasPlan: false,
+      submissionInFlight: false,
+    })).toBe("planning");
+
+    expect(createArchiveUnavailableReason({
+      sourceCount: 1,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "error",
+      hasPlan: false,
+      submissionInFlight: false,
+    })).toBe("needsPlan");
+  });
+
+  it("allows create archive only after destination and plan are valid", () => {
+    expect(createArchiveUnavailableReason({
+      sourceCount: 2,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "ready",
+      hasPlan: true,
+      submissionInFlight: false,
+    })).toBeNull();
+
+    expect(createArchiveUnavailableReason({
+      sourceCount: 2,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "ready",
+      hasPlan: true,
+      submissionInFlight: true,
+    })).toBe("starting");
   });
 
   it("builds create requests without blank optional fields", () => {

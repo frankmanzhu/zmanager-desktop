@@ -38,6 +38,27 @@ describe("archive selection helpers", () => {
     expect(Array.from(shift.selectedPaths)).toEqual(["alpha.txt", "bravo.txt", "charlie.md"]);
   });
 
+  it("replaces the visible selection on plain shift range and extends it on ctrl shift", () => {
+    const plainShift = applyRowSelectionIntent({
+      path: "charlie.md",
+      visiblePaths: visible,
+      currentSelection: new Set(["delta.txt"]),
+      anchorPath: "alpha.txt",
+      shiftKey: true,
+    });
+    const ctrlShift = applyRowSelectionIntent({
+      path: "charlie.md",
+      visiblePaths: visible,
+      currentSelection: new Set(["delta.txt"]),
+      anchorPath: "alpha.txt",
+      ctrlKey: true,
+      shiftKey: true,
+    });
+
+    expect(Array.from(plainShift.selectedPaths)).toEqual(["alpha.txt", "bravo.txt", "charlie.md"]);
+    expect(Array.from(ctrlShift.selectedPaths)).toEqual(["delta.txt", "alpha.txt", "bravo.txt", "charlie.md"]);
+  });
+
   it("finds visible paths with the focused extension", () => {
     expect(pathsWithSameExtension("alpha.txt", visible)).toEqual([
       "alpha.txt",

@@ -30,6 +30,21 @@ export const TZAP_RECOVERY_PERCENTAGE_DEFAULT = 5;
 export const TZAP_RECOVERY_PERCENTAGE_MIN = 0;
 export const TZAP_RECOVERY_PERCENTAGE_MAX = 100;
 
+export type CreateArchiveUnavailableReason =
+  | "needsSources"
+  | "needsDestination"
+  | "planning"
+  | "needsPlan"
+  | "starting";
+
+export type CreateArchiveAvailabilityInput = {
+  sourceCount: number;
+  destinationPath: string;
+  planState: CreateState;
+  hasPlan: boolean;
+  submissionInFlight: boolean;
+};
+
 export type CreatePathHelpers = {
   nativeParentPath: (path: string) => string;
 };
@@ -225,6 +240,27 @@ export function createStateAfterDestinationEdit(
   hasCurrentPlan: boolean,
 ): CreateState {
   return state === "error" && hasCurrentPlan ? "ready" : state;
+}
+
+export function createArchiveUnavailableReason(
+  input: CreateArchiveAvailabilityInput,
+): CreateArchiveUnavailableReason | null {
+  if (input.submissionInFlight) {
+    return "starting";
+  }
+  if (input.sourceCount === 0) {
+    return "needsSources";
+  }
+  if (input.destinationPath.trim().length === 0) {
+    return "needsDestination";
+  }
+  if (input.planState === "loading") {
+    return "planning";
+  }
+  if (input.planState !== "ready" || !input.hasPlan) {
+    return "needsPlan";
+  }
+  return null;
 }
 
 export type BuildStartCreateRequestInput = {

@@ -73,6 +73,7 @@ fn main() {
             commands::healthcheck,
             commands::project_contract,
             commands::system_file_icons,
+            commands::validate_directory,
             commands::quick_action_startup_state,
             commands::list_archive,
             commands::plan_create,

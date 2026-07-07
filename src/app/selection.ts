@@ -41,7 +41,9 @@ export function applyRowSelectionIntent(intent: SelectionIntent): SelectionResul
   if (intent.shiftKey) {
     const range = visiblePathRange(intent.visiblePaths, anchorPath, intent.path);
     return {
-      selectedPaths: new Set([...selectedPaths, ...range]),
+      selectedPaths: intent.ctrlKey || intent.metaKey
+        ? new Set([...selectedPaths, ...range])
+        : new Set(range),
       anchorPath,
     };
   }

@@ -67,6 +67,20 @@ pub struct SystemFileIconDto {
     pub data_url: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateDirectoryRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateDirectoryResponse {
+    pub exists: bool,
+    pub is_directory: bool,
+    pub accessible: bool,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum QuickActionKindDto {
@@ -286,6 +300,7 @@ pub enum NativeFileDragOutcomeDto {
 #[serde(rename_all = "camelCase")]
 pub struct TestArchiveRequest {
     pub archive_path: String,
+    pub entry_paths: Option<Vec<String>>,
     pub password: Option<String>,
 }
 

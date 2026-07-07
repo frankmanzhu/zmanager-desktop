@@ -42,6 +42,16 @@ export type SystemFileIconResponse = {
   icons: SystemFileIconDto[];
 };
 
+export type ValidateDirectoryRequest = {
+  path: string;
+};
+
+export type ValidateDirectoryResponse = {
+  exists: boolean;
+  isDirectory: boolean;
+  accessible: boolean;
+};
+
 export type QuickActionKind =
   | "open"
   | "compress"
@@ -193,6 +203,7 @@ export type NativeFileDragResponse = {
 
 export type TestArchiveRequest = {
   archivePath: string;
+  entryPaths?: string[];
   password?: string;
 };
 

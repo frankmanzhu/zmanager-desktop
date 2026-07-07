@@ -33,6 +33,7 @@ type JobStateFixture = {
     } | null;
   };
   events: unknown[];
+  outputActions?: Array<{ kind: "open" | "reveal"; path: string }>;
 };
 
 declare global {
@@ -104,13 +105,15 @@ const archiveFixture: ArchiveFixture = {
   ],
 };
 
+const visualJobBaseTime = Date.now();
+
 const jobsFixture: JobStateFixture[] = [
   {
     snapshot: {
       jobId: "job-create-complete",
       kind: "zipCreate",
       status: "completed",
-      createdAt: "2026-06-28T01:00:00Z",
+      createdAt: new Date(visualJobBaseTime - 6000).toISOString(),
       canDismiss: true,
       events: [],
       terminalSummary: {
@@ -124,14 +127,15 @@ const jobsFixture: JobStateFixture[] = [
       { eventType: "started", jobKind: "zipCreate", message: "Creating archive." },
       { eventType: "completed", jobKind: "zipCreate", message: "Archive created." },
     ],
+    outputActions: [{ kind: "reveal", path: "C:/Users/Frank/Desktop/report-bundle.zip" }],
   },
   {
     snapshot: {
       jobId: "job-extract-running",
       kind: "zipExtract",
       status: "running",
-      createdAt: "2026-06-28T01:01:00Z",
-      canDismiss: false,
+      createdAt: new Date(visualJobBaseTime - 5000).toISOString(),
+      canDismiss: true,
       events: [],
       terminalSummary: null,
     },
@@ -144,15 +148,21 @@ const jobsFixture: JobStateFixture[] = [
   {
     snapshot: {
       jobId: "job-test-failed",
-      kind: "zipTest",
+      kind: "testArchive",
       status: "failed",
-      createdAt: "2026-06-28T01:02:00Z",
+      createdAt: new Date(visualJobBaseTime - 4000).toISOString(),
       canDismiss: true,
       events: [],
       terminalSummary: null,
     },
     events: [
-      { eventType: "failed", code: "io_error", message: "Unable to read central directory." },
+      { eventType: "entryStarted", path: "documents/quarterly-review.pdf" },
+      {
+        eventType: "failed",
+        code: "io_error",
+        message: "Unable to read central directory.",
+        path: "documents/quarterly-review.pdf",
+      },
     ],
   },
 ];
@@ -169,12 +179,27 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
 
   await dragFiles(page, ["draft.zip"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#drop-overlay-title")).toHaveText("Add sources to archive");
+  await expect(page.locator("#drop-overlay-message")).toContainText("Copy");
+  await expect(page.locator("#drop-overlay-actions")).toBeHidden();
+  await expectOverlayInsideWorkspaceBody(page);
   await captureAndScan(page, "25-compress-drop-overlay");
   await dragLeave(page);
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "true");
+
+  await dragFilesThroughNestedTargets(page, ["nested-draft.zip"]);
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "true");
 
   await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
   await captureAndScan(page, "04-compress-with-sources");
+
+  await page.locator("#compress-source-body tr[data-compress-path]").first().click({ button: "right" });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu [data-context-action='remove-source']")).toContainText("Remove Source");
+  await captureAndScan(page, "26-create-source-context-menu");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#context-menu")).toBeHidden();
 
   await expect(page.locator("#compress-options-panel")).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
@@ -188,12 +213,33 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "27-create-dialog-advanced-options");
 
   await page.getByRole("tab", { name: "Extract" }).click();
+  await expect(page.locator("#open-archive")).toHaveClass(/is-primary-command/);
+  await expect(page.locator("#search-entries")).toBeDisabled();
+  await expect(page.locator("#details-content")).toContainText("No archive open");
+  await expect(page.locator("#details-content [data-details-action='open-archive']")).toBeVisible();
+  await expect(page.locator("#archive-empty-state [data-empty-action='open-archive']")).toBeVisible();
   await captureAndScan(page, "06-extract-empty");
 
-  await dragFiles(page, ["sample.zip"]);
+  await dragFiles(page, ["sample.zip", "loose-notes.txt"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#drop-overlay-title")).toHaveText("Choose a mode");
+  await expect(page.locator("#drop-overlay-actions")).toBeVisible();
+  await expect(page.locator("#drop-open-archive")).toHaveText("Open Archive");
+  await expect(page.locator("#drop-add-compress")).toHaveText("Add to Compress");
+  await expectOverlayInsideWorkspaceBody(page);
   await captureAndScan(page, "28-extract-drop-overlay");
   await dragLeave(page);
+
+  await dropFiles(page, ["sample.zip", "loose-notes.txt"]);
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator("#drop-open-archive")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#drop-add-compress")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.getByRole("tab", { name: "Compress" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#compress-source-body tr")).toHaveCount(5);
+  await page.getByRole("tab", { name: "Extract" }).click();
 
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
   await page.evaluate((fixtures) => window.__zmanagerDev?.setSystemIconFixtures(fixtures), {
@@ -205,18 +251,55 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   });
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
   await expect(page.locator(".row-icon-native-image").first()).toBeVisible();
+  await expect(page.locator("#search-entries")).toBeEnabled();
+  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\");
+  await expect(page.locator("#path-crumbs")).toBeVisible();
+  await expect(page.locator("#details-content [data-copy-value='C:/fixtures/visual-scan.zip']")).toBeVisible();
   await captureAndScan(page, "07-extract-with-archive");
+
+  await page.locator("#tree-content [data-tree-path='images']").click();
+  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\images\\");
+  await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
+  await expect(page.locator("#details-content")).toContainText("images");
+  await expect(page.locator("#status-selection-count")).toContainText("0 / 1");
+
+  await page.locator("#path-crumbs [data-crumb-path='']").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\");
+  await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
 
   await page.locator('tr[data-entry-path="documents"] .row-name').click();
   await expect(page.getByRole("button", { name: "Extract" })).toBeVisible();
   await page.getByRole("button", { name: "Extract" }).click();
   await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
+  await expect(page.locator("#extract-destination")).toBeFocused();
+  await expect(page.locator("#extract-start")).toBeDisabled();
   await captureAndScan(page, "08-extract-dialog");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
+  await page.locator("#extract-destination").fill("C:\\visual-scan-extract");
+  await expect(page.locator("#extract-start")).toBeEnabled();
+  await expect(page.locator("#extract-start")).toHaveClass(/primary-action/);
+  await expect(page.locator("#extract-destination")).toBeFocused();
   await page.locator("#extract-cancel").click();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
+  const entryMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
+  await expect(entryMenuLabels.nth(0)).toHaveText("Open");
+  await expect(entryMenuLabels.nth(1)).toHaveText("Open in Archive");
+  await expect(entryMenuLabels.nth(2)).toHaveText("Extract...");
+  await expect(entryMenuLabels.nth(3)).toHaveText("Extract Here");
+  await expect(entryMenuLabels.nth(4)).toHaveText("Test");
+  await expect(entryMenuLabels.nth(5)).toHaveText("Properties");
   await captureAndScan(page, "09-entry-context-menu");
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#context-menu")).toBeHidden();
+  await page.locator('tr[data-entry-path="documents"]').focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu [data-context-action]").first()).toContainText("Open");
 });
 
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
@@ -227,15 +310,58 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
 
   await openDevSurface(page, "preferences");
   await expect(page.getByRole("dialog", { name: "Options" })).toBeVisible();
+  await expect(page.locator("[data-pref-page='folders']")).toBeVisible();
+  await expect(page.locator("[data-pref-page-target='folders']")).toHaveAttribute("aria-selected", "true");
   await captureAndScan(page, "10-preferences-dialog");
 
   await page.locator("#pref-output-location").selectOption("customFolder");
-  await page.locator("#pref-custom-output").fill("C:/Users/frankzhu/Desktop/ZManager Output");
+  await expect(page.locator("#preferences-save")).toBeDisabled();
+  const longCustomOutputPath = "C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output";
+  await page.locator("#pref-custom-output").fill(longCustomOutputPath);
+  await expect(page.locator("#pref-custom-output")).toHaveValue(longCustomOutputPath);
+  await expect(page.locator("#preferences-save")).toBeEnabled();
+  await page.locator("#pref-custom-output").blur();
+  await expect(page.locator("#pref-custom-output")).not.toHaveValue(longCustomOutputPath);
   await captureAndScan(page, "30-preferences-custom-output");
   await closeDevSurface(page);
 
   await openDevSurface(page, "about");
   await expect(page.getByRole("dialog", { name: "About ZManager" })).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as Window & { __copiedDiagnostics?: string }).__copiedDiagnostics = text;
+        },
+      },
+    });
+  });
+  await page.locator("#copy-diagnostics").click();
+  const copiedDiagnostics = await page.evaluate(() => (window as Window & { __copiedDiagnostics?: string }).__copiedDiagnostics ?? "");
+  const visibleDiagnostics = await page.locator("#about-diagnostics").evaluate((element) => {
+    const lines: string[] = [];
+    for (const group of element.querySelectorAll<HTMLElement>("[data-diagnostics-group]")) {
+      const title = group.querySelector("h3")?.textContent?.trim();
+      if (title) {
+        lines.push(title);
+      }
+      for (const row of group.querySelectorAll("dl > div")) {
+        const label = row.querySelector("dt")?.textContent?.trim();
+        const value = row.querySelector("dd")?.textContent?.trim();
+        if (label && value) {
+          lines.push(`${label}: ${value}`);
+        }
+      }
+      lines.push("");
+    }
+    return lines.join("\n").trim();
+  });
+  expect(copiedDiagnostics).toBe(visibleDiagnostics);
+  expect(copiedDiagnostics).not.toContain("customOutputFolderPath");
+  expect(copiedDiagnostics).not.toContain("password");
+  expect(copiedDiagnostics).not.toContain("C:/Users/");
+  await expect(page.locator("#copy-diagnostics")).toHaveText("Copy Diagnostics", { timeout: 2000 });
   await captureAndScan(page, "11-about-dialog");
   await closeDevSurface(page);
 
@@ -248,24 +374,56 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await page.getByRole("tab", { name: "Extract" }).click();
   await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
   await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu [data-context-action='open-archive']")).toContainText("Open Archive");
   await captureAndScan(page, "13-extract-empty-context-menu");
+  await page.locator("#context-menu [data-context-action='open-archive']").click();
+  await expect(page.locator(".workspace-status")).toContainText("Native dialogs are unavailable in browser preview.");
 
   await loadArchiveWithIcons(page);
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
+  await expect(page.locator("#details-content [data-copy-value='ZIP']")).toBeVisible();
+  await expect(page.locator("#details-content [data-copy-value='5']")).toBeVisible();
   await captureAndScan(page, "14-extract-archive-details");
 
   await page.locator("th[data-column-id='name']").click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu")).toContainText("Sort Ascending");
+  await expect(page.locator("#context-menu")).toContainText("Choose Columns");
+  await expect(page.locator("#context-menu [data-context-action='reset-columns']")).toContainText("Reset columns");
   await captureAndScan(page, "15-column-context-menu");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#context-menu")).toBeHidden();
+
+  await page.locator("th[data-column-id='modified']").focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await page.locator("#context-menu [data-context-action='toggle-column'][data-column-id='created']").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("th[data-column-id='created']")).toBeVisible();
+  await page.locator("th[data-column-id='created']").focus();
+  await page.keyboard.press("Shift+F10");
+  await page.locator("#context-menu [data-context-action='reset-columns']").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("th[data-column-id='created']")).toBeHidden();
 
   await page.locator('tr[data-entry-path="documents"] .row-name').click();
   await page.locator('tr[data-entry-path="images"] .row-name').click({ modifiers: ["Control"] });
   await expect(page.locator('tr[data-entry-path="documents"]')).toHaveAttribute("aria-selected", "true");
   await expect(page.locator('tr[data-entry-path="images"]')).toHaveAttribute("aria-selected", "true");
+  await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  const multiMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
+  await expect(multiMenuLabels.nth(0)).toHaveText("Extract Selected");
+  await expect(multiMenuLabels.nth(1)).toHaveText("Extract Here");
+  await expect(multiMenuLabels.nth(2)).toHaveText("Test Selected");
+  await expect(multiMenuLabels.nth(3)).toHaveText("Properties");
+  await page.keyboard.press("Escape");
   await captureAndScan(page, "16-multi-selection-details");
 
   await openDevSurface(page, "info");
-  await expect(page.getByRole("dialog", { name: "Archive Info" })).toBeVisible();
+  const selectionPropertiesDialog = page.getByRole("dialog", { name: "Selection Properties" });
+  await expect(selectionPropertiesDialog).toBeVisible();
+  await expect(selectionPropertiesDialog.getByRole("button", { name: "Archive Info" })).toBeVisible();
   await captureAndScan(page, "17-multi-selection-info-dialog");
   await closeDevSurface(page);
 
@@ -293,6 +451,7 @@ test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await captureAndScan(page, "21-compact-compress-empty");
 
   await dropFiles(page, ["quarterly-report.pdf", "photos-folder"]);
+  await waitForCompressSources(page);
   await captureAndScan(page, "22-compact-compress-with-sources");
 
   await page.getByRole("tab", { name: "Extract" }).click();
@@ -312,9 +471,11 @@ test("minimum-size visual surfaces stay within the app bounds", async ({ page })
     "very-long-file-name-that-should-not-break-the-compress-table-layout-report-final.pdf",
     "deeply-nested-folder-with-a-long-name",
   ]);
+  await waitForCompressSources(page);
   await captureAndScan(page, "33-min-compress-long-sources");
 
   await expect(page.locator("#compress-options-panel")).toBeVisible();
+  await page.locator("#start-create").focus();
   await captureAndScan(page, "34-min-create-dialog");
 
   await page.getByRole("tab", { name: "Extract" }).click();
@@ -374,6 +535,46 @@ async function closeDevSurface(page: Page) {
   await page.evaluate(() => window.__zmanagerDev?.closeModal());
 }
 
+async function waitForCompressSources(page: Page) {
+  await expect(
+    page.locator("#compress-source-body tr[data-compress-folder-row], #compress-source-body tr[data-compress-entry-row]").first(),
+  ).toBeVisible();
+  await expect(page.locator("#start-create")).toBeEnabled();
+  await expect(page.locator("#start-create")).toHaveClass(/primary-action/);
+}
+
+async function expectOverlayInsideWorkspaceBody(page: Page) {
+  const bounds = await page.evaluate(() => {
+    const overlay = document.querySelector("#drop-overlay")?.getBoundingClientRect();
+    const body = document.querySelector(".browser-shell")?.getBoundingClientRect();
+    const status = document.querySelector(".status-bar")?.getBoundingClientRect();
+    if (!overlay || !body || !status) {
+      return null;
+    }
+    return {
+      overlay: {
+        left: overlay.left,
+        top: overlay.top,
+        right: overlay.right,
+        bottom: overlay.bottom,
+      },
+      body: {
+        left: body.left,
+        top: body.top,
+        right: body.right,
+        bottom: body.bottom,
+      },
+      statusTop: status.top,
+    };
+  });
+  expect(bounds).not.toBeNull();
+  expect(bounds!.overlay.left).toBeGreaterThanOrEqual(bounds!.body.left);
+  expect(bounds!.overlay.top).toBeGreaterThanOrEqual(bounds!.body.top);
+  expect(bounds!.overlay.right).toBeLessThanOrEqual(bounds!.body.right);
+  expect(bounds!.overlay.bottom).toBeLessThanOrEqual(bounds!.body.bottom);
+  expect(bounds!.overlay.bottom).toBeLessThanOrEqual(bounds!.statusTop);
+}
+
 async function dropFiles(page: Page, names: string[]) {
   await page.evaluate((fileNames) => {
     const dataTransfer = new DataTransfer();
@@ -413,6 +614,34 @@ async function dragLeave(page: Page) {
     });
     document.querySelector("#app")?.dispatchEvent(event);
   });
+}
+
+async function dragFilesThroughNestedTargets(page: Page, names: string[]) {
+  await page.evaluate((fileNames) => {
+    const dataTransfer = new DataTransfer();
+    for (const name of fileNames) {
+      dataTransfer.items.add(new File(["fixture"], name));
+    }
+
+    const app = document.querySelector("#app");
+    const nestedTarget = document.querySelector(".browser-shell");
+    app?.dispatchEvent(new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer,
+    }));
+    nestedTarget?.dispatchEvent(new DragEvent("dragenter", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer,
+    }));
+    app?.dispatchEvent(new DragEvent("dragleave", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer,
+      relatedTarget: document.body,
+    }));
+  }, names);
 }
 
 async function scanVisibleLayout(page: Page): Promise<string[]> {

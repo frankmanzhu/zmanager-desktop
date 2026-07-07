@@ -1,4 +1,5 @@
 export const APP_TITLE = "ZManager";
+export const APP_VERSION = "0.1.0";
 
 export const COMMAND_PASSWORD_REQUIRED = "password_required";
 export const COMMAND_INVALID_PASSWORD = "invalid_password";

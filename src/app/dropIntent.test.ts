@@ -84,6 +84,14 @@ describe("drop intent classifier", () => {
     });
   });
 
+  it("treats mixed drops as sources when they are dropped directly on create", () => {
+    expect(classifyDropIntent(["C:/work/nested.zip", "C:/work/readme.txt"], "create")).toEqual({
+      kind: "addCreateSources",
+      surface: "create",
+      sourcePaths: ["C:/work/nested.zip", "C:/work/readme.txt"],
+    });
+  });
+
   it("adds ordinary global drops as create sources", () => {
     expect(classifyDropIntent(["C:/work/readme.txt", "C:/work/src"], "unknown")).toEqual({
       kind: "addCreateSources",

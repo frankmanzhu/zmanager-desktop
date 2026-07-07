@@ -16,7 +16,7 @@ use crate::{
         PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
         ProjectIntegrationContract, ProjectIntegrationShellActionDto, ResumeJobRequest,
         StartCreateRequest, StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse,
-        TestArchiveRequest,
+        TestArchiveRequest, ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -96,6 +96,40 @@ pub fn project_contract() -> crate::dto::ProjectContract {
 pub fn system_file_icons(request: SystemFileIconRequest) -> SystemFileIconResponse {
     SystemFileIconResponse {
         icons: crate::platform::system_file_icons(&request.entries),
+    }
+}
+
+#[tauri::command]
+pub fn validate_directory(request: ValidateDirectoryRequest) -> ValidateDirectoryResponse {
+    let path = request.path.trim();
+    if path.is_empty() {
+        return ValidateDirectoryResponse {
+            exists: false,
+            is_directory: false,
+            accessible: false,
+        };
+    }
+
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            let is_directory = metadata.is_dir();
+            let accessible = is_directory && std::fs::read_dir(path).is_ok();
+            ValidateDirectoryResponse {
+                exists: true,
+                is_directory,
+                accessible,
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => ValidateDirectoryResponse {
+            exists: false,
+            is_directory: false,
+            accessible: false,
+        },
+        Err(_) => ValidateDirectoryResponse {
+            exists: true,
+            is_directory: false,
+            accessible: false,
+        },
     }
 }
 
@@ -795,6 +829,8 @@ fn start_test_archive_internal(
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
+    let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
+    let selected_entry_keys = Arc::new(entry_paths.into_iter().collect::<HashSet<_>>());
     let family = detect_archive_family(&archive_path);
 
     let (response, _token) = registry.create_job(JobKindDto::TestArchive);
@@ -827,30 +863,43 @@ fn start_test_archive_internal(
         );
 
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match family {
-            ArchiveFamily::Zip => zmanager_core::zip_backend::test_zip_with_password_filter(
-                &archive_path,
-                password.as_deref(),
-                |_| true,
-            )
-            .map(to_terminal_summary_for_zip_test)
-            .map_err(map_zip_error),
+            ArchiveFamily::Zip => {
+                let selected_entry_keys = Arc::clone(&selected_entry_keys);
+                zmanager_core::zip_backend::test_zip_with_password_filter(
+                    &archive_path,
+                    password.as_deref(),
+                    move |path| {
+                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
+                    },
+                )
+                .map(to_terminal_summary_for_zip_test)
+                .map_err(map_zip_error)
+            }
             ArchiveFamily::Tzap => {
+                let selected_entry_keys = Arc::clone(&selected_entry_keys);
                 zmanager_core::tzap_backend::test_tzap_with_optional_password_filter_and_x509_trust(
                     &archive_path,
                     password.as_deref(),
-                    |_| true,
+                    move |path| {
+                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
+                    },
                     None,
                 )
                 .map(to_terminal_summary_for_tzap_test)
                 .map_err(map_tzap_error)
             }
-            _ => zmanager_core::libarchive_backend::test_archive_with_password_filter(
-                &archive_path,
-                password.as_deref(),
-                |_| true,
-            )
-            .map(to_terminal_summary_for_libarchive_test)
-            .map_err(map_libarchive_error),
+            _ => {
+                let selected_entry_keys = Arc::clone(&selected_entry_keys);
+                zmanager_core::libarchive_backend::test_archive_with_password_filter(
+                    &archive_path,
+                    password.as_deref(),
+                    move |path| {
+                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
+                    },
+                )
+                .map(to_terminal_summary_for_libarchive_test)
+                .map_err(map_libarchive_error)
+            }
         };
 
         match result {
@@ -2761,6 +2810,7 @@ mod tests {
         let test_job = start_test_archive_internal(
             TestArchiveRequest {
                 archive_path: destination_archive.to_string_lossy().to_string(),
+                entry_paths: None,
                 password: None,
             },
             &registry,
@@ -3543,6 +3593,7 @@ mod tests {
         let test_job = start_test_archive_internal(
             TestArchiveRequest {
                 archive_path: destination_archive.to_string_lossy().to_string(),
+                entry_paths: None,
                 password: None,
             },
             &registry,
@@ -3587,6 +3638,7 @@ mod tests {
         let test_job = start_test_archive_internal(
             TestArchiveRequest {
                 archive_path: archive_path.to_string_lossy().to_string(),
+                entry_paths: None,
                 password: None,
             },
             &registry,

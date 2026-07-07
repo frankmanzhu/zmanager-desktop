@@ -24,6 +24,7 @@ export type PreferencesViewElements = {
   previewCleanupSelect: HTMLSelectElement;
   customOutputInput: HTMLInputElement;
   chooseOutputButton: HTMLButtonElement;
+  customOutputValidation: HTMLElement;
   createFormatSelect: HTMLSelectElement;
   createCompressionLevelSelect: HTMLSelectElement;
   createVolumeInput: HTMLInputElement;
@@ -46,10 +47,15 @@ export type PreferencesViewElements = {
   statusElement: HTMLParagraphElement;
 };
 
+const CUSTOM_OUTPUT_TRUNCATE_LENGTH = 40;
+const CUSTOM_OUTPUT_TRUNCATE_HEAD = 21;
+const CUSTOM_OUTPUT_TRUNCATE_TAIL = 13;
+
 export function syncPreferenceOutputState(elements: PreferencesViewElements): void {
   const customOutputEnabled = elements.outputLocationSelect.value === "customFolder";
   elements.customOutputInput.disabled = !customOutputEnabled;
   elements.chooseOutputButton.disabled = !customOutputEnabled;
+  elements.customOutputValidation.hidden = !customOutputEnabled;
 }
 
 export function renderPreferencesDialog(
@@ -77,6 +83,8 @@ export function renderPreferencesDialog(
   elements.flatViewDefaultCheckbox.checked = preferences.flatViewDefault;
   elements.statusElement.textContent = i18n.t("preferences.status.localOnly");
   elements.statusElement.className = "status status-idle";
+  elements.customOutputInput.dataset.fullValue = preferences.customOutputFolderPath;
+  renderCustomOutputPathDisplay(elements.customOutputInput);
   syncPreferenceOutputState(elements);
 }
 
@@ -138,7 +146,7 @@ export function collectPreferencesFromDialog(
       nextCreateFormatDefaults[elements.defaultFormatSelect.value as CreateArchiveFormat].cleanSource,
     createFormatDefaults: nextCreateFormatDefaults,
     defaultOutputLocation: elements.outputLocationSelect.value as DefaultOutputLocation,
-    customOutputFolderPath: elements.customOutputInput.value,
+    customOutputFolderPath: fullCustomOutputPath(elements.customOutputInput),
     defaultExtractionBehavior: elements.defaultExtractionSelect.value as DefaultExtractionBehavior,
     previewCleanupPolicy: elements.previewCleanupSelect.value as PreviewCleanupPolicy,
     showParentFolderItem: elements.showParentFolderItemCheckbox.checked,
@@ -152,6 +160,38 @@ export function collectPreferencesFromDialog(
     showToolbarLabels: elements.showToolbarLabelsCheckbox.checked,
     flatViewDefault: elements.flatViewDefaultCheckbox.checked,
   });
+}
+
+export function fullCustomOutputPath(input: HTMLInputElement): string {
+  return input.dataset.fullValue ?? input.value;
+}
+
+export function syncCustomOutputPathFromInput(input: HTMLInputElement): void {
+  input.dataset.fullValue = input.value;
+}
+
+export function renderCustomOutputPathDisplay(input: HTMLInputElement): void {
+  const fullValue = fullCustomOutputPath(input);
+  input.value = isCustomOutputInputFocused(input)
+    ? fullValue
+    : middleTruncatePath(fullValue);
+  input.title = fullValue;
+}
+
+export function restoreFullCustomOutputPathForEdit(input: HTMLInputElement): void {
+  input.value = fullCustomOutputPath(input);
+}
+
+export function middleTruncatePath(value: string): string {
+  if (value.length <= CUSTOM_OUTPUT_TRUNCATE_LENGTH) {
+    return value;
+  }
+
+  return `${value.slice(0, CUSTOM_OUTPUT_TRUNCATE_HEAD)}...${value.slice(-CUSTOM_OUTPUT_TRUNCATE_TAIL)}`;
+}
+
+function isCustomOutputInputFocused(input: HTMLInputElement): boolean {
+  return typeof document !== "undefined" && document.activeElement === input;
 }
 
 function parseOptionalNonNegativeInteger(value: string): number | null {

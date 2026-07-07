@@ -4,7 +4,11 @@ import { DEFAULT_APP_PREFERENCES } from "../app/preferences";
 import { createTranslator } from "../app/i18n/translator";
 import {
   collectPreferencesFromDialog,
+  fullCustomOutputPath,
+  middleTruncatePath,
   renderPreferencesDialog,
+  restoreFullCustomOutputPathForEdit,
+  syncCustomOutputPathFromInput,
   type PreferencesViewElements,
 } from "./preferencesView";
 
@@ -64,6 +68,29 @@ describe("preferences view", () => {
         .createFormatDefaults.tzap.tzapRecoveryPercentage,
     ).toBe(18);
   });
+
+  it("keeps a full custom output path while showing a middle-truncated unfocused value", () => {
+    const elements = createPreferenceElements();
+    const longPath = "C:/Users/frankzhu/Documents/Projects/ZManager/Very/Long/Output/Folder";
+
+    renderPreferencesDialog(elements, {
+      ...DEFAULT_APP_PREFERENCES,
+      defaultOutputLocation: "customFolder",
+      customOutputFolderPath: longPath,
+    }, createTranslator("en"));
+
+    expect(elements.customOutputInput.value).toBe(middleTruncatePath(longPath));
+    expect(fullCustomOutputPath(elements.customOutputInput)).toBe(longPath);
+
+    restoreFullCustomOutputPathForEdit(elements.customOutputInput);
+    expect(elements.customOutputInput.value).toBe(longPath);
+
+    elements.customOutputInput.value = `${longPath}/Edited`;
+    syncCustomOutputPathFromInput(elements.customOutputInput);
+
+    expect(collectPreferencesFromDialog(elements, DEFAULT_APP_PREFERENCES).customOutputFolderPath)
+      .toBe(`${longPath}/Edited`);
+  });
 });
 
 function createPreferenceElements(): PreferencesViewElements {
@@ -75,6 +102,7 @@ function createPreferenceElements(): PreferencesViewElements {
     previewCleanupSelect: select(DEFAULT_APP_PREFERENCES.previewCleanupPolicy),
     customOutputInput: input(DEFAULT_APP_PREFERENCES.customOutputFolderPath),
     chooseOutputButton: button(),
+    customOutputValidation: element(),
     createFormatSelect: select(DEFAULT_APP_PREFERENCES.defaultArchiveFormat),
     createCompressionLevelSelect: select(""),
     createVolumeInput: input(""),
@@ -103,7 +131,14 @@ function select(value: string): HTMLSelectElement {
 }
 
 function input(value: string): HTMLInputElement {
-  return { value, disabled: false } as HTMLInputElement;
+  return {
+    value,
+    disabled: false,
+    dataset: {},
+    title: "",
+    setAttribute: () => undefined,
+    removeAttribute: () => undefined,
+  } as unknown as HTMLInputElement;
 }
 
 function checkbox(checked: boolean): HTMLInputElement {

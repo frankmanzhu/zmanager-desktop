@@ -79,20 +79,20 @@ export function classifyDropIntent(
     return rejectDrop(surface, "emptyDrop", paths, archivePaths, sourcePaths);
   }
 
+  if (surface === "create") {
+    return {
+      kind: "addCreateSources",
+      surface,
+      sourcePaths: paths,
+    };
+  }
+
   if (archivePaths.length > 0 && sourcePaths.length > 0) {
     return {
       kind: "askAction",
       surface,
       archivePaths,
       sourcePaths,
-    };
-  }
-
-  if (surface === "create") {
-    return {
-      kind: "addCreateSources",
-      surface,
-      sourcePaths: paths,
     };
   }
 

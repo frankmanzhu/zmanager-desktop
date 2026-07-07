@@ -110,7 +110,7 @@ export type CommandBarGroup = {
 
 export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   open: { id: "open", label: "Open...", labelKey: "command.open", shortcut: "Ctrl+O", tooltip: "Open archive (Ctrl+O)" },
-  openInside: { id: "openInside", label: "Open Inside", labelKey: "command.openInside", shortcut: "Ctrl+PageDown" },
+  openInside: { id: "openInside", label: "Open in Archive", labelKey: "command.openInside", shortcut: "Ctrl+PageDown" },
   openOutside: { id: "openOutside", label: "Open Outside", labelKey: "command.openOutside", shortcut: "Shift+Enter" },
   view: { id: "view", label: "View", labelKey: "command.view", shortcut: "F3", tooltip: "View (F3)" },
   edit: { id: "edit", label: "Edit", shortcut: "F4", unsupported: true, mutation: true },

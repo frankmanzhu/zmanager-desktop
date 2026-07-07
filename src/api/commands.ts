@@ -27,6 +27,8 @@ import type {
   SystemFileIconRequest,
   SystemFileIconResponse,
   TestArchiveRequest,
+  ValidateDirectoryRequest,
+  ValidateDirectoryResponse,
 } from "./types";
 
 export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
@@ -41,6 +43,14 @@ export async function fetchSystemFileIcons(
   request: SystemFileIconRequest,
 ): Promise<SystemFileIconResponse> {
   return invoke<SystemFileIconResponse>("system_file_icons", {
+    request,
+  });
+}
+
+export async function validateDirectory(
+  request: ValidateDirectoryRequest,
+): Promise<ValidateDirectoryResponse> {
+  return invoke<ValidateDirectoryResponse>("validate_directory", {
     request,
   });
 }

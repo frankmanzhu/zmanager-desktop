@@ -23,6 +23,7 @@ export type JobRetryContext =
   | {
       retryKind: "testArchive";
       archivePath: string;
+      entryPaths?: string[];
     };
 
 export function isPasswordErrorCode(code?: string | null): boolean {

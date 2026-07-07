@@ -1,6 +1,11 @@
 import type { JobKind, JobState } from "../api/types";
-import { deriveJobProgress, isTerminalJobStatus } from "../app/jobs";
+import { deriveJobProgress, isCreateJobKind, isTerminalJobStatus } from "../app/jobs";
 import type { MessageKey, Translator } from "../app/i18n/translator";
+
+export type JobOutputAction = {
+  kind: "open" | "reveal";
+  path: string;
+};
 
 export type JobsViewFormatters = {
   i18n: Translator;
@@ -8,6 +13,7 @@ export type JobsViewFormatters = {
   formatBytes: (value?: number) => string;
   formatJobKind: (kind: JobKind) => string;
   canRetryJobWithPassword: (jobId: string, state: JobState) => boolean;
+  getOutputActions?: (jobId: string, state: JobState) => JobOutputAction[];
   formatDuration?: (milliseconds: number | null) => string;
 };
 
@@ -49,6 +55,9 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       const snapshot = state.snapshot;
       const summary = snapshot.terminalSummary;
       const canRetryPassword = formatters.canRetryJobWithPassword(snapshot.jobId, state);
+      const outputActions = snapshot.status === "completed"
+        ? formatters.getOutputActions?.(snapshot.jobId, state) ?? []
+        : [];
       const progress = deriveJobProgress(state);
       const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
       const filesText = progress.totalFiles === null
@@ -58,63 +67,200 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
       const progressAttributes = progress.progressPercent === null && !isTerminalJobStatus(snapshot.status)
         ? ""
         : `value="${progressValue.toFixed(0)}" max="100"`;
+      const statusLabel = i18n.t(jobStatusKey(snapshot.status));
+      const failedEvent = latestFailedEvent(state);
+      const failedMessage = failedEvent?.message ?? progress.latestStatusMessage;
+      const failedItem = failedEvent?.path ?? progress.currentFile;
+      const currentItem = progress.currentFile || i18n.t("jobs.current.none");
+      const speedText = progress.speedBytesPerSecond === null
+        ? i18n.t("jobs.metric.notAvailable")
+        : `${formatters.formatBytes(progress.speedBytesPerSecond)}/s`;
+      const remainingText = formatDuration(progress.remainingMs) || i18n.t("jobs.metric.notAvailable");
+      const processedText = progress.totalBytes === null
+        ? formatters.formatBytes(progress.processedBytes)
+        : `${formatters.formatBytes(progress.processedBytes)} / ${formatters.formatBytes(progress.totalBytes)}`;
       return `
-        <article class="job-card">
+        <article class="job-card" data-job-status="${formatters.escapeHtml(snapshot.status)}">
           <div class="job-header">
-            <div>
+            <div class="job-heading">
               <p class="job-title">${formatters.escapeHtml(formatters.formatJobKind(snapshot.kind))}</p>
-              <p class="job-subtitle">${formatters.escapeHtml(i18n.t(jobStatusKey(snapshot.status)).toUpperCase())} - ${formatters.escapeHtml(snapshot.jobId)}</p>
+              <p class="job-subtitle">${formatters.escapeHtml(snapshot.jobId)}</p>
             </div>
-            <div class="job-actions">
-              ${snapshot.status === "queued" || snapshot.status === "running"
-                ? `<button type="button" data-cancel="${formatters.escapeHtml(snapshot.jobId)}">${formatters.escapeHtml(i18n.t("jobs.action.cancel"))}</button>`
-                : ""
-              }
-              ${canRetryPassword ? `<button type="button" data-retry-password="${formatters.escapeHtml(snapshot.jobId)}">${formatters.escapeHtml(i18n.t("jobs.action.retryPassword"))}</button>` : ""}
-              ${snapshot.canDismiss ? `<button type="button" data-dismiss="${formatters.escapeHtml(snapshot.jobId)}">${formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
-            </div>
+            <span class="job-status-pill">${formatters.escapeHtml(statusLabel)}</span>
           </div>
-          <div class="job-progress-grid">
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.elapsedTime"))}</dt><dd>${formatters.escapeHtml(formatDuration(progress.elapsedMs))}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.remainingTime"))}</dt><dd>${formatters.escapeHtml(formatDuration(progress.remainingMs))}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.files"))}</dt><dd>${filesText}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.errors"))}</dt><dd>${progress.errorCount}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.warnings"))}</dt><dd>${progress.warningCount}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.totalSize"))}</dt><dd>${progress.totalBytes === null ? "" : formatters.formatBytes(progress.totalBytes)}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.speed"))}</dt><dd>${progress.speedBytesPerSecond === null ? "" : `${formatters.formatBytes(progress.speedBytesPerSecond)}/s`}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.processed"))}</dt><dd>${formatters.formatBytes(progress.processedBytes)}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.compressedSize"))}</dt><dd>${progress.compressedBytes === null ? "" : formatters.formatBytes(progress.compressedBytes)}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.compressionRatio"))}</dt><dd>${progress.compressionRatio === null ? "" : `${Math.round(progress.compressionRatio * 100)}%`}</dd></div>
-            <div><dt>${formatters.escapeHtml(i18n.t("jobs.metric.status"))}</dt><dd>${formatters.escapeHtml(progress.latestStatusMessage)}</dd></div>
-            <div class="span-2"><dt>${formatters.escapeHtml(i18n.t("jobs.metric.fileName"))}</dt><dd>${formatters.escapeHtml(progress.currentFile)}</dd></div>
-          </div>
-          <progress
-            aria-label="${formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
-            ${progressAttributes}
-          ></progress>
-          <div class="job-summary">
-            ${
-              summary
-                ? `
-                  <p><strong>${formatters.escapeHtml(i18n.t("jobs.summary.written"))}</strong> ${summary.writtenEntries} entries, ${formatters.formatBytes(summary.writtenBytes)}</p>
-                  ${
-                    typeof summary.skippedEntries === "number"
-                      ? `<p><strong>${formatters.escapeHtml(i18n.t("jobs.summary.skipped"))}</strong> ${summary.skippedEntries}</p>`
-                      : ""
-                  }
-                  ${
-                    summary.warnings.length
-                      ? `<p><strong>${formatters.escapeHtml(i18n.t("jobs.summary.warnings"))}</strong> ${summary.warnings.length}</p>`
-                      : ""
-                  }
-                `
-                : `<p>${formatters.escapeHtml(i18n.t("jobs.summary.empty"))}</p>`
-            }
-          </div>
+          ${renderJobBody(state, {
+            canRetryPassword,
+            currentItem,
+            failedItem,
+            failedMessage,
+            filesText,
+            formatters,
+            kind: snapshot.kind,
+            outputActions,
+            progressAttributes,
+            processedText,
+            remainingText,
+            speedText,
+            summary,
+          })}
         </article>
       `;
     })
     .join("");
+}
+
+type RenderJobBodyOptions = {
+  canRetryPassword: boolean;
+  currentItem: string;
+  failedItem?: string;
+  failedMessage: string;
+  filesText: string;
+  formatters: JobsViewFormatters;
+  kind: JobKind;
+  outputActions: JobOutputAction[];
+  progressAttributes: string;
+  processedText: string;
+  remainingText: string;
+  speedText: string;
+  summary: JobState["snapshot"]["terminalSummary"];
+};
+
+function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
+  const { i18n } = options.formatters;
+  const snapshot = state.snapshot;
+  const jobId = options.formatters.escapeHtml(snapshot.jobId);
+
+  if (snapshot.status === "failed") {
+    return `
+      <div class="job-message job-message-error">
+        <strong>${options.formatters.escapeHtml(i18n.t("jobs.failed.title", { kind: options.formatters.formatJobKind(snapshot.kind) }))}</strong>
+        <span>${options.formatters.escapeHtml(options.failedMessage)}</span>
+        ${options.failedItem
+          ? `<small>${options.formatters.escapeHtml(i18n.t("jobs.failed.item"))} ${options.formatters.escapeHtml(options.failedItem)}</small>`
+          : ""
+        }
+      </div>
+      <div class="job-actions">
+        ${options.canRetryPassword ? `<button type="button" data-retry-password="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.retryPassword"))}</button>` : ""}
+        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+      </div>
+    `;
+  }
+
+  if (snapshot.status === "completed") {
+    return `
+      <div class="job-completion">
+        <strong>${options.formatters.escapeHtml(i18n.t("jobs.completed.title"))}</strong>
+        ${renderJobSummary(options)}
+      </div>
+      ${renderOutputActions(jobId, options)}
+      <div class="job-actions">
+        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+      </div>
+      <progress
+        aria-label="${options.formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
+        ${options.progressAttributes}
+      ></progress>
+    `;
+  }
+
+  if (snapshot.status === "cancelled") {
+    return `
+      <div class="job-message">
+        <strong>${options.formatters.escapeHtml(i18n.t("jobs.cancelled.title"))}</strong>
+        <span>${options.formatters.escapeHtml(options.currentItem)}</span>
+      </div>
+      <div class="job-actions">
+        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+      </div>
+      <progress
+        aria-label="${options.formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
+        ${options.progressAttributes}
+      ></progress>
+    `;
+  }
+
+  return `
+    <div class="job-current">
+      <span>${options.formatters.escapeHtml(i18n.t("jobs.current.label"))}</span>
+      <strong>${options.formatters.escapeHtml(options.currentItem)}</strong>
+    </div>
+    <progress
+      aria-label="${options.formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
+      ${options.progressAttributes}
+    ></progress>
+    <div class="job-facts" aria-label="${options.formatters.escapeHtml(i18n.t("jobs.metrics.aria"))}">
+      <span><strong>${options.formatters.escapeHtml(options.filesText)}</strong> ${options.formatters.escapeHtml(i18n.t("jobs.metric.files"))}</span>
+      <span><strong>${options.formatters.escapeHtml(options.speedText)}</strong> ${options.formatters.escapeHtml(i18n.t("jobs.metric.speed"))}</span>
+      <span><strong>${options.formatters.escapeHtml(options.remainingText)}</strong> ${options.formatters.escapeHtml(i18n.t("jobs.metric.remainingTime"))}</span>
+      <span><strong>${options.formatters.escapeHtml(options.processedText)}</strong> ${options.formatters.escapeHtml(i18n.t("jobs.metric.processed"))}</span>
+    </div>
+    <div class="job-actions">
+      ${snapshot.status === "running" ? `<button type="button" data-pause="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.pause"))}</button>` : ""}
+      ${snapshot.status === "paused" ? `<button type="button" data-resume="${jobId}">${options.formatters.escapeHtml(i18n.t("common.continue"))}</button>` : ""}
+      ${snapshot.status === "queued" || snapshot.status === "running" || snapshot.status === "paused"
+        ? `<button type="button" data-cancel="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.cancel"))}</button>`
+        : ""
+      }
+    </div>
+  `;
+}
+
+function renderJobSummary(options: RenderJobBodyOptions): string {
+  const { i18n } = options.formatters;
+  const summary = options.summary;
+
+  if (!summary) {
+    return `<p>${options.formatters.escapeHtml(i18n.t("jobs.summary.empty"))}</p>`;
+  }
+
+  const sizeLabelKey = isCreateJobKind(options.kind)
+    ? "jobs.summary.archiveSize"
+    : "jobs.summary.outputSize";
+
+  return `
+    <p>${options.formatters.escapeHtml(i18n.t("jobs.summary.entries", {
+      count: summary.writtenEntries,
+      size: options.formatters.formatBytes(summary.writtenBytes),
+    }))}</p>
+    ${
+      typeof summary.skippedEntries === "number"
+        ? `<p>${options.formatters.escapeHtml(i18n.t("jobs.summary.skippedCount", { count: summary.skippedEntries }))}</p>`
+        : ""
+    }
+    ${
+      summary.warnings.length
+        ? `<p>${options.formatters.escapeHtml(i18n.t("jobs.summary.warningCount", { count: summary.warnings.length }))}</p>`
+        : ""
+    }
+    <p class="job-output-size">${options.formatters.escapeHtml(i18n.t(sizeLabelKey))}</p>
+  `;
+}
+
+function renderOutputActions(jobId: string, options: RenderJobBodyOptions): string {
+  if (!options.outputActions.length) {
+    return "";
+  }
+
+  return `
+    <div class="job-output-actions">
+      ${options.outputActions.map((action, index) => {
+        const labelKey = action.kind === "open" ? "jobs.action.openOutput" : "jobs.action.revealOutput";
+        return `<button type="button" data-output-action="${options.formatters.escapeHtml(action.kind)}" data-output-job="${jobId}" data-output-index="${index}">${options.formatters.escapeHtml(options.formatters.i18n.t(labelKey))}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function latestFailedEvent(state: JobState) {
+  for (let index = state.events.length - 1; index >= 0; index -= 1) {
+    const event = state.events[index];
+    if (event.eventType === "failed") {
+      return event;
+    }
+  }
+
+  return null;
 }
 
 function jobStatusKey(status: JobState["snapshot"]["status"]): MessageKey {
