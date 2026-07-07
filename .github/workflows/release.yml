@@ -203,8 +203,11 @@ jobs:
             exit 1
           fi
 
+          sha256_file="release-bundles/zmanager-desktop-${release_version}-SHA256SUMS.txt"
+          tmp_sha256="$(mktemp)"
           find release-bundles -type f -print0 \
-            | xargs -0 sha256sum > release-bundles/SHA256SUMS
+            | xargs -0 sha256sum > "$tmp_sha256"
+          mv "$tmp_sha256" "$sha256_file"
 
           echo "Prepared $artifact_count artifacts"
 

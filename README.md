@@ -2,6 +2,12 @@
 
 ZManager Desktop is the Windows and Linux graphical shell for the ZManager Rust archive engine.
 
+## Release Notes
+
+For each release, update [`ReadMe.txt`](./ReadMe.txt) with the release notes that should appear in the GitHub release assets/description.
+The latest release package is currently `v0.1.0` and includes normalized cross-platform
+artifact names plus `zmanager-desktop-<version>-SHA256SUMS.txt`.
+
 This project is intentionally separate from the existing macOS app repository. The current macOS app remains a native SwiftUI/Finder/Quick Look product. This project owns the shared Windows/Linux desktop experience, while reusing the public Rust engine from `frankmanzhu/zmanager`.
 
 ## Repository Relationship
