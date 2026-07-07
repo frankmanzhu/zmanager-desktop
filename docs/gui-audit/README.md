@@ -1,5 +1,43 @@
 # ZManager GUI Audit - 2026-06-28
 
+## July 2026 Windows Look-And-Feel Pass
+
+Date: 2026-07-07
+
+Scope: refreshed the existing Playwright GUI visual scan and reviewed the screenshot set for Windows desktop look and feel.
+
+Evidence refreshed with:
+
+```powershell
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts
+```
+
+Result: 4 Playwright visual scan tests passed and refreshed the screenshot set in this folder.
+
+Design findings from the refreshed screenshot set:
+
+1. Primary work surface was too visually quiet.
+   - Health before pass: usable but weak.
+   - Evidence: Compress and Extract screens gave similar visual weight to toolbar, table, side panes, and status bar.
+   - Fix direction: make the center table and selected rows more legible, while keeping chrome quiet.
+
+2. Compress mode felt like a form attached to a file table.
+   - Health before pass: functional but visually clunky.
+   - Evidence: destination controls, action buttons, file table, and right-side options all competed.
+   - Fix direction: simplify the create strip, make the empty drop zone intentional, and reserve the right rail for contextual archive options.
+
+3. Side panes looked mechanically separated rather than native.
+   - Health before pass: passing layout checks, weak hierarchy.
+   - Evidence: left and right rails were separated by heavy grey resizer bars and similar backgrounds.
+   - Fix direction: use quieter rail surfaces, softer resizers, and clearer table header/body separation.
+
+4. Dialogs and job surfaces needed to share the same visual language.
+   - Health before pass: passing.
+   - Evidence: modal and job cards were readable but flatter than the rest of the app.
+   - Fix direction: tune spacing, header weight, shadow, and progress sizing without changing behavior.
+
+Companion guide: `docs/WINDOWS_GUI_DESIGN_GUIDE.md`.
+
 ## Scope
 
 Surface audited: current desktop shell frontend at `http://127.0.0.1:5173/`.
