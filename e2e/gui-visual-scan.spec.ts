@@ -165,13 +165,12 @@ test.beforeEach(async ({ page }) => {
 
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
   await captureAndScan(page, "03-compress-empty");
+  await captureHero(page, "00-readme-hero", ".workspace");
 
   await dragFiles(page, ["draft.zip"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
   await captureAndScan(page, "25-compress-drop-overlay");
   await dragLeave(page);
-
-  await captureHero(page, "00-readme-hero", ".workspace");
 
   await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
