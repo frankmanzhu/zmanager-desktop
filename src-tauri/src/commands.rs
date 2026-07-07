@@ -3626,6 +3626,13 @@ mod tests {
         fs::set_permissions(&archive_path, permissions.clone())
             .expect("permissions should be restricted");
 
+        if fs::File::open(&archive_path).is_ok() {
+            permissions.set_mode(0o644);
+            let _ = fs::set_permissions(&archive_path, permissions);
+            let _ = fs::remove_dir_all(&workspace);
+            return;
+        }
+
         let error = list_archive(crate::dto::ListArchiveRequest {
             archive_path: archive_path.to_string_lossy().to_string(),
             password: None,
