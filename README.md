@@ -20,6 +20,15 @@ A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 3. Install and open the app.
 4. Open an archive → extract/create → watch progress in the job list.
 
+### Package quick lookup
+
+| Platform | Recommended package | Alt package |
+|---|---|---|
+| Windows x64 | `zmanager-desktop-<version>-windows-x64-installer.exe` | `zmanager-desktop-<version>-windows-x64-portable.exe` |
+| Windows ARM64 | `zmanager-desktop-<version>-windows-arm64-installer.exe` | `zmanager-desktop-<version>-windows-arm64-portable.exe` |
+| Linux x64 | `zmanager-desktop-<version>-linux-x64.deb` or `.rpm` | — |
+| Linux ARM64 | `zmanager-desktop-<version>-linux-arm64.deb` or `.rpm` | — |
+
 ## Formats and positioning
 
 - ZIP, TZST, TZAP, 7Z
