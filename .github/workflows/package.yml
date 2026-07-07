@@ -48,7 +48,6 @@ jobs:
           name: ${{ matrix.artifact-name }}
           if-no-files-found: error
           path: |
-            src-tauri/target/release/zmanager-desktop.exe
             src-tauri/target/release/bundle/nsis/*.exe
 
   linux-deb:
@@ -79,7 +78,6 @@ jobs:
           name: ${{ matrix.artifact-name }}
           if-no-files-found: error
           path: |
-            src-tauri/target/release/bundle/deb/*.deb
             /tmp/zmanager-desktop-deb/*.deb
 
   linux-rpm:
@@ -112,5 +110,4 @@ jobs:
           name: ${{ matrix.artifact-name }}
           if-no-files-found: error
           path: |
-            src-tauri/target/release/bundle/rpm/*.rpm
             /tmp/zmanager-desktop-rpm/*.rpm
