@@ -2,7 +2,7 @@
 
 A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 
-![ZManager Desktop extract workflow](docs/gui-audit/36-min-extract-dialog.png)
+![ZManager Desktop extract workflow](docs/gui-audit/00-readme-hero.png)
 
 ## Why this feels trustworthy
 

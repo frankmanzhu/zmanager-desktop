@@ -211,6 +211,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await page.getByRole("button", { name: "Extract" }).click();
   await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
   await captureAndScan(page, "08-extract-dialog");
+  await captureHero(page, "00-readme-hero", ".workspace");
   await page.locator("#extract-cancel").click();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
@@ -330,6 +331,12 @@ async function captureAndScan(page: Page, name: string) {
   await page.screenshot({ path: `${auditDir}/${name}.png`, fullPage: false });
   const problems = await scanVisibleLayout(page);
   expect(problems, `${name} layout problems`).toEqual([]);
+}
+
+async function captureHero(page: Page, name: string, selector: string) {
+  const target = page.locator(selector);
+  await expect(target).toBeVisible();
+  await target.screenshot({ path: `${auditDir}/${name}.png` });
 }
 
 async function loadArchiveWithIcons(page: Page) {
