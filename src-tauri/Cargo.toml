@@ -15,10 +15,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
-zmanager-core = { git = "https://github.com/tzap-org/zmanager", branch = "main", package = "zmanager-core" }
-
-[patch."https://github.com/tzap-org/zmanager"]
-zmanager-core = { path = "vendor/zmanager/crates/zmanager-core" }
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.6", package = "zmanager-core" }
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22.1"
