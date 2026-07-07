@@ -1,5 +1,12 @@
 # ZManager Desktop
 
+[![Package](https://github.com/frankmanzhu/zmanager-desktop/actions/workflows/package.yml/badge.svg?branch=main)](https://github.com/frankmanzhu/zmanager-desktop/actions/workflows/package.yml)
+[![Release](https://github.com/frankmanzhu/zmanager-desktop/actions/workflows/release.yml/badge.svg)](https://github.com/frankmanzhu/zmanager-desktop/actions/workflows/release.yml)
+[![Release version](https://img.shields.io/github/v/release/frankmanzhu/zmanager-desktop?include_prereleases&label=release)](https://github.com/frankmanzhu/zmanager-desktop/releases)
+[![Latest tag](https://img.shields.io/github/v/tag/frankmanzhu/zmanager-desktop?sort=semver&label=latest%20tag)](https://github.com/frankmanzhu/zmanager-desktop/tags)
+[![Downloads](https://img.shields.io/github/downloads/frankmanzhu/zmanager-desktop/total)](https://github.com/frankmanzhu/zmanager-desktop/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 
 ![ZManager Desktop first-run Compress workflow](docs/gui-audit/00-readme-hero.png)
