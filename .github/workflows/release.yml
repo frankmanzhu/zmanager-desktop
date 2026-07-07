@@ -47,6 +47,7 @@ jobs:
           name: ${{ matrix.artifact-name }}
           if-no-files-found: error
           path: |
+            src-tauri/target/release/zmanager-desktop.exe
             src-tauri/target/release/bundle/nsis/*.exe
 
   package-deb:
@@ -130,33 +131,51 @@ jobs:
           set -euo pipefail
 
           mkdir -p release-bundles
+          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
+          release_version="${release_tag#v}"
+          declare -A seen_names=()
 
           artifact_count=0
           while IFS= read -r -d '' src; do
             rel="${src#release-artifacts/}"
             artifact_dir="${rel%%/*}"
             file_name="${rel#*/}"
+            normalized_name=""
 
             case "$artifact_dir" in
               zmanager-windows-x64)
-                [[ "$file_name" == *setup*.exe ]] || continue
-                normalized_name="zmanager-desktop-windows-x64-installer.exe"
+                arch="x64"
+                if [[ "$src" == *"/bundle/nsis/"* ]] || [[ "$file_name" == *setup*.exe ]]; then
+                  normalized_name="zmanager-desktop-${release_version}-windows-${arch}-installer.exe"
+                elif [[ "$file_name" == "zmanager-desktop.exe" ]]; then
+                  normalized_name="zmanager-desktop-${release_version}-windows-${arch}-portable.exe"
+                else
+                  echo "Skipping unknown windows artifact: $file_name" >&2
+                  continue
+                fi
                 ;;
               zmanager-windows-arm64)
-                [[ "$file_name" == *setup*.exe ]] || continue
-                normalized_name="zmanager-desktop-windows-arm64-installer.exe"
+                arch="arm64"
+                if [[ "$src" == *"/bundle/nsis/"* ]] || [[ "$file_name" == *setup*.exe ]]; then
+                  normalized_name="zmanager-desktop-${release_version}-windows-${arch}-installer.exe"
+                elif [[ "$file_name" == "zmanager-desktop.exe" ]]; then
+                  normalized_name="zmanager-desktop-${release_version}-windows-${arch}-portable.exe"
+                else
+                  echo "Skipping unknown windows artifact: $file_name" >&2
+                  continue
+                fi
                 ;;
               zmanager-linux-x64-deb)
-                normalized_name="zmanager-desktop-linux-x64.deb"
+                normalized_name="zmanager-desktop-${release_version}-linux-x64.deb"
                 ;;
               zmanager-linux-arm64-deb)
-                normalized_name="zmanager-desktop-linux-arm64.deb"
+                normalized_name="zmanager-desktop-${release_version}-linux-arm64.deb"
                 ;;
               zmanager-linux-x64-rpm)
-                normalized_name="zmanager-desktop-linux-x64.rpm"
+                normalized_name="zmanager-desktop-${release_version}-linux-x64.rpm"
                 ;;
               zmanager-linux-arm64-rpm)
-                normalized_name="zmanager-desktop-linux-arm64.rpm"
+                normalized_name="zmanager-desktop-${release_version}-linux-arm64.rpm"
                 ;;
               *)
                 echo "Skipping unexpected artifact directory: $artifact_dir" >&2
@@ -164,12 +183,13 @@ jobs:
                 ;;
             esac
 
-            if [[ -e "release-bundles/$normalized_name" ]]; then
-              echo "Duplicate artifact name after normalization: $normalized_name" >&2
-              exit 1
+            if [[ -n "${seen_names[$normalized_name]:-}" ]]; then
+              echo "Skipping duplicate artifact: $normalized_name" >&2
+              continue
             fi
 
             cp "$src" "release-bundles/$normalized_name"
+            seen_names["$normalized_name"]="1"
             artifact_count=$((artifact_count + 1))
           done < <(find release-artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \) -print0)
 
@@ -192,7 +212,7 @@ jobs:
             Automated release of zmanager-desktop from GitHub Actions.
 
             - Built from pinned zmanager dependency tag.
-            - Includes Windows NSIS installers and Linux DEB/RPM packages.
+            - Includes Windows portable and installer binaries, plus Linux DEB/RPM packages.
             - SHA256SUMS file is included for artifact verification.
           files: |
             release-bundles/*
