@@ -1,0 +1,168 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  package-windows:
+    name: Windows ${{ matrix.arch }} package
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2022
+            artifact-name: zmanager-windows-x64
+          - arch: arm64
+            runner: windows-11-arm
+            artifact-name: zmanager-windows-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare and build Windows package
+        shell: pwsh
+        run: |
+          .\scripts\prepare-windows-static-build.ps1 `
+            -Architecture ${{ matrix.arch }} `
+            -InstallMissing `
+            -InstallNodeModules `
+            -Build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/zmanager-desktop.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+
+  package-deb:
+    name: Linux DEB ${{ matrix.arch }} package
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            artifact-name: zmanager-linux-x64-deb
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            artifact-name: zmanager-linux-arm64-deb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Debian package
+        shell: bash
+        run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
+
+      - name: Upload Debian artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            /tmp/zmanager-desktop-deb/*.deb
+
+  package-rpm:
+    name: Linux RPM ${{ matrix.arch }} package
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: fedora:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            artifact-name: zmanager-linux-x64-rpm
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            artifact-name: zmanager-linux-arm64-rpm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build RPM package
+        shell: bash
+        run: scripts/build-linux-fedora-rpm.sh --install-deps --no-install
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/rpm/*.rpm
+            /tmp/zmanager-desktop-rpm/*.rpm
+
+  publish:
+    name: Publish release
+    runs-on: ubuntu-24.04
+    needs:
+      - package-windows
+      - package-deb
+      - package-rpm
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Prepare release bundle
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-bundles
+
+          artifact_count=0
+          while IFS= read -r -d '' src; do
+            artifact_count=$((artifact_count + 1))
+            rel="${src#release-artifacts/}"
+            rel="${rel//\//-}"
+            cp "$src" "release-bundles/$rel"
+          done < <(find release-artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+
+          if [ "$artifact_count" -eq 0 ]; then
+            echo "No packaged artifacts found" >&2
+            exit 1
+          fi
+
+          find release-bundles -type f -print0 \
+            | xargs -0 sha256sum > release-bundles/SHA256SUMS
+
+          echo "Prepared $artifact_count artifacts"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          name: zmanager-desktop ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          body: |
+            Automated release of zmanager-desktop from GitHub Actions.
+
+            - Built from pinned zmanager dependency tag.
+            - Includes Windows NSIS installers and Linux DEB/RPM packages.
+            - SHA256SUMS file is included for artifact verification.
+          files: |
+            release-bundles/*
+          generate_release_notes: true
