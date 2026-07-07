@@ -171,6 +171,8 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "25-compress-drop-overlay");
   await dragLeave(page);
 
+  await captureHero(page, "00-readme-hero", ".workspace");
+
   await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
   await expect(page.locator("#compress-source-body tr")).toHaveCount(3);
   await captureAndScan(page, "04-compress-with-sources");
@@ -211,7 +213,6 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await page.getByRole("button", { name: "Extract" }).click();
   await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
   await captureAndScan(page, "08-extract-dialog");
-  await captureHero(page, "00-readme-hero", ".workspace");
   await page.locator("#extract-cancel").click();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
