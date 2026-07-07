@@ -165,7 +165,7 @@ test.beforeEach(async ({ page }) => {
 
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
   await captureAndScan(page, "03-compress-empty");
-  await captureHero(page, "00-readme-hero", ".workspace");
+  await captureReadmeHero(page, "00-readme-hero", ".workspace");
 
   await dragFiles(page, ["draft.zip"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
@@ -339,6 +339,22 @@ async function captureHero(page: Page, name: string, selector: string) {
   await target.screenshot({ path: `${auditDir}/${name}.png` });
 }
 
+async function captureReadmeHero(page: Page, name: string, selector: string) {
+  const originalStatus = await page.locator(".workspace-status").evaluate((element) => element.textContent ?? "");
+  try {
+    await page.locator(".workspace-status").evaluate((element) => {
+      element.textContent = "Ready.";
+    });
+    await captureHero(page, name, selector);
+    const problems = await scanVisibleLayout(page);
+    expect(problems, `${name} layout problems`).toEqual([]);
+  } finally {
+    await page.locator(".workspace-status").evaluate((element, text) => {
+      element.textContent = text;
+    }, originalStatus);
+  }
+}
+
 async function loadArchiveWithIcons(page: Page) {
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
   await page.evaluate((fixtures) => window.__zmanagerDev?.setSystemIconFixtures(fixtures), {
@@ -442,39 +458,48 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       "select",
       "summary",
       "th",
+      ".pane-resizer",
+      ".pane-resizer-grip",
       "h1",
       "h2",
+      ".compress-empty-state strong",
+      ".compress-empty-state span",
+      ".archive-empty-copy h2",
+      ".archive-empty-copy p",
+      ".archive-empty-hint",
       ".workspace-status",
       ".status-bar button",
       "#context-menu [role='menuitem']",
     ].join(",");
 
+    const isRendered = (element: HTMLElement): boolean => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        !element.hidden &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+
+    const isHitTestVisible = (element: HTMLElement): boolean => {
+      const rect = element.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      if (centerX < 0 || centerY < 0 || centerX > window.innerWidth || centerY > window.innerHeight) {
+        return false;
+      }
+      const hitElement = document.elementFromPoint(centerX, centerY);
+      return hitElement !== null && (element === hitElement || element.contains(hitElement) || hitElement.contains(element));
+    };
+
+    const isPersistentActionControl = (element: HTMLElement): boolean =>
+      element.closest(".dialog-actions,.dialog-footer,.status-bar") !== null;
+
     const elements = Array.from(document.querySelectorAll<HTMLElement>(selector))
-      .filter((element) => {
-        if (isClippedByScrollableAncestor(element)) {
-          return false;
-        }
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const hitElement =
-          centerX >= 0 &&
-          centerY >= 0 &&
-          centerX <= window.innerWidth &&
-          centerY <= window.innerHeight
-            ? document.elementFromPoint(centerX, centerY)
-            : null;
-        return (
-          !element.hidden &&
-          style.display !== "none" &&
-          style.visibility !== "hidden" &&
-          rect.width > 0 &&
-          rect.height > 0 &&
-          hitElement !== null &&
-          (element === hitElement || element.contains(hitElement) || hitElement.contains(element))
-        );
-      });
+      .filter((element) => isRendered(element) && (!isClippedByScrollableAncestor(element) || isPersistentActionControl(element)));
 
     const problems: string[] = [];
 
@@ -492,6 +517,9 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       const clippedBlock = measuredElement.scrollHeight > measuredElement.clientHeight + 1;
       if (label && (clippedInline || clippedBlock)) {
         problems.push(`clipped ${element.tagName.toLowerCase()} "${label}"`);
+      }
+      if (isPersistentActionControl(element) && isClippedByScrollableAncestor(element)) {
+        problems.push(`clipped by scroll container ${element.tagName.toLowerCase()} "${label}"`);
       }
       const rect = element.getBoundingClientRect();
       if (rect.left < -1 || rect.right > window.innerWidth + 1 || rect.top < -1 || rect.bottom > window.innerHeight + 1) {
@@ -523,7 +551,7 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
     }
 
     const controls = elements.filter((element) =>
-      element.matches("button,input,select,summary,#context-menu [role='menuitem']"),
+      element.matches("button,input,select,summary,#context-menu [role='menuitem']") && isHitTestVisible(element),
     );
 
     for (let index = 0; index < controls.length; index += 1) {

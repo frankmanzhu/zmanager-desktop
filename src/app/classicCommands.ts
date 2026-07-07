@@ -3,6 +3,12 @@ import type { MessageKey, Translator } from "./i18n/translator";
 
 export const UNSUPPORTED_OPERATION_MESSAGE = "Operation is not supported.";
 export const SINGLE_FILE_REQUIRED_MESSAGE = "You must select one file.";
+export const SINGLE_FOLDER_REQUIRED_MESSAGE = "You must select one folder.";
+export const NO_ARCHIVE_OPEN_MESSAGE = "Open an archive first.";
+export const ARCHIVE_NOT_READY_MESSAGE = "Archive contents are not ready.";
+export const NO_SELECTION_MESSAGE = "Select one or more entries first.";
+export const NO_ENTRIES_MESSAGE = "No entries are available.";
+export const JOB_RUNNING_MESSAGE = "Finish the current job before starting another operation.";
 
 export type CommandId =
   | "open"
@@ -66,6 +72,7 @@ export type CommandId =
   | "deleteTempFiles"
   | "helpContents"
   | "about"
+  | "jobs"
   | "add"
   | "extract"
   | "test"
@@ -91,6 +98,14 @@ export type MenuItem =
 export type MenuGroup = {
   label: "File" | "Edit" | "View" | "Favorites" | "Tools" | "Help";
   items: MenuItem[];
+};
+
+export type CommandBarGroupId = "compress" | "extract" | "table" | "jobs" | "settings" | "help";
+
+export type CommandBarGroup = {
+  id: CommandBarGroupId;
+  label: string;
+  items: CommandId[];
 };
 
 export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
@@ -155,6 +170,7 @@ export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   deleteTempFiles: { id: "deleteTempFiles", label: "Delete Temporary Files...", labelKey: "command.deleteTempFiles" },
   helpContents: { id: "helpContents", label: "Contents...", labelKey: "command.helpContents", shortcut: "F1", unsupported: true },
   about: { id: "about", label: "About ZManager...", labelKey: "command.about" },
+  jobs: { id: "jobs", label: "Jobs", tooltip: "Open Jobs task center" },
   add: { id: "add", label: "Add", labelKey: "command.add", shortcut: "Ctrl+N", tooltip: "Add (Ctrl+N)" },
   extract: { id: "extract", label: "Extract", labelKey: "command.extract", shortcut: "F5", tooltip: "Extract (F5)" },
   test: { id: "test", label: "Test", labelKey: "command.test", tooltip: "Test archive" },
@@ -227,12 +243,16 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
   },
 ];
 
-export const CLASSIC_TOOLBAR_GROUPS: CommandId[][] = [
-  ["add", "extract", "test"],
-  ["info"],
+export const CLASSIC_TOOLBAR_GROUPS: CommandBarGroup[] = [
+  { id: "compress", label: "Compress", items: ["add", "createFile"] },
+  { id: "extract", label: "Extract", items: ["open", "extract", "test"] },
+  { id: "table", label: "Table actions", items: ["view", "copy", "info", "refresh", "selectAll", "flatView"] },
+  { id: "jobs", label: "Jobs", items: ["jobs"] },
+  { id: "settings", label: "Settings", items: ["options", "deleteTempFiles"] },
+  { id: "help", label: "Help", items: ["helpContents", "about"] },
 ];
 
-export const CLASSIC_TOOLBAR_ORDER: CommandId[] = CLASSIC_TOOLBAR_GROUPS.flat();
+export const CLASSIC_TOOLBAR_ORDER: CommandId[] = CLASSIC_TOOLBAR_GROUPS.flatMap((group) => group.items);
 
 export type CommandContext = {
   browseState: BrowseState;
@@ -302,6 +322,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   const canNavigateUp = Boolean(context.canNavigateUp);
   const canOpenInside = Boolean(context.canOpenInside);
   const mutationsEnabled = context.mutableOperationsSupported && !context.jobRunning;
+  const archiveReason = context.hasArchive ? ARCHIVE_NOT_READY_MESSAGE : NO_ARCHIVE_OPEN_MESSAGE;
 
   const state = Object.fromEntries(
     (Object.keys(COMMAND_DEFINITIONS) as CommandId[]).map((id) => [id, { enabled: false }]),
@@ -313,22 +334,26 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
     }
   };
 
-  enable(["open", "createFile", "add", "options", "helpContents", "about", "archiveToolbar", "standardToolbar", "largeButtons", "showButtonText", "exit"]);
-  enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive);
-  enable(["copy"], hasSelection && canListEntries);
-  enable(["view", "openOutside"], hasOneSelection && canListEntries);
-  enable(["openInside"], canOpenInside && canListEntries);
-  enable(["selectAll"], canListEntries && context.visibleSelectableCount > 0);
-  enable(["deselectAll"], hasSelection);
-  enable(["invertSelection"], canListEntries && context.visibleSelectableCount > 0);
-  enable(["selectByType", "deselectByType"], hasFocusedOrSelected && canListEntries);
-  enable(["detailsView", "sortName", "sortType", "sortDate", "sortSize"], canListEntries);
-  enable(["openRoot"], canUseArchive);
-  enable(["upOneLevel"], canUseArchive && canNavigateUp);
+  enable(["open", "createFile", "add", "options", "helpContents", "about", "jobs", "archiveToolbar", "standardToolbar", "largeButtons", "showButtonText", "exit"]);
+  enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
+  enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
+  enable(["view", "openOutside"], hasOneSelection && canListEntries, hasOneSelection ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
+  enable(["openInside"], canOpenInside && canListEntries, hasOneSelection ? SINGLE_FOLDER_REQUIRED_MESSAGE : SINGLE_FILE_REQUIRED_MESSAGE);
+  enable(["selectAll"], canListEntries && context.visibleSelectableCount > 0, canListEntries ? NO_ENTRIES_MESSAGE : archiveReason);
+  enable(["deselectAll"], hasSelection, NO_SELECTION_MESSAGE);
+  enable(["invertSelection"], canListEntries && context.visibleSelectableCount > 0, canListEntries ? NO_ENTRIES_MESSAGE : archiveReason);
+  enable(["selectByType", "deselectByType"], hasFocusedOrSelected && canListEntries, hasFocusedOrSelected ? archiveReason : NO_SELECTION_MESSAGE);
+  enable(["detailsView", "sortName", "sortType", "sortDate", "sortSize"], canListEntries, archiveReason);
+  enable(["openRoot"], canUseArchive, archiveReason);
+  enable(["upOneLevel"], canUseArchive && canNavigateUp, canUseArchive ? "Already at the archive root." : archiveReason);
   enable(["deleteTempFiles"], true);
 
   const mutationIds: CommandId[] = ["edit", "rename", "moveTo", "delete", "comment", "createFolder", "move"];
-  enable(mutationIds, mutationsEnabled && hasSelection);
+  enable(mutationIds, mutationsEnabled && hasSelection, context.jobRunning ? JOB_RUNNING_MESSAGE : NO_SELECTION_MESSAGE);
+
+  if (context.jobRunning) {
+    enable(["open", "createFile", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
+  }
 
   for (const id of Object.keys(COMMAND_DEFINITIONS) as CommandId[]) {
     if (COMMAND_DEFINITIONS[id].unsupported) {

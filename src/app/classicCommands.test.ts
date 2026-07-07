@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARCHIVE_NOT_READY_MESSAGE,
   CLASSIC_MENU_GROUPS,
+  CLASSIC_TOOLBAR_GROUPS,
   CLASSIC_TOOLBAR_ORDER,
   COMMAND_DEFINITIONS,
+  JOB_RUNNING_MESSAGE,
+  NO_ARCHIVE_OPEN_MESSAGE,
+  NO_ENTRIES_MESSAGE,
+  NO_SELECTION_MESSAGE,
+  SINGLE_FILE_REQUIRED_MESSAGE,
+  SINGLE_FOLDER_REQUIRED_MESSAGE,
   commandLabel,
   commandTooltipText,
   type CommandId,
@@ -63,11 +71,31 @@ describe("classic command definitions", () => {
   });
 
   it("keeps the classic toolbar command order", () => {
+    expect(CLASSIC_TOOLBAR_GROUPS.map((group) => group.id)).toEqual([
+      "compress",
+      "extract",
+      "table",
+      "jobs",
+      "settings",
+      "help",
+    ]);
     expect(CLASSIC_TOOLBAR_ORDER.map((id) => COMMAND_DEFINITIONS[id].label)).toEqual([
       "Add",
+      "Create File",
+      "Open...",
       "Extract",
       "Test",
+      "View",
+      "Copy",
       "Info",
+      "Refresh",
+      "Select All",
+      "Flat View",
+      "Jobs",
+      "Options...",
+      "Delete Temporary Files...",
+      "Contents...",
+      "About ZManager...",
     ]);
   });
 
@@ -96,9 +124,15 @@ describe("command state selector", () => {
 
     expect(state.open.enabled).toBe(true);
     expect(state.add.enabled).toBe(true);
+    expect(state.createFile.enabled).toBe(true);
+    expect(state.jobs.enabled).toBe(true);
     expect(state.extract.enabled).toBe(false);
+    expect(state.extract.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
     expect(state.test.enabled).toBe(false);
+    expect(state.test.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
     expect(state.info.enabled).toBe(false);
+    expect(state.info.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
+    expect(state.selectAll.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
   });
 
   it("enables archive-level commands after a listing is available", () => {
@@ -114,6 +148,9 @@ describe("command state selector", () => {
     expect(state.properties.enabled).toBe(true);
     expect(state.selectAll.enabled).toBe(true);
     expect(state.upOneLevel.enabled).toBe(false);
+    expect(state.upOneLevel.reason).toBe("Already at the archive root.");
+    expect(state.view.enabled).toBe(false);
+    expect(state.view.reason).toBe(SINGLE_FILE_REQUIRED_MESSAGE);
   });
 
   it("enables row commands for a single selected entry and keeps mutations disabled", () => {
@@ -129,8 +166,69 @@ describe("command state selector", () => {
     expect(state.view.enabled).toBe(true);
     expect(state.copy.enabled).toBe(true);
     expect(state.openInside.enabled).toBe(false);
+    expect(state.openInside.reason).toBe(SINGLE_FOLDER_REQUIRED_MESSAGE);
     expect(state.delete.enabled).toBe(false);
     expect(state.rename.enabled).toBe(false);
+  });
+
+  it("enables selection actions and disables single-file actions for multiple selected entries", () => {
+    const state = selectCommandState({
+      ...baseContext,
+      browseState: "loaded",
+      hasArchive: true,
+      focusedRow: true,
+      selectedCount: 2,
+      visibleSelectableCount: 4,
+    });
+
+    expect(state.copy.enabled).toBe(true);
+    expect(state.deselectAll.enabled).toBe(true);
+    expect(state.selectByType.enabled).toBe(true);
+    expect(state.view.enabled).toBe(false);
+    expect(state.view.reason).toBe(SINGLE_FILE_REQUIRED_MESSAGE);
+    expect(state.openOutside.enabled).toBe(false);
+    expect(state.openOutside.reason).toBe(SINGLE_FILE_REQUIRED_MESSAGE);
+  });
+
+  it("keeps archive-level commands disabled with useful reasons while loading or empty", () => {
+    const loadingState = selectCommandState({
+      ...baseContext,
+      browseState: "loading",
+      hasArchive: true,
+    });
+    const emptyLoadedState = selectCommandState({
+      ...baseContext,
+      browseState: "loaded",
+      hasArchive: true,
+      visibleSelectableCount: 0,
+    });
+
+    expect(loadingState.extract.enabled).toBe(false);
+    expect(loadingState.extract.reason).toBe(ARCHIVE_NOT_READY_MESSAGE);
+    expect(emptyLoadedState.selectAll.enabled).toBe(false);
+    expect(emptyLoadedState.selectAll.reason).toBe(NO_ENTRIES_MESSAGE);
+    expect(emptyLoadedState.copy.enabled).toBe(false);
+    expect(emptyLoadedState.copy.reason).toBe(NO_SELECTION_MESSAGE);
+  });
+
+  it("blocks job-starting commands while a job is running", () => {
+    const state = selectCommandState({
+      ...baseContext,
+      browseState: "loaded",
+      hasArchive: true,
+      selectedCount: 1,
+      visibleSelectableCount: 3,
+      jobRunning: true,
+    });
+
+    expect(state.jobs.enabled).toBe(true);
+    expect(state.info.enabled).toBe(true);
+    expect(state.open.enabled).toBe(false);
+    expect(state.open.reason).toBe(JOB_RUNNING_MESSAGE);
+    expect(state.add.enabled).toBe(false);
+    expect(state.extract.enabled).toBe(false);
+    expect(state.test.enabled).toBe(false);
+    expect(state.refresh.enabled).toBe(false);
   });
 
   it("enables navigation commands only when their target exists", () => {

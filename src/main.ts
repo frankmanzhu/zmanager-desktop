@@ -11,8 +11,10 @@ import {
   APP_PATH_BAR_HEIGHT_PX,
   APP_STATUS_BAR_HEIGHT_PX,
   APP_NAV_PANE_MIN_WIDTH_PX,
+  APP_NAV_PANE_DEFAULT_WIDTH_PX,
   APP_NAV_PANE_MAX_WIDTH_PX,
   APP_DETAILS_PANE_MIN_WIDTH_PX,
+  APP_DETAILS_PANE_DEFAULT_WIDTH_PX,
   APP_DETAILS_PANE_MAX_WIDTH_PX,
   APP_STATUS_BAR_PARTS,
 } from "./app/constants";
@@ -20,7 +22,13 @@ import {
   CLASSIC_MENU_GROUPS,
   CLASSIC_TOOLBAR_GROUPS,
   COMMAND_DEFINITIONS,
+  ARCHIVE_NOT_READY_MESSAGE,
+  JOB_RUNNING_MESSAGE,
+  NO_ARCHIVE_OPEN_MESSAGE,
+  NO_ENTRIES_MESSAGE,
+  NO_SELECTION_MESSAGE,
   SINGLE_FILE_REQUIRED_MESSAGE,
+  SINGLE_FOLDER_REQUIRED_MESSAGE,
   UNSUPPORTED_OPERATION_MESSAGE,
   commandLabel,
   commandTooltip,
@@ -342,13 +350,31 @@ document.documentElement.style.setProperty("--zmanager-toolbar-height", `${APP_T
 document.documentElement.style.setProperty("--zmanager-pathbar-height", `${APP_PATH_BAR_HEIGHT_PX}px`);
 document.documentElement.style.setProperty("--zmanager-statusbar-height", `${APP_STATUS_BAR_HEIGHT_PX}px`);
 document.documentElement.style.setProperty("--zmanager-nav-pane-min", `${APP_NAV_PANE_MIN_WIDTH_PX}px`);
+document.documentElement.style.setProperty("--zmanager-nav-pane-width", `${APP_NAV_PANE_DEFAULT_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-nav-pane-max", `${APP_NAV_PANE_MAX_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-details-pane-min", `${APP_DETAILS_PANE_MIN_WIDTH_PX}px`);
+document.documentElement.style.setProperty("--zmanager-details-pane-width", `${APP_DETAILS_PANE_DEFAULT_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-details-pane-max", `${APP_DETAILS_PANE_MAX_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
 
 function toolbarIcon(
-  name: "open" | "new" | "add" | "extract" | "test" | "copy" | "move" | "delete" | "preview" | "info" | "jobs" | "settings",
+  name:
+    | "open"
+    | "new"
+    | "add"
+    | "extract"
+    | "test"
+    | "copy"
+    | "move"
+    | "delete"
+    | "preview"
+    | "info"
+    | "jobs"
+    | "settings"
+    | "refresh"
+    | "select"
+    | "flat"
+    | "help",
 ): string {
   const paths = {
     open: '<path d="M3 6.5h4.2l1.3 1.5H13v6H3z" /><path d="M3 6.5V4h3.8l1.3 1.5H13V8" />',
@@ -363,6 +389,10 @@ function toolbarIcon(
     info: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M7.5 7v3" /><path d="M7.5 5h.01" />',
     jobs: '<path d="M3 4.5h9" /><path d="M3 7.5h9" /><path d="M3 10.5h6" />',
     settings: '<path d="M6.5 2.5h2l.4 1.5 1.3.5 1.4-.8 1 1.7-1.1 1.1.2 1.5 1.1 1.1-1 1.7-1.4-.8-1.3.5-.4 1.5h-2l-.4-1.5-1.3-.5-1.4.8-1-1.7 1.1-1.1-.2-1.5-1.1-1.1 1-1.7 1.4.8 1.3-.5z" /><path d="M7.5 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
+    refresh: '<path d="M12 5.5A4.8 4.8 0 0 0 3.6 4" /><path d="M3.5 2.5V4h1.7" /><path d="M3 9.5A4.8 4.8 0 0 0 11.4 11" /><path d="M11.5 12.5V11H9.8" />',
+    select: '<path d="M3.5 3.5h8v8h-8z" /><path d="M5.2 7.4l1.7 1.7 3-3.5" />',
+    flat: '<path d="M3 4h9" /><path d="M3 7.5h9" /><path d="M3 11h9" />',
+    help: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M6 6a1.7 1.7 0 1 1 2.5 1.5c-.7.4-1 .8-1 1.5" /><path d="M7.5 10.8h.01" />',
   } satisfies Record<typeof name, string>;
 
   return `<svg class="tool-icon" aria-hidden="true" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
@@ -420,9 +450,38 @@ function commandIcon(commandId: CommandId): ReturnType<typeof toolbarIcon> {
     case "properties":
       return toolbarIcon("info");
     case "options":
+    case "deleteTempFiles":
       return toolbarIcon("settings");
+    case "jobs":
+      return toolbarIcon("jobs");
+    case "refresh":
+      return toolbarIcon("refresh");
+    case "selectAll":
+      return toolbarIcon("select");
+    case "flatView":
+      return toolbarIcon("flat");
+    case "helpContents":
+    case "about":
+      return toolbarIcon("help");
     default:
       return toolbarIcon("open");
+  }
+}
+
+function menuGroupAccessKey(label: Parameters<typeof menuGroupLabel>[0]): string {
+  switch (label) {
+    case "File":
+      return "f";
+    case "Edit":
+      return "e";
+    case "View":
+      return "v";
+    case "Favorites":
+      return "a";
+    case "Tools":
+      return "t";
+    case "Help":
+      return "h";
   }
 }
 
@@ -461,7 +520,11 @@ function renderMenuBar(): string {
   return CLASSIC_MENU_GROUPS
     .map((group) => `
       <details class="menu">
-        <summary data-menu-group-label="${escapeHtmlValue(group.label)}">${escapeHtmlValue(group.label)}</summary>
+        <summary
+          data-menu-group-label="${escapeHtmlValue(group.label)}"
+          accesskey="${menuGroupAccessKey(group.label)}"
+          aria-keyshortcuts="Alt+${menuGroupAccessKey(group.label).toUpperCase()}"
+        >${escapeHtmlValue(group.label)}</summary>
         <div class="menu-popover">
           ${group.items.map(renderMenuItem).join("")}
         </div>
@@ -486,6 +549,14 @@ function toolbarButtonId(commandId: CommandId): string {
       return "delete-toolbar";
     case "info":
       return "info-toolbar";
+    case "open":
+      return "open-archive";
+    case "createFile":
+      return "new-archive";
+    case "options":
+      return "preferences-toolbar";
+    case "jobs":
+      return "jobs-drawer-open";
     default:
       return `toolbar-${commandId}`;
   }
@@ -494,8 +565,9 @@ function toolbarButtonId(commandId: CommandId): string {
 function renderToolbar(): string {
   return CLASSIC_TOOLBAR_GROUPS
     .map((group) => `
-      <div class="toolbar-group">
-        ${group.map((commandId) => {
+      <div class="toolbar-group" role="group" aria-label="${escapeHtmlValue(group.label)}" data-command-group="${group.id}">
+        <span class="toolbar-group-label">${escapeHtmlValue(group.label)}</span>
+        ${group.items.map((commandId) => {
           const command = COMMAND_DEFINITIONS[commandId];
           return `
             <button
@@ -569,15 +641,10 @@ appRoot.innerHTML = `
         <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress" data-i18n-text="workspace.mode.compress">Compress</button>
         <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract" data-i18n-text="workspace.mode.extract">Extract</button>
       </div>
-      <div class="legacy-command-buttons">
+      <div class="command-strip">
         ${renderToolbar()}
-        <button id="open-archive" type="button" data-command-id="open" data-i18n-aria-label="commands.openArchive" aria-label="Open archive">${toolbarIcon("open")}</button>
-        <button id="new-archive" type="button" data-command-id="createFile" data-i18n-aria-label="commands.newArchive" aria-label="New archive">${toolbarIcon("new")}</button>
-        <button id="preferences-toolbar" type="button" data-command-id="options" data-i18n-aria-label="commands.options" aria-label="Options">${toolbarIcon("settings")}</button>
-        <button id="jobs-drawer-open" type="button">${toolbarIcon("jobs")}<span class="tool-label" data-i18n-text="jobs.title">Jobs</span></button>
       </div>
       <div class="toolbar-spacer"></div>
-      <p id="workspace-status" class="workspace-status" data-i18n-text="workspace.ready">Ready</p>
     </header>
 
     <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
@@ -614,13 +681,25 @@ appRoot.innerHTML = `
         </div>
       </div>
 
-      <aside class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
+      <aside id="navigation-pane" class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
         <div class="pane-header">
           <h2 data-i18n-text="pane.folders">Folders</h2>
         </div>
         <div id="tree-content" class="tree-content"></div>
       </aside>
-      <div class="pane-resizer" data-pane-resizer="navigation" role="separator" aria-orientation="vertical" aria-label="Resize folder pane"></div>
+      <div
+        class="pane-resizer"
+        data-pane-resizer="navigation"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        aria-controls="navigation-pane"
+        aria-label="Resize folder pane"
+        aria-valuemin="${APP_NAV_PANE_MIN_WIDTH_PX}"
+        aria-valuemax="${APP_NAV_PANE_MAX_WIDTH_PX}"
+        aria-valuenow="${APP_NAV_PANE_DEFAULT_WIDTH_PX}"
+        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+      ><span class="pane-resizer-grip" aria-hidden="true"></span></div>
 
       <section class="archive-table-pane" data-i18n-aria-label="workspace.archiveEntries.aria" aria-label="Archive entries">
         <div class="table-pane-header">
@@ -687,9 +766,21 @@ appRoot.innerHTML = `
           </table>
         </div>
       </section>
-      <div class="pane-resizer" data-pane-resizer="details" role="separator" aria-orientation="vertical" aria-label="Resize details pane"></div>
+      <div
+        class="pane-resizer"
+        data-pane-resizer="details"
+        role="separator"
+        tabindex="0"
+        aria-orientation="vertical"
+        aria-controls="details-pane"
+        aria-label="Resize details pane"
+        aria-valuemin="${APP_DETAILS_PANE_MIN_WIDTH_PX}"
+        aria-valuemax="${APP_DETAILS_PANE_MAX_WIDTH_PX}"
+        aria-valuenow="${APP_DETAILS_PANE_DEFAULT_WIDTH_PX}"
+        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+      ><span class="pane-resizer-grip" aria-hidden="true"></span></div>
 
-      <aside class="details-pane" data-i18n-aria-label="workspace.details.aria" aria-label="Details and actions">
+      <aside id="details-pane" class="details-pane" data-i18n-aria-label="workspace.details.aria" aria-label="Details and actions">
         <div class="pane-header">
           <h2 id="details-pane-title" data-i18n-text="pane.details">Details</h2>
         </div>
@@ -771,6 +862,7 @@ appRoot.innerHTML = `
       <span id="status-selection-size" class="status-part"></span>
       <span id="status-focused-size" class="status-part"></span>
       <span id="status-focused-modified" class="status-part"></span>
+      <span id="workspace-status" class="status-part workspace-status" data-i18n-text="workspace.readyWithPeriod">Ready.</span>
       <span id="status-text" class="sr-only" data-i18n-text="workspace.readyWithPeriod">Ready.</span>
       <button id="status-job-button" type="button">
         <span id="active-job-text" data-i18n-text="status.noJobs">No jobs</span>
@@ -1083,7 +1175,7 @@ const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
 const commandToolbarElement = document.querySelector<HTMLDivElement>(".command-toolbar")!;
 const modeCompressButton = document.querySelector<HTMLButtonElement>("#mode-compress")!;
 const modeExtractButton = document.querySelector<HTMLButtonElement>("#mode-extract")!;
-const statusElement = document.querySelector<HTMLParagraphElement>("#workspace-status")!;
+const statusElement = document.querySelector<HTMLElement>("#workspace-status")!;
 const statusTextElement = document.querySelector<HTMLSpanElement>("#status-text")!;
 const statusSelectionCountElement = document.querySelector<HTMLSpanElement>("#status-selection-count")!;
 const statusSelectionSizeElement = document.querySelector<HTMLSpanElement>("#status-selection-size")!;
@@ -2118,7 +2210,9 @@ function truncatedPathPreview(paths: string[], maxItems = 3, maxLength = 140): s
     return preview;
   }
 
-  return `${preview.slice(0, maxLength - 1)}…`;
+  const headLength = Math.max(8, Math.ceil((maxLength - 3) * 0.58));
+  const tailLength = Math.max(8, maxLength - headLength - 3);
+  return `${preview.slice(0, headLength)}...${preview.slice(-tailLength)}`;
 }
 
 function normalizeEntryPath(path: string): string {
@@ -2837,6 +2931,7 @@ function renderWorkspaceMode() {
     if (!currentArchivePath) {
       metaElement.textContent = i18n.t("extract.tableDescription");
     }
+    updateStatusBar();
   }
 }
 
@@ -4576,6 +4671,8 @@ type ResizablePane = "navigation" | "details";
 
 const PANE_RESIZE_CENTER_MIN_WIDTH_PX = 360;
 const PANE_RESIZE_GUTTER_TOTAL_PX = 10;
+const PANE_RESIZE_KEYBOARD_STEP_PX = 16;
+const PANE_RESIZE_KEYBOARD_LARGE_STEP_PX = 48;
 
 function paneWidthBounds(pane: ResizablePane): { min: number; max: number } {
   return pane === "navigation"
@@ -4583,7 +4680,36 @@ function paneWidthBounds(pane: ResizablePane): { min: number; max: number } {
     : { min: APP_DETAILS_PANE_MIN_WIDTH_PX, max: APP_DETAILS_PANE_MAX_WIDTH_PX };
 }
 
-function setResizablePaneWidth(pane: ResizablePane, width: number) {
+function paneElementForResize(pane: ResizablePane): HTMLElement {
+  return pane === "navigation" ? navigationPaneElement : detailsPaneElement;
+}
+
+function paneResizerForResize(pane: ResizablePane): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-pane-resizer="${pane}"]`);
+}
+
+function updatePaneResizerAttributes(pane: ResizablePane, width: number) {
+  const resizer = paneResizerForResize(pane);
+  if (!resizer) {
+    return;
+  }
+
+  const { min, max } = paneWidthBounds(pane);
+  resizer.setAttribute("aria-valuemin", String(min));
+  resizer.setAttribute("aria-valuemax", String(max));
+  resizer.setAttribute("aria-valuenow", String(Math.round(width)));
+}
+
+function currentResizablePaneWidth(pane: ResizablePane): number {
+  const width = paneElementForResize(pane).getBoundingClientRect().width;
+  if (width > 0) {
+    return width;
+  }
+
+  return pane === "navigation" ? APP_NAV_PANE_DEFAULT_WIDTH_PX : APP_DETAILS_PANE_DEFAULT_WIDTH_PX;
+}
+
+function setResizablePaneWidth(pane: ResizablePane, width: number): number {
   const { min, max } = paneWidthBounds(pane);
   const shellWidth = browserShellElement.getBoundingClientRect().width;
   const otherPaneWidth = pane === "navigation"
@@ -4593,6 +4719,8 @@ function setResizablePaneWidth(pane: ResizablePane, width: number) {
   const nextWidth = Math.max(min, Math.min(width, max, Math.max(min, maxWidthFromShell)));
   const variableName = pane === "navigation" ? "--zmanager-nav-pane-width" : "--zmanager-details-pane-width";
   document.documentElement.style.setProperty(variableName, `${Math.round(nextWidth)}px`);
+  updatePaneResizerAttributes(pane, nextWidth);
+  return nextWidth;
 }
 
 function startPaneResize(event: PointerEvent, pane: ResizablePane) {
@@ -4601,9 +4729,7 @@ function startPaneResize(event: PointerEvent, pane: ResizablePane) {
   document.body.classList.add("is-resizing-pane");
 
   const startX = event.clientX;
-  const startWidth = pane === "navigation"
-    ? navigationPaneElement.getBoundingClientRect().width
-    : detailsPaneElement.getBoundingClientRect().width;
+  const startWidth = currentResizablePaneWidth(pane);
 
   const onPointerMove = (moveEvent: PointerEvent) => {
     const delta = moveEvent.clientX - startX;
@@ -4618,6 +4744,31 @@ function startPaneResize(event: PointerEvent, pane: ResizablePane) {
 
   document.addEventListener("pointermove", onPointerMove);
   document.addEventListener("pointerup", onPointerUp, { once: true });
+}
+
+function resizePaneByKeyboard(event: KeyboardEvent, pane: ResizablePane) {
+  const { min, max } = paneWidthBounds(pane);
+  const currentWidth = currentResizablePaneWidth(pane);
+  const step = event.shiftKey ? PANE_RESIZE_KEYBOARD_LARGE_STEP_PX : PANE_RESIZE_KEYBOARD_STEP_PX;
+  let nextWidth: number | null = null;
+
+  if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+    nextWidth = pane === "navigation" ? currentWidth - step : currentWidth + step;
+  } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+    nextWidth = pane === "navigation" ? currentWidth + step : currentWidth - step;
+  } else if (event.key === "Home") {
+    nextWidth = min;
+  } else if (event.key === "End") {
+    nextWidth = max;
+  }
+
+  if (nextWidth === null) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  setResizablePaneWidth(pane, nextWidth);
 }
 
 function entryIsUnderFolder(entryPath: string, folderPath: string): boolean {
@@ -4942,6 +5093,18 @@ function localizedCommandStateReason(reason?: string): string | undefined {
   }
   if (reason === SINGLE_FILE_REQUIRED_MESSAGE) {
     return i18n.t("command.singleFileRequired");
+  }
+  if (reason === SINGLE_FOLDER_REQUIRED_MESSAGE) {
+    return i18n.t("command.singleFolderRequired");
+  }
+  if (
+    reason === NO_ARCHIVE_OPEN_MESSAGE ||
+    reason === ARCHIVE_NOT_READY_MESSAGE ||
+    reason === NO_SELECTION_MESSAGE ||
+    reason === NO_ENTRIES_MESSAGE ||
+    reason === JOB_RUNNING_MESSAGE
+  ) {
+    return reason;
   }
   return reason;
 }
@@ -5966,6 +6129,21 @@ async function onDeleteTemporaryFiles() {
   }
 }
 
+async function copySelectedEntryPathsToClipboard() {
+  const selectedPaths = getSelectedEntryPaths();
+  if (selectedPaths.length === 0) {
+    setOperationalMessage("command.singleFileRequired");
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(selectedPaths.join("\n"));
+    setOperationalStatus(`Copied ${selectedPaths.length} archive path${selectedPaths.length === 1 ? "" : "s"}.`);
+  } catch {
+    setOperationalStatus("Could not copy the selected archive paths.");
+  }
+}
+
 const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";
 
 function readJsonFromStorage<T>(key: string, fallback: T | null = null): T | null {
@@ -6656,6 +6834,17 @@ function bindActions() {
   infoToolbarButton.addEventListener("click", showCurrentInfo);
   jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
+  document.querySelector<HTMLButtonElement>("#toolbar-view")?.addEventListener("click", () => void onPreviewSelectedEntry());
+  document.querySelector<HTMLButtonElement>("#copy-toolbar")?.addEventListener("click", () => void copySelectedEntryPathsToClipboard());
+  document.querySelector<HTMLButtonElement>("#toolbar-refresh")?.addEventListener("click", () => void onRefreshArchive());
+  document.querySelector<HTMLButtonElement>("#toolbar-selectAll")?.addEventListener("click", selectVisibleEntries);
+  document.querySelector<HTMLButtonElement>("#toolbar-flatView")?.addEventListener("click", () => setFlatView(!isFlatView, true));
+  document.querySelector<HTMLButtonElement>("#toolbar-deleteTempFiles")?.addEventListener("click", () => void onDeleteTemporaryFiles());
+  document.querySelector<HTMLButtonElement>("#toolbar-helpContents")?.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
+  document.querySelector<HTMLButtonElement>("#toolbar-about")?.addEventListener("click", () => {
+    renderAboutDiagnostics();
+    openModal(aboutDialog, "#about-close");
+  });
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
   navUpButton.addEventListener("click", navigateUp);
@@ -6664,6 +6853,12 @@ function bindActions() {
       const pane = resizer.dataset.paneResizer as ResizablePane | undefined;
       if (pane === "navigation" || pane === "details") {
         startPaneResize(event, pane);
+      }
+    });
+    resizer.addEventListener("keydown", (event) => {
+      const pane = resizer.dataset.paneResizer as ResizablePane | undefined;
+      if (pane === "navigation" || pane === "details") {
+        resizePaneByKeyboard(event, pane);
       }
     });
   }
