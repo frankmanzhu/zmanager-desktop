@@ -139,7 +139,8 @@ jobs:
           while IFS= read -r -d '' src; do
             rel="${src#release-artifacts/}"
             artifact_dir="${rel%%/*}"
-            file_name="${rel#*/}"
+            file_path="${rel#*/}"
+            file_name="$(basename "$file_path")"
             normalized_name=""
 
             case "$artifact_dir" in
