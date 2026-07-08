@@ -1933,6 +1933,12 @@ tbody tr.is-selected .row-primary::before {
   box-shadow: 0 0 0 1px var(--native-layer-bg);
 }
 
+#compress-source-table tbody tr[aria-selected="true"] .row-primary::before,
+#compress-source-table tbody tr.is-selected .row-primary::before {
+  content: none;
+  display: none;
+}
+
 #entry-table td:first-child,
 #entry-table th:first-child {
   width: 28px;

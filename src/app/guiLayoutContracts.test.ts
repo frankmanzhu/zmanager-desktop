@@ -135,6 +135,8 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("#compress-source-table th:nth-child(2)");
     expect(styles).toContain("#compress-source-table th:nth-child(3)");
     expect(styles).toContain("#compress-source-table th:nth-child(4)");
+    expect(styles).toContain("#compress-source-table tbody tr[aria-selected=\"true\"] .row-primary::before");
+    expect(styles).toContain("content: none;");
   });
 
   it("keeps Compress create canonical in-window with validation and source actions", () => {
