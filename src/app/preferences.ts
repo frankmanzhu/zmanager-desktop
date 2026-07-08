@@ -63,6 +63,8 @@ export type AppPreferences = {
   tableSortAscending: boolean;
 };
 
+export type AppPreferencePatch = Partial<AppPreferences>;
+
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   locale: SYSTEM_LOCALE_PREFERENCE,
   defaultArchiveFormat: "tarZst",
@@ -407,7 +409,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
 
 export function preferencesWithPatch(
   preferences: AppPreferences,
-  patch: Partial<AppPreferences>,
+  patch: AppPreferencePatch,
 ): AppPreferences {
   return {
     ...preferences,
@@ -455,7 +457,7 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
 
 function normalizePreferenceTablePatch(
   preferences: AppPreferences,
-  patch: Partial<AppPreferences>,
+  patch: AppPreferencePatch,
 ): Pick<AppPreferences, "tableVisibleColumnIds" | "tableColumnOrderIds" | "tableColumnWidths"> {
   const normalized = normalizeColumnSettings({
     visibleColumnIds: patch.tableVisibleColumnIds ?? preferences.tableVisibleColumnIds,

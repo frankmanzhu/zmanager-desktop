@@ -37,12 +37,20 @@ import {
   menuGroupLabel,
   selectCommandState,
   type CommandId,
+  type CommandStateMap,
   type MenuItem,
 } from "./app/classicCommands";
 import {
+  createCommandRouter,
+  selectContextCommand,
+  selectDetailsCommand,
+  selectKeyboardCommand,
+  selectTreeCommand,
+  type CommandRouterPayload,
+} from "./app/commands/commandRouter";
+import {
   ARCHIVE_TABLE_COLUMNS,
   archiveTableColumnLabel,
-  formatArchiveTableValue,
   moveColumn,
   normalizeColumnSettings,
   resetColumnSettings,
@@ -75,6 +83,17 @@ import {
   type ArchiveEntryIconDescriptor,
 } from "./app/archiveEntryIcons";
 import {
+  middleTruncateDetailValue,
+  renderArchiveDetails,
+  renderArchiveNavigationTree,
+  renderArchiveWorkspaceTable,
+  renderCreateNavigationTree,
+  renderDetailRows as renderArchiveDetailRows,
+  type ArchiveDetailsModel,
+  type ArchiveWorkspaceTreeFolder,
+  type DetailRow,
+} from "./ui/archiveWorkspaceView";
+import {
   Minus,
   Square,
   X,
@@ -101,9 +120,6 @@ import {
 } from "./app/hierarchicalTable";
 import {
   escapeHtml as escapeHtmlValue,
-  formatBytes as formatBytesValue,
-  formatCompressionRatio,
-  formatDate as formatDateValue,
   getPathBasename,
   parseDateValue,
 } from "./app/formatting";
@@ -143,46 +159,43 @@ import {
   type WorkspaceDropMode,
 } from "./app/dropIntent";
 import {
-  canRetryJobWithPassword as canRetryJobWithPasswordState,
-  createInitialJobState,
-  deriveJobProgress,
-  getLatestPasswordFailureEvent,
-  isLiveJobStatus,
-  isTerminalJobStatus,
-  mergePolledJobState,
-  selectJobPollingDecision,
-  selectQuickActionJobCompletionDecision,
   type JobRetryContext,
 } from "./app/jobs";
+import {
+  createJobsWorkspace,
+  type FocusedJobAutoCloseAction,
+  type FocusedJobProgressContext,
+  type JobListSnapshot,
+  type JobOutputAction,
+  type ProgressClockSnapshot,
+} from "./app/workspaces/jobsWorkspace";
 import {
   createDefaultsForFormat,
   defaultCreateDirectory,
   loadAppPreferences,
+  preferencesWithPatch,
   saveAppPreferences,
+  type AppPreferencePatch,
   type AppPreferences,
 } from "./app/preferences";
 import {
-  normalizeCreateDestinationHistory,
-  normalizeExtractDestinationHistory,
-  normalizeRecentArchiveHistory,
-  recordCreateDestinationHistoryEntry,
-  recordExtractDestinationHistoryEntry,
-  recordRecentArchiveHistoryEntry,
-  setCreateDestinationHistoryEntries,
-  setExtractDestinationHistoryEntries,
-  setRecentArchiveHistoryEntries,
+  createPathHistoryStore,
 } from "./app/pathHistory";
 import {
-  localeDirection,
-  resolveLocalePreference,
-  type SupportedLocale,
-} from "./app/i18n/locale";
+  createShellWorkspace,
+  type DropOverlayCopy,
+  type DropOverlayMode,
+  type ShellWorkspaceSnapshot,
+} from "./app/shell/shellWorkspace";
 import {
-  applyTranslations,
-  createTranslator,
   type MessageKey,
-  type Translator,
+  type MessageParams,
 } from "./app/i18n/translator";
+import {
+  createDisplayContext,
+  refreshDisplayContext,
+  type DisplayRefreshWorkspace,
+} from "./app/display/displayContext";
 import {
   quickCreateDestination as buildQuickCreateDestination,
   quickExtractDestinationPlan,
@@ -225,7 +238,6 @@ import type {
   CreatePlanEntryDto,
   CreatePlanResponse,
   HealthcheckResponse,
-  JobEventDto,
   JobKind,
   JobState,
   ProjectContract,
@@ -249,10 +261,50 @@ import {
   type SaveDialogOptions,
 } from "./desktop/runtime";
 import {
-  activeJobStatusText,
   renderJobsListHtml,
-  type JobOutputAction,
 } from "./ui/jobsView";
+import {
+  bindDropOverlayActions,
+  focusDropOverlayPrimaryAction,
+  renderDropOverlay as renderShellDropOverlay,
+  type ShellViewElements,
+} from "./ui/shellView";
+import {
+  applyCompressSourceColumnWidths as applyCompressSourceColumnWidthStyles,
+  bindCreateSourceListActions,
+  clampCompressSourceColumnWidth as clampCompressSourceColumnWidthValue,
+  findCompressSourceRowByPath,
+  focusFirstCompressSourceRow,
+  getCompressSourceRows,
+  getCompressSourceSelectableRows,
+  readCompressIncludeAllChecked,
+  readCompressSourceColumnWidths,
+  readCreateOptionControlPatch,
+  renderCompressIncludeAllControl,
+  renderCreateActionState,
+  renderCompressSourceTable,
+  renderCreateDestinationHistory as renderCreateDestinationHistoryView,
+  renderCreateOptionControls,
+  renderCreatePlanStatus,
+  renderCreatePlanSummary,
+  renderCreateSourceList,
+  syncCompressSourceInclusionControls,
+  syncCompressSourceSelectionUi,
+  type CompressSourceTableRowModel,
+} from "./ui/createWorkspaceView";
+import {
+  applyCommandSurfaceState,
+  bindCommandSurface,
+  refreshCommandSurfaceText,
+  type CommandSurfaceClassState,
+} from "./ui/commandSurfaceView";
+import {
+  createModalController,
+} from "./ui/modalController";
+import {
+  bindContextMenu,
+  type ContextMenuActionPayload,
+} from "./ui/contextMenuView";
 import {
   isFiniteNumber,
   normalizeStoredWindowGeometry,
@@ -282,8 +334,6 @@ type ArchiveTreeFolder = {
 };
 type CompressPlanRow = CreatePlanRow;
 type CompressSourceColumnId = "name" | "size" | "modified" | "kind";
-type QuickActionWindowMode = "normal" | "jobOnly" | "background";
-type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
 type AppWindowResizeDirection =
   | "North"
   | "East"
@@ -293,7 +343,7 @@ type AppWindowResizeDirection =
   | "SouthEast"
   | "SouthWest"
   | "NorthWest";
-type FocusedJobProgressContext = {
+type FocusedJobProgressContextDisplay = {
   title: string;
   subtitle?: string;
   rows: { label: string; value: string }[];
@@ -1316,17 +1366,11 @@ const detailsElement = document.querySelector<HTMLDivElement>("#details-content"
 const compressOptionsPanel = document.querySelector<HTMLDetailsElement>("#compress-options-panel")!;
 const compactCompressOptionsQuery = window.matchMedia("(max-width: 1100px), (max-height: 640px)");
 
-const openArchiveButton = document.querySelector<HTMLButtonElement>("#open-archive")!;
-const newArchiveButton = document.querySelector<HTMLButtonElement>("#new-archive")!;
-const addArchiveButton = document.querySelector<HTMLButtonElement>("#add-archive")!;
 const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
-const testArchiveButton = document.querySelector<HTMLButtonElement>("#test-archive")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
-const jobsDrawerOpenButton = document.querySelector<HTMLButtonElement>("#jobs-drawer-open")!;
 const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
-const navUpButton = document.querySelector<HTMLButtonElement>("#nav-up")!;
 const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
 const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
 const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
@@ -1395,6 +1439,42 @@ const createTzapRecoveryInput = document.querySelector<HTMLInputElement>("#creat
 const createPlanMeta = document.querySelector<HTMLParagraphElement>("#create-plan-meta")!;
 const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary")!;
 const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create")!;
+const createSourceListViewElements = {
+  sourceListElement,
+  clearSourcesButton,
+  includeAllSourcesButton,
+  excludeAllSourcesButton,
+};
+const createActionStateViewElements = {
+  addSourceButton,
+  startCreateButton,
+  createPlanMeta,
+};
+const createPlanSummaryViewElements = {
+  createPlanSummary,
+};
+const createDestinationHistoryViewElements = {
+  createDestinationHistoryList,
+  createDestinationRecentSelect,
+};
+const compressIncludeAllControlViewElements = {
+  compressIncludeAllInput,
+};
+const compressSourceTableViewElements = {
+  compressSourceBody,
+};
+const createOptionControlViewElements = {
+  createFormatSelect,
+  createCleanSourceCheckbox,
+  createPreserveMetadataCheckbox,
+  createReplaceExistingCheckbox,
+  createRespectGitignoreCheckbox,
+  createCompressionInput,
+  createVolumeInput,
+  createTzapRecoveryField,
+  createTzapRecoveryInput,
+  createPasswordOptions,
+};
 
 const jobsListElement = document.querySelector<HTMLDivElement>("#jobs-list")!;
 const refreshJobsButton = document.querySelector<HTMLButtonElement>("#refresh-jobs")!;
@@ -1422,13 +1502,16 @@ const quickContinueButton = document.querySelector<HTMLButtonElement>("#quick-co
 const quickCancelButton = document.querySelector<HTMLButtonElement>("#quick-cancel")!;
 const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
 const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
-const dropOverlayTitle = document.querySelector<HTMLElement>("#drop-overlay-title")!;
-const dropOverlayMessage = document.querySelector<HTMLElement>("#drop-overlay-message")!;
-const dropOverlaySupport = document.querySelector<HTMLElement>("#drop-overlay-support")!;
-const dropOverlayActions = document.querySelector<HTMLDivElement>("#drop-overlay-actions")!;
-const dropOpenArchiveButton = document.querySelector<HTMLButtonElement>("#drop-open-archive")!;
-const dropAddCompressButton = document.querySelector<HTMLButtonElement>("#drop-add-compress")!;
-const dropCancelButton = document.querySelector<HTMLButtonElement>("#drop-cancel")!;
+const shellViewElements: ShellViewElements = {
+  workspace: workspaceElement,
+  dropOverlay,
+  dropOverlayCard: dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")!,
+  dropOverlayTitle: document.querySelector<HTMLElement>("#drop-overlay-title")!,
+  dropOverlayMessage: document.querySelector<HTMLElement>("#drop-overlay-message")!,
+  dropOverlaySupport: document.querySelector<HTMLElement>("#drop-overlay-support")!,
+  dropOverlayActions: document.querySelector<HTMLDivElement>("#drop-overlay-actions")!,
+  dropOpenArchiveButton: document.querySelector<HTMLButtonElement>("#drop-open-archive")!,
+};
 
 const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
@@ -1501,9 +1584,9 @@ const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
 const infoDescription = document.querySelector<HTMLParagraphElement>("#info-description")!;
 const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-group")!;
 
-let workspaceMode: WorkspaceDropMode = "compress";
-let pendingDropChoice: Extract<DropIntentDecision, { kind: "askAction" }> | null = null;
 let appPreferences: AppPreferences = loadAppPreferences();
+const shellWorkspace = createShellWorkspace();
+const pathHistoryStore = createPathHistoryStore();
 const archiveWorkspace = createArchiveWorkspace({
   flatView: appPreferences.flatViewDefault,
   showParentFolderItem: appPreferences.showParentFolderItem,
@@ -1523,8 +1606,7 @@ let browseEntries: ArchiveEntryDto[] = [...initialArchiveWorkspaceSnapshot.entri
 let selectedEntries = new Set<string>();
 let selectedCompressRows = new Set<string>();
 let navigationHistory: string[] = [...initialArchiveWorkspaceSnapshot.view.navigationHistory];
-let resolvedLocale: SupportedLocale = resolveLocalePreference(appPreferences.locale);
-let i18n: Translator = createTranslator(resolvedLocale);
+let displayContext = createDisplayContext(appPreferences.locale);
 let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
 let systemIconRequestRevision = 0;
@@ -1544,66 +1626,186 @@ let compressSelectionAnchorPath = "";
 let activeExtractMode: ExtractMode = "archive";
 let contextEntryPath = "";
 let contextSourcePath = "";
-let contextMenuReturnFocus: HTMLElement | null = null;
-let extractDestinationHistory: string[] = [];
-let createDestinationHistory: string[] = [];
-let recentArchiveHistory: string[] = [];
+const contextMenuView = bindContextMenu(contextMenu, {
+  onAction: handleContextMenuAction,
+  onHide: () => {
+    contextEntryPath = "";
+    contextSourcePath = "";
+  },
+});
+const showContextMenu = contextMenuView.showContextMenu;
+const hideContextMenu = contextMenuView.hideContextMenu;
 const archiveTreeRootPath = "";
 const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
 let archiveTreeChildrenByParent = new Map<string, string[]>();
 
 let planDebounce: number | null = null;
-let currentPreviewCleanupRoot = "";
-let currentPreviewPath = "";
-let currentPreviewEntryPath = "";
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
 let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
 let marqueeSelectionElement: HTMLDivElement | null = null;
 let suppressNextTableClick = false;
 
-const jobs = new Map<string, JobState>();
-const jobRetryContexts = new Map<string, JobRetryContext>();
-const jobOutputActions = new Map<string, JobOutputAction[]>();
-const promptedPasswordRetryJobs = new Set<string>();
-let pollTimer: number | null = null;
-let progressClockTimer: number | null = null;
-let pollInFlight = false;
-let pollAgainRequested = false;
-let quickActionWindowMode: QuickActionWindowMode = "normal";
-let quickActionWindowShown = false;
-let quickActionAutoCloseTimer: number | null = null;
-let quickActionAutoCloseAction: FocusedJobAutoCloseAction = "closeWindow";
-const quickActionJobIds = new Set<string>();
-const focusedJobProgressContexts = new Map<string, FocusedJobProgressContext>();
+const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
-let focusedBeforeDialog: HTMLElement | null = null;
 
-function menuItemButton(commandId: CommandId): HTMLButtonElement | null {
-  return document.querySelector<HTMLButtonElement>(`#menu-command-${commandId}`);
+const jobTimers = (() => {
+  let pollTimer: number | null = null;
+  let progressClockTimer: number | null = null;
+  let quickActionAutoCloseTimer: number | null = null;
+
+  return {
+    hasQuickActionAutoClosePending(): boolean {
+      return quickActionAutoCloseTimer !== null;
+    },
+    clearQuickActionAutoClose(): void {
+      if (quickActionAutoCloseTimer === null) {
+        return;
+      }
+
+      window.clearTimeout(quickActionAutoCloseTimer);
+      quickActionAutoCloseTimer = null;
+    },
+    scheduleQuickActionAutoClose(callback: () => void): void {
+      quickActionAutoCloseTimer = window.setTimeout(callback, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
+    },
+    startPolling(callback: () => void): void {
+      if (pollTimer !== null) {
+        return;
+      }
+
+      pollTimer = window.setInterval(callback, JOB_POLL_INTERVAL_MS);
+    },
+    stopPolling(): void {
+      if (pollTimer === null) {
+        return;
+      }
+
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    },
+    startProgressClock(callback: () => void): void {
+      if (progressClockTimer !== null) {
+        return;
+      }
+
+      progressClockTimer = window.setInterval(callback, 1000);
+    },
+    stopProgressClock(): void {
+      if (progressClockTimer === null) {
+        return;
+      }
+
+      window.clearInterval(progressClockTimer);
+      progressClockTimer = null;
+    },
+  };
+})();
+
+const appWindowEffects = {
+  close(): void {
+    if (!isDesktopRuntime()) {
+      setOperationalMessage("status.closeInBrowser");
+      return;
+    }
+
+    void getCurrentWindow().close().catch(() => {
+      setOperationalMessage("quick.completed.closeWindow");
+    });
+  },
+  minimize(): void {
+    if (!isDesktopRuntime()) {
+      return;
+    }
+
+    void getCurrentWindow().minimize().catch(() => {
+      setOperationalMessage("jobs.minimizeFailed");
+    });
+  },
+  toggleMaximize(): void {
+    if (!isDesktopRuntime()) {
+      return;
+    }
+
+    void getCurrentWindow().toggleMaximize().catch(() => {
+      setOperationalMessage("status.windowControlFailed");
+    });
+  },
+};
+
+const focusedJobWindowEffects = {
+  async revealNormalWindow(): Promise<void> {
+    await placeNormalAppWindowBeforeShow();
+    await getCurrentWindow().show();
+  },
+  async revealProgressWindow(): Promise<void> {
+    const currentWindow = getCurrentWindow();
+    await currentWindow.unminimize();
+    await currentWindow.setMinSize(new LogicalSize(
+      QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
+      QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
+    ));
+    await currentWindow.setSize(new LogicalSize(
+      QUICK_ACTION_WINDOW_WIDTH_PX,
+      QUICK_ACTION_WINDOW_HEIGHT_PX,
+    ));
+    await currentWindow.center();
+    await currentWindow.show();
+  },
+  async minimizeProgressWindow(): Promise<void> {
+    await getCurrentWindow().minimize();
+  },
+  async restoreNormalWindow(): Promise<void> {
+    await placeNormalAppWindowBeforeShow();
+  },
+};
+
+const jobPasswordPrompts = {
+  promptForNewArchivePassword(): string | null {
+    return promptForArchivePassword(message("create.prompt.newArchivePassword"));
+  },
+  promptForCommandRetry(commandCode: string): string | null {
+    return promptForArchivePassword(getArchivePasswordPrompt(commandCode));
+  },
+};
+
+const jobOutputEffects = {
+  async run(outputAction: JobOutputAction): Promise<void> {
+    if (outputAction.kind === "open") {
+      await openDesktopPath(outputAction.path);
+      return;
+    }
+
+    await revealInFileManager(outputAction.path);
+  },
+};
+
+function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
+  appPreferences = preferencesWithPatch(appPreferences, patch);
+  saveAppPreferences(appPreferences);
+  return appPreferences;
 }
 
 function saveTablePreferences() {
   const sort = archiveWorkspace.getSnapshot().view.sort;
-  appPreferences = {
-    ...appPreferences,
+  const preferences = persistPreferencePatch({
     tableVisibleColumnIds: tableColumnSettings.visibleColumnIds,
     tableColumnOrderIds: tableColumnSettings.columnOrderIds,
     tableColumnWidths: tableColumnSettings.columnWidths,
     tableSortKey: sort.key,
     tableSortAscending: sort.ascending,
-  };
-  saveAppPreferences(appPreferences);
+  });
+  tableColumnSettings = normalizeColumnSettings({
+    visibleColumnIds: preferences.tableVisibleColumnIds,
+    columnOrderIds: preferences.tableColumnOrderIds,
+    columnWidths: preferences.tableColumnWidths,
+  });
 }
 
-function savePreferencePatch(patch: Partial<AppPreferences>) {
-  appPreferences = {
-    ...appPreferences,
-    ...patch,
-  };
-  saveAppPreferences(appPreferences);
+function savePreferencePatch(patch: AppPreferencePatch) {
+  persistPreferencePatch(patch);
   applyPreferenceClasses();
   updateCommandState();
 }
@@ -1629,67 +1831,27 @@ function applySortDirection(nextSortKey: ArchiveSortKey, ascending: boolean) {
 }
 
 function closeAppWindow() {
-  if (!isDesktopRuntime()) {
-    setOperationalMessage("status.closeInBrowser");
-    return;
-  }
-
-  void getCurrentWindow().close().catch(() => {
-    setOperationalMessage("quick.completed.closeWindow");
-  });
+  appWindowEffects.close();
 }
 
 function minimizeAppWindow() {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  void getCurrentWindow().minimize().catch(() => {
-    setOperationalMessage("jobs.minimizeFailed");
-  });
+  appWindowEffects.minimize();
 }
 
 function toggleAppWindowMaximize() {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  void getCurrentWindow().toggleMaximize().catch(() => {
-    setOperationalMessage("status.windowControlFailed");
-  });
-}
-
-function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
-  return Boolean(request && [
-    "compressZip",
-    "compressTzap",
-    "compressSevenZ",
-    "compressTarZst",
-    "compressCleanSource",
-    "extractHere",
-    "extractToFolder",
-  ].includes(request.kind));
-}
-
-function hasQuickActionJobs(state: QuickActionStartupStateDto): boolean {
-  return Boolean(state.quickActionJobs?.length);
+  appWindowEffects.toggleMaximize();
 }
 
 function clearQuickActionAutoCloseTimer() {
-  if (quickActionAutoCloseTimer === null) {
-    return;
-  }
-
-  window.clearTimeout(quickActionAutoCloseTimer);
-  quickActionAutoCloseTimer = null;
+  jobTimers.clearQuickActionAutoClose();
 }
 
 function isQuickActionJobMode(): boolean {
-  return quickActionWindowMode === "jobOnly" || quickActionWindowMode === "background";
+  return shellWorkspace.isQuickActionJobMode();
 }
 
 function setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction) {
-  quickActionAutoCloseAction = action;
+  jobsWorkspace.setFocusedJobAutoCloseAction(action);
 }
 
 function renderNormalWorkspaceOnce() {
@@ -1713,17 +1875,16 @@ function syncCompressOptionsPanelDisclosure() {
 
 async function revealNormalAppWindow() {
   renderNormalWorkspaceOnce();
-  if (!isDesktopRuntime() || quickActionWindowShown) {
+  if (!isDesktopRuntime() || shellWorkspace.getSnapshot().quickActionWindow.shown) {
     return;
   }
 
   try {
-    await placeNormalAppWindowBeforeShow();
-    await getCurrentWindow().show();
+    await focusedJobWindowEffects.revealNormalWindow();
   } catch {
     // Window APIs are best-effort; the app is still usable if the window was already shown.
   }
-  quickActionWindowShown = true;
+  shellWorkspace.setQuickActionWindowShown(true);
 }
 
 async function revealQuickActionJobWindow(
@@ -1736,7 +1897,7 @@ async function revealQuickActionJobWindow(
   if (!wasInJobMode && autoCloseAction === "returnToWorkspace") {
     void persistWindowGeometry();
   }
-  quickActionWindowMode = "jobOnly";
+  shellWorkspace.setQuickActionWindowMode("jobOnly");
   workspaceElement.dataset.quickActionMode = "job-only";
   document.body.classList.add("quick-action-job-mode");
   quickProgressElement.hidden = false;
@@ -1748,28 +1909,17 @@ async function revealQuickActionJobWindow(
     return;
   }
 
-  const currentWindow = getCurrentWindow();
   try {
-    await currentWindow.unminimize();
-    await currentWindow.setMinSize(new LogicalSize(
-      QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
-      QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
-    ));
-    await currentWindow.setSize(new LogicalSize(
-      QUICK_ACTION_WINDOW_WIDTH_PX,
-      QUICK_ACTION_WINDOW_HEIGHT_PX,
-    ));
-    await currentWindow.center();
-    await currentWindow.show();
+    await focusedJobWindowEffects.revealProgressWindow();
   } catch {
     // Do not block job tracking on window-manager or permission failures.
   }
-  quickActionWindowShown = true;
+  shellWorkspace.setQuickActionWindowShown(true);
 }
 
 async function sendQuickActionJobsToBackground() {
   clearQuickActionAutoCloseTimer();
-  if (quickActionAutoCloseAction === "returnToWorkspace") {
+  if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
     await closeFocusedJobProgress();
     setOperationalMessage("jobs.background");
     openJobDrawer();
@@ -1778,13 +1928,12 @@ async function sendQuickActionJobsToBackground() {
   }
 
   if (isDesktopRuntime()) {
-    const currentWindow = getCurrentWindow();
-    quickActionWindowMode = "background";
+    shellWorkspace.setQuickActionWindowMode("background");
     quickBackgroundButton.disabled = true;
     setOperationalMessage("jobs.background");
     try {
-      await currentWindow.minimize();
-      quickActionWindowShown = false;
+      await focusedJobWindowEffects.minimizeProgressWindow();
+      shellWorkspace.setQuickActionWindowShown(false);
       return;
     } catch {
       setOperationalMessage("jobs.minimizeFailed");
@@ -1793,10 +1942,8 @@ async function sendQuickActionJobsToBackground() {
     }
   }
 
-  quickActionJobIds.clear();
-  focusedJobProgressContexts.clear();
-  quickActionWindowMode = "normal";
-  quickActionAutoCloseAction = "closeWindow";
+  jobsWorkspace.resetFocusedQuickActionProgress();
+  shellWorkspace.setQuickActionWindowMode("normal");
   document.body.classList.remove("quick-action-job-mode");
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
@@ -1807,10 +1954,8 @@ async function sendQuickActionJobsToBackground() {
 
 async function closeFocusedJobProgress() {
   clearQuickActionAutoCloseTimer();
-  quickActionJobIds.clear();
-  focusedJobProgressContexts.clear();
-  quickActionWindowMode = "normal";
-  quickActionAutoCloseAction = "closeWindow";
+  jobsWorkspace.resetFocusedQuickActionProgress();
+  shellWorkspace.setQuickActionWindowMode("normal");
   document.body.classList.remove("quick-action-job-mode");
   delete workspaceElement.dataset.quickActionMode;
   quickProgressElement.hidden = true;
@@ -1823,21 +1968,17 @@ async function closeFocusedJobProgress() {
 
   if (isDesktopRuntime()) {
     try {
-      await placeNormalAppWindowBeforeShow();
+      await focusedJobWindowEffects.restoreNormalWindow();
     } catch {
       // Window restoration is best-effort after a focused job view.
     }
   }
-  quickActionWindowShown = true;
+  shellWorkspace.setQuickActionWindowShown(true);
   renderJobs();
 }
 
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
-  if (
-    state.launchedForQuickAction &&
-    !state.error &&
-    (hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))
-  ) {
+  if (shellWorkspace.selectQuickActionStartupRevealTarget(state) === "jobOnly") {
     await revealQuickActionJobWindow();
     return;
   }
@@ -1851,18 +1992,12 @@ function trackQuickActionJob(jobId: string, context?: FocusedJobProgressContext)
   }
 
   clearQuickActionAutoCloseTimer();
-  quickActionJobIds.add(jobId);
-  if (context) {
-    focusedJobProgressContexts.set(jobId, context);
-  }
+  jobsWorkspace.trackFocusedQuickActionJob(jobId, context);
   renderQuickProgress();
 }
 
 function quickActionControllableJobIds(): string[] {
-  return Array.from(quickActionJobIds).filter((jobId) => {
-    const state = jobs.get(jobId);
-    return state ? isLiveJobStatus(state.snapshot.status) : false;
-  });
+  return [...jobsWorkspace.getControllableFocusedQuickActionJobIds()];
 }
 
 async function toggleQuickActionPause() {
@@ -1871,7 +2006,7 @@ async function toggleQuickActionPause() {
     return;
   }
 
-  const shouldResume = jobIds.some((jobId) => jobs.get(jobId)?.snapshot.status === "paused");
+  const shouldResume = jobIds.some((jobId) => jobsWorkspace.getJob(jobId)?.snapshot.status === "paused");
   const command = shouldResume ? resumeJobCommand : pauseJobCommand;
   quickContinueButton.disabled = true;
 
@@ -1879,16 +2014,7 @@ async function toggleQuickActionPause() {
     await Promise.all(
       jobIds.map(async (jobId) => {
         const response = await command({ jobId });
-        const state = jobs.get(jobId);
-        if (state) {
-          jobs.set(jobId, {
-            ...state,
-            snapshot: {
-              ...state.snapshot,
-              status: response.status,
-            },
-          });
-        }
+        jobsWorkspace.updateJobStatus(jobId, response.status);
       }),
     );
     setOperationalMessage(shouldResume ? "jobs.continued" : "jobs.paused");
@@ -1914,7 +2040,7 @@ async function cancelFocusedQuickActionJobs() {
     await Promise.all(jobIds.map((jobId) => cancelJobCommand({ jobId })));
     await pollJobs();
     setOperationalMessage("jobs.cancelled");
-    if (quickActionAutoCloseAction === "returnToWorkspace") {
+    if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
       await closeFocusedJobProgress();
     } else {
       closeAppWindow();
@@ -1927,11 +2053,9 @@ async function cancelFocusedQuickActionJobs() {
 }
 
 function maybeCloseCompletedQuickActionWindow() {
-  const decision = selectQuickActionJobCompletionDecision({
+  const decision = jobsWorkspace.selectFocusedQuickActionCompletion({
     canEvaluate: isDesktopRuntime() && isQuickActionJobMode(),
-    autoClosePending: quickActionAutoCloseTimer !== null,
-    trackedJobIds: Array.from(quickActionJobIds),
-    jobsById: jobs,
+    autoClosePending: jobTimers.hasQuickActionAutoClosePending(),
   });
 
   if (decision.action === "wait") {
@@ -1940,7 +2064,7 @@ function maybeCloseCompletedQuickActionWindow() {
 
   if (decision.action === "needsAttention") {
     setOperationalMessage("jobs.needsAttention");
-    if (quickActionWindowMode === "background") {
+    if (shellWorkspace.isQuickActionWindowBackgrounded()) {
       void revealQuickActionJobWindow();
     } else {
       renderQuickProgress();
@@ -1950,19 +2074,17 @@ function maybeCloseCompletedQuickActionWindow() {
 
   setOperationalMessage("jobs.completed");
   renderQuickProgress();
-  quickActionAutoCloseTimer = window.setTimeout(() => {
-    if (quickActionAutoCloseAction === "returnToWorkspace") {
+  jobTimers.scheduleQuickActionAutoClose(() => {
+    if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
       void closeFocusedJobProgress();
     } else {
       closeAppWindow();
     }
-  }, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
+  });
 }
 
 function clearTrackedPreviewState() {
-  currentPreviewCleanupRoot = "";
-  currentPreviewPath = "";
-  currentPreviewEntryPath = "";
+  shellWorkspace.clearTrackedPreview();
 }
 
 function updateStatusBar() {
@@ -1999,58 +2121,58 @@ function applyPreferenceClasses() {
 }
 
 function formatBytes(value?: number): string {
-  return formatBytesValue(value, { locale: resolvedLocale });
+  return displayContext.format.bytes(value);
 }
 
 function escapeHtml(value: string): string {
   return escapeHtmlValue(value);
 }
 
-function message(key: MessageKey, params?: Parameters<Translator["t"]>[1]): string {
-  return i18n.t(key, params);
+function message(key: MessageKey, params?: MessageParams): string {
+  return displayContext.translator.t(key, params);
 }
 
-function setOperationalMessage(key: MessageKey, params?: Parameters<Translator["t"]>[1]): void {
+function setOperationalMessage(key: MessageKey, params?: MessageParams): void {
   setOperationalStatus(message(key, params));
 }
 
 function formatJobKind(kind: JobKind): string {
   switch (kind) {
     case "zipCreate":
-      return i18n.t("jobs.kind.zipCreate");
+      return displayContext.translator.t("jobs.kind.zipCreate");
     case "zipExtract":
-      return i18n.t("jobs.kind.zipExtract");
+      return displayContext.translator.t("jobs.kind.zipExtract");
     case "sevenZCreate":
-      return i18n.t("jobs.kind.sevenZCreate");
+      return displayContext.translator.t("jobs.kind.sevenZCreate");
     case "sevenZExtract":
-      return i18n.t("jobs.kind.sevenZExtract");
+      return displayContext.translator.t("jobs.kind.sevenZExtract");
     case "rarExtract":
-      return i18n.t("jobs.kind.rarExtract");
+      return displayContext.translator.t("jobs.kind.rarExtract");
     case "tarZstdCreate":
-      return i18n.t("jobs.kind.tarZstdCreate");
+      return displayContext.translator.t("jobs.kind.tarZstdCreate");
     case "tarZstdExtract":
-      return i18n.t("jobs.kind.tarZstdExtract");
+      return displayContext.translator.t("jobs.kind.tarZstdExtract");
     case "tzapCreate":
-      return i18n.t("jobs.kind.tzapCreate");
+      return displayContext.translator.t("jobs.kind.tzapCreate");
     case "tzapExtract":
-      return i18n.t("jobs.kind.tzapExtract");
+      return displayContext.translator.t("jobs.kind.tzapExtract");
     case "appleArchiveCreate":
-      return i18n.t("jobs.kind.appleArchiveCreate");
+      return displayContext.translator.t("jobs.kind.appleArchiveCreate");
     case "appleArchiveExtract":
-      return i18n.t("jobs.kind.appleArchiveExtract");
+      return displayContext.translator.t("jobs.kind.appleArchiveExtract");
     case "archiveExtract":
-      return i18n.t("jobs.kind.archiveExtract");
+      return displayContext.translator.t("jobs.kind.archiveExtract");
     case "rawStreamExtract":
-      return i18n.t("jobs.kind.rawStreamExtract");
+      return displayContext.translator.t("jobs.kind.rawStreamExtract");
     case "testArchive":
-      return i18n.t("jobs.kind.testArchive");
+      return displayContext.translator.t("jobs.kind.testArchive");
     default:
       return String(kind);
   }
 }
 
 function formatDate(value?: string): string {
-  return formatDateValue(value, { emptyValue: "", locale: resolvedLocale });
+  return displayContext.format.date(value, { emptyValue: "" });
 }
 
 function formatDurationClock(milliseconds: number | null): string {
@@ -2089,7 +2211,7 @@ function quickActionOperationLabel(kind?: JobKind): string {
   }
 }
 
-function renderFocusedJobContext(context?: FocusedJobProgressContext) {
+function renderFocusedJobContext(context?: FocusedJobProgressContextDisplay) {
   if (!context || context.rows.length === 0) {
     quickContextElement.hidden = true;
     quickContextElement.innerHTML = "";
@@ -2107,16 +2229,14 @@ function renderFocusedJobContext(context?: FocusedJobProgressContext) {
     .join("");
 }
 
-function renderQuickProgress() {
+function renderQuickProgress(nowMs = Date.now()) {
   if (!isQuickActionJobMode()) {
     return;
   }
 
-  const trackedJobs = Array.from(quickActionJobIds, (jobId) => jobs.get(jobId)).filter(
-    (job): job is JobState => Boolean(job),
-  );
+  const progressSnapshot = jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs);
 
-  if (!trackedJobs.length) {
+  if (progressSnapshot.state === "empty") {
     quickTitleElement.textContent = message("quick.progress.title");
     quickSubtitleElement.textContent = "";
     renderFocusedJobContext();
@@ -2140,97 +2260,59 @@ function renderQuickProgress() {
     return;
   }
 
-  const nowMs = Date.now();
-  const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job, nowMs));
-  const latestJob = trackedJobs.at(-1);
-  const latestProgress = progressSnapshots.at(-1);
-  const latestContext = latestJob ? focusedJobProgressContexts.get(latestJob.snapshot.jobId) : undefined;
-  const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
-  const anyActive = trackedJobs.some((job) => isLiveJobStatus(job.snapshot.status));
-  const anyPaused = trackedJobs.some((job) => job.snapshot.status === "paused");
-  const elapsedMs = Math.max(...progressSnapshots.map((progress) => progress.elapsedMs), 0);
-  const processedBytes = progressSnapshots.reduce((total, progress) => total + progress.processedBytes, 0);
-  const totalBytes = progressSnapshots.every((progress) => progress.totalBytes !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.totalBytes ?? 0), 0)
-    : null;
-  const processedFiles = progressSnapshots.reduce((total, progress) => total + progress.processedFiles, 0);
-  const totalFiles = progressSnapshots.every((progress) => progress.totalFiles !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.totalFiles ?? 0), 0)
-    : null;
-  const compressedBytes = progressSnapshots.every((progress) => progress.compressedBytes !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.compressedBytes ?? 0), 0)
-    : null;
-  const remainingMs = totalBytes !== null && processedBytes > 0 && elapsedMs > 0
-    ? Math.max(0, ((totalBytes - processedBytes) / (processedBytes / elapsedMs)))
-    : totalFiles !== null && processedFiles > 0 && elapsedMs > 0
-      ? Math.max(0, ((totalFiles - processedFiles) / (processedFiles / elapsedMs)))
-    : null;
-  const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
-    ? processedBytes / (elapsedMs / 1000)
-    : null;
-  const progressPercent = totalBytes !== null && totalBytes > 0
-    ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
-    : totalFiles !== null && totalFiles > 0
-      ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
-    : allTerminal && trackedJobs.every((job) => job.snapshot.status === "completed")
-      ? 100
-      : null;
-  const currentFile = latestProgress?.currentFile || latestProgress?.latestStatusMessage || "";
-  const operation = allTerminal
-    ? latestJob?.snapshot.status === "completed"
+  const latestContext = focusedJobProgressContextDisplay(progressSnapshot.latestContext);
+  const operation = progressSnapshot.allTerminal
+    ? progressSnapshot.latestJob.status === "completed"
       ? message("quick.operation.completed")
-      : latestJob?.snapshot.status === "cancelled"
+      : progressSnapshot.latestJob.status === "cancelled"
         ? message("quick.operation.cancelled")
         : message("quick.operation.failed")
-    : anyPaused
+    : progressSnapshot.anyPaused
       ? message("quick.operation.paused")
-    : quickActionOperationLabel(latestJob?.snapshot.kind);
+    : quickActionOperationLabel(progressSnapshot.latestJob.kind);
 
-  quickTitleElement.textContent = trackedJobs.length > 1
-    ? message("quick.progress.multipleJobs", { count: trackedJobs.length })
-    : latestContext?.title ?? (latestJob ? formatJobKind(latestJob.snapshot.kind) : message("quick.progress.jobTitle"));
+  quickTitleElement.textContent = progressSnapshot.jobCount > 1
+    ? message("quick.progress.multipleJobs", { count: progressSnapshot.jobCount })
+    : latestContext?.title ?? formatJobKind(progressSnapshot.latestJob.kind);
   quickSubtitleElement.textContent = latestContext?.subtitle ?? "";
   renderFocusedJobContext(latestContext);
-  quickElapsedElement.textContent = formatDurationClock(elapsedMs);
-  quickRemainingElement.textContent = formatDurationClock(remainingMs);
-  quickFilesElement.textContent = totalFiles === null ? String(processedFiles) : `${processedFiles} / ${totalFiles}`;
-  quickTotalFilesElement.textContent = trackedJobs.length > 1
-    ? message("quick.progress.totalJobs", { count: trackedJobs.length })
+  quickElapsedElement.textContent = formatDurationClock(progressSnapshot.elapsedMs);
+  quickRemainingElement.textContent = formatDurationClock(progressSnapshot.remainingMs);
+  quickFilesElement.textContent = progressSnapshot.totalFiles === null
+    ? String(progressSnapshot.processedFiles)
+    : `${progressSnapshot.processedFiles} / ${progressSnapshot.totalFiles}`;
+  quickTotalFilesElement.textContent = progressSnapshot.jobCount > 1
+    ? message("quick.progress.totalJobs", { count: progressSnapshot.jobCount })
     : "";
-  quickTotalSizeElement.textContent = totalBytes === null ? "" : formatBytes(totalBytes);
-  quickSpeedElement.textContent = speedBytesPerSecond === null ? "" : `${formatBytes(speedBytesPerSecond)}/s`;
-  quickProcessedElement.textContent = processedBytes > 0 ? formatBytes(processedBytes) : "";
-  quickCompressedSizeElement.textContent = compressedBytes === null ? "" : formatBytes(compressedBytes);
-  quickRatioElement.textContent = compressedBytes === null || totalBytes === null
+  quickTotalSizeElement.textContent = progressSnapshot.totalBytes === null ? "" : formatBytes(progressSnapshot.totalBytes);
+  quickSpeedElement.textContent = progressSnapshot.speedBytesPerSecond === null ? "" : `${formatBytes(progressSnapshot.speedBytesPerSecond)}/s`;
+  quickProcessedElement.textContent = progressSnapshot.processedBytes > 0 ? formatBytes(progressSnapshot.processedBytes) : "";
+  quickCompressedSizeElement.textContent = progressSnapshot.compressedBytes === null ? "" : formatBytes(progressSnapshot.compressedBytes);
+  quickRatioElement.textContent = progressSnapshot.compressedBytes === null || progressSnapshot.totalBytes === null
     ? ""
-    : formatCompressionRatio(totalBytes, compressedBytes, { emptyValue: "", fractionDigits: 0, locale: resolvedLocale });
+    : displayContext.format.ratio(progressSnapshot.totalBytes, progressSnapshot.compressedBytes, {
+        emptyValue: "",
+        fractionDigits: 0,
+      });
   quickOperationElement.textContent = operation;
-  quickCurrentPathElement.textContent = currentFile;
-  quickBackgroundButton.disabled = allTerminal || anyPaused || quickActionWindowMode === "background";
-  quickContinueButton.disabled = !anyActive;
-  quickContinueButton.textContent = anyPaused ? message("common.continue") : message("quick.pause");
-  quickCancelButton.disabled = !anyActive;
+  quickCurrentPathElement.textContent = progressSnapshot.currentFile;
+  quickBackgroundButton.disabled = progressSnapshot.allTerminal || progressSnapshot.anyPaused || shellWorkspace.isQuickActionWindowBackgrounded();
+  quickContinueButton.disabled = !progressSnapshot.anyActive;
+  quickContinueButton.textContent = progressSnapshot.anyPaused ? message("common.continue") : message("quick.pause");
+  quickCancelButton.disabled = !progressSnapshot.anyActive;
 
-  if (progressPercent === null) {
+  if (progressSnapshot.progressPercent === null) {
     quickProgressBar.removeAttribute("value");
     quickProgressBar.removeAttribute("max");
   } else {
-    quickProgressBar.value = progressPercent;
+    quickProgressBar.value = progressSnapshot.progressPercent;
     quickProgressBar.max = 100;
   }
 }
 
 function formatRatio(entry: ArchiveEntryDto): string {
-  return formatCompressionRatio(entry.size, entry.compressedSize, { fractionDigits: 0, locale: resolvedLocale });
+  return displayContext.format.ratio(entry.size, entry.compressedSize, { fractionDigits: 0 });
 }
-
-type DetailValueMode = "wrap" | "middle";
-
-type DetailRow = {
-  label: string;
-  value?: string | null;
-  mode?: DetailValueMode;
-};
 
 type InfoAction = {
   label: string;
@@ -2239,58 +2321,6 @@ type InfoAction = {
   primary?: boolean;
   title?: string;
 };
-
-function middleTruncateDetailValue(value: string, maxLength = 88): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  const headLength = Math.max(12, Math.ceil((maxLength - 3) * 0.52));
-  const tailLength = Math.max(12, maxLength - headLength - 3);
-  return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
-}
-
-function detailValueMode(value: string): DetailValueMode {
-  return /[\\/]/.test(value) && value.length > 48 ? "middle" : "wrap";
-}
-
-function renderDetailDefinition(label: string, value?: string | null, mode?: DetailValueMode): string {
-  if (!value) {
-    return "";
-  }
-
-  const valueMode = mode ?? detailValueMode(value);
-  const displayValue = valueMode === "middle" ? middleTruncateDetailValue(value) : value;
-  const visibleValue = valueMode === "middle"
-    ? `<span class="detail-value detail-value-${valueMode}" aria-hidden="true">${escapeHtml(displayValue)}</span><span class="sr-only">${escapeHtml(value)}</span>`
-    : `<span class="detail-value detail-value-${valueMode}">${escapeHtml(displayValue)}</span>`;
-  return `
-    <div>
-      <dt>${escapeHtml(label)}</dt>
-      <dd class="detail-copyable" title="${escapeHtmlValue(value)}" aria-label="${escapeHtmlValue(`${label}: ${value}`)}">
-        ${visibleValue}
-        <button class="detail-copy-button" type="button" data-copy-value="${escapeHtmlValue(value)}" aria-label="${escapeHtmlValue(`${message("command.copy")} ${label}`)}" title="${escapeHtmlValue(message("command.copy"))}">
-          ${toolbarIcon("copy")}
-        </button>
-      </dd>
-    </div>
-  `;
-}
-
-function addDetailRow(label: string, value?: string | null): string {
-  return renderDetailDefinition(label, value);
-}
-
-function addDetailMessageRow(key: MessageKey, value?: string | null): string {
-  return addDetailRow(message(key), value);
-}
-
-function renderDetailRows(rows: readonly DetailRow[]): string {
-  return rows
-    .map((row) => renderDetailDefinition(row.label, row.value, row.mode))
-    .filter(Boolean)
-    .join("");
-}
 
 function detailRowsToText(rows: readonly DetailRow[]): string {
   return rows
@@ -2361,6 +2391,17 @@ function previewActionHint(): string {
   return message("preview.openTempOutsideHint");
 }
 
+function detailRenderHelpers() {
+  return {
+    copyLabel: message("command.copy"),
+    copyIconHtml: toolbarIcon("copy"),
+  };
+}
+
+function renderInfoDetailRows(rows: readonly DetailRow[]): string {
+  return renderArchiveDetailRows(rows, detailRenderHelpers());
+}
+
 function formatOptionalBytes(value?: number): string | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return null;
@@ -2408,10 +2449,10 @@ function formatLastTestStatusForCurrentArchive(): string | null {
     return null;
   }
 
-  const testJobs = Array.from(jobs.entries())
+  const testJobs = Array.from(jobsWorkspace.getJobsMap().entries())
     .map(([jobId, state]) => ({ jobId, state }))
     .filter((item) => {
-      const context = jobRetryContexts.get(item.jobId);
+      const context = jobsWorkspace.getRetryContext(item.jobId);
       return context?.retryKind === "testArchive" && context.archivePath === currentArchivePath;
     })
     .sort((lhs, rhs) => {
@@ -2466,7 +2507,7 @@ function jobStatusMessageKey(status: JobState["snapshot"]["status"]): MessageKey
   }
 }
 
-function truncatedPathPreview(paths: string[], maxItems = 3, maxLength = 140): string | null {
+function truncatedPathPreview(paths: readonly string[], maxItems = 3, maxLength = 140): string | null {
   if (!paths.length) {
     return null;
   }
@@ -2493,30 +2534,22 @@ function normalizeEntryPath(path: string): string {
   return normalizeArchivePath(path);
 }
 
-function progressContextRows(rows: Array<{ label: string; value?: string | null }>): FocusedJobProgressContext["rows"] {
+function progressContextRows(rows: Array<{ label: string; value?: string | null }>): FocusedJobProgressContextDisplay["rows"] {
   return rows
     .filter((row): row is { label: string; value: string } => Boolean(row.value))
     .map((row) => ({ label: row.label, value: row.value }));
 }
 
 function createJobProgressContext(request: StartCreateRequest): FocusedJobProgressContext {
-  const sourcePreview = truncatedPathPreview(request.sources, 3, 180);
-  const sourceLabel = request.sources.length === 1 ? "Source" : "Sources";
   return {
-    title: "Create archive",
-    subtitle: getPathBasename(request.destinationPath) || request.destinationPath,
-    rows: progressContextRows([
-      { label: sourceLabel, value: sourcePreview },
-      { label: "Destination", value: request.destinationPath },
-      { label: "Format", value: request.format },
-      { label: "Clean source", value: request.cleanSource ? "Yes" : "No" },
-      {
-        label: "Recovery",
-        value: request.format === "tzap" && request.tzapRecoveryPercentage !== undefined
-          ? `${request.tzapRecoveryPercentage}%`
-          : null,
-      },
-    ]),
+    kind: "create",
+    sources: [...request.sources],
+    destinationPath: request.destinationPath,
+    format: request.format,
+    cleanSource: request.cleanSource,
+    ...(request.tzapRecoveryPercentage !== undefined
+      ? { tzapRecoveryPercentage: request.tzapRecoveryPercentage }
+      : {}),
   };
 }
 
@@ -2526,18 +2559,56 @@ function createJobOutputActions(request: StartCreateRequest): JobOutputAction[] 
 
 function extractJobProgressContext(
   request: StartExtractRequest,
-  label = "Extract archive",
+  title: "archive" | "selection" = "archive",
 ): FocusedJobProgressContext {
-  const entryCount = request.entryPaths?.length ?? 0;
-  const entryPreview = request.entryPaths ? truncatedPathPreview(request.entryPaths, 3, 180) : null;
   return {
-    title: label,
-    subtitle: getPathBasename(request.archivePath) || request.archivePath,
+    kind: "extract",
+    title,
+    archivePath: request.archivePath,
+    destinationPath: request.destinationPath,
+    overwrite: request.overwrite,
+    ...(request.entryPaths?.length ? { entryPaths: [...request.entryPaths] } : {}),
+  };
+}
+
+function focusedJobProgressContextDisplay(
+  context?: FocusedJobProgressContext,
+): FocusedJobProgressContextDisplay | undefined {
+  if (!context) {
+    return undefined;
+  }
+
+  if (context.kind === "create") {
+    const sourcePreview = truncatedPathPreview(context.sources, 3, 180);
+    const sourceLabel = context.sources.length === 1 ? "Source" : "Sources";
+    return {
+      title: "Create archive",
+      subtitle: getPathBasename(context.destinationPath) || context.destinationPath,
+      rows: progressContextRows([
+        { label: sourceLabel, value: sourcePreview },
+        { label: "Destination", value: context.destinationPath },
+        { label: "Format", value: context.format },
+        { label: "Clean source", value: context.cleanSource ? "Yes" : "No" },
+        {
+          label: "Recovery",
+          value: context.format === "tzap" && context.tzapRecoveryPercentage !== undefined
+            ? `${context.tzapRecoveryPercentage}%`
+            : null,
+        },
+      ]),
+    };
+  }
+
+  const entryCount = context.entryPaths?.length ?? 0;
+  const entryPreview = context.entryPaths ? truncatedPathPreview(context.entryPaths, 3, 180) : null;
+  return {
+    title: context.title === "selection" ? message("extract.selectedProgressTitle") : "Extract archive",
+    subtitle: getPathBasename(context.archivePath) || context.archivePath,
     rows: progressContextRows([
-      { label: "Archive", value: request.archivePath },
-      { label: "Destination", value: request.destinationPath },
+      { label: "Archive", value: context.archivePath },
+      { label: "Destination", value: context.destinationPath },
       { label: "Entries", value: entryCount > 0 ? `${entryCount} selected${entryPreview ? `: ${entryPreview}` : ""}` : "All entries" },
-      { label: "Overwrite", value: request.overwrite },
+      { label: "Overwrite", value: context.overwrite },
     ]),
   };
 }
@@ -2694,17 +2765,19 @@ function syncCreateOptionControls(snapshot: CreateWorkspaceSnapshot = createWork
   if (createDestinationInput.value !== options.destinationPath) {
     createDestinationInput.value = options.destinationPath;
   }
-  createFormatSelect.value = options.format;
-  createCleanSourceCheckbox.checked = options.cleanSource;
-  createRespectGitignoreCheckbox.checked = options.respectGitignore;
-  createReplaceExistingCheckbox.checked = options.replaceExisting;
-  createPreserveMetadataCheckbox.checked = options.preserveMetadata;
-  createCompressionInput.value = options.compressionLevel === null ? "" : String(options.compressionLevel);
-  createVolumeInput.value = options.volumeSize === null ? "" : String(options.volumeSize);
-  createTzapRecoveryField.hidden = !options.tzapRecovery.visible;
-  createTzapRecoveryInput.disabled = options.tzapRecovery.disabled;
-  createTzapRecoveryInput.value = String(options.tzapRecoveryPercentage);
-  createPasswordOptions.hidden = !options.password.visible;
+  renderCreateOptionControls(createOptionControlViewElements, {
+    format: options.format,
+    cleanSource: options.cleanSource,
+    preserveMetadata: options.preserveMetadata,
+    replaceExisting: options.replaceExisting,
+    respectGitignore: options.respectGitignore,
+    compressionLevel: options.compressionLevel,
+    volumeSize: options.volumeSize,
+    tzapRecoveryPercentage: options.tzapRecoveryPercentage,
+    tzapRecoveryVisible: options.tzapRecovery.visible,
+    tzapRecoveryDisabled: options.tzapRecovery.disabled,
+    passwordVisible: options.password.visible,
+  });
   createPasswordInput.disabled = options.password.disabled;
   createPasswordConfirmInput.disabled = options.password.disabled;
   createShowPasswordInput.disabled = options.password.disabled;
@@ -2994,9 +3067,19 @@ function visibleRows(): BrowserRow[] {
   return [...archiveWorkspace.getSnapshot().view.rows];
 }
 
+function currentWorkspaceMode(): WorkspaceDropMode {
+  return shellWorkspace.getSnapshot().activeMode;
+}
+
+function renderOperationalStatus() {
+  const { operationalStatus } = shellWorkspace.getSnapshot();
+  statusElement.textContent = operationalStatus;
+  statusTextElement.textContent = operationalStatus;
+}
+
 function setOperationalStatus(message: string) {
-  statusElement.textContent = message;
-  statusTextElement.textContent = message;
+  shellWorkspace.setOperationalStatus(message);
+  renderOperationalStatus();
 }
 
 function currentArchiveDisplayPath(): string {
@@ -3030,12 +3113,30 @@ function setBrowseState(next: BrowseState, message = "") {
   updateCommandState();
 }
 
-function updateCommandVisualClasses(hasArchive = Boolean(currentArchivePath)) {
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
-    const commandId = button.dataset.commandId as CommandId | undefined;
-    button.classList.toggle("is-primary-command", commandId === "open" && workspaceMode === "extract" && !hasArchive);
-    button.classList.toggle("is-secondary-command", commandId === "refresh");
-  }
+function currentCommandClassState(hasArchive = Boolean(currentArchivePath)): CommandSurfaceClassState {
+  const mode = currentWorkspaceMode();
+  return {
+    open: { primary: mode === "extract" && !hasArchive },
+    refresh: { secondary: true },
+  };
+}
+
+function applyCurrentCommandSurfaceState(
+  commandState: CommandStateMap,
+  hasArchive = Boolean(currentArchivePath),
+) {
+  applyCommandSurfaceState(document, {
+    commandDefinitions: COMMAND_DEFINITIONS,
+    commandState,
+    commandTooltip: (commandId) => commandTooltipText(commandId, displayContext.translator),
+    commandStateReason: localizedCommandStateReason,
+    pressedState: {
+      flatView: isFlatView,
+      largeButtons: appPreferences.largeToolbarButtons,
+      showButtonText: appPreferences.showToolbarLabels,
+    },
+    classState: currentCommandClassState(hasArchive),
+  });
 }
 
 function promptForArchivePassword(promptMessage: string): string | null {
@@ -3050,8 +3151,8 @@ function promptForArchivePassword(promptMessage: string): string | null {
 
 function getArchivePasswordPrompt(commandCode: string): string {
   return commandCode === COMMAND_PASSWORD_REQUIRED
-    ? i18n.t("browse.passwordRequired")
-    : i18n.t("browse.passwordInvalid");
+    ? displayContext.translator.t("browse.passwordRequired")
+    : displayContext.translator.t("browse.passwordInvalid");
 }
 
 function requestArchivePasswordRetry(
@@ -3076,17 +3177,24 @@ function isPasswordCommandError(commandError: ReturnType<typeof asCommandError>)
 }
 
 function canRetryJobWithPassword(jobId: string, state: JobState): boolean {
-  return canRetryJobWithPasswordState(jobRetryContexts.has(jobId), state);
+  return jobsWorkspace.canRetryJobWithPassword(jobId, state);
+}
+
+function currentCommandStateMap() {
+  const snapshot = archiveWorkspace.getSnapshot();
+  const commandContext = snapshot.command;
+
+  return selectCommandState({
+    ...commandContext,
+    mutableOperationsSupported: false,
+    jobRunning: hasActiveJob(),
+  });
 }
 
 function updateCommandState() {
   const snapshot = archiveWorkspace.getSnapshot();
   const commandContext = snapshot.command;
-  const commandState = selectCommandState({
-    ...commandContext,
-    mutableOperationsSupported: false,
-    jobRunning: hasActiveJob(),
-  });
+  const commandState = currentCommandStateMap();
 
   searchInput.disabled = !commandContext.canSearchEntries;
   searchInput.setAttribute("aria-disabled", String(searchInput.disabled));
@@ -3095,49 +3203,120 @@ function updateCommandState() {
   clearSearchButton.disabled = searchInput.disabled || !snapshot.view.searchQuery.trim();
   clearSearchButton.setAttribute("aria-disabled", String(clearSearchButton.disabled));
   selectAllInput.disabled = !commandState.selectAll.enabled;
-  refreshArchiveButton.disabled = !commandState.refresh.enabled;
   navBackButton.disabled = !commandContext.canNavigateBack;
-  navUpButton.disabled = !commandState.upOneLevel.enabled;
 
-  addArchiveButton.disabled = !commandState.add.enabled;
-  extractToolbarButton.disabled = !commandState.extract.enabled;
-  testArchiveButton.disabled = !commandState.test.enabled;
-  infoToolbarButton.disabled = !commandState.info.enabled;
-
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
-    const commandId = button.dataset.commandId as CommandId | undefined;
-    if (!commandId) {
-      continue;
-    }
-    const state = commandState[commandId];
-    const command = COMMAND_DEFINITIONS[commandId];
-    button.disabled = !state.enabled;
-    button.title = localizedCommandStateReason(state.reason) ?? commandTooltipText(commandId, i18n);
-    button.setAttribute("aria-disabled", String(!state.enabled));
-    if (commandId === "flatView") {
-      button.setAttribute("aria-pressed", String(isFlatView));
-    }
-    if (commandId === "largeButtons") {
-      button.setAttribute("aria-pressed", String(appPreferences.largeToolbarButtons));
-    }
-    if (commandId === "showButtonText") {
-      button.setAttribute("aria-pressed", String(appPreferences.showToolbarLabels));
-    }
-    if (command.unsupported && !state.enabled) {
-      button.dataset.unsupported = "true";
-    } else {
-      delete button.dataset.unsupported;
-    }
-  }
+  applyCurrentCommandSurfaceState(commandState, commandContext.hasArchive);
 
   applyPreferenceClasses();
-  updateCommandVisualClasses(commandContext.hasArchive);
   updateStatusBar();
+}
+
+const commandRouter = createCommandRouter({
+  getCommandState: currentCommandStateMap,
+  effects: {
+    openArchive: (source, archivePath) => {
+      if (source === "clipboard") {
+        void openArchiveFromClipboard();
+        return;
+      }
+      if (source === "path" && archivePath) {
+        void openArchiveFromPath(archivePath);
+        return;
+      }
+      void onOpenArchive();
+    },
+    createArchive: showCreateWorkspace,
+    selectAll: selectVisibleEntries,
+    deselectAll: clearBrowseSelection,
+    invertSelection: invertVisibleSelectionEntries,
+    selectByType: () => selectEntriesByType("add"),
+    deselectByType: () => selectEntriesByType("remove"),
+    openRoot: () => navigateToFolder(""),
+    upOneLevel: navigateUp,
+    openInside: () => {
+      const selected = getSelectedEntryPaths();
+      if (selected.length !== 1) {
+        setOperationalMessage("command.singleFileRequired");
+        return;
+      }
+      navigateToFolder(selected[0]);
+    },
+    openOutside: () => void onOpenOutsideSelectedEntry(),
+    extract: (mode, destination) => {
+      if (destination === "here") {
+        openExtractHereDialog(mode);
+        return;
+      }
+      openExtractDialog(mode);
+    },
+    test: () => void onTestArchive(),
+    view: () => void onPreviewSelectedEntry(),
+    copySelectedPaths: () => void copySelectedEntryPathsToClipboard(),
+    info: (target, entryPath) => {
+      if (target === "archive") {
+        showArchiveInfo();
+        return;
+      }
+      if (target === "context") {
+        const selectedRows = getVisibleSelectedRows();
+        if (selectedRows.length > 1) {
+          showSelectionInfo(selectedRows);
+          return;
+        }
+        if (entryPath) {
+          showEntryInfo(entryPath);
+          return;
+        }
+        showArchiveInfo();
+        return;
+      }
+      showCurrentInfo();
+    },
+    refresh: () => void onRefreshArchive(),
+    exit: closeAppWindow,
+    detailsView: () => setOperationalMessage("status.detailsViewActive"),
+    sort: (key) => applySortCommand(key),
+    toggleArchiveToolbar: () => {
+      savePreferencePatch({ toolbarVisible: !appPreferences.toolbarVisible });
+    },
+    toggleLargeButtons: () => {
+      savePreferencePatch({ largeToolbarButtons: !appPreferences.largeToolbarButtons });
+    },
+    toggleToolbarLabels: () => {
+      savePreferencePatch({ showToolbarLabels: !appPreferences.showToolbarLabels });
+    },
+    options: openPreferencesDialog,
+    about: () => {
+      renderAboutDiagnostics();
+      openModal(aboutDialog, "#about-close");
+    },
+    toggleFlatView: () => setFlatView(!isFlatView, true),
+    deleteTempFiles: () => void onDeleteTemporaryFiles(),
+    jobs: openJobDrawer,
+    reportDisabled: (_commandId, reason) => {
+      setOperationalStatus(localizedCommandStateReason(reason) ?? UNSUPPORTED_OPERATION_MESSAGE);
+    },
+    reportUnsupported: () => {
+      setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
+    },
+  },
+});
+
+function commandPayload(commandId: CommandId): CommandRouterPayload {
+  if (commandId === "extract") {
+    return { extractMode: selectedEntries.size ? "selection" : "archive" };
+  }
+
+  return {};
+}
+
+function runRoutedCommand(commandId: CommandId, payload: CommandRouterPayload = {}): void {
+  commandRouter.run(commandId, { ...commandPayload(commandId), ...payload });
 }
 
 function updateMeta() {
   if (!currentArchivePath) {
-    metaElement.textContent = i18n.t("browse.statusReady");
+    metaElement.textContent = displayContext.translator.t("browse.statusReady");
     return;
   }
 
@@ -3146,11 +3325,12 @@ function updateMeta() {
 }
 
 function renderWorkspaceMode() {
-  const isCompress = workspaceMode === "compress";
+  const mode = currentWorkspaceMode();
+  const isCompress = mode === "compress";
   if (isCompress) {
     renderCompressBrowser();
   }
-  workspaceElement.dataset.mode = workspaceMode;
+  workspaceElement.dataset.mode = mode;
   modeCompressButton.classList.toggle("is-active", isCompress);
   modeExtractButton.classList.toggle("is-active", !isCompress);
   modeCompressButton.setAttribute("aria-selected", String(isCompress));
@@ -3164,42 +3344,47 @@ function renderWorkspaceMode() {
   messageElement.hidden = isCompress;
   detailsElement.hidden = isCompress;
   compressOptionsPanel.hidden = !isCompress;
-  detailsPaneTitleElement.textContent = i18n.t(isCompress ? "compress.options" : "pane.details");
+  detailsPaneTitleElement.textContent = displayContext.translator.t(isCompress ? "compress.options" : "pane.details");
   detailsPaneTitleElement.dataset.i18nText = isCompress ? "compress.options" : "pane.details";
 
   if (isCompress) {
-    workspaceTitleElement.textContent = i18n.t("compress.tableTitle");
-    metaElement.textContent = i18n.t("compress.tableDescription");
+    workspaceTitleElement.textContent = displayContext.translator.t("compress.tableTitle");
+    metaElement.textContent = displayContext.translator.t("compress.tableDescription");
     const sourceSnapshot = syncCreateSourcesFromWorkspace();
     const includedCount = sourceSnapshot.plan.current ? sourceSnapshot.inclusion.includedCount : sourceSnapshot.sourceCount;
-    statusSelectionCountElement.textContent = i18n.t("compress.sourceStaged", {
+    statusSelectionCountElement.textContent = displayContext.translator.t("compress.sourceStaged", {
       count: includedCount,
-      sourceLabel: i18n.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+      sourceLabel: displayContext.translator.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
     });
     statusSelectionSizeElement.textContent = "";
     statusFocusedSizeElement.textContent = "";
     statusFocusedModifiedElement.textContent = "";
   } else {
-    workspaceTitleElement.textContent = i18n.t("extract.tableTitle");
+    workspaceTitleElement.textContent = displayContext.translator.t("extract.tableTitle");
     if (!currentArchivePath) {
-      metaElement.textContent = i18n.t("extract.tableDescription");
+      metaElement.textContent = displayContext.translator.t("extract.tableDescription");
     }
     updateStatusBar();
   }
-  updateCommandVisualClasses();
+  applyCurrentCommandSurfaceState(currentCommandStateMap());
 }
 
 function setWorkspaceMode(mode: WorkspaceDropMode) {
-  if (workspaceMode === mode) {
+  if (currentWorkspaceMode() === mode) {
+    if (mode === "compress") {
+      renderDetails();
+    }
     renderWorkspaceMode();
     return;
   }
 
-  workspaceMode = mode;
+  shellWorkspace.setWorkspaceMode(mode);
   if (mode === "extract") {
     renderTree();
     renderDetails();
     updateMeta();
+  } else {
+    renderDetails();
   }
   renderWorkspaceMode();
   setOperationalMessage(mode === "compress" ? "workspace.mode.compressStatus" : "workspace.mode.extractStatus");
@@ -3207,10 +3392,10 @@ function setWorkspaceMode(mode: WorkspaceDropMode) {
 
 function renderPathBar() {
   if (!currentArchivePath) {
-    pathFieldInput.value = i18n.t("browse.statusEmpty");
+    pathFieldInput.value = displayContext.translator.t("browse.statusEmpty");
     pathFieldInput.disabled = true;
     pathFieldInput.readOnly = true;
-    pathCrumbsElement.textContent = i18n.t("browse.statusEmpty");
+    pathCrumbsElement.textContent = displayContext.translator.t("browse.statusEmpty");
     pathCrumbsElement.hidden = true;
     document.title = APP_TITLE;
     return;
@@ -3234,61 +3419,53 @@ function renderPathBar() {
 }
 
 function renderTree() {
-  if (workspaceMode === "compress") {
+  if (currentWorkspaceMode() === "compress") {
     renderCompressSourceTree();
     return;
   }
 
   if (!currentArchivePath) {
-    treeContentElement.innerHTML = `
-      <div class="empty-pane">
-        <p>${escapeHtml(i18n.t("browse.noArchiveOpen"))}</p>
-      </div>
-    `;
+    renderArchiveNavigationTree({ treeContentElement }, {
+      kind: "empty",
+      message: displayContext.translator.t("browse.noArchiveOpen"),
+    });
     return;
   }
 
-  const folders = getKnownFolderPaths();
-  treeContentElement.innerHTML = folders
+  const folders: ArchiveWorkspaceTreeFolder[] = getKnownFolderPaths()
     .map((folder) => {
-      const depth = folder.depth;
-      const label = folder.name;
       const isRoot = folder.path === archiveTreeRootPath;
-      const disclosure = folder.hasChildren && !isRoot
-        ? `<span class="tree-disclosure" data-tree-toggle data-tree-path="${escapeHtml(folder.path)}" aria-label="${
-          folder.isExpanded ? "Collapse" : "Expand"
-        } ${escapeHtml(folder.name)}" aria-hidden="true">${folder.isExpanded ? "-" : "+"}</span>`
-        : `<span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>`;
-      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder, i18n);
+      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder, displayContext.translator);
       const iconDataUrl = systemIconDataUrlForRequest(
         isRoot
           ? systemIconRequestForPath(currentArchivePath, false)
           : systemIconRequestForPath("folder", true),
       );
-      return `
-        <button
-          class="tree-item ${folder.path === currentArchiveFolder ? "is-active" : ""}"
-          type="button"
-          data-tree-path="${escapeHtml(folder.path)}"
-          style="--depth: ${depth}"
-        >
-          ${disclosure}
-          ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
-          <span class="tree-label">${escapeHtml(label)}</span>
-        </button>
-      `;
-    })
-    .join("");
+      return {
+        path: folder.path,
+        label: folder.name,
+        depth: folder.depth,
+        canToggle: folder.hasChildren && !isRoot,
+        isExpanded: folder.isExpanded,
+        isActive: folder.path === currentArchiveFolder,
+        iconHtml: renderEntryIcon(icon, "tree-icon", iconDataUrl),
+      };
+    });
+  renderArchiveNavigationTree({ treeContentElement }, {
+    kind: "folders",
+    folders,
+    collapseLabel: "Collapse",
+    expandLabel: "Expand",
+  });
 }
 
 function renderCompressSourceTree() {
   const sourceSnapshot = syncCreateSourcesFromWorkspace();
   if (!sourceSnapshot.hasSources) {
-    treeContentElement.innerHTML = `
-      <div class="empty-pane">
-        <p>${escapeHtml(i18n.t("compress.noSources"))}</p>
-      </div>
-    `;
+    renderCreateNavigationTree({ treeContentElement }, {
+      kind: "empty",
+      message: displayContext.translator.t("compress.noSources"),
+    });
     return;
   }
 
@@ -3296,54 +3473,48 @@ function renderCompressSourceTree() {
   const planEntries = plan?.planEntries ?? [];
   if (sourceSnapshot.plan.state === "loading" || !plan) {
     const planStatusText = createPlanStatusText(sourceSnapshot.plan.status);
-    treeContentElement.innerHTML = `
-      <div class="empty-pane">
-        <p>${escapeHtml(planStatusText || i18n.t("create.plan.planning"))}</p>
-      </div>
-    `;
+    renderCreateNavigationTree({ treeContentElement }, {
+      kind: "empty",
+      message: planStatusText || displayContext.translator.t("create.plan.planning"),
+    });
     return;
   }
 
   if (!planEntries.length) {
-    treeContentElement.innerHTML = `
-      <div class="empty-pane">
-        <p>${escapeHtml(i18n.t("create.plan.none"))}</p>
-      </div>
-    `;
+    renderCreateNavigationTree({ treeContentElement }, {
+      kind: "empty",
+      message: displayContext.translator.t("create.plan.none"),
+    });
     return;
   }
 
-  const folders = sourceSnapshot.view.treeFolders;
   const currentFolder = sourceSnapshot.view.currentFolder;
-  treeContentElement.innerHTML = folders
+  const folders: ArchiveWorkspaceTreeFolder[] = sourceSnapshot.view.treeFolders
     .map((folder) => {
       const isRoot = folder.path === archiveTreeRootPath;
       const label = isRoot ? suggestedCreateArchiveName() || APP_TITLE : folder.name;
-      const disclosure = folder.hasChildren && !isRoot
-        ? `<span class="tree-disclosure" data-compress-tree-toggle data-compress-folder-path="${escapeHtml(folder.path)}" aria-label="${
-          folder.isExpanded ? "Collapse" : "Expand"
-        } ${escapeHtml(label)}" aria-hidden="true">${folder.isExpanded ? "-" : "+"}</span>`
-        : `<span class="tree-disclosure tree-disclosure-placeholder" aria-hidden="true"></span>`;
-      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentFolder, i18n);
+      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentFolder, displayContext.translator);
       const iconDataUrl = systemIconDataUrlForRequest(
         isRoot
           ? systemIconRequestForPath(sourceSnapshot.sources[0] ?? "folder", true)
           : systemIconRequestForPath("folder", true),
       );
-      return `
-        <button
-          class="tree-item ${folder.path === currentFolder ? "is-active" : ""}"
-          type="button"
-          data-compress-folder-path="${escapeHtml(folder.path)}"
-          style="--depth: ${folder.depth}"
-        >
-          ${disclosure}
-          ${renderEntryIcon(icon, "tree-icon", iconDataUrl)}
-          <span class="tree-label">${escapeHtml(label)}</span>
-        </button>
-      `;
-    })
-    .join("");
+      return {
+        path: folder.path,
+        label,
+        depth: folder.depth,
+        canToggle: folder.hasChildren && !isRoot,
+        isExpanded: folder.isExpanded,
+        isActive: folder.path === currentFolder,
+        iconHtml: renderEntryIcon(icon, "tree-icon", iconDataUrl),
+      };
+    });
+  renderCreateNavigationTree({ treeContentElement }, {
+    kind: "folders",
+    folders,
+    collapseLabel: "Collapse",
+    expandLabel: "Expand",
+  });
 }
 
 function navigateToCompressFolder(folderPath: string) {
@@ -3357,235 +3528,61 @@ function navigateToCompressFolder(folderPath: string) {
   focusFirstCompressRow();
 }
 
-function tableColspan(): number {
-  return visibleColumns(tableColumnSettings).length + 1;
-}
-
-function tableMinimumWidth(columns = visibleColumns(tableColumnSettings)): number {
-  const selectionWidth = 28;
-  const columnWidth = columns.reduce((total, column) => total + column.width, 0);
-  return Math.max(720, selectionWidth + columnWidth);
-}
-
-function renderTableHeader() {
-  const columns = visibleColumns(tableColumnSettings);
-  entryTable.style.minWidth = `${tableMinimumWidth(columns)}px`;
-  tableHead.innerHTML = `
-    <tr>
-      <th class="selection-column">
-        <input id="select-all" type="checkbox" aria-label="${escapeHtml(i18n.t("table.selectVisibleEntries"))}" ${browseState === "loaded" ? "" : "disabled"} />
-      </th>
-      ${columns.map((column) => `
-        <th
-          data-column-id="${column.id}"
-          data-sort-key="${column.id}"
-          class="${column.align !== "left" ? `align-${column.align}` : ""}"
-          style="width: ${column.width}px; min-width: ${column.minWidth ?? 64}px"
-          aria-sort="${sortKey === column.id ? (sortAscending ? "ascending" : "descending") : "none"}"
-          aria-keyshortcuts="Enter Space ContextMenu Shift+F10"
-          tabindex="0"
-          title="${escapeHtmlValue(archiveTableColumnLabel(column, i18n))}"
-        >
-          <span class="column-header-label">${escapeHtml(archiveTableColumnLabel(column, i18n))}</span>
-          ${sortKey === column.id ? `<span class="sort-indicator" aria-hidden="true">${sortAscending ? "^" : "v"}</span>` : ""}
-          <span class="column-resizer" data-column-resizer="${column.id}" aria-hidden="true"></span>
-        </th>
-      `).join("")}
-    </tr>
-  `;
-  selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
-}
-
-function setArchiveEmptyStateVisible(visible: boolean) {
-  archiveEmptyStateElement.hidden = !visible;
-  entryTable.hidden = false;
-  tableShellElement.classList.toggle("has-start-empty", visible);
-}
-
-function renderNameCell(row: BrowserRow, showFullPath: boolean): string {
-  const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
-  const icon = archiveRowIconDescriptor(row, i18n);
+function archiveWorkspaceRowIcon(row: BrowserRow) {
+  const icon = archiveRowIconDescriptor(row, displayContext.translator);
   const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForRow(row));
-  const showSecondaryPath = showFullPath && (row.rowType === "entry" || row.rowType === "folder");
-  return `
-    <span class="row-primary">
-      ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
-      <span class="sr-only">${escapeHtml(icon.label)}:</span>
-      <span class="row-name">${escapeHtml(row.name)}</span>
-    </span>
-    ${showSecondaryPath ? `<span class="row-secondary">${escapeHtml(secondaryPath)}</span>` : ""}
-  `;
-}
-
-function renderCell(row: BrowserRow, column: ArchiveTableColumn, showFullPath: boolean): string {
-  const className = [
-    column.id === "name" ? "name-cell" : "",
-    column.align !== "left" ? `align-${column.align}` : "",
-  ].filter(Boolean).join(" ");
-
-  if (column.id === "name") {
-    return `<td class="${className}">${renderNameCell(row, showFullPath)}</td>`;
-  }
-
-  const entry = row.rowType === "entry" || row.rowType === "folder" ? row.entry : undefined;
-  if (!entry) {
-    return `<td class="${className}"></td>`;
-  }
-
-  return `<td class="${className}">${escapeHtml(formatArchiveTableValue(entry, column.id, i18n))}</td>`;
+  return {
+    html: renderEntryIcon(icon, "row-icon", iconDataUrl),
+    label: icon.label,
+  };
 }
 
 function renderBrowseRows() {
-  renderTableHeader();
-  setArchiveEmptyStateVisible(false);
   const snapshot = archiveWorkspace.getSnapshot();
-  const query = snapshot.view.searchQuery.trim();
-  searchCountElement.textContent = "";
-
-  if (browseState === "loading") {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="${tableColspan()}" class="empty">${escapeHtml(i18n.t("browse.statusLoading"))}</td>
-      </tr>
-    `;
-    selectAllInput.checked = false;
-    selectAllInput.indeterminate = false;
-    return;
-  }
-
-  if (browseState === "error") {
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="${tableColspan()}" class="empty">${escapeHtml(browseError || i18n.t("browse.statusUnknown"))}</td>
-      </tr>
-    `;
-    selectAllInput.checked = false;
-    selectAllInput.indeterminate = false;
-    return;
-  }
-
-  if (!currentArchivePath) {
-    tableBody.innerHTML = `
-      <tr class="empty-row">
-        <td colspan="${tableColspan()}" class="empty">${escapeHtml(i18n.t("browse.statusEmpty"))}</td>
-      </tr>
-    `;
-    setArchiveEmptyStateVisible(true);
-    selectAllInput.checked = false;
-    selectAllInput.indeterminate = false;
-    return;
-  }
-
-  const rows = [...snapshot.view.rows];
-  const selection = snapshot.view.selection;
-  const resultCount = selection.visibleSelectablePaths.length;
-  searchCountElement.textContent = formatSearchCount(resultCount);
-  if (!rows.length) {
-    const emptyMessage = query
-      ? i18n.t("browse.noEntriesMatchSearch", { query })
-      : i18n.t("browse.folderEmpty");
-    tableBody.innerHTML = `
-      <tr class="${query ? "search-empty-row" : ""}">
-        <td colspan="${tableColspan()}" class="empty">${escapeHtml(emptyMessage)}</td>
-      </tr>
-    `;
-    selectAllInput.checked = false;
-    selectAllInput.indeterminate = false;
-    return;
-  }
-
-  const selectedPaths = new Set(selection.selectedPaths);
-  const focusedPath = selection.focusedPath;
-  selectAllInput.checked = selection.visibleSelectablePaths.length > 0
-    && selection.visibleSelectedCount === selection.visibleSelectablePaths.length;
-  selectAllInput.indeterminate = selection.visibleSelectedCount > 0
-    && selection.visibleSelectedCount < selection.visibleSelectablePaths.length;
-
-  const showFullPath = Boolean(query) || snapshot.view.flatView;
-  const columns = visibleColumns(tableColumnSettings);
-  const nativeDragAttributes = nativeDragRowAttributes();
-  tableBody.innerHTML = rows
-    .map((row) => {
-      if (row.rowType === "parent") {
-        return `
-          <tr class="folder-row parent-row" data-folder-path="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}" aria-keyshortcuts="Enter ContextMenu Shift+F10">
-            <td class="selection-column"></td>
-            ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
-          </tr>
-        `;
-      }
-
-      if (row.rowType === "folder") {
-        const selected = selectedPaths.has(row.path);
-        const focused = focusedPath === row.path;
-        return `
-          <tr
-            class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
-            data-folder-path="${escapeHtml(row.path)}"
-            data-entry-path="${escapeHtml(row.path)}"
-            tabindex="0"
-            ${nativeDragAttributes}
-            aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}"
-            aria-selected="${selected ? "true" : "false"}"
-            aria-keyshortcuts="Space Enter ContextMenu Shift+F10"
-          >
-            <td class="selection-column">
-              <input
-                data-entry-path="${escapeHtml(row.path)}"
-                type="checkbox"
-                aria-label="${escapeHtml(i18n.t("browse.selectEntry.aria", { name: row.name }))}"
-                ${selected ? "checked" : ""}
-              />
-            </td>
-            ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
-          </tr>
-        `;
-      }
-
-      const selected = selectedPaths.has(row.path);
-      const focused = focusedPath === row.path;
-      return `
-        <tr
-          class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
-          data-entry-path="${escapeHtml(row.path)}"
-          tabindex="0"
-          ${nativeDragAttributes}
-          aria-selected="${selected ? "true" : "false"}"
-          aria-keyshortcuts="Space Enter ContextMenu Shift+F10"
-        >
-          <td class="selection-column">
-            <input
-              data-entry-path="${escapeHtml(row.path)}"
-              type="checkbox"
-              aria-label="${escapeHtml(i18n.t("browse.selectEntry.aria", { name: row.name }))}"
-              ${selected ? "checked" : ""}
-            />
-          </td>
-          ${columns.map((column) => renderCell(row, column, showFullPath)).join("")}
-        </tr>
-      `;
-    })
-    .join("");
+  const result = renderArchiveWorkspaceTable({
+    tableHead,
+    tableBody,
+    entryTable,
+    tableShellElement,
+    archiveEmptyStateElement,
+    searchCountElement,
+  }, {
+    browseState,
+    browseError,
+    currentArchivePath,
+    rows: [...snapshot.view.rows],
+    searchQuery: snapshot.view.searchQuery,
+    flatView: snapshot.view.flatView,
+    selection: snapshot.view.selection,
+    columns: visibleColumns(tableColumnSettings),
+    sortKey,
+    sortAscending,
+    translator: displayContext.translator,
+    formatSearchCount,
+    renderRowIcon: archiveWorkspaceRowIcon,
+    nativeDragAttributes: nativeDragRowAttributes(),
+  });
+  selectAllInput = result.selectAllInput;
 }
 
 function renderDetails() {
-  if (workspaceMode === "compress") {
+  if (currentWorkspaceMode() === "compress") {
     detailsElement.innerHTML = "";
     return;
   }
 
   const details = archiveWorkspace.getSnapshot().view.details;
+  let model: ArchiveDetailsModel;
 
   switch (details.kind) {
     case "noArchive":
-      detailsElement.innerHTML = `
-        <div class="details-empty">
-          <h3>No archive open</h3>
-          <p>${escapeHtml(message("detail.openArchiveFirst"))}</p>
-          <button class="primary-action" type="button" data-details-action="open-archive">${escapeHtml(message("browse.emptyOpenAction"))}</button>
-        </div>
-      `;
-      return;
+      model = {
+        kind: "noArchive",
+        title: "No archive open",
+        message: message("detail.openArchiveFirst"),
+        openArchiveLabel: message("browse.emptyOpenAction"),
+      };
+      break;
 
     case "hiddenSelection": {
       const rows: DetailRow[] = [
@@ -3595,98 +3592,85 @@ function renderDetails() {
         ...(details.firstSelectedEntryPath ? [{ label: message("detail.path"), value: details.firstSelectedEntryPath }] : []),
       ];
 
-      detailsElement.innerHTML = `
-        <div class="detail-block">
-          <h3>${escapeHtml(message("detail.selectionHiddenBySearch"))}</h3>
-          <p>${escapeHtml(message("detail.selectionHiddenBySearchDescription"))}</p>
-          <div class="detail-actions">
-            <button type="button" class="primary-action" data-details-action="clear-search">${escapeHtml(message("search.clear"))}</button>
-            <button type="button" data-details-action="archive-info">${escapeHtml(message("info.archiveTitle"))}</button>
-          </div>
-          <dl class="detail-list">
-            ${renderDetailRows(rows)}
-          </dl>
-        </div>
-      `;
-      return;
+      model = {
+        kind: "hiddenSelection",
+        title: message("detail.selectionHiddenBySearch"),
+        description: message("detail.selectionHiddenBySearchDescription"),
+        actions: [
+          { label: message("search.clear"), action: "clear-search", primary: true },
+          { label: message("info.archiveTitle"), action: "archive-info" },
+        ],
+        rows,
+      };
+      break;
     }
 
     case "archiveSummary": {
       const unpackedSize = details.unpackedSize === null ? null : formatBytes(details.unpackedSize);
       const format = formatArchiveTypeFromPath(details.archivePath);
-      const list: string = [
-        addDetailMessageRow("detail.archiveName", getArchiveName(details.archivePath, APP_TITLE)),
-        addDetailMessageRow("detail.path", details.archivePath),
-        addDetailMessageRow("detail.size", unpackedSize),
-        addDetailMessageRow("detail.format", format),
-        addDetailMessageRow("detail.entryCount", String(details.entryCount)),
-        addDetailMessageRow("detail.packedSize", details.packedSize === null ? null : formatBytes(details.packedSize)),
-        addDetailMessageRow("detail.lastTestStatus", formatLastTestStatusForCurrentArchive()),
-        addDetailMessageRow("detail.folder", details.currentFolder || "/"),
-      ].filter(Boolean).join("");
-
-      detailsElement.innerHTML = `
-        <div class="detail-block archive-detail-block">
-          <h3 class="detail-title">
-            ${renderEntryIcon(
-              archiveFileIconDescriptor(details.archivePath, false, i18n),
-              "detail-icon",
-              systemIconDataUrlForRequest(systemIconRequestForPath(details.archivePath, false)),
-            )}
-            <span>${escapeHtml(getArchiveName(details.archivePath, APP_TITLE))}</span>
-          </h3>
-          <dl class="detail-list">
-            ${list}
-          </dl>
-        </div>
-      `;
-      return;
+      const title = getArchiveName(details.archivePath, APP_TITLE);
+      model = {
+        kind: "archiveSummary",
+        title,
+        iconHtml: renderEntryIcon(
+          archiveFileIconDescriptor(details.archivePath, false, displayContext.translator),
+          "detail-icon",
+          systemIconDataUrlForRequest(systemIconRequestForPath(details.archivePath, false)),
+        ),
+        rows: [
+          { label: message("detail.archiveName"), value: title },
+          { label: message("detail.path"), value: details.archivePath },
+          { label: message("detail.size"), value: unpackedSize },
+          { label: message("detail.format"), value: format },
+          { label: message("detail.entryCount"), value: String(details.entryCount) },
+          { label: message("detail.packedSize"), value: details.packedSize === null ? null : formatBytes(details.packedSize) },
+          { label: message("detail.lastTestStatus"), value: formatLastTestStatusForCurrentArchive() },
+          { label: message("detail.folder"), value: details.currentFolder || "/" },
+        ],
+      };
+      break;
     }
 
     case "syntheticFolder": {
       const row = details.row;
-      const icon = archiveTreeIconDescriptor(false, row.path === currentArchiveFolder, i18n);
+      const icon = archiveTreeIconDescriptor(false, row.path === currentArchiveFolder, displayContext.translator);
       const rows: DetailRow[] = [
         { label: message("detail.name"), value: row.name },
         { label: message("detail.type"), value: message("detail.directory") },
         { label: message("detail.path"), value: row.path || "/" },
       ];
-      detailsElement.innerHTML = `
-        <div class="detail-block">
-          <h3 class="detail-title">
-            ${renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForPath("folder", true)))}
-            <span>${escapeHtml(row.name)}</span>
-          </h3>
-          <dl class="detail-list">
-            ${renderDetailRows(rows)}
-          </dl>
-        </div>
-      `;
-      return;
+      model = {
+        kind: "syntheticFolder",
+        title: row.name,
+        iconHtml: renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))),
+        rows,
+      };
+      break;
     }
 
     case "entry": {
       const entry = details.entry;
-      const icon = archiveEntryIconDescriptor(entry, i18n);
+      const icon = archiveEntryIconDescriptor(entry, displayContext.translator);
       const rows = entryPropertyRows(entry);
       const canPreview = entry.kind !== "directory";
-      detailsElement.innerHTML = `
-        <div class="detail-block">
-          <h3 class="detail-title">
-            ${renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForEntry(entry)))}
-            <span>${escapeHtml(getBaseName(entry.path))}</span>
-          </h3>
-          ${canPreview ? `
-            <div class="detail-actions">
-              <button type="button" class="primary-action" data-details-action="preview" title="${escapeHtmlValue(previewActionHint())}" aria-label="${escapeHtmlValue(`${message("command.view")}: ${previewActionHint()}`)}">${escapeHtml(message("command.view"))}</button>
-            </div>
-          ` : ""}
-          <dl class="detail-list">
-            ${renderDetailRows(rows)}
-          </dl>
-        </div>
-      `;
-      return;
+      const previewHint = previewActionHint();
+      const previewLabel = message("command.view");
+      model = {
+        kind: "entry",
+        title: getBaseName(entry.path),
+        iconHtml: renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForEntry(entry))),
+        actions: canPreview
+          ? [{
+              label: previewLabel,
+              action: "preview",
+              primary: true,
+              title: previewHint,
+              ariaLabel: `${previewLabel}: ${previewHint}`,
+            }]
+          : [],
+        rows,
+      };
+      break;
     }
 
     case "multipleSelection": {
@@ -3699,23 +3683,25 @@ function renderDetails() {
         { label: message("detail.pathPreview"), value: truncatedPathPreview([...details.pathPreviewPaths]) },
       ];
 
-      detailsElement.innerHTML = `
-        <div class="detail-block">
-          <h3>${escapeHtml(message("detail.selectedEntries", { count: details.selectedCount }))}</h3>
-          <div class="detail-actions">
-            <button type="button" class="primary-action" data-details-action="extract-selected">${escapeHtml(message("extract.selectedAction"))}</button>
-            <button type="button" data-details-action="test-selected">${escapeHtml(message("test.selectedAction"))}</button>
-            <button type="button" data-details-action="properties">${escapeHtml(message("command.properties"))}</button>
-            <button type="button" data-details-action="archive-info">${escapeHtml(message("info.archiveTitle"))}</button>
-          </div>
-          <dl class="detail-list">
-            ${renderDetailRows(rows)}
-          </dl>
-        </div>
-      `;
-      return;
+      model = {
+        kind: "multipleSelection",
+        title: message("detail.selectedEntries", { count: details.selectedCount }),
+        actions: [
+          { label: message("extract.selectedAction"), action: "extract-selected", primary: true },
+          { label: message("test.selectedAction"), action: "test-selected" },
+          { label: message("command.properties"), action: "properties" },
+          { label: message("info.archiveTitle"), action: "archive-info" },
+        ],
+        rows,
+      };
+      break;
     }
   }
+
+  renderArchiveDetails({ detailsElement }, {
+    model,
+    ...detailRenderHelpers(),
+  });
 }
 
 function renderBrowse() {
@@ -3729,7 +3715,7 @@ function renderBrowse() {
 
   const visibleSelectedCount = archiveWorkspace.getSnapshot().view.selection.visibleSelectedCount;
   if (browseState === "loaded" && visibleSelectedCount > 0) {
-    messageElement.textContent = i18n.t("browse.selectedEntries", { count: visibleSelectedCount });
+    messageElement.textContent = displayContext.translator.t("browse.selectedEntries", { count: visibleSelectedCount });
   }
 
   queueSystemIconRefresh();
@@ -3774,58 +3760,14 @@ function setCreatePlanState() {
     ? createUnavailableReasonText(unavailableReason, sourceSnapshot)
     : createReadyStatusText(sourceSnapshot);
 
-  startCreateButton.disabled = !canCreate;
-  startCreateButton.title = statusText;
-  startCreateButton.setAttribute("aria-label", canCreate
-    ? message("compress.createArchive")
-    : `${message("compress.createArchive")}: ${statusText}`);
-  addSourceButton.classList.toggle("primary-action", sourceSnapshot.isEmpty);
-  addSourceButton.classList.toggle("secondary-action", sourceSnapshot.hasSources);
-  startCreateButton.classList.toggle("primary-action", canCreate);
-  startCreateButton.classList.toggle("secondary-action", !canCreate);
-  createPlanMeta.textContent = statusText;
-  createPlanMeta.classList.toggle("is-ready", canCreate);
-  createPlanMeta.classList.toggle("is-warning", unavailableReason !== null && unavailableReason !== "needsSources");
-}
-
-function formatPlanSummary(plan: CreatePlanResponse): string {
-  const hasWarnings = plan.warnings.length > 0;
-  const warnings =
-    hasWarnings
-      ? `<ul>${plan.warnings.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul>`
-      : `<p>${escapeHtml(i18n.t("create.plan.noWarnings"))}</p>`;
-
-  const sampleRows = plan.entries
-    .slice(0, 8)
-    .map((entry) => `<li>${escapeHtml(entry)}</li>`)
-    .join("");
-
-  const summaryText = i18n.t("create.plan.summary", {
-    count: plan.includedCount,
-    size: formatBytes(plan.totalBytes),
-    warnings: plan.warnings.length,
+  renderCreateActionState(createActionStateViewElements, {
+    canCreate,
+    hasSources: sourceSnapshot.hasSources,
+    isEmpty: sourceSnapshot.isEmpty,
+    statusText,
+    createArchiveLabel: message("compress.createArchive"),
+    isWarning: unavailableReason !== null && unavailableReason !== "needsSources",
   });
-
-  return `
-    <div class="plan-validation ${hasWarnings ? "has-warnings" : "is-ready"}">
-      <strong>${escapeHtml(summaryText)}</strong>
-    </div>
-    <details class="plan-details" ${hasWarnings ? "open" : ""}>
-      <summary>${escapeHtml(i18n.t("create.plan.details"))}</summary>
-      <div class="plan-grid">
-        <p><strong>${escapeHtml(i18n.t("create.plan.included"))}</strong> ${plan.includedCount} entries - ${formatBytes(plan.totalBytes)}</p>
-        <p><strong>${escapeHtml(i18n.t("create.plan.excluded"))}</strong> ${plan.excludedCount} entries - ${formatBytes(plan.excludedBytes)}</p>
-        <p><strong>${escapeHtml(i18n.t("create.plan.warnings"))}</strong> ${plan.warnings.length}</p>
-      </div>
-      <div class="plan-list">
-        <p>${escapeHtml(i18n.t("create.plan.includedSample"))}</p>
-        <ul>${sampleRows || `<li>${escapeHtml(i18n.t("create.plan.none"))}</li>`}</ul>
-      </div>
-      <div class="plan-warnings">
-        ${warnings}
-      </div>
-    </details>
-  `;
 }
 
 function browserCreatePlanPreview(paths: string[]): CreatePlanResponse {
@@ -3895,15 +3837,11 @@ function setCurrentCompressFolderIncluded(included: boolean) {
 function syncCompressIncludeAllControl() {
   const snapshot = syncCreateSourcesFromWorkspace();
   const state = createWorkspace.getIncludeAllControlState(snapshot.view.currentFolder);
-  compressIncludeAllInput.checked = state.checked;
-  compressIncludeAllInput.indeterminate = state.indeterminate;
-  compressIncludeAllInput.disabled = state.disabled;
+  renderCompressIncludeAllControl(compressIncludeAllControlViewElements, state);
 }
 
 function syncCompressInclusionControls() {
-  for (const input of compressSourceBody.querySelectorAll<HTMLInputElement>("[data-compress-include]")) {
-    input.indeterminate = input.dataset.compressInclusionState === "partial";
-  }
+  syncCompressSourceInclusionControls(compressSourceTableViewElements);
   syncCompressIncludeAllControl();
 }
 
@@ -3912,50 +3850,24 @@ function refreshCreatePlanSummary() {
   if (!plan) {
     return;
   }
-  createPlanSummary.innerHTML = formatPlanSummary(plan);
+  renderCreatePlanSummary(createPlanSummaryViewElements, {
+    plan,
+    translator: displayContext.translator,
+    formatBytes,
+  });
 }
 
 function renderCreateSources() {
   const sourceSnapshot = syncCreateSourcesFromWorkspace();
-  const sources = sourceSnapshot.sources;
-  clearSourcesButton.hidden = sourceSnapshot.isEmpty;
-  clearSourcesButton.disabled = sourceSnapshot.isEmpty;
-  includeAllSourcesButton.hidden = sourceSnapshot.isEmpty;
-  excludeAllSourcesButton.hidden = sourceSnapshot.isEmpty;
-  includeAllSourcesButton.disabled = sourceSnapshot.isEmpty || sourceSnapshot.inclusion.excludedArchivePaths.length === 0;
-  excludeAllSourcesButton.disabled = sourceSnapshot.isEmpty || sourceSnapshot.inclusion.includedCount === 0;
 
-  createPlanMeta.textContent = sourceSnapshot.hasSources
-    ? i18n.t("compress.sourceSelected", {
-      count: sourceSnapshot.sourceCount,
-      sourceLabel: i18n.t(sourceSnapshot.sourceCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
-    })
-    : i18n.t("compress.dropSourcesHint");
-
-  if (sourceSnapshot.isEmpty) {
-    sourceListElement.innerHTML = `<li class="empty">${escapeHtml(i18n.t("compress.noSources"))}</li>`;
-  } else {
-    sourceListElement.innerHTML = sources
-      .map(
-        (path) => `
-          <li data-source-path="${escapeHtml(path)}">
-            <span>${escapeHtml(path)}</span>
-            <button type="button" data-source-remove>${escapeHtml(i18n.t("compress.removeSource"))}</button>
-          </li>
-        `,
-      )
-      .join("");
-  }
-
-  for (const button of sourceListElement.querySelectorAll<HTMLButtonElement>("[data-source-remove]")) {
-    button.addEventListener("click", () => {
-      const path = button.closest<HTMLElement>("li")?.dataset.sourcePath;
-      if (!path) {
-        return;
-      }
-      removeCreateSources([path]);
-    });
-  }
+  renderCreateSourceList(createSourceListViewElements, {
+    sources: sourceSnapshot.sources,
+    isEmpty: sourceSnapshot.isEmpty,
+    includeAllDisabled: sourceSnapshot.isEmpty || sourceSnapshot.inclusion.excludedArchivePaths.length === 0,
+    excludeAllDisabled: sourceSnapshot.isEmpty || sourceSnapshot.inclusion.includedCount === 0,
+    noSourcesLabel: displayContext.translator.t("compress.noSources"),
+    removeSourceLabel: displayContext.translator.t("compress.removeSource"),
+  });
 
   setCreatePlanState();
 }
@@ -3984,17 +3896,12 @@ function renderCompressSources() {
   const sourceSnapshot = syncCreateSourcesFromWorkspace();
   if (sourceSnapshot.isEmpty) {
     applyCompressTableSelection(clearHierarchicalTableSelection());
-    compressSourceBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="compress-empty-cell">
-          <div class="compress-empty-state">
-            <strong>${escapeHtml(i18n.t("compress.emptyTable"))}</strong>
-            <span>${escapeHtml(i18n.t("compress.dragSourcesHint"))}</span>
-          </div>
-        </td>
-      </tr>
-    `;
-    if (workspaceMode === "compress") {
+    renderCompressSourceTable(compressSourceTableViewElements, {
+      state: "emptySources",
+      emptyTitle: displayContext.translator.t("compress.emptyTable"),
+      emptyHint: displayContext.translator.t("compress.dragSourcesHint"),
+    });
+    if (currentWorkspaceMode() === "compress") {
       renderCompressSourceTree();
     }
     syncCompressIncludeAllControl();
@@ -4004,12 +3911,11 @@ function renderCompressSources() {
   if (sourceSnapshot.plan.state === "loading" || !sourceSnapshot.plan.current) {
     const planStatusText = createPlanStatusText(sourceSnapshot.plan.status);
     applyCompressTableSelection(clearHierarchicalTableSelection());
-    compressSourceBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="empty">${escapeHtml(planStatusText || i18n.t("create.plan.planning"))}</td>
-      </tr>
-    `;
-    if (workspaceMode === "compress") {
+    renderCompressSourceTable(compressSourceTableViewElements, {
+      state: "planning",
+      message: planStatusText || displayContext.translator.t("create.plan.planning"),
+    });
+    if (currentWorkspaceMode() === "compress") {
       renderCompressSourceTree();
     }
     syncCompressIncludeAllControl();
@@ -4019,12 +3925,11 @@ function renderCompressSources() {
   const rows = [...sourceSnapshot.view.rows];
   if (!rows.length) {
     applyCompressTableSelection(clearHierarchicalTableSelection());
-    compressSourceBody.innerHTML = `
-      <tr>
-        <td colspan="5" class="empty">${escapeHtml(i18n.t("browse.folderEmpty"))}</td>
-      </tr>
-    `;
-    if (workspaceMode === "compress") {
+    renderCompressSourceTable(compressSourceTableViewElements, {
+      state: "folderEmpty",
+      message: displayContext.translator.t("browse.folderEmpty"),
+    });
+    if (currentWorkspaceMode() === "compress") {
       renderCompressSourceTree();
     }
     syncCompressIncludeAllControl();
@@ -4037,12 +3942,13 @@ function renderCompressSources() {
     preserveHiddenSelection: false,
   }));
 
-  compressSourceBody.innerHTML = rows
-    .map((row) => renderCompressPlanRow(row, sourceSnapshot))
-    .join("");
+  renderCompressSourceTable(compressSourceTableViewElements, {
+    state: "rows",
+    rows: compressSourceTableRowModels(rows, sourceSnapshot),
+  });
   syncCompressInclusionControls();
 
-  if (workspaceMode === "compress") {
+  if (currentWorkspaceMode() === "compress") {
     renderCompressSourceTree();
   }
 }
@@ -4051,95 +3957,75 @@ function visibleCompressRows(): CompressPlanRow[] {
   return [...syncCreateSourcesFromWorkspace().view.rows];
 }
 
-function renderCompressInclusionCheckbox(
-  row: Extract<CompressPlanRow, { rowType: "folder" | "entry" }>,
-  state: "included" | "excluded" | "partial",
-): string {
-  const label = message(
-    state === "excluded"
-      ? "compress.includeItem.aria"
-      : "compress.excludeItem.aria",
-    { name: row.name },
-  );
-  return `
-    <input
-      data-compress-include
-      data-compress-path="${escapeHtml(row.path)}"
-      data-compress-inclusion-state="${state}"
-      type="checkbox"
-      aria-label="${escapeHtml(label)}"
-      ${state === "included" ? "checked" : ""}
-    />
-  `;
-}
-
 function visibleCompressRowForPath(path: string): CompressPlanRow | undefined {
   const normalizedPath = normalizeEntryPath(path);
   return visibleCompressRows().find((row) => normalizeEntryPath(row.path) === normalizedPath);
 }
 
-function renderCompressPlanRow(
-  row: CompressPlanRow,
+function compressSourceTableRowModels(
+  rows: readonly CompressPlanRow[],
   snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
-): string {
+): CompressSourceTableRowModel[] {
+  return rows.map((row) => compressSourceTableRowModel(row, snapshot));
+}
+
+function compressSourceTableRowModel(
+  row: CompressPlanRow,
+  snapshot: CreateWorkspaceSnapshot,
+): CompressSourceTableRowModel {
   if (row.rowType === "parent") {
-    return `
-      <tr class="folder-row parent-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}" aria-keyshortcuts="Enter ContextMenu Shift+F10">
-        <td class="inclusion-cell"></td>
-        <td class="name-cell">${renderCompressPlanNameCell(row, snapshot)}</td>
-        <td></td>
-        <td></td>
-        <td>${escapeHtml(i18n.t("icon.parentFolder"))}</td>
-      </tr>
-    `;
+    const icon = compressSourceTableRowIcon(row, snapshot);
+    return {
+      rowType: "parent",
+      path: row.path,
+      name: row.name,
+      iconHtml: icon.html,
+      iconLabel: icon.label,
+      ariaLabel: displayContext.translator.t("browse.parentFolder.aria"),
+      kindText: displayContext.translator.t("icon.parentFolder"),
+    };
   }
 
   if (row.rowType === "folder") {
-    const selected = selectedCompressRows.has(row.path);
-    const focused = focusedCompressRowPath === row.path;
-    const sourcePath = sourcePathForCompressRow(row, snapshot);
     const inclusionState = compressRowInclusionState(row);
-    return `
-      <tr
-        class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""} ${inclusionState === "excluded" ? "is-excluded" : ""} ${inclusionState === "partial" ? "is-partial" : ""}"
-        data-compress-folder-row="${escapeHtml(row.path)}"
-        data-compress-path="${escapeHtml(row.path)}"
-        ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
-        tabindex="0"
-        aria-label="${escapeHtml(i18n.t("browse.openFolder.aria", { name: row.name }))}"
-        aria-selected="${selected ? "true" : "false"}"
-        aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
-      >
-        <td class="inclusion-cell">${renderCompressInclusionCheckbox(row, inclusionState)}</td>
-        <td class="name-cell">${renderCompressPlanNameCell(row, snapshot)}</td>
-        <td>${row.entry?.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
-        <td>${row.entry?.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
-        <td>${escapeHtml(i18n.t("detail.directory"))}</td>
-      </tr>
-    `;
+    const icon = compressSourceTableRowIcon(row, snapshot);
+    return {
+      rowType: "folder",
+      path: row.path,
+      sourcePath: sourcePathForCompressRow(row, snapshot) || null,
+      name: row.name,
+      selected: selectedCompressRows.has(row.path),
+      focused: focusedCompressRowPath === row.path,
+      inclusionState,
+      inclusionLabel: compressInclusionLabel(inclusionState),
+      includeAriaLabel: compressInclusionAriaLabel(row, inclusionState),
+      iconHtml: icon.html,
+      iconLabel: icon.label,
+      ariaLabel: displayContext.translator.t("browse.openFolder.aria", { name: row.name }),
+      sizeText: row.entry?.size === undefined ? "" : formatBytes(row.entry.size),
+      modifiedText: row.entry?.modified ? formatDate(row.entry.modified) : "",
+      kindText: displayContext.translator.t("detail.directory"),
+    };
   }
 
-  const selected = selectedCompressRows.has(row.path);
-  const focused = focusedCompressRowPath === row.path;
-  const sourcePath = sourcePathForCompressRow(row, snapshot);
   const inclusionState = compressRowInclusionState(row);
-  return `
-    <tr
-      class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""} ${inclusionState === "excluded" ? "is-excluded" : ""}"
-      data-compress-entry-row="${escapeHtml(row.path)}"
-      data-compress-path="${escapeHtml(row.path)}"
-      ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
-      tabindex="0"
-      aria-selected="${selected ? "true" : "false"}"
-      aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
-    >
-      <td class="inclusion-cell">${renderCompressInclusionCheckbox(row, inclusionState)}</td>
-      <td class="name-cell">${renderCompressPlanNameCell(row, snapshot)}</td>
-      <td>${row.entry.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
-      <td>${row.entry.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
-      <td>${escapeHtml(normalizeArchiveKindLabel(row.entry.kind))}</td>
-    </tr>
-  `;
+  const icon = compressSourceTableRowIcon(row, snapshot);
+  return {
+    rowType: "entry",
+    path: row.path,
+    sourcePath: sourcePathForCompressRow(row, snapshot) || null,
+    name: row.name,
+    selected: selectedCompressRows.has(row.path),
+    focused: focusedCompressRowPath === row.path,
+    inclusionState,
+    inclusionLabel: compressInclusionLabel(inclusionState),
+    includeAriaLabel: compressInclusionAriaLabel(row, inclusionState),
+    iconHtml: icon.html,
+    iconLabel: icon.label,
+    sizeText: row.entry.size === undefined ? "" : formatBytes(row.entry.size),
+    modifiedText: row.entry.modified ? formatDate(row.entry.modified) : "",
+    kindText: normalizeArchiveKindLabel(row.entry.kind),
+  };
 }
 
 function sourcePathForCompressRow(
@@ -4149,33 +4035,38 @@ function sourcePathForCompressRow(
   return sourcePathForCreatePlanRow(row, createPlanEntries(snapshot), snapshot.sources);
 }
 
-function renderCompressPlanNameCell(
+function compressSourceTableRowIcon(
   row: CompressPlanRow,
   snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
-): string {
+): { html: string; label: string } {
   const icon = row.rowType === "parent"
-    ? archiveRowIconDescriptor(row, i18n)
+    ? archiveRowIconDescriptor(row, displayContext.translator)
     : row.rowType === "folder"
-      ? archiveTreeIconDescriptor(false, row.path === snapshot.view.currentFolder, i18n)
-      : archiveEntryIconDescriptor(row.entry, i18n);
+      ? archiveTreeIconDescriptor(false, row.path === snapshot.view.currentFolder, displayContext.translator)
+      : archiveEntryIconDescriptor(row.entry, displayContext.translator);
   const iconDataUrl = row.rowType === "folder" || row.rowType === "parent"
     ? systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))
     : systemIconDataUrlForRequest(systemIconRequestForPath(row.entry.sourcePath || row.entry.path, false));
-  const inclusionBadge = row.rowType === "parent"
-    ? ""
-    : `<span class="source-stage-badge ${compressRowInclusionState(row) === "excluded" ? "is-excluded" : ""}">${escapeHtml(compressInclusionLabel(compressRowInclusionState(row)))}</span>`;
-  return `
-    <span class="row-primary">
-      ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
-      <span class="sr-only">${escapeHtml(icon.label)}:</span>
-      <span class="row-name">${escapeHtml(row.name)}</span>
-      ${inclusionBadge}
-    </span>
-  `;
+  return {
+    html: renderEntryIcon(icon, "row-icon", iconDataUrl),
+    label: icon.label,
+  };
+}
+
+function compressInclusionAriaLabel(
+  row: Extract<CompressPlanRow, { rowType: "folder" | "entry" }>,
+  state: "included" | "excluded" | "partial",
+): string {
+  return message(
+    state === "excluded"
+      ? "compress.includeItem.aria"
+      : "compress.excludeItem.aria",
+    { name: row.name },
+  );
 }
 
 function focusFirstCompressRow() {
-  compressSourceBody.querySelector<HTMLTableRowElement>("tr[tabindex='0']")?.focus();
+  focusFirstCompressSourceRow(compressSourceTableViewElements);
 }
 
 function getVisibleCompressSelectablePaths(): string[] {
@@ -4197,13 +4088,11 @@ function applyCompressTableSelection(result: HierarchicalTableSelectionResult) {
 }
 
 function getCompressRows(): HTMLTableRowElement[] {
-  return Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>(
-    "tr[data-compress-folder-row], tr[data-compress-entry-row]",
-  ));
+  return getCompressSourceRows(compressSourceTableViewElements);
 }
 
 function getCompressSelectableRows(): HTMLTableRowElement[] {
-  return Array.from(compressSourceBody.querySelectorAll<HTMLTableRowElement>("tr[data-compress-path]"));
+  return getCompressSourceSelectableRows(compressSourceTableViewElements);
 }
 
 function selectedCompressSourcePaths(): string[] {
@@ -4264,14 +4153,10 @@ function updateCompressSelectionByIntent(
 }
 
 function syncCompressSelectionUi() {
-  for (const row of getCompressSelectableRows()) {
-    const rowPath = row.dataset.compressPath ?? "";
-    const selected = selectedCompressRows.has(rowPath);
-    const focused = focusedCompressRowPath === rowPath;
-    row.classList.toggle("is-selected", selected);
-    row.classList.toggle("is-focused-row", focused);
-    row.setAttribute("aria-selected", String(selected));
-  }
+  syncCompressSourceSelectionUi(compressSourceTableViewElements, {
+    selectedPaths: Array.from(selectedCompressRows),
+    focusedPath: focusedCompressRowPath,
+  });
 }
 
 function focusCompressRow(row: HTMLTableRowElement | null, focusedPath?: string) {
@@ -4322,29 +4207,33 @@ function activateCompressRow(row: HTMLTableRowElement) {
 }
 
 function renderCompressBrowser() {
-  if (workspaceMode === "compress") {
+  if (currentWorkspaceMode() === "compress") {
     renderCompressSourceTree();
     renderCompressSources();
   }
   setCreatePlanState();
 }
 
-function renderJobStatusBar() {
-  activeJobElement.textContent = activeJobStatusText(jobs, formatJobKind, i18n);
+function renderJobStatusBar(snapshot: JobListSnapshot) {
+  activeJobElement.textContent = snapshot.activeJob
+    ? `${formatJobKind(snapshot.activeJob.kind)}: ${message(jobStatusMessageKey(snapshot.activeJob.status))}`
+    : message("status.noJobs");
 }
 
 function renderJobs() {
-  jobsListElement.innerHTML = renderJobsListHtml(jobs, {
-    i18n,
+  const nowMs = Date.now();
+  const snapshot = jobsWorkspace.getJobListSnapshot(nowMs);
+  jobsListElement.innerHTML = renderJobsListHtml(jobsWorkspace.getJobsMap(), {
+    i18n: displayContext.translator,
     escapeHtml,
     formatBytes,
     formatJobKind,
     canRetryJobWithPassword,
-    getOutputActions: (jobId) => jobOutputActions.get(jobId) ?? [],
+    getOutputActions: (jobId) => [...jobsWorkspace.getReadyOutputActions(jobId)],
   });
-  renderJobStatusBar();
-  renderQuickProgress();
-  syncProgressClock();
+  renderJobStatusBar(snapshot);
+  renderQuickProgress(nowMs);
+  syncProgressClock(snapshot.progressClock);
 }
 
 function queuePlanRun() {
@@ -4358,13 +4247,17 @@ function queuePlanRun() {
   const sourceSnapshot = syncCreateSourcesFromWorkspace(queuedPlan.snapshot);
   if (sourceSnapshot.isEmpty) {
     setCreatePlanState();
-    createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.noSources"))}</p>`;
+    renderCreatePlanStatus(createPlanSummaryViewElements, {
+      message: displayContext.translator.t("create.plan.noSources"),
+    });
     renderCompressBrowser();
     return;
   }
 
   setCreatePlanState();
-  createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.planning"))}</p>`;
+  renderCreatePlanStatus(createPlanSummaryViewElements, {
+    message: displayContext.translator.t("create.plan.planning"),
+  });
   renderCompressBrowser();
 
   planDebounce = window.setTimeout(() => {
@@ -4386,15 +4279,9 @@ function refreshCreateStateAfterDestinationEdit() {
 }
 
 function setCreateOptionsFromControls() {
-  syncCreateSourcesFromWorkspace(createWorkspace.setOptions({
-    cleanSource: createCleanSourceCheckbox.checked,
-    preserveMetadata: createPreserveMetadataCheckbox.checked,
-    replaceExisting: createReplaceExistingCheckbox.checked,
-    respectGitignore: createRespectGitignoreCheckbox.checked,
-    compressionLevel: createCompressionInput.value,
-    volumeSize: createVolumeInput.value,
-    tzapRecoveryPercentage: createTzapRecoveryInput.value,
-  }).snapshot);
+  syncCreateSourcesFromWorkspace(createWorkspace.setOptions(
+    readCreateOptionControlPatch(createOptionControlViewElements),
+  ).snapshot);
 }
 
 function updateCreateOptionsFromControls() {
@@ -4407,109 +4294,42 @@ function updateCreatePlanOptionsFromControls() {
   queuePlanRun();
 }
 
-const EXTRACT_DESTINATION_HISTORY_KEY = "zmanager.extractDestinationHistory";
-const CREATE_DESTINATION_HISTORY_KEY = "zmanager.createDestinationHistory";
-const RECENT_ARCHIVE_HISTORY_KEY = "zmanager.recentArchiveHistory";
-
 type ExtractPathMode = "full" | "current" | "none";
 
-function loadStringListFromStorage(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((entry): entry is string => typeof entry === "string");
-  } catch {
-    return [];
-  }
-}
-
-function saveStringListToStorage(key: string, entries: string[]): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(entries));
-  } catch {
-    // Storage unavailable in restricted environments.
-  }
-}
-
-function setExtractDestinationHistory(entries: string[]): string[] {
-  extractDestinationHistory = setExtractDestinationHistoryEntries(entries);
-  saveStringListToStorage(EXTRACT_DESTINATION_HISTORY_KEY, extractDestinationHistory);
-  return extractDestinationHistory;
-}
-
 function recordExtractDestinationHistory(destination: string): void {
-  const nextHistory = recordExtractDestinationHistoryEntry(extractDestinationHistory, destination);
-  if (!nextHistory) {
+  if (!pathHistoryStore.recordExtractDestinationHistory(destination)) {
     return;
   }
-  setExtractDestinationHistory(nextHistory);
   renderExtractDestinationHistory();
 }
 
 function renderExtractDestinationHistory() {
+  const { extractDestinationHistory } = pathHistoryStore.getSnapshot();
   extractDestinationHistoryList.innerHTML = extractDestinationHistory
     .map((entry) => `<option value="${escapeHtml(entry)}"></option>`)
     .join("");
 }
 
-function loadExtractDestinationHistory() {
-  extractDestinationHistory = normalizeExtractDestinationHistory(loadStringListFromStorage(EXTRACT_DESTINATION_HISTORY_KEY));
-}
-
-function setCreateDestinationHistory(entries: string[]): string[] {
-  createDestinationHistory = setCreateDestinationHistoryEntries(entries);
-  saveStringListToStorage(CREATE_DESTINATION_HISTORY_KEY, createDestinationHistory);
-  return createDestinationHistory;
-}
-
 function recordCreateDestinationHistory(destination: string): void {
-  const nextHistory = recordCreateDestinationHistoryEntry(createDestinationHistory, destination);
-  if (!nextHistory) {
+  if (!pathHistoryStore.recordCreateDestinationHistory(destination)) {
     return;
   }
-  setCreateDestinationHistory(nextHistory);
   renderCreateDestinationHistory();
 }
 
 function renderCreateDestinationHistory() {
-  createDestinationHistoryList.innerHTML = createDestinationHistory
-    .map((entry) => `<option value="${escapeHtml(entry)}"></option>`)
-    .join("");
-  createDestinationRecentSelect.disabled = createDestinationHistory.length === 0;
-  createDestinationRecentSelect.innerHTML = `
-    <option value="">${escapeHtml(message("create.destination.recent"))}</option>
-    ${createDestinationHistory
-      .map((entry) => `<option value="${escapeHtml(entry)}">${escapeHtml(middleTruncateDetailValue(entry, 54))}</option>`)
-      .join("")}
-  `;
-}
-
-function loadCreateDestinationHistory() {
-  createDestinationHistory = normalizeCreateDestinationHistory(loadStringListFromStorage(CREATE_DESTINATION_HISTORY_KEY));
-}
-
-function setRecentArchiveHistory(entries: string[]): string[] {
-  recentArchiveHistory = setRecentArchiveHistoryEntries(entries);
-  saveStringListToStorage(RECENT_ARCHIVE_HISTORY_KEY, recentArchiveHistory);
-  return recentArchiveHistory;
+  const { createDestinationHistory } = pathHistoryStore.getSnapshot();
+  renderCreateDestinationHistoryView(createDestinationHistoryViewElements, {
+    entries: createDestinationHistory.map((entry) => ({
+      value: entry,
+      label: middleTruncateDetailValue(entry, 54),
+    })),
+    recentLabel: message("create.destination.recent"),
+  });
 }
 
 function recordRecentArchiveHistory(archivePath: string): void {
-  const nextHistory = recordRecentArchiveHistoryEntry(recentArchiveHistory, archivePath);
-  if (!nextHistory) {
-    return;
-  }
-  setRecentArchiveHistory(nextHistory);
-}
-
-function loadRecentArchiveHistory() {
-  recentArchiveHistory = normalizeRecentArchiveHistory(loadStringListFromStorage(RECENT_ARCHIVE_HISTORY_KEY));
+  pathHistoryStore.recordRecentArchiveHistory(archivePath);
 }
 
 function getExtractPathMode(): ExtractPathMode {
@@ -4758,64 +4578,6 @@ async function saveNativeDialog(options: SaveDialogOptions) {
   });
 }
 
-function getFocusableElements(root: HTMLElement): HTMLElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      [
-        "button:not(:disabled)",
-        "input:not(:disabled)",
-        "select:not(:disabled)",
-        "textarea:not(:disabled)",
-        "a[href]",
-        "summary",
-        "[tabindex]:not([tabindex='-1'])",
-      ].join(","),
-    ),
-  ).filter((element) => isVisibleElement(element) || element === document.activeElement);
-}
-
-function isVisibleElement(element: HTMLElement): boolean {
-  return Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
-}
-
-function getOpenModal(): HTMLElement | null {
-  for (const dialog of [extractDialog, aboutDialog, preferencesDialog, infoDialog]) {
-    if (!dialog.hidden) {
-      return dialog;
-    }
-  }
-  return null;
-}
-
-function getDialogSurface(dialog: HTMLElement): HTMLElement {
-  return dialog.querySelector<HTMLElement>("[role='dialog']") ?? dialog;
-}
-
-function trapModalFocus(event: KeyboardEvent, dialog: HTMLElement) {
-  const surface = getDialogSurface(dialog);
-  const focusable = getFocusableElements(surface);
-  if (!focusable.length) {
-    event.preventDefault();
-    surface.focus();
-    return;
-  }
-
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  const active = document.activeElement;
-
-  if (event.shiftKey && active === first) {
-    event.preventDefault();
-    last.focus();
-    return;
-  }
-
-  if (!event.shiftKey && active === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
-
 function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
   if (dialog === extractDialog) {
     const row = focusedEntryPath
@@ -4838,115 +4600,48 @@ function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
   return document.querySelector<HTMLButtonElement>("#toolbar-about") ?? null;
 }
 
-function resolveDialogReturnFocus(dialog: HTMLElement): HTMLElement | null {
-  const active = document.activeElement;
-  if (
-    active instanceof HTMLElement &&
-    !dialog.contains(active) &&
-    !contextMenu.contains(active) &&
-    isVisibleElement(active)
-  ) {
-    return active;
-  }
-  return fallbackFocusForDialog(dialog);
-}
-
-function openModal(dialog: HTMLElement, focusSelector = "button, input, select", returnFocusOverride: HTMLElement | null = null) {
-  focusedBeforeDialog = returnFocusOverride ?? resolveDialogReturnFocus(dialog);
-  dialog.hidden = false;
-  const surface = getDialogSurface(dialog);
-  const focusTarget = surface.querySelector<HTMLElement>(focusSelector)
-    ?? getFocusableElements(surface)[0]
-    ?? surface;
-  focusTarget.focus();
-  focusTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
-}
-
-function closeModal(dialog: HTMLElement) {
-  dialog.hidden = true;
+function onModalClosed(dialog: HTMLElement) {
   if (dialog === extractDialog) {
     archiveWorkspace.clearPasswordRetry();
     browsePasswordInput.value = "";
     browsePasswordInput.type = "password";
     browseShowPasswordInput.checked = false;
   }
-  const restoreTarget = focusedBeforeDialog && isVisibleElement(focusedBeforeDialog)
-    ? focusedBeforeDialog
-    : fallbackFocusForDialog(dialog);
-  restoreTarget?.focus();
-  focusedBeforeDialog = null;
 }
 
-function isTextEntryElement(element: HTMLElement): boolean {
-  if (element instanceof HTMLTextAreaElement || element.isContentEditable) {
-    return true;
-  }
-  if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
-    return true;
-  }
-  return false;
+const modalController = createModalController({
+  dialogs: () => [extractDialog, aboutDialog, preferencesDialog, infoDialog],
+  fallbackFocus: fallbackFocusForDialog,
+  ignoredReturnFocusRoots: () => [contextMenu],
+  onClose: onModalClosed,
+});
+
+function getOpenModal(): HTMLElement | null {
+  return modalController.getOpenModal();
 }
 
-function dialogButtonFromSelector(dialog: HTMLElement, selectorAttribute: "dialogDefault" | "dialogCancel"): HTMLButtonElement | null {
-  const surface = getDialogSurface(dialog);
-  const selector = surface.dataset[selectorAttribute];
-  if (selector) {
-    return surface.querySelector<HTMLButtonElement>(selector);
-  }
-
-  const dataAttribute = selectorAttribute === "dialogDefault"
-    ? "[data-dialog-default-button]"
-    : "[data-dialog-cancel-button]";
-  return surface.querySelector<HTMLButtonElement>(dataAttribute);
-}
-
-function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-    return false;
-  }
-
-  const target = event.target instanceof HTMLElement ? event.target : null;
-  const defaultSafeTextInput = dialog === extractDialog &&
+function isDefaultSafeDialogTextEntry(dialog: HTMLElement, target: HTMLElement): boolean {
+  return dialog === extractDialog &&
     target instanceof HTMLInputElement &&
     !["button", "checkbox", "radio", "reset", "submit"].includes(target.type);
-  if (target?.closest("button, a, summary") || (target && isTextEntryElement(target) && !defaultSafeTextInput)) {
-    return false;
-  }
+}
 
-  const button = dialogButtonFromSelector(dialog, "dialogDefault");
-  if (!button || button.disabled || !isVisibleElement(button)) {
-    return false;
-  }
+const openModal = (dialog: HTMLElement, focusSelector = "button, input, select", returnFocusOverride: HTMLElement | null = null) => {
+  modalController.open(dialog, focusSelector, returnFocusOverride);
+};
 
-  event.preventDefault();
-  button.click();
-  return true;
+const closeModal = (dialog: HTMLElement) => {
+  modalController.close(dialog);
+};
+
+function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
+  return modalController.activateDefault(event, dialog, {
+    isDefaultSafeTextEntry: isDefaultSafeDialogTextEntry,
+  });
 }
 
 function cancelDialog(event: KeyboardEvent, dialog: HTMLElement): boolean {
-  const button = dialogButtonFromSelector(dialog, "dialogCancel");
-  event.preventDefault();
-  if (button && !button.disabled && isVisibleElement(button)) {
-    button.click();
-  } else {
-    closeModal(dialog);
-  }
-  return true;
-}
-
-function keepFocusInsideOpenModal(event: FocusEvent) {
-  const openDialogElement = getOpenModal();
-  if (!openDialogElement || !(event.target instanceof HTMLElement)) {
-    return;
-  }
-
-  if (openDialogElement.contains(event.target)) {
-    return;
-  }
-
-  const surface = getDialogSurface(openDialogElement);
-  const focusTarget = getFocusableElements(surface)[0] ?? surface;
-  focusTarget.focus();
+  return modalController.cancel(event, dialog);
 }
 
 function clearCreatePasswordFields() {
@@ -4990,81 +4685,52 @@ function toggleJobDrawer() {
 }
 
 function hasActiveJob(): boolean {
-  return Array.from(jobs.values()).some((state) => isLiveJobStatus(state.snapshot.status));
+  return jobsWorkspace.hasActiveJob();
 }
 
 function currentDropSurface(): DropIntentSurface {
-  return dropSurfaceForWorkspace({ createDialogOpen: false, mode: workspaceMode });
+  return dropSurfaceForWorkspace({ createDialogOpen: false, mode: currentWorkspaceMode() });
 }
 
-type DropOverlayMode = "idle" | "active" | "choosing";
-type DropOverlayTarget = "compress" | "extract" | "choose" | "blocked" | "unknown";
-
-type DropOverlayCopy = {
-  title: string;
-  message: string;
-  support?: string;
-  target: DropOverlayTarget;
-  showActions?: boolean;
-};
+function renderDropOverlay(snapshot: ShellWorkspaceSnapshot = shellWorkspace.getSnapshot()) {
+  renderShellDropOverlay(shellViewElements, snapshot.dropOverlay, message);
+}
 
 function setDropOverlay(mode: DropOverlayMode, copy?: DropOverlayCopy) {
-  workspaceElement.dataset.dropState = mode;
-  if (copy?.target) {
-    workspaceElement.dataset.dropTarget = copy.target;
-  } else {
-    delete workspaceElement.dataset.dropTarget;
-  }
+  renderDropOverlay(shellWorkspace.setDropOverlay(mode, copy));
+}
 
-  const visible = mode !== "idle";
-  dropOverlay.setAttribute("aria-hidden", visible ? "false" : "true");
-  dropOverlayTitle.textContent = copy?.title ?? message("drop.title");
-  dropOverlayMessage.textContent = copy?.message ?? message("drop.defaultMessage");
-  dropOverlaySupport.textContent = copy?.support ?? "";
-  dropOverlaySupport.hidden = !copy?.support;
-  dropOverlayActions.hidden = !copy?.showActions;
-  dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.setAttribute(
-    "role",
-    copy?.showActions ? "dialog" : "status",
-  );
-  if (copy?.showActions) {
-    dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.setAttribute("aria-modal", "false");
-  } else {
-    dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")?.removeAttribute("aria-modal");
-  }
-
-  if (!visible) {
-    pendingDropChoice = null;
-  }
+function setDropOverlayChoice(decision: Extract<DropIntentDecision, { kind: "askAction" }>, copy: DropOverlayCopy) {
+  renderDropOverlay(shellWorkspace.setDropOverlayChoice(decision, copy));
 }
 
 function clearDropOverlay() {
-  setDropOverlay("idle");
+  renderDropOverlay(shellWorkspace.clearDropOverlay());
 }
 
 function dropCopyForSurface(surface: DropIntentSurface): DropOverlayCopy {
   if (surface === "create") {
     return {
-      title: message("drop.addSources.title"),
-      message: message("drop.addSources.copyMessage"),
-      support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+      titleKey: "drop.addSources.title",
+      messageKey: "drop.addSources.copyMessage",
+      ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
       target: "compress",
     };
   }
 
   if (currentArchivePath) {
     return {
-      title: message("drop.openArchive.title"),
-      message: message("drop.openArchive.message"),
-      support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+      titleKey: "drop.openArchive.title",
+      messageKey: "drop.openArchive.message",
+      ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
       target: "extract",
     };
   }
 
   return {
-    title: message("drop.chooseMode.title"),
-    message: message("drop.chooseMode.message"),
-    support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+    titleKey: "drop.chooseMode.title",
+    messageKey: "drop.chooseMode.message",
+    ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
     target: "choose",
   };
 }
@@ -5072,8 +4738,8 @@ function dropCopyForSurface(surface: DropIntentSurface): DropOverlayCopy {
 function dropCopyForDecision(decision: DropIntentDecision): DropOverlayCopy {
   if (hasActiveJob() || isCreateSubmissionInFlight()) {
     return {
-      title: message("drop.blocked.title"),
-      message: message("drop.blocked.message"),
+      titleKey: "drop.blocked.title",
+      messageKey: "drop.blocked.message",
       target: "blocked",
     };
   }
@@ -5081,33 +4747,35 @@ function dropCopyForDecision(decision: DropIntentDecision): DropOverlayCopy {
   switch (decision.kind) {
     case "openArchive":
       return {
-        title: message("drop.openArchive.title"),
-        message: message("drop.openArchive.actionMessage", { archiveName: getPathBasename(decision.archivePath) || decision.archivePath }),
-        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        titleKey: "drop.openArchive.title",
+        messageKey: "drop.openArchive.actionMessage",
+        messageParams: { archiveName: getPathBasename(decision.archivePath) || decision.archivePath },
+        ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
         target: "extract",
       };
     case "addCreateSources":
       return {
-        title: message("drop.addSources.title"),
-        message: message("drop.addSources.copyMessage"),
-        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        titleKey: "drop.addSources.title",
+        messageKey: "drop.addSources.copyMessage",
+        ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
         target: "compress",
       };
     case "askAction":
       return {
-        title: message("drop.chooseMode.title"),
-        message: message("drop.chooseMode.mixedMessage", {
+        titleKey: "drop.chooseMode.title",
+        messageKey: "drop.chooseMode.mixedMessage",
+        messageParams: {
           archiveCount: decision.archivePaths.length,
           sourceCount: decision.sourcePaths.length,
-        }),
-        support: isDesktopRuntime() ? "" : message("drop.browserPreview"),
+        },
+        ...(isDesktopRuntime() ? {} : { supportKey: "drop.browserPreview" }),
         target: "choose",
         showActions: true,
       };
     case "rejectUnsupportedDrop":
       return {
-        title: message("drop.blocked.title"),
-        message: message(decision.reason === "emptyDrop" ? "drop.empty" : "drop.browseRequiresArchive"),
+        titleKey: "drop.blocked.title",
+        messageKey: decision.reason === "emptyDrop" ? "drop.empty" : "drop.browseRequiresArchive",
         target: "blocked",
       };
   }
@@ -5186,9 +4854,8 @@ function handleDropDecision(decision: DropIntentDecision, chosenAction?: "openAr
       clearDropOverlay();
       break;
     case "askAction":
-      pendingDropChoice = decision;
-      setDropOverlay("choosing", dropCopyForDecision(decision));
-      dropOpenArchiveButton.focus();
+      setDropOverlayChoice(decision, dropCopyForDecision(decision));
+      focusDropOverlayPrimaryAction(shellViewElements);
       break;
     case "rejectUnsupportedDrop":
       rejectDrop(decision.reason);
@@ -5204,8 +4871,8 @@ function handleDroppedPaths(paths: readonly DroppedPath[]) {
   if (hasActiveJob() || isCreateSubmissionInFlight()) {
     setOperationalMessage("drop.finishCurrentJob");
     setDropOverlay("active", {
-      title: message("drop.blocked.title"),
-      message: message("drop.blocked.message"),
+      titleKey: "drop.blocked.title",
+      messageKey: "drop.blocked.message",
       target: "blocked",
     });
     return;
@@ -5305,12 +4972,21 @@ function activatePendingDropChoice(action: "openArchive" | "addToCompress" | "ca
     return;
   }
 
-  if (!pendingDropChoice) {
+  const pendingChoice = shellWorkspace.getSnapshot().dropOverlay.pendingChoice;
+  if (!pendingChoice) {
     clearDropOverlay();
     return;
   }
 
-  handleDropDecision(pendingDropChoice, action);
+  handleDropDecision(
+    {
+      kind: "askAction",
+      surface: pendingChoice.surface,
+      archivePaths: [...pendingChoice.archivePaths],
+      sourcePaths: [...pendingChoice.sourcePaths],
+    },
+    action,
+  );
 }
 
 function navigateToFolder(folderPath: string) {
@@ -5327,7 +5003,7 @@ function navigateToFolder(folderPath: string) {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = i18n.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
   }
   focusFirstVisibleRow();
 }
@@ -5344,7 +5020,7 @@ function navigateBack() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = i18n.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
   }
   focusFirstVisibleRow();
 }
@@ -5364,7 +5040,7 @@ function navigateUp() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = i18n.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
   }
   focusFirstVisibleRow();
 }
@@ -5514,7 +5190,7 @@ function activateTableRow(row: HTMLTableRowElement) {
     anchorPath: selectionAnchorPath,
   }));
   renderBrowse();
-  void onPreviewSelectedEntry();
+  runRoutedCommand("view");
 }
 
 function toggleTableRowSelection(row: HTMLTableRowElement) {
@@ -5538,28 +5214,6 @@ function selectVisibleEntries() {
 function clearBrowseSelection() {
   applyArchiveTableSelection(clearHierarchicalTableSelection());
   renderBrowse();
-}
-
-function contextMenuItems(): HTMLElement[] {
-  return Array.from(
-    contextMenu.querySelectorAll<HTMLElement>(
-      "button:not(:disabled), [role='menuitem']:not(:disabled):not([aria-disabled='true']), [role='menuitemcheckbox']:not(:disabled):not([aria-disabled='true'])",
-    ),
-  ).filter(isVisibleElement);
-}
-
-function showContextMenu(x: number, y: number, html: string, returnFocus: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null) {
-  contextMenuReturnFocus = returnFocus;
-  contextMenu.innerHTML = html;
-  contextMenu.hidden = false;
-  contextMenu.style.left = `${x}px`;
-  contextMenu.style.top = `${y}px`;
-  const rect = contextMenu.getBoundingClientRect();
-  const clampedX = Math.max(4, Math.min(x, window.innerWidth - rect.width - 4));
-  const clampedY = Math.max(4, Math.min(y, window.innerHeight - rect.height - 4));
-  contextMenu.style.left = `${clampedX}px`;
-  contextMenu.style.top = `${clampedY}px`;
-  contextMenuItems()[0]?.focus();
 }
 
 function tableColumnById(columnId: ArchiveTableColumnId): ArchiveTableColumn | undefined {
@@ -5628,40 +5282,29 @@ function isCompressSourceColumnId(value: string | undefined): value is CompressS
   return COMPRESS_SOURCE_COLUMN_IDS.includes(value as CompressSourceColumnId);
 }
 
-function compressSourceColumnHeader(columnId: CompressSourceColumnId): HTMLTableCellElement | null {
-  return compressSourceTable.querySelector<HTMLTableCellElement>(
-    `th[data-compress-column-id="${CSS.escape(columnId)}"]`,
-  );
-}
-
 function clampCompressSourceColumnWidth(columnId: CompressSourceColumnId, width: number): number {
-  const minWidth = COMPRESS_SOURCE_MIN_COLUMN_WIDTHS[columnId];
-  return Math.min(COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX, Math.max(minWidth, Math.round(width)));
+  return clampCompressSourceColumnWidthValue(width, {
+    minWidth: COMPRESS_SOURCE_MIN_COLUMN_WIDTHS[columnId],
+    maxWidth: COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX,
+  });
 }
 
 function currentCompressSourceColumnWidths(): Record<CompressSourceColumnId, number> {
-  const widths = { ...COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS };
-  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
-    const renderedWidth = compressSourceColumnHeader(columnId)?.getBoundingClientRect().width;
-    widths[columnId] = clampCompressSourceColumnWidth(
-      columnId,
-      Number.isFinite(renderedWidth) && renderedWidth ? renderedWidth : widths[columnId],
-    );
-  }
-  return widths;
+  return readCompressSourceColumnWidths(compressSourceTable, {
+    columnIds: COMPRESS_SOURCE_COLUMN_IDS,
+    defaultWidths: COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS,
+    minWidths: COMPRESS_SOURCE_MIN_COLUMN_WIDTHS,
+    maxWidth: COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX,
+  });
 }
 
 function applyCompressSourceColumnWidths(widths: Record<CompressSourceColumnId, number>) {
   compressSourceColumnWidths = widths;
-  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
-    compressSourceTable.style.setProperty(
-      `--compress-source-${columnId}-column-width`,
-      `${widths[columnId]}px`,
-    );
-  }
-  const tableWidth = COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX
-    + COMPRESS_SOURCE_COLUMN_IDS.reduce((total, columnId) => total + widths[columnId], 0);
-  compressSourceTable.style.minWidth = `${tableWidth}px`;
+  applyCompressSourceColumnWidthStyles(compressSourceTable, {
+    columnIds: COMPRESS_SOURCE_COLUMN_IDS,
+    includeColumnWidth: COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX,
+    widths,
+  });
 }
 
 function startCompressSourceColumnResize(event: PointerEvent, columnId: CompressSourceColumnId) {
@@ -5828,6 +5471,7 @@ function showStartupContextMenu(x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = "";
   const canPastePath = Boolean(navigator.clipboard?.readText);
+  const { recentArchiveHistory } = pathHistoryStore.getSnapshot();
   const pastePath = canPastePath
     ? `<button type="button" role="menuitem" data-context-action="paste-archive-path"><span class="context-menu-label">${escapeHtml(message("command.pastePath"))}</span></button>`
     : "";
@@ -5843,7 +5487,7 @@ function showStartupContextMenu(x: number, y: number) {
     `
     : "";
   showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${escapeHtml(i18n.t("browse.emptyOpenAction"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${escapeHtml(displayContext.translator.t("browse.emptyOpenAction"))}</span></button>
     ${pastePath}
     ${recentRows}
   `);
@@ -5922,7 +5566,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
     ? visibleColumnOrder.indexOf(selectedColumnId)
     : -1;
   const selectedColumnMenu = selectedColumn ? `
-    <div class="context-menu-caption">${escapeHtml(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, i18n) }))}</div>
+    <div class="context-menu-caption">${escapeHtml(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, displayContext.translator) }))}</div>
     <button type="button" role="menuitem" data-context-action="sort-ascending" data-column-id="${escapeHtml(selectedColumn.id)}">
       <span class="context-menu-label">${escapeHtml(message("command.sortAscending"))}</span>
     </button>
@@ -5974,7 +5618,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
         ${isNameColumn ? 'disabled aria-disabled="true"' : ""}
       >
         <span class="context-check" aria-hidden="true"></span>
-        <span class="context-menu-label">${escapeHtml(archiveTableColumnLabel(column, i18n))}</span>
+        <span class="context-menu-label">${escapeHtml(archiveTableColumnLabel(column, displayContext.translator))}</span>
       </button>
     `;
   }).join("");
@@ -6059,21 +5703,146 @@ function showAddSourcesMenu(anchor: HTMLElement) {
   `);
 }
 
-function hideContextMenu() {
-  const restoreTarget = contextMenuReturnFocus;
-  const active = document.activeElement;
-  const shouldRestoreFocus = active instanceof HTMLElement && contextMenu.contains(active);
-  contextMenu.hidden = true;
-  contextMenu.innerHTML = "";
-  contextEntryPath = "";
-  contextSourcePath = "";
-  contextMenuReturnFocus = null;
-  if (
-    restoreTarget &&
-    shouldRestoreFocus &&
-    isVisibleElement(restoreTarget)
-  ) {
-    restoreTarget.focus();
+function handleContextMenuAction(payload: ContextMenuActionPayload) {
+  const action = payload.action;
+  const folderPath = payload.folderPath;
+  const columnId = payload.columnId as ArchiveTableColumnId | undefined;
+  const archivePath = payload.archivePath;
+  const entryPath = contextEntryPath;
+  const sourcePath = contextSourcePath;
+  hideContextMenu();
+
+  const routedContextCommand = selectContextCommand(action, {
+    archivePath,
+    entryPath,
+    extractMode: selectedEntries.size ? "selection" : "archive",
+  });
+  if (routedContextCommand) {
+    runRoutedCommand(routedContextCommand.commandId, routedContextCommand.payload);
+    return;
+  }
+  if (action === "add-source-files") {
+    void addSourcePathsFromDialog("files");
+    return;
+  }
+  if (action === "add-source-folder") {
+    void addSourcePathsFromDialog("folder");
+    return;
+  }
+  if (action === "compress-open-folder" && folderPath !== undefined) {
+    navigateToCompressFolder(folderPath);
+    return;
+  }
+  if (action === "open-folder" && folderPath !== undefined) {
+    navigateToFolder(folderPath);
+    return;
+  }
+  if (action === "extract-folder" && folderPath !== undefined) {
+    selectFolderEntries(folderPath);
+    openExtractDialog("selection");
+    return;
+  }
+  if (action === "open-entry") {
+    const selectedPath = entryPath;
+    if (!selectedPath) {
+      return;
+    }
+    const selectedEntry = getEntryByPath(selectedPath);
+    if (selectedEntry?.kind === "directory") {
+      navigateToFolder(selectedPath);
+    } else {
+      applyArchiveTableSelection(replaceHierarchicalTableSelection({
+        paths: [selectedPath],
+        focusedPath: selectedPath,
+        anchorPath: selectedPath,
+      }));
+      renderBrowse();
+      runRoutedCommand("view");
+    }
+    return;
+  }
+  if (action === "open-inside") {
+    if (entryPath) {
+      const entry = getEntryByPath(entryPath);
+      if (!entry) {
+        return;
+      }
+      if (entry.kind !== "directory") {
+        setOperationalMessage("command.singleFolderRequired");
+        return;
+      }
+      navigateToFolder(entryPath);
+    }
+    return;
+  }
+  if (action === "sort-ascending" && columnId) {
+    applySortDirection(columnId, true);
+    return;
+  }
+  if (action === "sort-descending" && columnId) {
+    applySortDirection(columnId, false);
+    return;
+  }
+  if (action === "toggle-column" && columnId) {
+    tableColumnSettings = toggleColumnVisibility(tableColumnSettings, columnId);
+    saveTablePreferences();
+    renderBrowse();
+    return;
+  }
+  if (action === "move-column-left" && columnId) {
+    tableColumnSettings = moveColumn(tableColumnSettings, columnId, "left");
+    saveTablePreferences();
+    renderBrowse();
+    return;
+  }
+  if (action === "move-column-right" && columnId) {
+    tableColumnSettings = moveColumn(tableColumnSettings, columnId, "right");
+    saveTablePreferences();
+    renderBrowse();
+    return;
+  }
+  if (action === "narrow-column" && columnId) {
+    adjustTableColumnWidth(columnId, -24);
+    return;
+  }
+  if (action === "widen-column" && columnId) {
+    adjustTableColumnWidth(columnId, 24);
+    return;
+  }
+  if (action === "reset-column-width" && columnId) {
+    resetTableColumnWidth(columnId);
+    return;
+  }
+  if (action === "reset-columns") {
+    tableColumnSettings = resetColumnSettings();
+    saveTablePreferences();
+    renderBrowse();
+    return;
+  }
+  if (action === "reveal-source" && sourcePath) {
+    void revealInFileManager(sourcePath).catch((error) => {
+      setOperationalStatus(unknownErrorMessage(error, message("preview.unableRevealSource")));
+    });
+    return;
+  }
+  if (action === "include-compress-path" || action === "exclude-compress-path") {
+    const path = payload.compressMenuPath;
+    if (path) {
+      for (const compressPath of compressPathsForContextAction(path)) {
+        setCompressPathIncluded(compressPath, action === "include-compress-path");
+      }
+      refreshCreatePlanSummary();
+      renderCreateSources();
+      renderCompressBrowser();
+    }
+    return;
+  }
+  if (action === "remove-source") {
+    removeCreateSources(sourcePathsForCompressMenu(sourcePath));
+    return;
+  }
+  if (action === "clear-sources") {
+    clearCreateSources();
   }
 }
 
@@ -6104,7 +5873,7 @@ function showArchiveInfo() {
     <section class="dialog-section property-section">
       <h3>${escapeHtml(message("info.archiveTitle"))}</h3>
       <dl class="detail-list">
-        ${renderDetailRows(rows)}
+        ${renderInfoDetailRows(rows)}
       </dl>
     </section>
   `;
@@ -6131,7 +5900,7 @@ function showEntryInfo(path: string) {
     <section class="dialog-section property-section">
       <h3>${escapeHtml(message("info.entryTitle"))}</h3>
       <dl class="detail-list">
-        ${renderDetailRows(rows)}
+        ${renderInfoDetailRows(rows)}
       </dl>
     </section>
   `;
@@ -6155,7 +5924,7 @@ function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
     <section class="dialog-section property-section">
       <h3>${escapeHtml(message("info.selectionTitle"))}</h3>
       <dl class="detail-list">
-        ${renderDetailRows(rows)}
+        ${renderInfoDetailRows(rows)}
       </dl>
     </section>
   `;
@@ -6348,57 +6117,48 @@ async function validatePreferenceCustomOutputFolder(): Promise<boolean> {
   return true;
 }
 
-function applyLocaleFromPreferences() {
-  resolvedLocale = resolveLocalePreference(appPreferences.locale);
-  i18n = createTranslator(resolvedLocale);
-  document.documentElement.lang = resolvedLocale;
-  document.documentElement.dir = localeDirection(resolvedLocale);
-  applyTranslations(document.body, i18n);
-  refreshCommandDisplayText();
+function activeDisplayWorkspace(): DisplayRefreshWorkspace {
+  return currentWorkspaceMode() === "compress" ? "create" : "browse";
+}
+
+function refreshDisplayFromPreferences() {
+  refreshDisplayContext(appPreferences.locale, {
+    activeWorkspace: activeDisplayWorkspace(),
+    jobsVisible: workspaceElement.dataset.jobDrawer === "open" || isQuickActionJobMode(),
+    preferencesVisible: !preferencesDialog.hidden,
+  }, {
+    commitContext: (nextDisplayContext) => {
+      displayContext = nextDisplayContext;
+    },
+    documentElement: document.documentElement,
+    translationRoot: document.body,
+    refreshCommands: refreshCommandDisplayText,
+    renderBrowse,
+    renderCreate: renderCompressBrowser,
+    renderJobs,
+    renderPreferences: renderPreferencesDialog,
+  });
 }
 
 function refreshCommandDisplayText() {
-  for (const summary of document.querySelectorAll<HTMLElement>("[data-menu-group-label]")) {
-    const label = summary.dataset.menuGroupLabel as Parameters<typeof menuGroupLabel>[0] | undefined;
-    if (label) {
-      summary.textContent = menuGroupLabel(label, i18n);
-    }
-  }
-
-  for (const submenu of document.querySelectorAll<HTMLElement>("[data-command-submenu-label]")) {
-    const key = submenu.dataset.commandSubmenuLabel as Parameters<Translator["t"]>[0] | undefined;
-    if (key) {
-      submenu.textContent = i18n.t(key);
-    }
-  }
-
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-command-id]")) {
-    const commandId = button.dataset.commandId as CommandId | undefined;
-    if (!commandId) {
-      continue;
-    }
-    const label = commandLabel(commandId, i18n);
-    const textElement = button.querySelector<HTMLElement>(".tool-label, .context-menu-label")
-      ?? button.querySelector<HTMLElement>("span:not(.sort-indicator)");
-    if (textElement) {
-      textElement.textContent = label;
-    } else if (!button.querySelector("svg")) {
-      button.textContent = label;
-    }
-    button.setAttribute("aria-label", label);
-    button.title = commandTooltipText(commandId, i18n);
-  }
+  refreshCommandSurfaceText(document, {
+    commandDefinitions: COMMAND_DEFINITIONS,
+    commandLabel: (commandId) => commandLabel(commandId, displayContext.translator),
+    commandTooltip: (commandId) => commandTooltipText(commandId, displayContext.translator),
+    menuGroupLabel: (label) => menuGroupLabel(label, displayContext.translator),
+    submenuLabel: (key) => displayContext.translator.t(key),
+  });
 }
 
 function localizedCommandStateReason(reason?: string): string | undefined {
   if (reason === UNSUPPORTED_OPERATION_MESSAGE) {
-    return i18n.t("command.unsupported");
+    return displayContext.translator.t("command.unsupported");
   }
   if (reason === SINGLE_FILE_REQUIRED_MESSAGE) {
-    return i18n.t("command.singleFileRequired");
+    return displayContext.translator.t("command.singleFileRequired");
   }
   if (reason === SINGLE_FOLDER_REQUIRED_MESSAGE) {
-    return i18n.t("command.singleFolderRequired");
+    return displayContext.translator.t("command.singleFolderRequired");
   }
   if (
     reason === NO_ARCHIVE_OPEN_MESSAGE ||
@@ -6424,7 +6184,7 @@ function onPreferencesDefaultFormatChange() {
 }
 
 function renderPreferencesDialog() {
-  renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences, i18n);
+  renderPreferencesView(preferencesViewElements, preferencesDialogDraft ?? appPreferences, displayContext.translator);
   syncPreferenceSaveState();
 }
 
@@ -6464,19 +6224,17 @@ async function savePreferencesFromDialog() {
   if (!(await validatePreferenceCustomOutputFolder())) {
     return;
   }
-  appPreferences = preferencesDialogDraft ?? collectPreferencesFromDialog();
+  persistPreferencePatch(preferencesDialogDraft ?? collectPreferencesFromDialog());
   preferencesDialogDraft = null;
-  saveAppPreferences(appPreferences);
-  applyLocaleFromPreferences();
   syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setRowOptions({
     showParentFolderItem: appPreferences.showParentFolderItem,
   }));
   syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setFlatView(appPreferences.flatViewDefault));
-  preferencesStatusElement.textContent = i18n.t("preferences.saved");
-  preferencesStatusElement.className = "status status-success";
   applyCreatePreferenceDefaults();
   applyPreferenceClasses();
-  renderBrowse();
+  refreshDisplayFromPreferences();
+  preferencesStatusElement.textContent = displayContext.translator.t("preferences.saved");
+  preferencesStatusElement.className = "status status-success";
   window.setTimeout(() => closeModal(preferencesDialog), 240);
 }
 
@@ -6489,7 +6247,7 @@ function openPreferencesDialog() {
 
 async function onSelectPreferenceOutputFolder() {
   const selected = await openNativeDialog({
-    title: i18n.t("nativeDialog.chooseDefaultOutput"),
+    title: displayContext.translator.t("nativeDialog.chooseDefaultOutput"),
     directory: true,
     multiple: false,
   });
@@ -6515,6 +6273,7 @@ function openExtractDialog(mode: ExtractMode) {
   extractTitle.textContent = message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle");
   extractDialogMessage.textContent = extractDialogMessageForMode(mode);
   extractStartButton.textContent = message(mode === "selection" ? "extract.selectedAction" : "extract.allAction");
+  const { extractDestinationHistory } = pathHistoryStore.getSnapshot();
   if (!extractDestinationInput.value.trim() && extractDestinationHistory[0]) {
     extractDestinationInput.value = extractDestinationHistory[0];
   }
@@ -6545,6 +6304,7 @@ function openExtractHereDialog(mode: ExtractMode) {
 
 function showCreateWorkspace() {
   applyCreatePreferenceDefaults();
+  const { createDestinationHistory } = pathHistoryStore.getSnapshot();
   if (!createWorkspace.getSnapshot().options.destinationPath.trim() && createDestinationHistory[0]) {
     syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPathIfBlank(createDestinationHistory[0]).snapshot);
   }
@@ -6577,7 +6337,7 @@ async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOpti
     });
     syncArchiveWorkspaceSnapshot(loadingSnapshot);
     syncArchiveWorkspaceViewSnapshot(loadingSnapshot);
-    setBrowseState("loading", i18n.t("browse.statusLoading"));
+    setBrowseState("loading", displayContext.translator.t("browse.statusLoading"));
     renderBrowse();
 
     try {
@@ -6641,7 +6401,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
 
   clearTrackedPreviewState();
   hideContextMenu();
-  workspaceMode = "extract";
+  shellWorkspace.setWorkspaceMode("extract");
   const snapshot = archiveWorkspace.loadSucceeded(archiveListingFromFixture(listing), {
     preserveState: preservedState,
   });
@@ -6734,14 +6494,18 @@ async function runPlan(revision?: number) {
   if (!planStart.ready) {
     if (planStart.reason === "needsSources") {
       setCreatePlanState();
-      createPlanSummary.innerHTML = `<p>${escapeHtml(i18n.t("create.plan.noSources"))}</p>`;
+      renderCreatePlanStatus(createPlanSummaryViewElements, {
+        message: displayContext.translator.t("create.plan.noSources"),
+      });
       renderCompressBrowser();
     }
     return;
   }
 
   setCreatePlanState();
-  createPlanSummary.innerHTML = `<p>${escapeHtml(createPlanStatusText(planStartSnapshot.plan.status) || i18n.t("create.plan.planning"))}</p>`;
+  renderCreatePlanStatus(createPlanSummaryViewElements, {
+    message: createPlanStatusText(planStartSnapshot.plan.status) || displayContext.translator.t("create.plan.planning"),
+  });
   renderCompressBrowser();
 
   if (canUseBrowserCreatePlanPreview()) {
@@ -6787,7 +6551,9 @@ async function runPlan(revision?: number) {
 
     const errorSnapshot = syncCreateSourcesFromWorkspace(acceptedError.snapshot);
     setCreatePlanState();
-    createPlanSummary.innerHTML = `<p>${escapeHtml(createPlanStatusText(errorSnapshot.plan.status))}</p>`;
+    renderCreatePlanStatus(createPlanSummaryViewElements, {
+      message: createPlanStatusText(errorSnapshot.plan.status),
+    });
     renderCompressBrowser();
   }
 }
@@ -6822,15 +6588,11 @@ function addJobState(
   if (options.focusProgress) {
     void revealQuickActionJobWindow(options.autoCloseAction ?? "returnToWorkspace");
   }
-  jobs.set(response.jobId, createInitialJobState(response));
+  jobsWorkspace.addJob(response, {
+    retryContext: options.retryContext,
+    outputActions: options.outputActions,
+  });
   trackQuickActionJob(response.jobId, options.progressContext);
-
-  if (options.retryContext) {
-    jobRetryContexts.set(response.jobId, options.retryContext);
-  }
-  if (options.outputActions?.length) {
-    jobOutputActions.set(response.jobId, options.outputActions);
-  }
 
   schedulePolling();
   renderJobs();
@@ -6879,7 +6641,7 @@ async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cl
     const defaults = createDefaultsForFormat(appPreferences, format);
     let password: string | undefined;
     if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
-      const promptedPassword = promptForArchivePassword(message("create.prompt.newArchivePassword"));
+      const promptedPassword = jobPasswordPrompts.promptForNewArchivePassword();
       if (!promptedPassword) {
         setOperationalMessage("quickCreate.cancelled");
         return;
@@ -7035,7 +6797,7 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
       } catch (error) {
         const commandError = asCommandError(error);
         if (commandError && isPasswordCommandError(commandError)) {
-          const nextPassword = promptForArchivePassword(getArchivePasswordPrompt(commandError.code));
+          const nextPassword = jobPasswordPrompts.promptForCommandRetry(commandError.code);
           if (!nextPassword) {
             setOperationalStatus(commandError.message);
             break;
@@ -7174,30 +6936,28 @@ async function startPasswordRetryJob(context: JobRetryContext, password: string)
 }
 
 async function retryJobWithPasswordPrompt(jobId: string) {
-  const state = jobs.get(jobId);
-  const context = jobRetryContexts.get(jobId);
-  if (!state || !context) {
+  const retryDetails = jobsWorkspace.getPasswordRetryDetails(jobId);
+  if (!retryDetails) {
     setOperationalMessage("jobs.retryUnavailable");
     return;
   }
 
-  const failure = getLatestPasswordFailureEvent(state);
-  if (!failure?.code) {
+  if (!retryDetails.failure.code) {
     setOperationalMessage("jobs.retryUnavailable");
     return;
   }
 
-  const password = promptForArchivePassword(getArchivePasswordPrompt(failure.code));
+  const password = jobPasswordPrompts.promptForCommandRetry(retryDetails.failure.code);
   if (!password) {
     setOperationalMessage("jobs.passwordRetryCancelled");
     return;
   }
 
   try {
-    const response = await startPasswordRetryJob(context, password);
+    const response = await startPasswordRetryJob(retryDetails.context, password);
     addJobState(response, {
-      retryContext: context,
-      outputActions: retryJobOutputActions(context),
+      retryContext: retryDetails.context,
+      outputActions: retryJobOutputActions(retryDetails.context),
     });
     setOperationalMessage("jobs.passwordRetryStarted");
   } catch (error) {
@@ -7206,22 +6966,17 @@ async function retryJobWithPasswordPrompt(jobId: string) {
   }
 }
 
-async function maybePromptForJobPasswordRetry(jobId: string, state: JobState) {
-  if (
-    promptedPasswordRetryJobs.has(jobId) ||
-    !canRetryJobWithPassword(jobId, state)
-  ) {
+async function maybePromptForJobPasswordRetry(jobId: string) {
+  if (!jobsWorkspace.markPasswordRetryPromptedIfEligible(jobId)) {
     return;
   }
 
-  promptedPasswordRetryJobs.add(jobId);
   await retryJobWithPasswordPrompt(jobId);
 }
 
 async function pollJobs() {
-  const decision = selectJobPollingDecision(jobs.values(), pollInFlight);
+  const decision = jobsWorkspace.beginPolling();
   if (decision.action === "requestAgain") {
-    pollAgainRequested = true;
     return;
   }
 
@@ -7232,31 +6987,21 @@ async function pollJobs() {
     return;
   }
 
-  pollInFlight = true;
   try {
     await Promise.all(
       decision.jobIds.map(async (jobId) => {
-        const state = jobs.get(jobId);
-        if (!state) {
+        if (!jobsWorkspace.hasJob(jobId)) {
           return;
         }
         try {
           const snapshot = await pollJobEventsCommand({ jobId });
 
-          jobs.set(jobId, mergePolledJobState(jobs.get(jobId), snapshot));
-
-          const updated = jobs.get(jobId);
-          if (updated) {
-            await maybePromptForJobPasswordRetry(jobId, updated);
-          }
+          jobsWorkspace.mergePolledSnapshot(snapshot);
+          await maybePromptForJobPasswordRetry(jobId);
         } catch (error) {
           const commandError = asCommandError(error);
           if (commandError?.code === "not_found") {
-            jobs.delete(jobId);
-            jobRetryContexts.delete(jobId);
-            focusedJobProgressContexts.delete(jobId);
-            quickActionJobIds.delete(jobId);
-            promptedPasswordRetryJobs.delete(jobId);
+            jobsWorkspace.removeJob(jobId);
             return;
           }
 
@@ -7269,15 +7014,7 @@ async function pollJobs() {
             retryable: true,
             message: messageText,
           };
-          jobs.set(jobId, {
-            snapshot: {
-              ...state.snapshot,
-              status: "failed",
-              canDismiss: true,
-              events: [failedEvent],
-            },
-            events: [...state.events, failedEvent],
-          });
+          jobsWorkspace.markJobFailed(jobId, failedEvent);
           setOperationalStatus(messageText);
         }
       }),
@@ -7286,45 +7023,31 @@ async function pollJobs() {
     renderJobs();
     maybeCloseCompletedQuickActionWindow();
   } finally {
-    pollInFlight = false;
-    if (pollAgainRequested) {
-      pollAgainRequested = false;
+    const finish = jobsWorkspace.finishPolling();
+    if (finish.shouldPollAgain) {
       void pollJobs();
     }
   }
 }
 
 function schedulePolling() {
-  if (pollTimer !== null) {
-    return;
-  }
-
-  pollTimer = window.setInterval(() => {
+  jobTimers.startPolling(() => {
     void pollJobs();
-  }, JOB_POLL_INTERVAL_MS);
+  });
 }
 
 function scheduleProgressClock() {
-  if (progressClockTimer !== null) {
-    return;
-  }
-
-  progressClockTimer = window.setInterval(() => {
+  jobTimers.startProgressClock(() => {
     renderJobs();
-  }, 1000);
+  });
 }
 
 function stopProgressClock() {
-  if (progressClockTimer === null) {
-    return;
-  }
-
-  window.clearInterval(progressClockTimer);
-  progressClockTimer = null;
+  jobTimers.stopProgressClock();
 }
 
-function syncProgressClock() {
-  if (hasActiveJob()) {
+function syncProgressClock(snapshot: ProgressClockSnapshot = jobsWorkspace.getProgressClockSnapshot()) {
+  if (snapshot.shouldRun) {
     scheduleProgressClock();
   } else {
     stopProgressClock();
@@ -7332,16 +7055,12 @@ function syncProgressClock() {
 }
 
 function stopPolling() {
-  if (pollTimer === null) {
-    return;
-  }
-  window.clearInterval(pollTimer);
-  pollTimer = null;
+  jobTimers.stopPolling();
 }
 
 async function onOpenArchive() {
   const selected = await openNativeDialog({
-    title: i18n.t("nativeDialog.openArchive"),
+    title: displayContext.translator.t("nativeDialog.openArchive"),
     directory: false,
     multiple: false,
     filters: [ARCHIVE_OPEN_FILTER],
@@ -7383,7 +7102,7 @@ async function openArchiveFromClipboard() {
     }
     await openArchiveFromPath(pastedPath);
   } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, i18n.t("nativeDialog.failed")));
+    setOperationalStatus(unknownErrorMessage(error, displayContext.translator.t("nativeDialog.failed")));
   }
 }
 
@@ -7447,7 +7166,7 @@ async function onDeleteTemporaryFiles() {
     return;
   }
 
-  if (!currentPreviewCleanupRoot && !currentPreviewPath) {
+  if (!shellWorkspace.hasTrackedPreviewCleanup()) {
     setOperationalMessage("preview.cleanupNoneTracked");
     return;
   }
@@ -7588,17 +7307,17 @@ async function persistWindowGeometry(): Promise<void> {
 async function applyPreviewCleanupPolicyBeforeNextPreview(): Promise<void> {
   if (
     appPreferences.previewCleanupPolicy !== "beforeNextPreview" ||
-    !currentPreviewCleanupRoot
+    !shellWorkspace.hasPreviewCleanupRoot()
   ) {
     return;
   }
 
   try {
     await cleanupPreviewRoots();
-    clearTrackedPreviewState();
   } catch {
     // Best effort cleanup only.
   }
+  clearTrackedPreviewState();
 }
 
 function applyCleanupOnAppClose(): void {
@@ -7632,7 +7351,7 @@ async function onRefreshArchive() {
 
 async function onSelectDestinationForExtract() {
   const selected = await openNativeDialog({
-    title: i18n.t("nativeDialog.chooseExtractDestination"),
+    title: displayContext.translator.t("nativeDialog.chooseExtractDestination"),
     directory: true,
     multiple: false,
   });
@@ -7759,7 +7478,7 @@ async function startExtract(destinationMode: ExtractMode) {
         },
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
-        progressContext: extractJobProgressContext(request, message("extract.selectedProgressTitle")),
+        progressContext: extractJobProgressContext(request, "selection"),
         outputActions: extractJobOutputActions(request),
       });
       return;
@@ -7805,9 +7524,10 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
   }
   let request = requestResult.request;
 
-  if (openOutside && currentPreviewEntryPath === request.entryPath && currentPreviewPath) {
+  const cachedPreviewPath = shellWorkspace.getCachedPreviewPathForEntry(request.entryPath);
+  if (openOutside && cachedPreviewPath) {
     try {
-      await openDesktopPath(currentPreviewPath);
+      await openDesktopPath(cachedPreviewPath);
       archiveWorkspace.clearPasswordRetry();
       setBrowseState("loaded", message("preview.openedCached"));
       renderBrowse();
@@ -7822,9 +7542,11 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
       const response = await runPreviewEntry(request);
 
       await openDesktopPath(response.previewPath);
-      currentPreviewCleanupRoot = response.cleanupRoot;
-      currentPreviewPath = response.previewPath;
-      currentPreviewEntryPath = request.entryPath;
+      shellWorkspace.trackPreviewResultMetadata({
+        cleanupRoot: response.cleanupRoot,
+        previewPath: response.previewPath,
+        entryPath: request.entryPath,
+      });
       archiveWorkspace.clearPasswordRetry();
       if (openOutside) {
         setBrowseState("loaded", message("preview.openedOutside", { size: formatBytes(response.writtenBytes) }));
@@ -7868,7 +7590,7 @@ async function runPreviewSelectedEntry(openOutside: boolean) {
 
 async function addSourcePathsFromDialog(mode: "files" | "folder") {
   const selected = await openNativeDialog({
-    title: i18n.t(mode === "files" ? "nativeDialog.addSourceFiles" : "nativeDialog.addSourceFolder"),
+    title: displayContext.translator.t(mode === "files" ? "nativeDialog.addSourceFiles" : "nativeDialog.addSourceFolder"),
     directory: mode === "folder",
     multiple: mode === "files",
   });
@@ -7888,7 +7610,7 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 async function onSelectCreateDestination() {
   const optionSnapshot = syncCreateSourcesFromWorkspace().options;
   const selected = await saveNativeDialog({
-    title: i18n.t("nativeDialog.chooseDestinationArchive"),
+    title: displayContext.translator.t("nativeDialog.chooseDestinationArchive"),
     defaultPath: optionSnapshot.destinationPath.trim()
       ? createWorkspace.destinationPathWithFormatExtension(optionSnapshot.destinationPath)
       : suggestedCreateArchiveDefaultPath(),
@@ -7988,19 +7710,19 @@ async function onResumeJob(jobId: string) {
   }
 }
 
-async function onJobOutputAction(jobId: string, index: number, kind: JobOutputAction["kind"]) {
-  const action = jobOutputActions.get(jobId)?.[index];
-  if (!action || action.kind !== kind || !action.path) {
+async function onJobOutputAction(jobId?: string, indexValue?: string, kind?: string) {
+  const resolution = jobsWorkspace.getOutputAction({
+    jobId,
+    index: Number(indexValue),
+    kind,
+  });
+  if (resolution.action === "unavailable") {
     setOperationalMessage("jobs.outputUnavailable");
     return;
   }
 
   try {
-    if (kind === "open") {
-      await openDesktopPath(action.path);
-    } else {
-      await revealInFileManager(action.path);
-    }
+    await jobOutputEffects.run(resolution.outputAction);
   } catch (error) {
     setOperationalStatus(unknownErrorMessage(error, message("jobs.outputOpenFailed")));
   }
@@ -8009,14 +7731,9 @@ async function onJobOutputAction(jobId: string, index: number, kind: JobOutputAc
 async function onDismissJob(jobId: string) {
   try {
     await dismissJobCommand({ jobId });
-    jobs.delete(jobId);
-    jobRetryContexts.delete(jobId);
-    jobOutputActions.delete(jobId);
-    focusedJobProgressContexts.delete(jobId);
-    quickActionJobIds.delete(jobId);
-    promptedPasswordRetryJobs.delete(jobId);
+    jobsWorkspace.removeJob(jobId);
     renderJobs();
-    if (jobs.size === 0) {
+    if (!jobsWorkspace.hasJobs()) {
       stopPolling();
     }
   } catch (error) {
@@ -8077,7 +7794,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 function handleShortcut(event: KeyboardEvent) {
   const openDialogElement = getOpenModal();
   if (event.key === "Tab" && openDialogElement) {
-    trapModalFocus(event, openDialogElement);
+    modalController.trapFocus(event, openDialogElement);
     return;
   }
 
@@ -8104,18 +7821,6 @@ function handleShortcut(event: KeyboardEvent) {
     return;
   }
 
-  if (event.ctrlKey && event.key.toLowerCase() === "o") {
-    event.preventDefault();
-    void onOpenArchive();
-    return;
-  }
-
-  if (event.ctrlKey && event.key.toLowerCase() === "n") {
-    event.preventDefault();
-    showCreateWorkspace();
-    return;
-  }
-
   if (event.ctrlKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
     if (searchInput.disabled) {
@@ -8127,48 +7832,16 @@ function handleShortcut(event: KeyboardEvent) {
     return;
   }
 
-  if (event.ctrlKey && event.key.toLowerCase() === "a") {
+  const shortcutSelectedCount = event.key === "F5" ? selectedEntries.size : getSelectedEntryPaths().length;
+  const routedCommand = selectKeyboardCommand({
+    key: event.key,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    selectedCount: shortcutSelectedCount,
+  });
+  if (routedCommand) {
     event.preventDefault();
-    selectAllVisibleEntries();
-    return;
-  }
-
-  if (event.key === "F5") {
-    event.preventDefault();
-    void openExtractDialog(selectedEntries.size ? "selection" : "archive");
-    return;
-  }
-
-  if (event.ctrlKey && event.key.toLowerCase() === "r") {
-    event.preventDefault();
-    void onRefreshArchive();
-    return;
-  }
-
-  if (event.key === "Backspace" || (event.altKey && event.key === "ArrowUp")) {
-    event.preventDefault();
-    navigateUp();
-    return;
-  }
-
-  if (event.key === "Enter") {
-    const selected = getSelectedEntryPaths();
-    if (selected.length === 1) {
-      event.preventDefault();
-      void onPreviewSelectedEntry();
-    }
-    return;
-  }
-
-  if (event.key === "F3") {
-    event.preventDefault();
-    void onPreviewSelectedEntry();
-    return;
-  }
-
-  if (event.altKey && event.key === "Enter") {
-    event.preventDefault();
-    showCurrentInfo();
+    runRoutedCommand(routedCommand.commandId, routedCommand.payload);
     return;
   }
 }
@@ -8187,33 +7860,13 @@ function bindActions() {
   compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
   modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
   modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
-  dropOpenArchiveButton.addEventListener("click", () => activatePendingDropChoice("openArchive"));
-  dropAddCompressButton.addEventListener("click", () => activatePendingDropChoice("addToCompress"));
-  dropCancelButton.addEventListener("click", () => activatePendingDropChoice("cancel"));
-  dropOverlay.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      activatePendingDropChoice("cancel");
-    }
+  bindDropOverlayActions(shellViewElements, {
+    onChoice: activatePendingDropChoice,
   });
-  openArchiveButton.addEventListener("click", () => void onOpenArchive());
-  newArchiveButton.addEventListener("click", showCreateWorkspace);
-  addArchiveButton.addEventListener("click", showCreateWorkspace);
-  extractToolbarButton.addEventListener("click", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
-  testArchiveButton.addEventListener("click", () => void onTestArchive());
-  infoToolbarButton.addEventListener("click", showCurrentInfo);
-  jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
-  preferencesToolbarButton.addEventListener("click", openPreferencesDialog);
-  document.querySelector<HTMLButtonElement>("#toolbar-view")?.addEventListener("click", () => void onPreviewSelectedEntry());
-  document.querySelector<HTMLButtonElement>("#copy-toolbar")?.addEventListener("click", () => void copySelectedEntryPathsToClipboard());
-  document.querySelector<HTMLButtonElement>("#toolbar-refresh")?.addEventListener("click", () => void onRefreshArchive());
-  document.querySelector<HTMLButtonElement>("#toolbar-selectAll")?.addEventListener("click", selectVisibleEntries);
-  document.querySelector<HTMLButtonElement>("#toolbar-flatView")?.addEventListener("click", () => setFlatView(!isFlatView, true));
-  document.querySelector<HTMLButtonElement>("#toolbar-deleteTempFiles")?.addEventListener("click", () => void onDeleteTemporaryFiles());
-  document.querySelector<HTMLButtonElement>("#toolbar-helpContents")?.addEventListener("click", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  document.querySelector<HTMLButtonElement>("#toolbar-about")?.addEventListener("click", () => {
-    renderAboutDiagnostics();
-    openModal(aboutDialog, "#about-close");
+  bindCommandSurface(appRoot, {
+    commandDefinitions: COMMAND_DEFINITIONS,
+    onCommand: (commandId) => runRoutedCommand(commandId),
+    onMenuPopoverCommand: closeOpenMenus,
   });
   infoActionGroup.addEventListener("click", (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
@@ -8228,21 +7881,16 @@ function bindActions() {
     }
 
     const action = button.dataset.infoAction;
-    if (action === "preview") {
-      void onPreviewSelectedEntry();
-      return;
-    }
-    if (action === "archive-info") {
-      showArchiveInfo();
+    const routedCommand = selectDetailsCommand(action);
+    if (routedCommand) {
+      runRoutedCommand(routedCommand.commandId, routedCommand.payload);
       return;
     }
     if (action === "clear-search") {
       clearSearch();
     }
   });
-  refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
   navBackButton.addEventListener("click", navigateBack);
-  navUpButton.addEventListener("click", navigateUp);
   for (const resizer of paneResizerElements) {
     resizer.addEventListener("pointerdown", (event) => {
       const pane = resizer.dataset.paneResizer as ResizablePane | undefined;
@@ -8276,70 +7924,6 @@ function bindActions() {
       });
     }
   }
-
-  const bindMenuItem = (id: CommandId, handler: () => void) => {
-    const button = menuItemButton(id);
-    if (!button) {
-      return;
-    }
-    button.addEventListener("click", () => {
-      handler();
-      closeOpenMenus();
-    });
-  };
-
-  bindMenuItem("open", () => void onOpenArchive());
-  bindMenuItem("createFile", showCreateWorkspace);
-  bindMenuItem("selectAll", selectVisibleEntries);
-  bindMenuItem("deselectAll", clearBrowseSelection);
-  bindMenuItem("selectByType", () => selectEntriesByType("add"));
-  bindMenuItem("deselectByType", () => selectEntriesByType("remove"));
-  bindMenuItem("openRoot", () => navigateToFolder(""));
-  bindMenuItem("upOneLevel", navigateUp);
-  bindMenuItem("extract", () => openExtractDialog(selectedEntries.size ? "selection" : "archive"));
-  bindMenuItem("test", () => void onTestArchive());
-  bindMenuItem("view", () => void onPreviewSelectedEntry());
-  bindMenuItem("copyTo", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  bindMenuItem("info", showCurrentInfo);
-  bindMenuItem("properties", showCurrentInfo);
-  bindMenuItem("refresh", () => void onRefreshArchive());
-  bindMenuItem("exit", closeAppWindow);
-  bindMenuItem("detailsView", () => setOperationalMessage("status.detailsViewActive"));
-  bindMenuItem("sortName", () => applySortCommand("name"));
-  bindMenuItem("sortType", () => applySortCommand("kind"));
-  bindMenuItem("sortDate", () => applySortCommand("modified"));
-  bindMenuItem("sortSize", () => applySortCommand("size"));
-  bindMenuItem("archiveToolbar", () => {
-    savePreferencePatch({ toolbarVisible: !appPreferences.toolbarVisible });
-  });
-  bindMenuItem("standardToolbar", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  bindMenuItem("largeButtons", () => {
-    savePreferencePatch({ largeToolbarButtons: !appPreferences.largeToolbarButtons });
-  });
-  bindMenuItem("showButtonText", () => {
-    savePreferencePatch({ showToolbarLabels: !appPreferences.showToolbarLabels });
-  });
-  bindMenuItem("options", openPreferencesDialog);
-  bindMenuItem("about", () => {
-    renderAboutDiagnostics();
-    openModal(aboutDialog, "#about-close");
-  });
-  bindMenuItem("flatView", () => {
-    setFlatView(!isFlatView, true);
-  });
-  bindMenuItem("openInside", () => {
-    const selected = getSelectedEntryPaths();
-    if (selected.length !== 1) {
-      setOperationalMessage("command.singleFileRequired");
-      return;
-    }
-    navigateToFolder(selected[0]);
-  });
-  bindMenuItem("invertSelection", () => invertVisibleSelectionEntries());
-  bindMenuItem("openOutside", () => void onOpenOutsideSelectedEntry());
-  bindMenuItem("deleteTempFiles", () => void onDeleteTemporaryFiles());
-  bindMenuItem("delete", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
-  bindMenuItem("moveTo", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
 
   searchSubmitButton.addEventListener("click", () => {
     if (searchInput.disabled) {
@@ -8498,12 +8082,9 @@ function bindActions() {
     }
 
     const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-action]");
-    if (actionTarget?.dataset.treeAction === "open") {
-      void onOpenArchive();
-      return;
-    }
-    if (actionTarget?.dataset.treeAction === "create") {
-      showCreateWorkspace();
+    const routedTreeCommand = selectTreeCommand(actionTarget?.dataset.treeAction);
+    if (routedTreeCommand) {
+      runRoutedCommand(routedTreeCommand.commandId, routedTreeCommand.payload);
       return;
     }
 
@@ -8533,7 +8114,7 @@ function bindActions() {
     if (!target) {
       return;
     }
-    void onOpenArchive();
+    runRoutedCommand("open");
   });
 
   detailsElement.addEventListener("click", (event) => {
@@ -8545,28 +8126,9 @@ function bindActions() {
 
     const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-details-action]");
     const action = actionTarget?.dataset.detailsAction;
-    if (action === "open-archive") {
-      void onOpenArchive();
-      return;
-    }
-    if (action === "preview") {
-      void onPreviewSelectedEntry();
-      return;
-    }
-    if (action === "extract-selected") {
-      openExtractDialog("selection");
-      return;
-    }
-    if (action === "test-selected") {
-      void onTestArchive();
-      return;
-    }
-    if (action === "properties") {
-      showCurrentInfo();
-      return;
-    }
-    if (action === "archive-info") {
-      showArchiveInfo();
+    const routedCommand = selectDetailsCommand(action);
+    if (routedCommand) {
+      runRoutedCommand(routedCommand.commandId, routedCommand.payload);
     }
   });
 
@@ -8906,7 +8468,7 @@ tableBody.addEventListener("click", (event) => {
       appPreferences.singleClickOpen &&
       plainPrimaryClick
     ) {
-      void onPreviewSelectedEntry();
+      runRoutedCommand("view");
     }
     return;
   }
@@ -9004,7 +8566,7 @@ tableBody.addEventListener("click", (event) => {
         anchorPath: entryPath,
       }));
       renderBrowse();
-      void onPreviewSelectedEntry();
+      runRoutedCommand("view");
     }
   });
 
@@ -9038,247 +8600,6 @@ tableBody.addEventListener("click", (event) => {
     showEntryContextMenu(entryPath, event.clientX, event.clientY);
   });
 
-  contextMenu.addEventListener("click", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-context-action]");
-    if (!target) {
-      return;
-    }
-
-    const action = target.dataset.contextAction;
-    const folderPath = target.dataset.folderPath;
-    const columnId = target.dataset.columnId as ArchiveTableColumnId | undefined;
-    const archivePath = target.dataset.archivePath;
-    const entryPath = contextEntryPath;
-    const sourcePath = contextSourcePath;
-    hideContextMenu();
-
-    if (action === "open-archive") {
-      void onOpenArchive();
-      return;
-    }
-    if (action === "paste-archive-path") {
-      void openArchiveFromClipboard();
-      return;
-    }
-    if (action === "open-recent-archive" && archivePath) {
-      void openArchiveFromPath(archivePath);
-      return;
-    }
-    if (action === "create-archive") {
-      showCreateWorkspace();
-      return;
-    }
-    if (action === "add-source-files") {
-      void addSourcePathsFromDialog("files");
-      return;
-    }
-    if (action === "add-source-folder") {
-      void addSourcePathsFromDialog("folder");
-      return;
-    }
-    if (action === "compress-open-folder" && folderPath !== undefined) {
-      navigateToCompressFolder(folderPath);
-      return;
-    }
-    if (action === "open-folder" && folderPath !== undefined) {
-      navigateToFolder(folderPath);
-      return;
-    }
-    if (action === "extract-folder" && folderPath !== undefined) {
-      selectFolderEntries(folderPath);
-      openExtractDialog("selection");
-      return;
-    }
-    if (action === "open-entry") {
-      const selectedPath = entryPath;
-      if (!selectedPath) {
-        return;
-      }
-      const selectedEntry = getEntryByPath(selectedPath);
-      if (selectedEntry?.kind === "directory") {
-        navigateToFolder(selectedPath);
-      } else {
-        applyArchiveTableSelection(replaceHierarchicalTableSelection({
-          paths: [selectedPath],
-          focusedPath: selectedPath,
-          anchorPath: selectedPath,
-        }));
-        renderBrowse();
-        void onPreviewSelectedEntry();
-      }
-      return;
-    }
-    if (action === "open-inside") {
-      if (entryPath) {
-        const entry = getEntryByPath(entryPath);
-        if (!entry) {
-          return;
-        }
-        if (entry.kind !== "directory") {
-          setOperationalMessage("command.singleFolderRequired");
-          return;
-        }
-        navigateToFolder(entryPath);
-      }
-      return;
-    }
-    if (action === "open-outside") {
-      void onOpenOutsideSelectedEntry();
-      return;
-    }
-    if (action === "preview" || action === "view-entry") {
-      void onPreviewSelectedEntry();
-      return;
-    }
-    if (action === "select-by-type") {
-      selectEntriesByType("add");
-      return;
-    }
-    if (action === "deselect-by-type") {
-      selectEntriesByType("remove");
-      return;
-    }
-    if (action === "extract") {
-      openExtractDialog("selection");
-      return;
-    }
-    if (action === "test") {
-      void onTestArchive();
-      return;
-    }
-    if (action === "sort-ascending" && columnId) {
-      applySortDirection(columnId, true);
-      return;
-    }
-    if (action === "sort-descending" && columnId) {
-      applySortDirection(columnId, false);
-      return;
-    }
-    if (action === "toggle-column" && columnId) {
-      tableColumnSettings = toggleColumnVisibility(tableColumnSettings, columnId);
-      saveTablePreferences();
-      renderBrowse();
-      return;
-    }
-    if (action === "move-column-left" && columnId) {
-      tableColumnSettings = moveColumn(tableColumnSettings, columnId, "left");
-      saveTablePreferences();
-      renderBrowse();
-      return;
-    }
-    if (action === "move-column-right" && columnId) {
-      tableColumnSettings = moveColumn(tableColumnSettings, columnId, "right");
-      saveTablePreferences();
-      renderBrowse();
-      return;
-    }
-    if (action === "narrow-column" && columnId) {
-      adjustTableColumnWidth(columnId, -24);
-      return;
-    }
-    if (action === "widen-column" && columnId) {
-      adjustTableColumnWidth(columnId, 24);
-      return;
-    }
-    if (action === "reset-column-width" && columnId) {
-      resetTableColumnWidth(columnId);
-      return;
-    }
-    if (action === "reset-columns") {
-      tableColumnSettings = resetColumnSettings();
-      saveTablePreferences();
-      renderBrowse();
-      return;
-    }
-    if (action === "extract-here") {
-      openExtractHereDialog(selectedEntries.size ? "selection" : "archive");
-      return;
-    }
-    if (action === "extract-all") {
-      openExtractDialog("archive");
-      return;
-    }
-    if (action === "info" && getVisibleSelectedRows().length > 1) {
-      showSelectionInfo();
-      return;
-    }
-    if (action === "info" && entryPath) {
-      showEntryInfo(entryPath);
-      return;
-    }
-    if (action === "info") {
-      showArchiveInfo();
-      return;
-    }
-    if (action === "reveal-source" && sourcePath) {
-      void revealInFileManager(sourcePath).catch((error) => {
-        setOperationalStatus(unknownErrorMessage(error, message("preview.unableRevealSource")));
-      });
-      return;
-    }
-    if (action === "include-compress-path" || action === "exclude-compress-path") {
-      const path = target.dataset.compressMenuPath;
-      if (path) {
-        for (const compressPath of compressPathsForContextAction(path)) {
-          setCompressPathIncluded(compressPath, action === "include-compress-path");
-        }
-        refreshCreatePlanSummary();
-        renderCreateSources();
-        renderCompressBrowser();
-      }
-      return;
-    }
-    if (action === "remove-source") {
-      removeCreateSources(sourcePathsForCompressMenu(sourcePath));
-      return;
-    }
-    if (action === "clear-sources") {
-      clearCreateSources();
-    }
-  });
-
-  contextMenu.addEventListener("keydown", (event) => {
-    const items = contextMenuItems();
-    if (items.length === 0) {
-      return;
-    }
-
-    const activeIndex = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowDown") {
-      nextIndex = (activeIndex + 1) % items.length;
-    } else if (event.key === "ArrowUp") {
-      nextIndex = (activeIndex - 1 + items.length) % items.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = items.length - 1;
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      hideContextMenu();
-      return;
-    } else if (event.key === "Tab") {
-      event.stopPropagation();
-      hideContextMenu();
-      return;
-    }
-
-    if (nextIndex !== null) {
-      event.preventDefault();
-      items[nextIndex]?.focus();
-    }
-  });
-
-  contextMenu.addEventListener("focusout", () => {
-    window.setTimeout(() => {
-      const active = document.activeElement;
-      if (active instanceof HTMLElement && !contextMenu.hidden && !contextMenu.contains(active)) {
-        hideContextMenu();
-      }
-    }, 0);
-  });
-
   browseExtractDestinationButton.addEventListener("click", () => void onSelectDestinationForExtract());
   extractStartButton.addEventListener("click", () => void startExtract(activeExtractMode));
   extractDialog.addEventListener("keydown", handleExtractDialogEnter);
@@ -9288,6 +8609,11 @@ tableBody.addEventListener("click", (event) => {
   addSourceButton.addEventListener("click", (event) => {
     event.stopPropagation();
     showAddSourcesMenu(addSourceButton);
+  });
+  bindCreateSourceListActions(createSourceListViewElements, {
+    onRemoveSource: (sourcePath) => {
+      removeCreateSources([sourcePath]);
+    },
   });
   clearSourcesButton.addEventListener("click", () => {
     clearCreateSources();
@@ -9305,7 +8631,7 @@ tableBody.addEventListener("click", (event) => {
     renderCompressBrowser();
   });
   compressIncludeAllInput.addEventListener("change", () => {
-    setCurrentCompressFolderIncluded(compressIncludeAllInput.checked);
+    setCurrentCompressFolderIncluded(readCompressIncludeAllChecked(compressIncludeAllControlViewElements));
     refreshCreatePlanSummary();
     renderCreateSources();
     renderCompressBrowser();
@@ -9330,7 +8656,7 @@ tableBody.addEventListener("click", (event) => {
         refreshCreatePlanSummary();
         renderCreateSources();
         renderCompressBrowser();
-        focusCompressRow(compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-compress-path="${CSS.escape(rowPath)}"]`));
+        focusCompressRow(findCompressSourceRowByPath(compressSourceTableViewElements, rowPath));
       }
       return;
     }
@@ -9347,7 +8673,7 @@ tableBody.addEventListener("click", (event) => {
     if (rowPath) {
       updateCompressSelectionByIntent(rowPath, { ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey });
       renderCompressSources();
-      focusCompressRow(compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-compress-path="${CSS.escape(rowPath)}"]`));
+      focusCompressRow(findCompressSourceRowByPath(compressSourceTableViewElements, rowPath));
     }
 
     if (folderPath !== undefined && (event.detail >= 2 || (appPreferences.singleClickOpen && plainPrimaryClick))) {
@@ -9530,9 +8856,9 @@ tableBody.addEventListener("click", (event) => {
     const resumeId = actionButton?.dataset.resume;
     const retryPasswordId = actionButton?.dataset.retryPassword;
     const dismissId = actionButton?.dataset.dismiss;
-    const outputAction = actionButton?.dataset.outputAction as JobOutputAction["kind"] | undefined;
+    const outputAction = actionButton?.dataset.outputAction;
     const outputJobId = actionButton?.dataset.outputJob;
-    const outputIndex = Number(actionButton?.dataset.outputIndex);
+    const outputIndex = actionButton?.dataset.outputIndex;
     if (cancelId) {
       void onCancelJob(cancelId);
       return;
@@ -9549,11 +8875,7 @@ tableBody.addEventListener("click", (event) => {
       void retryJobWithPasswordPrompt(retryPasswordId);
       return;
     }
-    if (
-      outputJobId &&
-      (outputAction === "open" || outputAction === "reveal") &&
-      Number.isInteger(outputIndex)
-    ) {
+    if (outputAction !== undefined) {
       void onJobOutputAction(outputJobId, outputIndex, outputAction);
       return;
     }
@@ -9573,7 +8895,6 @@ tableBody.addEventListener("click", (event) => {
   });
 
   refreshJobsButton.addEventListener("click", () => void pollJobs());
-  jobsDrawerOpenButton.addEventListener("click", openJobDrawer);
   statusJobButton.addEventListener("click", openJobDrawer);
   jobDrawerCloseButton.addEventListener("click", closeJobDrawer);
   jobsListElement.addEventListener("focusin", () => void pollJobs());
@@ -9602,7 +8923,7 @@ tableBody.addEventListener("click", (event) => {
     }
   });
 
-  document.addEventListener("focusin", keepFocusInsideOpenModal);
+  document.addEventListener("focusin", (event) => modalController.keepFocusInsideOpenModal(event));
   appRoot.addEventListener("keydown", handleShortcut);
 }
 
@@ -9611,13 +8932,11 @@ bindDialogCloseButtons();
 bindActions();
 bindBrowserFileDropFallback();
 bindWindowLifecycleHandlers();
-applyLocaleFromPreferences();
-loadExtractDestinationHistory();
-loadCreateDestinationHistory();
-loadRecentArchiveHistory();
+refreshDisplayFromPreferences();
+pathHistoryStore.load();
 applyCreatePreferenceDefaults();
 setCreatePlanState();
-setBrowseState("idle", i18n.t("browse.statusIdle"));
+setBrowseState("idle", displayContext.translator.t("browse.statusIdle"));
 if (isLocalDevHost()) {
   window.__zmanagerDev = {
     loadArchiveFixture: loadArchiveListingIntoState,
@@ -9626,16 +8945,7 @@ if (isLocalDevHost()) {
       renderBrowse();
     },
     setJobFixtures: (fixtures: DevJobFixture[]) => {
-      jobs.clear();
-      jobRetryContexts.clear();
-      jobOutputActions.clear();
-      promptedPasswordRetryJobs.clear();
-      for (const fixture of fixtures) {
-        jobs.set(fixture.snapshot.jobId, fixture);
-        if (fixture.outputActions?.length) {
-          jobOutputActions.set(fixture.snapshot.jobId, fixture.outputActions);
-        }
-      }
+      jobsWorkspace.replaceJobs(fixtures);
       renderJobs();
     },
     openSurface: (surface: DevDialogName) => {

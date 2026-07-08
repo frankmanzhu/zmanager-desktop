@@ -7,6 +7,7 @@ import {
   preferencesWithPatch,
   createDefaultsForFormat,
   saveAppPreferences,
+  type AppPreferences,
 } from "./preferences";
 import { PREFERENCE_KEYS, type PreferenceStorage } from "./preferenceStorage";
 
@@ -278,6 +279,30 @@ describe("preferences helpers", () => {
     });
     expect(defaultCreateDirectory(preferences)).toBe("/tmp/archives");
     expect(defaultCreateDirectory(DEFAULT_APP_PREFERENCES)).toBeNull();
+  });
+
+  it("normalizes full preference-shaped patches from dialog saves", () => {
+    const dialogPreferences: AppPreferences = {
+      ...DEFAULT_APP_PREFERENCES,
+      customOutputFolderPath: " /tmp/dialog-output ",
+      tableVisibleColumnIds: ["size", "name", "size"],
+      tableColumnOrderIds: ["size", "name", "size"],
+      tableColumnWidths: {
+        name: 12,
+        size: 1200,
+        unknown: 200,
+      } as AppPreferences["tableColumnWidths"],
+    };
+
+    const preferences = preferencesWithPatch(DEFAULT_APP_PREFERENCES, dialogPreferences);
+
+    expect(preferences.customOutputFolderPath).toBe("/tmp/dialog-output");
+    expect(preferences.tableVisibleColumnIds).toEqual(["size", "name"]);
+    expect(preferences.tableColumnOrderIds.slice(0, 3)).toEqual(["name", "size", "compressedSize"]);
+    expect(preferences.tableColumnWidths).toEqual({
+      name: 140,
+      size: 520,
+    });
   });
 
   it("treats zero volume defaults as no split", () => {

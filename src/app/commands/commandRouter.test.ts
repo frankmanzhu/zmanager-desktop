@@ -1,0 +1,254 @@
+import { describe, expect, it } from "vitest";
+
+import { COMMAND_DEFINITIONS, type CommandId, type CommandStateMap } from "../classicCommands";
+import {
+  createCommandRouter,
+  selectContextCommand,
+  selectDetailsCommand,
+  selectKeyboardCommand,
+  selectTreeCommand,
+  type CommandRouterEffects,
+} from "./commandRouter";
+
+function enabledState(overrides: Partial<CommandStateMap> = {}): CommandStateMap {
+  return {
+    ...Object.fromEntries(
+      (Object.keys(COMMAND_DEFINITIONS) as CommandId[]).map((id) => [id, { enabled: true }]),
+    ) as CommandStateMap,
+    ...overrides,
+  };
+}
+
+function recordingEffects(log: string[]): CommandRouterEffects {
+  const record = (entry: string) => {
+    log.push(entry);
+  };
+
+  return {
+    openArchive: (source, archivePath) => record(`openArchive:${source}:${archivePath ?? ""}`),
+    createArchive: () => record("createArchive"),
+    selectAll: () => record("selectAll"),
+    deselectAll: () => record("deselectAll"),
+    invertSelection: () => record("invertSelection"),
+    selectByType: () => record("selectByType"),
+    deselectByType: () => record("deselectByType"),
+    openRoot: () => record("openRoot"),
+    upOneLevel: () => record("upOneLevel"),
+    openInside: () => record("openInside"),
+    openOutside: () => record("openOutside"),
+    extract: (mode, destination) => record(`extract:${mode}:${destination}`),
+    test: () => record("test"),
+    view: () => record("view"),
+    copySelectedPaths: () => record("copySelectedPaths"),
+    info: (target) => record(`info:${target}`),
+    refresh: () => record("refresh"),
+    exit: () => record("exit"),
+    detailsView: () => record("detailsView"),
+    sort: (key) => record(`sort:${key}`),
+    toggleArchiveToolbar: () => record("toggleArchiveToolbar"),
+    toggleLargeButtons: () => record("toggleLargeButtons"),
+    toggleToolbarLabels: () => record("toggleToolbarLabels"),
+    options: () => record("options"),
+    about: () => record("about"),
+    toggleFlatView: () => record("toggleFlatView"),
+    deleteTempFiles: () => record("deleteTempFiles"),
+    jobs: () => record("jobs"),
+    reportDisabled: (commandId, reason) => record(`disabled:${commandId}:${reason ?? ""}`),
+    reportUnsupported: (commandId, reason) => record(`unsupported:${commandId}:${reason}`),
+  };
+}
+
+describe("command router", () => {
+  it("routes representative menu and toolbar commands to injected effects", () => {
+    const log: string[] = [];
+    const router = createCommandRouter({
+      getCommandState: () => enabledState(),
+      effects: recordingEffects(log),
+    });
+
+    expect(router.run("open")).toEqual({ commandId: "open", status: "executed" });
+    expect(router.run("add")).toEqual({ commandId: "add", status: "executed" });
+    expect(router.run("selectAll")).toEqual({ commandId: "selectAll", status: "executed" });
+    expect(router.run("refresh")).toEqual({ commandId: "refresh", status: "executed" });
+    expect(router.run("about")).toEqual({ commandId: "about", status: "executed" });
+
+    expect(log).toEqual(["openArchive:dialog:", "createArchive", "selectAll", "refresh", "about"]);
+  });
+
+  it("passes payload for commands whose behavior depends on the surface context", () => {
+    const log: string[] = [];
+    const router = createCommandRouter({
+      getCommandState: () => enabledState(),
+      effects: recordingEffects(log),
+    });
+
+    router.run("extract", { extractMode: "selection" });
+    router.run("extract");
+    router.run("extract", { extractMode: "archive", extractDestination: "here" });
+    router.run("sortDate");
+
+    expect(log).toEqual(["extract:selection:dialog", "extract:archive:dialog", "extract:archive:here", "sort:modified"]);
+  });
+
+  it("normalizes disabled commands before executing effects", () => {
+    const log: string[] = [];
+    const router = createCommandRouter({
+      getCommandState: () => enabledState({
+        test: { enabled: false, reason: "Open an archive first." },
+      }),
+      effects: recordingEffects(log),
+    });
+
+    expect(router.run("test")).toEqual({
+      commandId: "test",
+      status: "disabled",
+      reason: "Open an archive first.",
+    });
+    expect(log).toEqual(["disabled:test:Open an archive first."]);
+  });
+
+  it("normalizes unsupported commands through a shared effect", () => {
+    const log: string[] = [];
+    const router = createCommandRouter({
+      getCommandState: () => enabledState(),
+      effects: recordingEffects(log),
+    });
+
+    expect(router.run("helpContents")).toEqual({
+      commandId: "helpContents",
+      status: "unsupported",
+      reason: "Operation is not supported.",
+    });
+    expect(router.run("copyTo")).toEqual({
+      commandId: "copyTo",
+      status: "unsupported",
+      reason: "Operation is not supported.",
+    });
+    expect(log).toEqual([
+      "unsupported:helpContents:Operation is not supported.",
+      "unsupported:copyTo:Operation is not supported.",
+    ]);
+  });
+
+  it("passes info target payloads to the info effect", () => {
+    const log: string[] = [];
+    const router = createCommandRouter({
+      getCommandState: () => enabledState(),
+      effects: recordingEffects(log),
+    });
+
+    router.run("info");
+    router.run("properties");
+    router.run("info", { infoTarget: "archive" });
+
+    expect(log).toEqual(["info:current", "info:current", "info:archive"]);
+  });
+});
+
+describe("keyboard command selector", () => {
+  it("maps global shortcuts to command ids", () => {
+    expect(selectKeyboardCommand({ key: "o", ctrlKey: true })).toEqual({ commandId: "open" });
+    expect(selectKeyboardCommand({ key: "N", ctrlKey: true })).toEqual({ commandId: "createFile" });
+    expect(selectKeyboardCommand({ key: "a", ctrlKey: true })).toEqual({ commandId: "selectAll" });
+    expect(selectKeyboardCommand({ key: "r", ctrlKey: true })).toEqual({ commandId: "refresh" });
+    expect(selectKeyboardCommand({ key: "Backspace" })).toEqual({ commandId: "upOneLevel" });
+    expect(selectKeyboardCommand({ key: "ArrowUp", altKey: true })).toEqual({ commandId: "upOneLevel" });
+    expect(selectKeyboardCommand({ key: "F3" })).toEqual({ commandId: "view" });
+  });
+
+  it("passes selection-sensitive payloads for extract and enter preview", () => {
+    expect(selectKeyboardCommand({ key: "F5", selectedCount: 2 })).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "selection" },
+    });
+    expect(selectKeyboardCommand({ key: "F5", selectedCount: 0 })).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "archive" },
+    });
+    expect(selectKeyboardCommand({ key: "Enter", selectedCount: 1 })).toEqual({ commandId: "view" });
+    expect(selectKeyboardCommand({ key: "Enter", selectedCount: 0 })).toBeNull();
+  });
+
+  it("preserves current enter handling precedence over alt-enter info", () => {
+    expect(selectKeyboardCommand({ key: "Enter", altKey: true, selectedCount: 1 })).toEqual({ commandId: "view" });
+    expect(selectKeyboardCommand({ key: "Enter", altKey: true, selectedCount: 0 })).toBeNull();
+  });
+});
+
+describe("details command selector", () => {
+  it("maps details-pane actions to command ids and payloads", () => {
+    expect(selectDetailsCommand("open-archive")).toEqual({ commandId: "open" });
+    expect(selectDetailsCommand("preview")).toEqual({ commandId: "view" });
+    expect(selectDetailsCommand("extract-selected")).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "selection" },
+    });
+    expect(selectDetailsCommand("test-selected")).toEqual({ commandId: "test" });
+    expect(selectDetailsCommand("properties")).toEqual({ commandId: "properties" });
+    expect(selectDetailsCommand("archive-info")).toEqual({
+      commandId: "info",
+      payload: { infoTarget: "archive" },
+    });
+  });
+
+  it("ignores details actions that are not classic commands", () => {
+    expect(selectDetailsCommand("clear-search")).toBeNull();
+    expect(selectDetailsCommand(undefined)).toBeNull();
+  });
+});
+
+describe("context command selector", () => {
+  it("maps context actions to command ids and payloads", () => {
+    expect(selectContextCommand("open-archive")).toEqual({ commandId: "open" });
+    expect(selectContextCommand("paste-archive-path")).toEqual({
+      commandId: "open",
+      payload: { openSource: "clipboard" },
+    });
+    expect(selectContextCommand("open-recent-archive", { archivePath: "C:/archives/app.zip" })).toEqual({
+      commandId: "open",
+      payload: { openSource: "path", archivePath: "C:/archives/app.zip" },
+    });
+    expect(selectContextCommand("create-archive")).toEqual({ commandId: "createFile" });
+    expect(selectContextCommand("open-outside")).toEqual({ commandId: "openOutside" });
+    expect(selectContextCommand("preview")).toEqual({ commandId: "view" });
+    expect(selectContextCommand("view-entry")).toEqual({ commandId: "view" });
+    expect(selectContextCommand("select-by-type")).toEqual({ commandId: "selectByType" });
+    expect(selectContextCommand("deselect-by-type")).toEqual({ commandId: "deselectByType" });
+    expect(selectContextCommand("extract")).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "selection" },
+    });
+    expect(selectContextCommand("extract-here", { extractMode: "selection" })).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "selection", extractDestination: "here" },
+    });
+    expect(selectContextCommand("extract-all")).toEqual({
+      commandId: "extract",
+      payload: { extractMode: "archive" },
+    });
+    expect(selectContextCommand("test")).toEqual({ commandId: "test" });
+    expect(selectContextCommand("info", { entryPath: "docs/readme.txt" })).toEqual({
+      commandId: "info",
+      payload: { infoTarget: "context", entryPath: "docs/readme.txt" },
+    });
+  });
+
+  it("ignores context actions that are not classic commands", () => {
+    expect(selectContextCommand("open-recent-archive")).toBeNull();
+    expect(selectContextCommand("open-folder")).toBeNull();
+    expect(selectContextCommand("toggle-column")).toBeNull();
+    expect(selectContextCommand(undefined)).toBeNull();
+  });
+});
+
+describe("tree command selector", () => {
+  it("maps explicit tree actions to command ids", () => {
+    expect(selectTreeCommand("open")).toEqual({ commandId: "open" });
+    expect(selectTreeCommand("create")).toEqual({ commandId: "createFile" });
+  });
+
+  it("ignores tree actions that are not classic commands", () => {
+    expect(selectTreeCommand("toggle")).toBeNull();
+    expect(selectTreeCommand(undefined)).toBeNull();
+  });
+});
