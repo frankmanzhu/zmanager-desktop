@@ -268,6 +268,7 @@ type CompressPlanRow =
     name: string;
     entry: CreatePlanEntryDto;
   };
+type CompressSourceColumnId = "name" | "size" | "modified" | "kind";
 type QuickActionWindowMode = "normal" | "jobOnly" | "background";
 type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
 type AppWindowResizeDirection =
@@ -299,6 +300,21 @@ type ArchiveFixture = {
 
 const NATIVE_DRAG_THRESHOLD_PX = 6;
 const MARQUEE_SELECTION_THRESHOLD_PX = 5;
+const COMPRESS_SOURCE_COLUMN_IDS = ["name", "size", "modified", "kind"] as const;
+const COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX = 28;
+const COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX = 520;
+const COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS: Record<CompressSourceColumnId, number> = {
+  name: 320,
+  size: 120,
+  modified: 170,
+  kind: 120,
+};
+const COMPRESS_SOURCE_MIN_COLUMN_WIDTHS: Record<CompressSourceColumnId, number> = {
+  name: 140,
+  size: 72,
+  modified: 110,
+  kind: 80,
+};
 
 type NativeDragGesture = {
   pointerId: number;
@@ -743,10 +759,10 @@ appRoot.innerHTML = `
                   <th class="inclusion-column">
                     <input id="compress-include-all" type="checkbox" data-i18n-aria-label="compress.includeAll" aria-label="Include All" disabled />
                   </th>
-                  <th data-i18n-text="table.name">Name</th>
-                  <th data-i18n-text="table.size">Size</th>
-                  <th data-i18n-text="table.modified">Modified</th>
-                  <th data-i18n-text="table.kind">Kind</th>
+                  <th data-compress-column-id="name" data-i18n-text="table.name">Name<span class="column-resizer" data-column-resizer="name" aria-hidden="true"></span></th>
+                  <th data-compress-column-id="size" data-i18n-text="table.size">Size<span class="column-resizer" data-column-resizer="size" aria-hidden="true"></span></th>
+                  <th data-compress-column-id="modified" data-i18n-text="table.modified">Modified<span class="column-resizer" data-column-resizer="modified" aria-hidden="true"></span></th>
+                  <th data-compress-column-id="kind" data-i18n-text="table.kind">Kind<span class="column-resizer" data-column-resizer="kind" aria-hidden="true"></span></th>
                 </tr>
               </thead>
               <tbody id="compress-source-body">
@@ -1495,6 +1511,7 @@ let tableColumnSettings: ArchiveTableColumnSettings = normalizeColumnSettings({
   columnOrderIds: appPreferences.tableColumnOrderIds,
   columnWidths: appPreferences.tableColumnWidths,
 });
+let compressSourceColumnWidths: Record<CompressSourceColumnId, number> | null = null;
 let sortKey: ArchiveSortKey = appPreferences.tableSortKey;
 let sortAscending = appPreferences.tableSortAscending;
 let isFlatView = appPreferences.flatViewDefault;
@@ -5975,6 +5992,78 @@ function startColumnResize(event: PointerEvent, columnId: ArchiveTableColumnId) 
   document.addEventListener("pointerup", onPointerUp, { once: true });
 }
 
+function isCompressSourceColumnId(value: string | undefined): value is CompressSourceColumnId {
+  return COMPRESS_SOURCE_COLUMN_IDS.includes(value as CompressSourceColumnId);
+}
+
+function compressSourceColumnHeader(columnId: CompressSourceColumnId): HTMLTableCellElement | null {
+  return compressSourceTable.querySelector<HTMLTableCellElement>(
+    `th[data-compress-column-id="${CSS.escape(columnId)}"]`,
+  );
+}
+
+function clampCompressSourceColumnWidth(columnId: CompressSourceColumnId, width: number): number {
+  const minWidth = COMPRESS_SOURCE_MIN_COLUMN_WIDTHS[columnId];
+  return Math.min(COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX, Math.max(minWidth, Math.round(width)));
+}
+
+function currentCompressSourceColumnWidths(): Record<CompressSourceColumnId, number> {
+  const widths = { ...COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS };
+  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
+    const renderedWidth = compressSourceColumnHeader(columnId)?.getBoundingClientRect().width;
+    widths[columnId] = clampCompressSourceColumnWidth(
+      columnId,
+      Number.isFinite(renderedWidth) && renderedWidth ? renderedWidth : widths[columnId],
+    );
+  }
+  return widths;
+}
+
+function applyCompressSourceColumnWidths(widths: Record<CompressSourceColumnId, number>) {
+  compressSourceColumnWidths = widths;
+  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
+    compressSourceTable.style.setProperty(
+      `--compress-source-${columnId}-column-width`,
+      `${widths[columnId]}px`,
+    );
+  }
+  const tableWidth = COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX
+    + COMPRESS_SOURCE_COLUMN_IDS.reduce((total, columnId) => total + widths[columnId], 0);
+  compressSourceTable.style.minWidth = `${tableWidth}px`;
+}
+
+function startCompressSourceColumnResize(event: PointerEvent, columnId: CompressSourceColumnId) {
+  event.preventDefault();
+  event.stopPropagation();
+  document.body.classList.add("is-resizing-column");
+
+  const startX = event.clientX;
+  const startWidths = compressSourceColumnWidths ?? currentCompressSourceColumnWidths();
+  let latestWidths = startWidths;
+  applyCompressSourceColumnWidths(startWidths);
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    latestWidths = {
+      ...startWidths,
+      [columnId]: clampCompressSourceColumnWidth(
+        columnId,
+        startWidths[columnId] + moveEvent.clientX - startX,
+      ),
+    };
+    applyCompressSourceColumnWidths(latestWidths);
+  };
+
+  const onPointerUp = () => {
+    document.body.classList.remove("is-resizing-column");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    applyCompressSourceColumnWidths(latestWidths);
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp, { once: true });
+}
+
 type ResizablePane = "navigation" | "details";
 
 const PANE_RESIZE_CENTER_MIN_WIDTH_PX = 360;
@@ -8763,6 +8852,16 @@ function bindActions() {
     }
 
     startColumnResize(event, columnId);
+  });
+
+  compressSourceTable.addEventListener("pointerdown", (event) => {
+    const target = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-column-resizer]");
+    const columnId = target?.dataset.columnResizer;
+    if (!isCompressSourceColumnId(columnId)) {
+      return;
+    }
+
+    startCompressSourceColumnResize(event, columnId);
   });
 
   pathCrumbsElement.addEventListener("click", (event) => {

@@ -131,12 +131,14 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('id="compress-include-all" type="checkbox"');
     expect(mainSource).toContain("function syncCompressIncludeAllControl");
     expect(mainSource).not.toContain('<th class="inclusion-column" data-i18n-text="table.include">Include</th>');
+    expect(mainSource).toContain('data-compress-column-id="name"');
+    expect(mainSource).toContain('data-column-resizer="name"');
+    expect(mainSource).toContain("function startCompressSourceColumnResize");
     expect(styles).toContain("#compress-source-table th:nth-child(1)");
     expect(styles).toContain("#compress-source-table th:nth-child(2)");
     expect(styles).toContain("#compress-source-table th:nth-child(3)");
     expect(styles).toContain("#compress-source-table th:nth-child(4)");
-    expect(styles).toContain("#compress-source-table tbody tr[aria-selected=\"true\"] .row-primary::before");
-    expect(styles).toContain("content: none;");
+    expect(styles).toContain("var(--compress-source-name-column-width, 42%)");
   });
 
   it("keeps Compress create canonical in-window with validation and source actions", () => {
@@ -263,6 +265,12 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
     expect(styles).toContain(".table-shell.has-start-empty #entry-table tbody .empty");
     expect(styles).toContain('tbody tr[aria-selected="true"] .row-primary::before');
+  });
+
+  it("keeps screen-reader-only text fully clipped out of visual rows", () => {
+    expect(styles).toContain(".sr-only {\n  position: absolute;");
+    expect(styles).toContain("clip-path: inset(50%);");
+    expect(styles).toContain("white-space: nowrap;");
   });
 
   it("keeps Extract empty and loaded archive navigation understandable", () => {
