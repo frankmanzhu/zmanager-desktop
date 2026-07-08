@@ -6232,7 +6232,7 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
   const folderPath = row.dataset.compressFolderRow;
   const sourcePath = row.dataset.compressSourcePath ?? "";
   const removableSourcePath = removableSourcePathForCompressRow(row);
-  const removableSourcePaths = sourcePathsForCompressMenu(removableSourcePath);
+  const removableSourcePaths = removableSourcePath ? sourcePathsForCompressMenu(removableSourcePath) : [];
   const contextPaths = compressPathsForContextAction(rowPath);
   const contextRows = contextPaths
     .map((path) => visibleCompressRowForPath(path))
@@ -6266,9 +6266,9 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
       <span class="context-menu-label">${escapeHtml(excludeLabel)}</span>
     </button>
     <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="remove-source" ${removableSourcePaths.length ? "" : "disabled"}>
+    ${removableSourcePaths.length ? `<button type="button" role="menuitem" data-context-action="remove-source">
       <span class="context-menu-label">${escapeHtml(removeLabel)}</span>
-    </button>
+    </button>` : ""}
     <button type="button" role="menuitem" data-context-action="clear-sources" ${createSources.length ? "" : "disabled"}>
       <span class="context-menu-label">${escapeHtml(message("command.clearAllSources"))}</span>
     </button>
