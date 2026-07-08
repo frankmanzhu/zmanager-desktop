@@ -128,6 +128,9 @@ describe("GUI layout contracts", () => {
   });
 
   it("declares stable Compress source table columns", () => {
+    expect(mainSource).toContain('id="compress-include-all" type="checkbox"');
+    expect(mainSource).toContain("function syncCompressIncludeAllControl");
+    expect(mainSource).not.toContain('<th class="inclusion-column" data-i18n-text="table.include">Include</th>');
     expect(styles).toContain("#compress-source-table th:nth-child(1)");
     expect(styles).toContain("#compress-source-table th:nth-child(2)");
     expect(styles).toContain("#compress-source-table th:nth-child(3)");

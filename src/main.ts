@@ -740,7 +740,9 @@ appRoot.innerHTML = `
             <table id="compress-source-table">
               <thead>
                 <tr>
-                  <th class="inclusion-column" data-i18n-text="table.include">Include</th>
+                  <th class="inclusion-column">
+                    <input id="compress-include-all" type="checkbox" data-i18n-aria-label="compress.includeAll" aria-label="Include All" disabled />
+                  </th>
                   <th data-i18n-text="table.name">Name</th>
                   <th data-i18n-text="table.size">Size</th>
                   <th data-i18n-text="table.modified">Modified</th>
@@ -1311,6 +1313,7 @@ const messageElement = document.querySelector<HTMLParagraphElement>("#browse-mes
 const compressSurfaceElement = document.querySelector<HTMLDivElement>("#compress-surface")!;
 const compressSourceBody = document.querySelector<HTMLTableSectionElement>("#compress-source-body")!;
 const compressSourceTable = document.querySelector<HTMLTableElement>("#compress-source-table")!;
+const compressIncludeAllInput = document.querySelector<HTMLInputElement>("#compress-include-all")!;
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
@@ -4106,10 +4109,43 @@ function setAllCompressPathsIncluded(included: boolean) {
   excludedCreateArchivePaths = new Set(createPlanEntries().map((entry) => normalizeEntryPath(entry.path)));
 }
 
+function setCurrentCompressFolderIncluded(included: boolean) {
+  const folderPath = normalizeFolderPath(currentCompressFolder);
+  if (folderPath) {
+    setCompressPathIncluded(folderPath, included);
+    return;
+  }
+
+  setAllCompressPathsIncluded(included);
+}
+
+function syncCompressIncludeAllControl() {
+  if (createSources.length === 0 || createPlanState === "loading" || !currentPlan) {
+    compressIncludeAllInput.checked = false;
+    compressIncludeAllInput.indeterminate = false;
+    compressIncludeAllInput.disabled = true;
+    return;
+  }
+
+  const entries = entriesForCompressPath(currentCompressFolder);
+  if (entries.length === 0) {
+    compressIncludeAllInput.checked = false;
+    compressIncludeAllInput.indeterminate = false;
+    compressIncludeAllInput.disabled = true;
+    return;
+  }
+
+  const includedCount = entries.filter((entry) => isCreateArchivePathIncluded(entry.path)).length;
+  compressIncludeAllInput.checked = includedCount === entries.length;
+  compressIncludeAllInput.indeterminate = includedCount > 0 && includedCount < entries.length;
+  compressIncludeAllInput.disabled = false;
+}
+
 function syncCompressInclusionControls() {
   for (const input of compressSourceBody.querySelectorAll<HTMLInputElement>("[data-compress-include]")) {
     input.indeterminate = input.dataset.compressInclusionState === "partial";
   }
+  syncCompressIncludeAllControl();
 }
 
 function refreshCreatePlanSummary() {
@@ -4213,6 +4249,7 @@ function renderCompressSources() {
     if (workspaceMode === "compress") {
       renderCompressSourceTree();
     }
+    syncCompressIncludeAllControl();
     return;
   }
 
@@ -4228,6 +4265,7 @@ function renderCompressSources() {
     if (workspaceMode === "compress") {
       renderCompressSourceTree();
     }
+    syncCompressIncludeAllControl();
     return;
   }
 
@@ -4244,6 +4282,7 @@ function renderCompressSources() {
     if (workspaceMode === "compress") {
       renderCompressSourceTree();
     }
+    syncCompressIncludeAllControl();
     return;
   }
 
@@ -9578,6 +9617,12 @@ tableBody.addEventListener("click", (event) => {
   });
   excludeAllSourcesButton.addEventListener("click", () => {
     setAllCompressPathsIncluded(false);
+    refreshCreatePlanSummary();
+    renderCreateSources();
+    renderCompressBrowser();
+  });
+  compressIncludeAllInput.addEventListener("change", () => {
+    setCurrentCompressFolderIncluded(compressIncludeAllInput.checked);
     refreshCreatePlanSummary();
     renderCreateSources();
     renderCompressBrowser();

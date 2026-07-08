@@ -1637,8 +1637,8 @@ input[type="search"] {
 
 .inclusion-column,
 .inclusion-cell {
-  width: 58px;
-  min-width: 58px;
+  width: 28px;
+  min-width: 28px;
   text-align: center;
 }
 
@@ -1672,7 +1672,7 @@ input[type="search"] {
 
 #compress-source-table th:nth-child(1),
 #compress-source-table td:nth-child(1) {
-  width: 58px;
+  width: 28px;
 }
 
 #compress-source-table th:nth-child(2),
