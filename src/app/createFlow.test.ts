@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyCreatePlanPathInclusion,
+  buildCreatePlanRows,
   buildStartCreateRequest,
   commonSourceParentDirectory,
   createArchiveUnavailableReason,
   createFormatSupportsPassword,
+  createPlanRowInclusionState,
   createStateAfterDestinationEdit,
+  filterCreatePlanByIncludedPaths,
   getCreateArchiveExtension,
+  isCreatePlanRevisionCurrent,
   normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
+  sourcePathForCreatePlanRow,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
 } from "./createFlow";
+import type { CreatePlanEntryDto, CreatePlanResponse } from "../api/types";
 
 const pathHelpers = {
   nativeParentPath(path: string): string {
@@ -61,6 +68,12 @@ describe("create flow helpers", () => {
     expect(createStateAfterDestinationEdit("error", true)).toBe("ready");
     expect(createStateAfterDestinationEdit("error", false)).toBe("error");
     expect(createStateAfterDestinationEdit("loading", true)).toBe("loading");
+  });
+
+  it("accepts only the latest create-plan revision result", () => {
+    expect(isCreatePlanRevisionCurrent(3, 3)).toBe(true);
+    expect(isCreatePlanRevisionCurrent(2, 3)).toBe(false);
+    expect(isCreatePlanRevisionCurrent(4, 3)).toBe(false);
   });
 
   it("explains why create archive is unavailable", () => {
@@ -247,5 +260,101 @@ describe("create flow helpers", () => {
     });
 
     expect(request.destinationCollisionStrategy).toBe("rename");
+  });
+});
+
+describe("create plan rows", () => {
+  const sources = [
+    "C:/work/project",
+    "C:/work/assets",
+    "C:/work/zeta.txt",
+  ];
+  const planEntries: CreatePlanEntryDto[] = [
+    { path: "project", kind: "directory", sourcePath: "C:/work/project" },
+    { path: "project/src/index.ts", kind: "file", size: 10, sourcePath: "C:/work/project/src/index.ts" },
+    { path: "project/README.md", kind: "file", size: 2, sourcePath: "C:/work/project/README.md" },
+    { path: "assets/logo.png", kind: "file", size: 3, sourcePath: "C:/work/assets/logo.png" },
+    { path: "zeta.txt", kind: "file", size: 1, sourcePath: "C:/work/zeta.txt" },
+  ];
+  const plan: CreatePlanResponse = {
+    includedCount: planEntries.length,
+    excludedCount: 0,
+    totalBytes: 16,
+    excludedBytes: 0,
+    entries: planEntries.map((entry) => entry.path),
+    planEntries,
+    excludedEntries: [],
+    warnings: [],
+  };
+
+  it("builds root create-plan rows and maps each row back to the owning source", () => {
+    const rows = buildCreatePlanRows({ entries: planEntries });
+
+    expect(rows.map((row) => [row.rowType, row.path, row.name])).toEqual([
+      ["folder", "assets", "assets"],
+      ["folder", "project", "project"],
+      ["entry", "zeta.txt", "zeta.txt"],
+    ]);
+    expect(rows.map((row) => sourcePathForCreatePlanRow(row, planEntries, sources))).toEqual([
+      "C:/work/assets",
+      "C:/work/project",
+      "C:/work/zeta.txt",
+    ]);
+  });
+
+  it("builds nested rows with a parent row and sorted folders before entries", () => {
+    const rows = buildCreatePlanRows({ entries: planEntries, currentFolder: "project" });
+
+    expect(rows.map((row) => [row.rowType, row.path, row.name])).toEqual([
+      ["parent", "", ".."],
+      ["folder", "project/src", "src"],
+      ["entry", "project/README.md", "README.md"],
+    ]);
+  });
+
+  it("derives included, excluded, and partial folder states from excluded paths", () => {
+    const rows = buildCreatePlanRows({ entries: planEntries });
+    const projectRow = rows.find((row) => row.path === "project")!;
+    const assetsRow = rows.find((row) => row.path === "assets")!;
+    const excludedPaths = new Set(["project/src/index.ts", "assets/logo.png"]);
+
+    expect(createPlanRowInclusionState(projectRow, planEntries, excludedPaths)).toBe("partial");
+    expect(createPlanRowInclusionState(assetsRow, planEntries, excludedPaths)).toBe("excluded");
+    expect(createPlanRowInclusionState(rows.find((row) => row.path === "zeta.txt")!, planEntries, excludedPaths)).toBe("included");
+  });
+
+  it("updates excluded paths for folder exclusions and descendant re-inclusion", () => {
+    const excludedProject = applyCreatePlanPathInclusion({
+      entries: planEntries,
+      excludedPaths: [],
+      path: "project",
+      included: false,
+    });
+
+    expect(Array.from(excludedProject).sort()).toEqual([
+      "project",
+      "project/README.md",
+      "project/src/index.ts",
+    ]);
+
+    const includedChild = applyCreatePlanPathInclusion({
+      entries: planEntries,
+      excludedPaths: new Set(["project", "project/src", "project/src/index.ts"]),
+      path: "project/src/index.ts",
+      included: true,
+    });
+
+    expect(Array.from(includedChild)).toEqual([]);
+  });
+
+  it("filters create plans and keeps byte counts aligned with user exclusions", () => {
+    const filtered = filterCreatePlanByIncludedPaths(plan, new Set(["assets/logo.png"]));
+
+    expect(filtered.includedCount).toBe(4);
+    expect(filtered.excludedCount).toBe(1);
+    expect(filtered.totalBytes).toBe(13);
+    expect(filtered.excludedBytes).toBe(3);
+    expect(filtered.entries).not.toContain("assets/logo.png");
+    expect(filtered.excludedEntries).toEqual(["assets/logo.png"]);
   });
 });

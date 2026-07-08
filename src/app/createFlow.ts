@@ -1,4 +1,14 @@
-import type { CreateState, StartCreateRequest } from "../api/types";
+import type { CreatePlanEntryDto, CreatePlanResponse, CreateState, StartCreateRequest } from "../api/types";
+import {
+  getParentArchivePath,
+  isArchivePathInFolder,
+  normalizeArchivePath,
+} from "./archiveTree";
+import { getPathBasename } from "./formatting";
+import {
+  buildHierarchicalRows,
+  type HierarchicalTableRow,
+} from "./hierarchicalTable";
 
 export type CreateArchiveFormat = StartCreateRequest["format"];
 
@@ -49,6 +59,22 @@ export type CreateArchiveAvailabilityInput = {
 
 export type CreatePathHelpers = {
   nativeParentPath: (path: string) => string;
+};
+
+export type CreatePlanRow = HierarchicalTableRow<CreatePlanEntryDto>;
+
+export type CreatePlanInclusionState = "included" | "excluded" | "partial";
+
+export type BuildCreatePlanRowsOptions = {
+  entries: readonly CreatePlanEntryDto[];
+  currentFolder?: string | null;
+};
+
+export type ApplyCreatePlanPathInclusionInput = {
+  entries: readonly CreatePlanEntryDto[];
+  excludedPaths: ReadonlySet<string> | readonly string[];
+  path: string;
+  included: boolean;
 };
 
 type ParsedDirectoryPath = {
@@ -237,6 +263,155 @@ export function commonSourceParentDirectory(
   return formatParsedDirectoryPath(firstParent, commonSegments);
 }
 
+export function buildCreatePlanRows(options: BuildCreatePlanRowsOptions): CreatePlanRow[] {
+  const currentFolder = normalizeArchivePath(options.currentFolder);
+  const rows = buildHierarchicalRows({
+    entries: options.entries,
+    getPath: (entry) => entry.path,
+    isFolderEntry: (entry) => entry.kind === "directory",
+    currentFolder,
+    showParentRow: Boolean(currentFolder),
+  });
+
+  const parentRows = rows.filter((row) => row.rowType === "parent");
+  const sortedFolders = rows
+    .filter((row): row is Extract<CreatePlanRow, { rowType: "folder" }> => row.rowType === "folder")
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const sortedEntries = rows
+    .filter((row): row is Extract<CreatePlanRow, { rowType: "entry" }> => row.rowType === "entry")
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return [...parentRows, ...sortedFolders, ...sortedEntries];
+}
+
+export function createPlanEntriesForPath(
+  entries: readonly CreatePlanEntryDto[],
+  path: string,
+): CreatePlanEntryDto[] {
+  const normalizedPath = normalizeArchivePath(path);
+  if (!normalizedPath) {
+    return [...entries];
+  }
+  return entries.filter((entry) => isArchivePathInFolder(entry.path, normalizedPath));
+}
+
+export function isCreatePlanPathIncluded(
+  excludedPaths: ReadonlySet<string> | readonly string[],
+  path: string,
+): boolean {
+  return !normalizeExcludedCreatePlanPaths(excludedPaths).has(normalizeArchivePath(path));
+}
+
+export function createPlanRowInclusionState(
+  row: CreatePlanRow,
+  entries: readonly CreatePlanEntryDto[],
+  excludedPaths: ReadonlySet<string> | readonly string[],
+): CreatePlanInclusionState {
+  if (row.rowType === "parent") {
+    return "included";
+  }
+
+  const affectedEntries = createPlanEntriesForPath(entries, row.path);
+  if (affectedEntries.length === 0) {
+    return isCreatePlanPathIncluded(excludedPaths, row.path) ? "included" : "excluded";
+  }
+
+  const includedCount = affectedEntries.filter((entry) => isCreatePlanPathIncluded(excludedPaths, entry.path)).length;
+  if (includedCount === 0) {
+    return "excluded";
+  }
+  if (includedCount === affectedEntries.length) {
+    return "included";
+  }
+  return "partial";
+}
+
+export function applyCreatePlanPathInclusion(
+  input: ApplyCreatePlanPathInclusionInput,
+): Set<string> {
+  const excludedPaths = normalizeExcludedCreatePlanPaths(input.excludedPaths);
+  const affectedEntries = createPlanEntriesForPath(input.entries, input.path);
+  const paths = affectedEntries.length
+    ? affectedEntries.map((entry) => normalizeArchivePath(entry.path))
+    : [normalizeArchivePath(input.path)];
+
+  for (const entryPath of paths) {
+    if (!entryPath) {
+      continue;
+    }
+    if (input.included) {
+      excludedPaths.delete(entryPath);
+      let parent = getParentArchivePath(entryPath) ?? "";
+      while (parent) {
+        excludedPaths.delete(parent);
+        parent = getParentArchivePath(parent) ?? "";
+      }
+    } else {
+      excludedPaths.add(entryPath);
+    }
+  }
+
+  return excludedPaths;
+}
+
+export function filterCreatePlanByIncludedPaths(
+  plan: CreatePlanResponse,
+  excludedPaths: ReadonlySet<string> | readonly string[],
+): CreatePlanResponse {
+  const includedEntries = plan.planEntries.filter((entry) => isCreatePlanPathIncluded(excludedPaths, entry.path));
+  const excludedByUser = plan.planEntries.filter((entry) => !isCreatePlanPathIncluded(excludedPaths, entry.path));
+  const excludedBytes = excludedByUser.reduce((total, entry) => total + (entry.size ?? 0), 0);
+  return {
+    ...plan,
+    includedCount: includedEntries.length,
+    excludedCount: plan.excludedCount + excludedByUser.length,
+    totalBytes: includedEntries.reduce((total, entry) => total + (entry.size ?? 0), 0),
+    excludedBytes: plan.excludedBytes + excludedBytes,
+    entries: includedEntries.map((entry) => entry.path),
+    planEntries: includedEntries,
+    excludedEntries: [
+      ...plan.excludedEntries,
+      ...excludedByUser.map((entry) => entry.path),
+    ],
+  };
+}
+
+export function sourcePathForCreatePlanRow(
+  row: CreatePlanRow,
+  entries: readonly CreatePlanEntryDto[],
+  createSources: readonly string[],
+): string {
+  if (row.rowType === "parent") {
+    return "";
+  }
+
+  const sourceFromArchivePath = sourcePathForCreatePlanArchivePath(row.path, entries, createSources);
+  if (sourceFromArchivePath) {
+    return sourceFromArchivePath;
+  }
+
+  if (row.entry?.sourcePath) {
+    const sourceFromNativePath = sourcePathForNativePath(row.entry.sourcePath, createSources);
+    if (sourceFromNativePath) {
+      return sourceFromNativePath;
+    }
+  }
+
+  const descendantSources = new Set(
+    createPlanEntriesForPath(entries, row.path)
+      .map((entry) => sourcePathForNativePath(entry.sourcePath, createSources))
+      .filter(Boolean),
+  );
+  if (descendantSources.size === 1) {
+    return descendantSources.values().next().value ?? "";
+  }
+
+  return createSources.find((sourcePath) => getPathBasename(sourcePath) === row.path) ?? "";
+}
+
+export function isCreatePlanRevisionCurrent(resultRevision: number, currentRevision: number): boolean {
+  return resultRevision === currentRevision;
+}
+
 export function createStateAfterDestinationEdit(
   state: CreateState,
   hasCurrentPlan: boolean,
@@ -315,4 +490,47 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
         }
       : {}),
   };
+}
+
+function normalizeExcludedCreatePlanPaths(
+  excludedPaths: ReadonlySet<string> | readonly string[],
+): Set<string> {
+  return new Set(Array.from(excludedPaths).map((path) => normalizeArchivePath(path)).filter(Boolean));
+}
+
+function sourcePathForCreatePlanArchivePath(
+  archivePath: string,
+  entries: readonly CreatePlanEntryDto[],
+  createSources: readonly string[],
+): string {
+  const normalizedArchivePath = normalizeArchivePath(archivePath);
+  if (!normalizedArchivePath) {
+    return "";
+  }
+
+  const rootEntries = entries
+    .filter((entry) => createSources.includes(entry.sourcePath))
+    .sort((left, right) => normalizeArchivePath(right.path).length - normalizeArchivePath(left.path).length);
+  const rootEntry = rootEntries.find((entry) => isArchivePathInFolder(normalizedArchivePath, entry.path));
+  return rootEntry?.sourcePath ?? "";
+}
+
+function normalizedNativePathForCompare(path: string): string {
+  const normalized = path.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith("//")
+    ? normalized.toLowerCase()
+    : normalized;
+}
+
+function sourcePathForNativePath(nativePath: string, createSources: readonly string[]): string {
+  const normalizedNativePath = normalizedNativePathForCompare(nativePath);
+  if (!normalizedNativePath) {
+    return "";
+  }
+
+  return createSources.find((sourcePath) => {
+    const normalizedSourcePath = normalizedNativePathForCompare(sourcePath);
+    return normalizedNativePath === normalizedSourcePath
+      || normalizedNativePath.startsWith(`${normalizedSourcePath}/`);
+  }) ?? "";
 }

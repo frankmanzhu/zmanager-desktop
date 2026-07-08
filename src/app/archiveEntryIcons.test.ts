@@ -8,6 +8,10 @@ import {
   fileExtensionForIcon,
 } from "./archiveEntryIcons";
 import type { ArchiveTableRow } from "./archiveTable";
+import {
+  folderHierarchicalRowId,
+  parentHierarchicalRowId,
+} from "./hierarchicalTable";
 import { createTranslatorFromCatalog } from "./i18n/translator";
 import { zhCnMessages } from "./i18n/messages.zh-CN";
 
@@ -15,8 +19,10 @@ describe("archive entry icon descriptors", () => {
   it("uses folder artwork for navigable archive folders", () => {
     const row: ArchiveTableRow = {
       rowType: "folder",
+      rowId: folderHierarchicalRowId("docs"),
       path: "docs",
       name: "docs",
+      isSynthetic: false,
     };
 
     expect(archiveRowIconDescriptor(row)).toMatchObject({
@@ -28,8 +34,10 @@ describe("archive entry icon descriptors", () => {
   it("uses parent folder artwork for the parent navigation row", () => {
     const row: ArchiveTableRow = {
       rowType: "parent",
+      rowId: parentHierarchicalRowId("docs"),
       path: "",
       name: "..",
+      currentFolderPath: "docs",
     };
 
     expect(archiveRowIconDescriptor(row)).toMatchObject({

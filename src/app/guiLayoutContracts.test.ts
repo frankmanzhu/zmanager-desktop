@@ -147,7 +147,8 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('id="create-destination-recent"');
     expect(mainSource).toContain('id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources"');
     expect(mainSource).toContain('aria-describedby="create-plan-meta"');
-    expect(mainSource).toContain("createArchiveUnavailableReason({");
+    expect(mainSource).toContain("sourceSnapshot.options.readiness.unavailableReason");
+    expect(mainSource).not.toContain("createArchiveUnavailableReason({");
     expect(mainSource).toContain('class="plan-details"');
     expect(mainSource).toContain('class="compress-options-summary"');
     expect(mainSource).toContain('data-compress-source-path="${escapeHtml(sourcePath)}"');
@@ -155,7 +156,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('data-context-action="remove-source"');
     expect(mainSource).toContain('aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"');
     expect(mainSource).toContain("function removableSourcePathForCompressRow");
-    expect(mainSource).toContain("if (!rowPath || currentCompressFolder)");
+    expect(mainSource).toContain("if (!rowPath || snapshot.view.currentFolder)");
     expect(mainSource).toContain("normalizeEntryPath(rowPath) === getPathBasename(sourcePath)");
     expect(mainSource).toContain("removableSourcePath ? sourcePathsForCompressMenu(removableSourcePath) : []");
     expect(mainSource).toContain("function sourcePathsForCompressMenu");
@@ -184,7 +185,9 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
     expect(mainSource).toContain('class="advanced-options extract-password-options"');
     expect(mainSource).toContain('browsePasswordInput.type = "password";');
-    expect(mainSource).toContain("requestExtractPasswordInDialog(commandError.code);");
+    expect(mainSource).toContain('requestArchivePasswordRetry("extractArchive", commandError)');
+    expect(mainSource).toContain('requestArchivePasswordRetry("extractSelection", commandError)');
+    expect(mainSource).toContain("requestExtractPasswordInDialog(retry);");
     expect(mainSource).not.toContain('id="extract-restore-security"');
     expect(styles).toContain("#extract-start.primary-action");
     expect(styles).toContain(".task-dialog .dialog-section .form-grid > label");
@@ -281,7 +284,9 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain("function currentArchiveDisplayPath");
     expect(mainSource).toContain("pathFieldInput.readOnly = true;");
     expect(mainSource).toContain("pathCrumbsElement.hidden = false;");
-    expect(mainSource).toContain('aria-keyshortcuts="Enter Space">${escapeHtml(crumb.name)}</button>');
+    expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
+    expect(mainSource).toContain("const name = crumb.isRoot ? getArchiveName(currentArchivePath, APP_TITLE) : crumb.name;");
+    expect(mainSource).toContain('aria-keyshortcuts="Enter Space">${escapeHtml(name)}</button>');
     expect(mainSource).toContain('commandId === "open" && workspaceMode === "extract" && !hasArchive');
     expect(mainSource).toContain('commandId === "refresh"');
     expect(mainSource).toContain('searchInput.setAttribute("aria-disabled", String(searchInput.disabled));');

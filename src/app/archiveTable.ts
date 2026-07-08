@@ -7,6 +7,10 @@ import {
   getPathBasename,
   parseDateValue,
 } from "./formatting";
+import {
+  buildHierarchicalRows,
+  type HierarchicalTableRow,
+} from "./hierarchicalTable";
 
 export type ArchiveTableColumnId =
   | "name"
@@ -37,24 +41,7 @@ export type ArchiveTableColumn = {
   alwaysVisible?: boolean;
 };
 
-export type ArchiveTableRow =
-  | {
-      rowType: "parent";
-      path: string;
-      name: "..";
-    }
-  | {
-      rowType: "folder";
-      path: string;
-      name: string;
-      entry?: ArchiveEntryDto;
-    }
-  | {
-      rowType: "entry";
-      path: string;
-      name: string;
-      entry: ArchiveEntryDto;
-    };
+export type ArchiveTableRow = HierarchicalTableRow<ArchiveEntryDto>;
 
 export type ArchiveTableColumnWidthMap = Partial<Record<ArchiveTableColumnId, number>>;
 
@@ -62,6 +49,14 @@ export type ArchiveTableColumnSettings = {
   visibleColumnIds: ArchiveTableColumnId[];
   columnOrderIds: ArchiveTableColumnId[];
   columnWidths: ArchiveTableColumnWidthMap;
+};
+
+export type BuildArchiveBrowserRowsOptions = {
+  entries: readonly ArchiveEntryDto[];
+  currentFolder?: string | null;
+  searchQuery?: string | null;
+  flatView?: boolean;
+  showParentFolderItem?: boolean;
 };
 
 const EMPTY_VALUE = "";
@@ -288,6 +283,20 @@ export function formatArchiveTableValue(
 
 export function archiveTableColumnLabel(column: ArchiveTableColumn, i18n?: Translator): string {
   return i18n?.t(column.labelKey) ?? column.label;
+}
+
+export function buildArchiveBrowserRows(options: BuildArchiveBrowserRowsOptions): ArchiveTableRow[] {
+  const query = options.searchQuery?.trim().toLowerCase() ?? "";
+  return buildHierarchicalRows({
+    entries: options.entries,
+    getPath: (entry) => entry.path,
+    isFolderEntry: (entry) => entry.kind === "directory",
+    currentFolder: options.currentFolder,
+    mode: query ? "search" : options.flatView ? "flat" : "folder",
+    searchQuery: options.searchQuery,
+    showParentRow: options.showParentFolderItem,
+    matchesSearch: (_entry, path, normalizedQuery) => path.toLowerCase().includes(normalizedQuery),
+  });
 }
 
 export function compareOptionalNumbers(left?: number | null, right?: number | null): number {

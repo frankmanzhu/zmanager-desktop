@@ -47,7 +47,7 @@ It is a map, not proof that the terrain still looks the same.
 Last checked: 2026-07-08
 
 - `src/main.ts` is roughly 9,000 lines and still owns archive selection,
-  create-plan selection, create-plan revision state, job polling concurrency,
+  create-plan table selection, job polling concurrency,
   command wiring, path history storage, and several render/update paths.
 - Useful app seeds already exist in `src/app/archiveTable.ts`,
   `src/app/archiveTree.ts`, `src/app/selection.ts`, `src/app/createFlow.ts`,
@@ -83,11 +83,11 @@ Last checked: 2026-07-08
 
 | Slice | Name | Status | Primary Gate |
 | --- | --- | --- | --- |
-| 0 | Guardrails and characterization | Not started | Risky current behavior has tests or explicit smoke coverage. |
-| 1 | Stable hierarchical row identity | Not started | Archive and create visible row derivation share `src/app/hierarchicalTable.ts`. |
-| 2 | Table selection and focus | Not started | Archive/create table selection globals leave row event handlers. |
-| 3 | Archive workspace | Not started | Archive browsing state and request readiness move behind `archiveWorkspace.ts`. |
-| 4 | Create workspace | Not started | Create sources, plan revision, inclusion, options, and request construction move behind `createWorkspace.ts`. |
+| 0 | Guardrails and characterization | Complete | Risky current behavior has tests or explicit smoke coverage. |
+| 1 | Stable hierarchical row identity | Complete | Archive and create visible row derivation share `src/app/hierarchicalTable.ts`. |
+| 2 | Table selection and focus | Complete | Archive/create table selection globals leave row event handlers. |
+| 3 | Archive workspace | Complete | Archive browsing state and request readiness move behind `archiveWorkspace.ts`. |
+| 4 | Create workspace | Complete | Create sources, plan revision, inclusion, options, and request construction move behind `createWorkspace.ts`. |
 | 5 | Shell workspace and path histories | Not started | Mode, status, drop state, histories, preview cleanup metadata move out of `main.ts`. |
 | 6 | Command router | Not started | Toolbar, menus, shortcuts, context menus, details, tree, and row actions execute through one router. |
 | 7 | Jobs workspace | Not started | Job merge, retry, polling decisions, quick-action state move behind `jobsWorkspace.ts`. |
@@ -95,7 +95,7 @@ Last checked: 2026-07-08
 | 9 | UI view adapters | Not started | `main.ts` mostly binds intents and renders snapshots. |
 | 10 | Desktop adapters and controllers | Not started | Tauri imports are concentrated in `src/api` and `src/desktop`; controllers use injected adapters. |
 
-Active slice: 0
+Active slice: 5
 
 ## Slice 0: Guardrails And Characterization
 
@@ -113,20 +113,45 @@ Primary files:
 
 Checklist:
 
-- [ ] Identify current archive row behavior that must not regress: root rows,
+- [x] Identify current archive row behavior that must not regress: root rows,
   nested rows, parent row, synthetic folders, flat view, search view, duplicate
   basenames, selected-hidden-during-search behavior.
-- [ ] Identify current create-plan row behavior that must not regress: source
+- [x] Identify current create-plan row behavior that must not regress: source
   path mapping, folder navigation, included/excluded paths, partial folder
   state, empty/loading/error states.
-- [ ] Confirm command state coverage for browse, create, job, menu, details,
+- [x] Confirm command state coverage for browse, create, job, menu, details,
   and row-action representative commands.
-- [ ] Confirm create-plan revision tests cover stale plan results and
+- [x] Confirm create-plan revision tests cover stale plan results and
   destination edits.
-- [ ] Confirm job polling tests cover in-flight poll, poll-again request, retry
+- [x] Confirm job polling tests cover in-flight poll, poll-again request, retry
   context, and quick-action focused jobs.
-- [ ] Confirm drop-intent tests cover archive drop, create-source drop, and
+- [x] Confirm drop-intent tests cover archive drop, create-source drop, and
   ambiguous drop choices.
+
+Slice 0 coverage note:
+
+- `archiveTable.test.ts` covers root rows, nested rows, parent row visibility,
+  explicit and synthetic folders, flat view, search view, duplicate basenames,
+  and selected paths hidden by search.
+- `createFlow.test.ts` covers create-plan row derivation, source-path mapping,
+  folder navigation, included/excluded/partial inclusion state, filtered plan
+  counts, stale plan revision guards, and destination edit recovery.
+- `classicCommands.test.ts` covers representative browse, create, job, menu,
+  details, and row-action command state.
+- `jobs.test.ts` covers poll-in-flight/poll-again decisions, no-pollable-job
+  stop decisions, pollable job selection, password retry context, and focused
+  quick-action job completion decisions.
+- `dropIntent.test.ts` already covers archive drops, create-source drops, and
+  ambiguous mixed drops.
+
+Explicit manual smoke gaps retained for later UI/view slices:
+
+- Create-plan empty, loading, and error table render rows remain in `main.ts`
+  and should be smoke-tested through the UI until Slice 4/9 exposes a stable
+  workspace/view snapshot seam.
+- Polling timer scheduling and native quick-action window close/reveal effects
+  remain manual smoke coverage until Slice 7/10 moves timers and window effects
+  behind adapters.
 
 Completion gate:
 
@@ -162,17 +187,17 @@ Likely touched files:
 
 Checklist:
 
-- [ ] Define explicit row IDs so parent rows cannot collide with real archive
+- [x] Define explicit row IDs so parent rows cannot collide with real archive
   paths.
-- [ ] Support parent rows, folder rows, entry rows, synthetic folders, current
+- [x] Support parent rows, folder rows, entry rows, synthetic folders, current
   folder mode, flat mode, and search mode.
-- [ ] Keep archive-specific columns and sorting outside the shared table
+- [x] Keep archive-specific columns and sorting outside the shared table
   module.
-- [ ] Keep create source-path mapping and inclusion state outside the shared
+- [x] Keep create source-path mapping and inclusion state outside the shared
   table module.
-- [ ] Replace archive visible row derivation with the shared module while
+- [x] Replace archive visible row derivation with the shared module while
   preserving row order.
-- [ ] Replace create-plan visible row derivation with the shared module while
+- [x] Replace create-plan visible row derivation with the shared module while
   preserving row order.
 
 Completion gate:
@@ -202,13 +227,13 @@ Likely files:
 
 Checklist:
 
-- [ ] Move visible selectable path calculation into the table module.
-- [ ] Move click replacement, ctrl/meta toggle, shift range, select all,
+- [x] Move visible selectable path calculation into the table module.
+- [x] Move click replacement, ctrl/meta toggle, shift range, select all,
   invert visible, and visible cleanup into the table module.
-- [ ] Move focus movement and anchor updates into table intents.
-- [ ] Preserve hidden-selection behavior during search unless the product
+- [x] Move focus movement and anchor updates into table intents.
+- [x] Preserve hidden-selection behavior during search unless the product
   decision changes.
-- [ ] Keep marquee DOM hit testing and native drag gesture detection in UI code,
+- [x] Keep marquee DOM hit testing and native drag gesture detection in UI code,
   applying their results through table intents.
 
 Completion gate:
@@ -235,16 +260,17 @@ New files:
 
 Checklist:
 
-- [ ] Move archive load state, error state, current archive path, and listing
+- [x] Move archive load state, error state, current archive path, and listing
   metadata into the workspace.
-- [ ] Move folder navigation, breadcrumbs, search, flat view, expanded tree
-  folders, table sort snapshot, selection snapshot, and details model into the
-  workspace.
-- [ ] Move password-required retry state into the workspace without storing
+- [x] Move folder navigation, breadcrumbs/current folder normalization, search,
+  flat view, and expanded tree folders into the workspace.
+- [x] Move table sort snapshot, full selection snapshot, and details model into
+  the workspace.
+- [x] Move password-required retry state into the workspace without storing
   password values.
-- [ ] Add extract, test, preview, open-outside, and native-drag readiness
+- [x] Add extract, test, preview, open-outside, and native-drag readiness
   builders that return serializable requests or unavailable reasons.
-- [ ] Feed command state from an archive workspace snapshot.
+- [x] Feed command state from an archive workspace snapshot.
 
 Completion gate:
 
@@ -269,14 +295,14 @@ New files:
 
 Checklist:
 
-- [ ] Move source paths and source removal state.
-- [ ] Move plan request readiness, plan revision, stale-result guards, plan
+- [x] Move source paths and source removal state.
+- [x] Move plan request readiness, plan revision, stale-result guards, plan
   errors, and warnings.
-- [ ] Move included/excluded archive paths and partial folder inclusion state.
-- [ ] Move create-plan folder navigation and expanded tree folders.
-- [ ] Move destination suggestion/readiness, per-format defaults, compression
+- [x] Move included/excluded archive paths and partial folder inclusion state.
+- [x] Move create-plan folder navigation and expanded tree folders.
+- [x] Move destination suggestion/readiness, per-format defaults, compression
   options, TZAP options, password option visibility, and create readiness.
-- [ ] Build `StartCreateRequest` only through the workspace interface.
+- [x] Build `StartCreateRequest` only through the workspace interface.
 
 Completion gate:
 
@@ -307,7 +333,7 @@ Checklist:
 
 - [ ] Move active workspace mode and app-wide status.
 - [ ] Move drop overlay state and pending drop choices.
-- [ ] Move recent archive, extract destination, and create destination history
+- [x] Move recent archive, extract destination, and create destination history
   normalization into `pathHistory.ts`.
 - [ ] Move preview cleanup root/path metadata into shell state.
 - [ ] Move quick-action startup mode decisions into shell state.
@@ -540,3 +566,413 @@ Run this after slices that move visible workflow or command behavior:
 - No production code changed.
 - Next action: start Slice 0 by reviewing existing characterization tests and
   adding missing coverage before introducing `src/app/hierarchicalTable.ts`.
+
+### 2026-07-08 Slice 0 Worker 1
+
+- Read `AGENTS.md`, `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`, and this
+  execution plan; `git status --short` was clean before editing.
+- Added tiny behavior-preserving test seams in existing modules only:
+  `archiveTable.ts` for archive browser rows, `createFlow.ts` for create-plan
+  rows/inclusion/source mapping/revision guards, and `jobs.ts` for polling and
+  focused quick-action job decisions.
+- Added/confirmed Slice 0 characterization coverage in
+  `archiveTable.test.ts`, `createFlow.test.ts`, `classicCommands.test.ts`,
+  `jobs.test.ts`, and existing `dropIntent.test.ts`.
+- Validation run: `npm.cmd run test:frontend` passed with 25 files and 199
+  tests; `npm.cmd run build` passed. Direct `npm run test:frontend` was blocked
+  by the local PowerShell script execution policy before rerunning the same
+  package script via `npm.cmd`.
+- Manual smoke gaps: create-plan empty/loading/error DOM rows, polling timer
+  scheduling, and native quick-action window close/reveal effects remain manual
+  until later workspace/view/adapter slices.
+- Next smallest safe action: start Slice 1 by introducing
+  `src/app/hierarchicalTable.ts` for shared stable row identity, using the
+  Slice 0 row characterization as the regression net.
+
+### 2026-07-08 Slice 1 Worker 2
+
+- Read `AGENTS.md`, `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`, and this
+  execution plan; `git status --short` showed the accepted uncommitted Slice 0
+  changes in `docs/FRONTEND_ARCHITECTURE_EXECUTION_PLAN.md`, `src/main.ts`,
+  and the existing app/test modules.
+- Added `src/app/hierarchicalTable.ts` and
+  `src/app/hierarchicalTable.test.ts` for shared row IDs and row derivation:
+  parent, folder, entry, synthetic folder, current-folder, flat, and search
+  rows.
+- Updated `src/app/archiveTable.ts` so archive browser rows call the shared
+  hierarchical table builder while archive columns, formatting, and sorting
+  remain archive-owned.
+- Updated `src/app/createFlow.ts` so create-plan rows call the shared builder
+  while create source-path mapping, inclusion state, and create-specific row
+  sorting remain create-owned.
+- Updated stale row fixtures in `src/app/archiveEntryIcons.test.ts` and
+  `src/app/archiveTable.test.ts`, and reused the real parent create row in
+  `src/main.ts` for parent-folder icon rendering.
+- Validation run: `npm.cmd run test:frontend` passed with 26 files and 205
+  tests; `npm.cmd run build` passed.
+- Next smallest safe action: start Slice 2 by moving visible selectable path
+  calculation and selection/focus intents into `src/app/hierarchicalTable.ts`
+  without changing DOM event decoding.
+
+### 2026-07-08 Slice 2 Worker 3
+
+- Read `AGENTS.md`, `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`, and this
+  execution plan; `git status --short` showed accepted uncommitted Slice 0/1
+  changes only.
+- Deepened `src/app/hierarchicalTable.ts` with DOM-independent visible
+  selectable path calculation, row click/range/toggle selection, select all,
+  invert visible, visible cleanup, focus movement, checkbox set, ensure
+  selected, clear, and marquee result helpers.
+- Kept marquee rectangle hit testing and native drag gesture detection in
+  `src/main.ts`; their decoded paths now apply through hierarchical table
+  helpers.
+- Updated archive and create table adapters in `src/main.ts` so row event
+  handlers no longer directly assign `selectedEntries`, `selectedCompressRows`,
+  `focusedEntryPath`, `focusedCompressRowPath`, `selectionAnchorPath`, or
+  `compressSelectionAnchorPath`; temporary centralized adapter functions still
+  assign those globals until workspace slices exist.
+- Preserved archive hidden-selection behavior during search/filtering. Create
+  plan visible cleanup continues to drop paths that are no longer visible.
+- Validation run: `npm.cmd run test:frontend` passed with 26 files and 217
+  tests; `npm.cmd run build` passed.
+- Next smallest safe action: start Slice 3 by introducing
+  `src/app/workspaces/archiveWorkspace.ts` around archive browsing state and
+  request readiness without moving Tauri calls into app modules.
+
+### 2026-07-08 Slice 3 Worker 4
+
+- Read `AGENTS.md`, `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`, and this
+  execution plan; `git status --short` showed accepted uncommitted Slice 0/1/2
+  changes before editing.
+- Added `src/app/workspaces/archiveWorkspace.ts` and
+  `src/app/workspaces/archiveWorkspace.test.ts` for deterministic archive
+  load/listing state: current archive path, browse state, language-neutral
+  status payloads, command error payloads, entries, entry count, total size,
+  listing revision, reset behavior, and password-free snapshots.
+- Integrated the workspace into the existing `src/main.ts` load/listing seam:
+  `loadArchive` now begins/fails loads through the workspace, and
+  `loadArchiveListingIntoState` applies the workspace's normalized listing and
+  preserved-state snapshot before existing render code runs. Existing Tauri
+  calls, DOM rendering, folder navigation handlers, search handlers, details,
+  and request builders remain in `main.ts` for later Slice 3 tasks.
+- Validation run: `npm.cmd run test:frontend` passed with 27 files and 226
+  tests; `npm.cmd run build` passed.
+- Next smallest safe action: move folder navigation plus breadcrumbs/current
+  folder history behind `archiveWorkspace.ts`, preserving the existing
+  `main.ts` render functions and avoiding request-builder migration.
+
+### 2026-07-08 Slice 3 Worker 5
+
+- Read `AGENTS.md`, `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`, and this
+  execution plan; `git status --short` showed accepted uncommitted Slice 0/1/2
+  plus partial Slice 3 changes before editing.
+- Extended `src/app/workspaces/archiveWorkspace.ts` with deterministic
+  navigation and view-state intents for current folder, breadcrumbs, navigation
+  history/back/up, search query, flat view, expanded archive tree folders, and a
+  small selection mirror used only to keep the existing compatibility globals in
+  sync.
+- Updated `src/main.ts` so archive navigation, search input, clear search,
+  flat-view toggles, preference-applied flat view, load-state preservation, and
+  archive tree expand/collapse flow through the workspace snapshot before
+  syncing back to the existing render globals. DOM rendering and event decoding
+  remain in `main.ts`.
+- Updated `src/app/workspaces/archiveWorkspace.test.ts` for navigation history,
+  current-folder normalization, breadcrumbs, search clearing/preservation,
+  flat-view state, expanded tree folders, and preserved load view state. Updated
+  `src/app/guiLayoutContracts.test.ts` for workspace-owned breadcrumb paths
+  with UI-owned root archive labeling.
+- Validation run: `npm.cmd run test:frontend` passed with 27 files and 233
+  tests; `npm.cmd run build` passed.
+- Slice 3 remains active/partial. Done in this session: folder navigation,
+  breadcrumbs/current folder normalization, search query, flat view, and
+  expanded tree folders. Still pending: password retry state, table sort
+  snapshot, full selection snapshot/details model, request readiness builders,
+  and command state from the workspace snapshot.
+- Next smallest safe action: move password-required listing retry state into
+  `archiveWorkspace.ts` without storing password values, leaving extract/test/
+  preview/native-drag readiness builders for a later Slice 3 subtask.
+
+### 2026-07-08 Slice 3 Worker 6
+
+- Read the accepted partial Slice 3 workspace and current `src/main.ts` wiring
+  before editing; adapted to the existing compatibility mirrors rather than
+  removing request-builder globals that later Slice 3 work still needs.
+- Extended `src/app/workspaces/archiveWorkspace.ts` so the archive workspace now
+  owns table sort state, row-option-aware sorted visible rows, immutable
+  selected/focused/anchor snapshots, visible selected row and entry facts,
+  hidden-selection-during-search facts, focused-entry facts, and a
+  language-neutral details model for no archive, hidden selection, archive
+  summary, synthetic folder, single entry, and multiple visible selection.
+- Updated `src/main.ts` to seed sort/row preferences into the workspace, persist
+  sort from the workspace snapshot, render table rows and the details pane from
+  workspace facts, and sync the remaining archive compatibility mirrors from
+  workspace snapshots.
+- Added archive workspace coverage for sort toggles, row derivation across
+  folder/search/flat/parent-row modes, immutable selection snapshots, hidden
+  search selections, and each details-model branch.
+- Validation run: `npm.cmd run test:frontend` passed with 27 files and 237
+  tests; `npm.cmd run build` passed.
+- Slice 3 remains active/partial. Still pending: password retry state, extract/
+  test/preview/open-outside/native-drag readiness builders, and command state
+  fed entirely from the workspace snapshot.
+- Next smallest safe action: add extract/test/preview/open-outside/native-drag
+  readiness builders that return serializable requests or unavailable reasons.
+
+### 2026-07-08 Slice 3 Worker 7
+
+- Added password retry decision state to `src/app/workspaces/archiveWorkspace.ts`
+  for current archive operations without storing password values. The retry
+  snapshot records only operation, archive path, password error code, prompt
+  message key, and attempt count.
+- Wired listing/loading, test archive, extract archive/selection dialog retry,
+  preview/open-outside, and native drag-out in `src/main.ts` through the archive
+  workspace retry model. Prompt text is still rendered at the UI seam, and
+  passwords still flow directly from prompt/dialog input into command DTOs.
+- Preserved out-of-scope job password retry and quick-action extract/create
+  prompts for later slices.
+- Added archive workspace tests for required vs invalid prompts, retry attempt
+  increment/replacement behavior, non-password errors, clearing on success/
+  failure/explicit clear/reset, and password-free serializable snapshots.
+- Updated the extract dialog GUI contract test to lock in the workspace-routed
+  retry prompt behavior.
+- Validation run: `npm.cmd run test:frontend` passed with 27 files and 242
+  tests; `npm.cmd run build` passed.
+- Slice 3 remains active/partial. Still pending: extract/test/preview/open-
+  outside/native-drag readiness builders and command state fed entirely from the
+  workspace snapshot.
+- Next smallest safe action: add archive workspace readiness builders for
+  extract/test/preview/open-outside/native-drag requests.
+
+### 2026-07-08 Slice 3 Worker 8
+
+- Added archive workspace readiness builders for extract, test, preview/open-
+  outside, and native drag-out requests. Builders return serializable API DTOs
+  or language-neutral unavailable reasons and keep Tauri, DOM, storage, i18n,
+  and command execution outside `src/app/workspaces/archiveWorkspace.ts`.
+- Moved selected extraction path derivation into the workspace, including
+  folder expansion to file descendants, synthetic folder descendants, and
+  explicit empty-folder fallback. `src/main.ts` now asks the workspace for
+  extract reference paths before applying the DOM-derived strip options.
+- Moved native drag path and strip-depth derivation into the workspace. Dragging
+  a selected row uses the selected rows, dragging an unselected row uses only
+  that row, synthetic folder rows are supported, and strip depth is zero for
+  root, search, and flat views.
+- Wired `src/main.ts` start-extract, test-archive, preview/open-outside, and
+  native drag-out call sites through the workspace builders while leaving
+  dialogs, password prompts, command calls, preview cleanup, and destination
+  history at the UI/runtime seam.
+- Added archive workspace tests for extract archive/selection requests, test
+  archive requests, preview/open-outside single-file readiness, native drag
+  selected vs unselected row behavior, synthetic folder drag requests, strip
+  depth, unavailable reasons, and password passthrough without snapshot storage.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 27 files and 248 tests;
+  `npm.cmd run build` passed.
+- Slice 3 remains active/partial. Still pending: command state fed entirely from
+  the archive workspace snapshot.
+- Next smallest safe action: feed toolbar/menu/shortcut command enablement from
+  the archive workspace snapshot instead of compatibility mirrors.
+
+### 2026-07-08 Slice 3 Worker 9
+
+- Added an archive command snapshot to `src/app/workspaces/archiveWorkspace.ts`
+  with the archive-derived inputs consumed by `selectCommandState`: browse
+  state, archive presence, focused row, navigation readiness, open-inside
+  readiness, selection counts, visible selectable count, and UI readiness facts
+  for listing/search/back navigation.
+- Updated `src/main.ts` so command enablement, search controls, select-all,
+  refresh, test, and up/back navigation buttons read from the workspace command
+  snapshot plus external command inputs such as active-job state. Command
+  enablement rules and disabled reason strings remain owned by
+  `src/app/classicCommands.ts`.
+- Added archive workspace coverage for command context/readiness in idle,
+  loading, loaded root, loaded nested folder, single selected directory, single
+  selected file, multiple selection, and empty archive states, plus a selector
+  feed test that uses the workspace snapshot with `selectCommandState`.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 27 files and 250 tests;
+  `npm.cmd run build` passed.
+- Slice 3 is complete. Archive workflow ownership now lives behind the
+  workspace snapshot; the remaining `main.ts` archive globals are compatibility
+  mirrors for render and DOM seams to remove in later UI/controller slices.
+- Next smallest safe action: start Slice 4 by introducing
+  `src/app/workspaces/createWorkspace.ts` around create-source and plan state.
+
+### 2026-07-08 Slice 4 Worker 10
+
+- Added `src/app/workspaces/createWorkspace.ts` as a deterministic create-source
+  workspace. It owns source path normalization, trimming, de-duplication,
+  replacement, removal, clearing, reset no-ops, immutable source snapshots, and
+  source-count/readiness facts.
+- Wired `src/main.ts` source add, remove, clear, quick-create review assignment,
+  source-list rendering, plan preview/request inputs, create request inputs, and
+  destination auto-suggestion through the create workspace snapshot. The
+  temporary `createSources` variable is now only a compatibility mirror synced
+  from the workspace.
+- Preserved existing UI/runtime side effects in `main.ts`: source removal and
+  clearing still reset excluded paths, compress selection, current plan, empty
+  folder state, rendering, and queued plan runs; adding the first source still
+  suggests a destination at the UI seam.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for add/de-dupe/
+  trim/order, source replacement, removal, clearing, reset/no-op behavior, and
+  immutable snapshots.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 28 files and 262 tests;
+  `npm.cmd run build` passed.
+- Slice 4 remains active/partial. Still pending: plan readiness/revision/stale
+  guards, included/excluded archive paths, create-plan folder navigation/tree
+  expansion, destination/options/readiness, and `StartCreateRequest`
+  construction through the workspace interface.
+
+### 2026-07-08 Slice 4 Worker 11
+
+- Extended `src/app/workspaces/createWorkspace.ts` so the create workspace now
+  owns plan lifecycle state: idle/loading/ready/error, current immutable plan,
+  language-neutral status payloads, warning snapshots, revision issuance, plan
+  request readiness, and stale result/error acceptance guards.
+- Updated `src/main.ts` so `queuePlanRun`, `runPlan`, source mutations,
+  quick-create review, destination edit recovery, and create validation/start
+  errors route through the workspace. `main.ts` still owns debounce timers, DOM
+  option reads, browser preview fixtures, command execution, rendering, and
+  localized text.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for no-source
+  readiness, revision/loading state, request construction from source plus
+  option input, current result/error acceptance, stale result/error ignoring,
+  source-change plan reset, warning exposure, destination-edit recovery, and
+  immutable plan snapshots.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 28 files and 271 tests;
+  `npm.cmd run build` passed.
+- Slice 4 remains active/partial. Still pending: included/excluded archive
+  paths and partial folder inclusion state, create-plan folder navigation/tree
+  expansion, destination/options/readiness, and `StartCreateRequest`
+  construction through the workspace interface.
+
+### 2026-07-08 Slice 4 Worker 12
+
+- Extended `src/app/workspaces/createWorkspace.ts` so the create workspace now
+  owns excluded archive paths, include/exclude path mutations, include-all and
+  exclude-all mutations, current-folder inclusion toggles, row/path inclusion
+  state, current-folder include-all control facts, filtered plan snapshots, and
+  included entry snapshots.
+- Accepted plan results now prune excluded archive paths to the new plan, stale
+  plan results leave inclusion untouched, and source changes clear inclusion
+  state along with resetting the plan lifecycle.
+- Updated `src/main.ts` so create summaries, include-all controls, row badges and
+  checkboxes, context-menu include/exclude actions, plan summaries, and existing
+  `StartCreateRequest` construction read inclusion facts from the workspace.
+  Rendering, localization, DOM event decoding, and command execution remain in
+  `main.ts`.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for single-file
+  include/exclude, folder excluded/partial/included transitions, include-all and
+  exclude-all, current-folder include-all facts, filtered plan counts/bytes,
+  pruning on accepted plan results, stale result protection, source-change
+  clearing, and immutable excluded-path snapshots.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 28 files and 280 tests;
+  `npm.cmd run build` passed.
+- Slice 4 remains active/partial. Still pending: create-plan folder
+  navigation/tree expansion, destination/options/readiness, and
+  `StartCreateRequest` construction through the workspace interface.
+
+### 2026-07-08 Slice 4 Worker 13
+
+- Extended `src/app/workspaces/createWorkspace.ts` so the create workspace now
+  owns create-plan folder navigation, expanded tree folder state, visible rows,
+  and tree folder snapshots. Navigation normalizes and rejects invalid folders,
+  keeps the active branch expanded, resets on source/plan loss, and reconciles
+  current folders against accepted plan results.
+- Updated `src/main.ts` to consume the create workspace view snapshot for
+  visible create-plan rows and tree rendering, and to call workspace navigation
+  and tree-toggle methods instead of mutating create navigation globals.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for valid and
+  invalid navigation, root and nested visible rows, tree folder snapshots,
+  active-branch expansion protection, reset behavior, and preserving/resetting
+  current folders across accepted plan results.
+- Validation run: `git diff --check` passed with line-ending warnings only;
+  `npm.cmd run test:frontend` passed with 28 files and 286 tests;
+  `npm.cmd run build` passed.
+- Slice 4 remains active/partial. Still pending: destination/options/readiness
+  and `StartCreateRequest` construction through the workspace interface.
+
+### 2026-07-08 Slice 4 Worker 14
+
+- Extended `src/app/workspaces/createWorkspace.ts` so the create workspace owns
+  create destination path state, format/default option state, compression and
+  volume option normalization, TZAP recovery facts, password option
+  visibility/disabled facts, and language-neutral create readiness including
+  submission-in-flight state.
+- Updated `src/main.ts` so create form controls are rendered from the workspace
+  option snapshot and DOM events call workspace methods for defaults, format
+  changes, destination edits/suggestions, option updates, and create readiness.
+  Password text remains DOM-only; `StartCreateRequest` is still constructed in
+  `runCreate` for the next checklist item.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for per-format
+  defaults, destination suggestions, extension changes, password/TZAP
+  visibility, numeric normalization, readiness transitions, submission state,
+  destination-edit recovery, and snapshot password exclusion.
+- Validation run: targeted `npm.cmd run test:frontend --
+  src/app/workspaces/createWorkspace.test.ts` passed with 42 tests;
+  `npm.cmd run test:frontend` passed with 28 files and 293 tests;
+  `npm.cmd run build` passed; `git diff --check` passed with line-ending
+  warnings only.
+- Slice 4 remains active/partial. Still pending: `StartCreateRequest`
+  construction through the workspace interface.
+
+### 2026-07-08 Slice 4 Worker 15
+
+- Added `StartCreateRequest` construction to
+  `src/app/workspaces/createWorkspace.ts`, including destination extension,
+  state/readiness validation, language-neutral unavailable reasons, workspace
+  inclusion exclusions, password support filtering, TZAP defaults, and a
+  stateless quick-create helper.
+- Updated `src/main.ts` so normal create and quick create no longer call the
+  lower-level `buildStartCreateRequest` helper directly; they now use the
+  create workspace interface while preserving job startup, destination history,
+  progress/output actions, and password-field clearing side effects.
+- Added `src/app/workspaces/createWorkspace.test.ts` coverage for successful
+  start request building, destination extension, excluded paths, unsupported
+  password formats, password mismatch and unavailable reasons, password-free
+  snapshots, and the quick-create helper.
+- Validation run: targeted `npm.cmd run test:frontend --
+  src/app/workspaces/createWorkspace.test.ts` passed with 50 tests;
+  `npm.cmd run test:frontend` passed with 28 files and 301 tests;
+  `npm.cmd run build` passed; `git diff --check` passed with line-ending
+  warnings only.
+- Slice 4 is complete and review-ready. Next smallest safe action: begin Slice
+  5 by moving shell workspace or path-history state behind the planned app
+  modules.
+
+### 2026-07-08 Slice 4 Completion Gate Worker 16
+
+- Removed the remaining create workflow compatibility mirror globals from
+  `src/main.ts`: sources, plan state/current/error, current create folder, and
+  plan revision now stay behind the create workspace snapshot.
+- Updated create render/action code to derive plan status, current folder,
+  inclusion controls, table/tree loading text, source-path removal, and
+  quick-create review state from `createWorkspace` snapshots directly.
+- Updated the GUI layout contract assertion that protected root-only source
+  removal so it checks the snapshot-backed current-folder guard.
+- Validation run: `npm.cmd run test:frontend` passed with 28 files and 301
+  tests; `npm.cmd run build` passed.
+- Slice 4 completion gate is now met, so Slice 4 remains complete and active
+  work can continue in Slice 5.
+
+### 2026-07-08 Slice 5 Worker 17
+
+- Added `src/app/pathHistory.ts` for pure path-history normalization,
+  record-prepending, duplicate removal, and max-size capping for extract
+  destinations, create destinations, and recent archives.
+- Updated `src/main.ts` so storage load/save and DOM rendering remain in the
+  composition root, while loaded lists are normalized through `pathHistory.ts`
+  and set/record operations are capped through named helpers.
+- Added `src/app/pathHistory.test.ts` coverage for blank filtering, trimming,
+  first-occurrence dedupe, duplicate records moving to the front, blank record
+  ignores, and the existing 10/10/8 max sizes.
+- Validation run: targeted `npm.cmd run test:frontend --
+  src/app/pathHistory.test.ts` passed with 7 tests; `npm.cmd run
+  test:frontend` passed with 29 files and 308 tests; `npm.cmd run build`
+  passed; `git diff --check` passed with line-ending warnings only.
+- Slice 5 remains active/partial. Still pending: shell workspace state,
+  preview cleanup metadata, quick-action startup decisions, storage injection,
+  and eventually moving the path-history arrays themselves out of `main.ts`.

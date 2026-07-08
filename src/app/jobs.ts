@@ -26,12 +26,46 @@ export type JobRetryContext =
       entryPaths?: string[];
     };
 
+export type JobPollingDecision =
+  | {
+      action: "requestAgain";
+    }
+  | {
+      action: "stop";
+    }
+  | {
+      action: "poll";
+      jobIds: string[];
+    };
+
+export type QuickActionJobCompletionDecision =
+  | {
+      action: "wait";
+    }
+  | {
+      action: "needsAttention";
+    }
+  | {
+      action: "completed";
+    };
+
+export type SelectQuickActionJobCompletionDecisionInput = {
+  canEvaluate: boolean;
+  autoClosePending: boolean;
+  trackedJobIds: readonly string[];
+  jobsById: ReadonlyMap<string, JobState>;
+};
+
 export function isPasswordErrorCode(code?: string | null): boolean {
   return code === COMMAND_PASSWORD_REQUIRED || code === COMMAND_INVALID_PASSWORD;
 }
 
 export function isTerminalJobStatus(status: JobStatus): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+export function isLiveJobStatus(status: JobStatus): boolean {
+  return status === "queued" || status === "running" || status === "paused";
 }
 
 export function isCreateJobKind(kind: JobKind): boolean {
@@ -84,6 +118,52 @@ export function mergePolledJobState(
     },
     events: [...(previous?.events ?? []), ...snapshot.events],
   };
+}
+
+export function selectJobPollingDecision(
+  jobs: Iterable<JobState>,
+  pollInFlight: boolean,
+): JobPollingDecision {
+  if (pollInFlight) {
+    return { action: "requestAgain" };
+  }
+
+  const jobIds = Array.from(jobs)
+    .filter((state) => !state.snapshot.canDismiss)
+    .map((state) => state.snapshot.jobId);
+
+  return jobIds.length ? { action: "poll", jobIds } : { action: "stop" };
+}
+
+export function selectQuickActionJobCompletionDecision(
+  input: SelectQuickActionJobCompletionDecisionInput,
+): QuickActionJobCompletionDecision {
+  if (
+    !input.canEvaluate ||
+    input.autoClosePending ||
+    input.trackedJobIds.length === 0
+  ) {
+    return { action: "wait" };
+  }
+
+  const trackedJobs: JobState[] = [];
+  for (const jobId of input.trackedJobIds) {
+    const job = input.jobsById.get(jobId);
+    if (!job) {
+      return { action: "wait" };
+    }
+    trackedJobs.push(job);
+  }
+
+  if (!trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status))) {
+    return { action: "wait" };
+  }
+
+  if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
+    return { action: "needsAttention" };
+  }
+
+  return { action: "completed" };
 }
 
 export type JobProgressSnapshot = {
