@@ -32,6 +32,7 @@ export const TZAP_RECOVERY_PERCENTAGE_MAX = 100;
 
 export type CreateArchiveUnavailableReason =
   | "needsSources"
+  | "needsIncludedEntries"
   | "needsDestination"
   | "planning"
   | "needsPlan"
@@ -39,6 +40,7 @@ export type CreateArchiveUnavailableReason =
 
 export type CreateArchiveAvailabilityInput = {
   sourceCount: number;
+  includedEntryCount?: number;
   destinationPath: string;
   planState: CreateState;
   hasPlan: boolean;
@@ -251,6 +253,9 @@ export function createArchiveUnavailableReason(
   if (input.sourceCount === 0) {
     return "needsSources";
   }
+  if (input.includedEntryCount !== undefined && input.includedEntryCount === 0) {
+    return "needsIncludedEntries";
+  }
   if (input.destinationPath.trim().length === 0) {
     return "needsDestination";
   }
@@ -268,6 +273,11 @@ export type BuildStartCreateRequestInput = {
   destinationPath: string;
   format: CreateArchiveFormat;
   cleanSource: boolean;
+  excludeNames?: string[];
+  excludeArchivePaths?: string[];
+  includeArchivePaths?: string[];
+  respectGitignore?: boolean;
+  followSymlinks?: boolean;
   replaceExisting: boolean;
   destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
   preserveMetadata: boolean;
@@ -285,6 +295,11 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     destinationPath: withCreateArchiveExtension(input.destinationPath, input.format),
     format: input.format,
     cleanSource: input.cleanSource,
+    ...(input.excludeNames?.length ? { excludeNames: [...input.excludeNames] } : {}),
+    ...(input.excludeArchivePaths?.length ? { excludeArchivePaths: [...input.excludeArchivePaths] } : {}),
+    ...(input.includeArchivePaths?.length ? { includeArchivePaths: [...input.includeArchivePaths] } : {}),
+    ...(input.respectGitignore !== undefined ? { respectGitignore: input.respectGitignore } : {}),
+    ...(input.followSymlinks !== undefined ? { followSymlinks: input.followSymlinks } : {}),
     replaceExisting: input.replaceExisting,
     ...(input.destinationCollisionStrategy
       ? { destinationCollisionStrategy: input.destinationCollisionStrategy }

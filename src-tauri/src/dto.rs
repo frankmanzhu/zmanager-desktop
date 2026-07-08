@@ -224,6 +224,13 @@ pub struct StartCreateRequest {
     pub format: ArchiveFormatDto,
     #[serde(default)]
     pub clean_source: bool,
+    pub exclude_names: Option<Vec<String>>,
+    pub exclude_archive_paths: Option<Vec<String>>,
+    pub include_archive_paths: Option<Vec<String>>,
+    #[serde(default)]
+    pub respect_gitignore: bool,
+    #[serde(default)]
+    pub follow_symlinks: bool,
     #[serde(default)]
     pub replace_existing: bool,
     #[serde(default)]

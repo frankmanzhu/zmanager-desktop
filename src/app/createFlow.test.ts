@@ -74,6 +74,15 @@ describe("create flow helpers", () => {
 
     expect(createArchiveUnavailableReason({
       sourceCount: 1,
+      includedEntryCount: 0,
+      destinationPath: "C:/tmp/output.zip",
+      planState: "ready",
+      hasPlan: true,
+      submissionInFlight: false,
+    })).toBe("needsIncludedEntries");
+
+    expect(createArchiveUnavailableReason({
+      sourceCount: 1,
       destinationPath: "",
       planState: "ready",
       hasPlan: true,
@@ -135,6 +144,28 @@ describe("create flow helpers", () => {
       cleanSource: false,
       replaceExisting: true,
       preserveMetadata: false,
+    });
+  });
+
+  it("passes selective archive path filters into create requests", () => {
+    const request = buildStartCreateRequest({
+      sources: ["C:/work/project"],
+      destinationPath: "C:/tmp/output",
+      format: "zip",
+      cleanSource: false,
+      excludeArchivePaths: ["project/debug.log", "project/node_modules"],
+      includeArchivePaths: ["project/node_modules/kept/index.js"],
+      respectGitignore: true,
+      followSymlinks: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+    });
+
+    expect(request).toMatchObject({
+      excludeArchivePaths: ["project/debug.log", "project/node_modules"],
+      includeArchivePaths: ["project/node_modules/kept/index.js"],
+      respectGitignore: true,
+      followSymlinks: false,
     });
   });
 

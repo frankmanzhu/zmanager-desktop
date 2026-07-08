@@ -156,6 +156,11 @@ export type StartCreateRequest = {
   destinationPath: string;
   format: "zip" | "tarZst" | "tzap" | "sevenZ";
   cleanSource: boolean;
+  excludeNames?: string[];
+  excludeArchivePaths?: string[];
+  includeArchivePaths?: string[];
+  respectGitignore?: boolean;
+  followSymlinks?: boolean;
   replaceExisting: boolean;
   destinationCollisionStrategy?: "refuse" | "rename";
   password?: string;

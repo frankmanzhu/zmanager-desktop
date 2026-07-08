@@ -694,6 +694,8 @@ appRoot.innerHTML = `
           </label>
           <div class="compress-create-actions">
             <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
+            <button id="include-all-sources" class="quiet-action" type="button" data-i18n-text="compress.includeAll" hidden>Include All</button>
+            <button id="exclude-all-sources" class="quiet-action" type="button" data-i18n-text="compress.excludeAll" hidden>Exclude All</button>
             <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources" hidden>Clear All Sources</button>
             <span class="compress-action-divider" aria-hidden="true"></span>
             <button id="start-create" class="secondary-action" type="button" data-i18n-text="compress.createArchive" aria-describedby="create-plan-meta" disabled>Create Archive</button>
@@ -738,6 +740,7 @@ appRoot.innerHTML = `
             <table id="compress-source-table">
               <thead>
                 <tr>
+                  <th class="inclusion-column" data-i18n-text="table.include">Include</th>
                   <th data-i18n-text="table.name">Name</th>
                   <th data-i18n-text="table.size">Size</th>
                   <th data-i18n-text="table.modified">Modified</th>
@@ -746,7 +749,7 @@ appRoot.innerHTML = `
               </thead>
               <tbody id="compress-source-body">
                 <tr>
-                  <td colspan="4" class="compress-empty-cell">
+                  <td colspan="5" class="compress-empty-cell">
                     <div class="compress-empty-state">
                       <strong data-i18n-text="compress.emptyTable">Drop files or folders to build a new archive.</strong>
                       <span data-i18n-text="compress.dragSourcesHint">Drag files or folders anywhere in this window, or use Add Sources.</span>
@@ -1336,6 +1339,8 @@ const extractPathModeSelect = document.querySelector<HTMLSelectElement>("#extrac
 const extractDeduplicateRootCheckbox = document.querySelector<HTMLInputElement>("#extract-deduplicate-root")!;
 
 const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
+const includeAllSourcesButton = document.querySelector<HTMLButtonElement>("#include-all-sources")!;
+const excludeAllSourcesButton = document.querySelector<HTMLButtonElement>("#exclude-all-sources")!;
 const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
 const sourceListElement = document.querySelector<HTMLUListElement>("#source-list")!;
 const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format")!;
@@ -1509,6 +1514,7 @@ let createSources: string[] = [];
 let createPlanState: CreateState = "idle";
 let currentPlan: CreatePlanResponse | null = null;
 let currentCompressFolder = "";
+let excludedCreateArchivePaths = new Set<string>();
 const expandedCompressTreeFolders = new Set<string>([archiveTreeRootPath]);
 let currentPlanError = "";
 let planDebounce: number | null = null;
@@ -3248,9 +3254,10 @@ function renderWorkspaceMode() {
   if (isCompress) {
     workspaceTitleElement.textContent = i18n.t("compress.tableTitle");
     metaElement.textContent = i18n.t("compress.tableDescription");
+    const includedCount = currentPlan ? includedCreatePlanEntries().length : createSources.length;
     statusSelectionCountElement.textContent = i18n.t("compress.sourceStaged", {
-      count: createSources.length,
-      sourceLabel: i18n.t(createSources.length === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+      count: includedCount,
+      sourceLabel: i18n.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
     });
     statusSelectionSizeElement.textContent = "";
     statusFocusedSizeElement.textContent = "";
@@ -3868,6 +3875,8 @@ function createUnavailableReasonText(reason: CreateArchiveUnavailableReason): st
   switch (reason) {
     case "needsSources":
       return message("create.status.needsSources");
+    case "needsIncludedEntries":
+      return message("create.status.needsIncludedEntries");
     case "needsDestination":
       return message("create.status.needsDestination");
     case "planning":
@@ -3881,9 +3890,10 @@ function createUnavailableReasonText(reason: CreateArchiveUnavailableReason): st
 
 function createReadyStatusText(): string {
   const includedCount = currentPlan?.includedCount ?? 0;
-  const totalBytes = currentPlan ? formatBytes(currentPlan.totalBytes) : "";
+  const filteredPlan = filteredCreatePlan();
+  const totalBytes = filteredPlan ? formatBytes(filteredPlan.totalBytes) : "";
   return message("create.status.ready", {
-    count: includedCount,
+    count: filteredPlan?.includedCount ?? includedCount,
     size: totalBytes,
   });
 }
@@ -3894,6 +3904,7 @@ function setCreatePlanState(state: CreateState, statusMessage = "") {
 
   const unavailableReason = createArchiveUnavailableReason({
     sourceCount: createSources.length,
+    includedEntryCount: currentPlan ? includedCreatePlanEntries().length : undefined,
     destinationPath: createDestinationInput.value,
     planState: state,
     hasPlan: currentPlan !== null,
@@ -3986,9 +3997,136 @@ function canUseBrowserCreatePlanPreview(): boolean {
   return !isDesktopRuntime();
 }
 
+function createPlanEntries(): CreatePlanEntryDto[] {
+  return currentPlan?.planEntries ?? [];
+}
+
+function entriesForCompressPath(path: string): CreatePlanEntryDto[] {
+  const normalizedPath = normalizeEntryPath(path);
+  if (!normalizedPath) {
+    return createPlanEntries();
+  }
+  return createPlanEntries().filter((entry) => entryIsUnderFolder(entry.path, normalizedPath));
+}
+
+function sortedExcludedCreateArchivePaths(): string[] {
+  return Array.from(excludedCreateArchivePaths).sort((left, right) => left.localeCompare(right));
+}
+
+function isCreateArchivePathIncluded(path: string): boolean {
+  return !excludedCreateArchivePaths.has(normalizeEntryPath(path));
+}
+
+function includedCreatePlanEntries(): CreatePlanEntryDto[] {
+  return createPlanEntries().filter((entry) => isCreateArchivePathIncluded(entry.path));
+}
+
+function filteredCreatePlan(): CreatePlanResponse | null {
+  if (!currentPlan) {
+    return null;
+  }
+
+  const includedEntries = includedCreatePlanEntries();
+  const excludedByUser = createPlanEntries().filter((entry) => !isCreateArchivePathIncluded(entry.path));
+  const excludedBytes = excludedByUser.reduce((total, entry) => total + (entry.size ?? 0), 0);
+  return {
+    ...currentPlan,
+    includedCount: includedEntries.length,
+    excludedCount: currentPlan.excludedCount + excludedByUser.length,
+    totalBytes: includedEntries.reduce((total, entry) => total + (entry.size ?? 0), 0),
+    excludedBytes: currentPlan.excludedBytes + excludedBytes,
+    entries: includedEntries.map((entry) => entry.path),
+    planEntries: includedEntries,
+    excludedEntries: [
+      ...currentPlan.excludedEntries,
+      ...excludedByUser.map((entry) => entry.path),
+    ],
+  };
+}
+
+function compressRowInclusionState(row: CompressPlanRow): "included" | "excluded" | "partial" {
+  if (row.rowType === "parent") {
+    return "included";
+  }
+
+  const entries = entriesForCompressPath(row.path);
+  if (entries.length === 0) {
+    return isCreateArchivePathIncluded(row.path) ? "included" : "excluded";
+  }
+
+  const includedCount = entries.filter((entry) => isCreateArchivePathIncluded(entry.path)).length;
+  if (includedCount === 0) {
+    return "excluded";
+  }
+  if (includedCount === entries.length) {
+    return "included";
+  }
+  return "partial";
+}
+
+function compressInclusionLabel(state: "included" | "excluded" | "partial"): string {
+  switch (state) {
+    case "included":
+      return message("compress.inclusion.included");
+    case "excluded":
+      return message("compress.inclusion.excluded");
+    case "partial":
+      return message("compress.inclusion.partial");
+  }
+}
+
+function setCompressPathIncluded(path: string, included: boolean) {
+  const affectedEntries = entriesForCompressPath(path);
+  const paths = affectedEntries.length
+    ? affectedEntries.map((entry) => normalizeEntryPath(entry.path))
+    : [normalizeEntryPath(path)];
+
+  for (const entryPath of paths) {
+    if (!entryPath) {
+      continue;
+    }
+    if (included) {
+      excludedCreateArchivePaths.delete(entryPath);
+      let parent = getParentPath(entryPath);
+      while (parent) {
+        excludedCreateArchivePaths.delete(parent);
+        parent = getParentPath(parent);
+      }
+    } else {
+      excludedCreateArchivePaths.add(entryPath);
+    }
+  }
+}
+
+function setAllCompressPathsIncluded(included: boolean) {
+  if (included) {
+    excludedCreateArchivePaths.clear();
+    return;
+  }
+  excludedCreateArchivePaths = new Set(createPlanEntries().map((entry) => normalizeEntryPath(entry.path)));
+}
+
+function syncCompressInclusionControls() {
+  for (const input of compressSourceBody.querySelectorAll<HTMLInputElement>("[data-compress-include]")) {
+    input.indeterminate = input.dataset.compressInclusionState === "partial";
+  }
+}
+
+function refreshCreatePlanSummary() {
+  const plan = filteredCreatePlan();
+  if (!plan) {
+    return;
+  }
+  createPlanSummary.innerHTML = formatPlanSummary(plan);
+}
+
 function renderCreateSources() {
   clearSourcesButton.hidden = createSources.length === 0;
   clearSourcesButton.disabled = createSources.length === 0;
+  includeAllSourcesButton.hidden = createSources.length === 0;
+  excludeAllSourcesButton.hidden = createSources.length === 0;
+  includeAllSourcesButton.disabled = createSources.length === 0 || excludedCreateArchivePaths.size === 0;
+  excludeAllSourcesButton.disabled = createSources.length === 0 || includedCreatePlanEntries().length === 0;
 
   createPlanMeta.textContent = createSources.length
     ? i18n.t("compress.sourceSelected", {
@@ -4027,6 +4165,7 @@ function renderCreateSources() {
 
 function clearCreateSources() {
   createSources = [];
+  excludedCreateArchivePaths.clear();
   selectedCompressRows.clear();
   focusedCompressRowPath = "";
   compressSelectionAnchorPath = "";
@@ -4043,6 +4182,7 @@ function removeCreateSources(sourcePaths: string[]) {
     return;
   }
   createSources = createSources.filter((item) => !removals.has(item));
+  excludedCreateArchivePaths.clear();
   selectedCompressRows.clear();
   focusedCompressRowPath = "";
   compressSelectionAnchorPath = "";
@@ -4062,7 +4202,7 @@ function renderCompressSources() {
     compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
-        <td colspan="4" class="compress-empty-cell">
+        <td colspan="5" class="compress-empty-cell">
           <div class="compress-empty-state">
             <strong>${escapeHtml(i18n.t("compress.emptyTable"))}</strong>
             <span>${escapeHtml(i18n.t("compress.dragSourcesHint"))}</span>
@@ -4082,7 +4222,7 @@ function renderCompressSources() {
     compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
-        <td colspan="4" class="empty">${escapeHtml(currentPlanError || i18n.t("create.plan.planning"))}</td>
+        <td colspan="5" class="empty">${escapeHtml(currentPlanError || i18n.t("create.plan.planning"))}</td>
       </tr>
     `;
     if (workspaceMode === "compress") {
@@ -4098,7 +4238,7 @@ function renderCompressSources() {
     compressSelectionAnchorPath = "";
     compressSourceBody.innerHTML = `
       <tr>
-        <td colspan="4" class="empty">${escapeHtml(i18n.t("browse.folderEmpty"))}</td>
+        <td colspan="5" class="empty">${escapeHtml(i18n.t("browse.folderEmpty"))}</td>
       </tr>
     `;
     if (workspaceMode === "compress") {
@@ -4121,6 +4261,7 @@ function renderCompressSources() {
   compressSourceBody.innerHTML = rows
     .map((row) => renderCompressPlanRow(row))
     .join("");
+  syncCompressInclusionControls();
 
   if (workspaceMode === "compress") {
     renderCompressSourceTree();
@@ -4197,10 +4338,38 @@ function visibleCompressRows(): CompressPlanRow[] {
   return [...rows, ...sortedFolders, ...sortedEntries];
 }
 
+function renderCompressInclusionCheckbox(
+  row: Extract<CompressPlanRow, { rowType: "folder" | "entry" }>,
+  state: "included" | "excluded" | "partial",
+): string {
+  const label = message(
+    state === "excluded"
+      ? "compress.includeItem.aria"
+      : "compress.excludeItem.aria",
+    { name: row.name },
+  );
+  return `
+    <input
+      data-compress-include
+      data-compress-path="${escapeHtml(row.path)}"
+      data-compress-inclusion-state="${state}"
+      type="checkbox"
+      aria-label="${escapeHtml(label)}"
+      ${state === "included" ? "checked" : ""}
+    />
+  `;
+}
+
+function visibleCompressRowForPath(path: string): CompressPlanRow | undefined {
+  const normalizedPath = normalizeEntryPath(path);
+  return visibleCompressRows().find((row) => normalizeEntryPath(row.path) === normalizedPath);
+}
+
 function renderCompressPlanRow(row: CompressPlanRow): string {
   if (row.rowType === "parent") {
     return `
       <tr class="folder-row parent-row" data-compress-folder-row="${escapeHtml(row.path)}" tabindex="0" aria-label="${escapeHtml(i18n.t("browse.parentFolder.aria"))}" aria-keyshortcuts="Enter ContextMenu Shift+F10">
+        <td class="inclusion-cell"></td>
         <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
         <td></td>
         <td></td>
@@ -4213,9 +4382,10 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
     const selected = selectedCompressRows.has(row.path);
     const focused = focusedCompressRowPath === row.path;
     const sourcePath = sourcePathForCompressRow(row);
+    const inclusionState = compressRowInclusionState(row);
     return `
       <tr
-        class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
+        class="folder-row ${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""} ${inclusionState === "excluded" ? "is-excluded" : ""} ${inclusionState === "partial" ? "is-partial" : ""}"
         data-compress-folder-row="${escapeHtml(row.path)}"
         data-compress-path="${escapeHtml(row.path)}"
         ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
@@ -4224,6 +4394,7 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
         aria-selected="${selected ? "true" : "false"}"
         aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
       >
+        <td class="inclusion-cell">${renderCompressInclusionCheckbox(row, inclusionState)}</td>
         <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
         <td>${row.entry?.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
         <td>${row.entry?.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
@@ -4235,9 +4406,10 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
   const selected = selectedCompressRows.has(row.path);
   const focused = focusedCompressRowPath === row.path;
   const sourcePath = sourcePathForCompressRow(row);
+  const inclusionState = compressRowInclusionState(row);
   return `
     <tr
-      class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""}"
+      class="${selected ? "is-selected" : ""} ${focused ? "is-focused-row" : ""} ${inclusionState === "excluded" ? "is-excluded" : ""}"
       data-compress-entry-row="${escapeHtml(row.path)}"
       data-compress-path="${escapeHtml(row.path)}"
       ${sourcePath ? `data-compress-source-path="${escapeHtml(sourcePath)}"` : ""}
@@ -4245,6 +4417,7 @@ function renderCompressPlanRow(row: CompressPlanRow): string {
       aria-selected="${selected ? "true" : "false"}"
       aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"
     >
+      <td class="inclusion-cell">${renderCompressInclusionCheckbox(row, inclusionState)}</td>
       <td class="name-cell">${renderCompressPlanNameCell(row)}</td>
       <td>${row.entry.size === undefined ? "" : escapeHtml(formatBytes(row.entry.size))}</td>
       <td>${row.entry.modified ? escapeHtml(formatDate(row.entry.modified)) : ""}</td>
@@ -4257,22 +4430,63 @@ function sourcePathForCompressRow(row: CompressPlanRow): string {
   if (row.rowType === "parent") {
     return "";
   }
-  if (row.entry?.sourcePath && createSources.includes(row.entry.sourcePath)) {
-    return row.entry.sourcePath;
+
+  const sourceFromArchivePath = sourcePathForCompressArchivePath(row.path);
+  if (sourceFromArchivePath) {
+    return sourceFromArchivePath;
   }
 
-  const matchingSources = new Set(
-    (currentPlan?.planEntries ?? [])
-      .filter((entry) => entryIsUnderFolder(entry.path, row.path))
-      .map((entry) => entry.sourcePath)
-      .filter((sourcePath) => createSources.includes(sourcePath)),
+  if (row.entry?.sourcePath) {
+    const sourceFromNativePath = sourcePathForNativePath(row.entry.sourcePath);
+    if (sourceFromNativePath) {
+      return sourceFromNativePath;
+    }
+  }
+
+  const descendantSources = new Set(
+    entriesForCompressPath(row.path)
+      .map((entry) => sourcePathForNativePath(entry.sourcePath))
+      .filter(Boolean),
   );
-  if (matchingSources.size === 1) {
-    return matchingSources.values().next().value ?? "";
+  if (descendantSources.size === 1) {
+    return descendantSources.values().next().value ?? "";
   }
 
   const basenameMatch = createSources.find((sourcePath) => getPathBasename(sourcePath) === row.path);
   return basenameMatch ?? "";
+}
+
+function sourcePathForCompressArchivePath(archivePath: string): string {
+  const normalizedArchivePath = normalizeEntryPath(archivePath);
+  if (!normalizedArchivePath) {
+    return "";
+  }
+
+  const rootEntries = createPlanEntries()
+    .filter((entry) => createSources.includes(entry.sourcePath))
+    .sort((left, right) => normalizeEntryPath(right.path).length - normalizeEntryPath(left.path).length);
+  const rootEntry = rootEntries.find((entry) => entryIsUnderFolder(normalizedArchivePath, entry.path));
+  return rootEntry?.sourcePath ?? "";
+}
+
+function normalizedNativePathForCompare(path: string): string {
+  const normalized = path.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith("//")
+    ? normalized.toLowerCase()
+    : normalized;
+}
+
+function sourcePathForNativePath(nativePath: string): string {
+  const normalizedNativePath = normalizedNativePathForCompare(nativePath);
+  if (!normalizedNativePath) {
+    return "";
+  }
+
+  return createSources.find((sourcePath) => {
+    const normalizedSourcePath = normalizedNativePathForCompare(sourcePath);
+    return normalizedNativePath === normalizedSourcePath
+      || normalizedNativePath.startsWith(`${normalizedSourcePath}/`);
+  }) ?? "";
 }
 
 function renderCompressPlanNameCell(row: CompressPlanRow): string {
@@ -4284,12 +4498,15 @@ function renderCompressPlanNameCell(row: CompressPlanRow): string {
   const iconDataUrl = row.rowType === "folder" || row.rowType === "parent"
     ? systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))
     : systemIconDataUrlForRequest(systemIconRequestForPath(row.entry.sourcePath || row.entry.path, false));
+  const inclusionBadge = row.rowType === "parent"
+    ? ""
+    : `<span class="source-stage-badge ${compressRowInclusionState(row) === "excluded" ? "is-excluded" : ""}">${escapeHtml(compressInclusionLabel(compressRowInclusionState(row)))}</span>`;
   return `
     <span class="row-primary">
       ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
       <span class="sr-only">${escapeHtml(icon.label)}:</span>
       <span class="row-name">${escapeHtml(row.name)}</span>
-      ${row.rowType === "parent" ? "" : `<span class="source-stage-badge">${escapeHtml(message("compress.sourceBadge"))}</span>`}
+      ${inclusionBadge}
     </span>
   `;
 }
@@ -4329,6 +4546,17 @@ function sourcePathsForCompressMenu(rowSourcePath: string): string[] {
   return selectedSourcePaths.includes(rowSourcePath) && selectedSourcePaths.length > 1
     ? selectedSourcePaths
     : [rowSourcePath];
+}
+
+function compressPathsForContextAction(rowPath: string): string[] {
+  if (!rowPath) {
+    return [];
+  }
+  if (selectedCompressRows.has(rowPath) && selectedCompressRows.size > 1) {
+    const visiblePaths = new Set(getVisibleCompressSelectablePaths());
+    return Array.from(selectedCompressRows).filter((path) => visiblePaths.has(path));
+  }
+  return [rowPath];
 }
 
 function updateCompressSelectionByIntent(
@@ -5992,9 +6220,21 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
   const folderPath = row.dataset.compressFolderRow;
   const sourcePath = row.dataset.compressSourcePath ?? (createSources.includes(rowPath) ? rowPath : "");
   const removableSourcePaths = sourcePathsForCompressMenu(sourcePath);
+  const contextPaths = compressPathsForContextAction(rowPath);
+  const contextRows = contextPaths
+    .map((path) => visibleCompressRowForPath(path))
+    .filter((candidate): candidate is CompressPlanRow => Boolean(candidate));
+  const canInclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "included");
+  const canExclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "excluded");
   const removeLabel = removableSourcePaths.length > 1
     ? message("command.removeSelectedSources", { count: removableSourcePaths.length })
     : message("command.removeSource");
+  const includeLabel = contextRows.length > 1
+    ? message("command.includeSelectedInArchive", { count: contextRows.length })
+    : message("command.includeInArchive");
+  const excludeLabel = contextRows.length > 1
+    ? message("command.excludeSelectedFromArchive", { count: contextRows.length })
+    : message("command.excludeFromArchive");
   contextEntryPath = "";
   contextSourcePath = sourcePath;
 
@@ -6004,6 +6244,13 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
     </button>
     <button type="button" role="menuitem" data-context-action="reveal-source" ${sourcePath ? "" : "disabled"}>
       <span class="context-menu-label">${escapeHtml(message("command.revealInFileManager"))}</span>
+    </button>
+    <div class="context-menu-separator" role="separator"></div>
+    <button type="button" role="menuitem" data-context-action="include-compress-path" data-compress-menu-path="${escapeHtml(rowPath)}" ${canInclude ? "" : "disabled"}>
+      <span class="context-menu-label">${escapeHtml(includeLabel)}</span>
+    </button>
+    <button type="button" role="menuitem" data-context-action="exclude-compress-path" data-compress-menu-path="${escapeHtml(rowPath)}" ${canExclude ? "" : "disabled"}>
+      <span class="context-menu-label">${escapeHtml(excludeLabel)}</span>
     </button>
     <div class="context-menu-separator" role="separator"></div>
     <button type="button" role="menuitem" data-context-action="remove-source" ${removableSourcePaths.length ? "" : "disabled"}>
@@ -6770,10 +7017,12 @@ async function runPlan(revision = ++createPlanRevision) {
   if (canUseBrowserCreatePlanPreview()) {
     const result = browserCreatePlanPreview(createSources);
     currentPlan = result;
+    const plannedPaths = new Set(result.planEntries.map((entry) => normalizeEntryPath(entry.path)));
+    excludedCreateArchivePaths = new Set([...excludedCreateArchivePaths].filter((path) => plannedPaths.has(path)));
     if (!compressFolderExists(result.planEntries, currentCompressFolder)) {
       currentCompressFolder = "";
     }
-    createPlanSummary.innerHTML = formatPlanSummary(result);
+    refreshCreatePlanSummary();
     setCreatePlanState("ready", "Plan generated.");
     renderCompressBrowser();
     return;
@@ -6787,10 +7036,12 @@ async function runPlan(revision = ++createPlanRevision) {
     }
 
     currentPlan = result;
+    const plannedPaths = new Set(result.planEntries.map((entry) => normalizeEntryPath(entry.path)));
+    excludedCreateArchivePaths = new Set([...excludedCreateArchivePaths].filter((path) => plannedPaths.has(path)));
     if (!compressFolderExists(result.planEntries, currentCompressFolder)) {
       currentCompressFolder = "";
     }
-    createPlanSummary.innerHTML = formatPlanSummary(result);
+    refreshCreatePlanSummary();
     setCreatePlanState("ready", "Plan generated.");
     renderCompressBrowser();
   } catch (error) {
@@ -7946,6 +8197,9 @@ async function runCreate(
       destinationPath,
       format,
       cleanSource,
+      excludeArchivePaths: sortedExcludedCreateArchivePaths(),
+      respectGitignore: createRespectGitignoreCheckbox.checked,
+      followSymlinks: false,
       replaceExisting,
       destinationCollisionStrategy: options.destinationCollisionStrategy,
       preserveMetadata,
@@ -9227,6 +9481,18 @@ tableBody.addEventListener("click", (event) => {
       });
       return;
     }
+    if (action === "include-compress-path" || action === "exclude-compress-path") {
+      const path = target.dataset.compressMenuPath;
+      if (path) {
+        for (const compressPath of compressPathsForContextAction(path)) {
+          setCompressPathIncluded(compressPath, action === "include-compress-path");
+        }
+        refreshCreatePlanSummary();
+        renderCreateSources();
+        renderCompressBrowser();
+      }
+      return;
+    }
     if (action === "remove-source") {
       removeCreateSources(sourcePathsForCompressMenu(sourcePath));
       return;
@@ -9291,6 +9557,18 @@ tableBody.addEventListener("click", (event) => {
   clearSourcesButton.addEventListener("click", () => {
     clearCreateSources();
   });
+  includeAllSourcesButton.addEventListener("click", () => {
+    setAllCompressPathsIncluded(true);
+    refreshCreatePlanSummary();
+    renderCreateSources();
+    renderCompressBrowser();
+  });
+  excludeAllSourcesButton.addEventListener("click", () => {
+    setAllCompressPathsIncluded(false);
+    refreshCreatePlanSummary();
+    renderCreateSources();
+    renderCompressBrowser();
+  });
   sourceListElement.addEventListener("contextmenu", (event) => {
     const row = (event.target as HTMLElement).closest<HTMLElement>("li[data-source-path]");
     if (!row?.dataset.sourcePath) {
@@ -9301,6 +9579,21 @@ tableBody.addEventListener("click", (event) => {
   });
 
   compressSourceBody.addEventListener("click", (event) => {
+    const includeControl = (event.target as HTMLElement).closest<HTMLInputElement>("[data-compress-include]");
+    if (includeControl) {
+      event.stopPropagation();
+      const rowPath = includeControl.dataset.compressPath;
+      if (rowPath) {
+        const nextIncluded = includeControl.checked;
+        setCompressPathIncluded(rowPath, nextIncluded);
+        refreshCreatePlanSummary();
+        renderCreateSources();
+        renderCompressBrowser();
+        focusCompressRow(compressSourceBody.querySelector<HTMLTableRowElement>(`tr[data-compress-path="${CSS.escape(rowPath)}"]`));
+      }
+      return;
+    }
+
     const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
     if (!row) {
       return;
@@ -9322,6 +9615,10 @@ tableBody.addEventListener("click", (event) => {
   });
 
   compressSourceBody.addEventListener("keydown", (event) => {
+    if ((event.target as HTMLElement).closest("[data-compress-include]")) {
+      return;
+    }
+
     const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
     if (!row) {
       return;
