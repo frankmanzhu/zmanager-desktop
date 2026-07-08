@@ -1,539 +1,539 @@
-# ZManager Desktop Frontend Architecture Deepening Plan
+# ZManager Desktop Frontend Architecture Redesign Plan
 
 Date: 2026-07-08
 
 ## Goal
 
-Make the frontend easier to manage by moving durable workflow behavior out of `src/main.ts` and into deep modules with small, hard-to-misuse interfaces.
+Turn the frontend from one large event-driven script into a small composition root plus deep workflow modules. The redesign must make archive browsing, archive creation, jobs, commands, dialogs, and desktop integration maintainable without moving archive behavior out of `zmanager-core`.
 
-The specific first target is a reusable hierarchical table pane. The table pane should make archive browsing and create-plan browsing share one behavioral implementation instead of growing parallel code paths.
+The primary target is not "more files." The target is depth: modules with small interfaces that hold meaningful behavior behind them. A helper that only formats one value or forwards one event is acceptable locally, but it is not the architecture.
 
-This is an architecture plan only. It does not change runtime behavior yet.
+## Critical Review Of The Previous Plan
 
-## Current Diagnosis
+The previous plan identified a real problem: `src/main.ts` owns too much. At the time of this review, it is roughly 9,000 lines and owns initial markup, DOM queries, archive browsing state, create-plan state, command routing, dialogs, selection, context menus, drag/drop, jobs, quick actions, preference wiring, and desktop window behavior.
 
-`src/main.ts` is acting as the application architecture instead of the composition root. It currently owns:
+What was correct:
 
-- Initial shell markup and DOM queries.
-- Browse/extract archive state.
-- Create-plan source state.
-- Archive and create-plan folder tree rendering.
-- Archive and create-plan table row construction.
-- Selection, focus, keyboard movement, and context menu behavior.
-- Column rendering, sorting, resizing, and persistence.
-- Dialog behavior.
-- Job polling and quick-action window behavior.
-- Drag/drop and native drag-out behavior.
+- `main.ts` should become a composition root, not the application architecture.
+- Archive browsing and create-plan browsing share a real hierarchical table interaction model.
+- Existing modules such as `archiveTable.ts`, `archiveTree.ts`, `selection.ts`, `createFlow.ts`, `jobs.ts`, and the `src/ui/*View.ts` files are useful starting points.
+- The first implementation slice should be behavior-preserving and covered by Vitest.
 
-This explains why the file feels hack-prone. A future change can add behavior anywhere in the module, because the module has no narrow interface that forces new behavior into the right place.
+What was missing or not quite correct:
 
-The extracted modules under `src/app` and `src/ui` are useful, but many are still shallow. They hold helper functions while the ordering rules, state transitions, and DOM behavior remain in `src/main.ts`.
+- The plan was too table-first. A reusable table module is useful, but it cannot own archive loading, create planning, command availability, extraction readiness, job retry rules, or desktop adapters. Without workspace modules above it, table extraction would create another shallow module.
+- The proposed table interface mixed state, rendering, and caller callbacks too early. The first seam should be row derivation and interaction state. DOM rendering and event binding can follow only after the state interface proves stable.
+- The plan under-described command routing. Today command availability is partially centralized in `classicCommands.ts`, but execution is scattered across toolbar buttons, menus, shortcuts, context menus, details actions, and table handlers. That is a larger architectural problem than table rendering.
+- The create workflow was under-scoped. Create planning is not just another archive table. It owns source paths, plan revisions, inclusion rules, destination defaults, format capabilities, password option visibility, and plan request invalidation.
+- The archive workflow was under-scoped. Archive browsing owns load state, password retry, search, flat view, folder history, selection, details data, preview/open outside, extract request preparation, native drag-out, real icons, and command context.
+- The jobs and quick-action flow was under-scoped. Polling, retry prompts, focused quick-action windows, progress clocks, auto-close, pause/resume/cancel/dismiss, and output actions need one lifecycle module.
+- Modal behavior was correctly called out, but it should not be a first architectural slice. It is important, but it is lower leverage than workflow and command modules.
+- The plan did not define the new ownership rules for `src/api`, `src/desktop`, and `src/ui`. Without those rules, future work can keep adding cross-layer shortcuts.
+- The plan did not include explicit anti-corruption rules for Rust-owned archive behavior and password handling.
 
-## Existing Good Direction
+## Target Architecture
 
-The codebase already has some good seams:
+The frontend should be organized around workflow modules, view modules, and adapters.
 
-- `src/app/archiveTable.ts` owns archive table columns, formatting, sorting, width normalization, and visibility rules.
-- `src/app/archiveTree.ts` owns archive path normalization, tree construction, breadcrumbs, search matching, and visible archive entries.
-- `src/app/selection.ts` owns row selection intent logic.
-- `src/app/createFlow.ts` owns create request validation and request construction.
-- `src/ui/jobsView.ts` and `src/ui/preferencesView.ts` are early examples of render-oriented modules.
+```text
+src/main.ts
+  Composition root only:
+  query stable DOM roots, create adapters, instantiate workspaces, bind top-level startup.
 
-The issue is not that everything is wrong. The issue is that these modules do not yet have enough depth. Deleting them would not fully concentrate the complexity back into obvious places; much of the real workflow knowledge already lives outside them.
+src/app/workspaces/archiveWorkspace.ts
+  Archive browsing workflow state and user intents.
 
-## Deepening Opportunities
+src/app/workspaces/createWorkspace.ts
+  Archive creation workflow state and user intents.
 
-### 1. Archive Workspace Module
+src/app/workspaces/jobsWorkspace.ts
+  Job lifecycle, polling decisions, retry state, and quick-action job state.
 
-Files:
+src/app/commands/commandRouter.ts
+  Command availability plus execution routing for all command surfaces.
 
-- `src/main.ts`
+src/app/hierarchicalTable.ts
+  Shared row derivation, selection, focus, and keyboard intent for folder-like tables.
+
+src/ui/*
+  Rendering and DOM event adapters. No durable workflow state.
+
+src/api/*
+  Tauri DTOs and invoke wrappers only.
+
+src/desktop/*
+  Runtime, native dialogs, paths, window, drag/drop, and shell adapters only.
+```
+
+The important seams are:
+
+- Workspace interface: accepts user intents and returns view state plus command context.
+- Command interface: accepts command IDs and dispatches to workspace intents or desktop adapters.
+- Table interface: accepts hierarchical row input and selection/focus intents, returns derived table state.
+- View adapter interface: binds DOM events to typed intents and renders view state.
+- Desktop adapter interface: wraps Tauri/window/dialog/file-manager calls so workflow modules can be tested without native runtime.
+
+## Ownership Rules
+
+### `src/main.ts`
+
+`main.ts` should only:
+
+- Render static shell markup or import it from a shell view module.
+- Query stable DOM roots.
+- Create desktop adapters, command adapters, and workspace modules.
+- Connect workspaces to view adapters.
+- Run startup flows.
+
+`main.ts` must not own:
+
+- Archive row derivation.
+- Create-plan row derivation.
+- Selection, focus, or keyboard behavior for table-like panes.
+- Command availability or command execution switches.
+- Job polling state.
+- Dialog focus trap behavior.
+- Password retry state.
+- Native drag-out request construction.
+- Create plan inclusion/exclusion logic.
+
+### `src/app`
+
+`src/app` owns workflow state and pure behavior. It may import DTO types from `src/api/types`, but it should not call Tauri directly. App modules should expose user intents such as `loadArchive`, `navigateToFolder`, `selectRows`, `setCreateSources`, `toggleCreatePathIncluded`, `pollJobs`, or `executeCommand`.
+
+App modules should be tested through their public interfaces. Do not extract private helpers only to test implementation details.
+
+### `src/ui`
+
+`src/ui` owns HTML rendering and DOM event adapters. It can emit typed events or call workspace intents, but it must not duplicate workflow decisions.
+
+UI modules may know about CSS classes and data attributes. Workflow modules should not.
+
+### `src/api`
+
+`src/api` owns serializable command DTOs and invoke wrappers. It must stay boring. It should not know about UI state, DOM, preferences, or workflow modules.
+
+### `src/desktop`
+
+`src/desktop` owns platform/runtime adapters: native file dialogs, file manager actions, Tauri event binding, window geometry, native drag-out, and path helpers. Workflow modules should depend on narrow adapter interfaces, not direct Tauri imports.
+
+## Deep Module Design
+
+### 1. Archive Workspace
+
+Files to introduce:
+
+- `src/app/workspaces/archiveWorkspace.ts`
+- `src/app/workspaces/archiveWorkspace.test.ts`
+
+Likely collaborators:
+
 - `src/app/archiveTree.ts`
 - `src/app/archiveTable.ts`
 - `src/app/archiveEntryIcons.ts`
+- `src/app/extractFlow.ts`
+- `src/app/hierarchicalTable.ts`
+- `src/api/types.ts`
 
-Problem:
+Owns:
 
-Archive browsing state is spread across globals: current archive, current folder, search query, flat view, selected entries, expanded folders, focused entry, table sort, column settings, and system icons.
+- Current archive path, listing state, error state, entry count, total size.
+- Current folder, folder history, breadcrumbs, expanded tree folders.
+- Search query and flat view.
+- Table sort and column settings.
+- Selected paths, focused path, anchor path.
+- Details pane model.
+- Extract/test/preview/open-outside/native-drag request readiness.
+- Password retry prompt state for archive listing when appropriate.
 
-Solution:
+Interface direction:
 
-Create an Archive Workspace module that owns archive browsing state and exposes a small interface for user intents: load listing, navigate, search, select, sort, and derive view state.
+```ts
+type ArchiveWorkspace = {
+  getSnapshot(): ArchiveWorkspaceSnapshot;
+  loadListing(result: ArchiveListingDto): ArchiveWorkspaceSnapshot;
+  failLoading(error: CommandErrorDto | string): ArchiveWorkspaceSnapshot;
+  navigate(intent: ArchiveNavigationIntent): ArchiveWorkspaceSnapshot;
+  updateSearch(query: string): ArchiveWorkspaceSnapshot;
+  updateSelection(intent: TableSelectionIntent): ArchiveWorkspaceSnapshot;
+  updateSort(intent: ArchiveSortIntent): ArchiveWorkspaceSnapshot;
+  buildExtractRequest(input: ExtractDialogInput): StartExtractRequest | null;
+};
+```
 
-Benefits:
+The exact names can change during implementation. The interface should stay intent-based; callers should not mutate sets and globals directly.
 
-- Locality: folder, search, selection, and sort bugs are fixed in one place.
-- Leverage: details pane, toolbar, context menus, and extraction commands can all read one consistent selection/view state.
-- Tests: archive browsing behavior can be tested without mounting the full desktop shell.
+Deletion test:
 
-### 2. Reusable Hierarchical Table Pane
+- If this module is deleted, archive load state, search, navigation, selection, details, command context, and extraction readiness would reappear across render functions, context menus, shortcuts, and toolbar handlers. That means it earns its keep.
 
-Files:
+### 2. Create Workspace
 
-- `src/main.ts`
-- `src/app/archiveTree.ts`
-- `src/app/archiveTable.ts`
-- `src/app/selection.ts`
+Files to introduce:
 
-Problem:
+- `src/app/workspaces/createWorkspace.ts`
+- `src/app/workspaces/createWorkspace.test.ts`
 
-Browse and create-plan views are two adapters for the same interaction model: a folder-like table with parent rows, folder rows, entry rows, selection, focus, keyboard navigation, optional checkboxes, context menus, and empty/loading states. Today they duplicate the behavior with different data attributes and different globals.
+Likely collaborators:
 
-Solution:
-
-Create a deep Hierarchical Table Pane module. Its interface should accept rows, state, behavior options, and adapter callbacks. It should own row identity, focus, selection, keyboard movement, activation, empty/loading rendering, and safe DOM event routing.
-
-Benefits:
-
-- Locality: table interaction changes land in one module instead of two branches in `main.ts`.
-- Leverage: archive browsing and create-plan browsing both inherit the same focus, keyboard, selection, and accessibility behavior.
-- Tests: the pane becomes the test surface for row behavior, not `main.ts`.
-
-### 3. Create Workspace Module
-
-Files:
-
-- `src/main.ts`
 - `src/app/createFlow.ts`
-- `src/app/archiveTree.ts`
+- `src/app/hierarchicalTable.ts`
+- `src/app/preferences.ts`
+- `src/api/types.ts`
 
-Problem:
+Owns:
 
-Create flow request construction is extracted, but staged sources, plan entries, inclusion/exclusion, create-plan folder navigation, destination history, and plan rendering are still in `main.ts`.
+- Source paths and source removal.
+- Plan state, plan revision, plan errors, warnings, and stale-plan detection.
+- Included/excluded archive paths.
+- Current create-plan folder and expanded create tree folders.
+- Destination suggestion and destination history model.
+- Format capabilities, compression options, TZAP recovery options, password option visibility.
+- Create readiness and unavailable reason.
+- Start-create request construction.
 
-Solution:
+Interface direction:
 
-Create a Create Workspace module that owns staged sources, plan state, inclusion state, visible create-plan rows, destination defaults, and create readiness.
+```ts
+type CreateWorkspace = {
+  getSnapshot(): CreateWorkspaceSnapshot;
+  setSources(paths: readonly string[]): CreateWorkspaceSnapshot;
+  applyPlan(result: CreatePlanResponse, revision: number): CreateWorkspaceSnapshot;
+  failPlan(error: CommandErrorDto | string, revision: number): CreateWorkspaceSnapshot;
+  navigatePlanFolder(path: string): CreateWorkspaceSnapshot;
+  setPathIncluded(path: string, included: boolean): CreateWorkspaceSnapshot;
+  setAllIncluded(included: boolean): CreateWorkspaceSnapshot;
+  updateOptions(intent: CreateOptionsIntent): CreateWorkspaceSnapshot;
+  buildPlanRequest(): PlanCreateRequest | null;
+  buildStartRequest(input: CreateSecretInput): StartCreateRequest | null;
+};
+```
 
-Benefits:
+Deletion test:
 
-- Locality: create-plan bugs stop leaking through table rendering and command wiring.
-- Leverage: quick actions, drag/drop, and the create workspace can share the same source/plan model.
-- Tests: inclusion/exclusion and plan state can be tested through one interface.
+- If this module is deleted, plan revision guards, inclusion rules, source mapping, destination readiness, and request construction would spread back through table rendering, form events, quick actions, and start-create handlers.
 
-### 4. Command Routing Module
+### 3. Jobs Workspace
 
-Files:
+Files to introduce:
 
-- `src/main.ts`
-- `src/app/classicCommands.ts`
+- `src/app/workspaces/jobsWorkspace.ts`
+- `src/app/workspaces/jobsWorkspace.test.ts`
 
-Problem:
+Likely collaborators:
 
-Command labels and availability are partly centralized, but execution is manually bound across toolbar buttons, menu items, context menu actions, keyboard shortcuts, and details pane buttons.
-
-Solution:
-
-Create a command routing module. UI surfaces emit command IDs and optional payloads; the workspace state decides availability and execution.
-
-Benefits:
-
-- Locality: command enablement and execution stay aligned.
-- Leverage: adding a command updates toolbar, menu, shortcut, and context behavior through the same route.
-- Tests: command availability can be tested against workspace state without DOM event wiring.
-
-### 5. Modal Dialog Module
-
-Files:
-
-- `src/main.ts`
-- `src/ui/preferencesView.ts`
-
-Problem:
-
-Generic modal behavior is mixed with extract, preferences, info, and about dialog behavior.
-
-Solution:
-
-Create a modal module that owns focus trap, return focus, default/cancel actions, and visibility. Dialog-specific modules own their own view state.
-
-Benefits:
-
-- Locality: accessibility fixes happen once.
-- Leverage: new dialogs get correct focus behavior by construction.
-- Tests: modal keyboard behavior has one test surface.
-
-### 6. Jobs And Quick Action Workspace Module
-
-Files:
-
-- `src/main.ts`
 - `src/app/jobs.ts`
-- `src/ui/jobsView.ts`
 - `src/app/quickActions.ts`
+- `src/ui/jobsView.ts`
+- `src/api/types.ts`
 
-Problem:
+Owns:
 
-Job state helpers and job rendering are extracted, but polling, retry prompts, quick-action focused mode, auto-close, and window behavior are still interleaved.
+- Job map and event merging.
+- Poll scheduling decisions, not timers themselves.
+- Retry contexts and password retry eligibility.
+- Focused quick-action job mode.
+- Progress clock snapshot.
+- Auto-close decision after focused quick-action completion.
+- Pause/resume/cancel/dismiss availability.
 
-Solution:
+Does not own:
 
-Create a Jobs Workspace module that owns job state, polling decisions, retry eligibility, and focused quick-action job state. Desktop window calls remain adapters.
+- Actual `setTimeout` or native window closing. Those remain adapters called from `main.ts` or a shell controller.
 
-Benefits:
+Deletion test:
 
-- Locality: job lifecycle bugs do not require reading the whole app.
-- Leverage: normal jobs and quick-action jobs share lifecycle behavior.
-- Tests: polling and retry behavior can be tested without Tauri window state.
+- If this module is deleted, retry logic, progress derivation, quick-action state, and poll decisions would reappear across the jobs drawer, status bar, quick-action window, and command handlers.
 
-## First Target: Reusable Hierarchical Table Pane
+### 4. Command Router
 
-### Why This First
+Files to introduce:
 
-This is the strongest first deepening candidate because it already has two real adapters:
+- `src/app/commands/commandRouter.ts`
+- `src/app/commands/commandRouter.test.ts`
 
-- Archive browser table.
-- Create-plan table.
+Likely collaborators:
 
-One adapter would make this seam hypothetical. Two adapters make it real.
+- `src/app/classicCommands.ts`
+- Archive, create, and jobs workspaces.
 
-It also attacks the user's visible pain directly: the folder view and table view can be reused, and duplicated code can stop spreading.
+Owns:
 
-### Current Browse Table Responsibilities In `main.ts`
+- Mapping every `CommandId` to availability and execution.
+- One route for toolbar, menu, shortcut, context menu, details pane, and row actions.
+- Unsupported command behavior.
+- Command-specific status messages.
 
-The archive browser path currently owns:
+The existing `selectCommandState` is a good foundation, but execution must join it. New UI surfaces should emit `CommandId`, not call workflow functions directly.
 
-- Building rows from archive entries.
-- Parent folder row insertion.
-- Folder/file row rendering.
-- Search result row behavior.
-- Flat view behavior.
-- Sort and column rendering.
-- Header rendering.
-- Select-all state.
-- Row checkbox state.
-- Focused row state.
-- Click, double-click, keyboard, and context menu routing.
-- Native drag-out gestures.
-- Marquee selection.
-- Details pane refresh after selection changes.
+Interface direction:
 
-Relevant locations:
+```ts
+type CommandRouter = {
+  getState(commandId: CommandId): CommandState;
+  getAllStates(): CommandStateMap;
+  execute(commandId: CommandId, payload?: CommandPayload): Promise<void> | void;
+};
+```
 
-- `buildBrowserRows`
-- `visibleRows`
-- `renderTableHeader`
-- `renderBrowseRows`
-- `updateSelectionByIntent`
-- `syncVisibleSelectionUi`
-- table event listeners near the end of `main.ts`
+Deletion test:
 
-### Current Create-Plan Table Responsibilities In `main.ts`
+- If this module is deleted, every command needs to be manually wired in menus, toolbar buttons, shortcuts, context menus, details actions, and row event handlers. That is exactly the duplication to remove.
 
-The create-plan path currently owns:
+### 5. Hierarchical Table
 
-- Building visible rows from plan entries.
-- Parent folder row insertion.
-- Folder/file row rendering.
-- Inclusion checkbox rendering.
-- Include/exclude state.
-- Source path lookup from row path.
-- Selected create-plan rows.
-- Focused create-plan row.
-- Click, keyboard, delete, and context menu routing.
-- Current create-plan folder navigation.
-
-Relevant locations:
-
-- `visibleCompressRows`
-- `renderCompressSources`
-- `renderCompressPlanRow`
-- `updateCompressSelectionByIntent`
-- `syncCompressSelectionUi`
-- `compressSourceBody` event listeners near the end of `main.ts`
-
-### Shared Concept
-
-Both tables are a hierarchical table:
-
-- Rows have stable path identity.
-- Rows may be parent, folder, or entry rows.
-- Folder rows can activate navigation.
-- Entry rows can activate a caller-defined action.
-- Rows may be selectable.
-- Rows may be focused.
-- Visible rows are derived from a current folder and row source.
-- Some visible rows are synthetic folders.
-- Some rows carry domain entries.
-- The table has loading, empty, and loaded states.
-- Keyboard and mouse behavior should be consistent.
-
-The module should be named after that concept, not after archive extraction or create planning.
-
-### Target Module Shape
-
-Recommended files:
+Files to introduce:
 
 - `src/app/hierarchicalTable.ts`
 - `src/app/hierarchicalTable.test.ts`
 - `src/ui/hierarchicalTableView.ts`
 - `src/ui/hierarchicalTableView.test.ts`
 
-Keep pure state and row derivation in `src/app`. Keep HTML rendering and DOM event binding in `src/ui`.
+Owns in `src/app`:
 
-The seam should sit above low-level row helpers and below workspace-specific actions. In other words:
-
-- The pane owns table behavior.
-- Archive Workspace owns archive-specific commands.
-- Create Workspace owns create-plan-specific commands.
-- `main.ts` wires adapters together.
-
-### Proposed Interface Direction
-
-The interface should be small enough that callers cannot bypass the core behavior casually.
-
-Illustrative shape:
-
-```ts
-type HierarchicalTableState<TEntry> = {
-  rows: HierarchicalTableRow<TEntry>[];
-  selectedPaths: Set<string>;
-  focusedPath: string;
-  anchorPath: string;
-  currentFolder: string;
-  status: "empty" | "loading" | "loaded" | "error";
-};
-
-type HierarchicalTableAdapter<TEntry> = {
-  getPath: (entry: TEntry) => string;
-  getKind: (entry: TEntry) => "folder" | "entry";
-  getLabel: (entry: TEntry) => string;
-  renderCells: (row: HierarchicalTableRow<TEntry>) => string[];
-  onActivateFolder: (path: string) => void;
-  onActivateEntry: (path: string) => void;
-  onContextMenu: (path: string, point: { x: number; y: number }) => void;
-};
-```
-
-This is not final code. It is the shape of the seam: table behavior is common, while cells and actions are adapters.
-
-### What The Pane Should Own
-
-The pane should own:
-
-- Parent row behavior.
-- Visible row derivation from current folder.
-- Stable row IDs and row data attributes.
+- Stable row identity.
+- Parent row derivation.
+- Synthetic folder derivation.
+- Folder, flat, and search row modes.
+- Visible selectable path calculation.
 - Selection intent application.
-- Select-all and visible selection state.
-- Focus movement.
-- Keyboard behavior for arrows, space, enter, context menu, and optional delete.
-- Click and double-click interpretation.
-- Empty, loading, error, and loaded table states.
-- ARIA selection state.
-- Optional checkbox cell behavior.
-- Optional context menu trigger.
-- Optional column header behavior.
+- Focus movement intent.
+- Selection cleanup when visible rows change.
+- Keyboard intent classification where DOM-independent.
 
-The pane should not own:
+Owns in `src/ui`:
 
+- Common row attributes.
+- ARIA selected/focused state.
+- Empty/loading/error/loaded table bodies.
+- Click, double-click, context menu, checkbox, and keydown event decoding.
+
+Does not own:
+
+- Archive columns or create-plan columns.
+- Extract/create/test/preview/native drag behavior.
 - Tauri commands.
-- Archive extraction or creation behavior.
-- Password handling.
-- Native file dialogs.
-- Create destination history.
+- Passwords.
+- Destination history.
 - Job polling.
-- User-visible archive safety rules.
 
-### Required Adapters
+This module should start as a pure row and interaction module. The view adapter can come after archive and create rows share the same state model.
 
-#### Archive Browser Adapter
+Deletion test:
 
-Owns archive-specific behavior:
+- If this module is deleted, row identity, parent rows, synthetic folders, selection ranges, focus movement, keyboard row behavior, context triggers, and visible selection cleanup should reappear in both archive browsing and create-plan browsing.
 
-- Archive entry DTO mapping.
-- Archive table columns.
-- Real file icon lookup.
-- Preview/open action.
-- Extract selection action.
-- Native drag-out action.
-- Archive context menu actions.
-- Details pane data.
+### 6. Dialog And Overlay Controller
 
-The pane should give this adapter row activation and selection change events. The adapter should not reimplement row selection.
+Files to introduce after the workflow slices:
 
-#### Create Plan Adapter
+- `src/ui/modalController.ts`
+- `src/ui/modalController.test.ts`
 
-Owns create-specific behavior:
+Owns:
 
-- Create plan entry DTO mapping.
-- Inclusion/exclusion state.
-- Include-all state.
-- Source path lookup.
-- Remove source action.
-- Reveal source action.
-- Create-plan context menu actions.
+- Open/close state for generic modal behavior.
+- Focus trap.
+- Return focus.
+- Default and cancel actions.
+- Escape handling for open dialogs.
 
-The pane should give this adapter a slot for inclusion cells and delete-key behavior. The adapter should not reimplement focus and selection.
+Dialog-specific workflow stays outside this module. Extract dialog request building belongs to Archive Workspace. Preferences rendering belongs to the preferences view. About diagnostics belongs to a diagnostics module or shell controller.
 
-### Anti-Hack Guardrails
+### 7. Desktop Adapter Set
 
-These rules should be enforced during the refactor:
+Files to introduce or deepen:
 
-- No new table row event listeners in `main.ts`.
-- No new folder row builders in `main.ts`.
-- No new selection globals for table-like panes in `main.ts`.
-- No direct `innerHTML` table body rendering for archive/create rows outside the table view module.
-- No duplicate parent-row or synthetic-folder logic.
-- No table-specific DOM data attribute names owned by adapters unless the pane defines them.
-- No command-specific behavior inside the generic table pane.
-- No archive behavior reimplemented in TypeScript beyond presentation and command DTO assembly.
+- `src/desktop/dialogs.ts`
+- `src/desktop/windowController.ts`
+- `src/desktop/fileDrop.ts`
+- `src/desktop/nativeDrag.ts`
 
-### Deletion Test
+Owns:
 
-After the refactor, deleting the Hierarchical Table Pane module should force the following complexity to reappear in both archive browsing and create-plan browsing:
+- Tauri imports.
+- Native dialog calls.
+- Window sizing, placement, minimize/maximize/close.
+- Desktop file-drop event decoding.
+- Native drag-out invocation.
+- File manager reveal/open calls.
 
-- Row identity.
-- Folder navigation rows.
-- Selection ranges.
-- Focus movement.
-- Keyboard behavior.
-- Empty/loading/error rendering.
-- ARIA row state.
-- Context menu triggers.
-
-If deleting the module would only remove a thin `renderRows()` wrapper, the module is too shallow.
+Workflow modules receive these as adapters. Tests use fake adapters.
 
 ## Migration Plan
 
-### Slice 1: Freeze Current Behavior With Focused Tests
+### Slice 0: Establish Guardrails
 
 Scope:
 
-- Add tests around existing pure helpers before moving behavior.
-- Prefer `src/app/archiveTree.ts`, `src/app/archiveTable.ts`, and `src/app/selection.ts`.
-- Add missing tests for folder row derivation if a helper is extracted.
+- Update this plan and `AGENTS.md`.
+- Do not add new workflow behavior to `main.ts` while the redesign is underway.
+- Add TODO comments only when they point to a named target module from this plan.
 
 Done when:
 
-- Existing archive table sorting and selection tests still pass.
-- Folder mode, flat mode, search mode, and parent row behavior have test coverage.
+- Architecture rules are documented.
+- Future changes have a clear destination module.
 
-### Slice 2: Extract Row Derivation
+### Slice 1: Create The Hierarchical Table App Module
 
 Scope:
 
-- Move shared visible-row derivation into `src/app/hierarchicalTable.ts`.
-- Support parent, folder, entry, synthetic folder, search, flat view, and current folder.
-- Make archive entries and create plan entries use adapters.
+- Add `src/app/hierarchicalTable.ts`.
+- Move shared row derivation concepts out of `main.ts` without changing DOM rendering.
+- Support parent rows, folder rows, entry rows, synthetic folders, flat mode, search mode, and current folder.
+- Keep archive-specific sort in `archiveTable.ts`; the table module should accept a comparator or sorted rows where needed.
 
 Done when:
 
-- `buildBrowserRows` and `visibleCompressRows` are replaced by calls into the same module.
-- Archive browser and create-plan browser produce the same visible row order as before.
+- Archive browser and create-plan browser call the same row derivation module.
+- Existing visible row order is preserved.
+- Vitest covers root folder, nested folder, explicit directory, synthetic folder, parent row, flat view, and search view.
 
-### Slice 3: Extract Selection And Focus State
+### Slice 2: Move Table Selection And Focus State
 
 Scope:
 
-- Move selected paths, focused path, anchor path, visible selectable paths, and selection cleanup into the table state.
-- Preserve hidden-selection behavior where intentionally used by search.
+- Move selection, anchor, focus, visible selectable paths, and cleanup into the table module.
+- Preserve intentional hidden-selection behavior during search if product behavior requires it.
 
 Done when:
 
-- Browse and create-plan selection changes use the same state transition.
-- `selectedEntries`, `selectedCompressRows`, `focusedEntryPath`, `focusedCompressRowPath`, `selectionAnchorPath`, and `compressSelectionAnchorPath` stop being directly mutated by row event handlers.
+- `selectedEntries`, `selectedCompressRows`, `focusedEntryPath`, `focusedCompressRowPath`, `selectionAnchorPath`, and `compressSelectionAnchorPath` are no longer directly mutated by row event handlers.
+- Vitest covers click replacement, ctrl/meta toggle, shift range, select all, invert visible, cleanup, and focus movement.
 
-### Slice 4: Extract View Rendering
+### Slice 3: Introduce Archive Workspace
 
 Scope:
 
-- Add `src/ui/hierarchicalTableView.ts`.
-- Render table body states and common row attributes in one place.
-- Keep archive-specific cells and create-specific cells behind adapters.
+- Move archive load state, folder navigation, search, flat view, sort snapshot, selection snapshot, details model, and extract/test/preview readiness into `archiveWorkspace.ts`.
+- Keep Tauri command calls outside the workspace at first; pass command results into workspace intents.
 
 Done when:
 
-- Archive and create-plan table bodies are rendered through one view module.
-- Select-all state and ARIA state are set by the table view module.
+- `main.ts` no longer owns archive browsing state globals.
+- Command state reads an archive workspace snapshot instead of scattered globals.
+- Tests cover load success, load failure, navigation history, search, flat view, selection, and extract request readiness.
 
-### Slice 5: Extract DOM Event Routing
+### Slice 4: Introduce Create Workspace
 
 Scope:
 
-- Move click, double-click, keydown, checkbox, and context menu routing into the table view module.
-- Adapters receive typed events such as activate folder, activate entry, selection changed, delete requested, context requested.
+- Move create sources, plan state, plan revision guards, inclusion/exclusion, create-plan folder navigation, destination readiness, and request construction into `createWorkspace.ts`.
+- Keep the existing `createFlow.ts` helpers, but let the workspace become the interface callers use.
 
 Done when:
 
-- `main.ts` no longer binds table-specific row events directly.
-- Archive and create-plan keyboard behavior remains consistent.
+- `main.ts` no longer owns create workflow state globals.
+- Plan revision behavior and inclusion rules are covered by tests.
+- Start-create request construction is tested through the workspace interface.
 
-### Slice 6: Connect Workspace Modules
+### Slice 5: Add The Command Router
 
 Scope:
 
-- Let Archive Workspace and Create Workspace own the adapters.
-- Let `main.ts` keep composition only: instantiate workspaces, pass DOM roots, and call high-level render/update functions.
+- Keep command labels and menu definitions in `classicCommands.ts`.
+- Move command execution into `commandRouter.ts`.
+- Convert toolbar, menus, shortcuts, context menus, details pane, and row actions to emit command IDs and payloads.
 
 Done when:
 
-- `main.ts` no longer knows how a table row is selected, focused, or activated.
-- `main.ts` only routes application-level commands and desktop adapters.
+- Every command surface reaches the same router.
+- Unsupported operations and disabled reasons are consistent.
+- Adding a new command no longer requires editing unrelated event handlers.
+
+### Slice 6: Introduce Jobs Workspace
+
+Scope:
+
+- Move job map, event merging, retry contexts, focused quick-action state, and poll decisions into `jobsWorkspace.ts`.
+- Keep actual timers and native window calls as adapters.
+
+Done when:
+
+- Normal jobs and quick-action jobs share lifecycle behavior.
+- Password retry logic is tested through the jobs workspace.
+- Polling start/stop decisions can be tested without timers.
+
+### Slice 7: Extract UI View Adapters
+
+Scope:
+
+- Add or deepen view modules for archive browser, create workspace, shell commands, context menus, and modal behavior.
+- Move DOM event decoding out of `main.ts` once the corresponding workspace interface exists.
+
+Done when:
+
+- `main.ts` mostly wires `view.bind({ onIntent })` and `view.render(snapshot)`.
+- UI modules contain data attributes and HTML; app modules contain state transitions.
+
+### Slice 8: Split Desktop Adapters
+
+Scope:
+
+- Move native dialogs, file manager actions, window geometry, file drop, and native drag-out into narrow desktop adapters.
+- Inject adapters into shell/workflow setup.
+
+Done when:
+
+- Most frontend tests can run without Tauri globals.
+- Tauri imports are concentrated in `src/api` and `src/desktop`.
 
 ## Testing Strategy
 
-Add tests at the interface, not behind it.
+Test the public interface of each deep module:
 
-Recommended coverage:
+- `hierarchicalTable.test.ts`: row derivation, selection, focus, cleanup, keyboard intents.
+- `archiveWorkspace.test.ts`: loading, navigation, search, flat view, command context, extract readiness.
+- `createWorkspace.test.ts`: sources, plan revisions, inclusion, destination readiness, request construction.
+- `commandRouter.test.ts`: command availability and execution dispatch.
+- `jobsWorkspace.test.ts`: event merging, retry state, polling decisions, focused quick-action state.
+- `modalController.test.ts`: focus trap, default/cancel, return focus.
 
-- Row derivation:
-  - root folder.
-  - nested folders.
-  - explicit directory entries.
-  - synthetic folders.
-  - parent row.
-  - flat view.
-  - search view.
-- Selection:
-  - click replacement.
-  - ctrl/meta toggle.
-  - shift range.
-  - hidden selection preservation under search.
-  - selection cleanup when visible rows disappear.
-- Focus:
-  - arrow movement.
-  - focus restoration after render.
-  - focused row removed from visible rows.
-- Rendering:
-  - loading state.
-  - empty state.
-  - error state.
-  - selectable row ARIA state.
-  - checkbox state.
-- Adapter events:
-  - folder activation.
-  - entry activation.
-  - context request.
-  - delete request for create-plan rows.
+Keep Playwright for end-to-end confidence, especially:
 
-Keep Playwright coverage for end-to-end confidence, but do not make Playwright the primary proof of table behavior. The pane should be testable in Vitest.
+- Open archive and browse folders.
+- Search and flat view.
+- Select and extract selected entries.
+- Create archive from multiple sources with inclusion/exclusion.
+- Jobs drawer and quick-action progress.
+- Keyboard navigation and context menus.
+
+Do not use Playwright as the main proof for workflow state. Workflow behavior should be mostly Vitest-covered.
+
+## Security And Architecture Guardrails
+
+- Passwords remain ephemeral. Do not store them in workspace snapshots, local storage, logs, diagnostics, URLs, or command-line strings.
+- TypeScript may assemble command DTOs, but archive planning, extraction safety, overwrite policy enforcement, symlink/hardlink checks, path normalization, and zip-bomb guards remain Rust/core-owned.
+- Command DTOs stay small and serializable.
+- Do not add direct Tauri imports outside `src/api` and `src/desktop`.
+- Do not add new table row listeners in `main.ts`.
+- Do not add new workflow globals in `main.ts`.
+- Do not duplicate archive path tree logic for create-plan rows; generalize it through the hierarchical table module while preserving source-path mapping in Create Workspace.
+- Do not create a frontend framework migration inside this refactor.
+- Do not redesign the visual UI as part of architecture extraction.
+- Do not introduce a general-purpose table library unless the local table module proves too expensive to own after the first two slices.
 
 ## Success Criteria
 
-The table-pane refactor is successful when:
+The redesign is successful when:
 
-- Archive browsing and create-plan browsing share one table behavior module.
-- `main.ts` no longer owns row building, row selection, row focus, or row keyboard behavior.
+- `main.ts` is a composition root, not the owner of workflows.
+- Archive browsing, create planning, jobs, and commands each have a deep module with a small interface.
+- Archive and create-plan folder tables share one row/selection/focus implementation.
+- Every command surface routes through one command router.
+- Tauri imports are concentrated in `src/api` and `src/desktop`.
+- Workflow tests cover the main state transitions without mounting the full shell.
 - Adding a third hierarchical table requires a new adapter, not copied event handlers.
-- The pane interface makes bypassing selection/focus behavior awkward.
-- Search, flat view, parent folder rows, create-plan inclusion, context menus, and keyboard navigation still work.
-- `npm run test:frontend` covers the table pane directly.
-
-## Non-Goals
-
-- Do not migrate to a frontend framework as part of this refactor.
-- Do not redesign the visual UI during the architecture work.
-- Do not change archive command contracts.
-- Do not move archive behavior from Rust into TypeScript.
-- Do not introduce a general-purpose table library unless this module proves too expensive to own.
+- Adding a command updates one router path and the relevant command definition, not six event surfaces.
+- Password and archive safety rules remain enforceable by construction.
 
 ## Recommended Next Step
 
 Start with Slice 1 and Slice 2 together:
 
-1. Add missing row-derivation tests.
-2. Extract the row derivation into `src/app/hierarchicalTable.ts`.
-3. Make both archive browsing and create-plan browsing call the same derivation module.
+1. Add `src/app/hierarchicalTable.ts` and focused tests.
+2. Replace archive and create-plan visible row derivation with the shared module.
+3. Move selection and focus state behind the table module interface.
 
-That first step is low-risk because it does not need to change DOM event behavior yet. It creates the real seam first, then later slices move selection, rendering, and event routing behind it.
+This is the best first move because it has two real adapters today: archive browsing and create-plan browsing. Once that interface is stable, extract Archive Workspace and Create Workspace above it.

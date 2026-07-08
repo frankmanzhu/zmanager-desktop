@@ -4,7 +4,9 @@
 
 ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. Keep it separate from the macOS SwiftUI app; do not reimplement archive behavior in TypeScript.
 
-- `src/`: Vite/TypeScript frontend. `src/app` owns UI state and flows, `src/api` command DTOs, `src/ui` rendering helpers, and `src/desktop` runtime/path integration.
+- `src/`: Vite/TypeScript frontend. `src/app` owns workflow state and pure behavior, `src/api` command DTOs and invoke wrappers, `src/ui` rendering and DOM event adapters, and `src/desktop` runtime/path/window integration.
+- `src/app/workspaces/`: target home for deep workflow modules such as Archive Workspace, Create Workspace, and Jobs Workspace.
+- `src/app/commands/`: target home for command routing that unifies toolbar, menu, shortcut, context-menu, details-pane, and row-action execution.
 - `src-tauri/`: Rust Tauri commands, job registry, DTO mapping, and platform modules. Keep OS code in `platform/windows.rs` and `platform/linux.rs`.
 - `e2e/`: Playwright end-to-end and visual tests.
 - `scripts/`, `packaging/`, `docs/`: release tooling, installer assets, architecture notes, and audits.
@@ -31,6 +33,23 @@ Use explicit TypeScript module names such as `extractFlow.ts` and `archiveTable.
 
 Rust code should keep app-facing mapping in Tauri commands and leave archive behavior in `zmanager-core`. Do not add macOS SwiftUI, Finder Sync, Quick Look, signing, notarization, or `.app` packaging code.
 
+## Frontend Architecture Goals
+
+Treat `src/main.ts` as the composition root, not the application architecture. It may query stable DOM roots, instantiate adapters/workspaces, bind top-level startup, and connect render functions to workspace snapshots. Do not add new durable workflow state, table row derivation, command execution switches, selection/focus logic, job lifecycle state, password retry state, or desktop request construction to `main.ts`.
+
+Prefer deep modules with small interfaces over shallow helper extraction. The current architecture target is documented in `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`: Archive Workspace, Create Workspace, Jobs Workspace, a shared Hierarchical Table module, and a Command Router.
+
+Keep ownership clear:
+
+- `src/app`: workflow state, state transitions, request readiness, and pure derivations. App modules may depend on DTO types but should not call Tauri directly.
+- `src/ui`: HTML rendering and DOM event decoding. UI modules emit typed intents and render snapshots; they should not duplicate workflow decisions.
+- `src/api`: serializable DTOs and Tauri invoke wrappers only.
+- `src/desktop`: native dialogs, file manager actions, Tauri events, window control, native drag-out, and platform path adapters.
+
+For table-like folder panes, reuse or deepen the planned `hierarchicalTable` module. Do not add new archive/create row builders, selection globals, focus globals, or table-specific event listeners in `main.ts`.
+
+For commands, route new toolbar, menu, shortcut, context-menu, details-pane, and row-action behavior through a command router rather than wiring each surface separately.
+
 ## Testing Guidelines
 
 Test command-boundary behavior first: validation, password-required flows, listing mapping, create/extract lifecycle, cancellation, normalized errors, and platform path edge cases. Frontend tests should cover state transitions and user-visible behavior. Use Vitest for `src/**/*.test.ts` and Playwright for `e2e/*.spec.ts`.
@@ -42,3 +61,5 @@ Recent history uses short imperative summaries, for example `Fix context menu`. 
 ## Security & Architecture Rules
 
 Passwords must never be logged, persisted in frontend storage, passed through command-line arguments, or included in diagnostics. Extraction safety must remain core-owned; do not bypass path normalization, collision handling, overwrite policy, symlink/hardlink checks, or zip-bomb guards. Keep command contracts small: plan, list, extract, create, test, cancel, and poll events.
+
+Do not reimplement archive planning, listing, extraction, creation, or safety behavior in TypeScript. The frontend may assemble command DTOs and derive presentation state, but Rust and `zmanager-core` own archive semantics.
