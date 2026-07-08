@@ -2,6 +2,8 @@
 
 Date: 2026-07-08
 
+Execution companion: `docs/FRONTEND_ARCHITECTURE_EXECUTION_PLAN.md`
+
 ## Goal
 
 Turn the frontend from one large event-driven script into a small composition
