@@ -523,10 +523,11 @@ p {
 
 .menu-item,
 .app-menu button {
+  position: relative;
   width: 100%;
   min-height: 28px;
   justify-content: flex-start;
-  padding: 4px 28px 4px 10px;
+  padding: 4px 28px;
   border-color: transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -539,6 +540,18 @@ p {
 .app-menu button:hover:not(:disabled) {
   border-color: transparent;
   background: var(--native-control-bg-hover);
+}
+
+.menu-item[aria-pressed="true"]::before {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  content: "";
+  transform: translateY(-56%) rotate(45deg);
 }
 
 .toolbar,
@@ -642,6 +655,13 @@ p {
   background: var(--native-control-bg-hover);
 }
 
+.command-toolbar .tool-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--native-layer-bg));
+  color: var(--accent-strong);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 .toolbar-brand {
   display: inline-flex;
   align-items: center;
@@ -734,7 +754,7 @@ button svg {
   grid-area: path;
   min-height: 44px;
   display: grid;
-  grid-template-columns: auto auto minmax(150px, 0.95fr) minmax(0, 1.05fr) minmax(190px, 280px);
+  grid-template-columns: auto auto minmax(150px, 0.85fr) minmax(0, 1fr) minmax(300px, 420px);
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -782,6 +802,27 @@ button svg {
 
 .search-field input[type="search"] {
   min-width: 0;
+}
+
+.search-box {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto auto minmax(58px, auto);
+  align-items: center;
+  gap: 4px;
+}
+
+.search-action {
+  min-height: 28px;
+  padding-inline: 8px;
+}
+
+.search-count {
+  min-width: 58px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .path-actions {
@@ -980,9 +1021,12 @@ body.is-resizing-pane {
 }
 
 .tree-item {
+  min-width: 0;
+  max-width: 100%;
   padding-left: calc(8px + var(--depth, 0) * 14px);
   gap: 6px;
   width: 100%;
+  overflow: hidden;
 }
 
 .tree-disclosure,
@@ -1100,6 +1144,27 @@ body.is-resizing-pane {
   display: none !important;
 }
 
+.compress-options-summary {
+  display: none;
+}
+
+.compress-options-summary-title {
+  font-weight: 650;
+}
+
+.compress-options-summary-description {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compress-options-panel:not([open]) > :not(summary) {
+  display: none !important;
+}
+
 .compress-options-intro {
   display: grid;
   gap: 3px;
@@ -1166,7 +1231,8 @@ body.is-resizing-pane {
 .details-list dt,
 .detail-list dt {
   color: var(--muted);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .details-list dd,
@@ -1853,9 +1919,11 @@ tbody tr.is-selected .row-primary::before {
 .row-name,
 .tree-label {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .row-secondary {
@@ -2972,7 +3040,7 @@ progress {
   }
 
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: auto minmax(0, 1fr) minmax(130px, auto);
+    grid-template-rows: auto minmax(0, 1fr) minmax(36px, auto);
   }
 
   .workspace[data-mode="compress"] .compress-create-panel {
@@ -2987,6 +3055,14 @@ progress {
 
   .workspace[data-mode="compress"] .details-pane {
     grid-row: 3;
+    max-height: 42px;
+    padding: 6px 10px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .details-pane > .pane-header {
+    display: none;
   }
 
   .navigation-pane {
@@ -3012,8 +3088,47 @@ progress {
     grid-template-columns: minmax(96px, 22%) minmax(0, 1fr);
   }
 
+  .archive-detail-block .detail-list > div:nth-of-type(n+5) {
+    display: none;
+  }
+
   .workspace[data-mode="compress"] .compress-options-intro p,
+  .workspace[data-mode="compress"] .compress-options-intro,
   .workspace[data-mode="compress"] .plan-header p {
+    display: none;
+  }
+
+  .workspace[data-mode="compress"] .plan-header,
+  .workspace[data-mode="compress"] #source-list,
+  .workspace[data-mode="compress"] #create-plan-summary {
+    display: none !important;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel {
+    min-height: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel[open] {
+    gap: 8px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .details-pane:has(.compress-options-panel[open]) {
+    max-height: 190px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary {
+    min-height: 29px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary-description {
     display: none;
   }
 
@@ -3045,7 +3160,7 @@ progress {
 
   .path-bar {
     padding-inline: 8px;
-    grid-template-columns: auto auto minmax(120px, 0.9fr) minmax(0, 1fr) minmax(140px, 180px);
+    grid-template-columns: auto auto minmax(120px, 0.8fr) minmax(0, 1fr) minmax(290px, 330px);
   }
 
   .status-bar {
@@ -3060,6 +3175,17 @@ progress {
   .compress-create-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel {
+    gap: 6px;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-intro p,
+  .workspace[data-mode="compress"] .plan-header,
+  .workspace[data-mode="compress"] #source-list,
+  .workspace[data-mode="compress"] #create-plan-summary {
+    display: none !important;
   }
 
   .recent-location-select {
@@ -3158,6 +3284,18 @@ progress {
     --zmanager-statusbar-parts: 1;
   }
 
+  .path-bar {
+    grid-template-columns: auto auto minmax(220px, 1fr) minmax(220px, 260px);
+  }
+
+  .path-crumbs {
+    display: none;
+  }
+
+  .search-box {
+    grid-template-columns: minmax(80px, 1fr) auto auto minmax(54px, auto);
+  }
+
   .topbar,
   .panel-header,
   .status-bar {
@@ -3207,7 +3345,7 @@ progress {
 
   .browser-shell,
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: minmax(54px, auto) minmax(190px, 1fr) minmax(88px, auto);
+    grid-template-rows: minmax(42px, auto) minmax(156px, 1fr) minmax(146px, auto);
   }
 
   .compress-destination-field .inline-field {
@@ -3219,7 +3357,7 @@ progress {
   }
 
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: auto minmax(44px, auto) minmax(150px, 1fr) minmax(84px, auto);
+    grid-template-rows: auto minmax(36px, auto) minmax(150px, 1fr) minmax(36px, auto);
   }
 
   .workspace[data-mode="compress"] .compress-create-panel {
@@ -3232,10 +3370,11 @@ progress {
     grid-column: 1;
     grid-row: 1;
     align-items: center;
-    max-height: 76px;
+    max-height: 56px;
     padding: 5px 8px;
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -3263,7 +3402,8 @@ progress {
   .tab,
   .tree-item,
   .nav-item {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    max-width: 100%;
   }
 
   .workspace[data-mode="compress"] .navigation-pane {
@@ -3285,33 +3425,65 @@ progress {
   .workspace[data-mode="compress"] .details-pane {
     grid-column: 1;
     grid-row: 3;
-    max-height: 118px;
     min-width: 0;
+  }
+
+  .details-pane {
+    max-height: 150px;
+    padding: 8px 10px;
+    gap: 5px;
   }
 
   .workspace[data-mode="compress"] .details-pane {
     grid-row: 4;
-    max-height: 126px;
+    max-height: 42px;
     padding: 6px 10px;
-    gap: 4px;
+    gap: 0;
+    overflow: hidden;
   }
 
   .details-pane .detail-list {
     grid-template-columns: minmax(76px, 32%) minmax(0, 1fr);
   }
 
+  .archive-detail-block .detail-list > div:nth-of-type(n+4) {
+    display: none;
+  }
+
   .workspace[data-mode="compress"] .compress-options-panel {
     min-height: 0;
-    gap: 6px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel[open] {
+    gap: 8px;
     overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .details-pane:has(.compress-options-panel[open]) {
+    max-height: 170px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary {
+    min-height: 29px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary-description {
+    display: none;
   }
 
   .workspace[data-mode="compress"] .compress-options-intro p,
   .workspace[data-mode="compress"] .compress-options-intro,
   .workspace[data-mode="compress"] .plan-header p,
+  .workspace[data-mode="compress"] .plan-header,
   .workspace[data-mode="compress"] #source-list,
-  .workspace[data-mode="compress"] #create-plan-summary,
-  .workspace[data-mode="compress"] .advanced-options {
+  .workspace[data-mode="compress"] #create-plan-summary {
     display: none !important;
   }
 
@@ -3696,7 +3868,7 @@ body.linux-window-chrome .quick-progress {
   }
 
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: auto minmax(0, 1fr) minmax(130px, auto);
+    grid-template-rows: auto minmax(0, 1fr) minmax(36px, auto);
   }
 
   .workspace[data-mode="compress"] .compress-create-panel {
@@ -3711,6 +3883,14 @@ body.linux-window-chrome .quick-progress {
 
   .workspace[data-mode="compress"] .details-pane {
     grid-row: 3;
+    max-height: 42px;
+    padding: 6px 10px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .details-pane > .pane-header {
+    display: none;
   }
 
   .navigation-pane {
@@ -3736,8 +3916,47 @@ body.linux-window-chrome .quick-progress {
     grid-template-columns: minmax(96px, 22%) minmax(0, 1fr);
   }
 
+  .archive-detail-block .detail-list > div:nth-of-type(n+5) {
+    display: none;
+  }
+
   .workspace[data-mode="compress"] .compress-options-intro p,
+  .workspace[data-mode="compress"] .compress-options-intro,
   .workspace[data-mode="compress"] .plan-header p {
+    display: none;
+  }
+
+  .workspace[data-mode="compress"] .plan-header,
+  .workspace[data-mode="compress"] #source-list,
+  .workspace[data-mode="compress"] #create-plan-summary {
+    display: none !important;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel {
+    min-height: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel[open] {
+    gap: 8px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .details-pane:has(.compress-options-panel[open]) {
+    max-height: 190px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary {
+    min-height: 29px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary-description {
     display: none;
   }
 
@@ -3764,11 +3983,11 @@ body.linux-window-chrome .quick-progress {
 
   .browser-shell,
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: minmax(54px, auto) minmax(190px, 1fr) minmax(88px, auto);
+    grid-template-rows: minmax(42px, auto) minmax(156px, 1fr) minmax(146px, auto);
   }
 
   .workspace[data-mode="compress"] .browser-shell {
-    grid-template-rows: auto minmax(44px, auto) minmax(150px, 1fr) minmax(84px, auto);
+    grid-template-rows: auto minmax(36px, auto) minmax(150px, 1fr) minmax(36px, auto);
   }
 
   .compress-destination-field .inline-field {
@@ -3789,10 +4008,11 @@ body.linux-window-chrome .quick-progress {
     grid-column: 1;
     grid-row: 1;
     align-items: center;
-    max-height: 76px;
+    max-height: 56px;
     padding: 5px 8px;
     flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -3817,6 +4037,13 @@ body.linux-window-chrome .quick-progress {
     white-space: nowrap;
   }
 
+  .tab,
+  .tree-item,
+  .nav-item {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+
   .workspace[data-mode="compress"] .navigation-pane {
     grid-row: 2;
   }
@@ -3835,33 +4062,65 @@ body.linux-window-chrome .quick-progress {
   .details-pane {
     grid-column: 1;
     grid-row: 3;
-    max-height: 118px;
     min-width: 0;
+  }
+
+  .details-pane {
+    max-height: 150px;
+    padding: 8px 10px;
+    gap: 5px;
   }
 
   .workspace[data-mode="compress"] .details-pane {
     grid-row: 4;
-    max-height: 126px;
+    max-height: 42px;
     padding: 6px 10px;
-    gap: 4px;
+    gap: 0;
+    overflow: hidden;
   }
 
   .details-pane .detail-list {
     grid-template-columns: minmax(76px, 32%) minmax(0, 1fr);
   }
 
+  .archive-detail-block .detail-list > div:nth-of-type(n+4) {
+    display: none;
+  }
+
   .workspace[data-mode="compress"] .compress-options-panel {
     min-height: 0;
-    gap: 6px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel[open] {
+    gap: 8px;
     overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .details-pane:has(.compress-options-panel[open]) {
+    max-height: 170px;
+    overflow: auto;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary {
+    min-height: 29px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-summary-description {
+    display: none;
   }
 
   .workspace[data-mode="compress"] .compress-options-intro p,
   .workspace[data-mode="compress"] .compress-options-intro,
   .workspace[data-mode="compress"] .plan-header p,
+  .workspace[data-mode="compress"] .plan-header,
   .workspace[data-mode="compress"] #source-list,
-  .workspace[data-mode="compress"] #create-plan-summary,
-  .workspace[data-mode="compress"] .advanced-options {
+  .workspace[data-mode="compress"] #create-plan-summary {
     display: none !important;
   }
 

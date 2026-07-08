@@ -425,7 +425,9 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(selectionPropertiesDialog).toBeVisible();
   await expect(selectionPropertiesDialog.getByRole("button", { name: "Archive Info" })).toBeVisible();
   await captureAndScan(page, "17-multi-selection-info-dialog");
-  await closeDevSurface(page);
+  await page.keyboard.press("Escape");
+  await expect(selectionPropertiesDialog).toBeHidden();
+  await expect(page.locator('tr[data-entry-path="images"]')).toBeFocused();
 
   await page.locator('tr[data-entry-path="images"] .row-name').dblclick();
   await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
@@ -433,17 +435,37 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await captureAndScan(page, "18-image-entry-details");
 
   await openDevSurface(page, "info");
-  await expect(page.getByRole("dialog", { name: "Entry Info" })).toBeVisible();
+  const entryInfoDialog = page.getByRole("dialog", { name: "Entry Info" });
+  await expect(entryInfoDialog).toBeVisible();
   await captureAndScan(page, "19-image-entry-info-dialog");
-  await closeDevSurface(page);
+  await entryInfoDialog.getByRole("button", { name: "Close" }).click();
+  await expect(entryInfoDialog).toBeHidden();
+  await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeFocused();
 
   await page.locator("#search-entries").fill("missing-entry");
+  await expect(page.locator("#search-submit")).toBeVisible();
+  await expect(page.locator("#clear-search")).toBeEnabled();
+  await expect(page.locator("#search-count")).toHaveText("0 results");
+  await expect(page.locator("#entry-table-body .search-empty-row")).toContainText('No entries match "missing-entry".');
+  await expect(page.locator("#details-content")).toContainText("Selection not visible in current search");
   await captureAndScan(page, "20-search-empty-results");
 
-  await page.locator("#search-entries").fill("");
+  await page.locator("#clear-search").click();
+  await expect(page.locator("#search-entries")).toHaveValue("");
+  await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
+  await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#details-content")).toContainText("product-screenshot.png");
+  await expect(page.locator("#status-selection-count")).toContainText("1 / 1");
+  await expect(page.locator("#toolbar-flatView")).toHaveAttribute("aria-pressed", "false");
   await page.locator("summary", { hasText: "View" }).click();
+  await expect(page.locator("#menu-command-flatView")).toHaveAttribute("aria-pressed", "false");
   await page.locator("#menu-command-flatView").click();
+  await expect(page.locator("#toolbar-flatView")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#menu-command-flatView")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('tr[data-entry-path="documents/notes.txt"] .row-secondary')).toContainText("documents/notes.txt");
   await captureAndScan(page, "31-flat-view-with-icons");
+  await page.locator('tr[data-entry-path="documents"] .row-name').dblclick();
+  await expect(page.locator('tr[data-entry-path="documents/notes.txt"]')).toBeVisible();
 });
 
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
@@ -649,6 +671,7 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
     const visibleLabel = (element: HTMLElement): string =>
       (
         element.getAttribute("aria-label") ||
+        element.innerText ||
         element.textContent ||
         element.getAttribute("placeholder") ||
         element.getAttribute("title") ||
@@ -661,24 +684,52 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       return width * height;
     };
 
-    const isClippedByScrollableAncestor = (element: HTMLElement): boolean => {
+    const nearestClippingAncestor = (element: HTMLElement): HTMLElement | null => {
+      let parent = element.parentElement;
+      while (parent && parent !== document.body) {
+        const style = window.getComputedStyle(parent);
+        const clips = /(auto|scroll|hidden|clip)/.test(`${style.overflow}${style.overflowY}${style.overflowX}`);
+        if (clips) {
+          return parent;
+        }
+        parent = parent.parentElement;
+      }
+      return null;
+    };
+
+    const clippingAncestorFor = (element: HTMLElement): HTMLElement | null => {
       const rect = element.getBoundingClientRect();
       let parent = element.parentElement;
       while (parent && parent !== document.body) {
         const style = window.getComputedStyle(parent);
-        const canScroll = /(auto|scroll)/.test(`${style.overflow}${style.overflowY}${style.overflowX}`);
-        if (canScroll && (parent.scrollHeight > parent.clientHeight + 1 || parent.scrollWidth > parent.clientWidth + 1)) {
+        const clips = /(auto|scroll|hidden|clip)/.test(`${style.overflow}${style.overflowY}${style.overflowX}`);
+        if (clips) {
           const parentRect = parent.getBoundingClientRect();
-          return (
+          const visibleArea = Math.max(0, Math.min(rect.right, parentRect.right) - Math.max(rect.left, parentRect.left)) *
+            Math.max(0, Math.min(rect.bottom, parentRect.bottom) - Math.max(rect.top, parentRect.top));
+          const elementArea = rect.width * rect.height;
+          const visibleRatio = elementArea > 0 ? visibleArea / elementArea : 0;
+          const intentionallyScrollableDetail = element.closest("#details-content") !== null &&
+            (
+              parent.id === "details-content" ||
+              parent.classList.contains("details-pane")
+            );
+          const isClipped = !intentionallyScrollableDetail &&
+            visibleRatio > 0 &&
+            visibleRatio < 0.98 &&
+            (
             rect.left < parentRect.left - 1 ||
             rect.right > parentRect.right + 1 ||
             rect.top < parentRect.top - 1 ||
             rect.bottom > parentRect.bottom + 1
-          );
+            );
+          if (isClipped) {
+            return parent;
+          }
         }
         parent = parent.parentElement;
       }
-      return false;
+      return null;
     };
 
     const selector = [
@@ -696,6 +747,15 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       ".archive-empty-copy h2",
       ".archive-empty-copy p",
       ".archive-empty-hint",
+      ".table-pane-header p",
+      ".empty-pane p",
+      ".details-pane dt",
+      ".details-pane dd",
+      ".detail-title span",
+      ".compress-options-summary-title",
+      ".compress-options-summary-description",
+      ".compress-options-panel .form-grid label > span",
+      ".compress-options-panel .toggle-line span",
       ".workspace-status",
       ".status-bar button",
       "#context-menu [role='menuitem']",
@@ -724,11 +784,9 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       return hitElement !== null && (element === hitElement || element.contains(hitElement) || hitElement.contains(element));
     };
 
-    const isPersistentActionControl = (element: HTMLElement): boolean =>
-      element.closest(".dialog-actions,.dialog-footer,.status-bar") !== null;
-
+    const activeModal = document.querySelector<HTMLElement>(".dialog-backdrop:not([hidden])");
     const elements = Array.from(document.querySelectorAll<HTMLElement>(selector))
-      .filter((element) => isRendered(element) && (!isClippedByScrollableAncestor(element) || isPersistentActionControl(element)));
+      .filter((element) => isRendered(element) && (!activeModal || activeModal.contains(element)));
 
     const problems: string[] = [];
 
@@ -742,16 +800,26 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
         ? (element.querySelector<HTMLElement>(".column-header-label") ?? element)
         : element;
       const label = visibleLabel(measuredElement);
+      const insideCommandOverflow = element.closest(".command-strip") !== null;
+      const insideContextMenuOverflow = element.closest("#context-menu") !== null;
+      const insideIntentionalOverflow = insideCommandOverflow || insideContextMenuOverflow;
       const clippedInline = measuredElement.scrollWidth > measuredElement.clientWidth + 1;
       const clippedBlock = measuredElement.scrollHeight > measuredElement.clientHeight + 1;
-      if (label && (clippedInline || clippedBlock)) {
+      if (label && !insideIntentionalOverflow && (clippedInline || clippedBlock)) {
         problems.push(`clipped ${element.tagName.toLowerCase()} "${label}"`);
       }
-      if (isPersistentActionControl(element) && isClippedByScrollableAncestor(element)) {
-        problems.push(`clipped by scroll container ${element.tagName.toLowerCase()} "${label}"`);
+      const clippingAncestor = clippingAncestorFor(element);
+      if (label && clippingAncestor && !insideIntentionalOverflow) {
+        const ancestorLabel = clippingAncestor.id
+          ? `#${clippingAncestor.id}`
+          : clippingAncestor.className
+            ? `.${String(clippingAncestor.className).trim().replace(/\s+/g, ".")}`
+            : clippingAncestor.tagName.toLowerCase();
+        problems.push(`clipped by ${ancestorLabel} ${element.tagName.toLowerCase()} "${label}"`);
       }
+      const nearestClip = nearestClippingAncestor(element);
       const rect = element.getBoundingClientRect();
-      if (rect.left < -1 || rect.right > window.innerWidth + 1 || rect.top < -1 || rect.bottom > window.innerHeight + 1) {
+      if (!insideIntentionalOverflow && !nearestClip && (rect.left < -1 || rect.right > window.innerWidth + 1 || rect.top < -1 || rect.bottom > window.innerHeight + 1)) {
         problems.push(`out of viewport ${element.tagName.toLowerCase()} "${label}"`);
       }
     }

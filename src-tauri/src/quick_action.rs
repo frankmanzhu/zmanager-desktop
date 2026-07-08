@@ -934,15 +934,51 @@ fn normalize_local_path(path: &str) -> Result<String, QuickActionError> {
             )));
         }
 
-        return url
-            .to_file_path()
-            .map(|path| path.to_string_lossy().to_string())
-            .map_err(|_| {
-                QuickActionError::invalid(format!("quick-action path must be local: {path}"))
-            });
+        return match url.to_file_path() {
+            Ok(path) => Ok(path.to_string_lossy().to_string()),
+            Err(()) if url.host_str().is_none() && url.path().starts_with('/') => {
+                Ok(percent_decode_uri_path(url.path()))
+            }
+            Err(()) => Err(QuickActionError::invalid(format!(
+                "quick-action path must be local: {path}"
+            ))),
+        };
     }
 
     Ok(path.to_string())
+}
+
+fn percent_decode_uri_path(path: &str) -> String {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (
+                hex_digit_value(bytes[index + 1]),
+                hex_digit_value(bytes[index + 2]),
+            ) {
+                decoded.push((high << 4) | low);
+                index += 3;
+                continue;
+            }
+        }
+
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+
+    String::from_utf8_lossy(&decoded).to_string()
+}
+
+fn hex_digit_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn validate_all_supported_archives(paths: &[String]) -> Result<(), QuickActionError> {

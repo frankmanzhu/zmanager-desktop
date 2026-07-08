@@ -142,6 +142,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('aria-describedby="create-plan-meta"');
     expect(mainSource).toContain("createArchiveUnavailableReason({");
     expect(mainSource).toContain('class="plan-details"');
+    expect(mainSource).toContain('class="compress-options-summary"');
     expect(mainSource).toContain('data-compress-source-path="${escapeHtml(sourcePath)}"');
     expect(mainSource).toContain('data-context-action="reveal-source"');
     expect(mainSource).toContain('data-context-action="remove-source"');
@@ -214,11 +215,15 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .details-pane {\n    grid-row: 3;");
     expect(styles).toContain("@media (max-width: 760px), (max-height: 520px)");
-    expect(styles).toContain("grid-template-rows: auto minmax(44px, auto) minmax(150px, 1fr) minmax(84px, auto);");
+    expect(styles).toContain("grid-template-rows: auto minmax(36px, auto) minmax(150px, 1fr) minmax(36px, auto);");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .archive-table-pane {\n    grid-row: 3;");
-    expect(styles).toContain("max-height: 76px;");
+    expect(styles).toContain("max-height: 56px;");
     expect(styles).toContain(".navigation-pane .tree-content {\n    min-width: 0;\n    display: flex;");
-    expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-panel {\n    min-height: 0;\n    gap: 6px;\n    overflow: auto;");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-panel {\n    min-height: 0;\n    gap: 0;\n    overflow: hidden;");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-summary {\n    min-height: 29px;");
+    expect(styles).toContain(".compress-options-panel:not([open]) > :not(summary)");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-panel .create-options-grid");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .details-pane:has(.compress-options-panel[open])");
     expect(styles).not.toContain(".workspace[data-mode=\"compress\"] .compress-options-panel > * {\n    display: none;");
   });
 
@@ -266,6 +271,22 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain(".detail-copyable");
     expect(styles).toContain(".tool-button.is-primary-command");
     expect(styles).toContain(".tool-button.is-secondary-command");
+  });
+
+  it("keeps search and flat view as stateful file-table controls", () => {
+    expect(mainSource).toContain('id="search-submit"');
+    expect(mainSource).toContain('id="clear-search"');
+    expect(mainSource).toContain('id="search-count"');
+    expect(mainSource).toContain('searchCountElement.textContent = formatSearchCount(resultCount);');
+    expect(mainSource).toContain('class="${query ? "search-empty-row" : ""}"');
+    expect(mainSource).toContain('message("detail.selectionHiddenBySearch")');
+    expect(mainSource).toContain('data-details-action="clear-search"');
+    expect(mainSource).toContain('button.setAttribute("aria-pressed", String(isFlatView));');
+    expect(styles).toContain(".search-box");
+    expect(styles).toContain(".search-count");
+    expect(styles).toContain('.command-toolbar .tool-button[aria-pressed="true"]');
+    expect(styles).toContain('.menu-item[aria-pressed="true"]::before');
+    expect(styles).toContain(".row-secondary");
   });
 
   it("keeps selection properties and entry preview surfaces unambiguous", () => {

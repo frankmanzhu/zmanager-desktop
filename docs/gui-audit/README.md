@@ -109,16 +109,16 @@ Primary user goal: switch between Compress and Extract without fake or broken UI
 
 ## Current Verification
 
-- `npm.cmd run test:frontend`: passed, 17 test files / 100 tests.
+- `npm.cmd run test:frontend`: passed, 25 test files / 183 tests.
 - `npm.cmd run build`: passed.
-- `npm.cmd run test:e2e`: passed, 14 Playwright tests.
-- `npx.cmd playwright test e2e/gui-visual-scan.spec.ts`: passed, 4 GUI scan tests covering 36 screenshots.
+- `npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts`: passed, 4 GUI scan tests covering 36 screenshots.
+- `docs/windows-native-gui-task16-smoke.md` records the 2026-07-08 native Tauri smoke evidence and remaining manual-only gaps.
 
 ## UX Risks Still Open
 
 1. Dialogs still come from the older architecture and need deeper review against the two-mode model.
 2. The Create Archive action is visually separated from the staged-file table but still opens the old modal, so the flow is not yet fully resolved.
-3. Extract drag-out behavior needs end-to-end verification in the real Tauri shell, not browser preview.
+3. Extract drag-out behavior needs hands-on end-to-end verification in the real Tauri shell; automated browser preview and the 2026-07-08 native smoke cannot prove it.
 4. More viewport variants should be added if the supported minimum window size changes.
 
 ## Accessibility Risks Still Open

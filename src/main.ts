@@ -667,10 +667,15 @@ appRoot.innerHTML = `
       <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" data-i18n-title="commands.upOneLevel.tooltip" data-i18n-aria-label="commands.upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
       <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." readonly disabled />
       <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</div>
-      <label class="search-field">
-        <span class="sr-only" data-i18n-text="search.entries">Search entries</span>
-        <input id="search-entries" type="search" data-i18n-placeholder="search.placeholder" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
-      </label>
+      <div class="search-box" role="search">
+        <label class="search-field">
+          <span class="sr-only" data-i18n-text="search.entries">Search entries</span>
+          <input id="search-entries" type="search" data-i18n-placeholder="search.placeholder" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
+        </label>
+        <button id="search-submit" class="search-action" type="button" data-i18n-text="search.button" disabled>Search</button>
+        <button id="clear-search" class="search-action quiet-action" type="button" data-i18n-text="search.clear" data-i18n-aria-label="search.clear.aria" aria-label="Clear search" disabled>Clear</button>
+        <output id="search-count" class="search-count" for="search-entries" aria-live="polite"></output>
+      </div>
     </section>
 
     <section class="browser-shell" data-i18n-aria-label="workspace.archiveWorkspace.aria" aria-label="Archive workspace">
@@ -804,7 +809,11 @@ appRoot.innerHTML = `
           <h2 id="details-pane-title" data-i18n-text="pane.details">Details</h2>
         </div>
         <div id="details-content" class="details-content"></div>
-        <div id="compress-options-panel" class="compress-options-panel" hidden>
+        <details id="compress-options-panel" class="compress-options-panel" hidden>
+          <summary class="compress-options-summary">
+            <span class="compress-options-summary-title" data-i18n-text="create.options.title">Archive Options</span>
+            <span class="compress-options-summary-description" data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</span>
+          </summary>
           <div class="compress-options-intro">
             <h3 data-i18n-text="create.options.title">Archive Options</h3>
             <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
@@ -872,7 +881,7 @@ appRoot.innerHTML = `
               </label>
             </div>
           </details>
-        </div>
+        </details>
       </aside>
     </section>
 
@@ -1235,7 +1244,7 @@ appRoot.innerHTML = `
         <div class="dialog-header">
           <div>
             <h2 id="info-title" data-i18n-text="info.title">Info</h2>
-            <p data-i18n-text="info.description">Archive or entry details.</p>
+            <p id="info-description" data-i18n-text="info.description">Archive or entry details.</p>
           </div>
         </div>
         <div class="dialog-body property-dialog-body">
@@ -1270,7 +1279,8 @@ const paneResizerElements = document.querySelectorAll<HTMLElement>("[data-pane-r
 const detailsPaneTitleElement = document.querySelector<HTMLHeadingElement>("#details-pane-title")!;
 const treeContentElement = document.querySelector<HTMLDivElement>("#tree-content")!;
 const detailsElement = document.querySelector<HTMLDivElement>("#details-content")!;
-const compressOptionsPanel = document.querySelector<HTMLDivElement>("#compress-options-panel")!;
+const compressOptionsPanel = document.querySelector<HTMLDetailsElement>("#compress-options-panel")!;
+const compactCompressOptionsQuery = window.matchMedia("(max-width: 1100px), (max-height: 640px)");
 
 const openArchiveButton = document.querySelector<HTMLButtonElement>("#open-archive")!;
 const newArchiveButton = document.querySelector<HTMLButtonElement>("#new-archive")!;
@@ -1290,6 +1300,9 @@ const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-clo
 const windowResizeHandleElements = document.querySelectorAll<HTMLElement>("[data-window-resize-direction]");
 
 const searchInput = document.querySelector<HTMLInputElement>("#search-entries")!;
+const searchSubmitButton = document.querySelector<HTMLButtonElement>("#search-submit")!;
+const clearSearchButton = document.querySelector<HTMLButtonElement>("#clear-search")!;
+const searchCountElement = document.querySelector<HTMLOutputElement>("#search-count")!;
 const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#workspace-title")!;
 const messageElement = document.querySelector<HTMLParagraphElement>("#browse-message")!;
 const compressSurfaceElement = document.querySelector<HTMLDivElement>("#compress-surface")!;
@@ -1448,6 +1461,7 @@ const preferencesViewElements: PreferencesViewElements = {
 const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
 const infoDialogBody = document.querySelector<HTMLDivElement>("#info-dialog-body")!;
 const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
+const infoDescription = document.querySelector<HTMLParagraphElement>("#info-description")!;
 const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-group")!;
 
 let workspaceMode: WorkspaceDropMode = "compress";
@@ -1650,6 +1664,7 @@ function renderNormalWorkspaceOnce() {
     return;
   }
 
+  syncCompressOptionsPanelDisclosure();
   renderExtractDestinationHistory();
   renderCreateDestinationHistory();
   renderCreateSources();
@@ -1657,6 +1672,10 @@ function renderNormalWorkspaceOnce() {
   renderBrowse();
   renderJobs();
   normalWorkspaceRendered = true;
+}
+
+function syncCompressOptionsPanelDisclosure() {
+  compressOptionsPanel.open = !compactCompressOptionsQuery.matches;
 }
 
 async function revealNormalAppWindow() {
@@ -2200,6 +2219,7 @@ type InfoAction = {
   action?: string;
   copyValue?: string;
   primary?: boolean;
+  title?: string;
 };
 
 function middleTruncateDetailValue(value: string, maxLength = 88): string {
@@ -2303,7 +2323,8 @@ function selectionPropertyRows(selectedRows: readonly SelectableBrowserRow[]): D
 function infoActionButton(action: InfoAction): string {
   const actionAttribute = action.action ? ` data-info-action="${escapeHtmlValue(action.action)}"` : "";
   const copyAttribute = action.copyValue ? ` data-copy-value="${escapeHtmlValue(action.copyValue)}"` : "";
-  return `<button type="button" class="${action.primary ? "primary-action" : ""}"${actionAttribute}${copyAttribute}>${escapeHtml(action.label)}</button>`;
+  const titleAttribute = action.title ? ` title="${escapeHtmlValue(action.title)}" aria-label="${escapeHtmlValue(`${action.label}: ${action.title}`)}"` : "";
+  return `<button type="button" class="${action.primary ? "primary-action" : ""}"${actionAttribute}${copyAttribute}${titleAttribute}>${escapeHtml(action.label)}</button>`;
 }
 
 function setInfoActions(actions: readonly InfoAction[]) {
@@ -2316,6 +2337,10 @@ function infoReturnFocusForCurrentSelection(): HTMLElement | null {
     return null;
   }
   return tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(selectedPath)}"]`);
+}
+
+function previewActionHint(): string {
+  return message("preview.openTempOutsideHint");
 }
 
 function formatOptionalBytes(value?: number): string | null {
@@ -2955,25 +2980,15 @@ function setFolderRow(
 }
 
 function buildBrowserRows(): BrowserRow[] {
-  const query = searchInput.value.trim().toLowerCase();
+  const query = currentSearchQuery().toLowerCase();
   if (query) {
     return browseEntries
       .filter((entry) => normalizeEntryPath(entry.path).toLowerCase().includes(query))
-      .map((entry) => ({
-        rowType: "entry",
-        path: normalizeEntryPath(entry.path),
-        name: getBaseName(entry.path),
-        entry,
-      }));
+      .map(browserRowForEntry);
   }
 
   if (isFlatView) {
-    return browseEntries.map((entry) => ({
-      rowType: "entry",
-      path: normalizeEntryPath(entry.path),
-      name: getBaseName(entry.path),
-      entry,
-    }));
+    return browseEntries.map(browserRowForEntry);
   }
 
   const folder = normalizeFolderPath(currentArchiveFolder);
@@ -3027,6 +3042,34 @@ function buildBrowserRows(): BrowserRow[] {
   }
 
   return [...folderRows.values(), ...entryRows];
+}
+
+function browserRowForEntry(entry: ArchiveEntryDto): SelectableBrowserRow {
+  return {
+    rowType: entry.kind === "directory" ? "folder" : "entry",
+    path: normalizeEntryPath(entry.path),
+    name: getBaseName(entry.path),
+    entry,
+  };
+}
+
+function currentSearchQuery(): string {
+  return searchInput.value.trim();
+}
+
+function formatSearchCount(count: number): string {
+  return count === 1
+    ? message("search.oneResult", { count })
+    : message("search.results", { count });
+}
+
+function clearSearch() {
+  if (!currentSearchQuery()) {
+    return;
+  }
+  searchInput.value = "";
+  renderBrowse();
+  searchInput.focus();
 }
 
 function visibleRows(): BrowserRow[] {
@@ -3125,6 +3168,10 @@ function updateCommandState() {
 
   searchInput.disabled = !hasArchive || isLoading;
   searchInput.setAttribute("aria-disabled", String(searchInput.disabled));
+  searchSubmitButton.disabled = searchInput.disabled;
+  searchSubmitButton.setAttribute("aria-disabled", String(searchSubmitButton.disabled));
+  clearSearchButton.disabled = searchInput.disabled || !currentSearchQuery();
+  clearSearchButton.setAttribute("aria-disabled", String(clearSearchButton.disabled));
   selectAllInput.disabled = !canListEntries || visibleSelectableCount === 0;
   refreshArchiveButton.disabled = !hasArchive || isLoading;
   navBackButton.disabled = navigationHistory.length === 0;
@@ -3495,13 +3542,14 @@ function renderNameCell(row: BrowserRow, showFullPath: boolean): string {
   const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
   const icon = archiveRowIconDescriptor(row, i18n);
   const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForRow(row));
+  const showSecondaryPath = showFullPath && (row.rowType === "entry" || row.rowType === "folder");
   return `
     <span class="row-primary">
       ${renderEntryIcon(icon, "row-icon", iconDataUrl)}
       <span class="sr-only">${escapeHtml(icon.label)}:</span>
       <span class="row-name">${escapeHtml(row.name)}</span>
     </span>
-    ${showFullPath && row.rowType === "entry" ? `<span class="row-secondary">${escapeHtml(secondaryPath)}</span>` : ""}
+    ${showSecondaryPath ? `<span class="row-secondary">${escapeHtml(secondaryPath)}</span>` : ""}
   `;
 }
 
@@ -3526,6 +3574,8 @@ function renderCell(row: BrowserRow, column: ArchiveTableColumn, showFullPath: b
 function renderBrowseRows() {
   renderTableHeader();
   setArchiveEmptyStateVisible(false);
+  const query = currentSearchQuery();
+  searchCountElement.textContent = "";
 
   if (browseState === "loading") {
     tableBody.innerHTML = `
@@ -3562,12 +3612,14 @@ function renderBrowseRows() {
   }
 
   const rows = visibleRows();
+  const resultCount = rows.filter((row) => row.rowType === "entry" || row.rowType === "folder").length;
+  searchCountElement.textContent = formatSearchCount(resultCount);
   if (!rows.length) {
-    const emptyMessage = searchInput.value.trim()
-      ? i18n.t("browse.noEntriesMatchSearch")
+    const emptyMessage = query
+      ? i18n.t("browse.noEntriesMatchSearch", { query })
       : i18n.t("browse.folderEmpty");
     tableBody.innerHTML = `
-      <tr>
+      <tr class="${query ? "search-empty-row" : ""}">
         <td colspan="${tableColspan()}" class="empty">${escapeHtml(emptyMessage)}</td>
       </tr>
     `;
@@ -3581,7 +3633,7 @@ function renderBrowseRows() {
   selectAllInput.checked = selectableRows.length > 0 && selectedVisibleCount === selectableRows.length;
   selectAllInput.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < selectableRows.length;
 
-  const showFullPath = Boolean(searchInput.value.trim()) || isFlatView;
+  const showFullPath = Boolean(query) || isFlatView;
   const columns = visibleColumns(tableColumnSettings);
   const nativeDragAttributes = nativeDragRowAttributes();
   tableBody.innerHTML = rows
@@ -3667,6 +3719,34 @@ function renderDetails() {
     return;
   }
 
+  if (selectedRows.length === 0 && selectedEntries.size > 0 && currentSearchQuery()) {
+    const selectedCount = selectedEntries.size;
+    const firstSelectedPath = getSelectedEntryPaths()[0] ?? "";
+    const firstSelectedEntry = firstSelectedPath ? getEntryByPath(firstSelectedPath) : null;
+    const selectedName = firstSelectedEntry ? getBaseName(firstSelectedEntry.path) : firstSelectedPath;
+    const rows: DetailRow[] = [
+      { label: message("detail.selected"), value: message("detail.selectedEntries", { count: selectedCount }) },
+      { label: message("detail.search"), value: currentSearchQuery() },
+      ...(selectedName ? [{ label: message("detail.name"), value: selectedName }] : []),
+      ...(firstSelectedPath ? [{ label: message("detail.path"), value: firstSelectedPath }] : []),
+    ];
+
+    detailsElement.innerHTML = `
+      <div class="detail-block">
+        <h3>${escapeHtml(message("detail.selectionHiddenBySearch"))}</h3>
+        <p>${escapeHtml(message("detail.selectionHiddenBySearchDescription"))}</p>
+        <div class="detail-actions">
+          <button type="button" class="primary-action" data-details-action="clear-search">${escapeHtml(message("search.clear"))}</button>
+          <button type="button" data-details-action="archive-info">${escapeHtml(message("info.archiveTitle"))}</button>
+        </div>
+        <dl class="detail-list">
+          ${renderDetailRows(rows)}
+        </dl>
+      </div>
+    `;
+    return;
+  }
+
   if (selectedRows.length === 0) {
     const knownUnpackedSize = currentArchiveTotalSize !== null
       ? currentArchiveTotalSize
@@ -3687,7 +3767,7 @@ function renderDetails() {
     ].filter(Boolean).join("");
 
     detailsElement.innerHTML = `
-      <div class="detail-block">
+      <div class="detail-block archive-detail-block">
         <h3 class="detail-title">
           ${renderEntryIcon(
             archiveFileIconDescriptor(currentArchivePath, false, i18n),
@@ -3738,7 +3818,7 @@ function renderDetails() {
         </h3>
         ${canPreview ? `
           <div class="detail-actions">
-            <button type="button" class="primary-action" data-details-action="preview">${escapeHtml(message("command.view"))}</button>
+            <button type="button" class="primary-action" data-details-action="preview" title="${escapeHtmlValue(previewActionHint())}" aria-label="${escapeHtmlValue(`${message("command.view")}: ${previewActionHint()}`)}">${escapeHtml(message("command.view"))}</button>
           </div>
         ` : ""}
         <dl class="detail-list">
@@ -5818,7 +5898,7 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   const multiSelectionMenu = `
     <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("extract.selectedAction"))}</span></button>
     <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
+    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
     <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
   `;
   showContextMenu(x, y, `
@@ -5976,6 +6056,7 @@ function hideContextMenu() {
 
 function showArchiveInfo() {
   infoTitle.textContent = message("info.archiveTitle");
+  infoDescription.textContent = message("info.archiveDescription");
   const knownTotalSize = currentArchiveTotalSize !== null
     ? currentArchiveTotalSize
     : (sumKnownBytes(browseEntries, (entry) => entry.size) ?? null);
@@ -6014,10 +6095,11 @@ function showEntryInfo(path: string) {
   }
 
   infoTitle.textContent = message("info.entryTitle");
+  infoDescription.textContent = message("info.entryDescription");
   const rows = entryPropertyRows(entry);
   const canPreview = entry.kind !== "directory";
   setInfoActions([
-    ...(canPreview ? [{ label: message("command.view"), action: "preview", primary: true }] : []),
+    ...(canPreview ? [{ label: message("command.view"), action: "preview", primary: true, title: previewActionHint() }] : []),
     { label: message("info.copyPath"), copyValue: entry.path },
     { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
     { label: message("info.archiveTitle"), action: "archive-info" },
@@ -6041,6 +6123,7 @@ function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
 
   const rows = selectionPropertyRows(selectedRows);
   infoTitle.textContent = message("info.selectionTitle");
+  infoDescription.textContent = message("info.selectionDescription");
   setInfoActions([
     { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
     { label: message("info.archiveTitle"), action: "archive-info" },
@@ -8124,6 +8207,7 @@ function bindDialogCloseButtons() {
 }
 
 function bindActions() {
+  compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
   modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
   modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
   dropOpenArchiveButton.addEventListener("click", () => activatePendingDropChoice("openArchive"));
@@ -8173,6 +8257,10 @@ function bindActions() {
     }
     if (action === "archive-info") {
       showArchiveInfo();
+      return;
+    }
+    if (action === "clear-search") {
+      clearSearch();
     }
   });
   refreshArchiveButton.addEventListener("click", () => void onRefreshArchive());
@@ -8275,6 +8363,17 @@ function bindActions() {
   bindMenuItem("deleteTempFiles", () => void onDeleteTemporaryFiles());
   bindMenuItem("delete", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
   bindMenuItem("moveTo", () => setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE));
+
+  searchSubmitButton.addEventListener("click", () => {
+    if (searchInput.disabled) {
+      setOperationalMessage("browse.noArchiveOpen");
+      return;
+    }
+    renderBrowse();
+    searchInput.focus();
+  });
+
+  clearSearchButton.addEventListener("click", clearSearch);
 
   searchInput.addEventListener("input", () => {
     if (!currentArchivePath) {
