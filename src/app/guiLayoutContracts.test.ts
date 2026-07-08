@@ -147,6 +147,9 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('data-context-action="reveal-source"');
     expect(mainSource).toContain('data-context-action="remove-source"');
     expect(mainSource).toContain('aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"');
+    expect(mainSource).toContain("function removableSourcePathForCompressRow");
+    expect(mainSource).toContain("if (!rowPath || currentCompressFolder)");
+    expect(mainSource).toContain("normalizeEntryPath(rowPath) === getPathBasename(sourcePath)");
     expect(mainSource).toContain("function sourcePathsForCompressMenu");
     expect(mainSource).toContain('message("command.removeSelectedSources"');
     expect(mainSource).toContain('event.key === "Delete"');

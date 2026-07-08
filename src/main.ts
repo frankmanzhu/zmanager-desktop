@@ -4534,8 +4534,20 @@ function getCompressSelectableRows(): HTMLTableRowElement[] {
 function selectedCompressSourcePaths(): string[] {
   return Array.from(new Set(getCompressSelectableRows()
     .filter((row) => selectedCompressRows.has(row.dataset.compressPath ?? ""))
-    .map((row) => row.dataset.compressSourcePath ?? "")
+    .map((row) => removableSourcePathForCompressRow(row))
     .filter(Boolean)));
+}
+
+function removableSourcePathForCompressRow(row: HTMLTableRowElement): string {
+  const rowPath = row.dataset.compressPath ?? "";
+  if (!rowPath || currentCompressFolder) {
+    return "";
+  }
+
+  const sourcePath = row.dataset.compressSourcePath ?? "";
+  return createSources.includes(sourcePath) && normalizeEntryPath(rowPath) === getPathBasename(sourcePath)
+    ? sourcePath
+    : "";
 }
 
 function sourcePathsForCompressMenu(rowSourcePath: string): string[] {
@@ -6218,8 +6230,9 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
 function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: number) {
   const rowPath = row.dataset.compressPath ?? "";
   const folderPath = row.dataset.compressFolderRow;
-  const sourcePath = row.dataset.compressSourcePath ?? (createSources.includes(rowPath) ? rowPath : "");
-  const removableSourcePaths = sourcePathsForCompressMenu(sourcePath);
+  const sourcePath = row.dataset.compressSourcePath ?? "";
+  const removableSourcePath = removableSourcePathForCompressRow(row);
+  const removableSourcePaths = sourcePathsForCompressMenu(removableSourcePath);
   const contextPaths = compressPathsForContextAction(rowPath);
   const contextRows = contextPaths
     .map((path) => visibleCompressRowForPath(path))
@@ -9654,7 +9667,7 @@ tableBody.addEventListener("click", (event) => {
     if (event.key === "Delete") {
       event.preventDefault();
       const sourcePaths = selectedCompressSourcePaths();
-      const fallbackSourcePath = row.dataset.compressSourcePath;
+      const fallbackSourcePath = removableSourcePathForCompressRow(row);
       removeCreateSources(sourcePaths.length > 0 ? sourcePaths : fallbackSourcePath ? [fallbackSourcePath] : []);
       return;
     }
