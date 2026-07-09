@@ -64,7 +64,9 @@ describe("DialogRoot", () => {
 
     expect(html).toContain("Entry Info");
     expect(html).toContain("docs/readme.txt");
-    expect(html).toContain('data-copy-value="docs/readme.txt"');
+    expect(html).toContain(">Copy Path</button>");
+    expect(html).not.toContain("data-info-action");
+    expect(html).not.toContain("data-copy-value");
   });
 
   it("renders about diagnostics groups", () => {

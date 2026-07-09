@@ -56,6 +56,7 @@ const workspaceBrowserShellSource = normalizedWorkspaceFile("src", "ui", "react"
 const workspacePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "WorkspacePathBar.tsx");
 const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "tableMarqueeSelection.ts");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
+const dialogSnapshotsSource = normalizedWorkspaceFile("src", "app", "display", "dialogSnapshots.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
 const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
@@ -63,7 +64,6 @@ const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs",
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 type FutureForbiddenTargetId =
-  | "phase2.info-about-hidden-html"
   | "phase3.typed-context-menu"
   | "phase4.create-legacy-render-helpers"
   | "phase5.archive-legacy-render-helpers"
@@ -77,11 +77,6 @@ type FutureForbiddenTarget = Readonly<{
 }>;
 
 const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase2.info-about-hidden-html",
-    phase: "Phase 2",
-    description: "info and about dialogs are snapshot-only with no hidden HTML source",
-  },
   {
     id: "phase3.typed-context-menu",
     phase: "Phase 3",
@@ -207,14 +202,6 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
   },
   {
-    id: "info-about-id-privatizer",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "function privatizeLegacyInfoAboutDialogIds() {",
-    reason: "Info/about hidden dialogs still exist while snapshot-only dialog content is introduced.",
-  },
-  {
     id: "create-workspace-id-privatizer",
     scanId: "hiddenLegacyDom",
     targetId: "phase4.create-legacy-render-helpers",
@@ -253,14 +240,6 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     file: "src/runtimeBridge.ts",
     line: "privatizeLegacyExtractDialogIds();",
     reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
-  },
-  {
-    id: "info-about-id-privatizer-call",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "privatizeLegacyInfoAboutDialogIds();",
-    reason: "Info/about hidden dialogs still exist while snapshot-only dialog content is introduced.",
   },
   {
     id: "create-workspace-id-privatizer-call",
@@ -504,52 +483,12 @@ const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
     reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
   },
   {
-    id: "info-action-group-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "infoActionGroup.innerHTML = actions.map(infoActionButton).join(\"\");",
-    reason: "Info dialog actions still render hidden HTML until snapshots own them.",
-  },
-  {
     id: "runtime-clears-archive-details-html",
     scanId: "innerHtml",
     targetId: "phase5.archive-legacy-render-helpers",
     file: "src/runtimeBridge.ts",
     line: "detailsElement.innerHTML = \"\";",
     reason: "Runtime bridge still imperatively clears the archive details pane.",
-  },
-  {
-    id: "archive-info-dialog-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "infoDialogBody.innerHTML = `",
-    reason: "Archive info still generates hidden HTML until snapshots are the only source.",
-  },
-  {
-    id: "entry-info-dialog-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "infoDialogBody.innerHTML = `",
-    reason: "Entry info still generates hidden HTML until snapshots are the only source.",
-  },
-  {
-    id: "selection-info-dialog-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "infoDialogBody.innerHTML = `",
-    reason: "Selection info still generates hidden HTML until snapshots are the only source.",
-  },
-  {
-    id: "about-diagnostics-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase2.info-about-hidden-html",
-    file: "src/runtimeBridge.ts",
-    line: "aboutDiagnostics.innerHTML = groups.map((group) => `",
-    reason: "About diagnostics still render hidden HTML until diagnostics serialize from snapshots.",
   },
 ];
 
@@ -964,7 +903,7 @@ describe("GUI layout contracts", () => {
 
   it("keeps dialogs on shared native task and property primitives", () => {
     expect(mainSource).toContain('class="dialog task-dialog"');
-    expect(mainSource).toContain('class="dialog property-dialog"');
+    expect(dialogRootSource).toContain('className="dialog property-dialog"');
     expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
     expect(mainSource).toContain('data-dialog-default="#extract-start"');
     expect(mainSource).toContain('data-dialog-cancel="#extract-cancel"');
@@ -984,10 +923,12 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps About diagnostics in the dialog body layout", () => {
-    expect(mainSource).toContain('<div class="dialog-body property-dialog-body about-property-body">');
-    expect(mainSource).toContain('<div id="about-diagnostics" class="diagnostics diagnostics-groups"></div>');
-    expect(mainSource).toContain('function diagnosticsText(): string');
-    expect(mainSource).toContain('for (const group of aboutDiagnostics.querySelectorAll<HTMLElement>("[data-diagnostics-group]"))');
+    expect(dialogRootSource).toContain('className="dialog about-dialog"');
+    expect(dialogRootSource).toContain('id="about-diagnostics"');
+    expect(dialogSnapshotsSource).toContain("export function serializeAboutDiagnostics");
+    expect(mainSource).toContain("serializeAboutDiagnostics(snapshot)");
+    expect(mainSource).not.toContain("function diagnosticsText");
+    expect(mainSource).not.toContain("aboutDiagnostics.querySelectorAll");
     expect(styles).toContain(".detail-list > div {\n  display: contents;");
     expect(styles).toContain(".diagnostics-groups");
   });
@@ -1140,7 +1081,7 @@ describe("GUI layout contracts", () => {
     expect(archiveDetailsPaneSource).toContain('className="detail-value detail-value-middle"');
     expect(archiveDetailsPaneSource).toContain('aria-label={`${label}: ${value}`}');
     expect(archiveDetailsPaneSource).toContain('<span className="sr-only">{value}</span>');
-    expect(mainSource).toContain('{ label: message("detail.path"), value: entry.path }');
+    expect(dialogSnapshotsSource).toContain('{ label: message(display, "detail.path"), value: entry.path }');
     expect(styles).toContain("grid-template-columns: minmax(76px, 34%) minmax(0, 1fr);");
     expect(styles).toContain(".detail-value-wrap");
     expect(styles).toContain(".detail-value-middle");
@@ -1243,7 +1184,7 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps selection properties and entry preview surfaces unambiguous", () => {
-    expect(mainSource).toContain('message("info.selectionTitle")');
+    expect(dialogSnapshotsSource).toContain('message(display, "info.selectionTitle")');
     expect(mainSource).toContain("function showSelectionInfo");
     expect(mainSource).toContain('action: "extract-selected"');
     expect(mainSource).toContain('action: "test-selected"');
@@ -1252,9 +1193,10 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('action: "preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="extract-selected"');
-    expect(mainSource).toContain("function entryPropertyRows");
-    expect(mainSource).toContain("{ label: message(\"detail.ratio\"), value: formatRatio(entry) }");
-    expect(mainSource).toContain("infoReturnFocusForCurrentSelection()");
+    expect(dialogSnapshotsSource).toContain("export function entryInfoDetailRows");
+    expect(dialogSnapshotsSource).toContain('label: message(display, "detail.ratio")');
+    expect(dialogSnapshotsSource).toContain("value: display.format.ratio(entry.size, entry.compressedSize");
+    expect(mainSource).toContain("returnFocusPath: infoReturnFocusPath()");
     expect(mainSource).not.toContain('id="info-dialog-close"');
     expect(styles).toContain(".detail-actions");
     expect(styles).toContain(".dialog-action-group");

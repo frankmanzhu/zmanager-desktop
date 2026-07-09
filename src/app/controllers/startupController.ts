@@ -34,7 +34,7 @@ export type StartupControllerOptions = Readonly<{
   toCommandError(error: unknown): CommandErrorDto | null;
   message(key: MessageKey, params?: MessageParams): string;
   setBootstrapState(state: BootstrapState): void;
-  renderAboutDiagnostics(): void;
+  refreshAboutDialogSnapshot(): void;
   shouldRenderBrowseAfterBootstrap(): boolean;
   renderBrowse(): void;
 }>;
@@ -51,7 +51,7 @@ export function createStartupController(
   options: StartupControllerOptions,
 ): StartupController {
   function renderBootstrapViews(): void {
-    options.renderAboutDiagnostics();
+    options.refreshAboutDialogSnapshot();
     if (options.shouldRenderBrowseAfterBootstrap()) {
       options.renderBrowse();
     }

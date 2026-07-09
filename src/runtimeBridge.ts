@@ -1,7 +1,6 @@
 import "./styles.css";
 import {
   APP_TITLE,
-  APP_VERSION,
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
   JOB_POLL_INTERVAL_MS,
@@ -119,7 +118,6 @@ import {
   renderArchiveWorkspaceModeChrome,
   renderArchiveWorkspaceTable,
   renderCreateNavigationTree,
-  renderDetailRows as renderArchiveDetailRows,
   syncArchiveVisibleSelection,
   type ArchiveDetailsModel,
   type ArchivePathBarModel,
@@ -235,6 +233,16 @@ import {
   type DisplayRefreshWorkspace,
 } from "./app/display/displayContext";
 import {
+  buildAboutDialogSnapshot,
+  buildArchiveInfoDialogSnapshot,
+  buildEntryInfoDialogSnapshot,
+  buildSelectionInfoDialogSnapshot,
+  entryInfoDetailRows,
+  formatArchiveTypeFromPath,
+  serializeAboutDiagnostics,
+  truncatedPathPreview,
+} from "./app/display/dialogSnapshots";
+import {
   createZManagerReactSnapshot,
   displaySnapshotFromContext,
   type ZManagerArchiveIntent,
@@ -242,8 +250,6 @@ import {
   type ZManagerContextMenuSnapshot,
   type ZManagerCreateIntent,
   type ZManagerDesktopIntent,
-  type ZManagerDialogAction,
-  type ZManagerDialogDetailRow,
   type ZManagerDialogIntent,
   type ZManagerDialogSnapshot,
   type ZManagerJobsIntent,
@@ -812,42 +818,6 @@ appRoot.innerHTML = `
       </section>
     </div>
 
-    <div id="about-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog property-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1" data-dialog-default="#about-close" data-dialog-cancel="#about-close">
-        <div class="dialog-header">
-          <div>
-            <h2 id="about-title" data-i18n-text="about.title">About ZManager</h2>
-            <p data-i18n-text="about.description">Diagnostics for support and bug reports.</p>
-          </div>
-          <button id="about-dialog-close" class="icon-button" type="button" data-i18n-aria-label="about.close.aria" data-i18n-text="common.close" aria-label="Close about dialog">Close</button>
-        </div>
-        <div class="dialog-body property-dialog-body about-property-body">
-          <div id="about-diagnostics" class="diagnostics diagnostics-groups"></div>
-        </div>
-        <div class="dialog-actions">
-          <button id="copy-diagnostics" type="button" data-i18n-text="about.copyDiagnostics">Copy Diagnostics</button>
-          <button id="about-close" type="button" data-dialog-default-button data-dialog-cancel-button data-i18n-text="common.close">Close</button>
-        </div>
-      </section>
-    </div>
-
-    <div id="info-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog property-dialog" role="dialog" aria-modal="true" aria-labelledby="info-title" tabindex="-1" data-dialog-default="#info-close" data-dialog-cancel="#info-close">
-        <div class="dialog-header">
-          <div>
-            <h2 id="info-title" data-i18n-text="info.title">Info</h2>
-            <p id="info-description" data-i18n-text="info.description">Archive or entry details.</p>
-          </div>
-        </div>
-        <div class="dialog-body property-dialog-body">
-          <div id="info-dialog-body" class="diagnostics"></div>
-        </div>
-        <div class="dialog-actions">
-          <div id="info-action-group" class="dialog-action-group"></div>
-          <button id="info-close" type="button" data-dialog-default-button data-dialog-cancel-button data-i18n-text="common.close">Close</button>
-        </div>
-      </section>
-    </div>
 `;
 
 const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
@@ -974,15 +944,6 @@ const createOptionControlViewElements = {
 
 const contextMenu = document.querySelector<HTMLDivElement>("#legacy-context-menu")!;
 
-const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
-const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
-const copyDiagnosticsButton = document.querySelector<HTMLButtonElement>("#copy-diagnostics")!;
-const infoDialog = document.querySelector<HTMLDivElement>("#info-dialog")!;
-const infoDialogBody = document.querySelector<HTMLDivElement>("#info-dialog-body")!;
-const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
-const infoDescription = document.querySelector<HTMLParagraphElement>("#info-description")!;
-const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-group")!;
-
 function privatizeLegacyArchiveSurfaceIds() {
   const publicArchiveIds = [
     "path-field",
@@ -1051,41 +1012,6 @@ function privatizeLegacyExtractDialogIds() {
 
   for (const id of publicExtractIds) {
     const element = extractDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-}
-
-function privatizeLegacyInfoAboutDialogIds() {
-  const publicInfoIds = [
-    "info-title",
-    "info-description",
-    "info-dialog-body",
-    "info-action-group",
-    "info-close",
-  ];
-  const publicAboutIds = [
-    "about-dialog-close",
-    "about-title",
-    "about-diagnostics",
-    "copy-diagnostics",
-    "about-close",
-  ];
-
-  for (const id of publicInfoIds) {
-    const element = infoDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-
-  for (const id of publicAboutIds) {
-    const element = aboutDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
     if (!element) {
       continue;
     }
@@ -1190,8 +1116,6 @@ const initialArchiveWorkspaceSnapshot = archiveWorkspace.getSnapshot();
 let currentArchivePath = initialArchiveWorkspaceSnapshot.currentArchivePath;
 let currentArchiveFolder = initialArchiveWorkspaceSnapshot.view.currentFolder;
 let currentArchiveSearchQuery = initialArchiveWorkspaceSnapshot.view.searchQuery;
-let currentArchiveEntryCount = initialArchiveWorkspaceSnapshot.entryCount;
-let currentArchiveTotalSize: number | null = initialArchiveWorkspaceSnapshot.totalSize;
 let browseState: BrowseState = initialArchiveWorkspaceSnapshot.browseState;
 let browseError = "";
 let browseEntries: ArchiveEntryDto[] = [...initialArchiveWorkspaceSnapshot.entries];
@@ -1531,7 +1455,7 @@ const startupController = createStartupController({
     latestHealthcheck = state.healthcheck;
     latestContract = state.contract;
   },
-  renderAboutDiagnostics,
+  refreshAboutDialogSnapshot,
   shouldRenderBrowseAfterBootstrap: () => normalWorkspaceRendered && !isQuickActionJobMode(),
   renderBrowse,
 });
@@ -1838,92 +1762,8 @@ function renderQuickProgress() {
   }
 }
 
-function formatRatio(entry: ArchiveEntryDto): string {
-  return displayContext.format.ratio(entry.size, entry.compressedSize, { fractionDigits: 0 });
-}
-
-type InfoAction = {
-  label: string;
-  action?: string;
-  copyValue?: string;
-  primary?: boolean;
-  title?: string;
-};
-
-function detailRowsToText(rows: readonly DetailRow[]): string {
-  return rows
-    .filter((row): row is DetailRow & { value: string } => Boolean(row.value))
-    .map((row) => `${row.label}: ${row.value}`)
-    .join("\n");
-}
-
-function detailRowsToReactRows(rows: readonly DetailRow[]): ZManagerDialogDetailRow[] {
-  return rows
-    .filter((row): row is DetailRow & { value: string } => Boolean(row.value))
-    .map((row) => ({
-      label: row.label,
-      value: row.value,
-      mode: row.mode,
-    }));
-}
-
 function infoReturnFocusPath(): string {
   return focusedEntryPath || getSelectedEntryPaths()[0] || "";
-}
-
-function entryPropertyRows(entry: ArchiveEntryDto): DetailRow[] {
-  return [
-    { label: message("detail.name"), value: getBaseName(entry.path) },
-    { label: message("detail.type"), value: normalizeArchiveKindLabel(entry.kind) },
-    { label: message("detail.path"), value: entry.path },
-    { label: message("detail.size"), value: formatOptionalBytes(entry.size) },
-    { label: message("detail.packed"), value: formatOptionalBytes(entry.compressedSize) },
-    { label: message("detail.modified"), value: formatDate(entry.modified) },
-    { label: message("detail.ratio"), value: formatRatio(entry) },
-    { label: message("detail.created"), value: formatDate(entry.created) },
-    { label: message("detail.attributes"), value: entry.attributes },
-    { label: message("detail.method"), value: entry.method },
-    { label: "CRC", value: entry.crc },
-    { label: message("detail.encrypted"), value: formatOptionalBoolean(entry.encrypted) },
-    { label: message("detail.solid"), value: formatOptionalBoolean(entry.solid) },
-    { label: message("detail.linkTarget"), value: entry.linkTarget },
-  ];
-}
-
-function selectionPropertyRows(selectedRows: readonly SelectableBrowserRow[]): DetailRow[] {
-  const selected = selectedRows
-    .map((row) => row.entry ?? getEntryByPath(row.path))
-    .filter((entry): entry is ArchiveEntryDto => entry !== null);
-  const selectedTotal = sumKnownBytes(selected, (entry) => entry.size);
-  const selectedPacked = sumKnownBytes(selected, (entry) => entry.compressedSize);
-  const selectedFiles = selectedRows.filter((row) => row.rowType === "entry" && row.entry?.kind !== "directory").length;
-  const selectedFolders = selectedRows.filter((row) => row.rowType === "folder" || row.entry?.kind === "directory").length;
-  const pathPreview = truncatedPathPreview(selectedRows.map((row) => row.path));
-
-  return [
-    { label: message("detail.entries"), value: String(selectedRows.length) },
-    { label: message("detail.selectedFiles"), value: String(selectedFiles) },
-    { label: message("detail.selectedFolders"), value: String(selectedFolders) },
-    { label: message("detail.totalSize"), value: selectedTotal === null ? null : formatBytes(selectedTotal) },
-    { label: message("detail.packedSize"), value: selectedPacked === null ? null : formatBytes(selectedPacked) },
-    { label: message("detail.pathPreview"), value: pathPreview },
-  ];
-}
-
-function infoActionButton(action: InfoAction): string {
-  const actionAttribute = action.action ? ` data-info-action="${escapeHtmlValue(action.action)}"` : "";
-  const copyAttribute = action.copyValue ? ` data-copy-value="${escapeHtmlValue(action.copyValue)}"` : "";
-  const titleAttribute = action.title ? ` title="${escapeHtmlValue(action.title)}" aria-label="${escapeHtmlValue(`${action.label}: ${action.title}`)}"` : "";
-  return `<button type="button" class="${action.primary ? "primary-action" : ""}"${actionAttribute}${copyAttribute}${titleAttribute}>${escapeHtml(action.label)}</button>`;
-}
-
-function setInfoActions(actions: readonly InfoAction[]) {
-  infoActionGroup.innerHTML = actions.map(infoActionButton).join("");
-}
-
-function infoReturnFocusForCurrentSelection(): HTMLElement | null {
-  const selectedPath = focusedEntryPath || getSelectedEntryPaths()[0] || "";
-  return findActiveArchiveRow(selectedPath);
 }
 
 function findActiveArchiveRow(path: string): HTMLTableRowElement | null {
@@ -1947,50 +1787,8 @@ function detailRenderHelpers() {
   };
 }
 
-function renderInfoDetailRows(rows: readonly DetailRow[]): string {
-  return renderArchiveDetailRows(rows, detailRenderHelpers());
-}
-
-function formatOptionalBytes(value?: number): string | null {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    return null;
-  }
-  return formatBytes(value);
-}
-
-function formatOptionalBoolean(value?: boolean): string | null {
-  if (typeof value !== "boolean") {
-    return null;
-  }
-  return value ? message("detail.booleanYes") : message("detail.booleanNo");
-}
-
 function normalizeArchiveKindLabel(kind: ArchiveEntryDto["kind"]): string {
   return kind === "directory" ? message("detail.directory") : kind;
-}
-
-function sumKnownBytes(
-  entries: ArchiveEntryDto[],
-  selector: (entry: ArchiveEntryDto) => number | undefined,
-): number | null {
-  let hasKnownValue = false;
-  let total = 0;
-  for (const entry of entries) {
-    const value = selector(entry);
-    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-      hasKnownValue = true;
-      total += value;
-    }
-  }
-  return hasKnownValue ? total : null;
-}
-
-function formatArchiveTypeFromPath(path: string): string | null {
-  const suffix = getKnownArchiveSuffix(path);
-  if (!suffix) {
-    return null;
-  }
-  return suffix.startsWith(".") ? suffix.slice(1).toUpperCase() : suffix.toUpperCase();
 }
 
 function formatLastTestStatusForCurrentArchive(): string | null {
@@ -2054,29 +1852,6 @@ function jobStatusMessageKey(status: JobState["snapshot"]["status"]): MessageKey
     case "cancelled":
       return "jobs.status.cancelled";
   }
-}
-
-function truncatedPathPreview(paths: readonly string[], maxItems = 3, maxLength = 140): string | null {
-  if (!paths.length) {
-    return null;
-  }
-
-  const sortedUniquePaths = Array.from(new Set(paths)).sort();
-  const shownPaths = sortedUniquePaths.slice(0, maxItems);
-  const remaining = sortedUniquePaths.length - maxItems;
-
-  let preview = shownPaths.join(", ");
-  if (remaining > 0) {
-    preview = `${preview} (+${remaining} more)`;
-  }
-
-  if (preview.length <= maxLength) {
-    return preview;
-  }
-
-  const headLength = Math.max(8, Math.ceil((maxLength - 3) * 0.58));
-  const tailLength = Math.max(8, maxLength - headLength - 3);
-  return `${preview.slice(0, headLength)}...${preview.slice(-tailLength)}`;
 }
 
 function normalizeEntryPath(path: string): string {
@@ -2529,8 +2304,6 @@ function syncArchiveWorkspaceSnapshot(snapshot: ArchiveWorkspaceSnapshot) {
   browseState = snapshot.browseState;
   browseError = archiveWorkspaceErrorText(snapshot);
   browseEntries = [...snapshot.entries];
-  currentArchiveEntryCount = snapshot.entryCount;
-  currentArchiveTotalSize = snapshot.totalSize;
 }
 
 function syncArchiveWorkspaceViewSnapshot(snapshot: ArchiveWorkspaceSnapshot) {
@@ -3732,7 +3505,7 @@ function renderDetails() {
     case "entry": {
       const entry = details.entry;
       const icon = archiveEntryIconDescriptor(entry, displayContext.translator);
-      const rows = entryPropertyRows(entry);
+      const rows = entryInfoDetailRows(entry, displayContext);
       const canPreview = entry.kind !== "directory";
       const previewHint = previewActionHint();
       const previewLabel = message("command.view");
@@ -4508,12 +4281,7 @@ function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
     return row ?? extractToolbarButton;
   }
 
-  if (dialog === infoDialog) {
-    const row = findActiveArchiveRow(focusedEntryPath);
-    return row ?? infoToolbarButton;
-  }
-
-  return document.querySelector<HTMLButtonElement>("#toolbar-about") ?? null;
+  return null;
 }
 
 function onModalClosed(dialog: HTMLElement) {
@@ -4523,7 +4291,7 @@ function onModalClosed(dialog: HTMLElement) {
 }
 
 const modalController = createModalController({
-  dialogs: () => [extractDialog, aboutDialog, infoDialog],
+  dialogs: () => [extractDialog],
   fallbackFocus: fallbackFocusForDialog,
   ignoredReturnFocusRoots: () => [
     contextMenu,
@@ -4567,7 +4335,7 @@ function closeReactDialog() {
   publishReactSnapshot();
 
   if (previous.kind === "info") {
-    findActiveArchiveRow(previous.returnFocusPath)?.focus();
+    (findActiveArchiveRow(previous.returnFocusPath) ?? infoToolbarButton).focus();
   } else if (previous.kind === "extract") {
     findActiveArchiveRow(focusedEntryPath)?.focus();
   }
@@ -5607,46 +5375,12 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
 }
 
 function showArchiveInfo() {
-  infoTitle.textContent = message("info.archiveTitle");
-  infoDescription.textContent = message("info.archiveDescription");
-  const knownTotalSize = currentArchiveTotalSize !== null
-    ? currentArchiveTotalSize
-    : (sumKnownBytes(browseEntries, (entry) => entry.size) ?? null);
-  const formattedTotalSize = knownTotalSize === null ? null : formatBytes(knownTotalSize);
-  const packedSize = sumKnownBytes(browseEntries, (entry) => entry.compressedSize);
-
-  const rows: DetailRow[] = [
-    { label: message("detail.archiveName"), value: getArchiveName(currentArchivePath, APP_TITLE) },
-    { label: message("detail.path"), value: currentArchivePath, mode: "middle" },
-    { label: message("detail.format"), value: formatArchiveTypeFromPath(currentArchivePath) },
-    { label: message("detail.entries"), value: String(currentArchiveEntryCount) },
-    { label: message("detail.totalUnpackedSize"), value: formattedTotalSize },
-    { label: message("detail.packedSize"), value: packedSize === null ? null : formatBytes(packedSize) },
-    { label: message("detail.lastTestStatus"), value: formatLastTestStatusForCurrentArchive() },
-  ];
-  const actions: ZManagerDialogAction[] = [
-    { label: message("info.copyPath"), copyValue: currentArchivePath },
-    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
-  ];
-  setInfoActions(actions);
-
-  infoDialogBody.innerHTML = `
-    <section class="dialog-section property-section">
-      <h3>${escapeHtml(message("info.archiveTitle"))}</h3>
-      <dl class="detail-list">
-        ${renderInfoDetailRows(rows)}
-      </dl>
-    </section>
-  `;
-  setReactDialogSnapshot({
-    kind: "info",
-    title: message("info.archiveTitle"),
-    description: message("info.archiveDescription"),
-    sectionTitle: message("info.archiveTitle"),
-    rows: detailRowsToReactRows(rows),
-    actions,
+  setReactDialogSnapshot(buildArchiveInfoDialogSnapshot({
+    archive: archiveWorkspace.getSnapshot(),
+    display: displayContext,
+    lastTestStatus: formatLastTestStatusForCurrentArchive(),
     returnFocusPath: infoReturnFocusPath(),
-  });
+  }));
 }
 
 function showEntryInfo(path: string) {
@@ -5655,34 +5389,12 @@ function showEntryInfo(path: string) {
     return;
   }
 
-  infoTitle.textContent = message("info.entryTitle");
-  infoDescription.textContent = message("info.entryDescription");
-  const rows = entryPropertyRows(entry);
-  const canPreview = entry.kind !== "directory";
-  const actions: ZManagerDialogAction[] = [
-    ...(canPreview ? [{ label: message("command.view"), action: "preview", primary: true, title: previewActionHint() }] : []),
-    { label: message("info.copyPath"), copyValue: entry.path },
-    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
-    { label: message("info.archiveTitle"), action: "archive-info" },
-  ];
-  setInfoActions(actions);
-  infoDialogBody.innerHTML = `
-    <section class="dialog-section property-section">
-      <h3>${escapeHtml(message("info.entryTitle"))}</h3>
-      <dl class="detail-list">
-        ${renderInfoDetailRows(rows)}
-      </dl>
-    </section>
-  `;
-  setReactDialogSnapshot({
-    kind: "info",
-    title: message("info.entryTitle"),
-    description: message("info.entryDescription"),
-    sectionTitle: message("info.entryTitle"),
-    rows: detailRowsToReactRows(rows),
-    actions,
+  setReactDialogSnapshot(buildEntryInfoDialogSnapshot({
+    entry,
+    display: displayContext,
+    previewActionTitle: previewActionHint(),
     returnFocusPath: infoReturnFocusPath(),
-  });
+  }));
 }
 
 function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
@@ -5691,31 +5403,12 @@ function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
     return;
   }
 
-  const rows = selectionPropertyRows(selectedRows);
-  infoTitle.textContent = message("info.selectionTitle");
-  infoDescription.textContent = message("info.selectionDescription");
-  const actions: ZManagerDialogAction[] = [
-    { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
-    { label: message("info.archiveTitle"), action: "archive-info" },
-  ];
-  setInfoActions(actions);
-  infoDialogBody.innerHTML = `
-    <section class="dialog-section property-section">
-      <h3>${escapeHtml(message("info.selectionTitle"))}</h3>
-      <dl class="detail-list">
-        ${renderInfoDetailRows(rows)}
-      </dl>
-    </section>
-  `;
-  setReactDialogSnapshot({
-    kind: "info",
-    title: message("info.selectionTitle"),
-    description: message("info.selectionDescription"),
-    sectionTitle: message("info.selectionTitle"),
-    rows: detailRowsToReactRows(rows),
-    actions,
+  setReactDialogSnapshot(buildSelectionInfoDialogSnapshot({
+    archive: archiveWorkspace.getSnapshot(),
+    display: displayContext,
+    selectedRows,
     returnFocusPath: infoReturnFocusPath(),
-  });
+  }));
 }
 
 function showCurrentInfo() {
@@ -5734,111 +5427,31 @@ function showCurrentInfo() {
   showArchiveInfo();
 }
 
-function renderAboutDiagnostics() {
-  const healthcheck = latestHealthcheck;
-  const contract = latestContract;
-  const shellActions =
-    contract?.platformIntegration.shellActions
-      .map((action) => `${action.label} (${action.quickAction})`)
-      .join(", ") ?? "-";
-  const groups = [
-    {
-      title: message("about.group.product"),
-      rows: [
-        [message("about.diagnostics.appName"), APP_TITLE],
-        [message("about.diagnostics.appVersion"), APP_VERSION],
-      ],
-    },
-    {
-      title: message("about.group.runtime"),
-      rows: [
-        [message("about.diagnostics.shell"), healthcheck?.shell ?? message("about.shell.browserPreview")],
-        [
-          message("about.diagnostics.engine"),
-          healthcheck ? `${healthcheck.engine} ${healthcheck.version}` : message("about.diagnostics.unavailable"),
-        ],
-        [message("about.diagnostics.coreDependency"), contract?.coreDependency ?? message("about.diagnostics.unavailable")],
-      ],
-    },
-    {
-      title: message("about.group.integration"),
-      rows: [
-        [message("about.diagnostics.platform"), contract?.platformIntegration.platform ?? message("about.diagnostics.unknown")],
-        [
-          message("about.diagnostics.explorerIntegration"),
-          contract?.platformIntegration.explorerIntegrationEnabled
-            ? message("about.diagnostics.enabled")
-            : message("about.diagnostics.disabled"),
-        ],
-        [
-          message("about.diagnostics.desktopActions"),
-          contract?.platformIntegration.desktopActionsEnabled
-            ? message("about.diagnostics.enabled")
-            : message("about.diagnostics.disabled"),
-        ],
-      ],
-    },
-    {
-      title: message("about.group.support"),
-      rows: [
-        [message("about.diagnostics.status"), healthcheck?.status ?? message("about.diagnostics.frontendOnly")],
-        [message("about.diagnostics.extensions"), contract?.platformIntegration.associatedExtensions.join(", ") ?? "-"],
-        [message("about.diagnostics.shellActions"), shellActions],
-      ],
-    },
-  ];
-
-  aboutDiagnostics.innerHTML = groups.map((group) => `
-    <section class="diagnostic-group" data-diagnostics-group>
-      <h3>${escapeHtml(group.title)}</h3>
-      <dl class="detail-list">
-        ${group.rows.map(([label, value]) => `
-          <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
-        `).join("")}
-      </dl>
-    </section>
-  `).join("");
-  return groups;
-}
-
-function openAboutDialog() {
-  const groups = renderAboutDiagnostics();
-  setReactDialogSnapshot({
-    kind: "about",
-    title: message("about.title"),
-    groups: groups.map((group) => ({
-      title: group.title,
-      rows: group.rows.map(([label, value]) => [label, value] as const),
-    })),
+function currentAboutDialogSnapshot(): Extract<ZManagerDialogSnapshot, { kind: "about" }> {
+  return buildAboutDialogSnapshot({
+    display: displayContext,
+    healthcheck: latestHealthcheck,
+    contract: latestContract,
   });
 }
 
-function diagnosticsText(): string {
-  const lines: string[] = [];
-  for (const group of aboutDiagnostics.querySelectorAll<HTMLElement>("[data-diagnostics-group]")) {
-    const title = group.querySelector("h3")?.textContent?.trim();
-    if (title) {
-      lines.push(title);
-    }
-    for (const row of group.querySelectorAll("dl > div")) {
-      const label = row.querySelector("dt")?.textContent?.trim();
-      const value = row.querySelector("dd")?.textContent?.trim();
-      if (label && value) {
-        lines.push(`${label}: ${value}`);
-      }
-    }
-    lines.push("");
+function openAboutDialog() {
+  setReactDialogSnapshot(currentAboutDialogSnapshot());
+}
+
+function refreshAboutDialogSnapshot() {
+  if (reactDialogSnapshot.kind === "about") {
+    setReactDialogSnapshot(currentAboutDialogSnapshot());
   }
-  return lines.join("\n").trim();
 }
 
 async function copyAboutDiagnostics() {
   try {
-    await writeClipboardText(diagnosticsText());
-    copyDiagnosticsButton.textContent = message("status.copied");
-    uiDeferrals.schedule(() => {
-      copyDiagnosticsButton.textContent = message("about.copyDiagnostics");
-    }, 1400);
+    const snapshot = reactDialogSnapshot.kind === "about"
+      ? reactDialogSnapshot
+      : currentAboutDialogSnapshot();
+    await writeClipboardText(serializeAboutDiagnostics(snapshot));
+    setOperationalMessage("status.copied");
   } catch {
     setOperationalMessage("status.copyDiagnosticsFailed");
   }
@@ -6567,21 +6180,10 @@ function handleInfoDialogAction(action?: string, copyValue?: string) {
 function bindDialogCloseButtons() {
   document.querySelector<HTMLButtonElement>("#extract-dialog-close")!.addEventListener("click", () => closeModal(extractDialog));
   document.querySelector<HTMLButtonElement>("#extract-cancel")!.addEventListener("click", () => closeModal(extractDialog));
-  document.querySelector<HTMLButtonElement>("#about-dialog-close")!.addEventListener("click", () => closeModal(aboutDialog));
-  document.querySelector<HTMLButtonElement>("#about-close")!.addEventListener("click", () => closeModal(aboutDialog));
-  document.querySelector<HTMLButtonElement>("#info-close")!.addEventListener("click", () => closeModal(infoDialog));
 }
 
 function bindActions() {
   compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
-  infoActionGroup.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
-    if (!button) {
-      return;
-    }
-
-    handleInfoDialogAction(button.dataset.infoAction, button.dataset.copyValue);
-  });
   windowMinimizeButton.addEventListener("click", minimizeAppWindow);
   windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
   windowCloseButton.addEventListener("click", closeAppWindow);
@@ -6894,8 +6496,6 @@ function bindActions() {
     createPasswordConfirmInput.type = type;
   });
 
-  copyDiagnosticsButton.addEventListener("click", () => void copyAboutDiagnostics());
-
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof HTMLElement)) {
       return;
@@ -6915,7 +6515,6 @@ bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
 privatizeLegacyExtractDialogIds();
-privatizeLegacyInfoAboutDialogIds();
 privatizeLegacyCreateWorkspaceIds();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();

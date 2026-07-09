@@ -50,7 +50,9 @@ export function DialogRoot() {
 }
 
 function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapshot, { kind: "info" }> }>) {
+  const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
 
   return (
     <div className="dialog-backdrop" onKeyDown={(event) => {
@@ -93,8 +95,6 @@ function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsho
               <button
                 type="button"
                 className={action.primary ? "primary-action" : undefined}
-                data-info-action={action.action}
-                data-copy-value={action.copyValue}
                 title={action.title}
                 aria-label={action.title ? `${action.label}: ${action.title}` : undefined}
                 onClick={() => actions.handleDialogIntent({
@@ -109,7 +109,7 @@ function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsho
             ))}
           </div>
           <button id="info-close" type="button" onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}>
-            Close
+            {i18n.t("common.close")}
           </button>
         </div>
       </section>
@@ -146,8 +146,8 @@ function AboutDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsh
             {i18n.t("common.close")}
           </button>
         </div>
-        <div className="dialog-body">
-          <div id="about-diagnostics" className="diagnostics">
+        <div className="dialog-body property-dialog-body about-property-body">
+          <div id="about-diagnostics" className="diagnostics diagnostics-groups">
             {dialog.groups.map((group) => (
               <section className="diagnostic-group" data-diagnostics-group key={group.title}>
                 <h3>{group.title}</h3>

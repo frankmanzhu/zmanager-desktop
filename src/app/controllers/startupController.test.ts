@@ -155,7 +155,7 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     setBootstrapState(state) {
       calls.bootstrapStates.push(state);
     },
-    renderAboutDiagnostics() {
+    refreshAboutDialogSnapshot() {
       calls.diagnostics += 1;
     },
     shouldRenderBrowseAfterBootstrap() {

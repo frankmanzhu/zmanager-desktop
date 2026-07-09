@@ -19,6 +19,15 @@ import {
   type FocusedQuickActionProgressSnapshot,
   type JobListSnapshot,
 } from "../../app/workspaces/jobsWorkspace";
+import type {
+  ZManagerDialogSnapshot,
+} from "../../app/display/dialogSnapshots";
+
+export type {
+  ZManagerDialogAction,
+  ZManagerDialogDetailRow,
+  ZManagerDialogSnapshot,
+} from "../../app/display/dialogSnapshots";
 
 export type ZManagerReactDisplaySnapshot = Readonly<{
   resolvedLocale: DisplayContextSnapshot["resolvedLocale"];
@@ -61,56 +70,6 @@ export type ZManagerContextMenuActionPayload = Readonly<{
   folderPath?: string;
   sourcePath?: string;
 }>;
-
-export type ZManagerDialogDetailRow = Readonly<{
-  label: string;
-  value: string;
-  mode?: "wrap" | "middle";
-}>;
-
-export type ZManagerDialogAction = Readonly<{
-  label: string;
-  action?: string;
-  copyValue?: string;
-  primary?: boolean;
-  title?: string;
-}>;
-
-export type ZManagerDialogSnapshot =
-  | Readonly<{ kind: "none" }>
-  | Readonly<{
-      kind: "extract";
-      mode: ExtractMode;
-      title: string;
-      message: string;
-      startLabel: string;
-      destination: string;
-      destinationHistory: readonly string[];
-      useSubfolder: boolean;
-      subfolder: string;
-      pathMode: "full" | "current" | "none";
-      overwrite: ExtractOverwritePolicy;
-      stripComponents: string;
-      deduplicateRoot: boolean;
-      passwordPromptOpen: boolean;
-    }>
-  | Readonly<{
-      kind: "info";
-      title: string;
-      description: string;
-      sectionTitle: string;
-      rows: readonly ZManagerDialogDetailRow[];
-      actions: readonly ZManagerDialogAction[];
-      returnFocusPath: string;
-    }>
-  | Readonly<{
-      kind: "about";
-      title: string;
-      groups: readonly Readonly<{
-        title: string;
-        rows: readonly (readonly [string, string])[];
-      }>[];
-    }>;
 
 export type ZManagerReactSnapshot = Readonly<{
   shell: ShellWorkspaceSnapshot;
