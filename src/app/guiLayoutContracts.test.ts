@@ -35,7 +35,8 @@ function workspaceRelativePath(filePath: string): string {
 
 const styles = normalizedWorkspaceFile("src", "styles.css");
 const compositionRootSource = normalizedWorkspaceFile("src", "main.ts");
-const mainSource = normalizedWorkspaceFile("src", "runtimeBridge.ts");
+const runtimeBridgeSource = normalizedWorkspaceFile("src", "runtimeBridge.ts");
+const mainSource = normalizedWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
 const appShellSource = normalizedWorkspaceFile("src", "ui", "react", "AppShell.tsx");
 const appFrameSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
 const menuBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "MenuBar.tsx");
@@ -101,8 +102,8 @@ const LEGACY_AUDIT_SCANS: readonly AuditScanDefinition[] = [
   },
   {
     id: "dangerousHtml",
-    command: "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
-    roots: ["src/ui/react", "src/runtimeBridge.ts"],
+    command: "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtime src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src/ui/react", "src/runtime", "src/runtimeBridge.ts"],
     pattern: /dangerouslySetInnerHTML|html:/,
   },
   {
@@ -119,8 +120,8 @@ const LEGACY_AUDIT_SCANS: readonly AuditScanDefinition[] = [
   },
   {
     id: "broadDomWiring",
-    command: "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
-    roots: ["src/runtimeBridge.ts", "src/ui/react", "src/app", "src/desktop"],
+    command: "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\runtime src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src/runtimeBridge.ts", "src/runtime", "src/ui/react", "src/app", "src/desktop"],
     pattern: /document\.querySelector|getElementById|addEventListener/,
   },
 ];
@@ -390,11 +391,20 @@ describe("GUI layout contracts", () => {
   it("records the Phase 0 audit rg scans used by the guardrails", () => {
     expect(LEGACY_AUDIT_SCANS.map((scan) => scan.command)).toEqual([
       "rg -n \"zmanager-runtime-bridge-root|appRoot\\.innerHTML|privatizeLegacy|writeReactExtractFormToLegacyControls\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
-      "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtime src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
       "rg -n 'ui/(archiveWorkspaceView|createWorkspaceView)' src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
       "rg -n \"innerHTML|insertAdjacentHTML\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
-      "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\runtime src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
     ]);
+  });
+
+  it("keeps runtimeBridge.ts as a tiny compatibility export", () => {
+    expect(runtimeBridgeSource.split("\n").filter((line) => line.trim()).length).toBeLessThanOrEqual(5);
+    expect(runtimeBridgeSource).toContain('import "./styles.css";');
+    expect(runtimeBridgeSource).toContain('export { getZManagerRuntimeAdapter } from "./runtime/zmanagerRuntimeAdapter";');
+    expect(runtimeBridgeSource).not.toContain("createCommandRouter");
+    expect(runtimeBridgeSource).not.toContain("createArchiveWorkspace");
+    expect(runtimeBridgeSource).not.toContain("appRoot.innerHTML");
   });
 
   it("keeps every allowed architecture exception mapped to a later deletion target", () => {

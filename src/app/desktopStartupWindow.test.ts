@@ -57,7 +57,7 @@ describe("desktop startup window", () => {
   });
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
-    const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
+    const runtimeAdapterTs = readWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
     const appRuntimeTs = readWorkspaceFile("src", "ui", "react", "appRuntime.ts");
     const appFrameTsx = readWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
@@ -67,16 +67,16 @@ describe("desktop startup window", () => {
     expect(appFrameTsx).toContain("data-window-resize-direction");
     expect(appFrameTsx).toContain('actions.handleDesktopIntent({ type: "beginWindowResize", direction })');
     expect(appRuntimeTs).toContain('Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>');
-    expect(runtimeBridgeTs).toContain("void appWindowController.beginResizeDrag(intent.direction");
+    expect(runtimeAdapterTs).toContain("void appWindowController.beginResizeDrag(intent.direction");
     expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
     expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {
-    const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
+    const runtimeAdapterTs = readWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(runtimeBridgeTs).toContain("await appWindowController.revealNormalWindow();");
+    expect(runtimeAdapterTs).toContain("await appWindowController.revealNormalWindow();");
     expect(windowControllerTs).toContain("async function restoreNormalWindowGeometryOrCenter()");
     expect(windowControllerTs).toContain("const restored = await restoreNormalWindowGeometry();");
     expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().center();");
