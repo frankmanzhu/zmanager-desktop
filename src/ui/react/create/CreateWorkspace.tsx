@@ -1,10 +1,30 @@
 import { File, Folder } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
+import { PaneResizer } from "../interaction/PaneResizer";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+
+const COMPRESS_SOURCE_COLUMN_IDS = ["name", "size", "modified", "kind"] as const;
+const COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX = 28;
+const COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX = 520;
+const COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS: Record<CompressSourceColumnId, number> = {
+  name: 320,
+  size: 120,
+  modified: 170,
+  kind: 120,
+};
+const COMPRESS_SOURCE_MIN_COLUMN_WIDTHS: Record<CompressSourceColumnId, number> = {
+  name: 140,
+  size: 72,
+  modified: 110,
+  kind: 80,
+};
+const COMPACT_COMPRESS_OPTIONS_QUERY = "(max-width: 1100px), (max-height: 640px)";
+
+type CompressSourceColumnId = typeof COMPRESS_SOURCE_COLUMN_IDS[number];
 
 export function CreateWorkspace() {
   const [password, setPassword] = useState("");
@@ -16,13 +36,9 @@ export function CreateWorkspace() {
       <section className="browser-shell" aria-label="Create archive workspace">
         <CreatePanel password={password} passwordConfirm={passwordConfirm} />
         <CreateTree />
-        <div className="pane-resizer" data-pane-resizer="navigation" role="separator" tabIndex={0} aria-orientation="vertical" aria-controls="navigation-pane" aria-label="Resize folder pane">
-          <span className="pane-resizer-grip" aria-hidden="true" />
-        </div>
+        <PaneResizer pane="navigation" controls="navigation-pane" label="Resize folder pane" />
         <CreateTable />
-        <div className="pane-resizer" data-pane-resizer="details" role="separator" tabIndex={0} aria-orientation="vertical" aria-controls="details-pane" aria-label="Resize details pane">
-          <span className="pane-resizer-grip" aria-hidden="true" />
-        </div>
+        <PaneResizer pane="details" controls="details-pane" label="Resize details pane" />
         <CreateOptions
           password={password}
           passwordConfirm={passwordConfirm}
@@ -209,10 +225,10 @@ function CreateTable() {
                       onChange={(event) => actions.handleCreateIntent({ type: "setCurrentFolderIncluded", included: event.currentTarget.checked })}
                     />
                   </th>
-                  <th data-compress-column-id="name"><span className="column-header-label">{i18n.t("table.name")}</span><span className="column-resizer" data-column-resizer="name" aria-hidden="true" /></th>
-                  <th data-compress-column-id="size"><span className="column-header-label">{i18n.t("table.size")}</span><span className="column-resizer" data-column-resizer="size" aria-hidden="true" /></th>
-                  <th data-compress-column-id="modified"><span className="column-header-label">{i18n.t("table.modified")}</span><span className="column-resizer" data-column-resizer="modified" aria-hidden="true" /></th>
-                  <th data-compress-column-id="kind"><span className="column-header-label">{i18n.t("table.kind")}</span><span className="column-resizer" data-column-resizer="kind" aria-hidden="true" /></th>
+                  <CompressSourceHeader columnId="name" label={i18n.t("table.name")} />
+                  <CompressSourceHeader columnId="size" label={i18n.t("table.size")} />
+                  <CompressSourceHeader columnId="modified" label={i18n.t("table.modified")} />
+                  <CompressSourceHeader columnId="kind" label={i18n.t("table.kind")} />
                 </tr>
               </thead>
             ) : null}
@@ -226,6 +242,107 @@ function CreateTable() {
       </div>
       <div className="table-shell" hidden />
     </section>
+  );
+}
+
+function CompressSourceHeader({
+  columnId,
+  label,
+}: Readonly<{
+  columnId: CompressSourceColumnId;
+  label: string;
+}>) {
+  return (
+    <th data-compress-column-id={columnId}>
+      <span className="column-header-label">{label}</span>
+      <span
+        className="column-resizer"
+        data-column-resizer={columnId}
+        aria-hidden="true"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => startCompressSourceColumnResize(event, columnId)}
+      />
+    </th>
+  );
+}
+
+function startCompressSourceColumnResize(
+  event: ReactPointerEvent<HTMLElement>,
+  columnId: CompressSourceColumnId,
+) {
+  if (event.button !== 0) {
+    return;
+  }
+
+  const table = event.currentTarget.closest<HTMLTableElement>("table");
+  if (!table) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  document.body.classList.add("is-resizing-column");
+
+  const startX = event.clientX;
+  const startWidths = readCompressSourceColumnWidths(table);
+  let latestWidths = startWidths;
+  applyCompressSourceColumnWidths(table, latestWidths);
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    latestWidths = {
+      ...startWidths,
+      [columnId]: clampCompressSourceColumnWidth(
+        columnId,
+        startWidths[columnId] + moveEvent.clientX - startX,
+      ),
+    };
+    applyCompressSourceColumnWidths(table, latestWidths);
+  };
+
+  const onPointerUp = () => {
+    document.body.classList.remove("is-resizing-column");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    applyCompressSourceColumnWidths(table, latestWidths);
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp, { once: true });
+}
+
+function readCompressSourceColumnWidths(table: HTMLTableElement): Record<CompressSourceColumnId, number> {
+  const widths = { ...COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS };
+  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
+    const renderedWidth = table.querySelector<HTMLTableCellElement>(
+      `th[data-compress-column-id="${columnId}"]`,
+    )?.getBoundingClientRect().width;
+    widths[columnId] = clampCompressSourceColumnWidth(
+      columnId,
+      Number.isFinite(renderedWidth) && renderedWidth ? renderedWidth : widths[columnId],
+    );
+  }
+  return widths;
+}
+
+function applyCompressSourceColumnWidths(
+  table: HTMLTableElement,
+  widths: Record<CompressSourceColumnId, number>,
+): void {
+  for (const columnId of COMPRESS_SOURCE_COLUMN_IDS) {
+    table.style.setProperty(`--compress-source-${columnId}-column-width`, `${widths[columnId]}px`);
+  }
+  const tableWidth = COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX
+    + COMPRESS_SOURCE_COLUMN_IDS.reduce((total, columnId) => total + widths[columnId], 0);
+  table.style.minWidth = `${tableWidth}px`;
+}
+
+function clampCompressSourceColumnWidth(columnId: CompressSourceColumnId, width: number): number {
+  return Math.min(
+    COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX,
+    Math.max(COMPRESS_SOURCE_MIN_COLUMN_WIDTHS[columnId], Math.round(width)),
   );
 }
 
@@ -412,12 +529,24 @@ function CreateOptions({
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
   const [showPassword, setShowPassword] = useState(false);
+  const compactOptions = useCompactCompressOptions();
+  const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
+  const panelOpen = manualPanelOpen ?? !compactOptions;
+
+  useEffect(() => {
+    setManualPanelOpen(null);
+  }, [compactOptions]);
 
   return (
     <aside id="details-pane" className="details-pane" aria-label={i18n.t("workspace.details.aria")}>
       <div className="pane-header"><h2 id="details-pane-title">{i18n.t("compress.options")}</h2></div>
       <div id="details-content" className="details-content" hidden />
-      <details id="compress-options-panel" className="compress-options-panel" open>
+      <details
+        id="compress-options-panel"
+        className="compress-options-panel"
+        open={panelOpen}
+        onToggle={(event) => setManualPanelOpen(event.currentTarget.open)}
+      >
         <summary className="compress-options-summary"><span className="compress-options-summary-title">{i18n.t("create.options.title")}</span></summary>
         <div className="compress-options-intro"><h3>{i18n.t("create.options.title")}</h3><p>{i18n.t("create.options.description")}</p></div>
         <div id="create-plan-summary" className="summary-card">
@@ -446,6 +575,20 @@ function CreateOptions({
       </details>
     </aside>
   );
+}
+
+function useCompactCompressOptions(): boolean {
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(COMPACT_COMPRESS_OPTIONS_QUERY);
+    const sync = () => setCompact(mediaQuery.matches);
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => mediaQuery.removeEventListener("change", sync);
+  }, []);
+
+  return compact;
 }
 
 function createUnavailableText(reason: string, snapshot: ReturnType<typeof useZManagerSnapshot>): string {

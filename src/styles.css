@@ -259,7 +259,7 @@ p {
   color: var(--text);
 }
 
-#zmanager-legacy-root {
+#zmanager-runtime-bridge-root {
   display: contents;
 }
 
@@ -3138,7 +3138,7 @@ progress {
     grid-template-columns: minmax(96px, 22%) minmax(0, 1fr);
   }
 
-  .archive-detail-block .detail-list > div:nth-of-type(n+5) {
+  .detail-block .detail-list > div:nth-of-type(n+5) {
     display: none;
   }
 
@@ -3496,7 +3496,7 @@ progress {
     grid-template-columns: minmax(76px, 32%) minmax(0, 1fr);
   }
 
-  .archive-detail-block .detail-list > div:nth-of-type(n+4) {
+  .detail-block .detail-list > div:nth-of-type(n+4) {
     display: none;
   }
 
@@ -3966,7 +3966,7 @@ body.linux-window-chrome .quick-progress {
     grid-template-columns: minmax(96px, 22%) minmax(0, 1fr);
   }
 
-  .archive-detail-block .detail-list > div:nth-of-type(n+5) {
+  .detail-block .detail-list > div:nth-of-type(n+5) {
     display: none;
   }
 
@@ -4133,7 +4133,7 @@ body.linux-window-chrome .quick-progress {
     grid-template-columns: minmax(76px, 32%) minmax(0, 1fr);
   }
 
-  .archive-detail-block .detail-list > div:nth-of-type(n+4) {
+  .detail-block .detail-list > div:nth-of-type(n+4) {
     display: none;
   }
 

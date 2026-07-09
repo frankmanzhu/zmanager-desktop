@@ -30,6 +30,7 @@ function DetailsContent({ model }: Readonly<{ model: ArchiveWorkspaceDetailsMode
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
+  const openCommandState = snapshot.commands.states.open;
 
   switch (model.kind) {
     case "noArchive":
@@ -41,6 +42,8 @@ function DetailsContent({ model }: Readonly<{ model: ArchiveWorkspaceDetailsMode
             className="primary-action"
             type="button"
             data-details-action="open-archive"
+            disabled={!openCommandState.enabled}
+            title={openCommandState.enabled ? undefined : openCommandState.reason}
             onClick={() => actions.handleArchiveIntent({ type: "runDetailsAction", action: "open-archive" })}
           >
             {i18n.t("browse.emptyOpenAction")}

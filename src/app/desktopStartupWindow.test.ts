@@ -57,23 +57,23 @@ describe("desktop startup window", () => {
   });
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
-    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
+    const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
     const appFrameTsx = readWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
     const styles = readWorkspaceFile("src", "styles.css");
 
     expect(appFrameTsx).toContain("function WindowResizeHandles()");
     expect(appFrameTsx).toContain("data-window-resize-direction");
-    expect(legacyMainTs).toContain("appWindowController.beginResizeDrag(direction)");
+    expect(runtimeBridgeTs).toContain("appWindowController.beginResizeDrag(direction)");
     expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
     expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {
-    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
+    const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(legacyMainTs).toContain("await appWindowController.revealNormalWindow();");
+    expect(runtimeBridgeTs).toContain("await appWindowController.revealNormalWindow();");
     expect(windowControllerTs).toContain("async function restoreNormalWindowGeometryOrCenter()");
     expect(windowControllerTs).toContain("const restored = await restoreNormalWindowGeometry();");
     expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().center();");
@@ -83,17 +83,17 @@ describe("desktop startup window", () => {
 
   it("keeps Tauri window and geometry ownership in the desktop adapter", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
-    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
+    const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
     expect(mainTs).not.toContain("@tauri-apps/api/window");
-    expect(legacyMainTs).not.toContain("@tauri-apps/api/window");
+    expect(runtimeBridgeTs).not.toContain("@tauri-apps/api/window");
     expect(mainTs).not.toMatch(/\bgetCurrentWindow\(/);
-    expect(legacyMainTs).not.toMatch(/\bgetCurrentWindow\(/);
+    expect(runtimeBridgeTs).not.toMatch(/\bgetCurrentWindow\(/);
     expect(mainTs).not.toMatch(/\bavailableMonitors\(/);
-    expect(legacyMainTs).not.toMatch(/\bavailableMonitors\(/);
+    expect(runtimeBridgeTs).not.toMatch(/\bavailableMonitors\(/);
     expect(mainTs).not.toContain("zmanager.windowGeometry");
-    expect(legacyMainTs).not.toContain("zmanager.windowGeometry");
+    expect(runtimeBridgeTs).not.toContain("zmanager.windowGeometry");
     expect(windowControllerTs).toContain('from "@tauri-apps/api/window"');
     expect(windowControllerTs).toContain('export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";');
     expect(windowControllerTs).toContain("restorableWindowGeometry");

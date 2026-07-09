@@ -68,8 +68,6 @@ export type JobControlControllerOptions = Readonly<{
   renderJobs(): void;
   renderQuickProgress(): void;
   stopPolling(): void;
-  disableQuickActionPauseControls(): void;
-  disableQuickActionCancelControls(): void;
   canEvaluateQuickActionCompletion(): boolean;
   isQuickActionWindowBackgrounded(): boolean;
   revealQuickActionJobWindow(): Promise<void>;
@@ -115,7 +113,6 @@ export function createJobControlController(
 
     const shouldResume = jobIds.some((jobId) => options.workspace.getJob(jobId)?.snapshot.status === "paused");
     const command = shouldResume ? options.resumeJob : options.pauseJob;
-    options.disableQuickActionPauseControls();
 
     try {
       await Promise.all(
@@ -138,8 +135,6 @@ export function createJobControlController(
     if (!jobIds.length) {
       return;
     }
-
-    options.disableQuickActionCancelControls();
 
     try {
       await Promise.all(jobIds.map((jobId) => options.cancelJob({ jobId })));

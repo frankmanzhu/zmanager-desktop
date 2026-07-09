@@ -54,7 +54,7 @@ function SnapshotProbe() {
 }
 
 describe("AppShell", () => {
-  it("is a React component boundary for the legacy GUI mount", () => {
+  it("is a React component boundary for the runtime bridge", () => {
     expect(typeof AppShell).toBe("function");
   });
 

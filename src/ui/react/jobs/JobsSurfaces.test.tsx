@@ -89,6 +89,53 @@ describe("React jobs surfaces", () => {
     expect(html).toContain('id="quick-continue"');
     expect(html).toContain('id="quick-cancel"');
   });
+
+  it("keeps backgrounded quick-action jobs in the job-only progress surface", () => {
+    const html = renderJobs(
+      createElement("div", null, createElement(QuickActionProgress), createElement(JobsDrawer)),
+      jobsSnapshot({
+        shell: {
+          jobDrawerOpen: true,
+          quickActionWindow: {
+            mode: "background",
+            shown: false,
+          },
+        },
+        jobs: [runningJob()],
+        quickActionProgress: {
+          state: "tracking",
+          jobCount: 1,
+          latestJob: {
+            jobId: "job-running",
+            kind: "zipExtract",
+            status: "running",
+          },
+          latestContext: undefined,
+          allTerminal: false,
+          allCompleted: false,
+          anyActive: true,
+          anyPaused: false,
+          elapsedMs: 1000,
+          remainingMs: null,
+          processedFiles: 1,
+          totalFiles: null,
+          processedBytes: 512,
+          totalBytes: null,
+          compressedBytes: null,
+          speedBytesPerSecond: null,
+          progressPercent: null,
+          currentFile: "docs/readme.md",
+          progressClock: { shouldRun: true },
+        },
+      }),
+    );
+
+    expect(html).toContain('id="quick-progress"');
+    expect(html).not.toContain('id="quick-progress" class="quick-progress" aria-label="Quick action progress" hidden=""');
+    expect(html).toContain('id="quick-background" type="button" disabled=""');
+    expect(html).toContain('id="job-drawer"');
+    expect(html).toContain('aria-hidden="true"');
+  });
 });
 
 function renderJobs(node: React.ReactElement, snapshot: ZManagerReactSnapshot): string {

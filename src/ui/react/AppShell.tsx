@@ -5,69 +5,75 @@ import { createZManagerAppStore } from "./appStore";
 import { noopZManagerReactActions, type ZManagerReactRuntimeAdapter } from "./appRuntime";
 import { ArchiveWorkspace } from "./archive/ArchiveWorkspace";
 import { useZManagerSnapshot } from "./AppProviders";
+import { ContextMenuRoot } from "./context-menu/ContextMenuRoot";
 import { CreateWorkspace } from "./create/CreateWorkspace";
 import { DialogRoot } from "./dialogs/DialogRoot";
+import { BrowserFileDropAdapter } from "./interaction/BrowserFileDropAdapter";
+import { ShellKeyboardShortcuts } from "./interaction/ShellKeyboardShortcuts";
 import { JobsDrawer, QuickActionProgress } from "./jobs/JobsSurfaces";
 import { AppFrame } from "./shell/AppFrame";
 
-type LegacyState = "loading" | "ready" | "failed";
+type RuntimeBridgeState = "loading" | "ready" | "failed";
 
-type LegacyMainModule = {
-  getLegacyReactRuntimeAdapter?: () => ZManagerReactRuntimeAdapter;
+type RuntimeBridgeModule = {
+  getZManagerRuntimeAdapter?: () => ZManagerReactRuntimeAdapter;
 };
 
 export function AppShell() {
-  const [legacyState, setLegacyState] = useState<LegacyState>("loading");
+  const [runtimeBridgeState, setRuntimeBridgeState] = useState<RuntimeBridgeState>("loading");
   const [store] = useState(() => createZManagerAppStore());
 
   useEffect(() => {
     let cancelled = false;
-    let unsubscribeLegacy: (() => void) | null = null;
+    let unsubscribeRuntimeBridge: (() => void) | null = null;
 
-    import("../../legacyMain")
-      .then((legacyModule: LegacyMainModule) => {
+    import("../../runtimeBridge")
+      .then((runtimeModule: RuntimeBridgeModule) => {
         if (!cancelled) {
-          const runtime = legacyModule.getLegacyReactRuntimeAdapter?.();
+          const runtime = runtimeModule.getZManagerRuntimeAdapter?.();
           if (!runtime) {
             throw new Error("legacy React runtime adapter is unavailable");
           }
 
           store.setActions(runtime.actions);
           store.publish(runtime.getSnapshot());
-          unsubscribeLegacy = runtime.subscribe((snapshot) => {
+          unsubscribeRuntimeBridge = runtime.subscribe((snapshot) => {
             store.publish(snapshot);
           });
-          setLegacyState("ready");
+          setRuntimeBridgeState("ready");
         }
       })
       .catch((error: unknown) => {
-        console.error("Failed to start ZManager legacy shell", error);
+        console.error("Failed to start ZManager runtime bridge", error);
         if (!cancelled) {
-          setLegacyState("failed");
+          setRuntimeBridgeState("failed");
         }
       });
 
     return () => {
       cancelled = true;
-      unsubscribeLegacy?.();
+      unsubscribeRuntimeBridge?.();
       store.setActions(noopZManagerReactActions);
     };
   }, [store]);
 
   return (
     <ZManagerAppRuntimeProvider store={store}>
-      <div className="zmanager-react-shell" data-legacy-state={legacyState}>
+      <div className="zmanager-react-shell" data-runtime-bridge-state={runtimeBridgeState}>
         <ReactRuntimeMetadata />
-        {legacyState === "failed" ? (
+        <BrowserFileDropAdapter />
+        <ShellKeyboardShortcuts />
+        {runtimeBridgeState === "failed" ? (
           <div className="startup-failure" role="alert">
             ZManager failed to start.
           </div>
         ) : null}
-        <AppFrame>
+        <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
           <QuickActionProgress />
-          <ReactWorkspaceSurfaces legacyState={legacyState} />
-          <div id="zmanager-legacy-root" />
+          <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
+          <div id="zmanager-runtime-bridge-root" />
           <JobsDrawer />
+          <ContextMenuRoot />
           <DialogRoot />
         </AppFrame>
       </div>
@@ -75,10 +81,10 @@ export function AppShell() {
   );
 }
 
-function ReactWorkspaceSurfaces({ legacyState }: Readonly<{ legacyState: LegacyState }>) {
+function ReactWorkspaceSurfaces({ runtimeBridgeState }: Readonly<{ runtimeBridgeState: RuntimeBridgeState }>) {
   const snapshot = useZManagerSnapshot();
 
-  if (legacyState !== "ready") {
+  if (runtimeBridgeState !== "ready") {
     return null;
   }
 

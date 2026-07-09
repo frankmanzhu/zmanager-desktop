@@ -33,4 +33,19 @@ describe("React AppFrame shell", () => {
     expect(html).toContain('id="status-job-button"');
     expect(html).toContain('id="drop-overlay"');
   });
+
+  it("omits workspace mode before the runtime bridge is ready", () => {
+    const store = createZManagerAppStore(createInitialZManagerReactSnapshot());
+
+    const html = renderToStaticMarkup(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store },
+        createElement(AppFrame, { runtimeBridgeReady: false }, createElement("section")),
+      ),
+    );
+
+    expect(html).toContain('class="workspace"');
+    expect(html).not.toContain('data-mode="compress"');
+  });
 });

@@ -11,17 +11,18 @@ import { TitleBar } from "./TitleBar";
 const WINDOW_RESIZE_DIRECTIONS = ["North", "East", "South", "West", "NorthEast", "SouthEast", "SouthWest", "NorthWest"] as const;
 
 export type AppFrameProps = Readonly<{
-  children: ReactNode;
+  children?: ReactNode;
+  runtimeBridgeReady?: boolean;
 }>;
 
-export function AppFrame({ children }: AppFrameProps) {
+export function AppFrame({ children, runtimeBridgeReady = true }: AppFrameProps) {
   const snapshot = useZManagerSnapshot();
 
   return (
     <main
       className={workspaceClassName(snapshot)}
       data-job-drawer={snapshot.shell.jobDrawerOpen ? "open" : "closed"}
-      data-mode={snapshot.shell.activeMode}
+      data-mode={runtimeBridgeReady ? snapshot.shell.activeMode : undefined}
       data-drop-state={snapshot.shell.dropOverlay.mode}
       data-drop-target={snapshot.shell.dropOverlay.copy?.target}
       data-quick-action-mode={quickActionModeAttribute(snapshot)}
@@ -40,9 +41,8 @@ export function AppFrame({ children }: AppFrameProps) {
 function quickActionModeAttribute(snapshot: ZManagerReactSnapshot): string | undefined {
   switch (snapshot.shell.quickActionWindow.mode) {
     case "jobOnly":
-      return "job-only";
     case "background":
-      return "background";
+      return "job-only";
     case "normal":
       return undefined;
   }

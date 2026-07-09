@@ -1,5 +1,5 @@
 import { Archive, File, Folder, Search } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { archiveRowIconDescriptor } from "../../../app/archiveEntryIcons";
 import {
@@ -11,15 +11,31 @@ import {
   type ArchiveTableColumnId,
   type ArchiveTableRow,
 } from "../../../app/archiveTable";
+import { applyHierarchicalMarqueeSelection } from "../../../app/hierarchicalTable";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
+import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { nativeIconDataUrlForRow } from "./archiveNativeIcons";
+
+const NATIVE_DRAG_THRESHOLD_PX = 6;
+const MARQUEE_SELECTION_THRESHOLD_PX = 5;
+
+type ViewportRect = Readonly<{
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}>;
 
 export function ArchiveTable() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  const tableBodyRef = useRef<HTMLTableSectionElement | null>(null);
+  const tableShellRef = useRef<HTMLDivElement | null>(null);
+  const [marqueeRect, setMarqueeRect] = useState<ViewportRect | null>(null);
   const i18n = translatorForSnapshot(snapshot);
   const archive = snapshot.archive;
+  const openCommandState = snapshot.commands.states.open;
   const columns = visibleColumns(normalizeColumnSettings({
     visibleColumnIds: snapshot.preferences.tableVisibleColumnIds,
     columnOrderIds: snapshot.preferences.tableColumnOrderIds,
@@ -27,6 +43,21 @@ export function ArchiveTable() {
   }));
   const showStartEmpty = !archive.currentArchivePath;
   const rows = archive.view.rows;
+
+  useEffect(() => {
+    const tableShell = tableShellRef.current;
+    if (!tableShell) {
+      return;
+    }
+
+    const preventSelectionGesture = (event: Event) => event.preventDefault();
+    tableShell.addEventListener("selectstart", preventSelectionGesture);
+    tableShell.addEventListener("dragstart", preventSelectionGesture);
+    return () => {
+      tableShell.removeEventListener("selectstart", preventSelectionGesture);
+      tableShell.removeEventListener("dragstart", preventSelectionGesture);
+    };
+  }, []);
 
   return (
     <section className="archive-table-pane" aria-label={i18n.t("workspace.archiveEntries.aria")}>
@@ -49,8 +80,22 @@ export function ArchiveTable() {
       <p id="browse-message" className={`status status-${archive.browseState}`}>
         {archive.status.fallbackText ?? i18n.t(archive.status.key, archive.status.values)}
       </p>
-      <div className={`table-shell ${showStartEmpty ? "has-start-empty" : ""}`} tabIndex={0}>
+      <div
+        ref={tableShellRef}
+        className={`table-shell ${showStartEmpty ? "has-start-empty" : ""}`}
+        tabIndex={0}
+        onPointerDownCapture={(event) => {
+          armMarqueeSelectionGesture({
+            event,
+            snapshot,
+            actions,
+            tableBody: tableBodyRef.current,
+            setMarqueeRect,
+          });
+        }}
+      >
         <div id="marquee-hit-surface" className="marquee-hit-surface" aria-hidden="true" />
+        {marqueeRect ? <div className="marquee-selection" style={marqueeRect} /> : null}
         <div
           id="archive-empty-state"
           className="archive-empty-state"
@@ -70,6 +115,8 @@ export function ArchiveTable() {
               className="primary-action"
               type="button"
               data-empty-action="open-archive"
+              disabled={!openCommandState.enabled}
+              title={openCommandState.enabled ? undefined : openCommandState.reason}
               onClick={() => actions.executeCommand("open")}
             >
               {i18n.t("browse.emptyOpenAction")}
@@ -99,7 +146,7 @@ export function ArchiveTable() {
               ))}
             </tr>
           </thead>
-          <tbody id="entry-table-body">
+          <tbody id="entry-table-body" ref={tableBodyRef}>
             {tableBodyRows(rows, archive.currentArchivePath, archive.browseState, columns, snapshot.archive.view.searchQuery, i18n.t("browse.statusEmpty")).map((row) =>
               typeof row === "string" ? (
                 <tr className={archive.view.searchQuery ? "search-empty-row" : ""} key="empty">
@@ -202,9 +249,61 @@ function HeaderCell({
     >
       <span className="column-header-label">{label}</span>
       {active ? <span className="sort-indicator" aria-hidden="true">{sortAscending ? "^" : "v"}</span> : null}
-      <span className="column-resizer" data-column-resizer={column.id} aria-hidden="true" />
+      <span
+        className="column-resizer"
+        data-column-resizer={column.id}
+        aria-hidden="true"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => startArchiveColumnResize(event, column, actions)}
+      />
     </th>
   );
+}
+
+function startArchiveColumnResize(
+  event: ReactPointerEvent<HTMLElement>,
+  column: ArchiveTableColumn,
+  actions: ZManagerReactActions,
+) {
+  if (event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  document.body.classList.add("is-resizing-column");
+
+  const startX = event.clientX;
+  const startWidth = column.width;
+  let latestWidth = startWidth;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    latestWidth = startWidth + moveEvent.clientX - startX;
+    actions.handleArchiveIntent({
+      type: "setColumnWidth",
+      columnId: column.id,
+      width: latestWidth,
+      persist: false,
+    });
+  };
+
+  const onPointerUp = () => {
+    document.body.classList.remove("is-resizing-column");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    actions.handleArchiveIntent({
+      type: "setColumnWidth",
+      columnId: column.id,
+      width: latestWidth,
+      persist: true,
+    });
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp, { once: true });
 }
 
 function ArchiveTableRowView({
@@ -250,6 +349,16 @@ function ArchiveTableRowView({
         });
       }}
       onDoubleClick={() => actions.handleArchiveIntent({ type: "activateRow", path: row.path, rowKind })}
+      onPointerDown={(event) => {
+        if (selectable) {
+          armNativeDragGesture(event, row.path, actions);
+        }
+      }}
+      onDragStart={(event) => {
+        if (selectable) {
+          event.preventDefault();
+        }
+      }}
       onContextMenu={(event) => {
         if (!selectable) {
           return;
@@ -405,4 +514,192 @@ function contextMenuPointForElement(element: HTMLElement): { x: number; y: numbe
     x: rect.left + 24,
     y: rect.top + Math.min(rect.height - 2, 24),
   };
+}
+
+function armNativeDragGesture(
+  event: ReactPointerEvent<HTMLTableRowElement>,
+  entryPath: string,
+  actions: ZManagerReactActions,
+) {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || !isNativeDragTarget(event.target)) {
+    return;
+  }
+
+  const pointerId = event.pointerId;
+  const startX = event.clientX;
+  const startY = event.clientY;
+  let started = false;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    if (moveEvent.pointerId !== pointerId || started) {
+      return;
+    }
+
+    const deltaX = moveEvent.clientX - startX;
+    const deltaY = moveEvent.clientY - startY;
+    if (Math.hypot(deltaX, deltaY) < NATIVE_DRAG_THRESHOLD_PX) {
+      return;
+    }
+
+    started = true;
+    moveEvent.preventDefault();
+    document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
+    clearNativeDragListeners();
+    actions.handleArchiveIntent({ type: "startNativeDrag", entryPath });
+  };
+
+  const onPointerEnd = (endEvent: PointerEvent) => {
+    if (endEvent.pointerId === pointerId) {
+      clearNativeDragListeners();
+    }
+  };
+
+  const clearNativeDragListeners = () => {
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerEnd);
+    document.removeEventListener("pointercancel", onPointerEnd);
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerEnd);
+  document.addEventListener("pointercancel", onPointerEnd);
+}
+
+function isNativeDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest("button, a, input, select, textarea")) {
+    return false;
+  }
+
+  return Boolean(target.closest(".row-primary"));
+}
+
+function suppressNativeDragClick(event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function armMarqueeSelectionGesture(input: Readonly<{
+  event: ReactPointerEvent<HTMLElement>;
+  snapshot: ZManagerReactSnapshot;
+  actions: ZManagerReactActions;
+  tableBody: HTMLTableSectionElement | null;
+  setMarqueeRect: (rect: ViewportRect | null) => void;
+}>) {
+  const { event, snapshot, actions, tableBody, setMarqueeRect } = input;
+  if (!canStartMarqueeSelection(event, snapshot) || !tableBody) {
+    return;
+  }
+
+  event.preventDefault();
+  const pointerId = event.pointerId;
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+  const baseSelection = new Set(snapshot.archive.view.selection.selectedPaths);
+  let started = false;
+
+  const onPointerMove = (moveEvent: PointerEvent) => {
+    if (moveEvent.pointerId !== pointerId) {
+      return;
+    }
+
+    const rect = viewportRectBetween(startX, startY, moveEvent.clientX, moveEvent.clientY);
+    if (!started && Math.hypot(rect.width, rect.height) < MARQUEE_SELECTION_THRESHOLD_PX) {
+      return;
+    }
+
+    if (!started) {
+      started = true;
+      document.body.classList.add("is-marquee-selecting");
+      document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
+    }
+
+    moveEvent.preventDefault();
+    setMarqueeRect(rect);
+    const selection = applyHierarchicalMarqueeSelection({
+      hitPaths: archiveEntryPathsInViewportRect(tableBody, rect),
+      visiblePaths: snapshot.archive.view.selection.visibleSelectablePaths,
+      baseSelection,
+      additive,
+    });
+    actions.handleArchiveIntent({
+      type: "applySelection",
+      selectedPaths: [...selection.selectedPaths],
+      focusedPath: selection.focusedPath,
+      anchorPath: selection.anchorPath,
+    });
+  };
+
+  const onPointerEnd = (endEvent: PointerEvent) => {
+    if (endEvent.pointerId !== pointerId) {
+      return;
+    }
+
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerEnd);
+    document.removeEventListener("pointercancel", onPointerEnd);
+    document.body.classList.remove("is-marquee-selecting");
+    setMarqueeRect(null);
+  };
+
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerEnd);
+  document.addEventListener("pointercancel", onPointerEnd);
+}
+
+function canStartMarqueeSelection(
+  event: ReactPointerEvent<HTMLElement>,
+  snapshot: ZManagerReactSnapshot,
+): boolean {
+  if (
+    event.button !== 0
+    || !snapshot.archive.currentArchivePath
+    || snapshot.archive.browseState !== "loaded"
+  ) {
+    return false;
+  }
+
+  if (!(event.target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (event.target.closest("button, a, input, select, textarea, .column-resizer")) {
+    return false;
+  }
+
+  return !event.target.closest(".row-primary, .row-secondary");
+}
+
+function viewportRectBetween(startX: number, startY: number, endX: number, endY: number): ViewportRect {
+  const left = Math.min(startX, endX);
+  const top = Math.min(startY, endY);
+  const right = Math.max(startX, endX);
+  const bottom = Math.max(startY, endY);
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function archiveEntryPathsInViewportRect(tableBody: HTMLTableSectionElement, rect: ViewportRect): string[] {
+  const right = rect.left + rect.width;
+  const bottom = rect.top + rect.height;
+  const paths: string[] = [];
+  for (const row of Array.from(tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]"))) {
+    const rowRect = row.getBoundingClientRect();
+    const intersects = rowRect.left <= right
+      && rowRect.right >= rect.left
+      && rowRect.top <= bottom
+      && rowRect.bottom >= rect.top;
+    if (intersects && row.dataset.entryPath) {
+      paths.push(row.dataset.entryPath);
+    }
+  }
+  return paths;
 }

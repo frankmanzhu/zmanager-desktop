@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { formatBytes, formatCompressionRatio, getPathBasename } from "../../../app/formatting";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
@@ -13,7 +15,7 @@ export function JobsDrawer() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const open = snapshot.shell.jobDrawerOpen && snapshot.shell.quickActionWindow.mode !== "jobOnly";
+  const open = snapshot.shell.jobDrawerOpen && snapshot.shell.quickActionWindow.mode === "normal";
 
   return (
     <aside id="job-drawer" className="job-drawer" aria-label={i18n.t("jobs.drawer.aria")} aria-hidden={open ? "false" : "true"}>
@@ -214,7 +216,7 @@ function JobProgressBar({ job }: Readonly<{ job: JobItem }>) {
 export function QuickActionProgress() {
   const snapshot = useZManagerSnapshot();
   const progress = snapshot.quickActionProgress;
-  const visible = snapshot.shell.quickActionWindow.mode === "jobOnly";
+  const visible = snapshot.shell.quickActionWindow.mode !== "normal";
 
   return progress.state === "tracking"
     ? <TrackingQuickActionProgress progress={progress} hidden={!visible} />
@@ -373,11 +375,48 @@ function QuickActions({
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
+  const [pendingAction, setPendingAction] = useState<"background" | "continue" | "cancel" | null>(null);
+
+  useEffect(() => {
+    setPendingAction(null);
+  }, [backgroundDisabled, continueDisabled, cancelDisabled, continueLabel]);
+
+  const controlsPending = pendingAction !== null;
   return (
     <div className="quick-progress-actions">
-      <button id="quick-background" type="button" disabled={backgroundDisabled} onClick={() => actions.handleJobsIntent({ type: "backgroundFocused" })}>{i18n.t("quick.background")}</button>
-      <button id="quick-continue" type="button" disabled={continueDisabled} onClick={() => actions.handleJobsIntent({ type: "toggleQuickActionPause" })}>{continueLabel}</button>
-      <button id="quick-cancel" type="button" disabled={cancelDisabled} onClick={() => actions.handleJobsIntent({ type: "cancelFocusedQuickActionJobs" })}>{i18n.t("common.cancel")}</button>
+      <button
+        id="quick-background"
+        type="button"
+        disabled={controlsPending || backgroundDisabled}
+        onClick={() => {
+          setPendingAction("background");
+          actions.handleJobsIntent({ type: "backgroundFocused" });
+        }}
+      >
+        {i18n.t("quick.background")}
+      </button>
+      <button
+        id="quick-continue"
+        type="button"
+        disabled={controlsPending || continueDisabled}
+        onClick={() => {
+          setPendingAction("continue");
+          actions.handleJobsIntent({ type: "toggleQuickActionPause" });
+        }}
+      >
+        {continueLabel}
+      </button>
+      <button
+        id="quick-cancel"
+        type="button"
+        disabled={controlsPending || cancelDisabled}
+        onClick={() => {
+          setPendingAction("cancel");
+          actions.handleJobsIntent({ type: "cancelFocusedQuickActionJobs" });
+        }}
+      >
+        {i18n.t("common.cancel")}
+      </button>
     </div>
   );
 }

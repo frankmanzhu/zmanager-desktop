@@ -24,11 +24,12 @@ The current entrypoint is React-based:
 
 - `src/main.ts` renders `AppShell`.
 - `src/ui/react/AppShell.tsx` owns the first React shell boundary.
-- `src/legacyMain.ts` keeps the current imperative GUI mounted inside
-  `#zmanager-legacy-root` until each workspace is converted.
+- `src/runtimeBridge.ts` keeps the current controller/runtime bridge connected
+  through `#zmanager-runtime-bridge-root` while remaining hidden scaffolding is
+  removed.
 
 This is intentionally a bridge. Future work should move one surface at a time
-from `legacyMain.ts` into React components backed by existing app/workspace
+from the runtime bridge into React components backed by existing app/workspace
 snapshots.
 
 ## Rules
@@ -40,7 +41,7 @@ snapshots.
 - Route new command surfaces through `src/app/commands/commandRouter.ts`.
 - Prefer React components in `src/ui/react` and reusable shadcn-style controls
   in `src/ui/components/ui`.
-- Add characterization tests before moving behavior out of `legacyMain.ts`.
+- Add characterization tests before moving behavior out of the runtime bridge.
 - Keep `src/main.ts` as a small composition root.
 
 ## Next Slices

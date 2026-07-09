@@ -33,9 +33,33 @@ export type ZManagerReactCommandSnapshot = Readonly<{
   secondaryCommandIds: readonly CommandId[];
 }>;
 
+export type ZManagerRuntimeSnapshot = Readonly<{
+  isDesktop: boolean;
+}>;
+
 export type ZManagerCreateSelectionSnapshot = Readonly<{
   selectedPaths: readonly string[];
   focusedPath: string;
+}>;
+
+export type ZManagerContextMenuSnapshot =
+  | Readonly<{ visible: false; id: number }>
+  | Readonly<{
+      visible: true;
+      id: number;
+      x: number;
+      y: number;
+      html: string;
+    }>;
+
+export type ZManagerContextMenuActionPayload = Readonly<{
+  action: string;
+  archivePath?: string;
+  columnId?: string;
+  compressMenuPath?: string;
+  entryPath?: string;
+  folderPath?: string;
+  sourcePath?: string;
 }>;
 
 export type ZManagerDialogDetailRow = Readonly<{
@@ -101,6 +125,8 @@ export type ZManagerReactSnapshot = Readonly<{
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
+  contextMenu: ZManagerContextMenuSnapshot;
+  runtime: ZManagerRuntimeSnapshot;
   dialog: ZManagerDialogSnapshot;
 }>;
 
@@ -111,6 +137,7 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
   | Readonly<{ type: "setFlatView"; flatView: boolean; persistPreference?: boolean }>
+  | Readonly<{ type: "setColumnWidth"; columnId: ArchiveTableColumnId; width: number; persist: boolean }>
   | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
   | Readonly<{ type: "sortByColumn"; columnId: ArchiveTableColumnId }>
   | Readonly<{ type: "selectAllVisible" }>
@@ -123,7 +150,14 @@ export type ZManagerArchiveIntent =
       shiftKey?: boolean;
     }>
   | Readonly<{ type: "setRowSelected"; path: string; selected: boolean }>
+  | Readonly<{
+      type: "applySelection";
+      selectedPaths: readonly string[];
+      focusedPath: string;
+      anchorPath: string;
+    }>
   | Readonly<{ type: "activateRow"; path: string; rowKind: "folder" | "entry" | "parent" }>
+  | Readonly<{ type: "startNativeDrag"; entryPath: string }>
   | Readonly<{ type: "copyDetailsValue"; value: string }>
   | Readonly<{ type: "showEmptyContextMenu"; x: number; y: number }>
   | Readonly<{ type: "showColumnContextMenu"; columnId: ArchiveTableColumnId; x: number; y: number }>
@@ -213,6 +247,14 @@ export type ZManagerDesktopIntent =
   | Readonly<{ type: "dropLeft" }>
   | Readonly<{ type: "dropChoice"; choice: "openArchive" | "addToCompress" | "cancel" }>;
 
+export type ZManagerContextMenuIntent =
+  | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>
+  | Readonly<{ type: "hide" }>;
+
+export type ZManagerKeyboardIntent =
+  | Readonly<{ type: "escape" }>
+  | Readonly<{ type: "focusSearch" }>;
+
 export type ZManagerReactActions = Readonly<{
   executeCommand(commandId: CommandId, payload?: CommandRouterPayload): void;
   setWorkspaceMode(mode: WorkspaceDropMode): void;
@@ -221,6 +263,8 @@ export type ZManagerReactActions = Readonly<{
   handleJobsIntent(intent: ZManagerJobsIntent): void;
   handleDialogIntent(intent: ZManagerDialogIntent): void;
   handleDesktopIntent(intent: ZManagerDesktopIntent): void;
+  handleContextMenuIntent(intent: ZManagerContextMenuIntent): void;
+  handleKeyboardIntent(intent: ZManagerKeyboardIntent): void;
 }>;
 
 export type ZManagerReactSnapshotListener = (snapshot: ZManagerReactSnapshot) => void;
@@ -244,6 +288,8 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
+  contextMenu?: ZManagerContextMenuSnapshot;
+  runtime?: ZManagerRuntimeSnapshot;
   dialog?: ZManagerDialogSnapshot;
 }>;
 
@@ -257,6 +303,8 @@ export const noopZManagerReactActions: ZManagerReactActions = Object.freeze({
   handleJobsIntent() {},
   handleDialogIntent() {},
   handleDesktopIntent() {},
+  handleContextMenuIntent() {},
+  handleKeyboardIntent() {},
 });
 
 export function displaySnapshotFromContext(
@@ -301,6 +349,8 @@ export function createZManagerReactSnapshot(
       primaryCommandIds: [...input.commands.primaryCommandIds],
       secondaryCommandIds: [...input.commands.secondaryCommandIds],
     },
+    contextMenu: cloneContextMenuSnapshot(input.contextMenu ?? { visible: false, id: 0 }),
+    runtime: { isDesktop: Boolean(input.runtime?.isDesktop) },
     dialog: cloneDialogSnapshot(input.dialog ?? { kind: "none" }),
   });
 }
@@ -342,8 +392,18 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       primaryCommandIds: ["open"],
       secondaryCommandIds: ["refresh"],
     },
+    contextMenu: { visible: false, id: 0 },
+    runtime: { isDesktop: false },
     dialog: { kind: "none" },
   });
+}
+
+function cloneContextMenuSnapshot(contextMenu: ZManagerContextMenuSnapshot): ZManagerContextMenuSnapshot {
+  if (!contextMenu.visible) {
+    return { visible: false, id: contextMenu.id };
+  }
+
+  return { ...contextMenu };
 }
 
 function cloneDialogSnapshot(dialog: ZManagerDialogSnapshot): ZManagerDialogSnapshot {

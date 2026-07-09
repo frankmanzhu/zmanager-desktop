@@ -69,8 +69,6 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
     addJobs: [] as Array<{ response: StartJobResponseDto; options: unknown }>,
     closeAppWindow: 0,
     closeFocusedJobProgress: 0,
-    disableCancelControls: 0,
-    disablePauseControls: 0,
     messages: [] as string[],
     outputActions: [] as JobOutputAction[],
     pollJobs: 0,
@@ -151,12 +149,6 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
     stopPolling() {
       calls.stopPolling += 1;
     },
-    disableQuickActionPauseControls() {
-      calls.disablePauseControls += 1;
-    },
-    disableQuickActionCancelControls() {
-      calls.disableCancelControls += 1;
-    },
     canEvaluateQuickActionCompletion() {
       return canEvaluateCompletion;
     },
@@ -234,7 +226,6 @@ describe("job control controller", () => {
     expect(harness.pauseJob).toHaveBeenCalledWith({ jobId: "job-2" });
     expect(harness.workspace.getJob("job-1")?.snapshot.status).toBe("paused");
     expect(harness.workspace.getJob("job-2")?.snapshot.status).toBe("paused");
-    expect(harness.calls.disablePauseControls).toBe(1);
     expect(harness.calls.messages).toEqual(["jobs.paused"]);
     expect(harness.calls.pollJobs).toBe(1);
   });
@@ -274,7 +265,6 @@ describe("job control controller", () => {
 
     expect(harness.cancelJob).toHaveBeenCalledWith({ jobId: "job-1" });
     expect(harness.cancelJob).toHaveBeenCalledWith({ jobId: "job-2" });
-    expect(harness.calls.disableCancelControls).toBe(1);
     expect(harness.calls.pollJobs).toBe(1);
     expect(harness.calls.messages).toEqual(["jobs.cancelled"]);
     expect(harness.calls.closeFocusedJobProgress).toBe(1);

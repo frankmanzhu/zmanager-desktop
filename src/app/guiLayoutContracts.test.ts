@@ -21,23 +21,28 @@ function normalizedWorkspaceFile(...parts: string[]): string {
 
 const styles = normalizedWorkspaceFile("src", "styles.css");
 const compositionRootSource = normalizedWorkspaceFile("src", "main.ts");
-const mainSource = normalizedWorkspaceFile("src", "legacyMain.ts");
+const mainSource = normalizedWorkspaceFile("src", "runtimeBridge.ts");
 const appShellSource = normalizedWorkspaceFile("src", "ui", "react", "AppShell.tsx");
 const appFrameSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
 const menuBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "MenuBar.tsx");
 const commandToolbarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "CommandToolbar.tsx");
 const statusBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "StatusBar.tsx");
 const dropOverlaySource = normalizedWorkspaceFile("src", "ui", "react", "shell", "DropOverlay.tsx");
+const browserFileDropAdapterSource = normalizedWorkspaceFile("src", "ui", "react", "interaction", "BrowserFileDropAdapter.tsx");
+const paneResizerSource = normalizedWorkspaceFile("src", "ui", "react", "interaction", "PaneResizer.tsx");
 const dialogRootSource = normalizedWorkspaceFile("src", "ui", "react", "dialogs", "DialogRoot.tsx");
+const contextMenuRootSource = normalizedWorkspaceFile("src", "ui", "react", "context-menu", "ContextMenuRoot.tsx");
+const preferencesDialogSource = normalizedWorkspaceFile("src", "ui", "react", "preferences", "PreferencesDialog.tsx");
+const archiveWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveWorkspace.tsx");
+const archiveTableSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveTable.tsx");
+const archivePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchivePathBar.tsx");
+const archiveDetailsPaneSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveDetailsPane.tsx");
+const createWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "create", "CreateWorkspace.tsx");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
-const shellViewSource = normalizedWorkspaceFile("src", "ui", "shellView.ts");
-const createWorkspaceViewSource = normalizedWorkspaceFile("src", "ui", "createWorkspaceView.ts");
-const archiveWorkspaceViewSource = normalizedWorkspaceFile("src", "ui", "archiveWorkspaceView.ts");
-const commandSurfaceViewSource = normalizedWorkspaceFile("src", "ui", "commandSurfaceView.ts");
-const contextMenuViewSource = normalizedWorkspaceFile("src", "ui", "contextMenuView.ts");
+const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
-const jobsViewSource = normalizedWorkspaceFile("src", "ui", "jobsView.ts");
+const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 function selectorsContainingFirstTableColumnRules(css: string): string[] {
@@ -81,7 +86,7 @@ describe("GUI layout contracts", () => {
   });
 
   it("renders the classic menu, command strip, and durable status surface visibly", () => {
-    expect(appShellSource).toContain("<AppFrame>");
+    expect(appShellSource).toContain('<AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>');
     expect(appFrameSource).toContain('className={workspaceClassName(snapshot)}');
     expect(menuBarSource).toContain('className="app-menu"');
     expect(commandToolbarSource).toContain('className="command-strip"');
@@ -91,7 +96,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('<header class="command-toolbar mode-toolbar"');
     expect(mainSource).not.toContain('<footer class="status-bar"');
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
-    expect(styles).toContain("#zmanager-legacy-root {\n  display: contents;");
+    expect(styles).toContain("#zmanager-runtime-bridge-root {\n  display: contents;");
     expect(styles).toContain(".command-strip {");
     expect(styles).toContain(".toolbar-group-label {");
   });
@@ -107,13 +112,8 @@ describe("GUI layout contracts", () => {
 
   it("keeps Slice 9 UI adapters out of workflow and runtime seams", () => {
     const slice9Sources = [
-      archiveWorkspaceViewSource,
-      createWorkspaceViewSource,
-      shellViewSource,
-      commandSurfaceViewSource,
-      contextMenuViewSource,
+      contextMenuHelpersSource,
       modalControllerSource,
-      jobsViewSource,
     ];
     for (const source of slice9Sources) {
       expect(source).not.toMatch(/from "\.\.\/api/);
@@ -123,9 +123,10 @@ describe("GUI layout contracts", () => {
         /archiveWorkspace\.|createWorkspace\.|shellWorkspace\.|commandRouter|runRoutedCommand|invoke|Tauri|openNativeDialog|localStorage|sessionStorage|passwordInput|passwordConfirm|\.value.*password|password.*\.value|fetch\(|listen\(/,
       );
     }
-    expect(jobsViewSource).not.toContain("Map<string, JobState>");
-    expect(jobsViewSource).not.toContain("deriveJobProgress");
-    expect(mainSource).toContain("renderJobsListHtml(snapshot.jobs");
+    expect(jobsSurfacesSource).toContain('id="job-drawer"');
+    expect(jobsSurfacesSource).toContain('id="quick-progress"');
+    expect(mainSource).not.toContain("renderJobsListHtml");
+    expect(mainSource).not.toContain("jobsListElement");
   });
 
   it("does not duplicate command buttons in secondary panes", () => {
@@ -145,7 +146,7 @@ describe("GUI layout contracts", () => {
   it("keeps dialogs on shared native task and property primitives", () => {
     expect(mainSource).toContain('class="dialog task-dialog"');
     expect(mainSource).toContain('class="dialog property-dialog"');
-    expect(mainSource).toContain('class="dialog property-dialog dialog-wide"');
+    expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
     expect(mainSource).toContain('data-dialog-default="#extract-start"');
     expect(mainSource).toContain('data-dialog-cancel="#extract-cancel"');
     expect(mainSource).toContain('from "./ui/modalController"');
@@ -192,19 +193,16 @@ describe("GUI layout contracts", () => {
   });
 
   it("declares stable Compress source table columns", () => {
-    expect(mainSource).toContain('id="compress-include-all" type="checkbox"');
-    expect(mainSource).toContain("renderCompressIncludeAllControl(compressIncludeAllControlViewElements");
-    expect(createWorkspaceViewSource).toContain("function renderCompressIncludeAllControl");
+    expect(createWorkspaceSource).toContain('id="compress-include-all"');
+    expect(createWorkspaceSource).toContain('type="checkbox"');
+    expect(createWorkspaceSource).toContain("function includeAllState");
+    expect(createWorkspaceSource).toContain("node.indeterminate = includeAll.indeterminate");
     expect(mainSource).not.toContain('<th class="inclusion-column" data-i18n-text="table.include">Include</th>');
-    expect(mainSource).toContain('data-compress-column-id="name"');
-    expect(mainSource).toContain('data-column-resizer="name"');
-    expect(mainSource).toContain("function startCompressSourceColumnResize");
-    expect(mainSource).not.toContain("compressSourceTable.querySelector<HTMLTableCellElement>");
-    expect(mainSource).not.toContain("compressSourceTable.style.setProperty");
-    expect(mainSource).not.toContain("compressSourceTable.style.minWidth");
-    expect(createWorkspaceViewSource).toContain("function findCompressSourceColumnHeader");
-    expect(createWorkspaceViewSource).toContain("function readCompressSourceColumnWidths");
-    expect(createWorkspaceViewSource).toContain("function applyCompressSourceColumnWidths");
+    expect(createWorkspaceSource).toContain('<CompressSourceHeader columnId="name"');
+    expect(createWorkspaceSource).toContain('data-compress-column-id={columnId}');
+    expect(createWorkspaceSource).toContain('data-column-resizer={columnId}');
+    expect(createWorkspaceSource).toContain("function startCompressSourceColumnResize");
+    expect(createWorkspaceSource).toContain('actions.handleCreateIntent({ type: "setCurrentFolderIncluded"');
     expect(styles).toContain("#compress-source-table th:nth-child(1)");
     expect(styles).toContain("#compress-source-table th:nth-child(2)");
     expect(styles).toContain("#compress-source-table th:nth-child(3)");
@@ -213,21 +211,19 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps Compress create canonical in-window with validation and source actions", () => {
-    expect(mainSource).toContain('<div class="compress-create-panel"');
+    expect(createWorkspaceSource).toContain('className="compress-create-panel"');
     expect(mainSource).not.toContain('id="create-dialog"');
-    expect(mainSource).toContain('id="create-destination-recent"');
-    expect(mainSource).toContain('id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources"');
-    expect(mainSource).toContain('aria-describedby="create-plan-meta"');
-    expect(mainSource).toContain("sourceSnapshot.options.readiness.unavailableReason");
+    expect(createWorkspaceSource).toContain('id="create-destination-recent"');
+    expect(createWorkspaceSource).toContain('id="clear-sources"');
+    expect(createWorkspaceSource).toContain('id="create-plan-meta"');
+    expect(createWorkspaceSource).toContain("create.options.readiness.unavailableReason");
     expect(mainSource).not.toContain("createArchiveUnavailableReason({");
-    expect(mainSource).toContain("renderCreatePlanSummary(createPlanSummaryViewElements");
-    expect(createWorkspaceViewSource).toContain('class="plan-details"');
-    expect(mainSource).toContain('class="compress-options-summary"');
-    expect(createWorkspaceViewSource).toContain('data-compress-source-path="${escapeHtml(sourcePath)}"');
-    expect(mainSource).toContain("sourcePath: sourcePathForCompressRow(row, snapshot) || null");
+    expect(createWorkspaceSource).toContain('className="compress-options-summary"');
+    expect(createWorkspaceSource).toContain("sourcePathForCreatePlanRow(row");
+    expect(createWorkspaceSource).toContain("data-compress-source-path={sourcePath || undefined}");
     expect(mainSource).toContain('data-context-action="reveal-source"');
     expect(mainSource).toContain('data-context-action="remove-source"');
-    expect(createWorkspaceViewSource).toContain('aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"');
+    expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
     expect(mainSource).toContain("function removableSourcePathForCompressRow");
     expect(mainSource).toContain("if (!rowPath || snapshot.view.currentFolder)");
     expect(mainSource).toContain("normalizeEntryPath(rowPath) === getPathBasename(sourcePath)");
@@ -279,26 +275,29 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps the three-pane workspace splitters visible and keyboard reachable", () => {
-    expect(mainSource).toContain('id="navigation-pane" class="navigation-pane"');
-    expect(mainSource).toContain('data-pane-resizer="navigation"');
-    expect(mainSource).toContain('data-pane-resizer="details"');
-    expect(mainSource).toContain('role="separator"');
-    expect(mainSource).toContain('tabindex="0"');
-    expect(mainSource).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
-    expect(mainSource).toContain("resizePaneByKeyboard(event, pane)");
-    expect(mainSource).toContain('nextWidth = pane === "navigation" ? currentWidth - step : currentWidth + step');
-    expect(mainSource).toContain('nextWidth = pane === "navigation" ? currentWidth + step : currentWidth - step');
+    expect(archiveWorkspaceSource).toContain('<PaneResizer pane="navigation"');
+    expect(archiveWorkspaceSource).toContain('<PaneResizer pane="details"');
+    expect(createWorkspaceSource).toContain('<PaneResizer pane="navigation"');
+    expect(createWorkspaceSource).toContain('<PaneResizer pane="details"');
+    expect(createWorkspaceSource).toContain('id="navigation-pane"');
+    expect(paneResizerSource).toContain('data-pane-resizer={pane}');
+    expect(paneResizerSource).toContain('role="separator"');
+    expect(paneResizerSource).toContain("tabIndex={0}");
+    expect(paneResizerSource).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
+    expect(paneResizerSource).toContain("resizePaneByKeyboard(event.currentTarget, event.nativeEvent, pane)");
+    expect(paneResizerSource).toContain('nextWidth = pane === "navigation" ? currentWidth - step : currentWidth + step');
+    expect(paneResizerSource).toContain('nextWidth = pane === "navigation" ? currentWidth + step : currentWidth - step');
     expect(styles).toContain(".pane-resizer-grip");
     expect(styles).toContain(".pane-resizer::before");
     expect(styles).toContain("grid-template-columns:\n    minmax(var(--zmanager-nav-pane-min), clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 190px), var(--zmanager-nav-pane-max)))");
   });
 
   it("keeps details values aligned and long paths predictable", () => {
-    expect(archiveWorkspaceViewSource).toContain('export type DetailValueMode = "wrap" | "middle";');
-    expect(archiveWorkspaceViewSource).toContain("function middleTruncateDetailValue");
-    expect(archiveWorkspaceViewSource).toContain('class="detail-value detail-value-${valueMode}"');
-    expect(archiveWorkspaceViewSource).toContain('aria-label="${escapeHtml(`${label}: ${value}`)}"');
-    expect(archiveWorkspaceViewSource).toContain('<span class="sr-only">${escapeHtml(value)}</span>');
+    expect(archiveDetailsPaneSource).toContain('function detailValueMode(value: string): "wrap" | "middle"');
+    expect(archiveDetailsPaneSource).toContain("function middleTruncateDetailValue");
+    expect(archiveDetailsPaneSource).toContain('className="detail-value detail-value-middle"');
+    expect(archiveDetailsPaneSource).toContain('aria-label={`${label}: ${value}`}');
+    expect(archiveDetailsPaneSource).toContain('<span className="sr-only">{value}</span>');
     expect(mainSource).toContain('{ label: message("detail.path"), value: entry.path }');
     expect(styles).toContain("grid-template-columns: minmax(76px, 34%) minmax(0, 1fr);");
     expect(styles).toContain(".detail-value-wrap");
@@ -316,6 +315,8 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain(".navigation-pane .tree-content {\n    min-width: 0;\n    display: flex;");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-panel {\n    min-height: 0;\n    gap: 0;\n    overflow: hidden;");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-summary {\n    min-height: 29px;");
+    expect(styles).toContain(".detail-block .detail-list > div:nth-of-type(n+5)");
+    expect(styles).toContain(".detail-block .detail-list > div:nth-of-type(n+4)");
     expect(styles).toContain(".compress-options-panel:not([open]) > :not(summary)");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .compress-options-panel .create-options-grid");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .details-pane:has(.compress-options-panel[open])");
@@ -332,18 +333,19 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps Explorer-like table keyboard and empty-state contracts explicit", () => {
-    expect(archiveWorkspaceViewSource).toContain('aria-keyshortcuts="Enter Space ContextMenu Shift+F10"');
-    expect(archiveWorkspaceViewSource).toContain('aria-keyshortcuts="Space Enter ContextMenu Shift+F10"');
+    expect(archiveTableSource).toContain('aria-keyshortcuts="Enter Space ContextMenu Shift+F10"');
+    expect(archiveTableSource).toContain('aria-keyshortcuts="Space Enter ContextMenu Shift+F10"');
     expect(mainSource).toContain('data-context-action="sort-ascending"');
     expect(mainSource).toContain('data-context-action="sort-descending"');
     expect(mainSource).toContain('data-context-action="extract-here"');
     expect(mainSource).toContain('data-context-action="paste-archive-path"');
     expect(mainSource).toContain('data-context-action="open-recent-archive"');
     expect(mainSource).toContain('data-context-action="reset-columns"');
-    expect(contextMenuViewSource).toContain("export function contextMenuItems");
-    expect(contextMenuViewSource).toContain('contextMenu.addEventListener("keydown"');
-    expect(contextMenuViewSource).toContain('contextMenu.addEventListener("focusout"');
-    expect(archiveWorkspaceViewSource).toContain("elements.entryTable.hidden = false;");
+    expect(contextMenuHelpersSource).toContain("export function contextMenuItems");
+    expect(contextMenuHelpersSource).not.toContain("addEventListener");
+    expect(contextMenuRootSource).toContain("function handleContextMenuKeyboard");
+    expect(contextMenuRootSource).toContain("onClick={(event) =>");
+    expect(archiveTableSource).toContain('<table id="entry-table">');
     expect(mainSource).toContain("function updateCompressSelectionByIntent");
     expect(mainSource).toContain("showCompressRowContextMenu");
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
@@ -358,37 +360,38 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps Extract empty and loaded archive navigation understandable", () => {
-    expect(mainSource).toContain('data-empty-action="open-archive"');
-    expect(archiveWorkspaceViewSource).toContain("<h3>${escapeHtml(model.title)}</h3>");
-    expect(archiveWorkspaceViewSource).toContain('data-details-action="open-archive"');
-    expect(archiveWorkspaceViewSource).toContain('data-copy-value="${escapeHtml(value)}"');
+    expect(archiveTableSource).toContain('data-empty-action="open-archive"');
+    expect(archiveDetailsPaneSource).toContain("<h3");
+    expect(archiveDetailsPaneSource).toContain('data-details-action="open-archive"');
+    expect(archiveDetailsPaneSource).toContain("data-copy-value={value}");
     expect(mainSource).toContain("function currentArchiveDisplayPath");
-    expect(archiveWorkspaceViewSource).toContain("elements.pathFieldInput.readOnly = true;");
-    expect(archiveWorkspaceViewSource).toContain("elements.pathCrumbsElement.hidden = model.kind === \"empty\";");
+    expect(archivePathBarSource).toContain("readOnly");
+    expect(archivePathBarSource).toContain("hidden={!archive.currentArchivePath}");
     expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
     expect(mainSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
-    expect(archiveWorkspaceViewSource).toContain('aria-keyshortcuts="Enter Space">${escapeHtml(crumb.name)}</button>');
+    expect(archivePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
-    expect(commandSurfaceViewSource).toContain('button.classList.toggle("is-primary-command", Boolean(classState?.primary));');
-    expect(commandSurfaceViewSource).toContain('button.classList.toggle("is-secondary-command", Boolean(classState?.secondary));');
-    expect(archiveWorkspaceViewSource).toContain('elements.searchInput.setAttribute("aria-disabled", String(state.searchDisabled));');
+    expect(commandToolbarSource).toContain('primary ? "is-primary-command" : ""');
+    expect(commandToolbarSource).toContain('secondary ? "is-secondary-command" : ""');
+    expect(archivePathBarSource).toContain("disabled={searchDisabled}");
     expect(styles).toContain(".detail-copyable");
     expect(styles).toContain(".tool-button.is-primary-command");
     expect(styles).toContain(".tool-button.is-secondary-command");
   });
 
   it("keeps search and flat view as stateful file-table controls", () => {
-    expect(mainSource).toContain('id="search-submit"');
-    expect(mainSource).toContain('id="clear-search"');
-    expect(mainSource).toContain('id="search-count"');
-    expect(archiveWorkspaceViewSource).toContain('elements.searchCountElement.textContent = options.formatSearchCount(resultCount);');
-    expect(archiveWorkspaceViewSource).toContain('class="${query ? "search-empty-row" : ""}"');
+    expect(archivePathBarSource).toContain('id="search-submit"');
+    expect(archivePathBarSource).toContain('id="clear-search"');
+    expect(archivePathBarSource).toContain('id="search-count"');
+    expect(archivePathBarSource).toContain("snapshot.archive.view.selection.visibleSelectablePaths.length");
+    expect(archiveTableSource).toContain('className={archive.view.searchQuery ? "search-empty-row" : ""}');
     expect(mainSource).toContain('message("detail.selectionHiddenBySearch")');
     expect(mainSource).toContain('action: "clear-search"');
-    expect(archiveWorkspaceViewSource).toContain('data-details-action="${escapeHtml(action.action)}"');
+    expect(archiveDetailsPaneSource).toContain('data-details-action="clear-search"');
     expect(mainSource).toContain('flatView: isFlatView,');
-    expect(commandSurfaceViewSource).toContain('button.setAttribute("aria-pressed", String(pressedState[commandId]));');
+    expect(commandToolbarSource).toContain("aria-pressed={typeof pressed === \"boolean\" ? pressed : undefined}");
+    expect(menuBarSource).toContain("aria-pressed={typeof pressed === \"boolean\" ? pressed : undefined}");
     expect(styles).toContain(".search-box");
     expect(styles).toContain(".search-count");
     expect(styles).toContain('.command-toolbar .tool-button[aria-pressed="true"]');
@@ -404,7 +407,8 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('action: "properties"');
     expect(mainSource).toContain('action: "archive-info"');
     expect(mainSource).toContain('action: "preview"');
-    expect(archiveWorkspaceViewSource).toContain('data-details-action="${escapeHtml(action.action)}"');
+    expect(archiveDetailsPaneSource).toContain('data-details-action="preview"');
+    expect(archiveDetailsPaneSource).toContain('data-details-action="extract-selected"');
     expect(mainSource).toContain("function entryPropertyRows");
     expect(mainSource).toContain("{ label: message(\"detail.ratio\"), value: formatRatio(entry) }");
     expect(mainSource).toContain("infoReturnFocusForCurrentSelection()");
@@ -421,12 +425,12 @@ describe("GUI layout contracts", () => {
     expect(appFrameSource).toContain("data-drop-target={snapshot.shell.dropOverlay.copy?.target}");
     expect(mainSource).not.toContain('<div id="drop-overlay"');
     expect(shellWorkspaceSource).toContain('export type DropOverlayMode = "idle" | "active" | "choosing";');
-    expect(shellViewSource).toContain("elements.workspace.dataset.dropTarget = copy.target;");
+    expect(appFrameSource).toContain("data-drop-target={snapshot.shell.dropOverlay.copy?.target}");
     expect(mainSource).toContain("setDropOverlayChoice(decision, dropCopyForDecision(decision));");
     expect(shellWorkspaceSource).toContain("setDropOverlayChoice(choice, copy)");
     expect(mainSource).toContain('document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();');
     expect(dropOverlaySource).toContain('actions.handleDesktopIntent({ type: "dropChoice", choice: "openArchive" })');
-    expect(mainSource).toContain('droppedPathsFromDataTransfer');
+    expect(browserFileDropAdapterSource).toContain('droppedPathsFromDataTransfer');
     expect(mainSource).toContain('droppedPathsFromDesktopEvent');
     expect(mainSource).not.toContain("window.confirm(");
     expect(styles).toContain("grid-area: body;");

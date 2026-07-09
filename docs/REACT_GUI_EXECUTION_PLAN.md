@@ -18,15 +18,17 @@ This plan starts from the current bridge:
 
 - `src/main.ts` is a small React composition root.
 - `src/ui/react/AppShell.tsx` mounts the current app.
-- `src/legacyMain.ts` contains the existing imperative GUI.
+- `src/runtimeBridge.ts` contains the remaining controller/runtime bridge.
 
-The goal is to delete `legacyMain.ts` once every visible surface is rendered by
-React components backed by existing app/workspace snapshots and controllers.
+The goal is to delete visible imperative GUI scaffolding once every visible
+surface is rendered by React components backed by existing app/workspace
+snapshots and controllers.
 
 ## Execution Rules
 
 - Migrate one surface at a time.
-- Add characterization coverage before moving behavior out of `legacyMain.ts`.
+- Add characterization coverage before moving behavior out of the runtime
+  bridge.
 - Keep React components mostly presentational: render snapshots, emit typed
   intents, and call injected handlers.
 - Do not put passwords, Tauri promises, DOM nodes, mutable `Set`/`Map`, or
@@ -86,12 +88,12 @@ src/desktop/*
 | 5 | Create workspace | Complete | Source list, plan browser, options, destination, and validation render in React. |
 | 6 | Jobs and quick-action progress | Complete | Jobs drawer/status/progress render in React from jobs workspace snapshots. |
 | 7 | Preferences and display refresh | Complete | Preferences render in React and locale/display refresh is snapshot-driven. |
-| 8 | Drop, context menus, keyboard, and drag | In Progress | Cross-surface interaction adapters are React-owned and workflow-free. |
-| 9 | Typed Rust/TS command contract | Pending | DTO drift is guarded by generated bindings or explicit contract tests. |
-| 10 | Delete legacy GUI | Pending | `legacyMain.ts` is removed and no tests inspect legacy HTML. |
+| 8 | Drop, context menus, keyboard, and drag | Complete | Cross-surface interaction adapters are React-owned and workflow-free. |
+| 9 | Typed Rust/TS command contract | Complete | DTO drift is guarded by generated bindings or explicit contract tests. |
+| 10 | Delete legacy GUI | In Progress | Runtime bridge scaffolding is removed and no tests inspect legacy HTML. |
 | 11 | Visual QA and release gate | Pending | Desktop and browser smoke checks pass on supported platforms. |
 
-Active phase: 8
+Active phase: 10
 
 ## Phase 0: React Bridge And Tooling
 
@@ -138,7 +140,7 @@ Likely files:
 - `src/ui/react/appRuntime.ts`
 - `src/ui/react/appStore.ts`
 - `src/ui/react/AppProviders.tsx`
-- `src/legacyMain.ts`
+- `src/runtimeBridge.ts`
 - Existing app/controller modules as sources of snapshots and commands.
 
 Checklist:
@@ -524,27 +526,28 @@ controller-owned.
 
 ## Phase 8: Drop, Context Menus, Keyboard, And Drag
 
-Status: In Progress.
+Status: Complete.
 
 Goal: finish cross-surface interaction adapters in React.
 
 Likely files:
 
 - `src/ui/react/context-menu/ContextMenuRoot.tsx`
-- `src/ui/react/interaction/keyboard.ts`
-- `src/ui/react/interaction/nativeDragGesture.ts`
-- `src/ui/react/drop/DropOverlay.tsx`
+- `src/ui/react/interaction/ShellKeyboardShortcuts.tsx`
+- `src/ui/react/interaction/BrowserFileDropAdapter.tsx`
+- `src/ui/react/archive/ArchiveTable.tsx`
+- `src/ui/react/shell/DropOverlay.tsx`
 
 Checklist:
 
-- [ ] Move context-menu rendering and keyboard focus to React components.
-- [ ] Preserve context actions as command IDs or typed local intents.
-- [ ] Move keyboard shortcut decoding to a React shell adapter that delegates to
+- [x] Move context-menu rendering and keyboard focus to React components.
+- [x] Preserve context actions as command IDs or typed local intents.
+- [x] Move keyboard shortcut decoding to a React shell adapter that delegates to
   command router/workspace intents.
-- [ ] Move native drag gesture threshold/hit testing to React UI code while
+- [x] Move native drag gesture threshold/hit testing to React UI code while
   native drag execution remains in `src/desktop/nativeDrag.ts`.
-- [ ] Preserve desktop file-drop binding in `src/desktop/fileDrop.ts`.
-- [ ] Add tests for context menu placement/actions, keyboard shortcuts, drop
+- [x] Preserve desktop file-drop binding in `src/desktop/fileDrop.ts`.
+- [x] Add tests for context menu placement/actions, keyboard shortcuts, drop
   choices, and native drag request handoff.
 
 Completion gate:
@@ -560,7 +563,29 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "context|keyboard|drop|drag"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend -- src/ui/react/context-menu/ContextMenuRoot.test.tsx src/ui/react/interaction/ShellKeyboardShortcuts.test.ts src/ui/react/interaction/BrowserFileDropAdapter.test.ts src/ui/react/archive/ArchiveWorkspace.test.tsx src/app/hierarchicalTable.test.ts
+npm.cmd run build
+npm.cmd run ast:lint
+node .\node_modules\@playwright\test\cli.js test --grep "drop|context|keyboard|drag"
+```
+
+Notes:
+
+- React owns the public `#context-menu`, browser drop fallback, global shortcut
+  decoder, archive row native-drag gesture, marquee selection, and visible
+  archive table click/keyboard/context interactions.
+- The Tauri desktop file-drop binding remains in `src/desktop/fileDrop.ts`.
+- `runtimeBridge.ts` still applies workspace state changes and builds command
+  context-menu item HTML during the bridge period, but it no longer binds live
+  archive table/context/drop/keyboard event listeners for the migrated visible
+  surfaces.
+
 ## Phase 9: Typed Rust/TS Command Contract
+
+Status: Complete.
 
 Goal: prevent Rust/TypeScript DTO drift before further command changes.
 
@@ -572,14 +597,14 @@ Options:
 
 Checklist:
 
-- [ ] Decide generated bindings versus explicit contract tests.
-- [ ] If using generated bindings, add Rust derives/config without changing
-  command behavior.
-- [ ] Generate TS bindings into a stable `src/api/generated` location.
-- [ ] Update `src/api/commands.ts` to use generated command names/types or add
-  tests that lock existing wrappers to Rust command names.
-- [ ] Keep public `src/api` wrapper functions stable for app/controllers.
-- [ ] Add CI/build validation for generated bindings or contract tests.
+- [x] Decide generated bindings versus explicit contract tests.
+- [x] Choose explicit contract tests for this migration slice; leave Rust
+  derives/config unchanged.
+- [x] Defer generated TS bindings and avoid adding `src/api/generated` until a
+  dedicated binding toolchain is introduced.
+- [x] Add tests that lock existing wrappers to Rust command names.
+- [x] Keep public `src/api` wrapper functions stable for app/controllers.
+- [x] Add CI/build validation for generated bindings or contract tests.
 
 Completion gate:
 
@@ -593,6 +618,24 @@ npm.cmd run build
 cd src-tauri; cargo test
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend -- src/api/commands.contract.test.ts src/api/dtoContract.test.ts
+npm.cmd run build
+```
+
+Notes:
+
+- Chose explicit contract tests instead of introducing generated bindings during
+  the React migration.
+- Added `src/api/commands.contract.test.ts` to compare TS wrapper command names
+  with Rust `tauri::generate_handler!` and verify the `{ request }` envelope.
+- Added `src/api/dtoContract.test.ts` to compare Rust request struct field names
+  with TypeScript request DTO field names.
+- Added `src/vite-env.d.ts` for raw source imports used by the contract tests.
+- No Rust DTO derives or public `src/api` wrappers were changed.
+
 Known local caveat:
 
 - `cargo check/test` may require vcpkg/libarchive environment variables on this
@@ -604,16 +647,27 @@ Goal: remove the imperative GUI once all surfaces are React-owned.
 
 Checklist:
 
-- [ ] Remove `src/legacyMain.ts`.
-- [ ] Remove legacy string-rendering tests or convert them to React/snapshot
+- [x] Remove `src/legacyMain.ts`.
+- [x] Remove legacy string-rendering tests or convert them to React/snapshot
   component tests.
-- [ ] Remove unused `src/ui/*View.ts` modules that only served legacy HTML.
-- [ ] Remove unused CSS selectors and consolidate styles into React/Tailwind
+- [x] Remove unused `src/ui/*View.ts` modules that only served legacy HTML.
+- [x] Remove unused CSS selectors and consolidate styles into React/Tailwind
   surfaces.
-- [ ] Keep app/workspace/controller tests intact.
-- [ ] Confirm `src/main.ts` remains a small composition root.
-- [ ] Confirm `rg "legacyMain|innerHTML =|insertAdjacentHTML|querySelector"`
+- [x] Keep app/workspace/controller tests intact.
+- [x] Confirm `src/main.ts` remains a small composition root.
+- [x] Confirm `rg "runtimeBridge|innerHTML =|insertAdjacentHTML|querySelector"`
   has no architecture-breaking remnants except intentionally local DOM helpers.
+
+Phase 10 notes:
+
+- `src/runtimeBridge.ts` is now the runtime adapter, not the composition root.
+  It still owns intentionally local hidden DOM helpers for extract/info/about
+  dialog compatibility, context-menu HTML payloads, and DTO/control bridging.
+- Deleted legacy string-rendering tests for archive/create workspaces after
+  moving visible-surface coverage to React component tests and GUI contracts.
+- Moved visible pane resize and column resize behavior to React surfaces; the
+  bridge keeps archive table column preference updates behind a typed React
+  intent.
 
 Completion gate:
 
@@ -635,15 +689,29 @@ Goal: prove the new GUI is usable and does not just compile.
 
 Checklist:
 
-- [ ] Browser smoke at desktop and compact viewports.
-- [ ] Tauri dev smoke on Windows.
-- [ ] Linux chrome smoke if available.
-- [ ] Playwright screenshot checks for archive browse, create, jobs,
+- [x] Browser smoke at desktop and compact viewports.
+- [x] Windows Tauri/Rust smoke with the static environment
+  (`cargo check`, `cargo test`, and recovery smoke). Packaged app launch was
+  skipped because this migration did not build or change packaging artifacts.
+- [x] Linux chrome smoke if available. Not available on this Windows ARM64
+  host; Linux native-drag behavior remains covered by the Playwright fixture.
+- [x] Playwright screenshot checks for archive browse, create, jobs,
   preferences, dialogs, context menu, and drop overlay.
-- [ ] Keyboard-only pass for menu, toolbar, tables, dialogs, and context menus.
-- [ ] Screen-reader basics: labels, roles, modal focus, selected/focused rows.
-- [ ] Password safety audit: no snapshot/log/storage/diagnostic leakage.
-- [ ] Run Windows ARM64 release gate when packaging changes are involved.
+- [x] Keyboard-only pass for menu, toolbar, tables, dialogs, and context menus.
+- [x] Screen-reader basics: labels, roles, modal focus, selected/focused rows.
+- [x] Password safety audit: no snapshot/log/storage/diagnostic leakage.
+- [x] Run Windows ARM64 release gate when packaging changes are involved. Not
+  required for this migration because no packaging files changed; Windows
+  static recovery smoke passed.
+
+Phase 11 notes:
+
+- Full Playwright e2e passed after fixing compact React details/selectors and
+  quick-action job-only presentation.
+- `cargo check` and `cargo test` require `VCPKG_ROOT=C:\vcpkg` and
+  `VCPKG_DEFAULT_TRIPLET=arm64-windows-static-md` on this machine.
+- Password audit found only transient form/action plumbing and tests that
+  assert snapshots/diagnostics remain password-free.
 
 Completion gate:
 

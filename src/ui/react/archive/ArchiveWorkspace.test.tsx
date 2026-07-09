@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { JOB_RUNNING_MESSAGE } from "../../../app/classicCommands";
 import { createArchiveWorkspace } from "../../../app/workspaces/archiveWorkspace";
 import { ZManagerAppRuntimeProvider } from "../AppProviders";
 import { createZManagerAppStore } from "../appStore";
@@ -24,6 +25,8 @@ describe("React archive workspace", () => {
     expect(html).toContain('id="search-entries"');
     expect(html).toContain('id="tree-content"');
     expect(html).toContain('data-tree-path="docs"');
+    expect(html).toContain('data-pane-resizer="navigation"');
+    expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
     expect(html).toContain('id="entry-table"');
     expect(html).toContain('data-entry-path="docs/readme.txt"');
     expect(html).toContain('data-column-id="name"');
@@ -38,6 +41,24 @@ describe("React archive workspace", () => {
     expect(html).toContain('data-empty-action="open-archive"');
     expect(html).toContain('data-details-action="open-archive"');
     expect(html).toContain("Open Archive");
+  });
+
+  it("disables no-archive open actions while another job blocks archive commands", () => {
+    const initial = createInitialZManagerReactSnapshot();
+    const html = renderArchiveWorkspace(createZManagerReactSnapshot({
+      ...initial,
+      commands: {
+        ...initial.commands,
+        states: {
+          ...initial.commands.states,
+          open: { enabled: false, reason: JOB_RUNNING_MESSAGE },
+        },
+      },
+    }));
+
+    expect(html).toMatch(/data-empty-action="open-archive"[^>]*disabled=""/);
+    expect(html).toMatch(/data-details-action="open-archive"[^>]*disabled=""/);
+    expect(html).toContain(JOB_RUNNING_MESSAGE);
   });
 });
 
