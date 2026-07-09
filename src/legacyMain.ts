@@ -239,6 +239,18 @@ import {
   type DisplayRefreshWorkspace,
 } from "./app/display/displayContext";
 import {
+  createZManagerReactSnapshot,
+  displaySnapshotFromContext,
+  type ZManagerArchiveIntent,
+  type ZManagerCreateIntent,
+  type ZManagerDesktopIntent,
+  type ZManagerDialogIntent,
+  type ZManagerJobsIntent,
+  type ZManagerReactRuntimeAdapter,
+  type ZManagerReactSnapshot,
+  type ZManagerReactSnapshotListener,
+} from "./ui/react/appRuntime";
+import {
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
 } from "./app/quickActions";
@@ -1681,6 +1693,7 @@ const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
+const reactRuntimeSubscribers = new Set<ZManagerReactSnapshotListener>();
 
 const appTimers = createAppTimers({
   jobPollIntervalMs: JOB_POLL_INTERVAL_MS,
@@ -2134,6 +2147,7 @@ function renderNormalWorkspaceOnce() {
   renderBrowse();
   renderJobs();
   normalWorkspaceRendered = true;
+  publishReactSnapshot();
 }
 
 function syncCompressOptionsPanelDisclosure() {
@@ -2450,6 +2464,7 @@ function renderQuickProgress(nowMs = Date.now()) {
     quickContinueButton.disabled = true;
     quickContinueButton.textContent = message("quick.pause");
     quickCancelButton.disabled = true;
+    publishReactSnapshot();
     return;
   }
 
@@ -2501,6 +2516,7 @@ function renderQuickProgress(nowMs = Date.now()) {
     quickProgressBar.value = progressSnapshot.progressPercent;
     quickProgressBar.max = 100;
   }
+  publishReactSnapshot();
 }
 
 function formatRatio(entry: ArchiveEntryDto): string {
@@ -3268,6 +3284,7 @@ function renderOperationalStatus() {
   const { operationalStatus } = shellWorkspace.getSnapshot();
   statusElement.textContent = operationalStatus;
   statusTextElement.textContent = operationalStatus;
+  publishReactSnapshot();
 }
 
 function setOperationalStatus(message: string) {
@@ -3410,6 +3427,7 @@ function updateCommandState() {
 
   applyPreferenceClasses();
   updateStatusBar();
+  publishReactSnapshot();
 }
 
 const commandRouter = createCommandRouter({
@@ -3513,6 +3531,235 @@ function commandPayload(commandId: CommandId): CommandRouterPayload {
 
 function runRoutedCommand(commandId: CommandId, payload: CommandRouterPayload = {}): void {
   commandRouter.run(commandId, { ...commandPayload(commandId), ...payload });
+}
+
+function createCurrentReactSnapshot(): ZManagerReactSnapshot {
+  const archive = archiveWorkspace.getSnapshot();
+  const nowMs = Date.now();
+  const commandClassState = currentCommandClassState(archive.command.hasArchive);
+
+  return createZManagerReactSnapshot({
+    shell: shellWorkspace.getSnapshot(),
+    archive,
+    create: createWorkspace.getSnapshot(),
+    jobs: jobsWorkspace.getJobListSnapshot(nowMs),
+    quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
+    preferences: appPreferences,
+    preferencesDraft: preferencesDialogDraft,
+    pathHistory: pathHistoryStore.getSnapshot(),
+    display: displaySnapshotFromContext(displayContext),
+    commands: {
+      states: currentCommandStateMap(),
+      pressed: {
+        flatView: archive.view.flatView,
+        largeButtons: appPreferences.largeToolbarButtons,
+        showButtonText: appPreferences.showToolbarLabels,
+      },
+      primaryCommandIds: commandIdsWithClass(commandClassState, "primary"),
+      secondaryCommandIds: commandIdsWithClass(commandClassState, "secondary"),
+    },
+  });
+}
+
+function commandIdsWithClass(
+  classState: CommandSurfaceClassState,
+  kind: "primary" | "secondary",
+): CommandId[] {
+  return (Object.keys(classState) as CommandId[])
+    .filter((commandId) => Boolean(classState[commandId]?.[kind]));
+}
+
+function publishReactSnapshot() {
+  if (reactRuntimeSubscribers.size === 0) {
+    return;
+  }
+
+  const snapshot = createCurrentReactSnapshot();
+  for (const subscriber of reactRuntimeSubscribers) {
+    subscriber(snapshot);
+  }
+}
+
+function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
+  switch (intent.type) {
+    case "navigateToFolder":
+      navigateToFolder(intent.folderPath);
+      break;
+    case "navigateBack":
+      navigateBack();
+      break;
+    case "navigateUp":
+      navigateUp();
+      break;
+    case "setSearchQuery":
+      searchInput.value = intent.query;
+      syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setSearchQuery(intent.query));
+      renderBrowse();
+      break;
+    case "clearSearch":
+      clearSearch();
+      break;
+    case "setFlatView":
+      setFlatView(intent.flatView, Boolean(intent.persistPreference));
+      break;
+    case "toggleTreeFolder":
+      syncArchiveWorkspaceViewSnapshot(archiveWorkspace.toggleTreeFolder(intent.folderPath));
+      renderTree();
+      publishReactSnapshot();
+      break;
+  }
+}
+
+function handleReactCreateIntent(intent: ZManagerCreateIntent) {
+  switch (intent.type) {
+    case "showWorkspace":
+      showCreateWorkspace();
+      break;
+    case "clearSources":
+      clearCreateSources();
+      break;
+    case "removeSources":
+      removeCreateSources([...intent.sourcePaths]);
+      break;
+    case "setDestinationPath":
+      syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(intent.destinationPath).snapshot);
+      setCreatePlanState();
+      publishReactSnapshot();
+      break;
+    case "setOptions":
+      syncCreateSourcesFromWorkspace(createWorkspace.setOptions(intent.patch).snapshot);
+      setCreatePlanState();
+      publishReactSnapshot();
+      break;
+    case "navigateToFolder": {
+      const navigation = createWorkspace.navigateToFolder(intent.folderPath);
+      if (navigation.changed) {
+        syncCreateSourcesFromWorkspace(navigation.snapshot);
+        renderCompressBrowser();
+      }
+      publishReactSnapshot();
+      break;
+    }
+    case "toggleTreeFolder": {
+      const navigation = createWorkspace.toggleTreeFolder(intent.folderPath);
+      if (navigation.changed) {
+        syncCreateSourcesFromWorkspace(navigation.snapshot);
+        renderCompressSourceTree();
+      }
+      publishReactSnapshot();
+      break;
+    }
+  }
+}
+
+function handleReactJobsIntent(intent: ZManagerJobsIntent) {
+  switch (intent.type) {
+    case "openDrawer":
+      openJobDrawer();
+      break;
+    case "closeDrawer":
+      closeJobDrawer();
+      break;
+    case "poll":
+      void pollJobs();
+      break;
+    case "cancel":
+      void onCancelJob(intent.jobId);
+      break;
+    case "pause":
+      void onPauseJob(intent.jobId);
+      break;
+    case "resume":
+      void onResumeJob(intent.jobId);
+      break;
+    case "dismiss":
+      void onDismissJob(intent.jobId);
+      break;
+    case "retryPassword":
+      void retryJobWithPasswordPrompt(intent.jobId);
+      break;
+    case "runOutputAction":
+      void onJobOutputAction(intent.jobId, String(intent.actionIndex), intent.kind);
+      break;
+  }
+}
+
+function handleReactDialogIntent(intent: ZManagerDialogIntent) {
+  switch (intent.type) {
+    case "extract":
+      openExtractDialog(intent.mode);
+      break;
+    case "extractHere":
+      openExtractHereDialog(intent.mode);
+      break;
+    case "preferences":
+      openPreferencesDialog();
+      break;
+    case "about":
+      renderAboutDiagnostics();
+      openModal(aboutDialog, "#about-close");
+      break;
+    case "info":
+      if (intent.target === "archive") {
+        showArchiveInfo();
+      } else if (intent.entryPath) {
+        showEntryInfo(intent.entryPath);
+      } else {
+        showCurrentInfo();
+      }
+      break;
+    case "closeCurrent": {
+      const modal = getOpenModal();
+      if (modal) {
+        closeModal(modal);
+      }
+      publishReactSnapshot();
+      break;
+    }
+  }
+}
+
+function handleReactDesktopIntent(intent: ZManagerDesktopIntent) {
+  switch (intent.type) {
+    case "droppedPaths":
+      handleDroppedPaths(intent.paths);
+      break;
+    case "dropEntered":
+      if (intent.paths?.length) {
+        setDropOverlayForPaths(intent.paths);
+      } else {
+        setDropOverlayForSurface(currentDropSurface());
+      }
+      break;
+    case "dropLeft":
+      clearDropOverlay();
+      break;
+    case "dropChoice":
+      activatePendingDropChoice(intent.choice);
+      break;
+  }
+}
+
+export function getLegacyReactRuntimeAdapter(): ZManagerReactRuntimeAdapter {
+  return {
+    getSnapshot: createCurrentReactSnapshot,
+    subscribe(listener) {
+      reactRuntimeSubscribers.add(listener);
+      listener(createCurrentReactSnapshot());
+      return () => {
+        reactRuntimeSubscribers.delete(listener);
+      };
+    },
+    actions: {
+      executeCommand: runRoutedCommand,
+      setWorkspaceMode,
+      handleArchiveIntent: handleReactArchiveIntent,
+      handleCreateIntent: handleReactCreateIntent,
+      handleJobsIntent: handleReactJobsIntent,
+      handleDialogIntent: handleReactDialogIntent,
+      handleDesktopIntent: handleReactDesktopIntent,
+    },
+  };
 }
 
 function updateMeta() {
@@ -3960,6 +4207,7 @@ function renderBrowse() {
   }
 
   queueSystemIconRefresh();
+  publishReactSnapshot();
 }
 
 function createUnavailableReasonText(
@@ -4473,6 +4721,7 @@ function renderJobs() {
   renderJobStatusBar(snapshot);
   renderQuickProgress(nowMs);
   syncProgressClock(snapshot.progressClock);
+  publishReactSnapshot();
 }
 
 function queuePlanRun() {
@@ -4898,6 +5147,7 @@ function currentDropSurface(): DropIntentSurface {
 
 function renderDropOverlay(snapshot: ShellWorkspaceSnapshot = shellWorkspace.getSnapshot()) {
   renderShellDropOverlay(shellViewElements, snapshot.dropOverlay, message);
+  publishReactSnapshot();
 }
 
 function setDropOverlay(mode: DropOverlayMode, copy?: DropOverlayCopy) {

@@ -79,8 +79,8 @@ src/desktop/*
 | Phase | Name | Status | Primary Gate |
 | --- | --- | --- | --- |
 | 0 | React bridge and tooling | Complete | React root boots existing workspace through `AppShell`. |
-| 1 | React app runtime seam | Pending | React can subscribe to app snapshots and dispatch typed intents without owning workflow state. |
-| 2 | Shell chrome and command surfaces | Pending | Titlebar/menu/toolbar/mode/status render in React and route through command router. |
+| 1 | React app runtime seam | Complete | React can subscribe to app snapshots and dispatch typed intents without owning workflow state. |
+| 2 | Shell chrome and command surfaces | In Progress | Titlebar/menu/toolbar/mode/status render in React and route through command router. |
 | 3 | Archive browse workspace | Pending | Archive tree/path/search/table/details render in React from archive snapshots. |
 | 4 | Extract, info, preview, and dialogs | Pending | Archive dialogs render in React while request building stays in workspaces/controllers. |
 | 5 | Create workspace | Pending | Source list, plan browser, options, destination, and validation render in React. |
@@ -91,7 +91,7 @@ src/desktop/*
 | 10 | Delete legacy GUI | Pending | `legacyMain.ts` is removed and no tests inspect legacy HTML. |
 | 11 | Visual QA and release gate | Pending | Desktop and browser smoke checks pass on supported platforms. |
 
-Active phase: 1
+Active phase: 2
 
 ## Phase 0: React Bridge And Tooling
 
@@ -125,6 +125,8 @@ Manual smoke:
 
 ## Phase 1: React App Runtime Seam
 
+Status: Complete.
+
 Goal: create the state/render bridge React needs before moving visible screens.
 
 Why first: direct component rewrites without a shared runtime seam would push
@@ -141,17 +143,17 @@ Likely files:
 
 Checklist:
 
-- [ ] Define a `ZManagerReactSnapshot` that combines shell, archive, create,
+- [x] Define a `ZManagerReactSnapshot` that combines shell, archive, create,
   jobs, preferences/display, and command-state snapshots.
-- [ ] Define a `ZManagerReactActions` interface for command execution,
+- [x] Define a `ZManagerReactActions` interface for command execution,
   workspace intents, dialogs, and desktop-triggered events.
-- [ ] Add a tiny subscription store using `useSyncExternalStore` or equivalent
+- [x] Add a tiny subscription store using `useSyncExternalStore` or equivalent
   so React can render snapshots without owning workflow state.
-- [ ] Expose the existing legacy boot/render loop through an adapter that can
+- [x] Expose the existing legacy boot/render loop through an adapter that can
   publish snapshots and accept typed intents.
-- [ ] Add tests proving React reads immutable snapshots and emits intents
+- [x] Add tests proving React reads immutable snapshots and emits intents
   without importing Tauri or mutating workspaces directly.
-- [ ] Keep the legacy DOM mounted until at least one complete surface is
+- [x] Keep the legacy DOM mounted until at least one complete surface is
   replaced.
 
 Completion gate:
@@ -171,6 +173,8 @@ npm.cmd run ast:lint
 
 ## Phase 2: Shell Chrome And Command Surfaces
 
+Status: In Progress.
+
 Goal: move titlebar, app menu, command toolbar, mode switch, path/status shell,
 and drop overlay shell chrome into React.
 
@@ -189,18 +193,19 @@ Likely files:
 
 Checklist:
 
-- [ ] Move window titlebar rendering to React while keeping window effects in
+- [x] Add React window titlebar rendering while keeping window effects in
   `src/desktop/windowController.ts`.
-- [ ] Move menu rendering to React from `CLASSIC_MENU_GROUPS`.
-- [ ] Move toolbar rendering to React from `CLASSIC_TOOLBAR_GROUPS`.
-- [ ] Route every React menu/toolbar button through command router IDs and
+- [x] Add menu rendering to React from `CLASSIC_MENU_GROUPS`.
+- [x] Add toolbar rendering to React from `CLASSIC_TOOLBAR_GROUPS`.
+- [x] Route every React menu/toolbar button through command router IDs and
   payloads.
-- [ ] Preserve disabled reasons, pressed state, primary/secondary command
+- [x] Preserve disabled reasons, pressed state, primary/secondary command
   classes, keyboard shortcuts, and localization.
-- [ ] Move status bar rendering to React from shell/job/archive snapshots.
-- [ ] Move drop overlay rendering to React while preserving drop decisions in
+- [x] Add status bar rendering to React from shell/job/archive snapshots.
+- [x] Add drop overlay rendering to React while preserving drop decisions in
   `shellWorkspace` and `dropIntent`.
-- [ ] Add tests for command routing from menu, toolbar, shortcut-facing command
+- [ ] Replace the live legacy shell chrome mount with the React shell frame.
+- [x] Add tests for command routing from menu, toolbar, shortcut-facing command
   IDs, status rendering, and drop overlay choices.
 
 Completion gate:
@@ -604,3 +609,12 @@ Run after any phase that moves a visible surface:
 - Recommended next action: design `ZManagerReactSnapshot` and
   `ZManagerReactActions` around existing shell/archive/create/jobs snapshots
   without changing visible UI.
+- Implemented Phase 1 runtime seam:
+  `src/ui/react/appRuntime.ts`, `src/ui/react/appStore.ts`, and
+  `src/ui/react/AppProviders.tsx`.
+- Wired `AppShell` to the legacy runtime adapter and added snapshot/action
+  tests.
+- Started Phase 2 with React shell components under `src/ui/react/shell/`:
+  titlebar, menu, toolbar/mode tabs, status bar, drop overlay, and `AppFrame`.
+  Live shell replacement remains open because the legacy body still assumes it
+  owns the outer workspace mount.
