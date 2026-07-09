@@ -7,6 +7,7 @@ import { ReactRuntimeMetadata, ZManagerAppRuntimeProvider, useZManagerActions, u
 import { createZManagerAppStore } from "./appStore";
 import {
   createInitialZManagerReactSnapshot,
+  createZManagerReactSnapshot,
   noopZManagerReactActions,
   type ZManagerReactActions,
 } from "./appRuntime";
@@ -116,6 +117,36 @@ describe("AppShell", () => {
     expect(Object.isFrozen(snapshot.commands.states.open)).toBe(true);
     expect(snapshotJson).not.toContain("passwordValue");
     expect(snapshotJson).not.toContain("passwordConfirm");
+  });
+
+  it("keeps extract dialog snapshots password-free even when prompting for one", () => {
+    const secret = "correct horse battery staple";
+    const snapshot = createZManagerReactSnapshot({
+      ...createInitialZManagerReactSnapshot(),
+      dialog: {
+        kind: "extract",
+        mode: "archive",
+        title: "Extract",
+        message: "Password required",
+        startLabel: "Extract",
+        destination: "C:/out",
+        destinationHistory: ["C:/out"],
+        useSubfolder: false,
+        subfolder: "",
+        pathMode: "full",
+        overwrite: "ask",
+        stripComponents: "0",
+        deduplicateRoot: false,
+        passwordPromptOpen: true,
+      },
+    });
+    const snapshotJson = JSON.stringify(snapshot);
+    const dialogJson = JSON.stringify(snapshot.dialog);
+
+    expect(snapshotJson).toContain("passwordPromptOpen");
+    expect(snapshotJson).not.toContain(secret);
+    expect(dialogJson).not.toMatch(/"password"\s*:/);
+    expect(dialogJson).not.toMatch(/"passwordConfirm"\s*:/);
   });
 
   it("keeps React components away from API and desktop adapters", () => {
