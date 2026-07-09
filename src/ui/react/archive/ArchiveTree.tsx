@@ -2,7 +2,6 @@ import { Archive, ChevronRight, Folder } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { getPathBasename } from "../../../app/formatting";
-import type { ArchiveWorkspaceSnapshot } from "../../../app/workspaces/archiveWorkspace";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { nativeIconDataUrlForArchivePath, nativeIconDataUrlForFolder } from "./archiveNativeIcons";
@@ -21,7 +20,15 @@ export function ArchiveTree() {
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const archive = snapshot.archive;
-  const folders = archive.currentArchivePath ? treeFoldersForArchive(archive) : [];
+  const archiveName = getPathBasename(archive.currentArchivePath, "Archive");
+  const folders = archive.view.treeFolders.map((folder) => ({
+    path: folder.path,
+    label: folder.isRoot ? archiveName : folder.name,
+    depth: folder.depth,
+    canToggle: folder.hasChildren && !folder.isRoot,
+    isExpanded: folder.isExpanded,
+    isActive: folder.isActive,
+  }));
 
   return (
     <aside id="navigation-pane" className="navigation-pane" aria-label={i18n.t("workspace.archiveNavigation.aria")}>
@@ -80,61 +87,4 @@ export function ArchiveTree() {
       </div>
     </aside>
   );
-}
-
-function treeFoldersForArchive(snapshot: ArchiveWorkspaceSnapshot): TreeFolder[] {
-  const expanded = new Set(snapshot.view.expandedTreeFolders);
-  const childMap = new Map<string, Set<string>>();
-  const folderPaths = new Set<string>([""]);
-
-  for (const entry of snapshot.entries) {
-    const parts = entry.path.split("/").filter(Boolean);
-    const folderPartCount = entry.kind === "directory" ? parts.length : Math.max(0, parts.length - 1);
-    let parent = "";
-    for (let index = 0; index < folderPartCount; index += 1) {
-      const path = parts.slice(0, index + 1).join("/");
-      folderPaths.add(path);
-      if (!childMap.has(parent)) {
-        childMap.set(parent, new Set());
-      }
-      childMap.get(parent)!.add(path);
-      parent = path;
-    }
-  }
-
-  const archiveName = getPathBasename(snapshot.currentArchivePath, "Archive");
-  const folders: TreeFolder[] = [{
-    path: "",
-    label: archiveName,
-    depth: 0,
-    canToggle: Boolean(childMap.get("")?.size),
-    isExpanded: true,
-    isActive: snapshot.view.currentFolder === "",
-  }];
-
-  function visit(parent: string, depth: number) {
-    const children = [...(childMap.get(parent) ?? [])].sort((left, right) => left.localeCompare(right));
-    for (const child of children) {
-      if (!folderPaths.has(child)) {
-        continue;
-      }
-      const label = child.split("/").at(-1) ?? child;
-      const canToggle = Boolean(childMap.get(child)?.size);
-      const isExpanded = expanded.has(child);
-      folders.push({
-        path: child,
-        label,
-        depth,
-        canToggle,
-        isExpanded,
-        isActive: snapshot.view.currentFolder === child,
-      });
-      if (canToggle && isExpanded) {
-        visit(child, depth + 1);
-      }
-    }
-  }
-
-  visit("", 1);
-  return folders;
 }

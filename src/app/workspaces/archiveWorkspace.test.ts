@@ -307,6 +307,48 @@ describe("archive workspace load state", () => {
     expect(collapsed.view.expandedTreeFolders).toEqual([""]);
   });
 
+  it("derives archive tree folders from workspace state", () => {
+    const workspace = createArchiveWorkspace();
+    workspace.loadSucceeded({
+      archivePath: "C:/tmp/project.zip",
+      entries,
+      entryCount: entries.length,
+      totalSize: 72,
+    });
+
+    expect(workspace.getSnapshot().view.treeFolders.map((folder) => ({
+      path: folder.path,
+      name: folder.name,
+      depth: folder.depth,
+      hasChildren: folder.hasChildren,
+      isExpanded: folder.isExpanded,
+      isActive: folder.isActive,
+      isRoot: folder.isRoot,
+    }))).toEqual([
+      { path: "", name: "", depth: 0, hasChildren: true, isExpanded: true, isActive: true, isRoot: true },
+      { path: "docs", name: "docs", depth: 1, hasChildren: true, isExpanded: false, isActive: false, isRoot: false },
+      { path: "src", name: "src", depth: 1, hasChildren: false, isExpanded: false, isActive: false, isRoot: false },
+    ]);
+
+    const expanded = workspace.toggleTreeFolder("docs");
+
+    expect(expanded.view.treeFolders.map((folder) => `${folder.depth}:${folder.path}:${folder.isActive}`)).toEqual([
+      "0::true",
+      "1:docs:false",
+      "2:docs/guides:false",
+      "1:src:false",
+    ]);
+
+    const nested = workspace.navigateToFolder("docs/guides");
+
+    expect(nested.view.treeFolders.map((folder) => `${folder.path}:${folder.isExpanded}:${folder.isActive}`)).toEqual([
+      ":true:false",
+      "docs:true:false",
+      "docs/guides:true:true",
+      "src:false:false",
+    ]);
+  });
+
   it("keeps the active tree branch expanded when toggling its ancestor", () => {
     const workspace = createArchiveWorkspace();
     workspace.loadSucceeded({

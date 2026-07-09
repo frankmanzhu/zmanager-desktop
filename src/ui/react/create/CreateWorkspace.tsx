@@ -279,7 +279,7 @@ function CreateTable() {
         >
           <div id="compress-marquee-hit-surface" className="marquee-hit-surface" aria-hidden="true" />
           {marqueeRect ? <div className="marquee-selection" style={marqueeRect} /> : null}
-          <table id="compress-source-table">
+          <table id="compress-source-table" className={createTableClassName(snapshot)}>
             {rows.length ? (
               <thead>
                 <tr>
@@ -369,6 +369,14 @@ function createVisibleSelectablePaths(snapshot: ZManagerReactSnapshot): string[]
   return snapshot.create.view.rows
     .filter((row) => row.rowType !== "parent")
     .map((row) => row.path);
+}
+
+function createTableClassName(snapshot: ZManagerReactSnapshot): string {
+  return [
+    snapshot.preferences.showGridLines ? "show-grid" : "",
+    snapshot.preferences.fullRowSelect ? "full-row-select" : "",
+    snapshot.preferences.singleClickOpen ? "single-click-open" : "",
+  ].filter(Boolean).join(" ");
 }
 
 function CompressSourceHeader({

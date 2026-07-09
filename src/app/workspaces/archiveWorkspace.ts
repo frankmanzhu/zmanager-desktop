@@ -23,7 +23,9 @@ import {
   type ArchiveTableRow,
 } from "../archiveTable";
 import {
+  buildArchiveTree,
   type ArchiveBreadcrumb,
+  type ArchiveFolderNode,
   getArchiveEntryName,
   archiveFolderExists,
   getArchiveBreadcrumbs,
@@ -44,6 +46,16 @@ export type ArchiveWorkspaceSortState = {
 
 export type ArchiveWorkspaceRowOptions = {
   showParentFolderItem: boolean;
+};
+
+export type ArchiveWorkspaceTreeFolder = {
+  path: string;
+  name: string;
+  depth: number;
+  hasChildren: boolean;
+  isExpanded: boolean;
+  isActive: boolean;
+  isRoot: boolean;
 };
 
 export type SelectableArchiveWorkspaceRow = Extract<
@@ -218,6 +230,7 @@ export type ArchiveWorkspaceViewState = {
   searchQuery: string;
   flatView: boolean;
   expandedTreeFolders: readonly string[];
+  treeFolders: readonly ArchiveWorkspaceTreeFolder[];
   sort: ArchiveWorkspaceSortState;
   rowOptions: ArchiveWorkspaceRowOptions;
   rows: readonly ArchiveTableRow[];
@@ -1064,6 +1077,39 @@ function visibleRowsForState(state: MutableArchiveWorkspaceState): ArchiveTableR
   }), state.view.sort.key, state.view.sort.ascending);
 }
 
+function treeFoldersForState(state: MutableArchiveWorkspaceState): ArchiveWorkspaceTreeFolder[] {
+  if (!state.currentArchivePath) {
+    return [];
+  }
+
+  const expandedFolders = new Set(normalizeExpandedTreeFolders(state.view.expandedTreeFolders));
+  const folders: ArchiveWorkspaceTreeFolder[] = [];
+  const root = buildArchiveTree(state.entries, { rootName: "" });
+
+  function visit(node: ArchiveFolderNode) {
+    folders.push({
+      path: node.path,
+      name: node.name,
+      depth: node.depth,
+      hasChildren: node.children.length > 0,
+      isExpanded: node.isRoot || expandedFolders.has(node.path),
+      isActive: state.view.currentFolder === node.path,
+      isRoot: node.isRoot,
+    });
+
+    if (!node.isRoot && !expandedFolders.has(node.path)) {
+      return;
+    }
+
+    for (const child of node.children) {
+      visit(child);
+    }
+  }
+
+  visit(root);
+  return folders;
+}
+
 function entryByPath(
   entries: readonly ArchiveEntryDto[],
   path: string | null | undefined,
@@ -1324,6 +1370,7 @@ function commandSnapshotFromState(
 
 function snapshotFromState(state: MutableArchiveWorkspaceState): ArchiveWorkspaceSnapshot {
   const rows = visibleRowsForState(state);
+  const treeFolders = treeFoldersForState(state);
   const selection = selectionSnapshotFromState(state, rows);
   const details = detailsModelFromState(state, selection);
   const command = commandSnapshotFromState(state, selection);
@@ -1346,6 +1393,7 @@ function snapshotFromState(state: MutableArchiveWorkspaceState): ArchiveWorkspac
       searchQuery: state.view.searchQuery,
       flatView: state.view.flatView,
       expandedTreeFolders: [...state.view.expandedTreeFolders],
+      treeFolders: cloneTreeFolders(treeFolders),
       sort: { ...state.view.sort },
       rowOptions: { ...state.view.rowOptions },
       rows: cloneRows(rows),
@@ -1375,6 +1423,12 @@ function cloneEntries(entries: readonly ArchiveEntryDto[]): ArchiveEntryDto[] {
 
 function cloneRows(rows: readonly ArchiveTableRow[]): ArchiveTableRow[] {
   return rows.map((row) => cloneRow(row));
+}
+
+function cloneTreeFolders(
+  folders: readonly ArchiveWorkspaceTreeFolder[],
+): ArchiveWorkspaceTreeFolder[] {
+  return folders.map((folder) => ({ ...folder }));
 }
 
 function cloneRow(row: ArchiveTableRow): ArchiveTableRow {

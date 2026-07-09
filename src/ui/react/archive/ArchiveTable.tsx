@@ -116,7 +116,7 @@ export function ArchiveTable() {
             <p className="archive-empty-hint">{i18n.t("browse.emptyDropHint")}</p>
           </div>
         </div>
-        <table id="entry-table">
+        <table id="entry-table" className={archiveTableClassName(snapshot)}>
           <thead id="entry-table-head">
             <tr>
               <th className="selection-column">
@@ -493,6 +493,14 @@ function archiveMetaText(archive: ReturnType<typeof useZManagerSnapshot>["archiv
   }
   const folderLabel = archive.view.currentFolder ? ` > ${archive.view.currentFolder}` : "";
   return `${getPathBasename(archive.currentArchivePath, "ZManager")}${folderLabel} - ${archive.view.rows.length} entries`;
+}
+
+function archiveTableClassName(snapshot: ZManagerReactSnapshot): string {
+  return [
+    snapshot.preferences.showGridLines ? "show-grid" : "",
+    snapshot.preferences.fullRowSelect ? "full-row-select" : "",
+    snapshot.preferences.singleClickOpen ? "single-click-open" : "",
+  ].filter(Boolean).join(" ");
 }
 
 function getPathBasename(path: string, fallback: string): string {

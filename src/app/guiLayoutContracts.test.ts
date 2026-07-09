@@ -50,6 +50,7 @@ const contextMenuRootSource = normalizedWorkspaceFile("src", "ui", "react", "con
 const preferencesDialogSource = normalizedWorkspaceFile("src", "ui", "react", "preferences", "PreferencesDialog.tsx");
 const archiveWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveWorkspace.tsx");
 const archiveTableSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveTable.tsx");
+const archiveTreeSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveTree.tsx");
 const archivePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchivePathBar.tsx");
 const archiveDetailsPaneSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveDetailsPane.tsx");
 const createWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "create", "CreateWorkspace.tsx");
@@ -59,6 +60,7 @@ const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react"
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const dialogSnapshotsSource = normalizedWorkspaceFile("src", "app", "display", "dialogSnapshots.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
+const archiveWorkspaceStateSource = normalizedWorkspaceFile("src", "app", "workspaces", "archiveWorkspace.ts");
 const createWorkspaceStateSource = normalizedWorkspaceFile("src", "app", "workspaces", "createWorkspace.ts");
 const contextMenuModelSource = normalizedWorkspaceFile("src", "app", "commands", "contextMenuModel.ts");
 const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
@@ -67,7 +69,6 @@ const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs",
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 type FutureForbiddenTargetId =
-  | "phase5.archive-legacy-render-helpers"
   | "phase6.runtime-event-wiring"
   | "phase7.hidden-legacy-root";
 
@@ -78,11 +79,6 @@ type FutureForbiddenTarget = Readonly<{
 }>;
 
 const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase5.archive-legacy-render-helpers",
-    phase: "Phase 5",
-    description: "archive workspace no longer imports legacy string render helpers",
-  },
   {
     id: "phase6.runtime-event-wiring",
     phase: "Phase 6",
@@ -177,44 +173,12 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
   },
   {
-    id: "archive-surface-id-privatizer",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "function privatizeLegacyArchiveSurfaceIds() {",
-    reason: "Archive legacy DOM IDs are still rewritten while archive string render helpers remain imported.",
-  },
-  {
     id: "extract-dialog-id-privatizer",
     scanId: "hiddenLegacyDom",
     targetId: "phase7.hidden-legacy-root",
     file: "src/runtimeBridge.ts",
     line: "function privatizeLegacyExtractDialogIds() {",
     reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
-  },
-  {
-    id: "archive-row-attribute-privatizer-call",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "privatizeLegacyArchiveRowAttributes();",
-    reason: "Archive row attributes still need hidden/visible ID separation during the archive helper migration.",
-  },
-  {
-    id: "archive-row-attribute-privatizer",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "function privatizeLegacyArchiveRowAttributes() {",
-    reason: "Archive row attributes still need hidden/visible ID separation during the archive helper migration.",
-  },
-  {
-    id: "archive-surface-id-privatizer-call",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "privatizeLegacyArchiveSurfaceIds();",
-    reason: "Archive legacy DOM IDs are still rewritten while archive string render helpers remain imported.",
   },
   {
     id: "extract-dialog-id-privatizer-call",
@@ -234,93 +198,11 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
   },
 ];
 
-const ALLOWED_DANGEROUS_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "archive-row-icon-html-return",
-    scanId: "dangerousHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "html: renderEntryIcon(icon, \"row-icon\", iconDataUrl),",
-    reason: "Archive rows still pass rendered icon HTML into legacy table helpers.",
-  },
-];
+const ALLOWED_DANGEROUS_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
-const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "runtime-imports-archive-legacy-view",
-    scanId: "legacyViewImports",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "} from \"./ui/archiveWorkspaceView\";",
-    reason: "Archive string render helpers remain until archive workspace deepening deletes them.",
-  },
-];
+const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
 const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "archive-details-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.detailsElement.innerHTML = renderArchiveDetailsHtml(options.model, {",
-    reason: "Archive details still have legacy string rendering.",
-  },
-  {
-    id: "archive-tree-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, ARCHIVE_TREE_CONFIG);",
-    reason: "Archive tree still has legacy string rendering.",
-  },
-  {
-    id: "archive-path-crumbs-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.pathCrumbsElement.innerHTML = model.crumbs",
-    reason: "Archive path crumbs still have legacy string rendering.",
-  },
-  {
-    id: "archive-table-error-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.tableBody.innerHTML = `",
-    reason: "Archive table still has legacy string rendering.",
-  },
-  {
-    id: "archive-table-empty-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.tableBody.innerHTML = `",
-    reason: "Archive table still has legacy string rendering.",
-  },
-  {
-    id: "archive-table-rows-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.tableBody.innerHTML = options.rows",
-    reason: "Archive table still has legacy string rendering.",
-  },
-  {
-    id: "archive-table-head-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.tableHead.innerHTML = `",
-    reason: "Archive table header still has legacy string rendering.",
-  },
-  {
-    id: "archive-table-tree-rows-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.tableBody.innerHTML = `",
-    reason: "Archive tree table still has legacy string rendering.",
-  },
   {
     id: "runtime-bridge-bootstrap-inner-html",
     scanId: "innerHtml",
@@ -328,14 +210,6 @@ const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
     file: "src/runtimeBridge.ts",
     line: "appRoot.innerHTML = `",
     reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
-  },
-  {
-    id: "runtime-clears-archive-details-html",
-    scanId: "innerHtml",
-    targetId: "phase5.archive-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "detailsElement.innerHTML = \"\";",
-    reason: "Runtime bridge still imperatively clears the archive details pane.",
   },
 ];
 
@@ -1000,7 +874,7 @@ describe("GUI layout contracts", () => {
     expect(contextMenuHelpersSource).not.toContain("addEventListener");
     expect(contextMenuRootSource).toContain("function handleContextMenuKeyboard");
     expect(contextMenuRootSource).toContain("onClick={(event) =>");
-    expect(archiveTableSource).toContain('<table id="entry-table">');
+    expect(archiveTableSource).toContain('<table id="entry-table" className={archiveTableClassName(snapshot)}>');
     expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
     expect(createWorkspaceStateSource).toContain("selectRow(path, modifiers)");
     expect(mainSource).toContain("createWorkspace.selectRow(intent.path, intent)");
@@ -1021,12 +895,13 @@ describe("GUI layout contracts", () => {
     expect(archiveDetailsPaneSource).toContain("<h3");
     expect(archiveDetailsPaneSource).toContain('data-details-action="open-archive"');
     expect(archiveDetailsPaneSource).toContain("data-copy-value={value}");
-    expect(mainSource).toContain("function currentArchiveDisplayPath");
+    expect(archivePathBarSource).toContain("const displayPath = archive.currentArchivePath");
     expect(workspacePathBarSource).toContain("readOnly");
     expect(workspacePathBarSource).toContain("hidden={crumbsHidden}");
     expect(archivePathBarSource).toContain("crumbsHidden={!archive.currentArchivePath}");
-    expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
-    expect(mainSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
+    expect(archivePathBarSource).toContain("archive.view.breadcrumbs.map");
+    expect(archivePathBarSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
+    expect(archiveTreeSource).toContain("archive.view.treeFolders.map");
     expect(workspacePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
@@ -1044,10 +919,12 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).toContain('id="search-count"');
     expect(archivePathBarSource).toContain("archive.view.selection.visibleSelectablePaths.length");
     expect(archiveTableSource).toContain('className={archive.view.searchQuery ? "search-empty-row" : ""}');
-    expect(mainSource).toContain('message("detail.selectionHiddenBySearch")');
-    expect(mainSource).toContain('action: "clear-search"');
+    expect(archiveDetailsPaneSource).toContain('i18n.t("detail.selectionHiddenBySearch")');
+    expect(archiveDetailsPaneSource).toContain('action: "clear-search"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="clear-search"');
-    expect(mainSource).toContain('flatView: isFlatView,');
+    expect(archiveWorkspaceStateSource).toContain("setFlatView(flatView)");
+    expect(archiveWorkspaceStateSource).toContain("flatView: state.view.flatView");
+    expect(archiveTableSource).toContain("snapshot.archive.view.flatView");
     expect(commandToolbarSource).toContain("aria-pressed={typeof pressed === \"boolean\" ? pressed : undefined}");
     expect(menuBarSource).toContain("aria-pressed={typeof pressed === \"boolean\" ? pressed : undefined}");
     expect(styles).toContain(".search-box");
@@ -1060,11 +937,9 @@ describe("GUI layout contracts", () => {
   it("keeps selection properties and entry preview surfaces unambiguous", () => {
     expect(dialogSnapshotsSource).toContain('message(display, "info.selectionTitle")');
     expect(mainSource).toContain("function showSelectionInfo");
-    expect(mainSource).toContain('action: "extract-selected"');
-    expect(mainSource).toContain('action: "test-selected"');
-    expect(mainSource).toContain('action: "properties"');
-    expect(mainSource).toContain('action: "archive-info"');
-    expect(mainSource).toContain('action: "preview"');
+    expect(archiveDetailsPaneSource).toContain('action: "extract-selected"');
+    expect(dialogSnapshotsSource).toContain('action: "archive-info"');
+    expect(dialogSnapshotsSource).toContain('action: "preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="extract-selected"');
     expect(dialogSnapshotsSource).toContain("export function entryInfoDetailRows");
