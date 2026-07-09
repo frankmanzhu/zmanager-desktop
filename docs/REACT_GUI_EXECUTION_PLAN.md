@@ -7,6 +7,7 @@ Companion docs:
 - `docs/REACT_GUI_MIGRATION.md`
 - `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`
 - `docs/FRONTEND_ARCHITECTURE_EXECUTION_PLAN.md`
+- `docs/NO_HIDDEN_LEGACY_DOM_EXECUTION_PLAN.md`
 
 ## Purpose
 
@@ -645,24 +646,27 @@ Known local caveat:
 
 Goal: remove the imperative GUI once all surfaces are React-owned.
 
+Detailed cleanup plan: `docs/NO_HIDDEN_LEGACY_DOM_EXECUTION_PLAN.md`.
+
 Checklist:
 
 - [x] Remove `src/legacyMain.ts`.
 - [x] Remove legacy string-rendering tests or convert them to React/snapshot
   component tests.
-- [x] Remove unused `src/ui/*View.ts` modules that only served legacy HTML.
-- [x] Remove unused CSS selectors and consolidate styles into React/Tailwind
+- [ ] Remove unused `src/ui/*View.ts` modules that only served legacy HTML.
+- [ ] Remove unused CSS selectors and consolidate styles into React/Tailwind
   surfaces.
 - [x] Keep app/workspace/controller tests intact.
 - [x] Confirm `src/main.ts` remains a small composition root.
-- [x] Confirm `rg "runtimeBridge|innerHTML =|insertAdjacentHTML|querySelector"`
+- [ ] Confirm `rg "runtimeBridge|innerHTML =|insertAdjacentHTML|querySelector"`
   has no architecture-breaking remnants except intentionally local DOM helpers.
 
 Phase 10 notes:
 
-- `src/runtimeBridge.ts` is now the runtime adapter, not the composition root.
-  It still owns intentionally local hidden DOM helpers for extract/info/about
-  dialog compatibility, context-menu HTML payloads, and DTO/control bridging.
+- `src/runtimeBridge.ts` is still a bridge, not yet the final runtime adapter.
+  It owns hidden DOM helpers for extract/info/about dialog compatibility,
+  context-menu HTML payloads, and DTO/control bridging. These are tracked in
+  `docs/NO_HIDDEN_LEGACY_DOM_EXECUTION_PLAN.md`.
 - Deleted legacy string-rendering tests for archive/create workspaces after
   moving visible-surface coverage to React component tests and GUI contracts.
 - Moved visible pane resize and column resize behavior to React surfaces; the
@@ -672,7 +676,16 @@ Phase 10 notes:
 Completion gate:
 
 - App boots without `legacyMain.ts`.
-- No behavior-critical tests still depend on legacy HTML strings.
+- No hidden legacy DOM root exists.
+- No React path writes form state into hidden controls.
+- Info/about dialogs are built from snapshots only.
+- Context menus are typed snapshots rendered by React.
+- `src/ui/archiveWorkspaceView.ts` and `src/ui/createWorkspaceView.ts` are
+  deleted or no longer contain legacy string render helpers.
+- `runtimeBridge.ts` is deleted or reduced to a small runtime adapter with no
+  DOM construction, no HTML strings, no hidden control refs, and no broad
+  workflow state mirrors.
+- No behavior-critical tests depend on legacy HTML strings.
 
 Validation:
 
