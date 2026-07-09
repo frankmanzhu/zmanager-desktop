@@ -162,6 +162,22 @@ describe("create start controller", () => {
     expect(harness.calls.renderPlanState).toBe(1);
   });
 
+  it("uses explicit submit passwords instead of the injected reader when provided", async () => {
+    const harness = createHarness();
+    harness.setPasswords("legacy secret", "legacy secret");
+
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: " react secret ",
+        passwordConfirm: "react secret",
+      },
+    });
+
+    expect(harness.startCreate).toHaveBeenCalledWith(expect.objectContaining({
+      password: "react secret",
+    }));
+  });
+
   it("maps API errors to plan errors and clears submission state", async () => {
     const harness = createHarness();
     harness.startCreate.mockRejectedValueOnce(commandError({ message: "Create failed" }));

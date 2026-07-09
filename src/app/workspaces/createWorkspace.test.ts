@@ -1304,7 +1304,7 @@ describe("create workspace start request", () => {
 
     const result = workspace.buildStartCreateRequest({
       password: "hunter2",
-      passwordConfirm: "hunter2",
+      passwordConfirm: "different-secret",
     });
 
     expect(result.ok).toBe(true);
@@ -1314,6 +1314,7 @@ describe("create workspace start request", () => {
     expect(result.request.format).toBe("tarZst");
     expect(result.request).not.toHaveProperty("password");
     expect(JSON.stringify(result.snapshot)).not.toContain("hunter2");
+    expect(JSON.stringify(result.snapshot)).not.toContain("different-secret");
   });
 
   it("rejects password mismatches without storing password values in snapshots", () => {

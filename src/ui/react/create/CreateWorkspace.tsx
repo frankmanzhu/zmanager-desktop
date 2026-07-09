@@ -1,5 +1,5 @@
 import { File, Folder } from "lucide-react";
-import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
@@ -22,19 +22,41 @@ const COMPRESS_SOURCE_MIN_COLUMN_WIDTHS: Record<CompressSourceColumnId, number> 
   modified: 110,
   kind: 80,
 };
-const COMPACT_COMPRESS_OPTIONS_QUERY = "(max-width: 1100px), (max-height: 640px)";
 
 type CompressSourceColumnId = typeof COMPRESS_SOURCE_COLUMN_IDS[number];
 
+const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function CreateWorkspace() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  useBrowserLayoutEffect(() => {
+    setPassword("");
+    setPasswordConfirm("");
+    setShowPassword(false);
+  }, [snapshot.create.options.format, snapshot.create.options.password.visible]);
+
+  const submitCreate = () => {
+    const canSubmitPassword = snapshot.create.options.password.visible && !snapshot.create.options.password.disabled;
+    actions.handleCreateIntent({
+      type: "runCreate",
+      password: canSubmitPassword ? password : "",
+      passwordConfirm: canSubmitPassword ? passwordConfirm : "",
+    });
+    setPassword("");
+    setPasswordConfirm("");
+    setShowPassword(false);
+  };
 
   return (
     <>
       <CreatePathBar />
       <section className="browser-shell" aria-label="Create archive workspace">
-        <CreatePanel password={password} passwordConfirm={passwordConfirm} />
+        <CreatePanel onRunCreate={submitCreate} />
         <CreateTree />
         <PaneResizer pane="navigation" controls="navigation-pane" label="Resize folder pane" />
         <CreateTable />
@@ -42,8 +64,10 @@ export function CreateWorkspace() {
         <CreateOptions
           password={password}
           passwordConfirm={passwordConfirm}
+          showPassword={showPassword}
           setPassword={setPassword}
           setPasswordConfirm={setPasswordConfirm}
+          setShowPassword={setShowPassword}
         />
       </section>
     </>
@@ -74,11 +98,9 @@ function CreatePathBar() {
 }
 
 function CreatePanel({
-  password,
-  passwordConfirm,
+  onRunCreate,
 }: Readonly<{
-  password: string;
-  passwordConfirm: string;
+  onRunCreate(): void;
 }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
@@ -142,7 +164,7 @@ function CreatePanel({
           <button id="exclude-all-sources" className="quiet-action" type="button" hidden={create.isEmpty} disabled={create.isEmpty || create.inclusion.includedCount === 0} onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: false })}>{i18n.t("compress.excludeAll")}</button>
           <button id="clear-sources" className="quiet-action" type="button" hidden={create.isEmpty} onClick={() => actions.handleCreateIntent({ type: "clearSources" })}>{i18n.t("command.clearAllSources")}</button>
           <span className="compress-action-divider" aria-hidden="true" />
-          <button id="start-create" className={create.options.readiness.canCreate ? "primary-action" : "secondary-action"} type="button" disabled={!create.options.readiness.canCreate} onClick={() => actions.handleCreateIntent({ type: "runCreate", password, passwordConfirm })}>
+          <button id="start-create" className={create.options.readiness.canCreate ? "primary-action" : "secondary-action"} type="button" disabled={!create.options.readiness.canCreate} onClick={onRunCreate}>
             {i18n.t("compress.createArchive")}
           </button>
         </div>
@@ -516,26 +538,24 @@ function compressInclusionText(
 function CreateOptions({
   password,
   passwordConfirm,
+  showPassword,
   setPassword,
   setPasswordConfirm,
+  setShowPassword,
 }: Readonly<{
   password: string;
   passwordConfirm: string;
+  showPassword: boolean;
   setPassword(value: string): void;
   setPasswordConfirm(value: string): void;
+  setShowPassword(value: boolean): void;
 }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
-  const [showPassword, setShowPassword] = useState(false);
-  const compactOptions = useCompactCompressOptions();
   const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
-  const panelOpen = manualPanelOpen ?? !compactOptions;
-
-  useEffect(() => {
-    setManualPanelOpen(null);
-  }, [compactOptions]);
+  const panelOpen = manualPanelOpen ?? true;
 
   return (
     <aside id="details-pane" className="details-pane" aria-label={i18n.t("workspace.details.aria")}>
@@ -564,31 +584,19 @@ function CreateOptions({
           <label className="checkbox-row"><input id="create-replace-existing" type="checkbox" checked={options.replaceExisting} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { replaceExisting: event.currentTarget.checked } })} /><span>{i18n.t("create.replaceExisting")}</span></label>
           <label className="checkbox-row"><input id="create-respect-gitignore" type="checkbox" checked={options.respectGitignore} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { respectGitignore: event.currentTarget.checked } })} /><span>{i18n.t("create.respectGitignore")}</span></label>
         </div>
-        <details className="advanced-options">
-          <summary>{i18n.t("extract.advancedOptions")}</summary>
-          <div id="create-password-options" className="form-grid form-grid-compact" hidden={!options.password.visible}>
-            <label><span>{i18n.t("extract.password")}</span><input id="create-password" type={showPassword ? "text" : "password"} value={password} disabled={options.password.disabled} onChange={(event) => setPassword(event.currentTarget.value)} /></label>
-            <label><span>{i18n.t("create.reenterPassword")}</span><input id="create-password-confirm" type={showPassword ? "text" : "password"} value={passwordConfirm} disabled={options.password.disabled} onChange={(event) => setPasswordConfirm(event.currentTarget.value)} /></label>
-            <label className="checkbox-row"><input id="create-show-password" type="checkbox" checked={showPassword} disabled={options.password.disabled} onChange={(event) => setShowPassword(event.currentTarget.checked)} /><span>{i18n.t("extract.showPassword")}</span></label>
-          </div>
-        </details>
+        {options.password.visible ? (
+          <details className="advanced-options">
+            <summary>{i18n.t("extract.advancedOptions")}</summary>
+            <div id="create-password-options" className="form-grid form-grid-compact">
+              <label><span>{i18n.t("extract.password")}</span><input id="create-password" type={showPassword ? "text" : "password"} value={password} disabled={options.password.disabled} onChange={(event) => setPassword(event.currentTarget.value)} /></label>
+              <label><span>{i18n.t("create.reenterPassword")}</span><input id="create-password-confirm" type={showPassword ? "text" : "password"} value={passwordConfirm} disabled={options.password.disabled} onChange={(event) => setPasswordConfirm(event.currentTarget.value)} /></label>
+              <label className="checkbox-row"><input id="create-show-password" type="checkbox" checked={showPassword} disabled={options.password.disabled} onChange={(event) => setShowPassword(event.currentTarget.checked)} /><span>{i18n.t("extract.showPassword")}</span></label>
+            </div>
+          </details>
+        ) : null}
       </details>
     </aside>
   );
-}
-
-function useCompactCompressOptions(): boolean {
-  const [compact, setCompact] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(COMPACT_COMPRESS_OPTIONS_QUERY);
-    const sync = () => setCompact(mediaQuery.matches);
-    sync();
-    mediaQuery.addEventListener("change", sync);
-    return () => mediaQuery.removeEventListener("change", sync);
-  }, []);
-
-  return compact;
 }
 
 function createUnavailableText(reason: string, snapshot: ReturnType<typeof useZManagerSnapshot>): string {

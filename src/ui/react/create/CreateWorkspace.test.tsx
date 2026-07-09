@@ -30,7 +30,7 @@ describe("React create workspace", () => {
     expect(html).toContain('data-compress-path="photos-folder"');
     expect(html).toContain('data-compress-source-path="C:/work/photos-folder"');
     expect(html).toContain('id="compress-options-panel"');
-    expect(html).toContain('class="advanced-options"');
+    expect(html).toMatch(/<details[^>]*id="compress-options-panel"[^>]*open=""/);
     expect(html).toContain('id="create-format"');
   });
 
@@ -38,6 +38,7 @@ describe("React create workspace", () => {
     const html = renderCreateWorkspace(createSnapshot("sevenZ"));
 
     expect(html).toContain('value="sevenZ" selected');
+    expect(html).toContain('class="advanced-options"');
     expect(html).toContain('id="create-password"');
     expect(html).toContain('id="create-password-confirm"');
     expect(html).toContain('id="create-show-password"');

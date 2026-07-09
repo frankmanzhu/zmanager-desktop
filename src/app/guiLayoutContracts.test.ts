@@ -219,6 +219,8 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain("create.options.readiness.unavailableReason");
     expect(mainSource).not.toContain("createArchiveUnavailableReason({");
     expect(createWorkspaceSource).toContain('className="compress-options-summary"');
+    expect(createWorkspaceSource).toContain("const useBrowserLayoutEffect = typeof window");
+    expect(createWorkspaceSource).toContain("useBrowserLayoutEffect(() => {");
     expect(createWorkspaceSource).toContain("sourcePathForCreatePlanRow(row");
     expect(createWorkspaceSource).toContain("data-compress-source-path={sourcePath || undefined}");
     expect(mainSource).toContain('data-context-action="reveal-source"');
@@ -234,6 +236,8 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('<button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>');
     expect(mainSource).toContain('createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
     expect(mainSource).toContain('createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
+    expect(mainSource).not.toContain("createPasswordInput.value = intent.password");
+    expect(mainSource).not.toContain("createPasswordConfirmInput.value = intent.passwordConfirm");
     expect(styles).toContain(".compress-destination-field .inline-field");
     expect(styles).toContain(".source-stage-badge");
     expect(styles).toContain(".plan-validation");

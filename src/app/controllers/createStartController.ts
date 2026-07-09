@@ -6,6 +6,10 @@ import type {
 
 export type CreateStartOptions = Readonly<{
   destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
+  passwordInput?: Readonly<{
+    password: string;
+    passwordConfirm: string;
+  }>;
 }>;
 
 export type CreateStartControllerWorkspace = Pick<
@@ -41,7 +45,7 @@ export function createCreateStartController(
       return;
     }
 
-    const passwordInput = options.passwordInput();
+    const passwordInput = createOptions.passwordInput ?? options.passwordInput();
     const requestResult = options.workspace.buildStartCreateRequest({
       password: passwordInput.password,
       passwordConfirm: passwordInput.passwordConfirm,

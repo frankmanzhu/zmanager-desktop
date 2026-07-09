@@ -3159,10 +3159,12 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       break;
     }
     case "runCreate":
-      createPasswordInput.value = intent.password;
-      createPasswordConfirmInput.value = intent.passwordConfirm;
-      refreshCreateStateAfterDestinationEdit();
-      void runCreate();
+      void runCreate({
+        passwordInput: {
+          password: intent.password,
+          passwordConfirm: intent.passwordConfirm,
+        },
+      });
       break;
   }
 }
@@ -6610,7 +6612,13 @@ async function onSelectCreateDestination() {
 }
 
 async function runCreate(
-  options: { destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"] } = {},
+  options: {
+    destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
+    passwordInput?: {
+      password: string;
+      passwordConfirm: string;
+    };
+  } = {},
 ) {
   await createStartController.runCreate(options);
 }

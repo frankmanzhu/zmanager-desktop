@@ -772,8 +772,9 @@ export function createCreateWorkspace(): CreateWorkspace {
         return startRequestUnavailableResult(state, "needsIncludedEntries");
       }
 
-      const password = input?.password?.trim() ?? "";
-      const passwordConfirm = input?.passwordConfirm?.trim() ?? "";
+      const supportsPassword = createFormatSupportsPassword(state.options.format);
+      const password = supportsPassword ? input?.password?.trim() ?? "" : "";
+      const passwordConfirm = supportsPassword ? input?.passwordConfirm?.trim() ?? "" : "";
       if ((password || passwordConfirm) && password !== passwordConfirm) {
         state = setPlanErrorState(state, { messageKey: "create.error.passwordMismatch" });
         return startRequestUnavailableResult(state, "passwordMismatch", state.planStatus);

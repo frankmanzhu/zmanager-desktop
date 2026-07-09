@@ -4199,3 +4199,33 @@ body.linux-window-chrome .quick-progress {
     gap: 3px;
   }
 }
+
+.workspace[data-mode="compress"] .compress-options-panel .form-grid > label.checkbox-row {
+  min-height: 20px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+
+.workspace[data-mode="compress"] .compress-options-panel .form-grid > label.checkbox-row > span {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+@media (max-width: 760px), (max-height: 520px) {
+  .workspace[data-mode="compress"] .compress-create-actions {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .workspace[data-mode="compress"] .compress-create-actions .primary-action {
+    grid-column: auto;
+  }
+
+  .workspace[data-mode="compress"] .archive-table-pane {
+    min-height: 96px;
+  }
+
+  .workspace[data-mode="compress"] .compress-options-panel .create-options-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

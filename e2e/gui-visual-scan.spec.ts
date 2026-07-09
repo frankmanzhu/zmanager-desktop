@@ -204,12 +204,15 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#compress-options-panel")).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
 
-  await page.locator("#compress-options-panel details.advanced-options summary").click();
   await page.locator("#create-format").selectOption("sevenZ");
+  await expect(page.locator("#compress-options-panel details.advanced-options summary")).toBeVisible();
+  await page.locator("#compress-options-panel details.advanced-options summary").click();
   await page.locator("#create-volume").fill("1048576");
   await page.locator("#create-password").fill("correct horse battery staple");
   await page.locator("#create-password-confirm").fill("correct horse battery staple");
-  await page.locator("#create-show-password").check();
+  await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
+  await expect(page.locator("#create-password-confirm")).toHaveAttribute("type", "password");
+  await expect(page.locator("#create-show-password")).not.toBeChecked();
   await captureAndScan(page, "27-create-dialog-advanced-options");
 
   await page.getByRole("tab", { name: "Extract" }).click();
@@ -318,6 +321,44 @@ test("create workspace rows preserve keyboard selection and delete removal", asy
   await page.keyboard.press("Delete");
   await expect(rows).toHaveCount(2);
   await expect(page.locator(`#compress-source-body tr[data-compress-source-path="${removedSourcePath}"]`)).toHaveCount(0);
+});
+
+test("create password fields clear when hidden or submitted", async ({ page }) => {
+  await dropFiles(page, ["secret-source.txt"]);
+  await waitForCompressSources(page);
+
+  await page.locator("#create-format").selectOption("sevenZ");
+  await waitForCompressSources(page);
+  await expect(page.locator("#compress-options-panel details.advanced-options summary")).toBeVisible();
+  await page.locator("#compress-options-panel details.advanced-options summary").click();
+  await page.locator("#create-password").fill("first-secret");
+  await page.locator("#create-password-confirm").fill("second-secret");
+  await page.locator("#create-show-password").check();
+  await expect(page.locator("#create-password")).toHaveAttribute("type", "text");
+
+  await page.locator("#create-format").selectOption("tarZst");
+  await waitForCompressSources(page);
+  await expect(page.locator("#create-password")).toHaveCount(0);
+  await page.locator("#start-create").click();
+  await expect(page.locator("#create-plan-meta")).not.toContainText("Password confirmation does not match.");
+
+  await page.locator("#create-format").selectOption("sevenZ");
+  await waitForCompressSources(page);
+  await page.locator("#compress-options-panel details.advanced-options summary").click();
+  await expect(page.locator("#create-password")).toHaveValue("");
+  await expect(page.locator("#create-password-confirm")).toHaveValue("");
+  await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
+  await expect(page.locator("#create-show-password")).not.toBeChecked();
+
+  await page.locator("#create-password").fill("matching-secret");
+  await page.locator("#create-password-confirm").fill("matching-secret");
+  await page.locator("#create-show-password").check();
+  await expect(page.locator("#create-password")).toHaveAttribute("type", "text");
+  await page.locator("#start-create").click();
+  await expect(page.locator("#create-password")).toHaveValue("");
+  await expect(page.locator("#create-password-confirm")).toHaveValue("");
+  await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
+  await expect(page.locator("#create-show-password")).not.toBeChecked();
 });
 
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
@@ -493,10 +534,14 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
 
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 700 });
+  await expect(page.locator("#create-format")).toBeVisible();
+  await expect(page.locator("#create-compression-level")).toBeVisible();
   await captureAndScan(page, "21-compact-compress-empty");
 
   await dropFiles(page, ["quarterly-report.pdf", "photos-folder"]);
   await waitForCompressSources(page);
+  await expect(page.locator("#create-format")).toBeVisible();
+  await expect(page.locator("#create-compression-level")).toBeVisible();
   await captureAndScan(page, "22-compact-compress-with-sources");
 
   await page.getByRole("tab", { name: "Extract" }).click();
@@ -510,6 +555,8 @@ test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
 
 test("minimum-size visual surfaces stay within the app bounds", async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 540 });
+  await expect(page.locator("#create-format")).toBeVisible();
+  await expect(page.locator("#create-compression-level")).toBeVisible();
   await captureAndScan(page, "32-min-compress-empty");
 
   await dropFiles(page, [
@@ -517,9 +564,13 @@ test("minimum-size visual surfaces stay within the app bounds", async ({ page })
     "deeply-nested-folder-with-a-long-name",
   ]);
   await waitForCompressSources(page);
+  await expect(page.locator("#create-format")).toBeVisible();
+  await expect(page.locator("#create-compression-level")).toBeVisible();
   await captureAndScan(page, "33-min-compress-long-sources");
 
   await expect(page.locator("#compress-options-panel")).toBeVisible();
+  await expect(page.locator("#create-format")).toBeVisible();
+  await expect(page.locator("#create-compression-level")).toBeVisible();
   await page.locator("#start-create").focus();
   await captureAndScan(page, "34-min-create-dialog");
 
