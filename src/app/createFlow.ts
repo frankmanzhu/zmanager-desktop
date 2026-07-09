@@ -68,6 +68,7 @@ export type CreatePlanInclusionState = "included" | "excluded" | "partial";
 export type BuildCreatePlanRowsOptions = {
   entries: readonly CreatePlanEntryDto[];
   currentFolder?: string | null;
+  searchQuery?: string | null;
 };
 
 export type ApplyCreatePlanPathInclusionInput = {
@@ -270,6 +271,8 @@ export function buildCreatePlanRows(options: BuildCreatePlanRowsOptions): Create
     getPath: (entry) => entry.path,
     isFolderEntry: (entry) => entry.kind === "directory",
     currentFolder,
+    mode: options.searchQuery?.trim() ? "search" : "folder",
+    searchQuery: options.searchQuery,
     showParentRow: Boolean(currentFolder),
   });
 

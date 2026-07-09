@@ -249,7 +249,6 @@ export type ArchiveCommandControlElements = {
   searchSubmitButton: HTMLButtonElement;
   clearSearchButton: HTMLButtonElement;
   selectAllInput: HTMLInputElement;
-  navBackButton: HTMLButtonElement;
 };
 
 export type ArchiveCommandControlState = {
@@ -257,7 +256,6 @@ export type ArchiveCommandControlState = {
   searchSubmitDisabled: boolean;
   clearSearchDisabled: boolean;
   selectAllDisabled: boolean;
-  navBackDisabled: boolean;
 };
 
 type TreeRenderConfig = {
@@ -380,7 +378,6 @@ export function renderArchiveCommandControlState(
   elements.clearSearchButton.disabled = state.clearSearchDisabled;
   elements.clearSearchButton.setAttribute("aria-disabled", String(state.clearSearchDisabled));
   elements.selectAllInput.disabled = state.selectAllDisabled;
-  elements.navBackButton.disabled = state.navBackDisabled;
 }
 
 export function renderArchiveBrowseMessage(

@@ -481,9 +481,10 @@ function renderEntryIcon(
 
 appRoot.innerHTML = `
     <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
-      <button id="nav-back" type="button" data-i18n-text="navigation.back" disabled>Back</button>
-      <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" data-i18n-title="commands.upOneLevel.tooltip" data-i18n-aria-label="commands.upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
-      <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." readonly disabled />
+      <label class="path-location">
+        <span class="path-location-label" data-i18n-text="path.fileLocation">File Location</span>
+        <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." readonly disabled />
+      </label>
       <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</div>
       <div class="search-box" role="search">
         <label class="search-field">
@@ -862,7 +863,6 @@ const compactCompressOptionsQuery = window.matchMedia("(max-width: 1100px), (max
 const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
-const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
 const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
 const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
 const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-close")!;
@@ -991,8 +991,6 @@ const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-gro
 
 function privatizeLegacyArchiveSurfaceIds() {
   const publicArchiveIds = [
-    "nav-back",
-    "nav-up",
     "path-field",
     "path-crumbs",
     "search-entries",
@@ -2715,13 +2713,11 @@ function updateCommandState() {
     searchSubmitButton,
     clearSearchButton,
     selectAllInput,
-    navBackButton,
   }, {
     searchDisabled,
     searchSubmitDisabled: searchDisabled,
     clearSearchDisabled: searchDisabled || !snapshot.view.searchQuery.trim(),
     selectAllDisabled: !commandState.selectAll.enabled,
-    navBackDisabled: !commandContext.canNavigateBack,
   });
 
   applyPreferenceClasses();
@@ -3073,6 +3069,16 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       publishReactSnapshot();
       break;
     }
+    case "setSearchQuery":
+      syncCreateSourcesFromWorkspace(createWorkspace.setSearchQuery(intent.query));
+      renderCompressBrowser();
+      publishReactSnapshot();
+      break;
+    case "clearSearch":
+      syncCreateSourcesFromWorkspace(createWorkspace.clearSearch());
+      renderCompressBrowser();
+      publishReactSnapshot();
+      break;
     case "toggleTreeFolder": {
       const navigation = createWorkspace.toggleTreeFolder(intent.folderPath);
       if (navigation.changed) {
@@ -3108,6 +3114,15 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
         ctrl: intent.ctrlKey,
         meta: intent.metaKey,
         shift: intent.shiftKey,
+      });
+      syncCompressSelectionUi();
+      publishReactSnapshot();
+      break;
+    case "applySelection":
+      applyCompressTableSelection({
+        selectedPaths: new Set(intent.selectedPaths),
+        focusedPath: intent.focusedPath,
+        anchorPath: intent.anchorPath,
       });
       syncCompressSelectionUi();
       publishReactSnapshot();

@@ -64,6 +64,10 @@ For path histories and storage-backed UI state, use typed storage and normalizat
 
 Maintainability is the primary project constraint. Prefer proof over confidence, characterization over broad rewrites, and enforced seams over architecture diagrams.
 
+- Act like a long-term senior owner of the codebase, not a short-term contractor. Do not hide messy behavior behind new filenames, wrappers, React facades, or "temporary" bridges and then present the result as clean architecture.
+- Treat "vibe-coded" glue, hidden duplicate state, hidden DOM control channels, and god-file relocation as architecture failures, not acceptable migration steps. If a transition needs temporary scaffolding, name it explicitly, keep it small, add a deletion plan, and remove it as soon as the new seam is proven.
+- A migration is not complete until the old ownership path is deleted or reduced to a clearly named adapter with a small interface. Moving logic from `main.ts` into another large file, preserving hidden legacy DOM, or keeping parallel render/control systems is debt relocation, not architecture progress.
+- Prefer deletion and consolidation over concealment. When refactoring, measure whether the change actually reduces code paths, hidden state, direct DOM wiring, broad interfaces, or duplicated responsibilities.
 - Do not claim a bug is fixed unless the changed behavior is covered by a failing-before/passing-after test, or unless you explicitly state why the behavior cannot be automated and describe the manual verification performed.
 - When fixing a regression, add the regression test first or add it in the same change. The test should exercise the public module interface or command seam that failed, not a private helper extracted only for testing.
 - Before refactoring a workflow, add or identify characterization tests for the current behavior. Refactors that move behavior without characterization tests should be treated as high risk.

@@ -20,6 +20,11 @@ describe("React create workspace", () => {
   it("renders create sources, plan rows, options, and the top create command", () => {
     const html = renderCreateWorkspace(createSnapshot());
 
+    expect(html).toContain('class="path-bar"');
+    expect(html).toContain('class="path-location"');
+    expect(html).toContain("File Location");
+    expect(html).not.toContain('id="nav-back"');
+    expect(html).not.toContain('id="nav-up"');
     expect(html).toContain('id="create-destination"');
     expect(html).toContain('id="add-source"');
     expect(html).toContain('id="start-create"');
@@ -27,6 +32,10 @@ describe("React create workspace", () => {
     expect(html).toContain('data-pane-resizer="navigation"');
     expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
     expect(html).toContain('id="compress-source-body"');
+    expect(html).toContain('id="compress-marquee-hit-surface"');
+    expect(html).toContain('class="compress-table-shell" tabindex="0"');
+    expect(html).toContain('<th class="inclusion-column"><input id="compress-include-all"');
+    expect(html).not.toContain('<span class="column-header-label" aria-hidden="true"></span><input id="compress-include-all"');
     expect(html).toContain('data-compress-path="photos-folder"');
     expect(html).toContain('data-compress-source-path="C:/work/photos-folder"');
     expect(html).toContain('id="compress-options-panel"');

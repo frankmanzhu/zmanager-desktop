@@ -1,3 +1,5 @@
+import { FolderOpen } from "lucide-react";
+
 import { CLASSIC_TOOLBAR_GROUPS } from "../../../app/classicCommands";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import {
@@ -81,7 +83,53 @@ function ToolbarGroup({
         {group.items.map((commandId) => (
           <ToolbarButton commandId={commandId} key={commandId} />
         ))}
+        {group.id === "compress" ? <CompressDestinationToolbarControls /> : null}
       </div>
+    </>
+  );
+}
+
+function CompressDestinationToolbarControls() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const history = snapshot.pathHistory.createDestinationHistory;
+
+  if (snapshot.shell.activeMode !== "compress") {
+    return null;
+  }
+
+  return (
+    <>
+      <button
+        id="browse-create-destination"
+        className="tool-button"
+        type="button"
+        title={i18n.t("create.destination.browse.title")}
+        onClick={() => actions.handleCreateIntent({ type: "browseDestination" })}
+      >
+        <FolderOpen className="tool-icon" aria-hidden="true" />
+        <span className="tool-label">{i18n.t("common.browse")}</span>
+      </button>
+      <select
+        id="create-destination-recent"
+        className="toolbar-select recent-location-select"
+        aria-label={i18n.t("create.destination.recent.aria")}
+        title={i18n.t("create.destination.recent.title")}
+        disabled={!history.length}
+        value=""
+        onChange={(event) => {
+          const destinationPath = event.currentTarget.value;
+          if (destinationPath) {
+            actions.handleCreateIntent({ type: "setDestinationPath", destinationPath });
+          }
+        }}
+      >
+        <option value="">{i18n.t("create.destination.recent")}</option>
+        {history.map((entry) => (
+          <option value={entry} key={entry}>{entry}</option>
+        ))}
+      </select>
     </>
   );
 }

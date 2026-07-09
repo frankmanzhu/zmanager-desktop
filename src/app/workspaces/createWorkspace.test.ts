@@ -137,6 +137,7 @@ describe("create workspace source state", () => {
       },
       view: {
         currentFolder: "",
+        searchQuery: "",
         expandedTreeFolders: [""],
         rows: [],
         treeFolders: [{
@@ -617,6 +618,28 @@ describe("create workspace plan navigation", () => {
       ["parent", "project", ".."],
       ["entry", "project/src/app.ts", "app.ts"],
       ["entry", "project/src/unused.ts", "unused.ts"],
+    ]);
+  });
+
+  it("filters create plan rows with a workspace-owned search query", () => {
+    const workspace = readyWorkspace();
+    workspace.navigateToFolder("project");
+
+    const searched = workspace.setSearchQuery("app");
+
+    expect(searched.view.searchQuery).toBe("app");
+    expect(searched.view.currentFolder).toBe("project");
+    expect(searched.view.rows.map((row) => [row.rowType, row.path, row.name])).toEqual([
+      ["entry", "project/src/app.ts", "app.ts"],
+    ]);
+
+    const cleared = workspace.clearSearch();
+
+    expect(cleared.view.searchQuery).toBe("");
+    expect(cleared.view.rows.map((row) => [row.rowType, row.path, row.name])).toEqual([
+      ["parent", "", ".."],
+      ["folder", "project/src", "src"],
+      ["entry", "project/readme.md", "readme.md"],
     ]);
   });
 

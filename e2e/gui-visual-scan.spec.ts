@@ -174,6 +174,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
+  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar")).toBeVisible();
+  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #create-destination")).toBeVisible();
+  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #search-entries")).toHaveAttribute("placeholder", "Search sources");
+  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #browse-create-destination")).toHaveCount(0);
+  await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toBeVisible();
+  await expect(page.locator("#zmanager-runtime-bridge-root > .browser-shell")).toBeHidden();
+
   await captureAndScan(page, "03-compress-empty");
   await captureReadmeHero(page, "00-readme-hero", ".workspace");
 
@@ -321,6 +329,34 @@ test("create workspace rows preserve keyboard selection and delete removal", asy
   await page.keyboard.press("Delete");
   await expect(rows).toHaveCount(2);
   await expect(page.locator(`#compress-source-body tr[data-compress-source-path="${removedSourcePath}"]`)).toHaveCount(0);
+});
+
+test("create workspace rows support drag-window multi-selection", async ({ page }) => {
+  await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
+  const rows = page.locator("#compress-source-body tr[data-compress-path]");
+  await expect(rows).toHaveCount(3);
+
+  const firstRow = rows.nth(0);
+  const secondRow = rows.nth(1);
+  const firstBox = await firstRow.boundingBox();
+  const secondKindCellBox = await secondRow.locator("td").nth(4).boundingBox();
+  if (!firstBox || !secondKindCellBox) {
+    throw new Error("Unable to locate compress table geometry");
+  }
+
+  const startX = secondKindCellBox.x + secondKindCellBox.width - 8;
+  const startY = secondKindCellBox.y + secondKindCellBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(firstBox.x + 2, firstBox.y + 2, { steps: 5 });
+
+  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(firstRow).toHaveAttribute("aria-selected", "true");
+  await expect(secondRow).toHaveAttribute("aria-selected", "true");
+  await expect(rows.nth(2)).toHaveAttribute("aria-selected", "false");
+
+  await page.mouse.up();
+  await expect(page.locator(".marquee-selection")).toBeHidden();
 });
 
 test("create password fields clear when hidden or submitted", async ({ page }) => {

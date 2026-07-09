@@ -273,24 +273,22 @@ p {
 }
 
 .workspace[data-mode="compress"] {
-  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "menu"
     "toolbar"
+    "path"
     "body"
     "status";
 }
 
 .workspace[data-mode="compress"].toolbar-hidden {
-  grid-template-rows: var(--zmanager-menu-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "menu"
+    "path"
     "body"
     "status";
-}
-
-.workspace[data-mode="compress"] .path-bar {
-  display: none;
 }
 
 .workspace.toolbar-hidden .command-toolbar {
@@ -696,6 +694,12 @@ p {
   padding: 4px 8px;
 }
 
+.toolbar-select {
+  min-height: 30px;
+  max-width: 150px;
+  font-size: 12px;
+}
+
 .tool-icon {
   opacity: 0.9;
 }
@@ -758,12 +762,39 @@ button svg {
   grid-area: path;
   min-height: 44px;
   display: grid;
-  grid-template-columns: auto auto minmax(150px, 0.85fr) minmax(0, 1fr) minmax(300px, 420px);
+  grid-template-columns: minmax(340px, 0.8fr) minmax(0, 1fr) minmax(320px, 460px);
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--chrome-bg);
+}
+
+.path-location {
+  grid-column: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.path-location-label {
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.path-location .path-field {
+  width: 100%;
+}
+
+.path-location-control {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
 }
 
 .path-bar input,
@@ -779,6 +810,7 @@ button svg {
 }
 
 .path-crumbs {
+  grid-column: 2;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -809,7 +841,10 @@ button svg {
 }
 
 .search-box {
+  grid-column: 3;
   min-width: 0;
+  width: min(100%, 460px);
+  justify-self: end;
   display: grid;
   grid-template-columns: minmax(110px, 1fr) auto auto minmax(58px, auto);
   align-items: center;
@@ -862,6 +897,22 @@ button svg {
 
 .workspace[data-mode="compress"] .browser-shell {
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.workspace[data-mode="compress"] .compress-create-panel {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  padding-block: 6px;
+}
+
+.workspace[data-mode="compress"] .compress-create-row {
+  grid-column: 1;
+}
+
+.workspace[data-mode="compress"] .compress-plan-row {
+  grid-column: 2;
+  align-self: center;
 }
 
 .pane-resizer {
@@ -1378,7 +1429,8 @@ input[type="search"] {
 }
 
 .table-shell,
-.archive-table-wrap {
+.archive-table-wrap,
+.compress-table-shell {
   position: relative;
   min-height: 0;
   overflow: auto;
@@ -1445,7 +1497,7 @@ input[type="search"] {
 .compress-create-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -1474,7 +1526,7 @@ input[type="search"] {
 }
 
 .compress-create-actions {
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: nowrap;
   padding: 0;
   border: 0;
@@ -1567,12 +1619,6 @@ input[type="search"] {
   background: var(--native-control-bg-hover);
 }
 
-.compress-table-shell {
-  min-height: 0;
-  overflow: auto;
-  background: var(--native-layer-bg);
-}
-
 .compress-empty-cell {
   height: 360px;
   padding: 22px;
@@ -1609,7 +1655,23 @@ input[type="search"] {
 }
 
 #compress-source-table {
+  position: relative;
   min-width: 760px;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+#compress-source-table th,
+#compress-source-table td {
+  position: relative;
+  z-index: 2;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#compress-source-table th {
+  z-index: 3;
 }
 
 #compress-source-table tbody tr[data-compress-path] {
@@ -1641,11 +1703,15 @@ input[type="search"] {
 
 .inclusion-column,
 .inclusion-cell {
-  width: 28px;
-  min-width: 28px;
+  width: 34px;
+  min-width: 34px;
+  padding-inline: 4px;
+  overflow: visible;
+  text-overflow: clip;
   text-align: center;
 }
 
+.inclusion-column input[type="checkbox"],
 .inclusion-cell input[type="checkbox"] {
   width: 16px;
   height: 16px;
@@ -1676,7 +1742,7 @@ input[type="search"] {
 
 #compress-source-table th:nth-child(1),
 #compress-source-table td:nth-child(1) {
-  width: 28px;
+  width: 34px;
 }
 
 #compress-source-table th:nth-child(2),
@@ -3210,7 +3276,7 @@ progress {
 
   .path-bar {
     padding-inline: 8px;
-    grid-template-columns: auto auto minmax(120px, 0.8fr) minmax(0, 1fr) minmax(290px, 330px);
+    grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1fr) minmax(290px, 360px);
   }
 
   .status-bar {
@@ -3335,7 +3401,7 @@ progress {
   }
 
   .path-bar {
-    grid-template-columns: auto auto minmax(220px, 1fr) minmax(220px, 260px);
+    grid-template-columns: minmax(260px, 1fr) minmax(220px, 260px);
   }
 
   .path-crumbs {
@@ -3343,6 +3409,7 @@ progress {
   }
 
   .search-box {
+    grid-column: 2;
     grid-template-columns: minmax(80px, 1fr) auto auto minmax(54px, auto);
   }
 
@@ -3810,20 +3877,22 @@ body.linux-window-chrome .workspace.toolbar-hidden {
 }
 
 body.linux-window-chrome .workspace[data-mode="compress"] {
-  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "title"
     "menu"
     "toolbar"
+    "path"
     "body"
     "status";
 }
 
 body.linux-window-chrome .workspace[data-mode="compress"].toolbar-hidden {
-  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
+  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "title"
     "menu"
+    "path"
     "body"
     "status";
 }

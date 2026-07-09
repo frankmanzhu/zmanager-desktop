@@ -70,6 +70,7 @@ export type CreateWorkspaceTreeFolder = Readonly<{
 
 export type CreateWorkspacePlanViewSnapshot = Readonly<{
   currentFolder: string;
+  searchQuery: string;
   expandedTreeFolders: readonly string[];
   rows: readonly CreatePlanRow[];
   treeFolders: readonly CreateWorkspaceTreeFolder[];
@@ -286,6 +287,8 @@ export type CreateWorkspace = {
   buildStartCreateRequest(input?: CreateWorkspaceStartRequestInput): CreateWorkspaceStartRequestResult;
   setSubmissionInFlight(inFlight: boolean): CreateWorkspaceOptionsMutation;
   navigateToFolder(folderPath: string): CreateWorkspaceNavigationMutation;
+  setSearchQuery(query: string): CreateWorkspaceSnapshot;
+  clearSearch(): CreateWorkspaceSnapshot;
   toggleTreeFolder(folderPath: string): CreateWorkspaceNavigationMutation;
   setTreeFolderExpanded(folderPath: string, expanded: boolean): CreateWorkspaceNavigationMutation;
   setPathIncluded(path: string, included: boolean): CreateWorkspaceInclusionMutation;
@@ -304,6 +307,7 @@ type MutableCreateWorkspaceState = {
   planRevision: number;
   excludedArchivePaths: Set<string>;
   currentFolder: string;
+  searchQuery: string;
   expandedTreeFolders: Set<string>;
   options: MutableCreateWorkspaceOptions;
 };
@@ -380,6 +384,7 @@ export function createCreateWorkspace(): CreateWorkspace {
     planRevision: 0,
     excludedArchivePaths: new Set(),
     currentFolder: CREATE_PLAN_ROOT_PATH,
+    searchQuery: "",
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
     options: cloneDefaultCreateOptions(),
   };
@@ -483,6 +488,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         planRevision: 0,
         excludedArchivePaths: new Set(),
         currentFolder: CREATE_PLAN_ROOT_PATH,
+        searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
         options: cloneDefaultCreateOptions(),
       };
@@ -565,6 +571,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         currentPlan: null,
         planStatus: freezePlanStatus(status),
         currentFolder: CREATE_PLAN_ROOT_PATH,
+        searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
       };
       return Object.freeze({
@@ -817,12 +824,36 @@ export function createCreateWorkspace(): CreateWorkspace {
       state = {
         ...state,
         currentFolder: nextFolder,
+        searchQuery: "",
         expandedTreeFolders: new Set(expandedFolderAndAncestors(
           [...state.expandedTreeFolders],
           nextFolder,
         )),
       };
       return navigationMutationResult(state, true, true);
+    },
+
+    setSearchQuery(query) {
+      const nextQuery = String(query ?? "");
+      if (nextQuery === state.searchQuery) {
+        return snapshotFromState(state);
+      }
+      state = {
+        ...state,
+        searchQuery: nextQuery,
+      };
+      return snapshotFromState(state);
+    },
+
+    clearSearch() {
+      if (!state.searchQuery) {
+        return snapshotFromState(state);
+      }
+      state = {
+        ...state,
+        searchQuery: "",
+      };
+      return snapshotFromState(state);
     },
 
     toggleTreeFolder(folderPath) {
@@ -1147,6 +1178,7 @@ function isPlanInitial(state: MutableCreateWorkspaceState): boolean {
     state.planRevision === 0 &&
     state.excludedArchivePaths.size === 0 &&
     state.currentFolder === CREATE_PLAN_ROOT_PATH &&
+    state.searchQuery === "" &&
     sameStringSet(state.expandedTreeFolders, new Set([CREATE_PLAN_ROOT_PATH])) &&
     sameOptions(state.options, DEFAULT_CREATE_OPTIONS)
   );
@@ -1160,6 +1192,7 @@ function resetPlanState(state: MutableCreateWorkspaceState): MutableCreateWorksp
     planStatus: null,
     excludedArchivePaths: new Set(),
     currentFolder: CREATE_PLAN_ROOT_PATH,
+    searchQuery: "",
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
   };
 }
@@ -1177,6 +1210,7 @@ function beginQueuedPlanState(
       planRevision: revision,
       excludedArchivePaths: new Set(),
       currentFolder: CREATE_PLAN_ROOT_PATH,
+      searchQuery: "",
       expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
     };
   }
@@ -1232,10 +1266,12 @@ function setPlanErrorState(
   const nextView = state.currentPlan
     ? {
         currentFolder: state.currentFolder,
+        searchQuery: state.searchQuery,
         expandedTreeFolders: state.expandedTreeFolders,
       }
     : {
         currentFolder: CREATE_PLAN_ROOT_PATH,
+        searchQuery: "",
         expandedTreeFolders: new Set<string>([CREATE_PLAN_ROOT_PATH]),
       };
   return {
@@ -1243,6 +1279,7 @@ function setPlanErrorState(
     planState: "error",
     planStatus: freezePlanStatus(status),
     currentFolder: nextView.currentFolder,
+    searchQuery: nextView.searchQuery,
     expandedTreeFolders: nextView.expandedTreeFolders,
   };
 }
@@ -1305,6 +1342,7 @@ function reconcileViewForPlan(state: MutableCreateWorkspaceState): MutableCreate
     return {
       ...state,
       currentFolder: CREATE_PLAN_ROOT_PATH,
+      searchQuery: "",
       expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
     };
   }
@@ -1658,6 +1696,7 @@ function snapshotFromState(state: MutableCreateWorkspaceState): CreateWorkspaceS
     filteredPlan,
   });
   const currentFolder = state.currentFolder;
+  const searchQuery = state.searchQuery;
   const expandedTreeFolders = Object.freeze(expandedFolderAndAncestors(
     state.expandedTreeFolders,
     currentFolder,
@@ -1665,9 +1704,11 @@ function snapshotFromState(state: MutableCreateWorkspaceState): CreateWorkspaceS
   const rows = freezeCreatePlanRows(buildCreatePlanRows({
     entries: currentPlan?.planEntries ?? [],
     currentFolder,
+    searchQuery,
   }));
   const view = Object.freeze({
     currentFolder,
+    searchQuery,
     expandedTreeFolders,
     rows,
     treeFolders: createPlanTreeFolders(

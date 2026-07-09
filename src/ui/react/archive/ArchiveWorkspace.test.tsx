@@ -20,7 +20,11 @@ describe("React archive workspace", () => {
     const html = renderArchiveWorkspace(snapshot);
 
     expect(html).toContain('class="path-bar"');
+    expect(html).toContain('class="path-location"');
+    expect(html).toContain("File Location");
     expect(html).toContain('id="path-field"');
+    expect(html).not.toContain('id="nav-back"');
+    expect(html).not.toContain('id="nav-up"');
     expect(html).toContain("demo.zip");
     expect(html).toContain('id="search-entries"');
     expect(html).toContain('id="tree-content"');

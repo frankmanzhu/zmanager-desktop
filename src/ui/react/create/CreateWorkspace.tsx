@@ -1,11 +1,14 @@
 import { File, Folder } from "lucide-react";
-import { useEffect, useLayoutEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
-import { formatBytes, getPathBasename } from "../../../app/formatting";
+import { formatBytes } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
-import { PaneResizer } from "../interaction/PaneResizer";
+import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+import { WorkspaceBrowserShell } from "../workspace/WorkspaceBrowserShell";
+import { WorkspacePathBar } from "../workspace/WorkspacePathBar";
+import { armTableMarqueeSelectionGesture, type ViewportRect } from "../workspace/tableMarqueeSelection";
 
 const COMPRESS_SOURCE_COLUMN_IDS = ["name", "size", "modified", "kind"] as const;
 const COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX = 28;
@@ -55,46 +58,90 @@ export function CreateWorkspace() {
   return (
     <>
       <CreatePathBar />
-      <section className="browser-shell" aria-label="Create archive workspace">
-        <CreatePanel onRunCreate={submitCreate} />
-        <CreateTree />
-        <PaneResizer pane="navigation" controls="navigation-pane" label="Resize folder pane" />
-        <CreateTable />
-        <PaneResizer pane="details" controls="details-pane" label="Resize details pane" />
-        <CreateOptions
+      <WorkspaceBrowserShell
+        ariaLabel="Create archive workspace"
+        topPanel={<CreatePanel onRunCreate={submitCreate} />}
+        navigation={<CreateTree />}
+        table={<CreateTable />}
+        sidePane={<CreateOptions
           password={password}
           passwordConfirm={passwordConfirm}
           showPassword={showPassword}
           setPassword={setPassword}
           setPasswordConfirm={setPasswordConfirm}
           setShowPassword={setShowPassword}
-        />
-      </section>
+        />}
+      />
     </>
   );
 }
 
 function CreatePathBar() {
   const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
+  const create = snapshot.create;
+  const [destination, setDestination] = useState(create.options.destinationPath);
+
+  useEffect(() => {
+    setDestination(create.options.destinationPath);
+  }, [create.options.destinationPath]);
+
+  const currentFolder = create.view.currentFolder;
+  const breadcrumbs = createBreadcrumbs(currentFolder, i18n.t("compress.tableTitle"));
+  const searchResultText = create.plan.current
+    ? i18n.t(
+      create.view.rows.filter((row) => row.rowType !== "parent").length === 1
+        ? "search.oneResult"
+        : "search.results",
+      { count: create.view.rows.filter((row) => row.rowType !== "parent").length },
+    )
+    : "";
 
   return (
-    <section className="path-bar" aria-label={i18n.t("workspace.archiveLocation.aria")}>
-      <button id="nav-back" type="button" disabled>{i18n.t("navigation.back")}</button>
-      <button id="nav-up" className="icon-button" type="button" disabled aria-label={i18n.t("commands.upOneLevel")}>^</button>
-      <input id="path-field" className="path-field" type="text" aria-label={i18n.t("path.archivePath.aria")} value={i18n.t("compress.tableTitle")} readOnly disabled />
-      <div id="path-crumbs" className="path-crumbs" aria-live="polite" hidden>{i18n.t("compress.tableTitle")}</div>
-      <div className="search-box" role="search">
-        <label className="search-field">
-          <span className="sr-only">{i18n.t("search.entries")}</span>
-          <input id="search-entries" type="search" placeholder={i18n.t("search.placeholder")} disabled />
-        </label>
-        <button id="search-submit" className="search-action" type="button" disabled>{i18n.t("search.button")}</button>
-        <button id="clear-search" className="search-action quiet-action" type="button" disabled>{i18n.t("search.clear")}</button>
-        <output id="search-count" className="search-count" htmlFor="search-entries" aria-live="polite" />
-      </div>
-    </section>
+    <WorkspacePathBar
+      ariaLabel={i18n.t("workspace.archiveLocation.aria")}
+      locationLabel={i18n.t("path.fileLocation")}
+      pathAriaLabel={i18n.t("compress.destination")}
+      pathInputId="create-destination"
+      displayPath={destination}
+      pathDisabled={false}
+      pathReadOnly={false}
+      pathPlaceholder={i18n.t("compress.destination.placeholder")}
+      onPathChange={(path) => {
+        setDestination(path);
+        actions.handleCreateIntent({ type: "setDestinationPath", destinationPath: path });
+      }}
+      crumbs={breadcrumbs}
+      crumbsHidden={!create.hasSources}
+      emptyCrumbsText={i18n.t("compress.tableTitle")}
+      onCrumbClick={(path) => actions.handleCreateIntent({ type: "navigateToFolder", folderPath: path })}
+      search={{
+        query: create.view.searchQuery,
+        disabled: !create.plan.current,
+        clearDisabled: !create.view.searchQuery.trim(),
+        resultText: searchResultText,
+        entriesLabel: i18n.t("search.entries"),
+        placeholder: i18n.t("search.sources.placeholder"),
+        buttonLabel: i18n.t("search.button"),
+        clearLabel: i18n.t("search.clear"),
+        clearAriaLabel: i18n.t("search.clear.aria"),
+        onChange: (query) => actions.handleCreateIntent({ type: "setSearchQuery", query }),
+        onSubmit: (query) => actions.handleCreateIntent({ type: "setSearchQuery", query }),
+        onClear: () => actions.handleCreateIntent({ type: "clearSearch" }),
+      }}
+    />
   );
+}
+
+function createBreadcrumbs(currentFolder: string, rootName: string) {
+  const crumbs = [{ name: rootName, path: "" }];
+  let path = "";
+  for (const segment of currentFolder.split("/").filter(Boolean)) {
+    path = path ? `${path}/${segment}` : segment;
+    crumbs.push({ name: segment, path });
+  }
+  return crumbs;
 }
 
 function CreatePanel({
@@ -106,11 +153,6 @@ function CreatePanel({
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const create = snapshot.create;
-  const [destination, setDestination] = useState(create.options.destinationPath);
-
-  useEffect(() => {
-    setDestination(create.options.destinationPath);
-  }, [create.options.destinationPath]);
 
   const includedCount = create.plan.current ? create.inclusion.includedCount : create.sourceCount;
   const statusText = create.options.readiness.unavailableReason
@@ -123,31 +165,6 @@ function CreatePanel({
   return (
     <div className="compress-create-panel" aria-label={i18n.t("compress.createArchive.aria")}>
       <div className="compress-create-row">
-        <label className="compress-destination-field">
-          <span>{i18n.t("compress.destination")}</span>
-          <div className="inline-field">
-            <input
-              id="create-destination"
-              type="text"
-              list="create-destination-history"
-              placeholder={i18n.t("compress.destination.placeholder")}
-              value={destination}
-              onChange={(event) => {
-                setDestination(event.currentTarget.value);
-                actions.handleCreateIntent({ type: "setDestinationPath", destinationPath: event.currentTarget.value });
-              }}
-            />
-            <button id="browse-create-destination" type="button" onClick={() => actions.handleCreateIntent({ type: "browseDestination" })}>
-              {i18n.t("common.browse")}
-            </button>
-            <select id="create-destination-recent" className="recent-location-select" aria-label={i18n.t("create.destination.recent.aria")} disabled={!snapshot.pathHistory.createDestinationHistory.length}>
-              <option value="">{i18n.t("create.destination.recent")}</option>
-            </select>
-          </div>
-          <datalist id="create-destination-history">
-            {snapshot.pathHistory.createDestinationHistory.map((entry) => <option value={entry} key={entry} />)}
-          </datalist>
-        </label>
         <div className="compress-create-actions">
           <button
             id="add-source"
@@ -211,9 +228,27 @@ function CreateTree() {
 function CreateTable() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  const tableBodyRef = useRef<HTMLTableSectionElement | null>(null);
+  const tableShellRef = useRef<HTMLDivElement | null>(null);
+  const [marqueeRect, setMarqueeRect] = useState<ViewportRect | null>(null);
   const i18n = translatorForSnapshot(snapshot);
   const rows = snapshot.create.view.rows;
   const includeAll = includeAllState(snapshot);
+
+  useEffect(() => {
+    const tableShell = tableShellRef.current;
+    if (!tableShell) {
+      return;
+    }
+
+    const preventSelectionGesture = (event: Event) => event.preventDefault();
+    tableShell.addEventListener("selectstart", preventSelectionGesture);
+    tableShell.addEventListener("dragstart", preventSelectionGesture);
+    return () => {
+      tableShell.removeEventListener("selectstart", preventSelectionGesture);
+      tableShell.removeEventListener("dragstart", preventSelectionGesture);
+    };
+  }, []);
 
   return (
     <section className="archive-table-pane" aria-label={i18n.t("workspace.archiveEntries.aria")}>
@@ -228,13 +263,27 @@ function CreateTable() {
         <ul id="source-list" className="list-box" hidden>
           {snapshot.create.sources.map((source) => <li data-source-path={source} key={source}>{source}</li>)}
         </ul>
-        <div className="compress-table-shell">
+        <div
+          ref={tableShellRef}
+          className="compress-table-shell"
+          tabIndex={0}
+          onPointerDownCapture={(event) => {
+            armCreateMarqueeSelectionGesture({
+              event,
+              snapshot,
+              actions,
+              tableBody: tableBodyRef.current,
+              setMarqueeRect,
+            });
+          }}
+        >
+          <div id="compress-marquee-hit-surface" className="marquee-hit-surface" aria-hidden="true" />
+          {marqueeRect ? <div className="marquee-selection" style={marqueeRect} /> : null}
           <table id="compress-source-table">
             {rows.length ? (
               <thead>
                 <tr>
                   <th className="inclusion-column">
-                    <span className="column-header-label" aria-hidden="true" />
                     <input
                       id="compress-include-all"
                       type="checkbox"
@@ -254,7 +303,7 @@ function CreateTable() {
                 </tr>
               </thead>
             ) : null}
-            <tbody id="compress-source-body">
+            <tbody id="compress-source-body" ref={tableBodyRef}>
               {rows.length ? rows.map((row) => <CreateTableRow row={row} key={row.rowId} />) : (
                 <tr><td colSpan={5} className="compress-empty-cell"><div className="compress-empty-state"><strong>{i18n.t("compress.emptyTable")}</strong><span>{i18n.t("compress.dragSourcesHint")}</span></div></td></tr>
               )}
@@ -265,6 +314,61 @@ function CreateTable() {
       <div className="table-shell" hidden />
     </section>
   );
+}
+
+function armCreateMarqueeSelectionGesture(input: Readonly<{
+  event: ReactPointerEvent<HTMLElement>;
+  snapshot: ZManagerReactSnapshot;
+  actions: ZManagerReactActions;
+  tableBody: HTMLTableSectionElement | null;
+  setMarqueeRect: (rect: ViewportRect | null) => void;
+}>) {
+  const { event, snapshot, actions, tableBody, setMarqueeRect } = input;
+  armTableMarqueeSelectionGesture({
+    event,
+    tableBody,
+    selectedPaths: snapshot.createSelection.selectedPaths,
+    visiblePaths: createVisibleSelectablePaths(snapshot),
+    rowSelector: "tr[data-compress-path]",
+    rowPath: (row) => row.dataset.compressPath,
+    canStart: (candidate) => canStartCreateMarqueeSelection(candidate, snapshot),
+    setMarqueeRect,
+    applySelection: (selection) => actions.handleCreateIntent({
+      type: "applySelection",
+      selectedPaths: [...selection.selectedPaths],
+      focusedPath: selection.focusedPath,
+      anchorPath: selection.anchorPath,
+    }),
+  });
+}
+
+function canStartCreateMarqueeSelection(
+  event: ReactPointerEvent<HTMLElement>,
+  snapshot: ZManagerReactSnapshot,
+): boolean {
+  if (
+    event.button !== 0
+    || snapshot.create.plan.state === "loading"
+    || createVisibleSelectablePaths(snapshot).length === 0
+  ) {
+    return false;
+  }
+
+  if (!(event.target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (event.target.closest("button, a, input, select, textarea, .column-resizer")) {
+    return false;
+  }
+
+  return !event.target.closest(".row-primary");
+}
+
+function createVisibleSelectablePaths(snapshot: ZManagerReactSnapshot): string[] {
+  return snapshot.create.view.rows
+    .filter((row) => row.rowType !== "parent")
+    .map((row) => row.path);
 }
 
 function CompressSourceHeader({
@@ -406,6 +510,7 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
         }
         const plainPrimaryClick = !event.ctrlKey && !event.metaKey && !event.shiftKey;
         if (selectable) {
+          event.currentTarget.focus();
           actions.handleCreateIntent({
             type: "selectRow",
             path,

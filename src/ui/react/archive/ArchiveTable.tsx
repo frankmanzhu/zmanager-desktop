@@ -11,21 +11,13 @@ import {
   type ArchiveTableColumnId,
   type ArchiveTableRow,
 } from "../../../app/archiveTable";
-import { applyHierarchicalMarqueeSelection } from "../../../app/hierarchicalTable";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+import { armTableMarqueeSelectionGesture, type ViewportRect } from "../workspace/tableMarqueeSelection";
 import { nativeIconDataUrlForRow } from "./archiveNativeIcons";
 
 const NATIVE_DRAG_THRESHOLD_PX = 6;
-const MARQUEE_SELECTION_THRESHOLD_PX = 5;
-
-type ViewportRect = Readonly<{
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}>;
 
 export function ArchiveTable() {
   const snapshot = useZManagerSnapshot();
@@ -590,65 +582,22 @@ function armMarqueeSelectionGesture(input: Readonly<{
   setMarqueeRect: (rect: ViewportRect | null) => void;
 }>) {
   const { event, snapshot, actions, tableBody, setMarqueeRect } = input;
-  if (!canStartMarqueeSelection(event, snapshot) || !tableBody) {
-    return;
-  }
-
-  event.preventDefault();
-  const pointerId = event.pointerId;
-  const startX = event.clientX;
-  const startY = event.clientY;
-  const additive = event.ctrlKey || event.metaKey || event.shiftKey;
-  const baseSelection = new Set(snapshot.archive.view.selection.selectedPaths);
-  let started = false;
-
-  const onPointerMove = (moveEvent: PointerEvent) => {
-    if (moveEvent.pointerId !== pointerId) {
-      return;
-    }
-
-    const rect = viewportRectBetween(startX, startY, moveEvent.clientX, moveEvent.clientY);
-    if (!started && Math.hypot(rect.width, rect.height) < MARQUEE_SELECTION_THRESHOLD_PX) {
-      return;
-    }
-
-    if (!started) {
-      started = true;
-      document.body.classList.add("is-marquee-selecting");
-      document.addEventListener("click", suppressNativeDragClick, { capture: true, once: true });
-    }
-
-    moveEvent.preventDefault();
-    setMarqueeRect(rect);
-    const selection = applyHierarchicalMarqueeSelection({
-      hitPaths: archiveEntryPathsInViewportRect(tableBody, rect),
-      visiblePaths: snapshot.archive.view.selection.visibleSelectablePaths,
-      baseSelection,
-      additive,
-    });
-    actions.handleArchiveIntent({
+  armTableMarqueeSelectionGesture({
+    event,
+    tableBody,
+    selectedPaths: snapshot.archive.view.selection.selectedPaths,
+    visiblePaths: snapshot.archive.view.selection.visibleSelectablePaths,
+    rowSelector: "tr[data-entry-path]",
+    rowPath: (row) => row.dataset.entryPath,
+    canStart: (candidate) => canStartMarqueeSelection(candidate, snapshot),
+    setMarqueeRect,
+    applySelection: (selection) => actions.handleArchiveIntent({
       type: "applySelection",
       selectedPaths: [...selection.selectedPaths],
       focusedPath: selection.focusedPath,
       anchorPath: selection.anchorPath,
-    });
-  };
-
-  const onPointerEnd = (endEvent: PointerEvent) => {
-    if (endEvent.pointerId !== pointerId) {
-      return;
-    }
-
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerEnd);
-    document.removeEventListener("pointercancel", onPointerEnd);
-    document.body.classList.remove("is-marquee-selecting");
-    setMarqueeRect(null);
-  };
-
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerEnd);
-  document.addEventListener("pointercancel", onPointerEnd);
+    }),
+  });
 }
 
 function canStartMarqueeSelection(
@@ -672,34 +621,4 @@ function canStartMarqueeSelection(
   }
 
   return !event.target.closest(".row-primary, .row-secondary");
-}
-
-function viewportRectBetween(startX: number, startY: number, endX: number, endY: number): ViewportRect {
-  const left = Math.min(startX, endX);
-  const top = Math.min(startY, endY);
-  const right = Math.max(startX, endX);
-  const bottom = Math.max(startY, endY);
-  return {
-    left,
-    top,
-    width: right - left,
-    height: bottom - top,
-  };
-}
-
-function archiveEntryPathsInViewportRect(tableBody: HTMLTableSectionElement, rect: ViewportRect): string[] {
-  const right = rect.left + rect.width;
-  const bottom = rect.top + rect.height;
-  const paths: string[] = [];
-  for (const row of Array.from(tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]"))) {
-    const rowRect = row.getBoundingClientRect();
-    const intersects = rowRect.left <= right
-      && rowRect.right >= rect.left
-      && rowRect.top <= bottom
-      && rowRect.bottom >= rect.top;
-    if (intersects && row.dataset.entryPath) {
-      paths.push(row.dataset.entryPath);
-    }
-  }
-  return paths;
 }

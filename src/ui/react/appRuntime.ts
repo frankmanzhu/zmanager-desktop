@@ -175,11 +175,14 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "changeFormat"; format: CreateWorkspaceSnapshot["options"]["format"] }>
   | Readonly<{ type: "setOptions"; patch: CreateWorkspaceOptionPatch }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
+  | Readonly<{ type: "setSearchQuery"; query: string }>
+  | Readonly<{ type: "clearSearch" }>
   | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
   | Readonly<{ type: "setPathIncluded"; path: string; included: boolean }>
   | Readonly<{ type: "setAllIncluded"; included: boolean }>
   | Readonly<{ type: "setCurrentFolderIncluded"; included: boolean }>
   | Readonly<{ type: "selectRow"; path: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }>
+  | Readonly<{ type: "applySelection"; selectedPaths: readonly string[]; focusedPath: string; anchorPath: string }>
   | Readonly<{ type: "toggleRowSelection"; path: string }>
   | Readonly<{ type: "focusRow"; path: string }>
   | Readonly<{ type: "removeSelectedSources"; fallbackSourcePath?: string }>

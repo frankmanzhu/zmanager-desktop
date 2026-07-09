@@ -38,6 +38,9 @@ const archiveTableSource = normalizedWorkspaceFile("src", "ui", "react", "archiv
 const archivePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchivePathBar.tsx");
 const archiveDetailsPaneSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveDetailsPane.tsx");
 const createWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "create", "CreateWorkspace.tsx");
+const workspaceBrowserShellSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "WorkspaceBrowserShell.tsx");
+const workspacePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "WorkspacePathBar.tsx");
+const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "tableMarqueeSelection.ts");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
 const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
@@ -213,7 +216,7 @@ describe("GUI layout contracts", () => {
   it("keeps Compress create canonical in-window with validation and source actions", () => {
     expect(createWorkspaceSource).toContain('className="compress-create-panel"');
     expect(mainSource).not.toContain('id="create-dialog"');
-    expect(createWorkspaceSource).toContain('id="create-destination-recent"');
+    expect(commandToolbarSource).toContain('id="create-destination-recent"');
     expect(createWorkspaceSource).toContain('id="clear-sources"');
     expect(createWorkspaceSource).toContain('id="create-plan-meta"');
     expect(createWorkspaceSource).toContain("create.options.readiness.unavailableReason");
@@ -279,10 +282,10 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps the three-pane workspace splitters visible and keyboard reachable", () => {
-    expect(archiveWorkspaceSource).toContain('<PaneResizer pane="navigation"');
-    expect(archiveWorkspaceSource).toContain('<PaneResizer pane="details"');
-    expect(createWorkspaceSource).toContain('<PaneResizer pane="navigation"');
-    expect(createWorkspaceSource).toContain('<PaneResizer pane="details"');
+    expect(archiveWorkspaceSource).toContain("<WorkspaceBrowserShell");
+    expect(createWorkspaceSource).toContain("<WorkspaceBrowserShell");
+    expect(workspaceBrowserShellSource).toContain('<PaneResizer pane="navigation"');
+    expect(workspaceBrowserShellSource).toContain('<PaneResizer pane="details"');
     expect(createWorkspaceSource).toContain('id="navigation-pane"');
     expect(paneResizerSource).toContain('data-pane-resizer={pane}');
     expect(paneResizerSource).toContain('role="separator"');
@@ -294,6 +297,22 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain(".pane-resizer-grip");
     expect(styles).toContain(".pane-resizer::before");
     expect(styles).toContain("grid-template-columns:\n    minmax(var(--zmanager-nav-pane-min), clamp(var(--zmanager-nav-pane-min), var(--zmanager-nav-pane-width, 190px), var(--zmanager-nav-pane-max)))");
+  });
+
+  it("keeps Compress on the shared workspace path bar instead of the old create-only chrome", () => {
+    expect(createWorkspaceSource).toContain("<WorkspacePathBar");
+    expect(createWorkspaceSource).toContain('pathInputId="create-destination"');
+    expect(createWorkspaceSource).toContain('type: "setSearchQuery"');
+    expect(workspacePathBarSource).not.toContain("pathActions");
+    expect(workspacePathBarSource).not.toContain("pathDatalist");
+    expect(commandToolbarSource).toContain("function CompressDestinationToolbarControls");
+    expect(commandToolbarSource).toContain('id="browse-create-destination"');
+    expect(commandToolbarSource).toContain('id="create-destination-recent"');
+    expect(createWorkspaceSource).not.toContain('<label className="compress-destination-field">');
+    expect(createWorkspaceSource).not.toContain("pathActions=");
+    expect(createWorkspaceSource).not.toContain("pathDatalist=");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] {\n  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);");
+    expect(styles).not.toContain(".workspace[data-mode=\"compress\"] .path-bar {\n  display: none;\n}");
   });
 
   it("keeps details values aligned and long paths predictable", () => {
@@ -369,26 +388,27 @@ describe("GUI layout contracts", () => {
     expect(archiveDetailsPaneSource).toContain('data-details-action="open-archive"');
     expect(archiveDetailsPaneSource).toContain("data-copy-value={value}");
     expect(mainSource).toContain("function currentArchiveDisplayPath");
-    expect(archivePathBarSource).toContain("readOnly");
-    expect(archivePathBarSource).toContain("hidden={!archive.currentArchivePath}");
+    expect(workspacePathBarSource).toContain("readOnly");
+    expect(workspacePathBarSource).toContain("hidden={crumbsHidden}");
+    expect(archivePathBarSource).toContain("crumbsHidden={!archive.currentArchivePath}");
     expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
     expect(mainSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
-    expect(archivePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
+    expect(workspacePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
     expect(commandToolbarSource).toContain('primary ? "is-primary-command" : ""');
     expect(commandToolbarSource).toContain('secondary ? "is-secondary-command" : ""');
-    expect(archivePathBarSource).toContain("disabled={searchDisabled}");
+    expect(workspacePathBarSource).toContain("disabled={search.disabled}");
     expect(styles).toContain(".detail-copyable");
     expect(styles).toContain(".tool-button.is-primary-command");
     expect(styles).toContain(".tool-button.is-secondary-command");
   });
 
   it("keeps search and flat view as stateful file-table controls", () => {
-    expect(archivePathBarSource).toContain('id="search-submit"');
-    expect(archivePathBarSource).toContain('id="clear-search"');
-    expect(archivePathBarSource).toContain('id="search-count"');
-    expect(archivePathBarSource).toContain("snapshot.archive.view.selection.visibleSelectablePaths.length");
+    expect(workspacePathBarSource).toContain('id="search-submit"');
+    expect(workspacePathBarSource).toContain('id="clear-search"');
+    expect(workspacePathBarSource).toContain('id="search-count"');
+    expect(archivePathBarSource).toContain("archive.view.selection.visibleSelectablePaths.length");
     expect(archiveTableSource).toContain('className={archive.view.searchQuery ? "search-empty-row" : ""}');
     expect(mainSource).toContain('message("detail.selectionHiddenBySearch")');
     expect(mainSource).toContain('action: "clear-search"');
@@ -419,6 +439,16 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('id="info-dialog-close"');
     expect(styles).toContain(".detail-actions");
     expect(styles).toContain(".dialog-action-group");
+  });
+
+  it("shares drag-window selection behavior without merging table row ownership", () => {
+    expect(tableMarqueeSelectionSource).toContain("applyHierarchicalMarqueeSelection");
+    expect(archiveTableSource).toContain("armTableMarqueeSelectionGesture");
+    expect(createWorkspaceSource).toContain("armTableMarqueeSelectionGesture");
+    expect(archiveTableSource).toContain('rowSelector: "tr[data-entry-path]"');
+    expect(createWorkspaceSource).toContain('rowSelector: "tr[data-compress-path]"');
+    expect(archiveTableSource).toContain("export function ArchiveTable()");
+    expect(createWorkspaceSource).toContain("function CreateTable()");
   });
 
   it("keeps drag and drop affordances local, explicit, and deterministic", () => {
