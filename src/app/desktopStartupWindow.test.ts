@@ -57,21 +57,21 @@ describe("desktop startup window", () => {
   });
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
-    const mainTs = readWorkspaceFile("src", "main.ts");
+    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
     const styles = readWorkspaceFile("src", "styles.css");
 
-    expect(mainTs).toContain("function renderWindowResizeHandles()");
-    expect(mainTs).toContain("appWindowController.beginResizeDrag(direction)");
+    expect(legacyMainTs).toContain("function renderWindowResizeHandles()");
+    expect(legacyMainTs).toContain("appWindowController.beginResizeDrag(direction)");
     expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
     expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {
-    const mainTs = readWorkspaceFile("src", "main.ts");
+    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(mainTs).toContain("await appWindowController.revealNormalWindow();");
+    expect(legacyMainTs).toContain("await appWindowController.revealNormalWindow();");
     expect(windowControllerTs).toContain("async function restoreNormalWindowGeometryOrCenter()");
     expect(windowControllerTs).toContain("const restored = await restoreNormalWindowGeometry();");
     expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().center();");
@@ -81,12 +81,17 @@ describe("desktop startup window", () => {
 
   it("keeps Tauri window and geometry ownership in the desktop adapter", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
+    const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
     expect(mainTs).not.toContain("@tauri-apps/api/window");
+    expect(legacyMainTs).not.toContain("@tauri-apps/api/window");
     expect(mainTs).not.toMatch(/\bgetCurrentWindow\(/);
+    expect(legacyMainTs).not.toMatch(/\bgetCurrentWindow\(/);
     expect(mainTs).not.toMatch(/\bavailableMonitors\(/);
+    expect(legacyMainTs).not.toMatch(/\bavailableMonitors\(/);
     expect(mainTs).not.toContain("zmanager.windowGeometry");
+    expect(legacyMainTs).not.toContain("zmanager.windowGeometry");
     expect(windowControllerTs).toContain('from "@tauri-apps/api/window"');
     expect(windowControllerTs).toContain('export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";');
     expect(windowControllerTs).toContain("restorableWindowGeometry");

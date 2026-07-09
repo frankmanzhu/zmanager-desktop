@@ -963,7 +963,10 @@ should be mostly Vitest-covered.
   DTOs, or sort/filter logic.
 - Escape translated and interpolated text before inserting it into string-built
   HTML.
-- Do not create a frontend framework migration inside this refactor.
+- The GUI layer is now migrating to React 19, shadcn/ui, and Tailwind CSS v4.
+  Keep that migration bounded to rendering and UI composition. Do not move
+  workflow state, command DTO construction, archive semantics, Tauri effects, or
+  passwords into React components. See `docs/REACT_GUI_MIGRATION.md`.
 - Do not redesign the visual UI as part of architecture extraction.
 - Do not introduce a general-purpose table library unless the local table
   module proves too expensive to own after the first two slices.

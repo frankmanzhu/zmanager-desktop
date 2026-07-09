@@ -1,0 +1,17 @@
+id: no-tauri-import-outside-adapters
+language: TypeScript
+message: Keep direct Tauri imports in src/api or src/desktop adapters.
+severity: warning
+files:
+  - "src/app/**/*.ts"
+  - "src/app/**/*.tsx"
+  - "src/ui/**/*.ts"
+  - "src/ui/**/*.tsx"
+  - "src/lib/**/*.ts"
+  - "src/lib/**/*.tsx"
+  - "src/main.ts"
+rule:
+  kind: import_statement
+  has:
+    kind: string_fragment
+    regex: "^@tauri-apps/"

@@ -20,7 +20,8 @@ function normalizedWorkspaceFile(...parts: string[]): string {
 }
 
 const styles = normalizedWorkspaceFile("src", "styles.css");
-const mainSource = normalizedWorkspaceFile("src", "main.ts");
+const compositionRootSource = normalizedWorkspaceFile("src", "main.ts");
+const mainSource = normalizedWorkspaceFile("src", "legacyMain.ts");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
 const shellViewSource = normalizedWorkspaceFile("src", "ui", "shellView.ts");
@@ -47,6 +48,13 @@ function selectorsContainingFirstTableColumnRules(css: string): string[] {
 }
 
 describe("GUI layout contracts", () => {
+  it("keeps main.ts as the React composition root while legacy GUI migrates", () => {
+    expect(compositionRootSource).toContain('from "./ui/react/AppShell"');
+    expect(compositionRootSource).toContain("createRoot(app).render(");
+    expect(compositionRootSource).not.toContain("appRoot.innerHTML");
+    expect(compositionRootSource).not.toContain("@tauri-apps/api/");
+  });
+
   it("keeps the Windows 11 native look foundation explicit", () => {
     expect(styles).toContain("--native-window-bg");
     expect(styles).toContain("--native-control-bg-hover");

@@ -11,19 +11,33 @@
     "preview": "vite preview",
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",
+    "ast:lint": "ast-grep scan",
     "tauri": "tauri"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.3.0",
+    "@tailwindcss/vite": "^4.3.2",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
-    "lucide": "^1.21.0"
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide": "^1.21.0",
+    "lucide-react": "^1.23.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
+    "@ast-grep/cli": "^0.44.1",
     "@playwright/test": "^1.61.1",
     "@tauri-apps/cli": "^2.2.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
     "typescript": "^5.7.2",
-    "vite": "^6.0.0",
+    "vite": "^8.1.4",
     "vitest": "^4.1.8"
   }
 }

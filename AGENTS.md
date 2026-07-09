@@ -60,9 +60,28 @@ For preferences, localization, and formatting, keep stable workflow values langu
 
 For path histories and storage-backed UI state, use typed storage and normalization modules. Do not add ad hoc `localStorage` keys or history arrays in `main.ts`.
 
+## Maintainability Hardening Rules
+
+Maintainability is the primary project constraint. Prefer proof over confidence, characterization over broad rewrites, and enforced seams over architecture diagrams.
+
+- Do not claim a bug is fixed unless the changed behavior is covered by a failing-before/passing-after test, or unless you explicitly state why the behavior cannot be automated and describe the manual verification performed.
+- When fixing a regression, add the regression test first or add it in the same change. The test should exercise the public module interface or command seam that failed, not a private helper extracted only for testing.
+- Before refactoring a workflow, add or identify characterization tests for the current behavior. Refactors that move behavior without characterization tests should be treated as high risk.
+- Prefer deep, testable modules over shallow helper movement. A new module must improve locality or leverage; if deleting it would only inline one pass-through call, do not add it.
+- Keep `src/main.ts` shrinking toward a composition root. Do not add new durable state, command switches, selection/focus logic, async job decisions, request construction, or storage normalization there.
+- Keep Tauri imports concentrated in `src/api` and `src/desktop`. Controllers and workspaces should use injected adapters so their behavior can be tested without a Tauri runtime.
+- Treat Rust/TypeScript DTO drift as a maintainability risk. Prefer generated bindings such as `tauri-specta`, or add explicit contract tests when commands or DTOs change.
+- Add architecture guardrails when a rule keeps being broken. Good candidates include `ast-grep`/lint rules for forbidden Tauri imports, workflow state in `main.ts`, direct `localStorage` keys, or command surfaces bypassing the router.
+- Route new toolbar, menu, shortcut, context-menu, details-pane, tree, and row-action behavior through the command router. Do not wire separate behavior per surface.
+- Use Playwright for end-to-end confidence and Vitest/Rust tests for workflow proof. Do not rely on UI click-through tests as the only proof of pure workflow behavior.
+- If a requested change cannot be safely proven in the current turn, say so plainly. Include the residual risk and the exact verification gap instead of presenting the change as complete.
+- When borrowing ideas from templates or external projects, adapt the concept only if it strengthens testability, contract safety, or locality. Do not adopt a framework or state library merely because it is modern.
+
 ## Testing Guidelines
 
 Test command seam behavior first: validation, password-required flows, listing mapping, create/extract lifecycle, cancellation, normalized errors, and platform path edge cases. Frontend tests should cover state transitions and user-visible behavior. Use Vitest for `src/**/*.test.ts` and Playwright for `e2e/*.spec.ts`.
+
+For every bug fix, include the test that proves the fix whenever feasible. For every architecture move, include characterization coverage before moving behavior and interface-level tests after the move. A final agent response should name the tests run and distinguish automated proof from manual smoke checks.
 
 ## Commit & Pull Request Guidelines
 
