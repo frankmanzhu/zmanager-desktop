@@ -6,17 +6,31 @@ declare const process: {
 
 declare function require(id: "fs"): {
   readFileSync(path: string, encoding: string): string;
+  readdirSync(path: string): string[];
+  statSync(path: string): {
+    isDirectory(): boolean;
+    isFile(): boolean;
+  };
 };
 
 declare function require(id: "path"): {
   join(...parts: string[]): string;
+  relative(from: string, to: string): string;
 };
 
-const { readFileSync } = require("fs");
-const { join } = require("path");
+const { readFileSync, readdirSync, statSync } = require("fs");
+const { join, relative } = require("path");
 
 function normalizedWorkspaceFile(...parts: string[]): string {
-  return readFileSync(join(process.cwd(), ...parts), "utf8").replace(/\r\n/g, "\n");
+  return readFileSync(workspaceFilePath(...parts), "utf8").replace(/\r\n/g, "\n");
+}
+
+function workspaceFilePath(...parts: string[]): string {
+  return join(process.cwd(), ...parts);
+}
+
+function workspaceRelativePath(filePath: string): string {
+  return relative(process.cwd(), filePath).replace(/\\/g, "/");
 }
 
 const styles = normalizedWorkspaceFile("src", "styles.css");
@@ -48,6 +62,758 @@ const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalControl
 const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
+type FutureForbiddenTargetId =
+  | "phase1.extract-hidden-control-sync"
+  | "phase2.info-about-hidden-html"
+  | "phase3.typed-context-menu"
+  | "phase4.create-legacy-render-helpers"
+  | "phase5.archive-legacy-render-helpers"
+  | "phase6.runtime-event-wiring"
+  | "phase7.hidden-legacy-root";
+
+type FutureForbiddenTarget = Readonly<{
+  id: FutureForbiddenTargetId;
+  phase: string;
+  description: string;
+}>;
+
+const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
+  {
+    id: "phase1.extract-hidden-control-sync",
+    phase: "Phase 1",
+    description: "extract dialog state no longer syncs through hidden controls",
+  },
+  {
+    id: "phase2.info-about-hidden-html",
+    phase: "Phase 2",
+    description: "info and about dialogs are snapshot-only with no hidden HTML source",
+  },
+  {
+    id: "phase3.typed-context-menu",
+    phase: "Phase 3",
+    description: "context menus are typed snapshots with no raw HTML payload",
+  },
+  {
+    id: "phase4.create-legacy-render-helpers",
+    phase: "Phase 4",
+    description: "create workspace no longer imports legacy string render helpers",
+  },
+  {
+    id: "phase5.archive-legacy-render-helpers",
+    phase: "Phase 5",
+    description: "archive workspace no longer imports legacy string render helpers",
+  },
+  {
+    id: "phase6.runtime-event-wiring",
+    phase: "Phase 6",
+    description: "runtime event wiring lives in React interaction adapters or desktop controllers",
+  },
+  {
+    id: "phase7.hidden-legacy-root",
+    phase: "Phase 7",
+    description: "the hidden runtime bridge root and legacy DOM bootstrap are deleted",
+  },
+];
+
+type AuditScanId =
+  | "hiddenLegacyDom"
+  | "dangerousHtml"
+  | "legacyViewImports"
+  | "innerHtml"
+  | "broadDomWiring";
+
+type AuditScanDefinition = Readonly<{
+  id: AuditScanId;
+  command: string;
+  roots: readonly string[];
+  pattern: RegExp;
+}>;
+
+const LEGACY_AUDIT_SCANS: readonly AuditScanDefinition[] = [
+  {
+    id: "hiddenLegacyDom",
+    command: "rg -n \"zmanager-runtime-bridge-root|appRoot\\.innerHTML|privatizeLegacy|writeReactExtractFormToLegacyControls\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src"],
+    pattern: /zmanager-runtime-bridge-root|appRoot\.innerHTML|privatizeLegacy|writeReactExtractFormToLegacyControls/,
+  },
+  {
+    id: "dangerousHtml",
+    command: "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src/ui/react", "src/runtimeBridge.ts"],
+    pattern: /dangerouslySetInnerHTML|html:/,
+  },
+  {
+    id: "legacyViewImports",
+    command: "rg -n 'ui/(archiveWorkspaceView|createWorkspaceView)' src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src"],
+    pattern: /ui\/(?:archiveWorkspaceView|createWorkspaceView)/,
+  },
+  {
+    id: "innerHtml",
+    command: "rg -n \"innerHTML|insertAdjacentHTML\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src"],
+    pattern: /innerHTML|insertAdjacentHTML/,
+  },
+  {
+    id: "broadDomWiring",
+    command: "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    roots: ["src/runtimeBridge.ts", "src/ui/react", "src/app", "src/desktop"],
+    pattern: /document\.querySelector|getElementById|addEventListener/,
+  },
+];
+
+type AllowedLegacyException = Readonly<{
+  id: string;
+  scanId: AuditScanId;
+  targetId: FutureForbiddenTargetId;
+  file: string;
+  line: string;
+  reason: string;
+}>;
+
+const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = [
+  {
+    id: "react-shell-mounts-hidden-runtime-bridge-root",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase7.hidden-legacy-root",
+    file: "src/ui/react/AppShell.tsx",
+    line: '<div id="zmanager-runtime-bridge-root" />',
+    reason: "React still hosts the hidden runtime bridge until the bridge bootstrap is deleted.",
+  },
+  {
+    id: "runtime-bridge-queries-hidden-root",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase7.hidden-legacy-root",
+    file: "src/runtimeBridge.ts",
+    line: 'const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");',
+    reason: "The bridge still locates its hidden legacy host.",
+  },
+  {
+    id: "runtime-bridge-writes-legacy-bootstrap-html",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase7.hidden-legacy-root",
+    file: "src/runtimeBridge.ts",
+    line: "appRoot.innerHTML = `",
+    reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
+  },
+  {
+    id: "archive-surface-id-privatizer",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "function privatizeLegacyArchiveSurfaceIds() {",
+    reason: "Archive legacy DOM IDs are still rewritten while archive string render helpers remain imported.",
+  },
+  {
+    id: "extract-dialog-id-privatizer",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "function privatizeLegacyExtractDialogIds() {",
+    reason: "Extract hidden controls still exist while dialog input moves to explicit controller input.",
+  },
+  {
+    id: "info-about-id-privatizer",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "function privatizeLegacyInfoAboutDialogIds() {",
+    reason: "Info/about hidden dialogs still exist while snapshot-only dialog content is introduced.",
+  },
+  {
+    id: "create-workspace-id-privatizer",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "function privatizeLegacyCreateWorkspaceIds() {",
+    reason: "Create workspace hidden controls still exist while create ownership moves into workspace/controller seams.",
+  },
+  {
+    id: "archive-row-attribute-privatizer-call",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "privatizeLegacyArchiveRowAttributes();",
+    reason: "Archive row attributes still need hidden/visible ID separation during the archive helper migration.",
+  },
+  {
+    id: "archive-row-attribute-privatizer",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "function privatizeLegacyArchiveRowAttributes() {",
+    reason: "Archive row attributes still need hidden/visible ID separation during the archive helper migration.",
+  },
+  {
+    id: "archive-surface-id-privatizer-call",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "privatizeLegacyArchiveSurfaceIds();",
+    reason: "Archive legacy DOM IDs are still rewritten while archive string render helpers remain imported.",
+  },
+  {
+    id: "extract-submit-writes-react-form-to-legacy-controls",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "writeReactExtractFormToLegacyControls(intent);",
+    reason: "React extract submit still syncs through hidden controls before controller start.",
+  },
+  {
+    id: "extract-browse-writes-react-form-to-legacy-controls",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "writeReactExtractFormToLegacyControls(intent);",
+    reason: "React extract browse still syncs through hidden controls before native browse.",
+  },
+  {
+    id: "extract-hidden-control-sync-function",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "function writeReactExtractFormToLegacyControls(input: Extract<ZManagerDialogIntent, { type: \"submitExtract\" | \"browseExtractDestination\" }>) {",
+    reason: "The temporary sync function is the Phase 1 deletion target.",
+  },
+  {
+    id: "extract-dialog-id-privatizer-call",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "privatizeLegacyExtractDialogIds();",
+    reason: "Extract hidden controls still exist while dialog input moves to explicit controller input.",
+  },
+  {
+    id: "info-about-id-privatizer-call",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "privatizeLegacyInfoAboutDialogIds();",
+    reason: "Info/about hidden dialogs still exist while snapshot-only dialog content is introduced.",
+  },
+  {
+    id: "create-workspace-id-privatizer-call",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "privatizeLegacyCreateWorkspaceIds();",
+    reason: "Create workspace hidden controls still exist while create ownership moves into workspace/controller seams.",
+  },
+  {
+    id: "runtime-bridge-root-css",
+    scanId: "hiddenLegacyDom",
+    targetId: "phase7.hidden-legacy-root",
+    file: "src/styles.css",
+    line: "#zmanager-runtime-bridge-root {",
+    reason: "CSS still keeps the hidden runtime bridge root layout-neutral.",
+  },
+];
+
+const ALLOWED_DANGEROUS_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
+  {
+    id: "runtime-context-menu-html-parameter",
+    scanId: "dangerousHtml",
+    targetId: "phase3.typed-context-menu",
+    file: "src/runtimeBridge.ts",
+    line: "function showContextMenu(x: number, y: number, html: string) {",
+    reason: "Context menu snapshots still carry raw HTML until typed menu rows land.",
+  },
+  {
+    id: "archive-row-icon-html-return",
+    scanId: "dangerousHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "html: renderEntryIcon(icon, \"row-icon\", iconDataUrl),",
+    reason: "Archive rows still pass rendered icon HTML into legacy table helpers.",
+  },
+  {
+    id: "create-row-icon-html-return-type",
+    scanId: "dangerousHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "): { html: string; label: string } {",
+    reason: "Create rows still expose rendered icon HTML to legacy table helpers.",
+  },
+  {
+    id: "create-row-icon-html-return",
+    scanId: "dangerousHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "html: renderEntryIcon(icon, \"row-icon\", iconDataUrl),",
+    reason: "Create rows still pass rendered icon HTML into legacy table helpers.",
+  },
+  {
+    id: "react-context-menu-snapshot-html-field",
+    scanId: "dangerousHtml",
+    targetId: "phase3.typed-context-menu",
+    file: "src/ui/react/appRuntime.ts",
+    line: "html: string;",
+    reason: "The React context menu snapshot still stores raw HTML.",
+  },
+  {
+    id: "react-context-menu-dangerous-html-render",
+    scanId: "dangerousHtml",
+    targetId: "phase3.typed-context-menu",
+    file: "src/ui/react/context-menu/ContextMenuRoot.tsx",
+    line: "dangerouslySetInnerHTML={{ __html: menu.visible ? menu.html : \"\" }}",
+    reason: "React still renders context menu HTML until typed menu rows replace it.",
+  },
+];
+
+const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] = [
+  {
+    id: "runtime-imports-archive-legacy-view",
+    scanId: "legacyViewImports",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "} from \"./ui/archiveWorkspaceView\";",
+    reason: "Archive string render helpers remain until archive workspace deepening deletes them.",
+  },
+  {
+    id: "runtime-imports-create-legacy-view",
+    scanId: "legacyViewImports",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "} from \"./ui/createWorkspaceView\";",
+    reason: "Create string render helpers remain until create workspace deepening deletes them.",
+  },
+];
+
+const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
+  {
+    id: "create-source-list-empty-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.sourceListElement.innerHTML = `<li class=\"empty\">${escapeHtml(options.noSourcesLabel)}</li>`;",
+    reason: "Create source list still has legacy string rendering.",
+  },
+  {
+    id: "create-source-list-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.sourceListElement.innerHTML = options.sources",
+    reason: "Create source list still has legacy string rendering.",
+  },
+  {
+    id: "create-plan-summary-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.createPlanSummary.innerHTML = createPlanSummaryHtml(options);",
+    reason: "Create plan summary still has legacy string rendering.",
+  },
+  {
+    id: "create-plan-summary-message-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.createPlanSummary.innerHTML = `<p>${escapeHtml(options.message)}</p>`;",
+    reason: "Create plan summary still has legacy string rendering.",
+  },
+  {
+    id: "create-destination-history-datalist-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.createDestinationHistoryList.innerHTML = options.entries",
+    reason: "Create destination history still has legacy datalist rendering.",
+  },
+  {
+    id: "create-destination-recent-select-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.createDestinationRecentSelect.innerHTML = `",
+    reason: "Create destination recent select still has legacy option rendering.",
+  },
+  {
+    id: "create-compress-source-loading-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.compressSourceBody.innerHTML = `",
+    reason: "Create source table still has legacy string rendering.",
+  },
+  {
+    id: "create-compress-source-empty-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.compressSourceBody.innerHTML = `",
+    reason: "Create source table still has legacy string rendering.",
+  },
+  {
+    id: "create-compress-source-rows-html",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/createWorkspaceView.ts",
+    line: "elements.compressSourceBody.innerHTML = options.rows",
+    reason: "Create source table still has legacy string rendering.",
+  },
+  {
+    id: "archive-details-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.detailsElement.innerHTML = renderArchiveDetailsHtml(options.model, {",
+    reason: "Archive details still have legacy string rendering.",
+  },
+  {
+    id: "archive-tree-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, ARCHIVE_TREE_CONFIG);",
+    reason: "Archive tree still has legacy string rendering.",
+  },
+  {
+    id: "create-tree-html-from-archive-view-helper",
+    scanId: "innerHtml",
+    targetId: "phase4.create-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, CREATE_TREE_CONFIG);",
+    reason: "Create tree still uses the shared legacy archive view helper.",
+  },
+  {
+    id: "archive-path-crumbs-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.pathCrumbsElement.innerHTML = model.crumbs",
+    reason: "Archive path crumbs still have legacy string rendering.",
+  },
+  {
+    id: "archive-table-error-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.tableBody.innerHTML = `",
+    reason: "Archive table still has legacy string rendering.",
+  },
+  {
+    id: "archive-table-empty-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.tableBody.innerHTML = `",
+    reason: "Archive table still has legacy string rendering.",
+  },
+  {
+    id: "archive-table-rows-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.tableBody.innerHTML = options.rows",
+    reason: "Archive table still has legacy string rendering.",
+  },
+  {
+    id: "archive-table-head-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.tableHead.innerHTML = `",
+    reason: "Archive table header still has legacy string rendering.",
+  },
+  {
+    id: "archive-table-tree-rows-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/ui/archiveWorkspaceView.ts",
+    line: "elements.tableBody.innerHTML = `",
+    reason: "Archive tree table still has legacy string rendering.",
+  },
+  {
+    id: "runtime-bridge-bootstrap-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase7.hidden-legacy-root",
+    file: "src/runtimeBridge.ts",
+    line: "appRoot.innerHTML = `",
+    reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
+  },
+  {
+    id: "info-action-group-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "infoActionGroup.innerHTML = actions.map(infoActionButton).join(\"\");",
+    reason: "Info dialog actions still render hidden HTML until snapshots own them.",
+  },
+  {
+    id: "runtime-clears-archive-details-html",
+    scanId: "innerHtml",
+    targetId: "phase5.archive-legacy-render-helpers",
+    file: "src/runtimeBridge.ts",
+    line: "detailsElement.innerHTML = \"\";",
+    reason: "Runtime bridge still imperatively clears the archive details pane.",
+  },
+  {
+    id: "extract-destination-history-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase1.extract-hidden-control-sync",
+    file: "src/runtimeBridge.ts",
+    line: "extractDestinationHistoryList.innerHTML = extractDestinationHistory",
+    reason: "Extract destination history still renders through hidden datalist controls.",
+  },
+  {
+    id: "archive-info-dialog-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "infoDialogBody.innerHTML = `",
+    reason: "Archive info still generates hidden HTML until snapshots are the only source.",
+  },
+  {
+    id: "entry-info-dialog-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "infoDialogBody.innerHTML = `",
+    reason: "Entry info still generates hidden HTML until snapshots are the only source.",
+  },
+  {
+    id: "selection-info-dialog-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "infoDialogBody.innerHTML = `",
+    reason: "Selection info still generates hidden HTML until snapshots are the only source.",
+  },
+  {
+    id: "about-diagnostics-inner-html",
+    scanId: "innerHtml",
+    targetId: "phase2.info-about-hidden-html",
+    file: "src/runtimeBridge.ts",
+    line: "aboutDiagnostics.innerHTML = groups.map((group) => `",
+    reason: "About diagnostics still render hidden HTML until diagnostics serialize from snapshots.",
+  },
+];
+
+const ALLOWED_LEGACY_EXCEPTIONS = [
+  ...ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS,
+  ...ALLOWED_DANGEROUS_HTML_EXCEPTIONS,
+  ...ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS,
+  ...ALLOWED_INNER_HTML_EXCEPTIONS,
+];
+
+const ALLOWED_BROAD_DOM_ACCESS_FILES: readonly Readonly<{
+  file: string;
+  targetId: FutureForbiddenTargetId;
+  reason: string;
+}>[] = [
+  {
+    file: "src/runtimeBridge.ts",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "The bridge still owns legacy DOM queries and event wiring during the migration.",
+  },
+  {
+    file: "src/ui/react/archive/ArchiveTable.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Archive table drag and marquee interactions still attach temporary document listeners.",
+  },
+  {
+    file: "src/ui/react/create/CreateWorkspace.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Create table drag and marquee interactions still attach temporary document listeners.",
+  },
+  {
+    file: "src/ui/react/dialogs/DialogRoot.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "React dialogs still attach an escape-key document listener.",
+  },
+  {
+    file: "src/ui/react/interaction/BrowserFileDropAdapter.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Browser file drop remains an explicit React interaction adapter.",
+  },
+  {
+    file: "src/ui/react/interaction/PaneResizer.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Pane resizing remains an explicit React interaction adapter.",
+  },
+  {
+    file: "src/ui/react/interaction/ShellKeyboardShortcuts.tsx",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Shell shortcuts remain an explicit React interaction adapter.",
+  },
+  {
+    file: "src/ui/react/workspace/tableMarqueeSelection.ts",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Shared table marquee selection still attaches temporary document listeners.",
+  },
+  {
+    file: "src/desktop/previewCleanup.ts",
+    targetId: "phase6.runtime-event-wiring",
+    reason: "Preview cleanup is a named desktop adapter for page lifecycle events.",
+  },
+];
+
+type AllowedImportException = Readonly<{
+  file: string;
+  specifier: string;
+  targetId: FutureForbiddenTargetId;
+  reason: string;
+}>;
+
+const ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS: readonly AllowedImportException[] = [];
+
+type SourceLineMatch = Readonly<{
+  file: string;
+  lineNumber: number;
+  line: string;
+}>;
+
+type ImportReference = Readonly<{
+  file: string;
+  lineNumber: number;
+  specifier: string;
+}>;
+
+function listWorkspaceFiles(...rootParts: string[]): string[] {
+  const root = workspaceFilePath(...rootParts);
+  const files: string[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory)) {
+      const filePath = join(directory, entry);
+      const stat = statSync(filePath);
+      if (stat.isDirectory()) {
+        visit(filePath);
+      } else if (stat.isFile()) {
+        files.push(workspaceRelativePath(filePath));
+      }
+    }
+  };
+  visit(root);
+  return files.sort();
+}
+
+function isProductionSourceFile(file: string): boolean {
+  return /\.(?:css|ts|tsx)$/.test(file) && !/\.test\.(?:ts|tsx)$/.test(file);
+}
+
+function productionSourceFilesFromRoots(roots: readonly string[]): string[] {
+  return uniqueSorted(
+    roots.flatMap((root) => {
+      const rootParts = root.split("/");
+      const rootPath = workspaceFilePath(...rootParts);
+      const stat = statSync(rootPath);
+      if (stat.isFile()) {
+        return [root];
+      }
+      return listWorkspaceFiles(...rootParts);
+    }).filter(isProductionSourceFile),
+  );
+}
+
+function sourceLineMatches(files: readonly string[], pattern: RegExp): SourceLineMatch[] {
+  const linePattern = new RegExp(pattern.source, pattern.flags.replace("g", ""));
+  const matches: SourceLineMatch[] = [];
+  for (const file of files) {
+    const lines = normalizedWorkspaceFile(...file.split("/")).split("\n");
+    lines.forEach((line, index) => {
+      linePattern.lastIndex = 0;
+      if (linePattern.test(line)) {
+        matches.push({ file, lineNumber: index + 1, line: line.trim() });
+      }
+    });
+  }
+  return matches;
+}
+
+function sourceLineMatchesForScan(scanId: AuditScanId): SourceLineMatch[] {
+  const scan = auditScan(scanId);
+  return sourceLineMatches(productionSourceFilesFromRoots(scan.roots), scan.pattern);
+}
+
+function auditScan(scanId: AuditScanId): AuditScanDefinition {
+  const scan = LEGACY_AUDIT_SCANS.find((candidate) => candidate.id === scanId);
+  if (!scan) {
+    throw new Error(`missing audit scan: ${scanId}`);
+  }
+  return scan;
+}
+
+function expectScanMatchesOnlyAllowed(scanId: AuditScanId) {
+  expect(sourceLineMatchesForScan(scanId).map(sourceLineKey).sort()).toEqual(
+    ALLOWED_LEGACY_EXCEPTIONS
+      .filter((exception) => exception.scanId === scanId)
+      .map((exception) => sourceLineKey(exception))
+      .sort(),
+  );
+}
+
+function sourceLineKey(match: Pick<SourceLineMatch, "file" | "line">): string {
+  return JSON.stringify([match.file, match.line.trim()]);
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return Array.from(new Set(values)).sort();
+}
+
+function importReferencesForFiles(files: readonly string[]): ImportReference[] {
+  const references: ImportReference[] = [];
+  const importStatementPattern = /\bimport[\s\S]*?;(?=\n|$)/g;
+
+  for (const file of files) {
+    const source = normalizedWorkspaceFile(...file.split("/"));
+    let match: RegExpExecArray | null;
+    while ((match = importStatementPattern.exec(source)) !== null) {
+      const statement = match[0];
+      const specifier = /\bfrom\s+["']([^"']+)["']/.exec(statement)?.[1]
+        ?? /^import\s+["']([^"']+)["']/.exec(statement.trim())?.[1];
+      if (!specifier) {
+        continue;
+      }
+      references.push({
+        file,
+        lineNumber: source.slice(0, match.index).split("\n").length,
+        specifier,
+      });
+    }
+  }
+
+  return references;
+}
+
+function importReferenceKey(reference: Pick<ImportReference, "file" | "specifier">): string {
+  return JSON.stringify([reference.file, reference.specifier]);
+}
+
+function importTargetFor(reference: Pick<ImportReference, "file" | "specifier">): string {
+  if (!reference.specifier.startsWith(".")) {
+    return reference.specifier;
+  }
+  const directory = reference.file.slice(0, reference.file.lastIndexOf("/"));
+  return normalizePosixPath(`${directory}/${reference.specifier}`);
+}
+
+function importTargetsSrcDirectory(reference: ImportReference, directory: "api" | "desktop" | "ui/react"): boolean {
+  const target = importTargetFor(reference);
+  return target === `src/${directory}` || target.startsWith(`src/${directory}/`);
+}
+
+function normalizePosixPath(path: string): string {
+  const parts: string[] = [];
+  for (const part of path.split("/")) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.join("/");
+}
+
+function controllerDomGlobalMatches(): SourceLineMatch[] {
+  const controllerFiles = productionSourceFilesFromRoots(["src/app/controllers"]);
+  return sourceLineMatches(controllerFiles, /\b(?:document|window)\s*\.|\b(?:HTMLElement|HTMLInputElement|HTMLButtonElement|HTMLDivElement|HTMLTableElement|HTMLDetailsElement|HTMLSelectElement|HTMLTextAreaElement|HTMLDataListElement|HTMLSpanElement|HTMLParagraphElement|HTMLHeadingElement|HTMLOutputElement|Element|Node|KeyboardEvent|MouseEvent|PointerEvent|DragEvent|EventTarget|DataTransfer)\b|\baddEventListener\s*\(/);
+}
+
 function selectorsContainingFirstTableColumnRules(css: string): string[] {
   const selectors: string[] = [];
   const rulePattern = /(^|})\s*([^{}@][^{}]*)\{/g;
@@ -63,11 +829,99 @@ function selectorsContainingFirstTableColumnRules(css: string): string[] {
 }
 
 describe("GUI layout contracts", () => {
+  for (const target of FUTURE_FORBIDDEN_TARGETS) {
+    it.todo(`${target.phase}: final guardrail forbids ${target.description}`);
+  }
+
   it("keeps main.ts as the React composition root while legacy GUI migrates", () => {
     expect(compositionRootSource).toContain('from "./ui/react/AppShell"');
     expect(compositionRootSource).toContain("createRoot(app).render(");
+    expect(compositionRootSource).not.toContain('from "./runtimeBridge"');
+    expect(compositionRootSource).not.toMatch(/from "\.\/(?:api|desktop|app\/controllers|app\/workspaces)\//);
     expect(compositionRootSource).not.toContain("appRoot.innerHTML");
     expect(compositionRootSource).not.toContain("@tauri-apps/api/");
+  });
+
+  it("records the Phase 0 audit rg scans used by the guardrails", () => {
+    expect(LEGACY_AUDIT_SCANS.map((scan) => scan.command)).toEqual([
+      "rg -n \"zmanager-runtime-bridge-root|appRoot\\.innerHTML|privatizeLegacy|writeReactExtractFormToLegacyControls\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n \"dangerouslySetInnerHTML|html:\" src\\ui\\react src\\runtimeBridge.ts --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n 'ui/(archiveWorkspaceView|createWorkspaceView)' src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n \"innerHTML|insertAdjacentHTML\" src --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+      "rg -n \"document\\.querySelector|getElementById|addEventListener\" src\\runtimeBridge.ts src\\ui\\react src\\app src\\desktop --glob '!**/*.test.ts' --glob '!**/*.test.tsx'",
+    ]);
+  });
+
+  it("keeps every allowed Phase 0 legacy exception mapped to a later deletion target", () => {
+    const targetIds = new Set(FUTURE_FORBIDDEN_TARGETS.map((target) => target.id));
+    const scanIds = new Set(LEGACY_AUDIT_SCANS.map((scan) => scan.id));
+    const allowedExceptionIds = ALLOWED_LEGACY_EXCEPTIONS.map((exception) => exception.id);
+    const usedTargetIds = new Set([
+      ...ALLOWED_LEGACY_EXCEPTIONS.map((exception) => exception.targetId),
+      ...ALLOWED_BROAD_DOM_ACCESS_FILES.map((exception) => exception.targetId),
+      ...ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS.map((exception) => exception.targetId),
+    ]);
+
+    expect(allowedExceptionIds.sort()).toEqual(uniqueSorted(allowedExceptionIds));
+    expect(ALLOWED_LEGACY_EXCEPTIONS.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.id)).toEqual([]);
+    expect(ALLOWED_LEGACY_EXCEPTIONS.filter((exception) => !scanIds.has(exception.scanId)).map((exception) => exception.id)).toEqual([]);
+    expect(ALLOWED_BROAD_DOM_ACCESS_FILES.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.file)).toEqual([]);
+    expect(ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.file)).toEqual([]);
+    expect(FUTURE_FORBIDDEN_TARGETS.filter((target) => !usedTargetIds.has(target.id)).map((target) => target.id)).toEqual([]);
+  });
+
+  it("names the remaining hidden legacy DOM and extract sync exceptions", () => {
+    expectScanMatchesOnlyAllowed("hiddenLegacyDom");
+  });
+
+  it("names the remaining raw HTML context-menu and legacy icon HTML exceptions", () => {
+    expectScanMatchesOnlyAllowed("dangerousHtml");
+  });
+
+  it("names the remaining legacy archive/create view imports", () => {
+    expectScanMatchesOnlyAllowed("legacyViewImports");
+  });
+
+  it("names the remaining innerHTML legacy renderer exceptions", () => {
+    expectScanMatchesOnlyAllowed("innerHtml");
+  });
+
+  it("keeps broad DOM event wiring limited to named runtime, interaction, and desktop seams", () => {
+    expect(uniqueSorted(sourceLineMatchesForScan("broadDomWiring").map((match) => match.file))).toEqual(
+      ALLOWED_BROAD_DOM_ACCESS_FILES.map((exception) => exception.file).sort(),
+    );
+  });
+
+  it("keeps React UI modules from importing api or desktop directly except named interaction adapters", () => {
+    const allowedImports = new Set(ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS.map(importReferenceKey));
+    const violations = importReferencesForFiles(productionSourceFilesFromRoots(["src/ui/react"]))
+      .filter((reference) => importTargetsSrcDirectory(reference, "api") || importTargetsSrcDirectory(reference, "desktop"))
+      .filter((reference) => !allowedImports.has(importReferenceKey(reference)));
+    const invalidExceptions = ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS
+      .filter((exception) => !exception.file.startsWith("src/ui/react/interaction/"));
+
+    expect(violations.map((reference) => `${reference.file}:${reference.lineNumber}: ${reference.specifier}`)).toEqual([]);
+    expect(invalidExceptions.map((exception) => `${exception.file}: ${exception.specifier}`)).toEqual([]);
+  });
+
+  it("keeps app controllers free of React, DOM globals, desktop adapters, and Tauri imports", () => {
+    const controllerFiles = productionSourceFilesFromRoots(["src/app/controllers"]);
+    const importViolations = importReferencesForFiles(controllerFiles)
+      .filter((reference) =>
+        reference.specifier === "react"
+        || reference.specifier.startsWith("react/")
+        || reference.specifier === "react-dom"
+        || reference.specifier.startsWith("react-dom/")
+        || reference.specifier.startsWith("@tauri-apps/")
+        || importTargetsSrcDirectory(reference, "desktop")
+        || importTargetsSrcDirectory(reference, "ui/react")
+      )
+      .map((reference) => `${reference.file}:${reference.lineNumber}: ${reference.specifier}`);
+    const domViolations = controllerDomGlobalMatches()
+      .map((match) => `${match.file}:${match.lineNumber}: ${match.line}`);
+
+    expect(importViolations).toEqual([]);
+    expect(domViolations).toEqual([]);
   });
 
   it("keeps the Windows 11 native look foundation explicit", () => {
