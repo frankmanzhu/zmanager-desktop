@@ -72,7 +72,7 @@ export function MenuBar() {
               aria-keyshortcuts={`Alt+${accessKey.toUpperCase()}`}
               onClick={(event) => {
                 event.preventDefault();
-                setOpenGroupLabel((current) => (current === group.label ? null : group.label));
+                setOpenGroupLabel(group.label);
               }}
             >
               {localizedMenuGroupLabel(group.label, snapshot)}

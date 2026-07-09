@@ -68,8 +68,10 @@ function useDialogFocusRestoration(dialog: ZManagerDialogSnapshot, archiveFocuse
       const returnFocusTarget = returnFocusRef.current;
       returnFocusRef.current = null;
       window.requestAnimationFrame(() => {
-        const target = focusableConnectedElement(returnFocusTarget)
-          ?? focusTargetForClosedDialog(previousDialog, archiveFocusedPath);
+        const fallbackTarget = focusTargetForClosedDialog(previousDialog, archiveFocusedPath);
+        const target = previousDialog.kind === "info"
+          ? fallbackTarget ?? focusableConnectedElement(returnFocusTarget)
+          : focusableConnectedElement(returnFocusTarget) ?? fallbackTarget;
         target?.focus();
       });
     }

@@ -1210,10 +1210,14 @@ function suggestedDestinationPathFromOptions(
   format: CreateArchiveFormat,
   options: CreateWorkspaceDestinationSuggestionOptions,
 ): string {
+  const sourceParentDirectory = commonSourceParentDirectory(sources, options);
   const directory =
     normalizedOptionalPath(options.defaultDirectory) ??
-    commonSourceParentDirectory(sources, options);
-  const name = suggestedCreateArchiveName([...sources], format);
+    sourceParentDirectory;
+  const nameSource = sources.length > 1
+    ? sourceParentDirectory ? [sourceParentDirectory] : []
+    : [...sources];
+  const name = suggestedCreateArchiveName(nameSource, format);
   return directory ? joinNativePath(directory, name) : name;
 }
 

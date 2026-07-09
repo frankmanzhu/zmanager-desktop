@@ -25,7 +25,9 @@ describe("React context menu root", () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain("Open Archive");
     expect(html).toContain("Show Size");
-    expect(html).not.toContain("data-context-action");
+    expect(html).toContain('data-context-action="open-archive"');
+    expect(html).toContain('data-context-action="toggle-column"');
+    expect(html).toContain('data-column-id="size"');
   });
 
   it("keeps hidden context menus empty", () => {

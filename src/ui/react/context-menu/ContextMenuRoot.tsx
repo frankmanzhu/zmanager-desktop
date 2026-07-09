@@ -99,6 +99,11 @@ function renderContextMenuItem(
           key={contextMenuItemKey(item, index)}
           type="button"
           role="menuitem"
+          data-context-action={item.payload.action}
+          data-column-id={item.payload.columnId}
+          data-archive-path={item.payload.archivePath}
+          data-entry-path={item.payload.entryPath}
+          data-source-path={item.payload.sourcePath}
           disabled={item.disabled}
           aria-disabled={item.disabled ? true : undefined}
           title={item.title ?? item.disabledReason}
@@ -117,6 +122,11 @@ function renderContextMenuItem(
           type="button"
           className="context-check-item"
           role="menuitemcheckbox"
+          data-context-action={item.payload.action}
+          data-column-id={item.payload.columnId}
+          data-archive-path={item.payload.archivePath}
+          data-entry-path={item.payload.entryPath}
+          data-source-path={item.payload.sourcePath}
           aria-checked={item.checked ? "true" : "false"}
           disabled={item.disabled}
           aria-disabled={item.disabled ? true : undefined}

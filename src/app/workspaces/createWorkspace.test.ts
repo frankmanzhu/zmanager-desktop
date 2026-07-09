@@ -1101,19 +1101,29 @@ describe("create workspace option and readiness state", () => {
     expect(workspace.suggestedDestinationPath({
       ...pathHelpers,
       defaultDirectory: "E:/out",
-    })).toBe("E:/out/project.tzst");
+    })).toBe("E:/out/work.tzst");
 
-    expect(workspace.suggestedDestinationPath(pathHelpers)).toBe("C:/work/project.tzst");
+    expect(workspace.suggestedDestinationPath(pathHelpers)).toBe("C:/work/work.tzst");
 
     const suggested = workspace.suggestDestinationPathIfBlank(pathHelpers);
 
     expect(suggested.changed).toBe(true);
-    expect(suggested.destinationPath).toBe("C:/work/project.tzst");
+    expect(suggested.destinationPath).toBe("C:/work/work.tzst");
     expect(workspace.suggestDestinationPathIfBlank({
       ...pathHelpers,
       defaultDirectory: "F:/ignored",
     }).changed).toBe(false);
-    expect(workspace.getSnapshot().options.destinationPath).toBe("C:/work/project.tzst");
+    expect(workspace.getSnapshot().options.destinationPath).toBe("C:/work/work.tzst");
+  });
+
+  it("uses a generic destination name for multiple browser sources without a parent directory", () => {
+    const workspace = createCreateWorkspace();
+    workspace.addSources([
+      "very-long-file-name-that-should-not-break-the-compress-table-layout-report-final.pdf",
+      "deeply-nested-folder-with-a-long-name",
+    ]);
+
+    expect(workspace.suggestedDestinationPath(pathHelpers)).toBe("archive.tzst");
   });
 
   it("changes formats by applying defaults and replacing an existing destination extension", () => {
