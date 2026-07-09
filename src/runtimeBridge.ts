@@ -335,11 +335,6 @@ declare global {
   }
 }
 
-const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");
-if (!app) {
-  throw new Error("missing runtime bridge root");
-}
-const appRoot = app;
 const useLinuxWindowChrome = isDesktopRuntime() && /\bLinux\b/i.test(navigator.userAgent);
 if (useLinuxWindowChrome) {
   document.body.classList.add("linux-window-chrome");
@@ -357,140 +352,6 @@ document.documentElement.style.setProperty("--zmanager-details-pane-min", `${APP
 document.documentElement.style.setProperty("--zmanager-details-pane-width", `${APP_DETAILS_PANE_DEFAULT_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-details-pane-max", `${APP_DETAILS_PANE_MAX_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
-
-appRoot.innerHTML = `
-    <div id="legacy-context-menu" class="context-menu" role="menu" hidden></div>
-
-    <div id="extract-dialog" class="dialog-backdrop" hidden>
-      <section class="dialog task-dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title" tabindex="-1" data-dialog-default="#extract-start" data-dialog-cancel="#extract-cancel">
-        <div class="dialog-header">
-          <div>
-            <h2 id="extract-title" data-i18n-text="extract.title">Extract</h2>
-            <p id="extract-dialog-message" data-i18n-text="extract.description">Choose a destination before starting.</p>
-          </div>
-          <button id="extract-dialog-close" class="icon-button" type="button" data-i18n-aria-label="extract.close.aria" data-i18n-text="common.close" aria-label="Close extract dialog">Close</button>
-        </div>
-        <div class="dialog-body">
-          <section class="dialog-section">
-            <h3 data-i18n-text="extract.destination">Extract to</h3>
-            <label class="field-row">
-              <span data-i18n-text="extract.destination">Extract to</span>
-              <div class="inline-field">
-                <input
-                  id="extract-destination"
-                  type="text"
-                  data-i18n-placeholder="extract.destination.placeholder"
-                  placeholder="Select a destination folder"
-                  list="extract-destination-history"
-                />
-                <datalist id="extract-destination-history"></datalist>
-                <button id="browse-extract-destination" type="button" data-i18n-text="common.browse" data-i18n-title="nativeDialog.chooseExtractDestination" title="Choose extract destination">Browse...</button>
-              </div>
-            </label>
-            <div class="form-grid form-grid-compact">
-              <label class="checkbox-row">
-                <input id="extract-use-subfolder" type="checkbox" />
-                <span data-i18n-text="extract.toSubfolder">Extract to subfolder</span>
-              </label>
-              <label>
-                <span data-i18n-text="extract.subfolder">Subfolder</span>
-                <input id="extract-subfolder" type="text" data-i18n-placeholder="common.optional" placeholder="Optional" />
-              </label>
-            </div>
-          </section>
-          <section class="dialog-section extract-options-section">
-            <h3 data-i18n-text="extract.advancedOptions">Advanced options</h3>
-            <div class="form-grid form-grid-compact">
-              <label>
-                <span data-i18n-text="extract.pathMode">Path mode</span>
-                <select id="extract-path-mode">
-                  <option value="full" data-i18n-text="extract.pathMode.full">Full paths</option>
-                  <option value="current" data-i18n-text="extract.pathMode.current">Current folder</option>
-                  <option value="none" data-i18n-text="extract.pathMode.none">No paths</option>
-                </select>
-              </label>
-              <label>
-                <span data-i18n-text="extract.overwritePolicy">Overwrite policy</span>
-                <select id="browse-overwrite">
-                  <option value="ask" data-i18n-text="extract.overwrite.ask">Ask</option>
-                  <option value="refuse" data-i18n-text="extract.overwrite.refuse">Refuse</option>
-                  <option value="rename" data-i18n-text="extract.overwrite.rename">Rename</option>
-                  <option value="replace" data-i18n-text="extract.overwrite.replace">Replace</option>
-                </select>
-              </label>
-            </div>
-            <details class="advanced-options">
-              <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
-              <div class="form-grid form-grid-compact">
-                <label>
-                  <span data-i18n-text="extract.stripComponents">Strip components</span>
-                  <input id="browse-strip-components" type="number" min="0" max="8" value="0" />
-                </label>
-                <label class="checkbox-row">
-                  <input id="extract-deduplicate-root" type="checkbox" />
-                  <span data-i18n-text="extract.deduplicateRoot">Eliminate duplicated root folder</span>
-                </label>
-              </div>
-            </details>
-            <details class="advanced-options extract-password-options">
-              <summary data-i18n-text="extract.password">Password</summary>
-              <div class="form-grid form-grid-compact">
-                <label>
-                  <span data-i18n-text="extract.password">Password</span>
-                  <input id="browse-password" type="password" autocomplete="off" />
-                </label>
-              <label class="checkbox-row">
-                <input id="browse-show-password" type="checkbox" />
-                <span data-i18n-text="extract.showPassword">Show Password</span>
-              </label>
-              </div>
-            </details>
-          </section>
-        </div>
-        <div class="dialog-actions">
-          <button id="extract-start" type="button" data-dialog-default-button data-i18n-text="command.extract" disabled>Extract</button>
-          <button id="extract-cancel" type="button" data-dialog-cancel-button data-i18n-text="common.cancel">Cancel</button>
-        </div>
-      </section>
-    </div>
-
-`;
-
-function privatizeLegacyExtractDialogIds() {
-  const extractDialog = appRoot.querySelector<HTMLDivElement>("#extract-dialog");
-  if (!extractDialog) {
-    return;
-  }
-
-  const publicExtractIds = [
-    "extract-dialog-close",
-    "extract-title",
-    "extract-dialog-message",
-    "extract-destination",
-    "extract-destination-history",
-    "browse-extract-destination",
-    "extract-use-subfolder",
-    "extract-subfolder",
-    "extract-path-mode",
-    "browse-overwrite",
-    "browse-strip-components",
-    "extract-deduplicate-root",
-    "browse-password",
-    "browse-show-password",
-    "extract-start",
-    "extract-cancel",
-  ];
-
-  for (const id of publicExtractIds) {
-    const element = extractDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-}
-
 
 let appPreferences: AppPreferences = loadAppPreferences();
 const shellWorkspace = createShellWorkspace();
@@ -4010,7 +3871,6 @@ function handleInfoDialogAction(action?: string, copyValue?: string) {
   }
 }
 
-privatizeLegacyExtractDialogIds();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();
 pathHistoryStore.load();

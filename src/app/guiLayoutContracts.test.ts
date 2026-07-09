@@ -68,7 +68,7 @@ const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalControl
 const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
-type FutureForbiddenTargetId = "phase7.hidden-legacy-root";
+type FutureForbiddenTargetId = never;
 
 type FutureForbiddenTarget = Readonly<{
   id: FutureForbiddenTargetId;
@@ -76,13 +76,7 @@ type FutureForbiddenTarget = Readonly<{
   description: string;
 }>;
 
-const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase7.hidden-legacy-root",
-    phase: "Phase 7",
-    description: "the hidden runtime bridge root and legacy DOM bootstrap are deleted",
-  },
-];
+const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [];
 
 type AuditScanId =
   | "hiddenLegacyDom"
@@ -140,71 +134,13 @@ type AllowedLegacyException = Readonly<{
   reason: string;
 }>;
 
-const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "react-shell-mounts-hidden-runtime-bridge-root",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/ui/react/AppShell.tsx",
-    line: '<div id="zmanager-runtime-bridge-root" />',
-    reason: "React still hosts the hidden runtime bridge until the bridge bootstrap is deleted.",
-  },
-  {
-    id: "runtime-bridge-queries-hidden-root",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/runtimeBridge.ts",
-    line: 'const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");',
-    reason: "The bridge still locates its hidden legacy host.",
-  },
-  {
-    id: "runtime-bridge-writes-legacy-bootstrap-html",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/runtimeBridge.ts",
-    line: "appRoot.innerHTML = `",
-    reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
-  },
-  {
-    id: "extract-dialog-id-privatizer",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/runtimeBridge.ts",
-    line: "function privatizeLegacyExtractDialogIds() {",
-    reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
-  },
-  {
-    id: "extract-dialog-id-privatizer-call",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/runtimeBridge.ts",
-    line: "privatizeLegacyExtractDialogIds();",
-    reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
-  },
-  {
-    id: "runtime-bridge-root-css",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/styles.css",
-    line: "#zmanager-runtime-bridge-root {",
-    reason: "CSS still keeps the hidden runtime bridge root layout-neutral.",
-  },
-];
+const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
 const ALLOWED_DANGEROUS_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
 const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
-const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "runtime-bridge-bootstrap-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase7.hidden-legacy-root",
-    file: "src/runtimeBridge.ts",
-    line: "appRoot.innerHTML = `",
-    reason: "The hidden legacy DOM bootstrap remains until all bridge dependencies move out.",
-  },
-];
+const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [];
 
 const ALLOWED_LEGACY_EXCEPTIONS = [
   ...ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS,
@@ -217,10 +153,6 @@ const ALLOWED_BROAD_DOM_ACCESS_FILES: readonly Readonly<{
   file: string;
   reason: string;
 }>[] = [
-  {
-    file: "src/runtimeBridge.ts",
-    reason: "The bridge still queries the hidden runtime root until the bootstrap is deleted.",
-  },
   {
     file: "src/ui/react/archive/ArchiveTable.tsx",
     reason: "Archive table drag and marquee interactions still attach temporary document listeners.",
@@ -446,7 +378,7 @@ describe("GUI layout contracts", () => {
     it.todo(`${target.phase}: final guardrail forbids ${target.description}`);
   }
 
-  it("keeps main.ts as the React composition root while legacy GUI migrates", () => {
+  it("keeps main.ts as the React composition root", () => {
     expect(compositionRootSource).toContain('from "./ui/react/AppShell"');
     expect(compositionRootSource).toContain("createRoot(app).render(");
     expect(compositionRootSource).not.toContain('from "./runtimeBridge"');
@@ -465,7 +397,7 @@ describe("GUI layout contracts", () => {
     ]);
   });
 
-  it("keeps every allowed Phase 0 legacy exception mapped to a later deletion target", () => {
+  it("keeps every allowed architecture exception mapped to a later deletion target", () => {
     const targetIds = new Set(FUTURE_FORBIDDEN_TARGETS.map((target) => target.id));
     const scanIds = new Set(LEGACY_AUDIT_SCANS.map((scan) => scan.id));
     const allowedExceptionIds = ALLOWED_LEGACY_EXCEPTIONS.map((exception) => exception.id);
@@ -481,11 +413,11 @@ describe("GUI layout contracts", () => {
     expect(FUTURE_FORBIDDEN_TARGETS.filter((target) => !usedTargetIds.has(target.id)).map((target) => target.id)).toEqual([]);
   });
 
-  it("names the remaining hidden legacy DOM exceptions", () => {
+  it("forbids the hidden legacy DOM bootstrap", () => {
     expectScanMatchesOnlyAllowed("hiddenLegacyDom");
   });
 
-  it("names the remaining legacy icon HTML exceptions", () => {
+  it("forbids dangerous React and runtime HTML rendering exceptions", () => {
     expectScanMatchesOnlyAllowed("dangerousHtml");
   });
 
@@ -501,7 +433,7 @@ describe("GUI layout contracts", () => {
     expect(contextMenuRootSource).not.toContain("dangerouslySetInnerHTML");
   });
 
-  it("names the remaining legacy archive/create view imports", () => {
+  it("forbids legacy archive/create view imports", () => {
     expectScanMatchesOnlyAllowed("legacyViewImports");
   });
 
@@ -518,7 +450,7 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain("snapshot.create.selection.focusedPath");
   });
 
-  it("names the remaining innerHTML legacy renderer exceptions", () => {
+  it("forbids runtime and app innerHTML renderers", () => {
     expectScanMatchesOnlyAllowed("innerHtml");
   });
 
@@ -528,12 +460,10 @@ describe("GUI layout contracts", () => {
     );
   });
 
-  it("keeps runtime bridge DOM access limited to the Phase 7 hidden root query", () => {
+  it("keeps runtime bridge free of DOM access and UI event wiring", () => {
     expect(sourceLineMatches(["src/runtimeBridge.ts"], /document\.querySelector|getElementById|addEventListener/)
       .map(sourceLineKey)
-      .sort()).toEqual([
-        JSON.stringify(["src/runtimeBridge.ts", 'const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");']),
-      ]);
+      .sort()).toEqual([]);
   });
 
   it("keeps React UI modules from importing api or desktop directly except named interaction adapters", () => {
@@ -597,7 +527,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('<header class="command-toolbar mode-toolbar"');
     expect(mainSource).not.toContain('<footer class="status-bar"');
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
-    expect(styles).toContain("#zmanager-runtime-bridge-root {\n  display: contents;");
+    expect(styles).not.toContain("#zmanager-runtime-bridge-root");
     expect(styles).toContain(".command-strip {");
     expect(styles).toContain(".toolbar-group-label {");
   });
@@ -645,11 +575,11 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps dialogs on shared native task and property primitives", () => {
-    expect(mainSource).toContain('class="dialog task-dialog"');
+    expect(dialogRootSource).toContain('className="dialog task-dialog"');
     expect(dialogRootSource).toContain('className="dialog property-dialog"');
     expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
-    expect(mainSource).toContain('data-dialog-default="#extract-start"');
-    expect(mainSource).toContain('data-dialog-cancel="#extract-cancel"');
+    expect(dialogRootSource).toContain('id="extract-start"');
+    expect(dialogRootSource).toContain('id="extract-cancel"');
     expect(mainSource).not.toContain('from "./ui/modalController"');
     expect(mainSource).not.toContain("const modalController = createModalController");
     expect(dialogRootSource).toContain("function useDialogFocusRestoration");
@@ -749,10 +679,10 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps Extract selected validation and optional fields native", () => {
-    expect(mainSource).toContain('<button id="extract-start" type="button" data-dialog-default-button data-i18n-text="command.extract" disabled>Extract</button>');
     expect(mainSource).toContain("function requestExtractPasswordInDialog");
     expect(appShellSource).toContain("<DialogRoot />");
     expect(dialogRootSource).toContain('id="extract-destination"');
+    expect(dialogRootSource).toContain('id="extract-start"');
     expect(dialogRootSource).toContain('type: "submitExtract"');
     expect(dialogRootSource).toContain('type: "browseExtractDestination"');
     expect(mainSource).toContain("function buildReactExtractDialogSnapshot");
@@ -770,7 +700,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain("target instanceof HTMLInputElement");
     expect(dialogRootSource).toContain('onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}');
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
-    expect(mainSource).toContain('class="advanced-options extract-password-options"');
+    expect(dialogRootSource).toContain('className="advanced-options extract-password-options"');
     expect(mainSource).not.toContain("browsePasswordInput");
     expect(extractStartControllerSource).not.toContain("readInput");
     expect(extractStartControllerSource).toContain("startExtract(mode: ExtractMode, input: ExtractStartInput)");

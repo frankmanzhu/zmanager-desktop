@@ -71,7 +71,6 @@ export function AppShell() {
         <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
           <QuickActionProgress />
           <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
-          <div id="zmanager-runtime-bridge-root" />
           <JobsDrawer />
           <ContextMenuRoot />
           <DialogRoot />
