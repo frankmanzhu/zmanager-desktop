@@ -59,15 +59,20 @@ function statusBarModel(snapshot: ZManagerReactSnapshot): StatusBarModel {
   }
 
   return {
-    selectionCountText: `${selection.visibleSelectedCount} / ${selection.visibleSelectablePaths.length} object(s) selected`,
+    selectionCountText: i18n.t("status.selectionCount", {
+      selected: selection.visibleSelectedCount,
+      total: selection.visibleSelectablePaths.length,
+    }),
     selectionSizeText: selection.visibleSelectedSize > 0
-      ? formatBytes(selection.visibleSelectedSize, { locale })
+      ? i18n.t("status.selectedSize", { size: formatBytes(selection.visibleSelectedSize, { locale }) })
       : "",
     focusedSizeText: focusedEntry?.size !== undefined
-      ? formatBytes(focusedEntry.size, { locale })
+      ? i18n.t("status.focusedSize", { size: formatBytes(focusedEntry.size, { locale }) })
       : "",
     focusedModifiedText: focusedEntry?.modified
-      ? formatDate(focusedEntry.modified, { locale, emptyValue: "" })
+      ? i18n.t("status.focusedModified", {
+        date: formatDate(focusedEntry.modified, { locale, emptyValue: "" }),
+      })
       : "",
     activeJobText: activeJobText(snapshot),
   };

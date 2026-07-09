@@ -22,6 +22,13 @@ function normalizedWorkspaceFile(...parts: string[]): string {
 const styles = normalizedWorkspaceFile("src", "styles.css");
 const compositionRootSource = normalizedWorkspaceFile("src", "main.ts");
 const mainSource = normalizedWorkspaceFile("src", "legacyMain.ts");
+const appShellSource = normalizedWorkspaceFile("src", "ui", "react", "AppShell.tsx");
+const appFrameSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
+const menuBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "MenuBar.tsx");
+const commandToolbarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "CommandToolbar.tsx");
+const statusBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "StatusBar.tsx");
+const dropOverlaySource = normalizedWorkspaceFile("src", "ui", "react", "shell", "DropOverlay.tsx");
+const dialogRootSource = normalizedWorkspaceFile("src", "ui", "react", "dialogs", "DialogRoot.tsx");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
 const shellViewSource = normalizedWorkspaceFile("src", "ui", "shellView.ts");
@@ -74,18 +81,25 @@ describe("GUI layout contracts", () => {
   });
 
   it("renders the classic menu, command strip, and durable status surface visibly", () => {
-    expect(mainSource).toContain('<nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">');
-    expect(mainSource).toContain('<div class="command-strip">');
-    expect(mainSource).toContain('data-command-group="${group.id}"');
-    expect(mainSource).toContain('<span id="workspace-status" class="status-part workspace-status"');
+    expect(appShellSource).toContain("<AppFrame>");
+    expect(appFrameSource).toContain('className={workspaceClassName(snapshot)}');
+    expect(menuBarSource).toContain('className="app-menu"');
+    expect(commandToolbarSource).toContain('className="command-strip"');
+    expect(commandToolbarSource).toContain("data-command-group={group.id}");
+    expect(statusBarSource).toContain('id="workspace-status"');
+    expect(mainSource).not.toContain('<nav class="app-menu"');
+    expect(mainSource).not.toContain('<header class="command-toolbar mode-toolbar"');
+    expect(mainSource).not.toContain('<footer class="status-bar"');
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
+    expect(styles).toContain("#zmanager-legacy-root {\n  display: contents;");
     expect(styles).toContain(".command-strip {");
     expect(styles).toContain(".toolbar-group-label {");
   });
 
-  it("keeps status selection and focus text rendering in the shell view", () => {
-    expect(shellViewSource).toContain("function renderShellStatusBar");
-    expect(mainSource).toContain("renderShellStatusBar(shellStatusBarElements");
+  it("keeps status selection and focus text rendering in React shell chrome", () => {
+    expect(statusBarSource).toContain("function statusBarModel");
+    expect(statusBarSource).toContain("selection.visibleSelectedCount");
+    expect(mainSource).not.toContain("renderShellStatusBar(shellStatusBarElements");
     expect(mainSource).not.toMatch(
       /status(?:SelectionCount|SelectionSize|FocusedSize|FocusedModified)Element\.textContent/,
     );
@@ -237,7 +251,13 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain("function requestExtractPasswordInDialog");
     expect(mainSource).toContain("function handleExtractDialogEnter");
     expect(mainSource).toContain('extractStartButton.classList.toggle("primary-action", canExtract);');
-    expect(mainSource).toContain('openModal(extractDialog, "#extract-destination");');
+    expect(appShellSource).toContain("<DialogRoot />");
+    expect(dialogRootSource).toContain('id="extract-destination"');
+    expect(dialogRootSource).toContain('type: "submitExtract"');
+    expect(dialogRootSource).toContain('type: "browseExtractDestination"');
+    expect(mainSource).toContain("setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));");
+    expect(mainSource).toContain("closeExtractDialog: closeReactDialog");
+    expect(mainSource).toContain("writeReactExtractFormToLegacyControls(intent);");
     expect(mainSource).toContain('extractDialog.addEventListener("keydown", handleExtractDialogEnter);');
     expect(mainSource).toContain('extractDestinationInput.addEventListener("input", syncExtractDialogState);');
     expect(mainSource).toContain("function isDefaultSafeDialogTextEntry");
@@ -394,16 +414,18 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps drag and drop affordances local, explicit, and deterministic", () => {
-    expect(mainSource).toContain('id="drop-overlay-actions"');
-    expect(mainSource).toContain('data-drop-choice="open-archive"');
-    expect(mainSource).toContain('data-drop-choice="add-compress"');
+    expect(dropOverlaySource).toContain('id="drop-overlay-actions"');
+    expect(dropOverlaySource).toContain('data-drop-choice="open-archive"');
+    expect(dropOverlaySource).toContain('data-drop-choice="add-compress"');
+    expect(appFrameSource).toContain("data-drop-state={snapshot.shell.dropOverlay.mode}");
+    expect(appFrameSource).toContain("data-drop-target={snapshot.shell.dropOverlay.copy?.target}");
+    expect(mainSource).not.toContain('<div id="drop-overlay"');
     expect(shellWorkspaceSource).toContain('export type DropOverlayMode = "idle" | "active" | "choosing";');
     expect(shellViewSource).toContain("elements.workspace.dataset.dropTarget = copy.target;");
     expect(mainSource).toContain("setDropOverlayChoice(decision, dropCopyForDecision(decision));");
     expect(shellWorkspaceSource).toContain("setDropOverlayChoice(choice, copy)");
-    expect(mainSource).toContain("focusDropOverlayPrimaryAction(shellViewElements);");
-    expect(shellViewSource).toContain('elements.dropOverlay.addEventListener("keydown"');
-    expect(shellViewSource).toContain('elements.dropOverlayActions.addEventListener("click"');
+    expect(mainSource).toContain('document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();');
+    expect(dropOverlaySource).toContain('actions.handleDesktopIntent({ type: "dropChoice", choice: "openArchive" })');
     expect(mainSource).toContain('droppedPathsFromDataTransfer');
     expect(mainSource).toContain('droppedPathsFromDesktopEvent');
     expect(mainSource).not.toContain("window.confirm(");

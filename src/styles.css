@@ -259,6 +259,10 @@ p {
   color: var(--text);
 }
 
+#zmanager-legacy-root {
+  display: contents;
+}
+
 .workspace.toolbar-hidden {
   grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:

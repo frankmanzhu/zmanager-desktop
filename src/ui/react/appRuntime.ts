@@ -8,7 +8,8 @@ import type { CommandRouterPayload } from "../../app/commands/commandRouter";
 import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
 import type { ExtractMode } from "../../app/extractFlow";
-import { DEFAULT_APP_PREFERENCES, preferencesWithPatch, type AppPreferences } from "../../app/preferences";
+import type { ArchiveTableColumnId } from "../../app/archiveTable";
+import { DEFAULT_APP_PREFERENCES, preferencesWithPatch, type AppPreferencePatch, type AppPreferences, type FormatCreateDefaults } from "../../app/preferences";
 import { createPathHistoryStore, type PathHistorySnapshot } from "../../app/pathHistory";
 import { createShellWorkspace, type ShellWorkspaceSnapshot } from "../../app/shell/shellWorkspace";
 import { createArchiveWorkspace, type ArchiveWorkspaceSnapshot } from "../../app/workspaces/archiveWorkspace";
@@ -32,17 +33,75 @@ export type ZManagerReactCommandSnapshot = Readonly<{
   secondaryCommandIds: readonly CommandId[];
 }>;
 
+export type ZManagerCreateSelectionSnapshot = Readonly<{
+  selectedPaths: readonly string[];
+  focusedPath: string;
+}>;
+
+export type ZManagerDialogDetailRow = Readonly<{
+  label: string;
+  value: string;
+  mode?: "wrap" | "middle";
+}>;
+
+export type ZManagerDialogAction = Readonly<{
+  label: string;
+  action?: string;
+  copyValue?: string;
+  primary?: boolean;
+  title?: string;
+}>;
+
+export type ZManagerDialogSnapshot =
+  | Readonly<{ kind: "none" }>
+  | Readonly<{
+      kind: "extract";
+      mode: ExtractMode;
+      title: string;
+      message: string;
+      startLabel: string;
+      destination: string;
+      destinationHistory: readonly string[];
+      useSubfolder: boolean;
+      subfolder: string;
+      pathMode: "full" | "current" | "none";
+      overwrite: string;
+      stripComponents: string;
+      deduplicateRoot: boolean;
+      passwordPromptOpen: boolean;
+    }>
+  | Readonly<{
+      kind: "info";
+      title: string;
+      description: string;
+      sectionTitle: string;
+      rows: readonly ZManagerDialogDetailRow[];
+      actions: readonly ZManagerDialogAction[];
+      returnFocusPath: string;
+    }>
+  | Readonly<{
+      kind: "about";
+      title: string;
+      groups: readonly Readonly<{
+        title: string;
+        rows: readonly (readonly [string, string])[];
+      }>[];
+    }>;
+
 export type ZManagerReactSnapshot = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
+  createSelection: ZManagerCreateSelectionSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
+  systemIcons: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft: AppPreferences | null;
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
+  dialog: ZManagerDialogSnapshot;
 }>;
 
 export type ZManagerArchiveIntent =
@@ -52,16 +111,46 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
   | Readonly<{ type: "setFlatView"; flatView: boolean; persistPreference?: boolean }>
-  | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>;
+  | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
+  | Readonly<{ type: "sortByColumn"; columnId: ArchiveTableColumnId }>
+  | Readonly<{ type: "selectAllVisible" }>
+  | Readonly<{ type: "clearSelection" }>
+  | Readonly<{
+      type: "selectRow";
+      path: string;
+      ctrlKey?: boolean;
+      metaKey?: boolean;
+      shiftKey?: boolean;
+    }>
+  | Readonly<{ type: "setRowSelected"; path: string; selected: boolean }>
+  | Readonly<{ type: "activateRow"; path: string; rowKind: "folder" | "entry" | "parent" }>
+  | Readonly<{ type: "copyDetailsValue"; value: string }>
+  | Readonly<{ type: "showEmptyContextMenu"; x: number; y: number }>
+  | Readonly<{ type: "showColumnContextMenu"; columnId: ArchiveTableColumnId; x: number; y: number }>
+  | Readonly<{ type: "showRowContextMenu"; path: string; rowKind: "folder" | "entry" | "parent"; x: number; y: number }>
+  | Readonly<{ type: "runDetailsAction"; action: string }>;
 
 export type ZManagerCreateIntent =
   | Readonly<{ type: "showWorkspace" }>
+  | Readonly<{ type: "showAddSourcesMenu"; x: number; y: number }>
   | Readonly<{ type: "clearSources" }>
   | Readonly<{ type: "removeSources"; sourcePaths: readonly string[] }>
+  | Readonly<{ type: "showSourceContextMenu"; sourcePath: string; x: number; y: number }>
   | Readonly<{ type: "setDestinationPath"; destinationPath: string }>
+  | Readonly<{ type: "browseDestination" }>
+  | Readonly<{ type: "changeFormat"; format: CreateWorkspaceSnapshot["options"]["format"] }>
   | Readonly<{ type: "setOptions"; patch: CreateWorkspaceOptionPatch }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
-  | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>;
+  | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
+  | Readonly<{ type: "setPathIncluded"; path: string; included: boolean }>
+  | Readonly<{ type: "setAllIncluded"; included: boolean }>
+  | Readonly<{ type: "setCurrentFolderIncluded"; included: boolean }>
+  | Readonly<{ type: "selectRow"; path: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }>
+  | Readonly<{ type: "toggleRowSelection"; path: string }>
+  | Readonly<{ type: "focusRow"; path: string }>
+  | Readonly<{ type: "removeSelectedSources"; fallbackSourcePath?: string }>
+  | Readonly<{ type: "showCompressRowContextMenu"; path: string; sourcePath?: string; x: number; y: number }>
+  | Readonly<{ type: "runCreate"; password: string; passwordConfirm: string }>;
 
 export type ZManagerJobsIntent =
   | Readonly<{ type: "openDrawer" }>
@@ -72,14 +161,50 @@ export type ZManagerJobsIntent =
   | Readonly<{ type: "resume"; jobId: string }>
   | Readonly<{ type: "dismiss"; jobId: string }>
   | Readonly<{ type: "retryPassword"; jobId: string }>
-  | Readonly<{ type: "runOutputAction"; jobId: string; actionIndex: number; kind: "open" | "reveal" }>;
+  | Readonly<{ type: "runOutputAction"; jobId: string; actionIndex: number; kind: "open" | "reveal" }>
+  | Readonly<{ type: "backgroundFocused" }>
+  | Readonly<{ type: "toggleQuickActionPause" }>
+  | Readonly<{ type: "cancelFocusedQuickActionJobs" }>;
 
 export type ZManagerDialogIntent =
   | Readonly<{ type: "extract"; mode: ExtractMode }>
   | Readonly<{ type: "extractHere"; mode: ExtractMode }>
+  | Readonly<{
+      type: "submitExtract";
+      mode: ExtractMode;
+      destination: string;
+      useSubfolder: boolean;
+      subfolder: string;
+      pathMode: "full" | "current" | "none";
+      overwrite: string;
+      stripComponents: string;
+      deduplicateRoot: boolean;
+      password: string;
+    }>
+  | Readonly<{
+      type: "browseExtractDestination";
+      destination: string;
+      useSubfolder: boolean;
+      subfolder: string;
+      pathMode: "full" | "current" | "none";
+      overwrite: string;
+      stripComponents: string;
+      deduplicateRoot: boolean;
+    }>
   | Readonly<{ type: "preferences" }>
   | Readonly<{ type: "about" }>
   | Readonly<{ type: "info"; target?: "current" | "archive"; entryPath?: string }>
+  | Readonly<{ type: "infoAction"; action?: string; copyValue?: string }>
+  | Readonly<{ type: "copyAboutDiagnostics" }>
+  | Readonly<{ type: "preferencesPatch"; patch: AppPreferencePatch }>
+  | Readonly<{
+      type: "preferencesCreateDefaultsPatch";
+      format: CreateWorkspaceSnapshot["options"]["format"];
+      patch: Partial<FormatCreateDefaults>;
+    }>
+  | Readonly<{ type: "preferencesChooseOutput" }>
+  | Readonly<{ type: "preferencesSave" }>
+  | Readonly<{ type: "preferencesCancel" }>
   | Readonly<{ type: "closeCurrent" }>;
 
 export type ZManagerDesktopIntent =
@@ -110,13 +235,16 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
+  createSelection?: ZManagerCreateSelectionSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
+  systemIcons?: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft?: AppPreferences | null;
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
+  dialog?: ZManagerDialogSnapshot;
 }>;
 
 const COMMAND_IDS = Object.keys(COMMAND_DEFINITIONS) as CommandId[];
@@ -152,8 +280,13 @@ export function createZManagerReactSnapshot(
     shell: input.shell,
     archive: input.archive,
     create: input.create,
+    createSelection: {
+      selectedPaths: [...(input.createSelection?.selectedPaths ?? [])],
+      focusedPath: input.createSelection?.focusedPath ?? "",
+    },
     jobs: input.jobs,
     quickActionProgress: input.quickActionProgress,
+    systemIcons: { ...(input.systemIcons ?? {}) },
     preferences: cloneAppPreferencesSnapshot(input.preferences),
     preferencesDraft: input.preferencesDraft ? cloneAppPreferencesSnapshot(input.preferencesDraft) : null,
     pathHistory: {
@@ -168,6 +301,7 @@ export function createZManagerReactSnapshot(
       primaryCommandIds: [...input.commands.primaryCommandIds],
       secondaryCommandIds: [...input.commands.secondaryCommandIds],
     },
+    dialog: cloneDialogSnapshot(input.dialog ?? { kind: "none" }),
   });
 }
 
@@ -208,7 +342,34 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       primaryCommandIds: ["open"],
       secondaryCommandIds: ["refresh"],
     },
+    dialog: { kind: "none" },
   });
+}
+
+function cloneDialogSnapshot(dialog: ZManagerDialogSnapshot): ZManagerDialogSnapshot {
+  switch (dialog.kind) {
+    case "none":
+      return { kind: "none" };
+    case "extract":
+      return {
+        ...dialog,
+        destinationHistory: [...dialog.destinationHistory],
+      };
+    case "info":
+      return {
+        ...dialog,
+        rows: dialog.rows.map((row) => ({ ...row })),
+        actions: dialog.actions.map((action) => ({ ...action })),
+      };
+    case "about":
+      return {
+        ...dialog,
+        groups: dialog.groups.map((group) => ({
+          title: group.title,
+          rows: group.rows.map(([label, value]) => [label, value] as const),
+        })),
+      };
+  }
 }
 
 function cloneCommandStateMap(commandState: CommandStateMap): CommandStateMap {

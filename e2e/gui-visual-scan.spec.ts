@@ -302,6 +302,24 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#context-menu [data-context-action]").first()).toContainText("Open");
 });
 
+test("create workspace rows preserve keyboard selection and delete removal", async ({ page }) => {
+  await dropFiles(page, ["desktop-archive-source.zip", "quarterly-report.pdf", "photos-folder"]);
+  const rows = page.locator("#compress-source-body tr[data-compress-path]");
+  await expect(rows).toHaveCount(3);
+
+  const firstRow = rows.first();
+  const removedSourcePath = await firstRow.getAttribute("data-compress-source-path");
+  expect(removedSourcePath).toBeTruthy();
+
+  await firstRow.click();
+  await expect(firstRow).toHaveClass(/is-selected/);
+  await expect(firstRow).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("Delete");
+  await expect(rows).toHaveCount(2);
+  await expect(page.locator(`#compress-source-body tr[data-compress-source-path="${removedSourcePath}"]`)).toHaveCount(0);
+});
+
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
   await openDevSurface(page, "jobs");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
@@ -376,6 +394,11 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator("#context-menu")).toBeVisible();
   await expect(page.locator("#context-menu [data-context-action='open-archive']")).toContainText("Open Archive");
   await captureAndScan(page, "13-extract-empty-context-menu");
+  await page.locator("#context-menu [data-context-action='open-archive']").click();
+  await expect(page.locator(".workspace-status")).toContainText("Finish the current job before starting another operation.");
+
+  await page.evaluate(() => window.__zmanagerDev?.setJobFixtures([]));
+  await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
   await page.locator("#context-menu [data-context-action='open-archive']").click();
   await expect(page.locator(".workspace-status")).toContainText("Native dialogs are unavailable in browser preview.");
 

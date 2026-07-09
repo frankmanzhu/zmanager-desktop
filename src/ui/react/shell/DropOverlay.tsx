@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "./shellHelpers";
 
@@ -9,9 +11,27 @@ export function DropOverlay() {
   const visible = mode !== "idle";
   const showActions = Boolean(copy?.showActions);
   const supportText = copy?.supportKey ? i18n.t(copy.supportKey) : "";
+  const primaryActionRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (showActions) {
+      primaryActionRef.current?.focus();
+    }
+  }, [showActions]);
 
   return (
-    <div id="drop-overlay" className="drop-overlay" aria-hidden={!visible} tabIndex={-1}>
+    <div
+      id="drop-overlay"
+      className="drop-overlay"
+      aria-hidden={!visible}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          actions.handleDesktopIntent({ type: "dropChoice", choice: "cancel" });
+        }
+      }}
+    >
       <div
         id="drop-overlay-card"
         className="drop-overlay-card"
@@ -28,6 +48,7 @@ export function DropOverlay() {
         <div id="drop-overlay-actions" className="drop-overlay-actions" hidden={!showActions}>
           <button
             id="drop-open-archive"
+            ref={primaryActionRef}
             type="button"
             data-drop-choice="open-archive"
             onClick={() => actions.handleDesktopIntent({ type: "dropChoice", choice: "openArchive" })}
@@ -35,6 +56,7 @@ export function DropOverlay() {
             {i18n.t("drop.action.openArchive")}
           </button>
           <button
+            id="drop-add-compress"
             type="button"
             data-drop-choice="add-compress"
             onClick={() => actions.handleDesktopIntent({ type: "dropChoice", choice: "addToCompress" })}

@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 import { ReactRuntimeMetadata, ZManagerAppRuntimeProvider } from "./AppProviders";
 import { createZManagerAppStore } from "./appStore";
 import { noopZManagerReactActions, type ZManagerReactRuntimeAdapter } from "./appRuntime";
+import { ArchiveWorkspace } from "./archive/ArchiveWorkspace";
+import { useZManagerSnapshot } from "./AppProviders";
+import { CreateWorkspace } from "./create/CreateWorkspace";
+import { DialogRoot } from "./dialogs/DialogRoot";
+import { JobsDrawer, QuickActionProgress } from "./jobs/JobsSurfaces";
+import { AppFrame } from "./shell/AppFrame";
 
 type LegacyState = "loading" | "ready" | "failed";
 
@@ -57,8 +63,24 @@ export function AppShell() {
             ZManager failed to start.
           </div>
         ) : null}
-        <div id="zmanager-legacy-root" />
+        <AppFrame>
+          <QuickActionProgress />
+          <ReactWorkspaceSurfaces legacyState={legacyState} />
+          <div id="zmanager-legacy-root" />
+          <JobsDrawer />
+          <DialogRoot />
+        </AppFrame>
       </div>
     </ZManagerAppRuntimeProvider>
   );
+}
+
+function ReactWorkspaceSurfaces({ legacyState }: Readonly<{ legacyState: LegacyState }>) {
+  const snapshot = useZManagerSnapshot();
+
+  if (legacyState !== "ready") {
+    return null;
+  }
+
+  return snapshot.shell.activeMode === "extract" ? <ArchiveWorkspace /> : <CreateWorkspace />;
 }

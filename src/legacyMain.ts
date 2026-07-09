@@ -20,8 +20,6 @@ import {
   APP_STATUS_BAR_PARTS,
 } from "./app/constants";
 import {
-  CLASSIC_MENU_GROUPS,
-  CLASSIC_TOOLBAR_GROUPS,
   COMMAND_DEFINITIONS,
   ARCHIVE_NOT_READY_MESSAGE,
   JOB_RUNNING_MESSAGE,
@@ -32,13 +30,11 @@ import {
   SINGLE_FOLDER_REQUIRED_MESSAGE,
   UNSUPPORTED_OPERATION_MESSAGE,
   commandLabel,
-  commandTooltip,
   commandTooltipText,
   menuGroupLabel,
   selectCommandState,
   type CommandId,
   type CommandStateMap,
-  type MenuItem,
 } from "./app/classicCommands";
 import {
   createCommandRouter,
@@ -136,9 +132,6 @@ import {
   type DetailRow,
 } from "./ui/archiveWorkspaceView";
 import {
-  Minus,
-  Square,
-  X,
   type IconNode,
 } from "lucide";
 import {
@@ -244,7 +237,10 @@ import {
   type ZManagerArchiveIntent,
   type ZManagerCreateIntent,
   type ZManagerDesktopIntent,
+  type ZManagerDialogAction,
+  type ZManagerDialogDetailRow,
   type ZManagerDialogIntent,
+  type ZManagerDialogSnapshot,
   type ZManagerJobsIntent,
   type ZManagerReactRuntimeAdapter,
   type ZManagerReactSnapshot,
@@ -323,21 +319,12 @@ import {
   startNativeFileDrag,
 } from "./desktop/nativeDrag";
 import {
-  WINDOW_RESIZE_DIRECTIONS,
   createWindowController,
   type AppWindowResizeDirection,
 } from "./desktop/windowController";
 import {
   renderJobsListHtml,
 } from "./ui/jobsView";
-import {
-  bindDropOverlayActions,
-  focusDropOverlayPrimaryAction,
-  renderDropOverlay as renderShellDropOverlay,
-  renderShellStatusBar,
-  type ShellStatusBarElements,
-  type ShellViewElements,
-} from "./ui/shellView";
 import {
   applyCompressSourceColumnWidths as applyCompressSourceColumnWidthStyles,
   bindCreateSourceListActions,
@@ -573,212 +560,7 @@ function renderEntryIcon(
   `;
 }
 
-function commandIcon(commandId: CommandId): ReturnType<typeof toolbarIcon> {
-  switch (commandId) {
-    case "add":
-    case "createFile":
-      return toolbarIcon("add");
-    case "extract":
-    case "copy":
-    case "copyTo":
-      return toolbarIcon(commandId === "copy" ? "copy" : "extract");
-    case "test":
-      return toolbarIcon("test");
-    case "move":
-    case "moveTo":
-      return toolbarIcon("move");
-    case "delete":
-      return toolbarIcon("delete");
-    case "info":
-    case "properties":
-      return toolbarIcon("info");
-    case "options":
-    case "deleteTempFiles":
-      return toolbarIcon("settings");
-    case "jobs":
-      return toolbarIcon("jobs");
-    case "refresh":
-      return toolbarIcon("refresh");
-    case "selectAll":
-      return toolbarIcon("select");
-    case "flatView":
-      return toolbarIcon("flat");
-    case "helpContents":
-    case "about":
-      return toolbarIcon("help");
-    default:
-      return toolbarIcon("open");
-  }
-}
-
-function menuGroupAccessKey(label: Parameters<typeof menuGroupLabel>[0]): string {
-  switch (label) {
-    case "File":
-      return "f";
-    case "Edit":
-      return "e";
-    case "View":
-      return "v";
-    case "Favorites":
-      return "a";
-    case "Tools":
-      return "t";
-    case "Help":
-      return "h";
-  }
-}
-
-function renderMenuItem(item: MenuItem): string {
-  if (item.kind === "separator") {
-    return `<div class="menu-separator" role="separator"></div>`;
-  }
-
-  if (item.kind === "submenu") {
-    return `
-      <div class="menu-submenu">
-        <span ${item.labelKey ? `data-command-submenu-label="${escapeHtmlValue(item.labelKey)}"` : ""}>${escapeHtmlValue(item.label)}</span>
-        <div class="menu-submenu-popover">
-          ${item.items.map(renderMenuItem).join("")}
-        </div>
-      </div>
-    `;
-  }
-
-  const command = COMMAND_DEFINITIONS[item.id];
-  return `
-    <button
-      id="menu-command-${command.id}"
-      class="menu-item"
-      type="button"
-      data-command-id="${command.id}"
-      title="${escapeHtmlValue(commandTooltip(command.id))}"
-    >
-      <span>${escapeHtmlValue(command.label)}</span>
-      ${command.shortcut ? `<kbd>${escapeHtmlValue(command.shortcut)}</kbd>` : ""}
-    </button>
-  `;
-}
-
-function renderMenuBar(): string {
-  return CLASSIC_MENU_GROUPS
-    .map((group) => `
-      <details class="menu">
-        <summary
-          data-menu-group-label="${escapeHtmlValue(group.label)}"
-          accesskey="${menuGroupAccessKey(group.label)}"
-          aria-keyshortcuts="Alt+${menuGroupAccessKey(group.label).toUpperCase()}"
-        >${escapeHtmlValue(group.label)}</summary>
-        <div class="menu-popover">
-          ${group.items.map(renderMenuItem).join("")}
-        </div>
-      </details>
-    `)
-    .join("");
-}
-
-function toolbarButtonId(commandId: CommandId): string {
-  switch (commandId) {
-    case "add":
-      return "add-archive";
-    case "extract":
-      return "extract-toolbar";
-    case "test":
-      return "test-archive";
-    case "copy":
-      return "copy-toolbar";
-    case "move":
-      return "move-toolbar";
-    case "delete":
-      return "delete-toolbar";
-    case "info":
-      return "info-toolbar";
-    case "open":
-      return "open-archive";
-    case "createFile":
-      return "new-archive";
-    case "options":
-      return "preferences-toolbar";
-    case "jobs":
-      return "jobs-drawer-open";
-    default:
-      return `toolbar-${commandId}`;
-  }
-}
-
-function renderToolbar(): string {
-  return CLASSIC_TOOLBAR_GROUPS
-    .map((group) => `
-      <div class="toolbar-group" role="group" aria-label="${escapeHtmlValue(group.label)}" data-command-group="${group.id}">
-        <span class="toolbar-group-label">${escapeHtmlValue(group.label)}</span>
-        ${group.items.map((commandId) => {
-          const command = COMMAND_DEFINITIONS[commandId];
-          return `
-            <button
-              id="${toolbarButtonId(commandId)}"
-              class="tool-button"
-              type="button"
-              data-command-id="${commandId}"
-              aria-label="${escapeHtmlValue(command.label)}"
-              title="${escapeHtmlValue(commandTooltip(commandId))}"
-              ${command.shortcut ? `aria-keyshortcuts="${escapeHtmlValue(command.shortcut.replace("Ctrl", "Control"))}"` : ""}
-            >
-              ${commandIcon(commandId)}
-              <span class="tool-label">${escapeHtmlValue(command.label)}</span>
-            </button>
-          `;
-        }).join("")}
-      </div>
-    `)
-    .join(`<div class="toolbar-separator" aria-hidden="true"></div>`);
-}
-
-function renderWindowTitlebar(): string {
-  return `
-    <header class="window-titlebar" data-tauri-drag-region>
-      <div class="window-titlebar-brand" data-tauri-drag-region>
-        <span class="window-titlebar-title" data-tauri-drag-region>${APP_TITLE}</span>
-      </div>
-      <div class="window-titlebar-controls">
-        <button id="window-minimize" class="window-control" type="button" aria-label="Minimize window" title="Minimize">
-          ${renderIconNode(Minus, "window-control-icon")}
-        </button>
-        <button id="window-maximize" class="window-control" type="button" aria-label="Maximize or restore window" title="Maximize or restore">
-          ${renderIconNode(Square, "window-control-icon")}
-        </button>
-        <button id="window-close" class="window-control window-control-close" type="button" aria-label="Close window" title="Close">
-          ${renderIconNode(X, "window-control-icon")}
-        </button>
-      </div>
-    </header>
-  `;
-}
-
-function renderWindowResizeHandles(): string {
-  return WINDOW_RESIZE_DIRECTIONS
-    .map((direction) => `<div class="window-resize-handle window-resize-handle-${direction.toLowerCase()}" data-window-resize-direction="${direction}" aria-hidden="true"></div>`)
-    .join("");
-}
-
 appRoot.innerHTML = `
-  <main class="workspace" data-job-drawer="closed">
-    ${renderWindowTitlebar()}
-    ${renderWindowResizeHandles()}
-
-    <nav class="app-menu" data-i18n-aria-label="workspace.menu.aria" aria-label="Application menu">
-      ${renderMenuBar()}
-    </nav>
-
-    <header class="command-toolbar mode-toolbar" role="toolbar" data-i18n-aria-label="workspace.toolbar.aria" aria-label="Workspace modes">
-      <div class="mode-switch" role="tablist" data-i18n-aria-label="workspace.mode.aria" aria-label="Workspace mode">
-        <button id="mode-compress" class="mode-button" type="button" role="tab" data-workspace-mode="compress" data-i18n-text="workspace.mode.compress">Compress</button>
-        <button id="mode-extract" class="mode-button" type="button" role="tab" data-workspace-mode="extract" data-i18n-text="workspace.mode.extract">Extract</button>
-      </div>
-      <div class="command-strip">
-        ${renderToolbar()}
-      </div>
-      <div class="toolbar-spacer"></div>
-    </header>
-
     <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
       <button id="nav-back" type="button" data-i18n-text="navigation.back" disabled>Back</button>
       <button id="nav-up" class="icon-button" type="button" data-command-id="upOneLevel" data-i18n-title="commands.upOneLevel.tooltip" data-i18n-aria-label="commands.upOneLevel" disabled title="Up One Level (Backspace)" aria-label="Up One Level">${toolbarIcon("extract")}</button>
@@ -1007,18 +789,6 @@ appRoot.innerHTML = `
       </aside>
     </section>
 
-    <footer class="status-bar" aria-live="polite">
-      <span id="status-selection-count" class="status-part" data-i18n-text="status.initialSelection">0 / 0 object(s) selected</span>
-      <span id="status-selection-size" class="status-part"></span>
-      <span id="status-focused-size" class="status-part"></span>
-      <span id="status-focused-modified" class="status-part"></span>
-      <span id="workspace-status" class="status-part workspace-status" data-i18n-text="workspace.readyWithPeriod">Ready.</span>
-      <span id="status-text" class="sr-only" data-i18n-text="workspace.readyWithPeriod">Ready.</span>
-      <button id="status-job-button" type="button">
-        <span id="active-job-text" data-i18n-text="status.noJobs">No jobs</span>
-      </button>
-    </footer>
-
     <aside id="job-drawer" class="job-drawer" data-i18n-aria-label="jobs.drawer.aria" aria-label="Job details" aria-hidden="true">
       <div class="job-drawer-header">
         <div>
@@ -1066,18 +836,6 @@ appRoot.innerHTML = `
     </section>
 
     <div id="context-menu" class="context-menu" role="menu" hidden></div>
-    <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
-      <div class="drop-overlay-card" role="status" aria-live="polite">
-        <strong id="drop-overlay-title" data-i18n-text="drop.title">Drop files</strong>
-        <span id="drop-overlay-message" data-i18n-text="drop.message">Open an archive or add files to a new archive.</span>
-        <span id="drop-overlay-support" class="drop-overlay-support"></span>
-        <div id="drop-overlay-actions" class="drop-overlay-actions" hidden>
-          <button id="drop-open-archive" type="button" data-drop-choice="open-archive" data-i18n-text="drop.action.openArchive">Open Archive</button>
-          <button id="drop-add-compress" type="button" data-drop-choice="add-compress" data-i18n-text="drop.action.addCompress">Add to Compress</button>
-          <button id="drop-cancel" type="button" data-drop-choice="cancel" data-i18n-text="common.cancel">Cancel</button>
-        </div>
-      </div>
-    </div>
 
     <div id="extract-dialog" class="dialog-backdrop" hidden>
       <section class="dialog task-dialog" role="dialog" aria-modal="true" aria-labelledby="extract-title" tabindex="-1" data-dialog-default="#extract-start" data-dialog-cancel="#extract-cancel">
@@ -1378,20 +1136,16 @@ appRoot.innerHTML = `
         </div>
       </section>
     </div>
-  </main>
 `;
 
 const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
 const commandToolbarElement = document.querySelector<HTMLDivElement>(".command-toolbar")!;
 const modeCompressButton = document.querySelector<HTMLButtonElement>("#mode-compress")!;
 const modeExtractButton = document.querySelector<HTMLButtonElement>("#mode-extract")!;
-const statusElement = document.querySelector<HTMLElement>("#workspace-status")!;
-const statusTextElement = document.querySelector<HTMLSpanElement>("#status-text")!;
 const statusSelectionCountElement = document.querySelector<HTMLSpanElement>("#status-selection-count")!;
 const statusSelectionSizeElement = document.querySelector<HTMLSpanElement>("#status-selection-size")!;
 const statusFocusedSizeElement = document.querySelector<HTMLSpanElement>("#status-focused-size")!;
 const statusFocusedModifiedElement = document.querySelector<HTMLSpanElement>("#status-focused-modified")!;
-const activeJobElement = document.querySelector<HTMLSpanElement>("#active-job-text")!;
 const pathFieldInput = document.querySelector<HTMLInputElement>("#path-field")!;
 const pathCrumbsElement = document.querySelector<HTMLDivElement>("#path-crumbs")!;
 const browserShellElement = document.querySelector<HTMLElement>(".browser-shell")!;
@@ -1409,7 +1163,6 @@ const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolb
 const preferencesToolbarButton = document.querySelector<HTMLButtonElement>("#preferences-toolbar")!;
 const refreshArchiveButton = document.querySelector<HTMLButtonElement>("#refresh-archive")!;
 const navBackButton = document.querySelector<HTMLButtonElement>("#nav-back")!;
-const appMenuElement = document.querySelector<HTMLElement>(".app-menu")!;
 const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
 const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
 const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-close")!;
@@ -1434,6 +1187,18 @@ const archiveTablePaneElement = document.querySelector<HTMLElement>(".archive-ta
 const archiveEmptyStateElement = document.querySelector<HTMLDivElement>("#archive-empty-state")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
 let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
+const legacyArchivePathBarElement = pathFieldInput.closest<HTMLElement>(".path-bar")!;
+const legacyArchiveSurfaceClassEntries: ReadonlyArray<readonly [HTMLElement, string]> = [
+  [legacyArchivePathBarElement, "path-bar"],
+  [browserShellElement, "browser-shell"],
+  [navigationPaneElement, "navigation-pane"],
+  [treeContentElement, "tree-content"],
+  [archiveTablePaneElement, "archive-table-pane"],
+  [tableShellElement, "table-shell"],
+  [archiveEmptyStateElement, "archive-empty-state"],
+  [detailsPaneElement, "details-pane"],
+  [detailsElement, "details-content"],
+];
 
 const extractDialog = document.querySelector<HTMLDivElement>("#extract-dialog")!;
 const extractTitle = document.querySelector<HTMLHeadingElement>("#extract-title")!;
@@ -1539,23 +1304,6 @@ const quickBackgroundButton = document.querySelector<HTMLButtonElement>("#quick-
 const quickContinueButton = document.querySelector<HTMLButtonElement>("#quick-continue")!;
 const quickCancelButton = document.querySelector<HTMLButtonElement>("#quick-cancel")!;
 const contextMenu = document.querySelector<HTMLDivElement>("#context-menu")!;
-const dropOverlay = document.querySelector<HTMLDivElement>("#drop-overlay")!;
-const shellViewElements: ShellViewElements = {
-  workspace: workspaceElement,
-  dropOverlay,
-  dropOverlayCard: dropOverlay.querySelector<HTMLElement>(".drop-overlay-card")!,
-  dropOverlayTitle: document.querySelector<HTMLElement>("#drop-overlay-title")!,
-  dropOverlayMessage: document.querySelector<HTMLElement>("#drop-overlay-message")!,
-  dropOverlaySupport: document.querySelector<HTMLElement>("#drop-overlay-support")!,
-  dropOverlayActions: document.querySelector<HTMLDivElement>("#drop-overlay-actions")!,
-  dropOpenArchiveButton: document.querySelector<HTMLButtonElement>("#drop-open-archive")!,
-};
-const shellStatusBarElements: ShellStatusBarElements = {
-  selectionCount: statusSelectionCountElement,
-  selectionSize: statusSelectionSizeElement,
-  focusedSize: statusFocusedSizeElement,
-  focusedModified: statusFocusedModifiedElement,
-};
 
 const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
@@ -1628,6 +1376,305 @@ const infoTitle = document.querySelector<HTMLHeadingElement>("#info-title")!;
 const infoDescription = document.querySelector<HTMLParagraphElement>("#info-description")!;
 const infoActionGroup = document.querySelector<HTMLDivElement>("#info-action-group")!;
 
+function privatizeLegacyArchiveSurfaceIds() {
+  const publicArchiveIds = [
+    "nav-back",
+    "nav-up",
+    "path-field",
+    "path-crumbs",
+    "search-entries",
+    "search-submit",
+    "clear-search",
+    "search-count",
+    "navigation-pane",
+    "tree-content",
+    "workspace-title",
+    "browse-meta",
+    "refresh-archive",
+    "browse-message",
+    "marquee-hit-surface",
+    "archive-empty-state",
+    "entry-table",
+    "entry-table-head",
+    "select-all",
+    "entry-table-body",
+    "details-pane",
+    "details-pane-title",
+    "details-content",
+  ];
+
+  for (const id of publicArchiveIds) {
+    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+
+  for (const resizer of paneResizerElements) {
+    if (resizer.getAttribute("aria-controls") === "navigation-pane") {
+      resizer.setAttribute("aria-controls", "legacy-navigation-pane");
+    } else if (resizer.getAttribute("aria-controls") === "details-pane") {
+      resizer.setAttribute("aria-controls", "legacy-details-pane");
+    }
+  }
+
+  navigationPaneElement.id = "legacy-navigation-pane";
+  detailsPaneElement.id = "legacy-details-pane";
+}
+
+function privatizeLegacyExtractDialogIds() {
+  const publicExtractIds = [
+    "extract-dialog-close",
+    "extract-title",
+    "extract-dialog-message",
+    "extract-destination",
+    "extract-destination-history",
+    "browse-extract-destination",
+    "extract-use-subfolder",
+    "extract-subfolder",
+    "extract-path-mode",
+    "browse-overwrite",
+    "browse-strip-components",
+    "extract-deduplicate-root",
+    "browse-password",
+    "browse-show-password",
+    "extract-start",
+    "extract-cancel",
+  ];
+
+  for (const id of publicExtractIds) {
+    const element = extractDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+}
+
+function privatizeLegacyInfoAboutDialogIds() {
+  const publicInfoIds = [
+    "info-title",
+    "info-description",
+    "info-dialog-body",
+    "info-action-group",
+    "info-close",
+  ];
+  const publicAboutIds = [
+    "about-dialog-close",
+    "about-title",
+    "about-diagnostics",
+    "copy-diagnostics",
+    "about-close",
+  ];
+
+  for (const id of publicInfoIds) {
+    const element = infoDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+
+  for (const id of publicAboutIds) {
+    const element = aboutDialog.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+}
+
+function privatizeLegacyCreateWorkspaceIds() {
+  const publicCreateIds = [
+    "create-destination",
+    "browse-create-destination",
+    "create-destination-recent",
+    "create-destination-history",
+    "add-source",
+    "include-all-sources",
+    "exclude-all-sources",
+    "clear-sources",
+    "start-create",
+    "create-plan-meta",
+    "compress-surface",
+    "compress-source-table",
+    "compress-source-body",
+    "compress-include-all",
+    "source-list",
+    "compress-options-panel",
+    "create-plan-summary",
+    "create-format",
+    "create-clean-source",
+    "create-preserve-metadata",
+    "create-replace-existing",
+    "create-respect-gitignore",
+    "create-password",
+    "create-password-confirm",
+    "create-show-password",
+    "create-password-options",
+    "create-compression-level",
+    "create-volume",
+    "create-tzap-recovery-field",
+    "create-tzap-recovery",
+  ];
+
+  for (const id of publicCreateIds) {
+    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+}
+
+function privatizeLegacyJobsIds() {
+  const publicJobIds = [
+    "job-drawer",
+    "refresh-jobs",
+    "job-drawer-close",
+    "jobs-list",
+    "quick-progress",
+    "quick-title",
+    "quick-subtitle",
+    "quick-context",
+    "quick-elapsed",
+    "quick-total-size",
+    "quick-remaining",
+    "quick-speed",
+    "quick-files",
+    "quick-processed",
+    "quick-total-files",
+    "quick-compressed-size",
+    "quick-ratio",
+    "quick-operation",
+    "quick-current-path",
+    "quick-progress-bar",
+    "quick-background",
+    "quick-continue",
+    "quick-cancel",
+  ];
+
+  for (const id of publicJobIds) {
+    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+
+  jobDrawer.style.display = "none";
+  quickProgressElement.style.display = "none";
+}
+
+function privatizeLegacyPreferencesIds() {
+  const publicPreferenceIds = [
+    "preferences-dialog",
+    "preferences-title",
+    "preferences-dialog-close",
+    "pref-output-location",
+    "pref-custom-output",
+    "pref-choose-output",
+    "pref-custom-output-help",
+    "pref-custom-output-validation",
+    "pref-default-format",
+    "pref-create-format",
+    "pref-create-compression-level",
+    "pref-create-volume",
+    "pref-create-tzap-recovery-field",
+    "pref-create-tzap-recovery",
+    "pref-default-extraction",
+    "pref-show-parent",
+    "pref-real-file-icons",
+    "pref-full-row-select",
+    "pref-show-grid",
+    "pref-single-click",
+    "pref-alternative-selection",
+    "pref-toolbar-visible",
+    "pref-large-toolbar",
+    "pref-toolbar-labels",
+    "pref-flat-view",
+    "pref-language",
+    "pref-create-clean-source",
+    "pref-create-preserve-metadata",
+    "pref-create-replace-existing",
+    "pref-create-prompt-password",
+    "pref-preview-cleanup",
+    "preferences-status",
+    "preferences-save",
+    "preferences-cancel",
+  ];
+
+  for (const id of publicPreferenceIds) {
+    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+    if (!element) {
+      continue;
+    }
+    element.dataset.legacyId = id;
+    element.removeAttribute("id");
+  }
+
+  for (const page of preferencesDialog.querySelectorAll<HTMLElement>("[data-pref-page]")) {
+    if (page.dataset.prefPage) {
+      page.dataset.legacyPrefPage = page.dataset.prefPage;
+      delete page.dataset.prefPage;
+    }
+  }
+
+  for (const button of preferencesDialog.querySelectorAll<HTMLElement>("[data-pref-page-target]")) {
+    if (button.dataset.prefPageTarget) {
+      button.dataset.legacyPrefPageTarget = button.dataset.prefPageTarget;
+      delete button.dataset.prefPageTarget;
+    }
+  }
+
+  preferencesDialog.style.display = "none";
+}
+
+function syncLegacyArchiveSurfaceOwnership() {
+  const showLegacyArchiveSurface = false;
+
+  legacyArchivePathBarElement.hidden = !showLegacyArchiveSurface;
+  browserShellElement.hidden = !showLegacyArchiveSurface;
+  for (const [element, className] of legacyArchiveSurfaceClassEntries) {
+    element.classList.toggle(className, showLegacyArchiveSurface);
+  }
+  if (!showLegacyArchiveSurface) {
+    privatizeLegacyArchiveRowAttributes();
+  }
+}
+
+function privatizeLegacyArchiveRowAttributes() {
+  for (const header of tableHead.querySelectorAll<HTMLElement>("[data-column-id], [data-sort-key]")) {
+    if (header.dataset.columnId) {
+      header.dataset.legacyColumnId = header.dataset.columnId;
+      delete header.dataset.columnId;
+    }
+    if (header.dataset.sortKey) {
+      header.dataset.legacySortKey = header.dataset.sortKey;
+      delete header.dataset.sortKey;
+    }
+  }
+
+  for (const row of tableBody.querySelectorAll<HTMLElement>("[data-entry-path], [data-folder-path]")) {
+    if (row.dataset.entryPath) {
+      row.dataset.legacyEntryPath = row.dataset.entryPath;
+      delete row.dataset.entryPath;
+    }
+    if (row.dataset.folderPath) {
+      row.dataset.legacyFolderPath = row.dataset.folderPath;
+      delete row.dataset.folderPath;
+    }
+    row.removeAttribute("aria-label");
+  }
+}
+
 let appPreferences: AppPreferences = loadAppPreferences();
 const shellWorkspace = createShellWorkspace();
 const pathHistoryStore = createPathHistoryStore();
@@ -1683,6 +1730,9 @@ const archiveTreeRootPath = "";
 const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
 let archiveTreeChildrenByParent = new Map<string, string[]>();
 
+privatizeLegacyArchiveSurfaceIds();
+syncLegacyArchiveSurfaceOwnership();
+
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
 let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
@@ -1693,6 +1743,7 @@ const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
+let reactDialogSnapshot: ZManagerDialogSnapshot = { kind: "none" };
 const reactRuntimeSubscribers = new Set<ZManagerReactSnapshotListener>();
 
 const appTimers = createAppTimers({
@@ -1879,13 +1930,15 @@ const extractStartController = createExtractStartController({
   chooseDestinationFirst: () => {
     extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
     syncExtractDialogState();
+    syncReactExtractDialogSnapshot(message("extract.chooseDestinationFirst"));
     extractDestinationInput.focus();
   },
   selectEntryFirst: () => {
     extractDialogMessage.textContent = message("extract.selectEntryFirst");
+    syncReactExtractDialogSnapshot(message("extract.selectEntryFirst"));
   },
   recordDestination: recordExtractDestinationHistory,
-  closeExtractDialog: () => closeModal(extractDialog),
+  closeExtractDialog: closeReactDialog,
   addJob: addJobState,
   progressContext: extractJobProgressContext,
   outputActions: extractJobOutputActions,
@@ -2183,7 +2236,8 @@ async function revealQuickActionJobWindow(
   document.body.classList.add("quick-action-job-mode");
   quickProgressElement.hidden = false;
   jobDrawer.setAttribute("aria-hidden", "true");
-  workspaceElement.dataset.jobDrawer = "closed";
+  shellWorkspace.setJobDrawerOpen(false);
+  publishReactSnapshot();
   renderQuickProgress();
 
   if (!isDesktopRuntime()) {
@@ -2244,7 +2298,7 @@ async function closeFocusedJobProgress() {
   quickContinueButton.disabled = true;
   quickCancelButton.disabled = true;
   jobDrawer.setAttribute("aria-hidden", "true");
-  workspaceElement.dataset.jobDrawer = "closed";
+  shellWorkspace.setJobDrawerOpen(false);
   renderNormalWorkspaceOnce();
 
   if (isDesktopRuntime()) {
@@ -2294,25 +2348,7 @@ function clearTrackedPreviewState() {
 }
 
 function updateStatusBar() {
-  const selection = archiveWorkspace.getSnapshot().view.selection;
-  const selectedTotal = selection.visibleSelectedCount;
-  const focusedEntry = selection.focusedEntry;
-
-  renderShellStatusBar(shellStatusBarElements, {
-    selectionCountText: message("status.selectionCount", {
-      selected: selectedTotal,
-      total: selection.visibleSelectablePaths.length,
-    }),
-    selectionSizeText: selectedTotal > 0
-      ? message("status.selectedSize", { size: formatBytes(selection.visibleSelectedSize) })
-      : "",
-    focusedSizeText: focusedEntry
-      ? message("status.focusedSize", { size: formatBytes(focusedEntry.size) })
-      : "",
-    focusedModifiedText: focusedEntry
-      ? message("status.focusedModified", { date: formatDate(focusedEntry.modified) })
-      : "",
-  });
+  publishReactSnapshot();
 }
 
 function applyPreferenceClasses() {
@@ -2538,6 +2574,20 @@ function detailRowsToText(rows: readonly DetailRow[]): string {
     .join("\n");
 }
 
+function detailRowsToReactRows(rows: readonly DetailRow[]): ZManagerDialogDetailRow[] {
+  return rows
+    .filter((row): row is DetailRow & { value: string } => Boolean(row.value))
+    .map((row) => ({
+      label: row.label,
+      value: row.value,
+      mode: row.mode,
+    }));
+}
+
+function infoReturnFocusPath(): string {
+  return focusedEntryPath || getSelectedEntryPaths()[0] || "";
+}
+
 function entryPropertyRows(entry: ArchiveEntryDto): DetailRow[] {
   return [
     { label: message("detail.name"), value: getBaseName(entry.path) },
@@ -2590,10 +2640,17 @@ function setInfoActions(actions: readonly InfoAction[]) {
 
 function infoReturnFocusForCurrentSelection(): HTMLElement | null {
   const selectedPath = focusedEntryPath || getSelectedEntryPaths()[0] || "";
-  if (!selectedPath) {
+  return findActiveArchiveRow(selectedPath);
+}
+
+function findActiveArchiveRow(path: string): HTMLTableRowElement | null {
+  if (!path) {
     return null;
   }
-  return tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(selectedPath)}"]`);
+
+  const selector = `tr[data-entry-path="${CSS.escape(path)}"]`;
+  return document.querySelector<HTMLTableRowElement>(selector)
+    ?? tableBody.querySelector<HTMLTableRowElement>(selector);
 }
 
 function previewActionHint(): string {
@@ -3281,9 +3338,6 @@ function currentWorkspaceMode(): WorkspaceDropMode {
 }
 
 function renderOperationalStatus() {
-  const { operationalStatus } = shellWorkspace.getSnapshot();
-  statusElement.textContent = operationalStatus;
-  statusTextElement.textContent = operationalStatus;
   publishReactSnapshot();
 }
 
@@ -3505,10 +3559,7 @@ const commandRouter = createCommandRouter({
       savePreferencePatch({ showToolbarLabels: !appPreferences.showToolbarLabels });
     },
     options: openPreferencesDialog,
-    about: () => {
-      renderAboutDiagnostics();
-      openModal(aboutDialog, "#about-close");
-    },
+    about: openAboutDialog,
     toggleFlatView: () => setFlatView(!isFlatView, true),
     deleteTempFiles: () => void onDeleteTemporaryFiles(),
     jobs: openJobDrawer,
@@ -3542,8 +3593,13 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
+    createSelection: {
+      selectedPaths: Array.from(selectedCompressRows),
+      focusedPath: focusedCompressRowPath,
+    },
     jobs: jobsWorkspace.getJobListSnapshot(nowMs),
     quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
+    systemIcons: Object.fromEntries(systemIconDataUrls),
     preferences: appPreferences,
     preferencesDraft: preferencesDialogDraft,
     pathHistory: pathHistoryStore.getSnapshot(),
@@ -3558,6 +3614,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
       primaryCommandIds: commandIdsWithClass(commandClassState, "primary"),
       secondaryCommandIds: commandIdsWithClass(commandClassState, "secondary"),
     },
+    dialog: reactDialogSnapshot,
   });
 }
 
@@ -3607,6 +3664,67 @@ function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
       renderTree();
       publishReactSnapshot();
       break;
+    case "sortByColumn":
+      applySortCommand(intent.columnId);
+      break;
+    case "selectAllVisible":
+      selectVisibleEntries();
+      break;
+    case "clearSelection":
+      clearBrowseSelection();
+      break;
+    case "selectRow":
+      updateSelectionByIntent(intent.path, {
+        ctrl: intent.ctrlKey,
+        meta: intent.metaKey,
+        shift: intent.shiftKey,
+      });
+      renderBrowse();
+      break;
+    case "setRowSelected":
+      applyArchiveTableSelection(setHierarchicalTablePathSelected({
+        ...currentArchiveTableSelectionState(),
+        path: intent.path,
+        selected: intent.selected,
+      }));
+      renderBrowse();
+      break;
+    case "activateRow":
+      if (intent.rowKind === "folder" || intent.rowKind === "parent") {
+        navigateToFolder(intent.path);
+        break;
+      }
+      updateSelectionByIntent(intent.path);
+      renderBrowse();
+      runRoutedCommand("view");
+      break;
+    case "copyDetailsValue":
+      void copyTextToClipboard(intent.value);
+      break;
+    case "showEmptyContextMenu":
+      showStartupContextMenu(intent.x, intent.y);
+      break;
+    case "showColumnContextMenu":
+      showTableHeaderContextMenu(intent.x, intent.y, intent.columnId);
+      break;
+    case "showRowContextMenu":
+      if (intent.rowKind === "folder" || intent.rowKind === "parent") {
+        showFolderContextMenu(intent.path, intent.x, intent.y, intent.path);
+      } else {
+        showEntryContextMenu(intent.path, intent.x, intent.y);
+      }
+      break;
+    case "runDetailsAction": {
+      if (intent.action === "clear-search") {
+        clearSearch();
+        break;
+      }
+      const routedCommand = selectDetailsCommand(intent.action);
+      if (routedCommand) {
+        runRoutedCommand(routedCommand.commandId, routedCommand.payload);
+      }
+      break;
+    }
   }
 }
 
@@ -3615,20 +3733,44 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
     case "showWorkspace":
       showCreateWorkspace();
       break;
+    case "showAddSourcesMenu":
+      contextEntryPath = "";
+      contextSourcePath = "";
+      showContextMenu(intent.x, intent.y, `
+        <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">${escapeHtml(message("command.filesWithEllipsis"))}</span></button>
+        <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">${escapeHtml(message("command.folderWithEllipsis"))}</span></button>
+      `);
+      break;
     case "clearSources":
       clearCreateSources();
       break;
     case "removeSources":
       removeCreateSources([...intent.sourcePaths]);
       break;
+    case "showSourceContextMenu":
+      showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
+      break;
     case "setDestinationPath":
       syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(intent.destinationPath).snapshot);
-      setCreatePlanState();
+      refreshCreateStateAfterDestinationEdit();
       publishReactSnapshot();
       break;
+    case "browseDestination":
+      void onSelectCreateDestination();
+      break;
+    case "changeFormat": {
+      const defaults = createDefaultsForFormat(appPreferences, intent.format);
+      syncCreateSourcesFromWorkspace(createWorkspace.changeFormat(intent.format, defaults).snapshot);
+      clearCreatePasswordFields();
+      setCreatePlanState();
+      queuePlanRun();
+      publishReactSnapshot();
+      break;
+    }
     case "setOptions":
       syncCreateSourcesFromWorkspace(createWorkspace.setOptions(intent.patch).snapshot);
       setCreatePlanState();
+      queuePlanRun();
       publishReactSnapshot();
       break;
     case "navigateToFolder": {
@@ -3649,6 +3791,88 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       publishReactSnapshot();
       break;
     }
+    case "setPathIncluded":
+      setCompressPathIncluded(intent.path, intent.included);
+      refreshCreatePlanSummary();
+      renderCreateSources();
+      renderCompressBrowser();
+      publishReactSnapshot();
+      break;
+    case "setAllIncluded":
+      setAllCompressPathsIncluded(intent.included);
+      refreshCreatePlanSummary();
+      renderCreateSources();
+      renderCompressBrowser();
+      publishReactSnapshot();
+      break;
+    case "setCurrentFolderIncluded":
+      setCurrentCompressFolderIncluded(intent.included);
+      refreshCreatePlanSummary();
+      renderCreateSources();
+      renderCompressBrowser();
+      publishReactSnapshot();
+      break;
+    case "selectRow":
+      updateCompressSelectionByIntent(intent.path, {
+        ctrl: intent.ctrlKey,
+        meta: intent.metaKey,
+        shift: intent.shiftKey,
+      });
+      syncCompressSelectionUi();
+      publishReactSnapshot();
+      break;
+    case "toggleRowSelection":
+      applyCompressTableSelection(toggleHierarchicalTablePathSelection({
+        ...currentCompressTableSelectionState(),
+        path: intent.path,
+      }));
+      syncCompressSelectionUi();
+      publishReactSnapshot();
+      break;
+    case "focusRow":
+      applyCompressTableSelection(focusHierarchicalTablePath(
+        currentCompressTableSelectionState(),
+        intent.path,
+      ));
+      syncCompressSelectionUi();
+      publishReactSnapshot();
+      break;
+    case "removeSelectedSources": {
+      const selectedSourcePaths = selectedCompressSourcePaths();
+      const fallbackSourcePath = intent.fallbackSourcePath?.trim();
+      removeCreateSources(
+        selectedSourcePaths.length > 0
+          ? selectedSourcePaths
+          : fallbackSourcePath
+            ? [fallbackSourcePath]
+            : [],
+      );
+      publishReactSnapshot();
+      break;
+    }
+    case "showCompressRowContextMenu": {
+      const row = findCompressSourceRowByPath(compressSourceTableViewElements, intent.path);
+      if (row) {
+        if (!selectedCompressRows.has(intent.path)) {
+          applyCompressTableSelection(ensureHierarchicalTablePathSelected({
+            ...currentCompressTableSelectionState(),
+            path: intent.path,
+          }));
+          syncCompressSelectionUi();
+        }
+        showCompressRowContextMenu(row, intent.x, intent.y);
+      } else if (intent.sourcePath) {
+        showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
+      }
+      publishReactSnapshot();
+      break;
+    }
+    case "runCreate":
+      createPasswordInput.value = intent.password;
+      createPasswordConfirmInput.value = intent.passwordConfirm;
+      refreshCreateStateAfterDestinationEdit();
+      void runCreate();
+      break;
   }
 }
 
@@ -3681,6 +3905,15 @@ function handleReactJobsIntent(intent: ZManagerJobsIntent) {
     case "runOutputAction":
       void onJobOutputAction(intent.jobId, String(intent.actionIndex), intent.kind);
       break;
+    case "backgroundFocused":
+      void sendQuickActionJobsToBackground();
+      break;
+    case "toggleQuickActionPause":
+      void toggleQuickActionPause();
+      break;
+    case "cancelFocusedQuickActionJobs":
+      void cancelFocusedQuickActionJobs();
+      break;
   }
 }
 
@@ -3692,12 +3925,25 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
     case "extractHere":
       openExtractHereDialog(intent.mode);
       break;
+    case "submitExtract":
+      writeReactExtractFormToLegacyControls(intent);
+      activeExtractMode = intent.mode;
+      browsePasswordInput.value = intent.password.trim();
+      syncExtractDialogState();
+      void startExtract(intent.mode);
+      break;
+    case "browseExtractDestination":
+      writeReactExtractFormToLegacyControls(intent);
+      syncExtractDialogState();
+      void onSelectDestinationForExtract().finally(() => {
+        syncReactExtractDialogSnapshot();
+      });
+      break;
     case "preferences":
       openPreferencesDialog();
       break;
     case "about":
-      renderAboutDiagnostics();
-      openModal(aboutDialog, "#about-close");
+      openAboutDialog();
       break;
     case "info":
       if (intent.target === "archive") {
@@ -3708,7 +3954,32 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
         showCurrentInfo();
       }
       break;
+    case "infoAction":
+      handleInfoDialogAction(intent.action, intent.copyValue);
+      break;
+    case "copyAboutDiagnostics":
+      void copyAboutDiagnostics();
+      break;
+    case "preferencesPatch":
+      updateReactPreferencesDraft(intent.patch);
+      break;
+    case "preferencesCreateDefaultsPatch":
+      updateReactCreateDefaultsDraft(intent.format, intent.patch);
+      break;
+    case "preferencesChooseOutput":
+      void onSelectReactPreferenceOutputFolder();
+      break;
+    case "preferencesSave":
+      void saveReactPreferencesDraft();
+      break;
+    case "preferencesCancel":
+      cancelReactPreferencesDialog();
+      break;
     case "closeCurrent": {
+      if (reactDialogSnapshot.kind !== "none") {
+        closeReactDialog();
+        break;
+      }
       const modal = getOpenModal();
       if (modal) {
         closeModal(modal);
@@ -3780,6 +4051,7 @@ function archiveMetaText(): string {
 function renderWorkspaceMode() {
   const mode = currentWorkspaceMode();
   const isCompress = mode === "compress";
+  syncLegacyArchiveSurfaceOwnership();
   if (isCompress) {
     renderCompressBrowser();
   }
@@ -4257,6 +4529,7 @@ function setCreatePlanState() {
     createArchiveLabel: message("compress.createArchive"),
     isWarning: unavailableReason !== null && unavailableReason !== "needsSources",
   });
+  publishReactSnapshot();
 }
 
 function browserCreatePlanPreview(paths: string[]): CreatePlanResponse {
@@ -4367,6 +4640,7 @@ function clearCreateSources() {
   renderCreateSources();
   renderCompressBrowser();
   queuePlanRun();
+  publishReactSnapshot();
 }
 
 function removeCreateSources(sourcePaths: string[]) {
@@ -4703,12 +4977,6 @@ function renderCompressBrowser() {
   setCreatePlanState();
 }
 
-function renderJobStatusBar(snapshot: JobListSnapshot) {
-  activeJobElement.textContent = snapshot.activeJob
-    ? `${formatJobKind(snapshot.activeJob.kind)}: ${message(jobStatusMessageKey(snapshot.activeJob.status))}`
-    : message("status.noJobs");
-}
-
 function renderJobs() {
   const nowMs = Date.now();
   const snapshot = jobsWorkspace.getJobListSnapshot(nowMs);
@@ -4718,7 +4986,6 @@ function renderJobs() {
     formatBytes,
     formatJobKind: (kind) => formatJobKind(kind as JobKind),
   });
-  renderJobStatusBar(snapshot);
   renderQuickProgress(nowMs);
   syncProgressClock(snapshot.progressClock);
   publishReactSnapshot();
@@ -4840,6 +5107,7 @@ function syncExtractDialogState() {
   if (canExtract && extractDialogMessage.textContent === message("extract.chooseDestinationFirst")) {
     extractDialogMessage.textContent = extractDialogMessageForMode(activeExtractMode);
   }
+  syncReactExtractDialogSnapshot();
 }
 
 function requestExtractPasswordInDialog(retry: ArchiveWorkspacePasswordRetry) {
@@ -4849,6 +5117,7 @@ function requestExtractPasswordInDialog(retry: ArchiveWorkspacePasswordRetry) {
   browsePasswordInput.type = "password";
   browseShowPasswordInput.checked = false;
   syncExtractDialogState();
+  syncReactExtractDialogSnapshot(message(retry.promptKey));
   browsePasswordInput.focus();
 }
 
@@ -5033,16 +5302,12 @@ async function saveNativeDialog(options: NativeDialogSaveOptions) {
 
 function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
   if (dialog === extractDialog) {
-    const row = focusedEntryPath
-      ? tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(focusedEntryPath)}"]`)
-      : null;
+    const row = findActiveArchiveRow(focusedEntryPath);
     return row ?? extractToolbarButton;
   }
 
   if (dialog === infoDialog) {
-    const row = focusedEntryPath
-      ? tableBody.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(focusedEntryPath)}"]`)
-      : null;
+    const row = findActiveArchiveRow(focusedEntryPath);
     return row ?? infoToolbarButton;
   }
 
@@ -5087,6 +5352,72 @@ const closeModal = (dialog: HTMLElement) => {
   modalController.close(dialog);
 };
 
+function setReactDialogSnapshot(snapshot: ZManagerDialogSnapshot) {
+  reactDialogSnapshot = snapshot;
+  publishReactSnapshot();
+}
+
+function closeReactDialog() {
+  const previous = reactDialogSnapshot;
+  reactDialogSnapshot = { kind: "none" };
+  if (previous.kind === "extract") {
+    archiveWorkspace.clearPasswordRetry();
+    browsePasswordInput.value = "";
+    browsePasswordInput.type = "password";
+    browseShowPasswordInput.checked = false;
+  }
+  publishReactSnapshot();
+
+  if (previous.kind === "info") {
+    findActiveArchiveRow(previous.returnFocusPath)?.focus();
+  } else if (previous.kind === "extract") {
+    findActiveArchiveRow(focusedEntryPath)?.focus();
+  }
+}
+
+function currentReactExtractDialogSnapshot(
+  mode: ExtractMode = activeExtractMode,
+  messageText = extractDialogMessage.textContent || extractDialogMessageForMode(mode),
+): Extract<ZManagerDialogSnapshot, { kind: "extract" }> {
+  return {
+    kind: "extract",
+    mode,
+    title: message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle"),
+    message: messageText,
+    startLabel: message(mode === "selection" ? "extract.selectedAction" : "extract.allAction"),
+    destination: extractDestinationInput.value,
+    destinationHistory: [...pathHistoryStore.getSnapshot().extractDestinationHistory],
+    useSubfolder: extractUseSubfolderCheckbox.checked,
+    subfolder: extractSubfolderInput.value,
+    pathMode: getExtractPathMode(),
+    overwrite: getOverwritePolicyValue(),
+    stripComponents: browseStripInput.value,
+    deduplicateRoot: extractDeduplicateRootCheckbox.checked,
+    passwordPromptOpen: extractPasswordOptions.open,
+  };
+}
+
+function syncReactExtractDialogSnapshot(
+  messageText = extractDialogMessage.textContent || extractDialogMessageForMode(activeExtractMode),
+) {
+  if (reactDialogSnapshot.kind !== "extract") {
+    return;
+  }
+
+  setReactDialogSnapshot(currentReactExtractDialogSnapshot(activeExtractMode, messageText));
+}
+
+function writeReactExtractFormToLegacyControls(input: Extract<ZManagerDialogIntent, { type: "submitExtract" | "browseExtractDestination" }>) {
+  extractDestinationInput.value = input.destination;
+  extractUseSubfolderCheckbox.checked = input.useSubfolder;
+  extractSubfolderInput.value = input.subfolder;
+  extractSubfolderInput.disabled = !input.useSubfolder;
+  extractPathModeSelect.value = input.pathMode;
+  browseOverwriteSelect.value = input.overwrite;
+  browseStripInput.value = input.stripComponents;
+  extractDeduplicateRootCheckbox.checked = input.deduplicateRoot;
+}
+
 function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
   return modalController.activateDefault(event, dialog, {
     isDefaultSafeTextEntry: isDefaultSafeDialogTextEntry,
@@ -5116,7 +5447,8 @@ function openJobDrawer() {
   }
 
   jobDrawer.setAttribute("aria-hidden", "false");
-  workspaceElement.dataset.jobDrawer = "open";
+  shellWorkspace.setJobDrawerOpen(true);
+  publishReactSnapshot();
   void pollJobs();
 }
 
@@ -5126,11 +5458,12 @@ function closeJobDrawer() {
   }
 
   jobDrawer.setAttribute("aria-hidden", "true");
-  workspaceElement.dataset.jobDrawer = "closed";
+  shellWorkspace.setJobDrawerOpen(false);
+  publishReactSnapshot();
 }
 
 function toggleJobDrawer() {
-  if (workspaceElement.dataset.jobDrawer === "open") {
+  if (shellWorkspace.getSnapshot().jobDrawerOpen) {
     closeJobDrawer();
   } else {
     openJobDrawer();
@@ -5146,7 +5479,7 @@ function currentDropSurface(): DropIntentSurface {
 }
 
 function renderDropOverlay(snapshot: ShellWorkspaceSnapshot = shellWorkspace.getSnapshot()) {
-  renderShellDropOverlay(shellViewElements, snapshot.dropOverlay, message);
+  void snapshot;
   publishReactSnapshot();
 }
 
@@ -5309,7 +5642,7 @@ function handleDropDecision(decision: DropIntentDecision, chosenAction?: "openAr
       break;
     case "askAction":
       setDropOverlayChoice(decision, dropCopyForDecision(decision));
-      focusDropOverlayPrimaryAction(shellViewElements);
+      document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();
       break;
     case "rejectUnsupportedDrop":
       rejectDrop(decision.reason);
@@ -5388,7 +5721,9 @@ async function bindTauriFileDrop() {
 }
 
 function bindBrowserFileDropFallback() {
-  appRoot.addEventListener("dragenter", (event) => {
+  const browserDropRoot = document.querySelector<HTMLElement>("#app") ?? appRoot;
+
+  browserDropRoot.addEventListener("dragenter", (event) => {
     if (isDesktopRuntime()) {
       return;
     }
@@ -5396,7 +5731,7 @@ function bindBrowserFileDropFallback() {
     setDropOverlayForPaths(droppedPathsFromDataTransfer(event.dataTransfer));
   });
 
-  appRoot.addEventListener("dragover", (event) => {
+  browserDropRoot.addEventListener("dragover", (event) => {
     if (isDesktopRuntime()) {
       return;
     }
@@ -5404,14 +5739,14 @@ function bindBrowserFileDropFallback() {
     setDropOverlayForPaths(droppedPathsFromDataTransfer(event.dataTransfer));
   });
 
-  appRoot.addEventListener("dragleave", (event) => {
-    if (isDesktopRuntime() || (event.relatedTarget instanceof Node && appRoot.contains(event.relatedTarget))) {
+  browserDropRoot.addEventListener("dragleave", (event) => {
+    if (isDesktopRuntime() || (event.relatedTarget instanceof Node && browserDropRoot.contains(event.relatedTarget))) {
       return;
     }
     clearDropOverlay();
   });
 
-  appRoot.addEventListener("drop", (event) => {
+  browserDropRoot.addEventListener("drop", (event) => {
     if (isDesktopRuntime()) {
       return;
     }
@@ -6310,10 +6645,11 @@ function showArchiveInfo() {
     { label: message("detail.packedSize"), value: packedSize === null ? null : formatBytes(packedSize) },
     { label: message("detail.lastTestStatus"), value: formatLastTestStatusForCurrentArchive() },
   ];
-  setInfoActions([
+  const actions: ZManagerDialogAction[] = [
     { label: message("info.copyPath"), copyValue: currentArchivePath },
     { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
-  ]);
+  ];
+  setInfoActions(actions);
 
   infoDialogBody.innerHTML = `
     <section class="dialog-section property-section">
@@ -6323,7 +6659,15 @@ function showArchiveInfo() {
       </dl>
     </section>
   `;
-  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
+  setReactDialogSnapshot({
+    kind: "info",
+    title: message("info.archiveTitle"),
+    description: message("info.archiveDescription"),
+    sectionTitle: message("info.archiveTitle"),
+    rows: detailRowsToReactRows(rows),
+    actions,
+    returnFocusPath: infoReturnFocusPath(),
+  });
 }
 
 function showEntryInfo(path: string) {
@@ -6336,12 +6680,13 @@ function showEntryInfo(path: string) {
   infoDescription.textContent = message("info.entryDescription");
   const rows = entryPropertyRows(entry);
   const canPreview = entry.kind !== "directory";
-  setInfoActions([
+  const actions: ZManagerDialogAction[] = [
     ...(canPreview ? [{ label: message("command.view"), action: "preview", primary: true, title: previewActionHint() }] : []),
     { label: message("info.copyPath"), copyValue: entry.path },
     { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
     { label: message("info.archiveTitle"), action: "archive-info" },
-  ]);
+  ];
+  setInfoActions(actions);
   infoDialogBody.innerHTML = `
     <section class="dialog-section property-section">
       <h3>${escapeHtml(message("info.entryTitle"))}</h3>
@@ -6350,7 +6695,15 @@ function showEntryInfo(path: string) {
       </dl>
     </section>
   `;
-  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
+  setReactDialogSnapshot({
+    kind: "info",
+    title: message("info.entryTitle"),
+    description: message("info.entryDescription"),
+    sectionTitle: message("info.entryTitle"),
+    rows: detailRowsToReactRows(rows),
+    actions,
+    returnFocusPath: infoReturnFocusPath(),
+  });
 }
 
 function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
@@ -6362,10 +6715,11 @@ function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
   const rows = selectionPropertyRows(selectedRows);
   infoTitle.textContent = message("info.selectionTitle");
   infoDescription.textContent = message("info.selectionDescription");
-  setInfoActions([
+  const actions: ZManagerDialogAction[] = [
     { label: message("info.copyDetails"), copyValue: detailRowsToText(rows) },
     { label: message("info.archiveTitle"), action: "archive-info" },
-  ]);
+  ];
+  setInfoActions(actions);
   infoDialogBody.innerHTML = `
     <section class="dialog-section property-section">
       <h3>${escapeHtml(message("info.selectionTitle"))}</h3>
@@ -6374,7 +6728,15 @@ function showSelectionInfo(selectedRows = getVisibleSelectedRows()) {
       </dl>
     </section>
   `;
-  openModal(infoDialog, "#info-close", infoReturnFocusForCurrentSelection());
+  setReactDialogSnapshot({
+    kind: "info",
+    title: message("info.selectionTitle"),
+    description: message("info.selectionDescription"),
+    sectionTitle: message("info.selectionTitle"),
+    rows: detailRowsToReactRows(rows),
+    actions,
+    returnFocusPath: infoReturnFocusPath(),
+  });
 }
 
 function showCurrentInfo() {
@@ -6457,6 +6819,19 @@ function renderAboutDiagnostics() {
       </dl>
     </section>
   `).join("");
+  return groups;
+}
+
+function openAboutDialog() {
+  const groups = renderAboutDiagnostics();
+  setReactDialogSnapshot({
+    kind: "about",
+    title: message("about.title"),
+    groups: groups.map((group) => ({
+      title: group.title,
+      rows: group.rows.map(([label, value]) => [label, value] as const),
+    })),
+  });
 }
 
 function diagnosticsText(): string {
@@ -6476,6 +6851,18 @@ function diagnosticsText(): string {
     lines.push("");
   }
   return lines.join("\n").trim();
+}
+
+async function copyAboutDiagnostics() {
+  try {
+    await writeClipboardText(diagnosticsText());
+    copyDiagnosticsButton.textContent = message("status.copied");
+    uiDeferrals.schedule(() => {
+      copyDiagnosticsButton.textContent = message("about.copyDiagnostics");
+    }, 1400);
+  } catch {
+    setOperationalMessage("status.copyDiagnosticsFailed");
+  }
 }
 
 function syncPreferenceOutputState() {
@@ -6570,7 +6957,7 @@ function activeDisplayWorkspace(): DisplayRefreshWorkspace {
 function refreshDisplayFromPreferences() {
   refreshDisplayContext(appPreferences.locale, {
     activeWorkspace: activeDisplayWorkspace(),
-    jobsVisible: workspaceElement.dataset.jobDrawer === "open" || isQuickActionJobMode(),
+    jobsVisible: shellWorkspace.getSnapshot().jobDrawerOpen || isQuickActionJobMode(),
     preferencesVisible: !preferencesDialog.hidden,
   }, {
     commitContext: (nextDisplayContext) => {
@@ -6638,6 +7025,36 @@ function collectPreferencesFromDialog(): AppPreferences {
   return collectPreferencesFromView(preferencesViewElements, preferencesDialogDraft ?? appPreferences);
 }
 
+function currentPreferencesDraft(): AppPreferences {
+  return preferencesDialogDraft ?? appPreferences;
+}
+
+function updateReactPreferencesDraft(patch: AppPreferencePatch) {
+  preferencesDialogDraft = preferencesWithPatch(currentPreferencesDraft(), patch);
+  publishReactSnapshot();
+}
+
+function updateReactCreateDefaultsDraft(
+  format: CreateArchiveFormat,
+  patch: Partial<ReturnType<typeof createDefaultsForFormat>>,
+) {
+  const draft = currentPreferencesDraft();
+  const nextDefaultsForFormat = {
+    ...createDefaultsForFormat(draft, format),
+    ...patch,
+  };
+  preferencesDialogDraft = preferencesWithPatch(draft, {
+    createFormatDefaults: {
+      ...draft.createFormatDefaults,
+      [format]: nextDefaultsForFormat,
+    },
+    ...(draft.defaultArchiveFormat === format
+      ? { defaultCleanSourceEnabled: Boolean(nextDefaultsForFormat.cleanSource) }
+      : {}),
+  });
+  publishReactSnapshot();
+}
+
 function applyCreatePreferenceDefaults() {
   const format = appPreferences.defaultArchiveFormat;
   applyCreateDefaultsForFormat(format, { suggestDestinationIfBlank: true });
@@ -6689,6 +7106,7 @@ function openPreferencesDialog() {
   showPreferencePage("folders");
   renderPreferencesDialog();
   openModal(preferencesDialog, "#pref-output-location");
+  publishReactSnapshot();
 }
 
 async function onSelectPreferenceOutputFolder() {
@@ -6707,6 +7125,34 @@ async function onSelectPreferenceOutputFolder() {
   renderCustomOutputPathDisplay(preferencesCustomOutputInput);
   syncPreferenceSaveState();
   void validatePreferenceCustomOutputFolder();
+}
+
+async function onSelectReactPreferenceOutputFolder() {
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseDefaultOutput"),
+    directory: true,
+    multiple: false,
+  });
+
+  if (!selected || Array.isArray(selected)) {
+    return;
+  }
+
+  updateReactPreferencesDraft({
+    customOutputFolderPath: selected,
+  });
+}
+
+async function saveReactPreferencesDraft() {
+  renderPreferencesDialog();
+  await savePreferencesFromDialog();
+  publishReactSnapshot();
+}
+
+function cancelReactPreferencesDialog() {
+  preferencesDialogDraft = null;
+  closeModal(preferencesDialog);
+  publishReactSnapshot();
 }
 
 function openExtractDialog(mode: ExtractMode) {
@@ -6733,7 +7179,7 @@ function openExtractDialog(mode: ExtractMode) {
   extractPasswordOptions.open = false;
   renderExtractDestinationHistory();
   syncExtractDialogState();
-  openModal(extractDialog, "#extract-destination");
+  setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));
 }
 
 function openExtractHereDialog(mode: ExtractMode) {
@@ -6745,6 +7191,7 @@ function openExtractHereDialog(mode: ExtractMode) {
       ? message("extract.hereSelected", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) })
       : message("extract.hereArchive", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) });
     syncExtractDialogState();
+    setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode, extractDialogMessage.textContent));
   }
 }
 
@@ -6805,9 +7252,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
 
   renderBrowse();
   if (focusedEntryPath) {
-    const restoredFocus = tableBody.querySelector<HTMLTableRowElement>(
-      `tr[data-entry-path="${CSS.escape(focusedEntryPath)}"]`,
-    );
+    const restoredFocus = findActiveArchiveRow(focusedEntryPath);
     if (restoredFocus) {
       focusTableRow(restoredFocus);
       return;
@@ -7263,7 +7708,7 @@ function handleShortcut(event: KeyboardEvent) {
 
     hideContextMenu();
     if (openDialogElement) cancelDialog(event, openDialogElement);
-    else if (workspaceElement.dataset.jobDrawer === "open") closeJobDrawer();
+    else if (shellWorkspace.getSnapshot().jobDrawerOpen) closeJobDrawer();
     else clearBrowseSelection();
     return;
   }
@@ -7297,6 +7742,22 @@ function handleShortcut(event: KeyboardEvent) {
   }
 }
 
+function handleInfoDialogAction(action?: string, copyValue?: string) {
+  if (copyValue) {
+    void copyTextToClipboard(copyValue);
+    return;
+  }
+
+  const routedCommand = selectDetailsCommand(action);
+  if (routedCommand) {
+    runRoutedCommand(routedCommand.commandId, routedCommand.payload);
+    return;
+  }
+  if (action === "clear-search") {
+    clearSearch();
+  }
+}
+
 function bindDialogCloseButtons() {
   document.querySelector<HTMLButtonElement>("#extract-dialog-close")!.addEventListener("click", () => closeModal(extractDialog));
   document.querySelector<HTMLButtonElement>("#extract-cancel")!.addEventListener("click", () => closeModal(extractDialog));
@@ -7309,11 +7770,6 @@ function bindDialogCloseButtons() {
 
 function bindActions() {
   compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
-  modeCompressButton.addEventListener("click", () => setWorkspaceMode("compress"));
-  modeExtractButton.addEventListener("click", () => setWorkspaceMode("extract"));
-  bindDropOverlayActions(shellViewElements, {
-    onChoice: activatePendingDropChoice,
-  });
   bindCommandSurface(appRoot, {
     commandDefinitions: COMMAND_DEFINITIONS,
     onCommand: (commandId) => runRoutedCommand(commandId),
@@ -7325,21 +7781,7 @@ function bindActions() {
       return;
     }
 
-    const copyValue = button.dataset.copyValue;
-    if (copyValue) {
-      void copyTextToClipboard(copyValue);
-      return;
-    }
-
-    const action = button.dataset.infoAction;
-    const routedCommand = selectDetailsCommand(action);
-    if (routedCommand) {
-      runRoutedCommand(routedCommand.commandId, routedCommand.payload);
-      return;
-    }
-    if (action === "clear-search") {
-      clearSearch();
-    }
+    handleInfoDialogAction(button.dataset.infoAction, button.dataset.copyValue);
   });
   navBackButton.addEventListener("click", navigateBack);
   for (const resizer of paneResizerElements) {
@@ -8334,17 +8776,7 @@ tableBody.addEventListener("click", (event) => {
   jobDrawerCloseButton.addEventListener("click", closeJobDrawer);
   jobsListElement.addEventListener("focusin", () => void pollJobs());
 
-  copyDiagnosticsButton.addEventListener("click", async () => {
-    try {
-      await writeClipboardText(diagnosticsText());
-      copyDiagnosticsButton.textContent = message("status.copied");
-      uiDeferrals.schedule(() => {
-        copyDiagnosticsButton.textContent = message("about.copyDiagnostics");
-      }, 1400);
-    } catch {
-      setOperationalMessage("status.copyDiagnosticsFailed");
-    }
-  });
+  copyDiagnosticsButton.addEventListener("click", () => void copyAboutDiagnostics());
 
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof HTMLElement)) {
@@ -8365,6 +8797,11 @@ tableBody.addEventListener("click", (event) => {
 bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
+privatizeLegacyExtractDialogIds();
+privatizeLegacyInfoAboutDialogIds();
+privatizeLegacyCreateWorkspaceIds();
+privatizeLegacyJobsIds();
+privatizeLegacyPreferencesIds();
 bindBrowserFileDropFallback();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();
@@ -8385,8 +8822,7 @@ if (isLocalDevHost()) {
     },
     openSurface: (surface: DevDialogName) => {
       if (surface === "about") {
-        renderAboutDiagnostics();
-        openModal(aboutDialog, "#about-close");
+        openAboutDialog();
       } else if (surface === "preferences") {
         openPreferencesDialog();
       } else if (surface === "info") {
@@ -8396,6 +8832,12 @@ if (isLocalDevHost()) {
       }
     },
     closeModal: () => {
+      if (reactDialogSnapshot.kind !== "none") {
+        closeReactDialog();
+      }
+      if (preferencesDialogDraft) {
+        cancelReactPreferencesDialog();
+      }
       const openDialog = getOpenModal();
       if (openDialog) {
         closeModal(openDialog);

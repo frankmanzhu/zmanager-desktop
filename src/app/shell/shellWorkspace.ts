@@ -52,6 +52,7 @@ export interface QuickActionWindowSnapshot {
 export interface ShellWorkspaceSnapshot {
   readonly activeMode: WorkspaceDropMode;
   readonly operationalStatus: string;
+  readonly jobDrawerOpen: boolean;
   readonly dropOverlay: DropOverlaySnapshot;
   readonly previewCleanup: PreviewCleanupMetadata;
   readonly quickActionWindow: QuickActionWindowSnapshot;
@@ -61,6 +62,7 @@ export interface ShellWorkspace {
   getSnapshot(): ShellWorkspaceSnapshot;
   setWorkspaceMode(mode: WorkspaceDropMode): ShellWorkspaceSnapshot;
   setOperationalStatus(message: string): ShellWorkspaceSnapshot;
+  setJobDrawerOpen(open: boolean): ShellWorkspaceSnapshot;
   setQuickActionWindowMode(mode: QuickActionWindowMode): ShellWorkspaceSnapshot;
   setQuickActionWindowShown(shown: boolean): ShellWorkspaceSnapshot;
   isQuickActionJobMode(): boolean;
@@ -143,6 +145,7 @@ function hasQuickActionJobs(state: QuickActionStartupStateDto): boolean {
 export function createShellWorkspace(): ShellWorkspace {
   let activeMode: WorkspaceDropMode = "compress";
   let operationalStatus = "";
+  let jobDrawerOpen = false;
   let dropOverlayMode: DropOverlayMode = "idle";
   let dropOverlayCopy: DropOverlayCopy | null = null;
   let pendingDropChoice: PendingDropChoice | null = null;
@@ -154,6 +157,7 @@ export function createShellWorkspace(): ShellWorkspace {
     return Object.freeze({
       activeMode,
       operationalStatus,
+      jobDrawerOpen,
       dropOverlay: Object.freeze({
         mode: dropOverlayMode,
         copy: dropOverlayCopy ? freezeDropOverlayCopy(dropOverlayCopy) : null,
@@ -177,6 +181,11 @@ export function createShellWorkspace(): ShellWorkspace {
 
     setOperationalStatus(message) {
       operationalStatus = message;
+      return getSnapshot();
+    },
+
+    setJobDrawerOpen(open) {
+      jobDrawerOpen = open;
       return getSnapshot();
     },
 

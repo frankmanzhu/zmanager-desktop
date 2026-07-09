@@ -10,6 +10,7 @@ describe("shell workspace state", () => {
     expect(snapshot).toEqual({
       activeMode: "compress",
       operationalStatus: "",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -38,6 +39,7 @@ describe("shell workspace state", () => {
     expect(workspace.setWorkspaceMode("extract")).toEqual({
       activeMode: "extract",
       operationalStatus: "",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -57,6 +59,7 @@ describe("shell workspace state", () => {
     expect(workspace.setOperationalStatus("Ready")).toEqual({
       activeMode: "extract",
       operationalStatus: "Ready",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -72,6 +75,14 @@ describe("shell workspace state", () => {
         shown: false,
       },
     });
+  });
+
+  it("tracks job drawer visibility as shell state", () => {
+    const workspace = createShellWorkspace();
+
+    expect(workspace.getSnapshot().jobDrawerOpen).toBe(false);
+    expect(workspace.setJobDrawerOpen(true).jobDrawerOpen).toBe(true);
+    expect(workspace.setJobDrawerOpen(false).jobDrawerOpen).toBe(false);
   });
 
   it("tracks quick-action shell window mode and shown state", () => {
@@ -174,6 +185,7 @@ describe("shell workspace state", () => {
     expect(workspace.getSnapshot()).toEqual({
       activeMode: "compress",
       operationalStatus: "",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -195,6 +207,7 @@ describe("shell workspace state", () => {
     expect(workspace.getSnapshot()).toEqual({
       activeMode: "compress",
       operationalStatus: "",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -471,6 +484,7 @@ describe("shell workspace state", () => {
     expect(snapshot).toEqual({
       activeMode: "extract",
       operationalStatus: "Ready",
+      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,

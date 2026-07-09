@@ -80,18 +80,18 @@ src/desktop/*
 | --- | --- | --- | --- |
 | 0 | React bridge and tooling | Complete | React root boots existing workspace through `AppShell`. |
 | 1 | React app runtime seam | Complete | React can subscribe to app snapshots and dispatch typed intents without owning workflow state. |
-| 2 | Shell chrome and command surfaces | In Progress | Titlebar/menu/toolbar/mode/status render in React and route through command router. |
-| 3 | Archive browse workspace | Pending | Archive tree/path/search/table/details render in React from archive snapshots. |
-| 4 | Extract, info, preview, and dialogs | Pending | Archive dialogs render in React while request building stays in workspaces/controllers. |
-| 5 | Create workspace | Pending | Source list, plan browser, options, destination, and validation render in React. |
-| 6 | Jobs and quick-action progress | Pending | Jobs drawer/status/progress render in React from jobs workspace snapshots. |
-| 7 | Preferences and display refresh | Pending | Preferences render in React and locale/display refresh is snapshot-driven. |
-| 8 | Drop, context menus, keyboard, and drag | Pending | Cross-surface interaction adapters are React-owned and workflow-free. |
+| 2 | Shell chrome and command surfaces | Complete | Titlebar/menu/toolbar/mode/status render in React and route through command router. |
+| 3 | Archive browse workspace | Complete | Archive tree/path/search/table/details render in React from archive snapshots. |
+| 4 | Extract, info, preview, and dialogs | Complete | Archive dialogs render in React while request building stays in workspaces/controllers. |
+| 5 | Create workspace | Complete | Source list, plan browser, options, destination, and validation render in React. |
+| 6 | Jobs and quick-action progress | Complete | Jobs drawer/status/progress render in React from jobs workspace snapshots. |
+| 7 | Preferences and display refresh | Complete | Preferences render in React and locale/display refresh is snapshot-driven. |
+| 8 | Drop, context menus, keyboard, and drag | In Progress | Cross-surface interaction adapters are React-owned and workflow-free. |
 | 9 | Typed Rust/TS command contract | Pending | DTO drift is guarded by generated bindings or explicit contract tests. |
 | 10 | Delete legacy GUI | Pending | `legacyMain.ts` is removed and no tests inspect legacy HTML. |
 | 11 | Visual QA and release gate | Pending | Desktop and browser smoke checks pass on supported platforms. |
 
-Active phase: 2
+Active phase: 8
 
 ## Phase 0: React Bridge And Tooling
 
@@ -173,7 +173,7 @@ npm.cmd run ast:lint
 
 ## Phase 2: Shell Chrome And Command Surfaces
 
-Status: In Progress.
+Status: Complete.
 
 Goal: move titlebar, app menu, command toolbar, mode switch, path/status shell,
 and drop overlay shell chrome into React.
@@ -204,7 +204,7 @@ Checklist:
 - [x] Add status bar rendering to React from shell/job/archive snapshots.
 - [x] Add drop overlay rendering to React while preserving drop decisions in
   `shellWorkspace` and `dropIntent`.
-- [ ] Replace the live legacy shell chrome mount with the React shell frame.
+- [x] Replace the live legacy shell chrome mount with the React shell frame.
 - [x] Add tests for command routing from menu, toolbar, shortcut-facing command
   IDs, status rendering, and drop overlay choices.
 
@@ -223,7 +223,22 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "menu|toolbar|drop|status"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+```
+
+Note: the exact combined Playwright grep is split/avoided on this Windows shell
+because `cmd` treats the `|` alternation as a pipeline before Playwright sees
+it. The primary GUI smoke exercises React shell drop/status/menu/toolbar paths.
+
 ## Phase 3: Archive Browse Workspace
+
+Status: Complete.
 
 Goal: migrate the main archive browsing screen to React.
 
@@ -240,16 +255,16 @@ Likely files:
 
 Checklist:
 
-- [ ] Render archive tree from `ArchiveWorkspaceSnapshot`.
-- [ ] Render path bar and search/flat-view controls from snapshot and display
+- [x] Render archive tree from `ArchiveWorkspaceSnapshot`.
+- [x] Render path bar and search/flat-view controls from snapshot and display
   context.
-- [ ] Render archive table rows using existing `hierarchicalTable` state and
+- [x] Render archive table rows using existing `hierarchicalTable` state and
   archive table column settings.
-- [ ] Preserve selection, focus, range selection, checkbox selection, keyboard
+- [x] Preserve selection, focus, range selection, checkbox selection, keyboard
   movement, sort, column widths/order/visibility, and hidden-selection behavior.
-- [ ] Render details pane from existing details snapshot/model.
-- [ ] Preserve native file icon rendering and fallback icons.
-- [ ] Add tests for table row rendering, selection intents, sort intents,
+- [x] Render details pane from existing details snapshot/model.
+- [x] Preserve native file icon rendering and fallback icons.
+- [x] Add tests for table row rendering, selection intents, sort intents,
   search controls, details actions, and empty/error/loading states.
 
 Completion gate:
@@ -268,7 +283,23 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "archive|search|flat|selection|details"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "secondary GUI surfaces"
+```
+
+Note: the live archive browse surface is React-owned. The legacy archive DOM
+scaffold is privatized and hidden in Extract mode so remaining create/dialog
+plumbing can keep its captured refs until later phases remove those surfaces.
+
 ## Phase 4: Extract, Info, Preview, And Dialogs
+
+Status: Complete.
 
 Goal: migrate archive-related dialogs and overlays to React.
 
@@ -282,16 +313,16 @@ Likely files:
 
 Checklist:
 
-- [ ] Build shared React modal primitives with focus trap and return focus.
-- [ ] Move extract dialog UI to React while request construction remains in
+- [x] Build shared React modal primitives with focus trap and return focus.
+- [x] Move extract dialog UI to React while request construction remains in
   archive workspace/controller.
-- [ ] Move info/properties dialog rendering to React.
-- [ ] Move about diagnostics rendering to React without leaking secrets.
-- [ ] Move password retry prompt UI to React while password values remain
+- [x] Move info/properties dialog rendering to React.
+- [x] Move about diagnostics rendering to React without leaking secrets.
+- [x] Move password retry prompt UI to React while password values remain
   transient and are never stored in snapshots.
-- [ ] Preserve Enter/Escape/default-button behavior, validation state, advanced
+- [x] Preserve Enter/Escape/default-button behavior, validation state, advanced
   options, and accessibility labels.
-- [ ] Add tests for extract validation, default/cancel behavior, password
+- [x] Add tests for extract validation, default/cancel behavior, password
   prompt cancellation, info details, and diagnostics copy text.
 
 Completion gate:
@@ -308,7 +339,24 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "extract|dialog|password|properties|about"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "secondary GUI surfaces"
+```
+
+Note: extract submit still bridges through the captured legacy form controls so
+the existing extract start controller remains the request-construction owner.
+The React snapshot never stores password values; password text stays local to
+the React form until submit.
+
 ## Phase 5: Create Workspace
+
+Status: Complete.
 
 Goal: migrate the create/compress workspace to React.
 
@@ -323,17 +371,17 @@ Likely files:
 
 Checklist:
 
-- [ ] Render source list and source actions from `CreateWorkspaceSnapshot`.
-- [ ] Render destination field, recent destinations, validation, and browse
+- [x] Render source list and source actions from `CreateWorkspaceSnapshot`.
+- [x] Render destination field, recent destinations, validation, and browse
   actions through controller effects.
-- [ ] Render per-format options and password controls without persisting
+- [x] Render per-format options and password controls without persisting
   password values.
-- [ ] Render create plan tree/table using shared hierarchical table components.
-- [ ] Preserve include/exclude all, partial inclusion, source removal, source
+- [x] Render create plan tree/table using shared hierarchical table components.
+- [x] Preserve include/exclude all, partial inclusion, source removal, source
   reveal, keyboard navigation, Delete behavior, and source context menus.
-- [ ] Preserve plan revision guards and stale-result behavior in controller and
+- [x] Preserve plan revision guards and stale-result behavior in controller and
   workspace tests.
-- [ ] Add React tests for source actions, option changes, destination changes,
+- [x] Add React tests for source actions, option changes, destination changes,
   plan browser intents, and create readiness.
 
 Completion gate:
@@ -350,7 +398,26 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "create|compress|source|plan"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "secondary GUI surfaces"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "create workspace rows preserve keyboard"
+```
+
+Note: the live create/compress surface is React-owned. The captured legacy
+create DOM is still privatized as a bridge for the existing create controllers,
+selection helpers, and context-menu actions until the later cleanup phases
+remove the remaining legacy scaffolding. Password values stay local to React
+state and are copied into the existing start controller only on submit.
+
 ## Phase 6: Jobs And Quick-Action Progress
+
+Status: Complete.
 
 Goal: migrate job drawer, status job button details, and quick-action focused
 progress UI to React.
@@ -364,14 +431,14 @@ Likely files:
 
 Checklist:
 
-- [ ] Render job list from `JobsWorkspace` snapshots.
-- [ ] Render cancel/pause/resume/retry-password/dismiss buttons through
+- [x] Render job list from `JobsWorkspace` snapshots.
+- [x] Render cancel/pause/resume/retry-password/dismiss buttons through
   `jobControlController`.
-- [ ] Render focused quick-action progress and output actions.
-- [ ] Preserve progress clock updates through injected timer/adapters, not React
+- [x] Render focused quick-action progress and output actions.
+- [x] Preserve progress clock updates through injected timer/adapters, not React
   workflow state.
-- [ ] Preserve quick-action auto-close decisions in jobs workspace/controller.
-- [ ] Add React tests for job actions, retry prompts, focused progress, and
+- [x] Preserve quick-action auto-close decisions in jobs workspace/controller.
+- [x] Add React tests for job actions, retry prompts, focused progress, and
   terminal job states.
 
 Completion gate:
@@ -388,7 +455,23 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "job|progress|quick"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "secondary GUI surfaces"
+```
+
+Note: job drawer and quick-action progress IDs are React-owned. The captured
+legacy DOM is hidden and privatized so existing job controllers, timers, and
+desktop effects remain the operation owners until the legacy cleanup phase.
+
 ## Phase 7: Preferences And Display Refresh
+
+Status: Complete.
 
 Goal: migrate preferences UI and make display refresh fully React-driven.
 
@@ -402,12 +485,12 @@ Likely files:
 
 Checklist:
 
-- [ ] Render preferences pages from typed preferences snapshot.
-- [ ] Preserve custom output folder validation and display truncation.
-- [ ] Preserve default create/extract options and toolbar/table settings.
-- [ ] Preserve locale change behavior through display context without mutating
+- [x] Render preferences pages from typed preferences snapshot.
+- [x] Preserve custom output folder validation and display truncation.
+- [x] Preserve default create/extract options and toolbar/table settings.
+- [x] Preserve locale change behavior through display context without mutating
   workflow values.
-- [ ] Add tests for preference patch collection, locale refresh, output
+- [x] Add tests for preference patch collection, locale refresh, output
   validation, default format changes, and save/cancel behavior.
 
 Completion gate:
@@ -424,7 +507,24 @@ npm.cmd run ast:lint
 npm.cmd run test:e2e -- --grep "preferences|locale|settings"
 ```
 
+Verified:
+
+```powershell
+npm.cmd run test:frontend
+npm.cmd run build
+npm.cmd run ast:lint
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "primary GUI states"
+npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "secondary GUI surfaces"
+```
+
+Note: preferences pages and public IDs are React-owned. React edits the typed
+preferences draft and reuses the existing save/apply flow so persistence,
+display refresh, table option refresh, and create-default application remain
+controller-owned.
+
 ## Phase 8: Drop, Context Menus, Keyboard, And Drag
+
+Status: In Progress.
 
 Goal: finish cross-surface interaction adapters in React.
 

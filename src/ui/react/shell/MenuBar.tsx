@@ -1,4 +1,8 @@
 import {
+  type MouseEvent,
+} from "react";
+
+import {
   CLASSIC_MENU_GROUPS,
   COMMAND_DEFINITIONS,
   type CommandId,
@@ -79,10 +83,17 @@ function MenuEntry({ item }: Readonly<{ item: MenuItem }>) {
       disabled={!state.enabled}
       aria-disabled={!state.enabled}
       aria-pressed={typeof pressed === "boolean" ? pressed : undefined}
-      onClick={() => actions.executeCommand(commandId)}
+      onClick={(event) => {
+        actions.executeCommand(commandId);
+        closeContainingMenu(event);
+      }}
     >
       <span>{localizedCommandLabel(commandId, snapshot)}</span>
       {COMMAND_DEFINITIONS[commandId].shortcut ? <kbd>{COMMAND_DEFINITIONS[commandId].shortcut}</kbd> : null}
     </button>
   );
+}
+
+function closeContainingMenu(event: MouseEvent<HTMLElement>) {
+  event.currentTarget.closest("details")?.removeAttribute("open");
 }

@@ -20,10 +20,11 @@ export function AppFrame({ children }: AppFrameProps) {
   return (
     <main
       className={workspaceClassName(snapshot)}
-      data-job-drawer="closed"
+      data-job-drawer={snapshot.shell.jobDrawerOpen ? "open" : "closed"}
       data-mode={snapshot.shell.activeMode}
       data-drop-state={snapshot.shell.dropOverlay.mode}
       data-drop-target={snapshot.shell.dropOverlay.copy?.target}
+      data-quick-action-mode={quickActionModeAttribute(snapshot)}
     >
       <TitleBar />
       <WindowResizeHandles />
@@ -34,6 +35,17 @@ export function AppFrame({ children }: AppFrameProps) {
       <DropOverlay />
     </main>
   );
+}
+
+function quickActionModeAttribute(snapshot: ZManagerReactSnapshot): string | undefined {
+  switch (snapshot.shell.quickActionWindow.mode) {
+    case "jobOnly":
+      return "job-only";
+    case "background":
+      return "background";
+    case "normal":
+      return undefined;
+  }
 }
 
 function WindowResizeHandles() {

@@ -58,10 +58,12 @@ describe("desktop startup window", () => {
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
     const legacyMainTs = readWorkspaceFile("src", "legacyMain.ts");
+    const appFrameTsx = readWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
     const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
     const styles = readWorkspaceFile("src", "styles.css");
 
-    expect(legacyMainTs).toContain("function renderWindowResizeHandles()");
+    expect(appFrameTsx).toContain("function WindowResizeHandles()");
+    expect(appFrameTsx).toContain("data-window-resize-direction");
     expect(legacyMainTs).toContain("appWindowController.beginResizeDrag(direction)");
     expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
     expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
