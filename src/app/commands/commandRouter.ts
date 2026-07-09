@@ -4,6 +4,7 @@ import {
   type CommandId,
   type CommandStateMap,
 } from "../classicCommands";
+import type { ContextMenuAction } from "./contextMenuModel";
 
 export type RoutedExtractMode = "archive" | "selection";
 export type RoutedExtractDestination = "dialog" | "here";
@@ -162,7 +163,7 @@ export function selectTreeCommand(action?: string): RoutedCommand | null {
   }
 }
 
-export function selectContextCommand(action?: string, options: ContextCommandOptions = {}): RoutedCommand | null {
+export function selectContextCommand(action?: ContextMenuAction | string, options: ContextCommandOptions = {}): RoutedCommand | null {
   switch (action) {
     case "open-archive":
       return { commandId: "open" };

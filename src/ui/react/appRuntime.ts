@@ -5,6 +5,10 @@ import {
   type CommandStateMap,
 } from "../../app/classicCommands";
 import type { CommandRouterPayload } from "../../app/commands/commandRouter";
+import type {
+  ContextMenuActionPayload,
+  ContextMenuItem,
+} from "../../app/commands/contextMenuModel";
 import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
 import type { ExtractMode, ExtractOverwritePolicy } from "../../app/extractFlow";
@@ -58,18 +62,11 @@ export type ZManagerContextMenuSnapshot =
       id: number;
       x: number;
       y: number;
-      html: string;
+      items: readonly ContextMenuItem[];
     }>;
 
-export type ZManagerContextMenuActionPayload = Readonly<{
-  action: string;
-  archivePath?: string;
-  columnId?: string;
-  compressMenuPath?: string;
-  entryPath?: string;
-  folderPath?: string;
-  sourcePath?: string;
-}>;
+export type ZManagerContextMenuItem = ContextMenuItem;
+export type ZManagerContextMenuActionPayload = ContextMenuActionPayload;
 
 export type ZManagerReactSnapshot = Readonly<{
   shell: ShellWorkspaceSnapshot;
@@ -365,7 +362,29 @@ function cloneContextMenuSnapshot(contextMenu: ZManagerContextMenuSnapshot): ZMa
     return { visible: false, id: contextMenu.id };
   }
 
-  return { ...contextMenu };
+  return {
+    ...contextMenu,
+    items: contextMenu.items.map(cloneContextMenuItem),
+  };
+}
+
+function cloneContextMenuItem(item: ContextMenuItem): ContextMenuItem {
+  switch (item.type) {
+    case "action":
+      return {
+        ...item,
+        payload: { ...item.payload },
+      };
+    case "checkbox":
+      return {
+        ...item,
+        payload: { ...item.payload },
+      };
+    case "caption":
+      return { ...item };
+    case "separator":
+      return { type: "separator" };
+  }
 }
 
 function cloneDialogSnapshot(dialog: ZManagerDialogSnapshot): ZManagerDialogSnapshot {

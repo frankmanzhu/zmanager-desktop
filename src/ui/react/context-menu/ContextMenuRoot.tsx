@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 
 import {
   contextMenuItems,
-  decodeContextMenuAction,
 } from "../../contextMenuHelpers";
+import type { ZManagerContextMenuItem } from "../appRuntime";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 
 export function ContextMenuRoot() {
@@ -49,16 +49,6 @@ export function ContextMenuRoot() {
       role="menu"
       hidden={!menu.visible}
       style={menu.visible ? { left: menu.x, top: menu.y } : undefined}
-      dangerouslySetInnerHTML={{ __html: menu.visible ? menu.html : "" }}
-      onClick={(event) => {
-        const payload = decodeContextMenuAction(event.target);
-        if (!payload) {
-          return;
-        }
-
-        event.preventDefault();
-        actions.handleContextMenuIntent({ type: "action", payload });
-      }}
       onKeyDown={(event) => {
         if (handleContextMenuKeyboard(event.currentTarget, event.nativeEvent)) {
           actions.handleContextMenuIntent({ type: "hide" });
@@ -70,8 +60,78 @@ export function ContextMenuRoot() {
           returnFocusRef.current = event.relatedTarget;
         }
       }}
-    />
+    >
+      {menu.visible
+        ? menu.items.map((item, index) => renderContextMenuItem(item, index, actions.handleContextMenuIntent))
+        : null}
+    </div>
   );
+}
+
+function renderContextMenuItem(
+  item: ZManagerContextMenuItem,
+  index: number,
+  onIntent: ReturnType<typeof useZManagerActions>["handleContextMenuIntent"],
+) {
+  switch (item.type) {
+    case "action":
+      return (
+        <button
+          key={contextMenuItemKey(item, index)}
+          type="button"
+          role="menuitem"
+          disabled={item.disabled}
+          aria-disabled={item.disabled ? true : undefined}
+          title={item.title ?? item.disabledReason}
+          onClick={(event) => {
+            event.preventDefault();
+            onIntent({ type: "action", payload: item.payload });
+          }}
+        >
+          <span className="context-menu-label">{item.label}</span>
+        </button>
+      );
+    case "checkbox":
+      return (
+        <button
+          key={contextMenuItemKey(item, index)}
+          type="button"
+          className="context-check-item"
+          role="menuitemcheckbox"
+          aria-checked={item.checked ? "true" : "false"}
+          disabled={item.disabled}
+          aria-disabled={item.disabled ? true : undefined}
+          title={item.title ?? item.disabledReason}
+          onClick={(event) => {
+            event.preventDefault();
+            onIntent({ type: "action", payload: item.payload });
+          }}
+        >
+          <span className="context-check" aria-hidden="true" />
+          <span className="context-menu-label">{item.label}</span>
+        </button>
+      );
+    case "caption":
+      return (
+        <div key={contextMenuItemKey(item, index)} className="context-menu-caption">
+          {item.label}
+        </div>
+      );
+    case "separator":
+      return <div key={contextMenuItemKey(item, index)} className="context-menu-separator" role="separator" />;
+  }
+}
+
+function contextMenuItemKey(item: ZManagerContextMenuItem, index: number): string {
+  switch (item.type) {
+    case "action":
+    case "checkbox":
+      return `${item.type}:${item.payload.action}:${index}`;
+    case "caption":
+      return `${item.type}:${item.label}:${index}`;
+    case "separator":
+      return `${item.type}:${index}`;
+  }
 }
 
 function handleContextMenuKeyboard(contextMenu: HTMLElement, event: KeyboardEvent): boolean {

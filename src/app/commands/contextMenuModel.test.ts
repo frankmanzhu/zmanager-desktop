@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  resetColumnSettings,
+} from "../archiveTable";
+import { createTranslator } from "../i18n/translator";
+import {
+  buildArchiveEntryContextMenuItems,
+  buildArchiveFolderContextMenuItems,
+  buildArchiveHeaderContextMenuItems,
+  buildCompressRowContextMenuItems,
+  buildSourceContextMenuItems,
+  buildStartupContextMenuItems,
+  type ContextMenuActionItem,
+  type ContextMenuCheckboxItem,
+  type ContextMenuItem,
+} from "./contextMenuModel";
+
+const translator = createTranslator("en");
+
+describe("context menu model", () => {
+  it("builds startup empty-menu typed actions for open, paste, and recent archives", () => {
+    const items = buildStartupContextMenuItems({
+      translator,
+      canPastePath: true,
+      recentArchiveHistory: [
+        "C:/archives/demo.zip",
+        "C:/archives/another.zip",
+      ],
+    });
+
+    expect(actionItems(items).map((item) => item.payload)).toEqual([
+      { action: "open-archive" },
+      { action: "paste-archive-path" },
+      { action: "open-recent-archive", archivePath: "C:/archives/demo.zip" },
+      { action: "open-recent-archive", archivePath: "C:/archives/another.zip" },
+    ]);
+    expect(items.map((item) => item.type)).toEqual(["action", "action", "separator", "caption", "action", "action"]);
+    expect(items).not.toContainEqual(expect.objectContaining({ html: expect.any(String) }));
+  });
+
+  it("builds archive folder and entry menus with the same command payloads", () => {
+    const folderItems = buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "docs",
+      entryPath: "docs",
+      selectedCount: 1,
+      hasArchive: true,
+    });
+    const entryItems = buildArchiveEntryContextMenuItems({
+      translator,
+      entryPath: "docs/readme.txt",
+      canOpenInside: false,
+      canOpenOutside: true,
+      selectedCount: 1,
+      selectedEntryCount: 1,
+      hasArchive: false,
+    });
+
+    expect(actionItems(folderItems).map((item) => item.payload)).toEqual([
+      { action: "open-folder", folderPath: "docs", entryPath: "docs" },
+      { action: "open-inside", entryPath: "docs" },
+      { action: "extract", entryPath: "docs" },
+      { action: "extract-here", entryPath: "docs" },
+      { action: "test", entryPath: "docs" },
+      { action: "info", entryPath: "docs" },
+    ]);
+    expect(actionItems(entryItems).map((item) => item.payload)).toEqual([
+      { action: "open-entry", entryPath: "docs/readme.txt" },
+      { action: "open-outside", entryPath: "docs/readme.txt" },
+      { action: "extract", entryPath: "docs/readme.txt" },
+      { action: "extract-here", entryPath: "docs/readme.txt" },
+      { action: "test", entryPath: "docs/readme.txt" },
+      { action: "info", entryPath: "docs/readme.txt" },
+      { action: "select-by-type", entryPath: "docs/readme.txt" },
+      { action: "deselect-by-type", entryPath: "docs/readme.txt" },
+    ]);
+    expect(actionItems(entryItems).find((item) => item.payload.action === "test")?.disabled).toBe(true);
+  });
+
+  it("builds archive header sort, movement, visibility, width, and reset actions", () => {
+    const items = buildArchiveHeaderContextMenuItems({
+      translator,
+      tableColumnSettings: resetColumnSettings(),
+      selectedColumnId: "size",
+    });
+    const actions = actionItems(items);
+    const checkboxes = checkboxItems(items);
+
+    expect(items[0]).toEqual({ type: "caption", label: "Column: Size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "sort-ascending", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "sort-descending", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "move-column-left", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "move-column-right", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "narrow-column", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "widen-column", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-column-width", columnId: "size" });
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-columns" });
+    expect(actions.find((item) => item.payload.action === "move-column-left")?.disabled).toBe(true);
+    expect(actions.find((item) => item.payload.action === "move-column-right")?.disabled).not.toBe(true);
+    expect(checkboxes.find((item) => item.payload.columnId === "name")).toEqual(expect.objectContaining({
+      checked: true,
+      disabled: true,
+      payload: { action: "toggle-column", columnId: "name" },
+    }));
+    expect(checkboxes.find((item) => item.payload.columnId === "kind")).toEqual(expect.objectContaining({
+      checked: false,
+      payload: { action: "toggle-column", columnId: "kind" },
+    }));
+  });
+
+  it("builds create row and source menus for reveal, include, exclude, remove, and clear actions", () => {
+    const rowItems = buildCompressRowContextMenuItems({
+      translator,
+      rowPath: "src/app",
+      folderPath: "src",
+      sourcePath: "C:/work/source",
+      contextRowCount: 2,
+      removableSourceCount: 2,
+      canInclude: true,
+      canExclude: false,
+      hasSources: true,
+    });
+    const sourceItems = buildSourceContextMenuItems({
+      translator,
+      sourcePath: "C:/work/source",
+    });
+
+    expect(actionItems(rowItems).map((item) => item.payload)).toEqual([
+      { action: "compress-open-folder", folderPath: "src" },
+      { action: "reveal-source", sourcePath: "C:/work/source" },
+      { action: "include-compress-path", compressMenuPath: "src/app" },
+      { action: "exclude-compress-path", compressMenuPath: "src/app" },
+      { action: "remove-source", sourcePath: "C:/work/source" },
+      { action: "clear-sources" },
+    ]);
+    expect(actionItems(rowItems).find((item) => item.payload.action === "include-compress-path")?.label).toBe("Include 2 Selected in Archive");
+    expect(actionItems(rowItems).find((item) => item.payload.action === "exclude-compress-path")?.disabled).toBe(true);
+    expect(actionItems(rowItems).find((item) => item.payload.action === "remove-source")?.label).toBe("Remove 2 Sources");
+    expect(actionItems(sourceItems).map((item) => item.payload)).toEqual([
+      { action: "reveal-source", sourcePath: "C:/work/source" },
+      { action: "remove-source", sourcePath: "C:/work/source" },
+      { action: "clear-sources" },
+    ]);
+  });
+});
+
+function actionItems(items: readonly ContextMenuItem[]): ContextMenuActionItem[] {
+  return items.filter((item): item is ContextMenuActionItem => item.type === "action");
+}
+
+function checkboxItems(items: readonly ContextMenuItem[]): ContextMenuCheckboxItem[] {
+  return items.filter((item): item is ContextMenuCheckboxItem => item.type === "checkbox");
+}
