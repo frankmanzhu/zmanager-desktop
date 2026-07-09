@@ -58,38 +58,50 @@ describe("desktop startup window", () => {
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
+    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
     const styles = readWorkspaceFile("src", "styles.css");
 
     expect(mainTs).toContain("function renderWindowResizeHandles()");
-    expect(mainTs).toContain("startResizeDragging(direction)");
+    expect(mainTs).toContain("appWindowController.beginResizeDrag(direction)");
+    expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
     expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
+    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(mainTs).toContain("async function placeNormalAppWindowBeforeShow()");
-    expect(mainTs).toContain("const restored = await restoreWindowGeometry();");
-    expect(mainTs).toContain("if (!restored) {\n    await getCurrentWindow().center();\n  }");
-    expect(mainTs).toContain("await placeNormalAppWindowBeforeShow();\n    await getCurrentWindow().show();");
+    expect(mainTs).toContain("await appWindowController.revealNormalWindow();");
+    expect(windowControllerTs).toContain("async function restoreNormalWindowGeometryOrCenter()");
+    expect(windowControllerTs).toContain("const restored = await restoreNormalWindowGeometry();");
+    expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().center();");
+    expect(windowControllerTs).toContain("await restoreNormalWindowGeometryOrCenter();");
+    expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().show();");
   });
 
-  it("persists desktop window geometry in logical pixels", () => {
+  it("keeps Tauri window and geometry ownership in the desktop adapter", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
+    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(mainTs).toContain("restorableWindowGeometry");
-    expect(mainTs).toContain("const scaleFactor = await currentWindow.scaleFactor();");
-    expect(mainTs).toContain("monitors = await availableMonitors();");
-    expect(mainTs).toContain("const size = (await currentWindow.innerSize()).toLogical(scaleFactor);");
-    expect(mainTs).toContain("const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);");
-    expect(mainTs).toContain('unit: "logical"');
+    expect(mainTs).not.toContain("@tauri-apps/api/window");
+    expect(mainTs).not.toMatch(/\bgetCurrentWindow\(/);
+    expect(mainTs).not.toMatch(/\bavailableMonitors\(/);
+    expect(mainTs).not.toContain("zmanager.windowGeometry");
+    expect(windowControllerTs).toContain('from "@tauri-apps/api/window"');
+    expect(windowControllerTs).toContain('export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";');
+    expect(windowControllerTs).toContain("restorableWindowGeometry");
+    expect(windowControllerTs).toContain("const scaleFactor = await currentWindow.scaleFactor();");
+    expect(windowControllerTs).toContain("monitors = await dependencies.availableMonitors();");
+    expect(windowControllerTs).toContain("const size = (await currentWindow.innerSize()).toLogical(scaleFactor);");
+    expect(windowControllerTs).toContain("const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);");
+    expect(windowControllerTs).toContain('unit: "logical"');
   });
 
   it("falls back to centering when saved geometry is not restorable on the current monitors", () => {
-    const mainTs = readWorkspaceFile("src", "main.ts");
+    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
 
-    expect(mainTs).toContain("const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);");
-    expect(mainTs).toContain("if (!geometry) {\n    return false;\n  }");
-    expect(mainTs).toContain("if (!restored) {\n    await getCurrentWindow().center();\n  }");
+    expect(windowControllerTs).toContain("const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);");
+    expect(windowControllerTs).toContain("if (!geometry) {\n      return false;\n    }");
+    expect(windowControllerTs).toContain("if (!restored) {\n      await dependencies.getCurrentWindow().center();\n    }");
   });
 });

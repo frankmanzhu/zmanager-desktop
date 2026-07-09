@@ -21,6 +21,7 @@ function normalizedWorkspaceFile(...parts: string[]): string {
 
 const styles = normalizedWorkspaceFile("src", "styles.css");
 const mainSource = normalizedWorkspaceFile("src", "main.ts");
+const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
 const shellViewSource = normalizedWorkspaceFile("src", "ui", "shellView.ts");
 const createWorkspaceViewSource = normalizedWorkspaceFile("src", "ui", "createWorkspaceView.ts");
@@ -28,6 +29,7 @@ const archiveWorkspaceViewSource = normalizedWorkspaceFile("src", "ui", "archive
 const commandSurfaceViewSource = normalizedWorkspaceFile("src", "ui", "commandSurfaceView.ts");
 const contextMenuViewSource = normalizedWorkspaceFile("src", "ui", "contextMenuView.ts");
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
+const jobsViewSource = normalizedWorkspaceFile("src", "ui", "jobsView.ts");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 function selectorsContainingFirstTableColumnRules(css: string): string[] {
@@ -71,6 +73,37 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
     expect(styles).toContain(".command-strip {");
     expect(styles).toContain(".toolbar-group-label {");
+  });
+
+  it("keeps status selection and focus text rendering in the shell view", () => {
+    expect(shellViewSource).toContain("function renderShellStatusBar");
+    expect(mainSource).toContain("renderShellStatusBar(shellStatusBarElements");
+    expect(mainSource).not.toMatch(
+      /status(?:SelectionCount|SelectionSize|FocusedSize|FocusedModified)Element\.textContent/,
+    );
+  });
+
+  it("keeps Slice 9 UI adapters out of workflow and runtime seams", () => {
+    const slice9Sources = [
+      archiveWorkspaceViewSource,
+      createWorkspaceViewSource,
+      shellViewSource,
+      commandSurfaceViewSource,
+      contextMenuViewSource,
+      modalControllerSource,
+      jobsViewSource,
+    ];
+    for (const source of slice9Sources) {
+      expect(source).not.toMatch(/from "\.\.\/api/);
+      expect(source).not.toMatch(/from "\.\.\/app\/(?:workspaces|controllers|shell)\//);
+      expect(source).not.toMatch(/from "\.\.\/desktop/);
+      expect(source).not.toMatch(
+        /archiveWorkspace\.|createWorkspace\.|shellWorkspace\.|commandRouter|runRoutedCommand|invoke|Tauri|openNativeDialog|localStorage|sessionStorage|passwordInput|passwordConfirm|\.value.*password|password.*\.value|fetch\(|listen\(/,
+      );
+    }
+    expect(jobsViewSource).not.toContain("Map<string, JobState>");
+    expect(jobsViewSource).not.toContain("deriveJobProgress");
+    expect(mainSource).toContain("renderJobsListHtml(snapshot.jobs");
   });
 
   it("does not duplicate command buttons in secondary panes", () => {
@@ -205,9 +238,9 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
     expect(mainSource).toContain('class="advanced-options extract-password-options"');
     expect(mainSource).toContain('browsePasswordInput.type = "password";');
-    expect(mainSource).toContain('requestArchivePasswordRetry("extractArchive", commandError)');
-    expect(mainSource).toContain('requestArchivePasswordRetry("extractSelection", commandError)');
-    expect(mainSource).toContain("requestExtractPasswordInDialog(retry);");
+    expect(extractStartControllerSource).toContain('operation: passwordRetryOperation(mode)');
+    expect(extractStartControllerSource).toContain('"extractArchive" : "extractSelection"');
+    expect(extractStartControllerSource).toContain("options.requestPasswordInDialog(retry);");
     expect(mainSource).not.toContain('id="extract-restore-security"');
     expect(styles).toContain("#extract-start.primary-action");
     expect(styles).toContain(".task-dialog .dialog-section .form-grid > label");
@@ -302,16 +335,16 @@ describe("GUI layout contracts", () => {
     expect(archiveWorkspaceViewSource).toContain('data-details-action="open-archive"');
     expect(archiveWorkspaceViewSource).toContain('data-copy-value="${escapeHtml(value)}"');
     expect(mainSource).toContain("function currentArchiveDisplayPath");
-    expect(mainSource).toContain("pathFieldInput.readOnly = true;");
-    expect(mainSource).toContain("pathCrumbsElement.hidden = false;");
+    expect(archiveWorkspaceViewSource).toContain("elements.pathFieldInput.readOnly = true;");
+    expect(archiveWorkspaceViewSource).toContain("elements.pathCrumbsElement.hidden = model.kind === \"empty\";");
     expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
-    expect(mainSource).toContain("const name = crumb.isRoot ? getArchiveName(currentArchivePath, APP_TITLE) : crumb.name;");
-    expect(mainSource).toContain('aria-keyshortcuts="Enter Space">${escapeHtml(name)}</button>');
+    expect(mainSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
+    expect(archiveWorkspaceViewSource).toContain('aria-keyshortcuts="Enter Space">${escapeHtml(crumb.name)}</button>');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
     expect(commandSurfaceViewSource).toContain('button.classList.toggle("is-primary-command", Boolean(classState?.primary));');
     expect(commandSurfaceViewSource).toContain('button.classList.toggle("is-secondary-command", Boolean(classState?.secondary));');
-    expect(mainSource).toContain('searchInput.setAttribute("aria-disabled", String(searchInput.disabled));');
+    expect(archiveWorkspaceViewSource).toContain('elements.searchInput.setAttribute("aria-disabled", String(state.searchDisabled));');
     expect(styles).toContain(".detail-copyable");
     expect(styles).toContain(".tool-button.is-primary-command");
     expect(styles).toContain(".tool-button.is-secondary-command");

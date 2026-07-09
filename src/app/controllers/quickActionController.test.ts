@@ -1,0 +1,426 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type {
+  BrowseState,
+  CommandErrorDto,
+  CreatePlanResponse,
+  StartCreateRequest,
+  StartExtractRequest,
+  StartJobResponseDto,
+} from "../../api/types";
+import type { CreateArchiveFormat } from "../createFlow";
+import type { MessageKey, MessageParams } from "../i18n/translator";
+import {
+  createDefaultsForFormat,
+  DEFAULT_APP_PREFERENCES,
+  type AppPreferences,
+} from "../preferences";
+import { createCreateWorkspace, type CreateWorkspace } from "../workspaces/createWorkspace";
+import { createQuickActionController, type QuickActionControllerOptions } from "./quickActionController";
+
+const startedAt = "2026-06-11T00:00:00Z";
+
+function startJobResponse(overrides: Partial<StartJobResponseDto> = {}): StartJobResponseDto {
+  return {
+    jobId: "job-1",
+    kind: "zipCreate",
+    status: "queued",
+    createdAt: startedAt,
+    ...overrides,
+  };
+}
+
+function commandError(overrides: Partial<CommandErrorDto> = {}): CommandErrorDto {
+  return {
+    code: "failed",
+    message: "Command failed",
+    hint: null,
+    severity: "error",
+    retryable: false,
+    ...overrides,
+  };
+}
+
+function planForSources(workspace: CreateWorkspace): CreatePlanResponse {
+  return {
+    includedCount: workspace.getSnapshot().sources.length,
+    excludedCount: 0,
+    totalBytes: 10,
+    excludedBytes: 0,
+    entries: [],
+    planEntries: workspace.getSnapshot().sources.map((source) => ({
+      path: source.replace(/\\/g, "/").split("/").filter(Boolean).at(-1) ?? source,
+      kind: "file",
+      size: 10,
+      sourcePath: source,
+    })),
+    excludedEntries: [],
+    warnings: [],
+  };
+}
+
+function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
+  const workspace = createCreateWorkspace();
+  let preferences: AppPreferences = DEFAULT_APP_PREFERENCES;
+  let browseState: BrowseState = "loaded";
+  const calls = {
+    messages: [] as Array<{ key: MessageKey; params?: MessageParams }>,
+    statuses: [] as string[],
+    openedArchives: [] as string[][],
+    createDestinations: [] as string[],
+    extractDestinations: [] as string[],
+    jobs: [] as unknown[],
+    shownCreateWorkspace: 0,
+    cancelledPlans: 0,
+    renderedSources: 0,
+    renderedBrowser: 0,
+    currentArchives: [] as string[],
+    loadedArchives: [] as string[],
+    browseErrors: [] as string[],
+    extractDialogs: [] as string[],
+    promptedNewPasswords: 0,
+    promptedRetryCodes: [] as string[],
+    syncedSnapshots: 0,
+  };
+  const runStartCreate = vi.fn(async () => startJobResponse({ kind: "zipCreate" }));
+  const runStartExtract = vi.fn(async () => startJobResponse({ kind: "zipExtract" }));
+
+  const controller = createQuickActionController({
+    preferences: () => preferences,
+    pathHelpers: {
+      nativeParentPath(path) {
+        const normalized = path.replace(/\\/g, "/");
+        const index = normalized.lastIndexOf("/");
+        return index > 0 ? normalized.slice(0, index) : "";
+      },
+      joinNativePath(parentPath, childName) {
+        return `${parentPath.replace(/[\\/]+$/, "")}/${childName}`;
+      },
+    },
+    setOperationalMessage(key, params) {
+      calls.messages.push({ key, params });
+    },
+    setOperationalStatus(message) {
+      calls.statuses.push(message);
+    },
+    message(key, params) {
+      return params && "archivePath" in params
+        ? `${key}:${String(params.archivePath)}`
+        : key;
+    },
+    async openArchive(paths) {
+      calls.openedArchives.push(paths);
+    },
+    runStartCreate,
+    runStartExtract,
+    toCommandError(error) {
+      return error && typeof error === "object" && "code" in error
+        ? error as CommandErrorDto
+        : null;
+    },
+    isPasswordCommandError(error) {
+      return error?.code === "password_required" || error?.code === "invalid_password";
+    },
+    promptForNewArchivePassword() {
+      calls.promptedNewPasswords += 1;
+      return "new-secret";
+    },
+    promptForCommandRetry(commandCode) {
+      calls.promptedRetryCodes.push(commandCode);
+      return "retry-secret";
+    },
+    recordCreateDestination(destination) {
+      calls.createDestinations.push(destination);
+    },
+    recordExtractDestination(destination) {
+      calls.extractDestinations.push(destination);
+    },
+    addJob(response, options) {
+      calls.jobs.push({ response, options });
+    },
+    createProgressContext(request) {
+      return {
+        kind: "create",
+        sources: request.sources,
+        destinationPath: request.destinationPath,
+        format: request.format,
+        cleanSource: request.cleanSource,
+      };
+    },
+    createOutputActions(request) {
+      return [{ kind: "reveal", path: request.destinationPath }];
+    },
+    extractProgressContext(request) {
+      return {
+        kind: "extract",
+        title: "archive",
+        archivePath: request.archivePath,
+        destinationPath: request.destinationPath,
+        overwrite: request.overwrite,
+      };
+    },
+    extractOutputActions(request) {
+      return [{ kind: "open", path: request.destinationPath }];
+    },
+    showCreateWorkspace() {
+      calls.shownCreateWorkspace += 1;
+    },
+    setCreateSources(sources) {
+      return workspace.setSources(sources).snapshot;
+    },
+    applyCreateDefaultsForFormat(format) {
+      const defaults = createDefaultsForFormat(preferences, format);
+      workspace.applyFormatDefaults(format, defaults);
+    },
+    setCreateOptions(patch) {
+      return workspace.setOptions(patch).snapshot;
+    },
+    setCreateDestinationPath(path) {
+      return workspace.setDestinationPath(path).snapshot;
+    },
+    syncCreateSources(snapshot = workspace.getSnapshot()) {
+      calls.syncedSnapshots += 1;
+      return snapshot;
+    },
+    cancelQueuedPlanRun() {
+      calls.cancelledPlans += 1;
+    },
+    renderCreateSources() {
+      calls.renderedSources += 1;
+    },
+    renderCompressBrowser() {
+      calls.renderedBrowser += 1;
+    },
+    async runPlan() {
+      const planStart = workspace.beginPlan();
+      if (planStart.ready) {
+        workspace.acceptPlanResult(planStart.revision, planForSources(workspace));
+      }
+    },
+    setCurrentArchivePath(archivePath) {
+      calls.currentArchives.push(archivePath);
+    },
+    async loadArchive(request) {
+      calls.loadedArchives.push(request.archivePath);
+    },
+    readBrowseState() {
+      return browseState;
+    },
+    setBrowseError(message) {
+      calls.browseErrors.push(message);
+    },
+    openExtractDialog(mode) {
+      calls.extractDialogs.push(mode);
+    },
+    ...overrides,
+  });
+
+  return {
+    calls,
+    controller,
+    runStartCreate,
+    runStartExtract,
+    setBrowseState(next: BrowseState) {
+      browseState = next;
+    },
+    setPreferences(next: AppPreferences) {
+      preferences = next;
+    },
+    workspace,
+  };
+}
+
+describe("quick action controller", () => {
+  it("starts quick create with unique sources, password defaults, and focused close-window job", async () => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      defaultArchiveFormat: "zip",
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        zip: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults.zip,
+          promptForPassword: true,
+          compressionLevel: 5,
+        },
+      },
+    });
+
+    await harness.controller.startQuickCreate(
+      ["C:/work/report.txt", " C:/work/report.txt ", "C:/work/images"],
+      "zip",
+      false,
+    );
+
+    expect(harness.runStartCreate).toHaveBeenCalledWith({
+      sources: ["C:/work/report.txt", "C:/work/images"],
+      destinationPath: "C:/work/report.txt.zip",
+      format: "zip",
+      cleanSource: false,
+      replaceExisting: false,
+      destinationCollisionStrategy: "rename",
+      preserveMetadata: true,
+      password: "new-secret",
+      compressionLevel: 5,
+    } satisfies StartCreateRequest);
+    expect(harness.calls.createDestinations).toEqual(["C:/work/report.txt.zip"]);
+    expect(harness.calls.jobs).toHaveLength(1);
+    expect(harness.calls.jobs[0]).toMatchObject({
+      options: {
+        focusProgress: true,
+        autoCloseAction: "closeWindow",
+        outputActions: [{ kind: "reveal", path: "C:/work/report.txt.zip" }],
+      },
+    });
+    expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.started", params: undefined });
+  });
+
+  it("cancels quick create when a password prompt is dismissed", async () => {
+    const harness = createHarness({
+      promptForNewArchivePassword: () => null,
+    });
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        zip: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults.zip,
+          promptForPassword: true,
+        },
+      },
+    });
+
+    await harness.controller.startQuickCreate(["C:/work/report.txt"], "zip", false);
+
+    expect(harness.runStartCreate).not.toHaveBeenCalled();
+    expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.cancelled", params: undefined });
+  });
+
+  it("sets up create review, cancels queued planning, runs a plan, and reports review readiness", async () => {
+    const harness = createHarness();
+
+    await harness.controller.openQuickCreateReview(
+      ["C:/work/report.txt", "C:/work/report.txt"],
+      "tarZst",
+      true,
+    );
+
+    expect(harness.calls.shownCreateWorkspace).toBe(1);
+    expect(harness.workspace.getSnapshot().sources).toEqual(["C:/work/report.txt"]);
+    expect(harness.workspace.getSnapshot().options).toMatchObject({
+      format: "tarZst" satisfies CreateArchiveFormat,
+      cleanSource: true,
+      destinationPath: "C:/work/report.txt.tzst",
+    });
+    expect(harness.calls.cancelledPlans).toBe(1);
+    expect(harness.calls.renderedSources).toBe(1);
+    expect(harness.calls.renderedBrowser).toBe(1);
+    expect(harness.calls.messages.map((call) => call.key)).toContain("quickCreate.planning");
+    expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.review", params: undefined });
+  });
+
+  it("opens extract review for one supported archive after loading it", async () => {
+    const harness = createHarness();
+
+    await harness.controller.openQuickExtractReview(["C:/archives/demo.zip"]);
+
+    expect(harness.calls.currentArchives).toEqual(["C:/archives/demo.zip"]);
+    expect(harness.calls.loadedArchives).toEqual(["C:/archives/demo.zip"]);
+    expect(harness.calls.messages.at(-1)).toEqual({ key: "quickExtract.chooseOptions", params: undefined });
+    expect(harness.calls.extractDialogs).toEqual(["archive"]);
+  });
+
+  it("guards extract review when the request has multiple archives or unsupported paths", async () => {
+    const manyHarness = createHarness();
+    await manyHarness.controller.openQuickExtractReview(["C:/a.zip", "C:/b.zip"]);
+    expect(manyHarness.calls.messages).toEqual([{ key: "quickExtract.oneArchiveAtATime", params: undefined }]);
+    expect(manyHarness.calls.loadedArchives).toEqual([]);
+
+    const unsupportedHarness = createHarness();
+    await unsupportedHarness.controller.openQuickExtractReview(["C:/archives/demo.txt"]);
+    expect(unsupportedHarness.calls.messages).toEqual([{
+      key: "archive.unsupported",
+      params: { archivePath: "C:/archives/demo.txt" },
+    }]);
+    expect(unsupportedHarness.calls.loadedArchives).toEqual([]);
+  });
+
+  it("starts quick extract with password retry and focused close-window job metadata", async () => {
+    const harness = createHarness();
+    harness.runStartExtract
+      .mockRejectedValueOnce(commandError({ code: "password_required", message: "Password required" }))
+      .mockResolvedValueOnce(startJobResponse({ kind: "zipExtract" }));
+
+    await harness.controller.startQuickExtract(["C:/archives/demo.zip"], "extractToFolder");
+
+    expect(harness.runStartExtract).toHaveBeenNthCalledWith(1, {
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives/demo",
+      overwrite: "rename",
+      destinationCollisionStrategy: "rename",
+      stripComponents: 0,
+    } satisfies StartExtractRequest);
+    expect(harness.runStartExtract).toHaveBeenNthCalledWith(2, {
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives/demo",
+      overwrite: "rename",
+      destinationCollisionStrategy: "rename",
+      stripComponents: 0,
+      password: "retry-secret",
+    } satisfies StartExtractRequest);
+    expect(harness.calls.promptedRetryCodes).toEqual(["password_required"]);
+    expect(harness.calls.extractDestinations).toEqual(["C:/archives/demo"]);
+    expect(harness.calls.jobs[0]).toMatchObject({
+      options: {
+        retryContext: {
+          retryKind: "extractArchive",
+          archivePath: "C:/archives/demo.zip",
+          destinationPath: "C:/archives/demo",
+          overwrite: "rename",
+          destinationCollisionStrategy: "rename",
+          stripComponents: 0,
+        },
+        focusProgress: true,
+        autoCloseAction: "closeWindow",
+        outputActions: [{ kind: "open", path: "C:/archives/demo" }],
+      },
+    });
+  });
+
+  it("continues past unsupported quick extract paths and reports command hints", async () => {
+    const harness = createHarness();
+    harness.runStartExtract.mockRejectedValueOnce(commandError({
+      message: "Could not extract",
+      hint: "Try another destination.",
+    }));
+
+    await harness.controller.startQuickExtract(
+      ["C:/archives/readme.txt", "C:/archives/demo.zip"],
+      "extractHere",
+    );
+
+    expect(harness.calls.messages).toEqual([{
+      key: "archive.unsupported",
+      params: { archivePath: "C:/archives/readme.txt" },
+    }]);
+    expect(harness.calls.statuses).toEqual(["Could not extract"]);
+    expect(harness.calls.browseErrors).toEqual(["Could not extract\nTry another destination."]);
+  });
+
+  it("dispatches quick-action requests through the controller methods", async () => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      defaultExtractionBehavior: "askEveryTime",
+    });
+
+    await harness.controller.handleQuickActionRequest({
+      kind: "extract",
+      paths: ["C:/archives/demo.zip"],
+    });
+
+    expect(harness.calls.loadedArchives).toEqual(["C:/archives/demo.zip"]);
+    expect(harness.runStartExtract).not.toHaveBeenCalled();
+    expect(harness.calls.extractDialogs).toEqual(["archive"]);
+  });
+});

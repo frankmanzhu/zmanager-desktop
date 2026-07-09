@@ -1,8 +1,19 @@
-import type {
-  DropOverlayMessageParams,
-  DropOverlaySnapshot,
-} from "../app/shell/shellWorkspace";
 import type { MessageKey } from "../app/i18n/translator";
+
+export type DropOverlayMessageParams = Readonly<Record<string, string | number | boolean | null | undefined>>;
+
+export type DropOverlaySnapshot = {
+  mode: "idle" | "active" | "choosing";
+  copy: {
+    titleKey: MessageKey;
+    messageKey: MessageKey;
+    messageParams?: DropOverlayMessageParams;
+    supportKey?: MessageKey;
+    target?: string;
+    showActions?: boolean;
+  } | null;
+  pendingChoice?: unknown;
+};
 
 export type ShellViewMessage = (key: MessageKey, params?: DropOverlayMessageParams) => string;
 
@@ -15,6 +26,20 @@ export type ShellViewElements = {
   dropOverlaySupport: HTMLElement;
   dropOverlayActions: HTMLElement;
   dropOpenArchiveButton: HTMLButtonElement;
+};
+
+export type ShellStatusBarElements = {
+  selectionCount: HTMLElement;
+  selectionSize: HTMLElement;
+  focusedSize: HTMLElement;
+  focusedModified: HTMLElement;
+};
+
+export type ShellStatusBarModel = {
+  selectionCountText: string;
+  selectionSizeText: string;
+  focusedSizeText: string;
+  focusedModifiedText: string;
 };
 
 export type DropOverlayAction = "openArchive" | "addToCompress" | "cancel";
@@ -53,6 +78,16 @@ export function renderDropOverlay(
   } else {
     elements.dropOverlayCard.removeAttribute("aria-modal");
   }
+}
+
+export function renderShellStatusBar(
+  elements: ShellStatusBarElements,
+  model: ShellStatusBarModel,
+): void {
+  elements.selectionCount.textContent = model.selectionCountText;
+  elements.selectionSize.textContent = model.selectionSizeText;
+  elements.focusedSize.textContent = model.focusedSizeText;
+  elements.focusedModified.textContent = model.focusedModifiedText;
 }
 
 export function bindDropOverlayActions(

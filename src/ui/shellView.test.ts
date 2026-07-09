@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { createTranslator } from "../app/i18n/translator";
-import type { DropOverlaySnapshot } from "../app/shell/shellWorkspace";
 import {
   bindDropOverlayActions,
   dropOverlayActionFromChoice,
   focusDropOverlayPrimaryAction,
   renderDropOverlay,
+  renderShellStatusBar,
   type DropOverlayAction,
+  type DropOverlaySnapshot,
+  type ShellStatusBarElements,
   type ShellViewElements,
 } from "./shellView";
 
@@ -139,6 +141,41 @@ describe("shell view", () => {
     expect(dropOverlayActionFromChoice("unknown")).toBeNull();
     expect(elements.dropOpenArchiveButton.focusCount).toBe(1);
   });
+
+  it("renders populated status bar selection and focus text", () => {
+    const elements = createShellStatusBarElements();
+
+    renderShellStatusBar(elements, {
+      selectionCountText: "2 of 5 selected",
+      selectionSizeText: "Selected: 12 KB",
+      focusedSizeText: "Size: 10 KB",
+      focusedModifiedText: "Modified: Jan 2, 2026",
+    });
+
+    expect(elements.selectionCount.textContent).toBe("2 of 5 selected");
+    expect(elements.selectionSize.textContent).toBe("Selected: 12 KB");
+    expect(elements.focusedSize.textContent).toBe("Size: 10 KB");
+    expect(elements.focusedModified.textContent).toBe("Modified: Jan 2, 2026");
+  });
+
+  it("renders empty optional status bar selection and focus text", () => {
+    const elements = createShellStatusBarElements();
+    elements.selectionSize.textContent = "stale selection";
+    elements.focusedSize.textContent = "stale size";
+    elements.focusedModified.textContent = "stale modified";
+
+    renderShellStatusBar(elements, {
+      selectionCountText: "0 of 5 selected",
+      selectionSizeText: "",
+      focusedSizeText: "",
+      focusedModifiedText: "",
+    });
+
+    expect(elements.selectionCount.textContent).toBe("0 of 5 selected");
+    expect(elements.selectionSize.textContent).toBe("");
+    expect(elements.focusedSize.textContent).toBe("");
+    expect(elements.focusedModified.textContent).toBe("");
+  });
 });
 
 function idleDropOverlay(): DropOverlaySnapshot {
@@ -165,6 +202,15 @@ function createShellViewElements(): TestShellViewElements {
     dropOverlaySupport: testElement(),
     dropOverlayActions: testElement(),
     dropOpenArchiveButton: testElement() as TestElement & HTMLButtonElement,
+  };
+}
+
+function createShellStatusBarElements(): ShellStatusBarElements {
+  return {
+    selectionCount: testElement(),
+    selectionSize: testElement(),
+    focusedSize: testElement(),
+    focusedModified: testElement(),
   };
 }
 

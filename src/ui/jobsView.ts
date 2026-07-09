@@ -1,5 +1,3 @@
-import type { JobKind, JobState } from "../api/types";
-import { deriveJobProgress, isCreateJobKind, isTerminalJobStatus } from "../app/jobs";
 import type { MessageKey, Translator } from "../app/i18n/translator";
 
 export type JobOutputAction = {
@@ -7,41 +5,70 @@ export type JobOutputAction = {
   path: string;
 };
 
+export type JobsViewJobStatus = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+
+export type JobsViewProgress = {
+  remainingMs: number | null;
+  processedFiles: number;
+  totalFiles: number | null;
+  totalBytes: number | null;
+  processedBytes: number;
+  speedBytesPerSecond: number | null;
+  currentFile: string;
+  progressPercent: number | null;
+  latestStatusMessage: string;
+};
+
+export type JobsViewTerminalSummary = {
+  writtenEntries: number;
+  skippedEntries?: number | null;
+  writtenBytes: number;
+  warnings: readonly unknown[];
+};
+
+export type JobsViewEvent = {
+  eventType: string;
+  message?: string;
+  path?: string;
+};
+
+export type JobsViewItem = {
+  jobId: string;
+  kind: string;
+  status: JobsViewJobStatus;
+  canDismiss: boolean;
+  events: readonly JobsViewEvent[];
+  terminalSummary?: JobsViewTerminalSummary | null;
+  progress: JobsViewProgress;
+  isTerminal: boolean;
+  completedSizeLabelKey: MessageKey;
+  canRetryPassword: boolean;
+  readyOutputActions: readonly JobOutputAction[];
+};
+
 export type JobsViewFormatters = {
   i18n: Translator;
   escapeHtml: (value: string) => string;
   formatBytes: (value?: number) => string;
-  formatJobKind: (kind: JobKind) => string;
-  canRetryJobWithPassword: (jobId: string, state: JobState) => boolean;
-  getOutputActions?: (jobId: string, state: JobState) => JobOutputAction[];
+  formatJobKind: (kind: string) => string;
   formatDuration?: (milliseconds: number | null) => string;
 };
 
-export function sortedJobStates(jobs: Map<string, JobState>): JobState[] {
-  return Array.from(jobs.values()).sort((a, b) =>
-    b.snapshot.createdAt.localeCompare(a.snapshot.createdAt),
-  );
-}
-
 export function activeJobStatusText(
-  jobs: Map<string, JobState>,
-  formatJobKind: (kind: JobKind) => string,
+  activeJob: Pick<JobsViewItem, "kind" | "status"> | null,
+  formatJobKind: (kind: string) => string,
   i18n: Translator,
 ): string {
-  const active = sortedJobStates(jobs).find((state) =>
-    state.snapshot.status === "queued" || state.snapshot.status === "running" || state.snapshot.status === "paused",
-  ) ?? sortedJobStates(jobs)[0];
-
-  if (!active) {
+  if (!activeJob) {
     return i18n.t("status.noJobs");
   }
 
-  return `${formatJobKind(active.snapshot.kind)}: ${i18n.t(jobStatusKey(active.snapshot.status))}`;
+  return `${formatJobKind(activeJob.kind)}: ${i18n.t(jobStatusKey(activeJob.status))}`;
 }
 
-export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: JobsViewFormatters): string {
+export function renderJobsListHtml(jobs: readonly JobsViewItem[], formatters: JobsViewFormatters): string {
   const { i18n } = formatters;
-  if (!jobs.size) {
+  if (!jobs.length) {
     return `
       <div class="job-empty">
         <strong>${formatters.escapeHtml(i18n.t("jobs.empty.title"))}</strong>
@@ -50,25 +77,21 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
     `;
   }
 
-  return sortedJobStates(jobs)
-    .map((state) => {
-      const snapshot = state.snapshot;
-      const summary = snapshot.terminalSummary;
-      const canRetryPassword = formatters.canRetryJobWithPassword(snapshot.jobId, state);
-      const outputActions = snapshot.status === "completed"
-        ? formatters.getOutputActions?.(snapshot.jobId, state) ?? []
-        : [];
-      const progress = deriveJobProgress(state);
+  return jobs
+    .map((job) => {
+      const summary = job.terminalSummary;
+      const outputActions = job.status === "completed" ? job.readyOutputActions : [];
+      const progress = job.progress;
       const formatDuration = formatters.formatDuration ?? defaultFormatDuration;
       const filesText = progress.totalFiles === null
         ? String(progress.processedFiles)
         : `${progress.processedFiles} / ${progress.totalFiles}`;
       const progressValue = progress.progressPercent ?? 0;
-      const progressAttributes = progress.progressPercent === null && !isTerminalJobStatus(snapshot.status)
+      const progressAttributes = progress.progressPercent === null && !job.isTerminal
         ? ""
         : `value="${progressValue.toFixed(0)}" max="100"`;
-      const statusLabel = i18n.t(jobStatusKey(snapshot.status));
-      const failedEvent = latestFailedEvent(state);
+      const statusLabel = i18n.t(jobStatusKey(job.status));
+      const failedEvent = latestFailedEvent(job);
       const failedMessage = failedEvent?.message ?? progress.latestStatusMessage;
       const failedItem = failedEvent?.path ?? progress.currentFile;
       const currentItem = progress.currentFile || i18n.t("jobs.current.none");
@@ -80,22 +103,20 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
         ? formatters.formatBytes(progress.processedBytes)
         : `${formatters.formatBytes(progress.processedBytes)} / ${formatters.formatBytes(progress.totalBytes)}`;
       return `
-        <article class="job-card" data-job-status="${formatters.escapeHtml(snapshot.status)}">
+        <article class="job-card" data-job-status="${formatters.escapeHtml(job.status)}">
           <div class="job-header">
             <div class="job-heading">
-              <p class="job-title">${formatters.escapeHtml(formatters.formatJobKind(snapshot.kind))}</p>
-              <p class="job-subtitle">${formatters.escapeHtml(snapshot.jobId)}</p>
+              <p class="job-title">${formatters.escapeHtml(formatters.formatJobKind(job.kind))}</p>
+              <p class="job-subtitle">${formatters.escapeHtml(job.jobId)}</p>
             </div>
             <span class="job-status-pill">${formatters.escapeHtml(statusLabel)}</span>
           </div>
-          ${renderJobBody(state, {
-            canRetryPassword,
+          ${renderJobBody(job, {
             currentItem,
             failedItem,
             failedMessage,
             filesText,
             formatters,
-            kind: snapshot.kind,
             outputActions,
             progressAttributes,
             processedText,
@@ -110,30 +131,27 @@ export function renderJobsListHtml(jobs: Map<string, JobState>, formatters: Jobs
 }
 
 type RenderJobBodyOptions = {
-  canRetryPassword: boolean;
   currentItem: string;
   failedItem?: string;
   failedMessage: string;
   filesText: string;
   formatters: JobsViewFormatters;
-  kind: JobKind;
-  outputActions: JobOutputAction[];
+  outputActions: readonly JobOutputAction[];
   progressAttributes: string;
   processedText: string;
   remainingText: string;
   speedText: string;
-  summary: JobState["snapshot"]["terminalSummary"];
+  summary?: JobsViewTerminalSummary | null;
 };
 
-function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
+function renderJobBody(job: JobsViewItem, options: RenderJobBodyOptions): string {
   const { i18n } = options.formatters;
-  const snapshot = state.snapshot;
-  const jobId = options.formatters.escapeHtml(snapshot.jobId);
+  const jobId = options.formatters.escapeHtml(job.jobId);
 
-  if (snapshot.status === "failed") {
+  if (job.status === "failed") {
     return `
       <div class="job-message job-message-error">
-        <strong>${options.formatters.escapeHtml(i18n.t("jobs.failed.title", { kind: options.formatters.formatJobKind(snapshot.kind) }))}</strong>
+        <strong>${options.formatters.escapeHtml(i18n.t("jobs.failed.title", { kind: options.formatters.formatJobKind(job.kind) }))}</strong>
         <span>${options.formatters.escapeHtml(options.failedMessage)}</span>
         ${options.failedItem
           ? `<small>${options.formatters.escapeHtml(i18n.t("jobs.failed.item"))} ${options.formatters.escapeHtml(options.failedItem)}</small>`
@@ -141,21 +159,21 @@ function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
         }
       </div>
       <div class="job-actions">
-        ${options.canRetryPassword ? `<button type="button" data-retry-password="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.retryPassword"))}</button>` : ""}
-        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+        ${job.canRetryPassword ? `<button type="button" data-retry-password="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.retryPassword"))}</button>` : ""}
+        ${job.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
       </div>
     `;
   }
 
-  if (snapshot.status === "completed") {
+  if (job.status === "completed") {
     return `
       <div class="job-completion">
         <strong>${options.formatters.escapeHtml(i18n.t("jobs.completed.title"))}</strong>
-        ${renderJobSummary(options)}
+        ${renderJobSummary(job, options)}
       </div>
       ${renderOutputActions(jobId, options)}
       <div class="job-actions">
-        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+        ${job.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
       </div>
       <progress
         aria-label="${options.formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
@@ -164,14 +182,14 @@ function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
     `;
   }
 
-  if (snapshot.status === "cancelled") {
+  if (job.status === "cancelled") {
     return `
       <div class="job-message">
         <strong>${options.formatters.escapeHtml(i18n.t("jobs.cancelled.title"))}</strong>
         <span>${options.formatters.escapeHtml(options.currentItem)}</span>
       </div>
       <div class="job-actions">
-        ${snapshot.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
+        ${job.canDismiss ? `<button type="button" data-dismiss="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.dismiss"))}</button>` : ""}
       </div>
       <progress
         aria-label="${options.formatters.escapeHtml(i18n.t("jobs.progress.aria"))}"
@@ -196,9 +214,9 @@ function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
       <span><strong>${options.formatters.escapeHtml(options.processedText)}</strong> ${options.formatters.escapeHtml(i18n.t("jobs.metric.processed"))}</span>
     </div>
     <div class="job-actions">
-      ${snapshot.status === "running" ? `<button type="button" data-pause="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.pause"))}</button>` : ""}
-      ${snapshot.status === "paused" ? `<button type="button" data-resume="${jobId}">${options.formatters.escapeHtml(i18n.t("common.continue"))}</button>` : ""}
-      ${snapshot.status === "queued" || snapshot.status === "running" || snapshot.status === "paused"
+      ${job.status === "running" ? `<button type="button" data-pause="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.pause"))}</button>` : ""}
+      ${job.status === "paused" ? `<button type="button" data-resume="${jobId}">${options.formatters.escapeHtml(i18n.t("common.continue"))}</button>` : ""}
+      ${job.status === "queued" || job.status === "running" || job.status === "paused"
         ? `<button type="button" data-cancel="${jobId}">${options.formatters.escapeHtml(i18n.t("jobs.action.cancel"))}</button>`
         : ""
       }
@@ -206,17 +224,13 @@ function renderJobBody(state: JobState, options: RenderJobBodyOptions): string {
   `;
 }
 
-function renderJobSummary(options: RenderJobBodyOptions): string {
+function renderJobSummary(job: JobsViewItem, options: RenderJobBodyOptions): string {
   const { i18n } = options.formatters;
   const summary = options.summary;
 
   if (!summary) {
     return `<p>${options.formatters.escapeHtml(i18n.t("jobs.summary.empty"))}</p>`;
   }
-
-  const sizeLabelKey = isCreateJobKind(options.kind)
-    ? "jobs.summary.archiveSize"
-    : "jobs.summary.outputSize";
 
   return `
     <p>${options.formatters.escapeHtml(i18n.t("jobs.summary.entries", {
@@ -233,7 +247,7 @@ function renderJobSummary(options: RenderJobBodyOptions): string {
         ? `<p>${options.formatters.escapeHtml(i18n.t("jobs.summary.warningCount", { count: summary.warnings.length }))}</p>`
         : ""
     }
-    <p class="job-output-size">${options.formatters.escapeHtml(i18n.t(sizeLabelKey))}</p>
+    <p class="job-output-size">${options.formatters.escapeHtml(i18n.t(job.completedSizeLabelKey))}</p>
   `;
 }
 
@@ -252,9 +266,9 @@ function renderOutputActions(jobId: string, options: RenderJobBodyOptions): stri
   `;
 }
 
-function latestFailedEvent(state: JobState) {
-  for (let index = state.events.length - 1; index >= 0; index -= 1) {
-    const event = state.events[index];
+function latestFailedEvent(job: JobsViewItem): JobsViewEvent | null {
+  for (let index = job.events.length - 1; index >= 0; index -= 1) {
+    const event = job.events[index];
     if (event.eventType === "failed") {
       return event;
     }
@@ -263,7 +277,7 @@ function latestFailedEvent(state: JobState) {
   return null;
 }
 
-function jobStatusKey(status: JobState["snapshot"]["status"]): MessageKey {
+function jobStatusKey(status: JobsViewJobStatus): MessageKey {
   switch (status) {
     case "queued":
       return "jobs.status.queued";

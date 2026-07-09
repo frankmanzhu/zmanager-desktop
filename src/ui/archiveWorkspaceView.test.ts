@@ -8,17 +8,256 @@ import {
 } from "../app/archiveTable";
 import { createTranslator } from "../app/i18n/translator";
 import {
+  archiveEntryPathsInViewportRect,
+  renderArchiveBrowseMessage,
+  renderArchiveCommandControlState,
   renderArchiveNavigationTree,
+  renderArchiveMetaText,
+  renderArchivePathBar,
+  renderArchiveWorkspaceModeChrome,
   renderArchiveWorkspaceTable,
   renderCreateNavigationTree,
   renderArchiveDetailsHtml,
+  syncArchiveVisibleSelection,
   tableMinimumWidth,
+  type ArchiveCommandControlElements,
+  type ArchivePathBarElements,
+  type ArchiveWorkspaceModeChromeElements,
   type ArchiveWorkspaceTreeFolder,
   type ArchiveWorkspaceTableElements,
   type ArchiveWorkspaceTableRenderOptions,
 } from "./archiveWorkspaceView";
 
 describe("archive workspace view", () => {
+  it("renders browse status classes and explicit messages", () => {
+    const messageElement = element();
+
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState: "loading",
+      message: "Loading archive entries...",
+    });
+
+    expect(messageElement.className).toBe("status status-loading");
+    expect(messageElement.textContent).toBe("Loading archive entries...");
+
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState: "error",
+      message: "Could not parse archive",
+    });
+
+    expect(messageElement.className).toBe("status status-error");
+    expect(messageElement.textContent).toBe("Could not parse archive");
+
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState: "loaded",
+      message: "12 entries loaded.",
+    });
+
+    expect(messageElement.className).toBe("status status-loaded");
+    expect(messageElement.textContent).toBe("12 entries loaded.");
+  });
+
+  it("updates browse status class without replacing an omitted message", () => {
+    const messageElement = element();
+    messageElement.textContent = "Previous message";
+
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState: "empty",
+    });
+
+    expect(messageElement.className).toBe("status status-empty");
+    expect(messageElement.textContent).toBe("Previous message");
+  });
+
+  it("renders explicit browse messages through textContent semantics", () => {
+    const messageElement = element();
+    messageElement.innerHTML = "";
+
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState: "error",
+      message: "<img src=x onerror=alert(1)> & unsafe",
+    });
+
+    expect(messageElement.textContent).toBe("<img src=x onerror=alert(1)> & unsafe");
+    expect(messageElement.innerHTML).toBe("");
+  });
+
+  it("renders the no-archive path bar state", () => {
+    const view = createPathBarElements();
+
+    renderArchivePathBar(view.elements, {
+      kind: "empty",
+      emptyLabel: "Open or create an archive to begin.",
+      documentTitle: "ZManager",
+    });
+
+    expect(view.pathFieldInput.value).toBe("Open or create an archive to begin.");
+    expect(view.pathFieldInput.disabled).toBe(true);
+    expect(view.pathFieldInput.readOnly).toBe(true);
+    expect(view.pathCrumbsElement.hidden).toBe(true);
+    expect(view.pathCrumbsElement.textContent).toBe("Open or create an archive to begin.");
+    expect(view.document.title).toBe("ZManager");
+  });
+
+  it("renders archive path bar breadcrumbs with escaped names and paths", () => {
+    const view = createPathBarElements();
+
+    renderArchivePathBar(view.elements, {
+      kind: "archive",
+      displayPath: "C:\\archives\\demo.zip\\docs/<unsafe>",
+      documentTitle: "demo.zip\\docs\\<unsafe> - ZManager",
+      crumbs: [
+        { name: "demo.zip", path: "" },
+        { name: "docs & <unsafe>", path: "docs/<unsafe>" },
+      ],
+    });
+
+    expect(view.pathFieldInput.value).toBe("C:\\archives\\demo.zip\\docs/<unsafe>");
+    expect(view.pathFieldInput.disabled).toBe(false);
+    expect(view.pathFieldInput.readOnly).toBe(true);
+    expect(view.pathCrumbsElement.hidden).toBe(false);
+    expect(view.document.title).toBe("demo.zip\\docs\\<unsafe> - ZManager");
+    expect(view.pathCrumbsElement.innerHTML).toContain('data-crumb-path=""');
+    expect(view.pathCrumbsElement.innerHTML).toContain(">demo.zip</button>");
+    expect(view.pathCrumbsElement.innerHTML).toContain('<span aria-hidden="true">&gt;</span>');
+    expect(view.pathCrumbsElement.innerHTML).toContain('data-crumb-path="docs/&lt;unsafe&gt;"');
+    expect(view.pathCrumbsElement.innerHTML).toContain(">docs &amp; &lt;unsafe&gt;</button>");
+    expect(view.pathCrumbsElement.innerHTML).toContain('aria-keyshortcuts="Enter Space"');
+  });
+
+  it("renders archive meta text", () => {
+    const metaElement = element();
+
+    renderArchiveMetaText({ metaElement }, {
+      text: "demo.zip > docs - 3 entries",
+    });
+
+    expect(metaElement.textContent).toBe("demo.zip > docs - 3 entries");
+  });
+
+  it("renders compress workspace mode chrome", () => {
+    const chrome = createWorkspaceChromeElements();
+
+    renderArchiveWorkspaceModeChrome(chrome.elements, {
+      mode: "compress",
+      compressActive: true,
+      extractActive: false,
+      compressSurfaceHidden: false,
+      tableShellHidden: true,
+      refreshArchiveHidden: true,
+      messageHidden: true,
+      detailsHidden: true,
+      compressOptionsHidden: false,
+      detailsPaneTitle: "Options",
+      detailsPaneTitleI18nKey: "compress.options",
+      workspaceTitle: "Create Archive",
+      metaText: "Choose files to compress.",
+      statusSelectionCountText: "2 sources staged",
+      statusSelectionSizeText: "",
+      statusFocusedSizeText: "",
+      statusFocusedModifiedText: "",
+    });
+
+    expect(chrome.workspaceElement.dataset.mode).toBe("compress");
+    expect(chrome.compressClasses.has("is-active")).toBe(true);
+    expect(chrome.extractClasses.has("is-active")).toBe(false);
+    expect(chrome.compressAttributes["aria-selected"]).toBe("true");
+    expect(chrome.compressAttributes["aria-pressed"]).toBe("true");
+    expect(chrome.extractAttributes["aria-selected"]).toBe("false");
+    expect(chrome.extractAttributes["aria-pressed"]).toBe("false");
+    expect(chrome.compressSurfaceElement.hidden).toBe(false);
+    expect(chrome.tableShellElement.hidden).toBe(true);
+    expect(chrome.refreshArchiveButton.hidden).toBe(true);
+    expect(chrome.messageElement.hidden).toBe(true);
+    expect(chrome.detailsElement.hidden).toBe(true);
+    expect(chrome.compressOptionsPanel.hidden).toBe(false);
+    expect(chrome.detailsPaneTitleElement.textContent).toBe("Options");
+    expect(chrome.detailsPaneTitleElement.dataset.i18nText).toBe("compress.options");
+    expect(chrome.workspaceTitleElement.textContent).toBe("Create Archive");
+    expect(chrome.metaElement.textContent).toBe("Choose files to compress.");
+    expect(chrome.statusSelectionCountElement.textContent).toBe("2 sources staged");
+    expect(chrome.statusSelectionSizeElement.textContent).toBe("");
+    expect(chrome.statusFocusedSizeElement.textContent).toBe("");
+    expect(chrome.statusFocusedModifiedElement.textContent).toBe("");
+  });
+
+  it("renders extract workspace mode chrome without overwriting omitted status fields", () => {
+    const chrome = createWorkspaceChromeElements();
+    chrome.statusSelectionCountElement.textContent = "stale selection";
+    chrome.metaElement.textContent = "stale meta";
+
+    renderArchiveWorkspaceModeChrome(chrome.elements, {
+      mode: "extract",
+      compressActive: false,
+      extractActive: true,
+      compressSurfaceHidden: true,
+      tableShellHidden: false,
+      refreshArchiveHidden: false,
+      messageHidden: false,
+      detailsHidden: false,
+      compressOptionsHidden: true,
+      detailsPaneTitle: "Details",
+      detailsPaneTitleI18nKey: "pane.details",
+      workspaceTitle: "Browse Archive",
+      metaText: "Open an archive to begin.",
+    });
+
+    expect(chrome.workspaceElement.dataset.mode).toBe("extract");
+    expect(chrome.compressClasses.has("is-active")).toBe(false);
+    expect(chrome.extractClasses.has("is-active")).toBe(true);
+    expect(chrome.compressAttributes["aria-selected"]).toBe("false");
+    expect(chrome.extractAttributes["aria-selected"]).toBe("true");
+    expect(chrome.compressSurfaceElement.hidden).toBe(true);
+    expect(chrome.tableShellElement.hidden).toBe(false);
+    expect(chrome.refreshArchiveButton.hidden).toBe(false);
+    expect(chrome.messageElement.hidden).toBe(false);
+    expect(chrome.detailsElement.hidden).toBe(false);
+    expect(chrome.compressOptionsPanel.hidden).toBe(true);
+    expect(chrome.detailsPaneTitleElement.textContent).toBe("Details");
+    expect(chrome.detailsPaneTitleElement.dataset.i18nText).toBe("pane.details");
+    expect(chrome.workspaceTitleElement.textContent).toBe("Browse Archive");
+    expect(chrome.metaElement.textContent).toBe("Open an archive to begin.");
+    expect(chrome.statusSelectionCountElement.textContent).toBe("stale selection");
+  });
+
+  it("renders command and search control disabled states", () => {
+    const controls = createCommandControlElements();
+
+    renderArchiveCommandControlState(controls.elements, {
+      searchDisabled: true,
+      searchSubmitDisabled: true,
+      clearSearchDisabled: true,
+      selectAllDisabled: true,
+      navBackDisabled: true,
+    });
+
+    expect(controls.searchInput.disabled).toBe(true);
+    expect(controls.searchInputAttributes["aria-disabled"]).toBe("true");
+    expect(controls.searchSubmitButton.disabled).toBe(true);
+    expect(controls.searchSubmitAttributes["aria-disabled"]).toBe("true");
+    expect(controls.clearSearchButton.disabled).toBe(true);
+    expect(controls.clearSearchAttributes["aria-disabled"]).toBe("true");
+    expect(controls.selectAllInput.disabled).toBe(true);
+    expect(controls.navBackButton.disabled).toBe(true);
+
+    renderArchiveCommandControlState(controls.elements, {
+      searchDisabled: false,
+      searchSubmitDisabled: false,
+      clearSearchDisabled: true,
+      selectAllDisabled: false,
+      navBackDisabled: false,
+    });
+
+    expect(controls.searchInput.disabled).toBe(false);
+    expect(controls.searchInputAttributes["aria-disabled"]).toBe("false");
+    expect(controls.searchSubmitButton.disabled).toBe(false);
+    expect(controls.searchSubmitAttributes["aria-disabled"]).toBe("false");
+    expect(controls.clearSearchButton.disabled).toBe(true);
+    expect(controls.clearSearchAttributes["aria-disabled"]).toBe("true");
+    expect(controls.selectAllInput.disabled).toBe(false);
+    expect(controls.navBackButton.disabled).toBe(false);
+  });
+
   it("renders archive tree empty state", () => {
     const treeContentElement = treeElement();
 
@@ -465,6 +704,82 @@ describe("archive workspace view", () => {
     expect(view.elements.tableHead.innerHTML).toContain('<span class="sort-indicator" aria-hidden="true">v</span>');
     expect(view.elements.tableHead.innerHTML).toContain('style="width: 500px; min-width: 140px"');
   });
+
+  it("syncs archive select-all state for none, all, and partial visible selection", () => {
+    const view = createSelectionSyncElements([]);
+
+    syncArchiveVisibleSelection(view.elements, {
+      selectedPaths: [],
+      focusedPath: "",
+      visibleSelectablePaths: ["docs/a.txt", "docs/b.txt"],
+      visibleSelectedCount: 0,
+    });
+
+    expect(view.selectAllInput.checked).toBe(false);
+    expect(view.selectAllInput.indeterminate).toBe(false);
+
+    syncArchiveVisibleSelection(view.elements, {
+      selectedPaths: ["docs/a.txt", "docs/b.txt"],
+      focusedPath: "docs/a.txt",
+      visibleSelectablePaths: ["docs/a.txt", "docs/b.txt"],
+      visibleSelectedCount: 2,
+    });
+
+    expect(view.selectAllInput.checked).toBe(true);
+    expect(view.selectAllInput.indeterminate).toBe(false);
+
+    syncArchiveVisibleSelection(view.elements, {
+      selectedPaths: ["docs/a.txt"],
+      focusedPath: "docs/a.txt",
+      visibleSelectablePaths: ["docs/a.txt", "docs/b.txt"],
+      visibleSelectedCount: 1,
+    });
+
+    expect(view.selectAllInput.checked).toBe(false);
+    expect(view.selectAllInput.indeterminate).toBe(true);
+  });
+
+  it("syncs selected and focused entry rows while ignoring non-entry rows", () => {
+    const selectedRow = tableRow("docs/a.txt");
+    const focusedRow = tableRow("docs/b.txt");
+    const nonEntryRow = tableRow(null);
+    const view = createSelectionSyncElements([selectedRow, focusedRow], nonEntryRow);
+
+    syncArchiveVisibleSelection(view.elements, {
+      selectedPaths: ["docs/a.txt"],
+      focusedPath: "docs/b.txt",
+      visibleSelectablePaths: ["docs/a.txt", "docs/b.txt"],
+      visibleSelectedCount: 1,
+    });
+
+    expect(selectedRow.classes.has("is-selected")).toBe(true);
+    expect(selectedRow.classes.has("is-focused-row")).toBe(false);
+    expect(selectedRow.attributes["aria-selected"]).toBe("true");
+    expect(selectedRow.checkbox.checked).toBe(true);
+
+    expect(focusedRow.classes.has("is-selected")).toBe(false);
+    expect(focusedRow.classes.has("is-focused-row")).toBe(true);
+    expect(focusedRow.attributes["aria-selected"]).toBe("false");
+    expect(focusedRow.checkbox.checked).toBe(false);
+
+    expect(nonEntryRow.classes.size).toBe(0);
+    expect(nonEntryRow.attributes).toEqual({});
+    expect(nonEntryRow.checkbox.checked).toBe(false);
+  });
+
+  it("returns entry paths for rows intersecting a viewport rectangle", () => {
+    const insideRow = tableRow("docs/a.txt", { left: 10, top: 10, right: 60, bottom: 40 });
+    const outsideRow = tableRow("docs/b.txt", { left: 80, top: 80, right: 120, bottom: 120 });
+    const missingPathRow = tableRow("", { left: 20, top: 20, right: 30, bottom: 30 });
+    const view = createSelectionSyncElements([insideRow, outsideRow, missingPathRow]);
+
+    expect(archiveEntryPathsInViewportRect(view.elements, {
+      left: 0,
+      top: 0,
+      right: 70,
+      bottom: 70,
+    })).toEqual(["docs/a.txt"]);
+  });
 });
 
 function options(
@@ -560,6 +875,215 @@ function createElements(): {
   };
 }
 
+type FakeTableRow = HTMLTableRowElement & {
+  attributes: Record<string, string>;
+  checkbox: HTMLInputElement;
+  classes: Set<string>;
+};
+
+function createSelectionSyncElements(
+  rows: readonly FakeTableRow[],
+  ignoredRow?: FakeTableRow,
+): {
+  elements: { tableBody: HTMLTableSectionElement; selectAllInput: HTMLInputElement };
+  selectAllInput: HTMLInputElement;
+  ignoredRow?: FakeTableRow;
+} {
+  const selectAllInput = checkbox();
+  const tableBody = {
+    querySelectorAll: (selector: string) => selector === "tr[data-entry-path]" ? rows : [],
+  } as unknown as HTMLTableSectionElement;
+  return {
+    elements: {
+      tableBody,
+      selectAllInput,
+    },
+    selectAllInput,
+    ignoredRow,
+  };
+}
+
+function tableRow(
+  entryPath: string | null,
+  rect: Partial<Pick<DOMRect, "left" | "top" | "right" | "bottom">> = {},
+): FakeTableRow {
+  const attributes: Record<string, string> = {};
+  const classes = new Set<string>();
+  const checkboxInput = checkbox();
+  const boundingRect = {
+    left: rect.left ?? 0,
+    top: rect.top ?? 0,
+    right: rect.right ?? 0,
+    bottom: rect.bottom ?? 0,
+  } as DOMRect;
+  return {
+    dataset: entryPath === null ? {} : { entryPath },
+    attributes,
+    checkbox: checkboxInput,
+    classes,
+    classList: {
+      toggle: (className: string, force?: boolean) => {
+        if (force) {
+          classes.add(className);
+          return true;
+        }
+        classes.delete(className);
+        return false;
+      },
+    },
+    setAttribute: (name: string, value: string) => {
+      attributes[name] = value;
+    },
+    getBoundingClientRect: () => boundingRect,
+    querySelector: (selector: string) => selector === "input[type='checkbox']" ? checkboxInput : null,
+  } as unknown as FakeTableRow;
+}
+
+function createPathBarElements(): {
+  elements: ArchivePathBarElements;
+  pathFieldInput: HTMLInputElement;
+  pathCrumbsElement: HTMLElement;
+  document: Pick<Document, "title">;
+} {
+  const pathFieldInput = input();
+  const pathCrumbsElement = element();
+  const document = { title: "" };
+  return {
+    elements: {
+      pathFieldInput,
+      pathCrumbsElement,
+      document,
+    },
+    pathFieldInput,
+    pathCrumbsElement,
+    document,
+  };
+}
+
+function createWorkspaceChromeElements(): {
+  elements: ArchiveWorkspaceModeChromeElements;
+  workspaceElement: HTMLElement;
+  modeCompressButton: HTMLButtonElement;
+  modeExtractButton: HTMLButtonElement;
+  compressClasses: Set<string>;
+  extractClasses: Set<string>;
+  compressAttributes: Record<string, string>;
+  extractAttributes: Record<string, string>;
+  compressSurfaceElement: HTMLElement;
+  tableShellElement: HTMLElement;
+  refreshArchiveButton: HTMLElement;
+  messageElement: HTMLElement;
+  detailsElement: HTMLElement;
+  compressOptionsPanel: HTMLElement;
+  detailsPaneTitleElement: HTMLElement;
+  workspaceTitleElement: HTMLElement;
+  metaElement: HTMLElement;
+  statusSelectionCountElement: HTMLElement;
+  statusSelectionSizeElement: HTMLElement;
+  statusFocusedSizeElement: HTMLElement;
+  statusFocusedModifiedElement: HTMLElement;
+} {
+  const workspaceElement = element();
+  const compressClasses = new Set<string>();
+  const extractClasses = new Set<string>();
+  const compressAttributes: Record<string, string> = {};
+  const extractAttributes: Record<string, string> = {};
+  const modeCompressButton = button(compressClasses, compressAttributes);
+  const modeExtractButton = button(extractClasses, extractAttributes);
+  const compressSurfaceElement = element();
+  const tableShellElement = element();
+  const refreshArchiveButton = element();
+  const messageElement = element();
+  const detailsElement = element();
+  const compressOptionsPanel = element();
+  const detailsPaneTitleElement = element();
+  const workspaceTitleElement = element();
+  const metaElement = element();
+  const statusSelectionCountElement = element();
+  const statusSelectionSizeElement = element();
+  const statusFocusedSizeElement = element();
+  const statusFocusedModifiedElement = element();
+
+  return {
+    elements: {
+      workspaceElement,
+      modeCompressButton,
+      modeExtractButton,
+      compressSurfaceElement,
+      tableShellElement,
+      refreshArchiveButton,
+      messageElement,
+      detailsElement,
+      compressOptionsPanel,
+      detailsPaneTitleElement,
+      workspaceTitleElement,
+      metaElement,
+      statusSelectionCountElement,
+      statusSelectionSizeElement,
+      statusFocusedSizeElement,
+      statusFocusedModifiedElement,
+    },
+    workspaceElement,
+    modeCompressButton,
+    modeExtractButton,
+    compressClasses,
+    extractClasses,
+    compressAttributes,
+    extractAttributes,
+    compressSurfaceElement,
+    tableShellElement,
+    refreshArchiveButton,
+    messageElement,
+    detailsElement,
+    compressOptionsPanel,
+    detailsPaneTitleElement,
+    workspaceTitleElement,
+    metaElement,
+    statusSelectionCountElement,
+    statusSelectionSizeElement,
+    statusFocusedSizeElement,
+    statusFocusedModifiedElement,
+  };
+}
+
+function createCommandControlElements(): {
+  elements: ArchiveCommandControlElements;
+  searchInput: HTMLInputElement;
+  searchSubmitButton: HTMLButtonElement;
+  clearSearchButton: HTMLButtonElement;
+  selectAllInput: HTMLInputElement;
+  navBackButton: HTMLButtonElement;
+  searchInputAttributes: Record<string, string>;
+  searchSubmitAttributes: Record<string, string>;
+  clearSearchAttributes: Record<string, string>;
+} {
+  const searchInputAttributes: Record<string, string> = {};
+  const searchSubmitAttributes: Record<string, string> = {};
+  const clearSearchAttributes: Record<string, string> = {};
+  const searchInput = input(searchInputAttributes);
+  const searchSubmitButton = button(undefined, searchSubmitAttributes);
+  const clearSearchButton = button(undefined, clearSearchAttributes);
+  const selectAllInput = input();
+  const navBackButton = button();
+  return {
+    elements: {
+      searchInput,
+      searchSubmitButton,
+      clearSearchButton,
+      selectAllInput,
+      navBackButton,
+    },
+    searchInput,
+    searchSubmitButton,
+    clearSearchButton,
+    selectAllInput,
+    navBackButton,
+    searchInputAttributes,
+    searchSubmitAttributes,
+    clearSearchAttributes,
+  };
+}
+
 function section(): HTMLTableSectionElement {
   return {
     innerHTML: "",
@@ -578,8 +1102,11 @@ function table(): HTMLTableElement {
 
 function element(): HTMLElement {
   return {
+    className: "",
     hidden: false,
     textContent: "",
+    innerHTML: "",
+    dataset: {},
     classList: {
       toggle: () => false,
     },
@@ -606,7 +1133,44 @@ function checkbox(): HTMLInputElement {
   return {
     checked: false,
     indeterminate: false,
+    disabled: false,
   } as HTMLInputElement;
+}
+
+function input(attributes: Record<string, string> = {}): HTMLInputElement {
+  return {
+    value: "",
+    checked: false,
+    indeterminate: false,
+    disabled: false,
+    readOnly: false,
+    setAttribute: (name: string, value: string) => {
+      attributes[name] = value;
+    },
+  } as unknown as HTMLInputElement;
+}
+
+function button(
+  classes = new Set<string>(),
+  attributes: Record<string, string> = {},
+): HTMLButtonElement {
+  return {
+    hidden: false,
+    disabled: false,
+    classList: {
+      toggle: (className: string, force?: boolean) => {
+        if (force) {
+          classes.add(className);
+          return true;
+        }
+        classes.delete(className);
+        return false;
+      },
+    },
+    setAttribute: (name: string, value: string) => {
+      attributes[name] = value;
+    },
+  } as unknown as HTMLButtonElement;
 }
 
 function treeElement(): HTMLElement {

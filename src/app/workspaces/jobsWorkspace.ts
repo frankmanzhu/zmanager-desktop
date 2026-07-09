@@ -12,6 +12,7 @@ import {
   createInitialJobState,
   deriveJobProgress,
   getLatestPasswordFailureEvent,
+  isCreateJobKind,
   isLiveJobStatus,
   isTerminalJobStatus,
   mergePolledJobState,
@@ -88,8 +89,16 @@ export type ProgressClockSnapshot = {
 };
 
 export type JobListItemSnapshot = {
+  jobId: string;
+  kind: JobState["snapshot"]["kind"];
+  status: JobState["snapshot"]["status"];
+  canDismiss: boolean;
+  events: readonly JobEventDto[];
+  terminalSummary: JobState["snapshot"]["terminalSummary"];
   state: JobState;
   progress: JobProgressSnapshot;
+  isTerminal: boolean;
+  completedSizeLabelKey: "jobs.summary.archiveSize" | "jobs.summary.outputSize";
   canRetryPassword: boolean;
   readyOutputActions: readonly JobOutputAction[];
 };
@@ -406,12 +415,26 @@ export function createJobsWorkspace(): JobsWorkspace {
     getJobListSnapshot(nowMs) {
       const sortedJobs = sortedJobStates(jobs.values());
       return {
-        jobs: sortedJobs.map((state) => ({
-          state: cloneJobState(state),
-          progress: deriveJobProgress(state, nowMs),
-          canRetryPassword: canRetryJob(state.snapshot.jobId, state),
-          readyOutputActions: readyOutputActionsFor(state, outputActions.get(state.snapshot.jobId)),
-        })),
+        jobs: sortedJobs.map((state) => {
+          const clonedState = cloneJobState(state);
+          const snapshot = clonedState.snapshot;
+          return {
+            jobId: snapshot.jobId,
+            kind: snapshot.kind,
+            status: snapshot.status,
+            canDismiss: snapshot.canDismiss,
+            events: clonedState.events,
+            terminalSummary: snapshot.terminalSummary,
+            state: clonedState,
+            progress: deriveJobProgress(state, nowMs),
+            isTerminal: isTerminalJobStatus(snapshot.status),
+            completedSizeLabelKey: isCreateJobKind(snapshot.kind)
+              ? "jobs.summary.archiveSize"
+              : "jobs.summary.outputSize",
+            canRetryPassword: canRetryJob(snapshot.jobId, state),
+            readyOutputActions: readyOutputActionsFor(state, outputActions.get(snapshot.jobId)),
+          };
+        }),
         activeJob: activeJobFrom(sortedJobs),
         progressClock: progressClockSnapshot(sortedJobs),
       };

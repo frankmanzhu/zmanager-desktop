@@ -1,7 +1,30 @@
-import type { OpenDialogOptions, SaveDialogOptions } from "@tauri-apps/plugin-dialog";
+export type NativeDialogFilter = {
+  name: string;
+  extensions: string[];
+};
 
-type OpenDialogFn = (options: OpenDialogOptions) => Promise<string | string[] | null>;
-type SaveDialogFn = (options: SaveDialogOptions) => Promise<string | null>;
+export type NativeDialogOpenOptions = {
+  title?: string;
+  filters?: NativeDialogFilter[];
+  defaultPath?: string;
+  multiple?: boolean;
+  directory?: boolean;
+  recursive?: boolean;
+  canCreateDirectories?: boolean;
+};
+
+export type NativeDialogSaveOptions = {
+  title?: string;
+  filters?: NativeDialogFilter[];
+  defaultPath?: string;
+  canCreateDirectories?: boolean;
+};
+
+export type NativeOpenDialogResult = string | string[] | null;
+export type NativeSaveDialogResult = string | null;
+
+export type NativeOpenDialogFn = (options: NativeDialogOpenOptions) => Promise<NativeOpenDialogResult>;
+export type NativeSaveDialogFn = (options: NativeDialogSaveOptions) => Promise<NativeSaveDialogResult>;
 type StatusReporter = (message: string) => void;
 export type NativeDialogErrorMessages = {
   unavailableInBrowser: string;
@@ -33,8 +56,8 @@ export function nativeDialogErrorMessage(
 }
 
 export async function runNativeOpenDialog(
-  openDialog: OpenDialogFn,
-  options: OpenDialogOptions,
+  openDialog: NativeOpenDialogFn,
+  options: NativeDialogOpenOptions,
   isDesktop: boolean,
   reportStatus: StatusReporter,
   messages: NativeDialogErrorMessages,
@@ -48,8 +71,8 @@ export async function runNativeOpenDialog(
 }
 
 export async function runNativeSaveDialog(
-  saveDialog: SaveDialogFn,
-  options: SaveDialogOptions,
+  saveDialog: NativeSaveDialogFn,
+  options: NativeDialogSaveOptions,
   isDesktop: boolean,
   reportStatus: StatusReporter,
   messages: NativeDialogErrorMessages,

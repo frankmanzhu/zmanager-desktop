@@ -49,6 +49,41 @@ import {
   type CommandRouterPayload,
 } from "./app/commands/commandRouter";
 import {
+  createArchiveLoadController,
+  type ArchiveLoadOptions,
+} from "./app/controllers/archiveLoadController";
+import {
+  createArchiveOpenController,
+} from "./app/controllers/archiveOpenController";
+import {
+  createArchivePreviewController,
+  type ArchivePreviewMode,
+} from "./app/controllers/archivePreviewController";
+import {
+  createArchiveTestController,
+} from "./app/controllers/archiveTestController";
+import {
+  createCreatePlanController,
+} from "./app/controllers/createPlanController";
+import {
+  createCreateStartController,
+} from "./app/controllers/createStartController";
+import {
+  createExtractStartController,
+} from "./app/controllers/extractStartController";
+import {
+  createJobControlController,
+} from "./app/controllers/jobControlController";
+import {
+  createJobPollingController,
+} from "./app/controllers/jobPollingController";
+import {
+  createQuickActionController,
+} from "./app/controllers/quickActionController";
+import {
+  createStartupController,
+} from "./app/controllers/startupController";
+import {
   ARCHIVE_TABLE_COLUMNS,
   archiveTableColumnLabel,
   moveColumn,
@@ -70,7 +105,6 @@ import {
   type ArchiveWorkspaceSnapshot,
 } from "./app/workspaces/archiveWorkspace";
 import {
-  buildQuickCreateStartRequest,
   createCreateWorkspace,
   type CreateWorkspacePlanStatus,
   type CreateWorkspaceSnapshot,
@@ -83,13 +117,21 @@ import {
   type ArchiveEntryIconDescriptor,
 } from "./app/archiveEntryIcons";
 import {
+  archiveEntryPathsInViewportRect,
   middleTruncateDetailValue,
+  renderArchiveBrowseMessage,
+  renderArchiveCommandControlState,
   renderArchiveDetails,
+  renderArchiveMetaText,
   renderArchiveNavigationTree,
+  renderArchivePathBar,
+  renderArchiveWorkspaceModeChrome,
   renderArchiveWorkspaceTable,
   renderCreateNavigationTree,
   renderDetailRows as renderArchiveDetailRows,
+  syncArchiveVisibleSelection,
   type ArchiveDetailsModel,
+  type ArchivePathBarModel,
   type ArchiveWorkspaceTreeFolder,
   type DetailRow,
 } from "./ui/archiveWorkspaceView";
@@ -128,7 +170,6 @@ import {
 } from "./app/archiveTree";
 import {
   CREATE_ARCHIVE_FILTERS,
-  createFormatSupportsPassword,
   getArchiveName,
   TZAP_RECOVERY_PERCENTAGE_DEFAULT,
   TZAP_RECOVERY_PERCENTAGE_MAX,
@@ -140,9 +181,10 @@ import {
 } from "./app/createFlow";
 import {
   unknownErrorMessage,
+  type NativeDialogOpenOptions,
+  type NativeDialogSaveOptions,
 } from "./app/dialogs";
 import {
-  buildStartExtractRequest,
   type ExtractMode,
 } from "./app/extractFlow";
 import {
@@ -197,9 +239,6 @@ import {
   type DisplayRefreshWorkspace,
 } from "./app/display/displayContext";
 import {
-  quickCreateDestination as buildQuickCreateDestination,
-  quickExtractDestinationPlan,
-  runQuickActionRequest,
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
 } from "./app/quickActions";
@@ -212,25 +251,16 @@ import {
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
   listArchive as listArchiveCommand,
-  cleanupPreviewRoots,
   pollJobEvents as pollJobEventsCommand,
   pauseJob as pauseJobCommand,
   runPlanCreate,
   runPreviewEntry,
   resumeJob as resumeJobCommand,
-  runStartNativeFileDrag,
   runStartCreate,
   runStartExtract,
   runTestArchive,
   validateDirectory,
 } from "./api/commands";
-import {
-  availableMonitors,
-  getCurrentWindow,
-  LogicalPosition,
-  LogicalSize,
-} from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
 import type {
   ArchiveEntryDto,
   ArchiveListingDto,
@@ -240,6 +270,7 @@ import type {
   HealthcheckResponse,
   JobKind,
   JobState,
+  ListArchiveRequest,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -248,18 +279,42 @@ import type {
   StartJobResponseDto,
   SystemFileIconRequestEntry,
 } from "./api/types";
-import { ListArchiveRequest } from "./api/types";
+import {
+  isDesktopRuntime,
+  openNativeDialog as openRuntimeDialog,
+  saveNativeDialog as saveRuntimeDialog,
+} from "./desktop/runtime";
 import {
   bindDesktopFileDrop,
-  isDesktopRuntime,
-  openDesktopPath,
-  openNativeDialog as openRuntimeDialog,
-  revealInFileManager,
-  saveNativeDialog as saveRuntimeDialog,
   type DesktopFileDropEvent,
-  type OpenDialogOptions,
-  type SaveDialogOptions,
-} from "./desktop/runtime";
+} from "./desktop/fileDrop";
+import {
+  openDesktopPath,
+  revealInFileManager,
+} from "./desktop/fileManager";
+import {
+  canReadClipboard,
+  readClipboardText,
+  writeClipboardText,
+} from "./desktop/clipboard";
+import {
+  createAppTimers,
+} from "./desktop/timers";
+import {
+  bindPreviewCleanupOnAppClose,
+  cleanupPreviewRoots,
+} from "./desktop/previewCleanup";
+import {
+  listenQuickActionLaunch,
+} from "./desktop/quickActionEvents";
+import {
+  startNativeFileDrag,
+} from "./desktop/nativeDrag";
+import {
+  WINDOW_RESIZE_DIRECTIONS,
+  createWindowController,
+  type AppWindowResizeDirection,
+} from "./desktop/windowController";
 import {
   renderJobsListHtml,
 } from "./ui/jobsView";
@@ -267,6 +322,8 @@ import {
   bindDropOverlayActions,
   focusDropOverlayPrimaryAction,
   renderDropOverlay as renderShellDropOverlay,
+  renderShellStatusBar,
+  type ShellStatusBarElements,
   type ShellViewElements,
 } from "./ui/shellView";
 import {
@@ -306,12 +363,6 @@ import {
   type ContextMenuActionPayload,
 } from "./ui/contextMenuView";
 import {
-  isFiniteNumber,
-  normalizeStoredWindowGeometry,
-  restorableWindowGeometry,
-  type WindowGeometry,
-} from "./app/windowGeometry";
-import {
   collectPreferencesFromDialog as collectPreferencesFromView,
   fullCustomOutputPath,
   renderCustomOutputPathDisplay,
@@ -334,25 +385,11 @@ type ArchiveTreeFolder = {
 };
 type CompressPlanRow = CreatePlanRow;
 type CompressSourceColumnId = "name" | "size" | "modified" | "kind";
-type AppWindowResizeDirection =
-  | "North"
-  | "East"
-  | "South"
-  | "West"
-  | "NorthEast"
-  | "SouthEast"
-  | "SouthWest"
-  | "NorthWest";
 type FocusedJobProgressContextDisplay = {
   title: string;
   subtitle?: string;
   rows: { label: string; value: string }[];
 };
-
-const QUICK_ACTION_WINDOW_WIDTH_PX = 620;
-const QUICK_ACTION_WINDOW_HEIGHT_PX = 420;
-const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 540;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 360;
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 type ArchiveFixture = {
   archivePath: string;
@@ -705,18 +742,7 @@ function renderWindowTitlebar(): string {
 }
 
 function renderWindowResizeHandles(): string {
-  const directions: AppWindowResizeDirection[] = [
-    "North",
-    "East",
-    "South",
-    "West",
-    "NorthEast",
-    "SouthEast",
-    "SouthWest",
-    "NorthWest",
-  ];
-
-  return directions
+  return WINDOW_RESIZE_DIRECTIONS
     .map((direction) => `<div class="window-resize-handle window-resize-handle-${direction.toLowerCase()}" data-window-resize-direction="${direction}" aria-hidden="true"></div>`)
     .join("");
 }
@@ -1512,6 +1538,12 @@ const shellViewElements: ShellViewElements = {
   dropOverlayActions: document.querySelector<HTMLDivElement>("#drop-overlay-actions")!,
   dropOpenArchiveButton: document.querySelector<HTMLButtonElement>("#drop-open-archive")!,
 };
+const shellStatusBarElements: ShellStatusBarElements = {
+  selectionCount: statusSelectionCountElement,
+  selectionSize: statusSelectionSizeElement,
+  focusedSize: statusFocusedSizeElement,
+  focusedModified: statusFocusedModifiedElement,
+};
 
 const aboutDialog = document.querySelector<HTMLDivElement>("#about-dialog")!;
 const aboutDiagnostics = document.querySelector<HTMLDivElement>("#about-diagnostics")!;
@@ -1639,7 +1671,6 @@ const archiveTreeRootPath = "";
 const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
 let archiveTreeChildrenByParent = new Map<string, string[]>();
 
-let planDebounce: number | null = null;
 let dropUnlisten: (() => void) | null = null;
 let pendingNativeDragGesture: NativeDragGesture | null = null;
 let pendingMarqueeSelection: MarqueeSelectionGesture | null = null;
@@ -1651,58 +1682,206 @@ let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 
-const jobTimers = (() => {
-  let pollTimer: number | null = null;
-  let progressClockTimer: number | null = null;
-  let quickActionAutoCloseTimer: number | null = null;
-
-  return {
-    hasQuickActionAutoClosePending(): boolean {
-      return quickActionAutoCloseTimer !== null;
-    },
-    clearQuickActionAutoClose(): void {
-      if (quickActionAutoCloseTimer === null) {
-        return;
-      }
-
-      window.clearTimeout(quickActionAutoCloseTimer);
-      quickActionAutoCloseTimer = null;
-    },
-    scheduleQuickActionAutoClose(callback: () => void): void {
-      quickActionAutoCloseTimer = window.setTimeout(callback, QUICK_ACTION_AUTO_CLOSE_DELAY_MS);
-    },
-    startPolling(callback: () => void): void {
-      if (pollTimer !== null) {
-        return;
-      }
-
-      pollTimer = window.setInterval(callback, JOB_POLL_INTERVAL_MS);
-    },
-    stopPolling(): void {
-      if (pollTimer === null) {
-        return;
-      }
-
-      window.clearInterval(pollTimer);
-      pollTimer = null;
-    },
-    startProgressClock(callback: () => void): void {
-      if (progressClockTimer !== null) {
-        return;
-      }
-
-      progressClockTimer = window.setInterval(callback, 1000);
-    },
-    stopProgressClock(): void {
-      if (progressClockTimer === null) {
-        return;
-      }
-
-      window.clearInterval(progressClockTimer);
-      progressClockTimer = null;
-    },
-  };
-})();
+const appTimers = createAppTimers({
+  jobPollIntervalMs: JOB_POLL_INTERVAL_MS,
+  quickActionAutoCloseDelayMs: QUICK_ACTION_AUTO_CLOSE_DELAY_MS,
+  createPlanDebounceMs: 350,
+});
+const jobTimers = appTimers.jobs;
+const createPlanDebounce = appTimers.createPlanDebounce;
+const uiDeferrals = appTimers.uiDeferrals;
+const createPlanController = createCreatePlanController({
+  workspace: createWorkspace,
+  debounceTimer: createPlanDebounce,
+  runPlanCreate,
+  syncSources: syncCreateSourcesFromWorkspace,
+  renderPlanState: setCreatePlanState,
+  renderPlanStatus: (text) => {
+    renderCreatePlanStatus(createPlanSummaryViewElements, {
+      message: text,
+    });
+  },
+  renderCreateBrowser: renderCompressBrowser,
+  refreshPlanSummary: refreshCreatePlanSummary,
+  planStatusText: createPlanStatusText,
+  translate: (key) => displayContext.translator.t(key),
+  canUseBrowserPreview: canUseBrowserCreatePlanPreview,
+  browserPreview: (sources) => browserCreatePlanPreview([...sources]),
+  toCommandError: asCommandError,
+});
+const createStartController = createCreateStartController({
+  workspace: createWorkspace,
+  syncSources: syncCreateSourcesFromWorkspace,
+  isSubmissionInFlight: isCreateSubmissionInFlight,
+  passwordInput: () => ({
+    password: createPasswordInput.value,
+    passwordConfirm: createPasswordConfirmInput.value,
+  }),
+  startCreate: runStartCreate,
+  onCreateStarted: (response, request) => {
+    clearCreatePasswordFields();
+    recordCreateDestinationHistory(request.destinationPath);
+    addJobState(response, {
+      focusProgress: true,
+      autoCloseAction: "returnToWorkspace",
+      progressContext: createJobProgressContext(request),
+      outputActions: createJobOutputActions(request),
+    });
+  },
+  toCommandError: asCommandError,
+  renderPlanState: setCreatePlanState,
+});
+const jobPollingController = createJobPollingController({
+  workspace: jobsWorkspace,
+  timers: jobTimers,
+  pollJobEvents: (jobId) => pollJobEventsCommand({ jobId }),
+  maybePromptForJobPasswordRetry,
+  toCommandError: asCommandError,
+  readProgressFailedMessage: () => message("jobs.readProgressFailed"),
+  setOperationalStatus,
+  renderJobs,
+  maybeCloseCompletedQuickActionWindow,
+});
+const archiveLoadController = createArchiveLoadController({
+  workspace: archiveWorkspace,
+  enterExtractWorkspace: () => setWorkspaceMode("extract"),
+  listArchive: listArchiveCommand,
+  toCommandError: asCommandError,
+  renderLoading: (snapshot) => {
+    syncArchiveWorkspaceSnapshot(snapshot);
+    syncArchiveWorkspaceViewSnapshot(snapshot);
+    setBrowseState("loading", displayContext.translator.t("browse.statusLoading"));
+    renderBrowse();
+  },
+  acceptListing: (listing, options) => {
+    loadArchiveListingIntoState({
+      archivePath: listing.archivePath,
+      entries: listing.entries,
+      entryCount: listing.entryCount,
+      totalSize: listing.totalSize,
+    }, options);
+  },
+  renderLoadError: (snapshot, text) => {
+    syncArchiveWorkspaceSnapshot(snapshot);
+    setBrowseState("error", text);
+    renderBrowse();
+  },
+  failedListMessage: () => message("browse.failedList"),
+  loadErrorMessage: (error, options) => options.includeHint && error.hint
+    ? `${error.message}\n${error.hint}`
+    : error.message,
+  promptForPasswordRetry: promptForArchivePasswordRetry,
+});
+const archiveOpenController = createArchiveOpenController({
+  pathHistoryStore,
+  renderExtractDestinationHistory: () => renderExtractDestinationHistory(),
+  renderCreateDestinationHistory: () => renderCreateDestinationHistory(),
+  openArchiveDialogOptions: () => ({
+    title: displayContext.translator.t("nativeDialog.openArchive"),
+    directory: false,
+    multiple: false,
+    filters: [ARCHIVE_OPEN_FILTER],
+  }),
+  openArchiveDialog: openNativeDialog,
+  canReadClipboard,
+  readClipboardText,
+  unsupportedClipboardMessage: () => UNSUPPORTED_OPERATION_MESSAGE,
+  clipboardEmptyMessage: () => setOperationalMessage("browse.noArchiveOpen"),
+  nativeDialogFailedMessage: () => displayContext.translator.t("nativeDialog.failed"),
+  unknownErrorMessage,
+  setOperationalStatus,
+  clearPreviewState: clearTrackedPreviewState,
+  setCurrentArchivePath: (archivePath) => {
+    currentArchivePath = archivePath;
+  },
+  loadArchive: (request) => loadArchive(request),
+});
+const archiveTestController = createArchiveTestController({
+  workspace: archiveWorkspace,
+  hasCurrentArchive: () => Boolean(currentArchivePath),
+  initialPassword: () => browsePasswordInput.value.trim() || undefined,
+  runTestArchive,
+  addJob: addJobState,
+  toCommandError: asCommandError,
+  promptForPasswordRetry: promptForArchivePasswordRetry,
+  unableStartMessage: () => message("test.unableStart"),
+  setBrowseError: (text) => setBrowseState("error", text),
+});
+const archivePreviewController = createArchivePreviewController({
+  workspace: archiveWorkspace,
+  hasCurrentArchive: () => Boolean(currentArchivePath),
+  isCurrentArchive: (archivePath) => currentArchivePath === archivePath,
+  cleanupBeforePreview: applyPreviewCleanupPolicyBeforeNextPreview,
+  previewRequestInput: (password) => ({
+    overwrite: getOverwritePolicyValue(),
+    stripComponents: toNumberOrUndefined(browseStripInput.value) ?? 0,
+    password: password ?? (browsePasswordInput.value.trim() || undefined),
+  }),
+  cachedPreviewPathForEntry: (entryPath) => shellWorkspace.getCachedPreviewPathForEntry(entryPath),
+  runPreviewEntry,
+  openPath: openDesktopPath,
+  clearTrackedPreviewState,
+  trackPreviewResult: (metadata) => {
+    shellWorkspace.trackPreviewResultMetadata(metadata);
+  },
+  toCommandError: asCommandError,
+  promptForPasswordRetry: promptForArchivePasswordRetry,
+  singleFileRequired: () => setOperationalMessage("command.singleFileRequired"),
+  previewUnableMessage: () => message("preview.unablePreview"),
+  cachedOpenedMessage: () => message("preview.openedCached"),
+  openedOutsideMessage: (writtenBytes) => message("preview.openedOutside", { size: formatBytes(writtenBytes) }),
+  previewReadyMessage: (writtenBytes) => message("preview.ready", { size: formatBytes(writtenBytes) }),
+  setBrowseLoaded: (text) => {
+    setBrowseState("loaded", text);
+    renderBrowse();
+  },
+  setBrowseError: (text) => setBrowseState("error", text),
+});
+const extractStartController = createExtractStartController({
+  workspace: archiveWorkspace,
+  hasCurrentArchive: () => Boolean(currentArchivePath),
+  readInput: (mode) => {
+    const destination = resolveExtractDestination(extractDestinationInput.value);
+    const entryReferences = archiveWorkspace.getExtractReferencePaths(mode);
+    const stripComponentsBase = toNumberOrUndefined(browseStripInput.value) ?? 0;
+    const pathMode = getExtractPathMode();
+    const deduplicateRoot = extractDeduplicateRootCheckbox.checked;
+    return {
+      destination,
+      destinationValid: isExtractDestinationValid(),
+      overwrite: getOverwritePolicyValue(),
+      stripComponents: resolveExtractStripComponents(
+        stripComponentsBase,
+        pathMode,
+        [...entryReferences],
+        deduplicateRoot,
+      ),
+      password: browsePasswordInput.value.trim() || undefined,
+      entryReferences,
+    };
+  },
+  startExtract: runStartExtract,
+  toCommandError: asCommandError,
+  requestPasswordInDialog: requestExtractPasswordInDialog,
+  chooseDestinationFirst: () => {
+    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
+    syncExtractDialogState();
+    extractDestinationInput.focus();
+  },
+  selectEntryFirst: () => {
+    extractDialogMessage.textContent = message("extract.selectEntryFirst");
+  },
+  recordDestination: recordExtractDestinationHistory,
+  closeExtractDialog: () => closeModal(extractDialog),
+  addJob: addJobState,
+  progressContext: extractJobProgressContext,
+  outputActions: extractJobOutputActions,
+  unableStartMessage: (mode) => message(mode === "selection" ? "extract.unableSelected" : "extract.unableStart"),
+  setBrowseError: (text) => setBrowseState("error", text),
+});
+const appWindowController = createWindowController({
+  isQuickActionJobMode,
+});
 
 const appWindowEffects = {
   close(): void {
@@ -1711,7 +1890,7 @@ const appWindowEffects = {
       return;
     }
 
-    void getCurrentWindow().close().catch(() => {
+    void appWindowController.closeCurrentWindow().catch(() => {
       setOperationalMessage("quick.completed.closeWindow");
     });
   },
@@ -1720,7 +1899,7 @@ const appWindowEffects = {
       return;
     }
 
-    void getCurrentWindow().minimize().catch(() => {
+    void appWindowController.minimizeCurrentWindow().catch(() => {
       setOperationalMessage("jobs.minimizeFailed");
     });
   },
@@ -1729,7 +1908,7 @@ const appWindowEffects = {
       return;
     }
 
-    void getCurrentWindow().toggleMaximize().catch(() => {
+    void appWindowController.toggleMaximizeCurrentWindow().catch(() => {
       setOperationalMessage("status.windowControlFailed");
     });
   },
@@ -1737,28 +1916,16 @@ const appWindowEffects = {
 
 const focusedJobWindowEffects = {
   async revealNormalWindow(): Promise<void> {
-    await placeNormalAppWindowBeforeShow();
-    await getCurrentWindow().show();
+    await appWindowController.revealNormalWindow();
   },
   async revealProgressWindow(): Promise<void> {
-    const currentWindow = getCurrentWindow();
-    await currentWindow.unminimize();
-    await currentWindow.setMinSize(new LogicalSize(
-      QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
-      QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
-    ));
-    await currentWindow.setSize(new LogicalSize(
-      QUICK_ACTION_WINDOW_WIDTH_PX,
-      QUICK_ACTION_WINDOW_HEIGHT_PX,
-    ));
-    await currentWindow.center();
-    await currentWindow.show();
+    await appWindowController.revealProgressWindow();
   },
   async minimizeProgressWindow(): Promise<void> {
-    await getCurrentWindow().minimize();
+    await appWindowController.minimizeProgressWindow();
   },
   async restoreNormalWindow(): Promise<void> {
-    await placeNormalAppWindowBeforeShow();
+    await appWindowController.restoreNormalWindowGeometryOrCenter();
   },
 };
 
@@ -1771,6 +1938,70 @@ const jobPasswordPrompts = {
   },
 };
 
+const quickActionController = createQuickActionController({
+  preferences: () => appPreferences,
+  pathHelpers: { nativeParentPath, joinNativePath },
+  setOperationalMessage,
+  setOperationalStatus,
+  message,
+  openArchive: openQuickActionArchive,
+  runStartCreate,
+  runStartExtract,
+  toCommandError: asCommandError,
+  isPasswordCommandError,
+  promptForNewArchivePassword: jobPasswordPrompts.promptForNewArchivePassword,
+  promptForCommandRetry: jobPasswordPrompts.promptForCommandRetry,
+  recordCreateDestination: recordCreateDestinationHistory,
+  recordExtractDestination: recordExtractDestinationHistory,
+  addJob: addJobState,
+  createProgressContext: createJobProgressContext,
+  createOutputActions: createJobOutputActions,
+  extractProgressContext: (request) => extractJobProgressContext(request),
+  extractOutputActions: extractJobOutputActions,
+  showCreateWorkspace,
+  setCreateSources: (sources) => createWorkspace.setSources(sources).snapshot,
+  applyCreateDefaultsForFormat,
+  setCreateOptions: (patch) => createWorkspace.setOptions(patch).snapshot,
+  setCreateDestinationPath: (path) => createWorkspace.setDestinationPath(path).snapshot,
+  syncCreateSources: syncCreateSourcesFromWorkspace,
+  cancelQueuedPlanRun,
+  renderCreateSources,
+  renderCompressBrowser,
+  runPlan,
+  setCurrentArchivePath: (archivePath) => {
+    currentArchivePath = archivePath;
+  },
+  loadArchive: (request) => loadArchive(request),
+  readBrowseState: () => browseState,
+  setBrowseError: (text) => setBrowseState("error", text),
+  openExtractDialog,
+});
+
+const startupController = createStartupController({
+  fetchHealthcheck,
+  fetchProjectContract,
+  fetchQuickActionStartupState,
+  listenQuickActionLaunch,
+  isDesktopRuntime,
+  revealWindowForStartupQuickAction,
+  revealNormalWindow: revealNormalAppWindow,
+  activateQuickActionJobs,
+  handleQuickActionRequest,
+  setOperationalStatus,
+  setOperationalMessage,
+  setBrowseError: (text) => setBrowseState("error", text),
+  unknownErrorMessage,
+  toCommandError: asCommandError,
+  message,
+  setBootstrapState: (state) => {
+    latestHealthcheck = state.healthcheck;
+    latestContract = state.contract;
+  },
+  renderAboutDiagnostics,
+  shouldRenderBrowseAfterBootstrap: () => normalWorkspaceRendered && !isQuickActionJobMode(),
+  renderBrowse,
+});
+
 const jobOutputEffects = {
   async run(outputAction: JobOutputAction): Promise<void> {
     if (outputAction.kind === "open") {
@@ -1781,6 +2012,42 @@ const jobOutputEffects = {
     await revealInFileManager(outputAction.path);
   },
 };
+
+const jobControlController = createJobControlController({
+  workspace: jobsWorkspace,
+  quickActionAutoCloseTimer: jobTimers,
+  cancelJob: cancelJobCommand,
+  pauseJob: pauseJobCommand,
+  resumeJob: resumeJobCommand,
+  dismissJob: dismissJobCommand,
+  runTestArchive,
+  runStartExtract,
+  addJob: addJobState,
+  retryOutputActions: retryJobOutputActions,
+  runOutputAction: (outputAction) => jobOutputEffects.run(outputAction),
+  promptForCommandRetry: jobPasswordPrompts.promptForCommandRetry,
+  toCommandError: asCommandError,
+  message,
+  setOperationalMessage,
+  setOperationalStatus,
+  pollJobs: () => pollJobs(),
+  renderJobs,
+  renderQuickProgress,
+  stopPolling: () => stopPolling(),
+  disableQuickActionPauseControls: () => {
+    quickContinueButton.disabled = true;
+  },
+  disableQuickActionCancelControls: () => {
+    quickCancelButton.disabled = true;
+    quickContinueButton.disabled = true;
+    quickBackgroundButton.disabled = true;
+  },
+  canEvaluateQuickActionCompletion: () => isDesktopRuntime() && isQuickActionJobMode(),
+  isQuickActionWindowBackgrounded: () => shellWorkspace.isQuickActionWindowBackgrounded(),
+  revealQuickActionJobWindow: () => revealQuickActionJobWindow(),
+  closeFocusedJobProgress: () => closeFocusedJobProgress(),
+  closeAppWindow,
+});
 
 function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
   appPreferences = preferencesWithPatch(appPreferences, patch);
@@ -1895,7 +2162,7 @@ async function revealQuickActionJobWindow(
     setFocusedJobAutoCloseAction(autoCloseAction);
   }
   if (!wasInJobMode && autoCloseAction === "returnToWorkspace") {
-    void persistWindowGeometry();
+    void appWindowController.persistCurrentWindowGeometry();
   }
   shellWorkspace.setQuickActionWindowMode("jobOnly");
   workspaceElement.dataset.quickActionMode = "job-only";
@@ -1996,91 +2263,16 @@ function trackQuickActionJob(jobId: string, context?: FocusedJobProgressContext)
   renderQuickProgress();
 }
 
-function quickActionControllableJobIds(): string[] {
-  return [...jobsWorkspace.getControllableFocusedQuickActionJobIds()];
-}
-
 async function toggleQuickActionPause() {
-  const jobIds = quickActionControllableJobIds();
-  if (!jobIds.length) {
-    return;
-  }
-
-  const shouldResume = jobIds.some((jobId) => jobsWorkspace.getJob(jobId)?.snapshot.status === "paused");
-  const command = shouldResume ? resumeJobCommand : pauseJobCommand;
-  quickContinueButton.disabled = true;
-
-  try {
-    await Promise.all(
-      jobIds.map(async (jobId) => {
-        const response = await command({ jobId });
-        jobsWorkspace.updateJobStatus(jobId, response.status);
-      }),
-    );
-    setOperationalMessage(shouldResume ? "jobs.continued" : "jobs.paused");
-    await pollJobs();
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
-    renderJobs();
-  }
+  await jobControlController.toggleQuickActionPause();
 }
 
 async function cancelFocusedQuickActionJobs() {
-  const jobIds = quickActionControllableJobIds();
-  if (!jobIds.length) {
-    return;
-  }
-
-  quickCancelButton.disabled = true;
-  quickContinueButton.disabled = true;
-  quickBackgroundButton.disabled = true;
-
-  try {
-    await Promise.all(jobIds.map((jobId) => cancelJobCommand({ jobId })));
-    await pollJobs();
-    setOperationalMessage("jobs.cancelled");
-    if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
-      await closeFocusedJobProgress();
-    } else {
-      closeAppWindow();
-    }
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.cancelFailed"));
-    renderJobs();
-  }
+  await jobControlController.cancelFocusedQuickActionJobs();
 }
 
 function maybeCloseCompletedQuickActionWindow() {
-  const decision = jobsWorkspace.selectFocusedQuickActionCompletion({
-    canEvaluate: isDesktopRuntime() && isQuickActionJobMode(),
-    autoClosePending: jobTimers.hasQuickActionAutoClosePending(),
-  });
-
-  if (decision.action === "wait") {
-    return;
-  }
-
-  if (decision.action === "needsAttention") {
-    setOperationalMessage("jobs.needsAttention");
-    if (shellWorkspace.isQuickActionWindowBackgrounded()) {
-      void revealQuickActionJobWindow();
-    } else {
-      renderQuickProgress();
-    }
-    return;
-  }
-
-  setOperationalMessage("jobs.completed");
-  renderQuickProgress();
-  jobTimers.scheduleQuickActionAutoClose(() => {
-    if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
-      void closeFocusedJobProgress();
-    } else {
-      closeAppWindow();
-    }
-  });
+  jobControlController.maybeCloseCompletedQuickActionWindow();
 }
 
 function clearTrackedPreviewState() {
@@ -2092,20 +2284,21 @@ function updateStatusBar() {
   const selectedTotal = selection.visibleSelectedCount;
   const focusedEntry = selection.focusedEntry;
 
-  statusSelectionCountElement.textContent = message("status.selectionCount", {
-    selected: selectedTotal,
-    total: selection.visibleSelectablePaths.length,
+  renderShellStatusBar(shellStatusBarElements, {
+    selectionCountText: message("status.selectionCount", {
+      selected: selectedTotal,
+      total: selection.visibleSelectablePaths.length,
+    }),
+    selectionSizeText: selectedTotal > 0
+      ? message("status.selectedSize", { size: formatBytes(selection.visibleSelectedSize) })
+      : "",
+    focusedSizeText: focusedEntry
+      ? message("status.focusedSize", { size: formatBytes(focusedEntry.size) })
+      : "",
+    focusedModifiedText: focusedEntry
+      ? message("status.focusedModified", { date: formatDate(focusedEntry.modified) })
+      : "",
   });
-  statusSelectionSizeElement.textContent = selectedTotal > 0
-    ? message("status.selectedSize", { size: formatBytes(selection.visibleSelectedSize) })
-    : "";
-
-  statusFocusedSizeElement.textContent = focusedEntry
-    ? message("status.focusedSize", { size: formatBytes(focusedEntry.size) })
-    : "";
-  statusFocusedModifiedElement.textContent = focusedEntry
-    ? message("status.focusedModified", { date: formatDate(focusedEntry.modified) })
-    : "";
 }
 
 function applyPreferenceClasses() {
@@ -2907,7 +3100,7 @@ async function startNativeDragOut(entryPath: string) {
 
   while (true) {
     try {
-      const response = await runStartNativeFileDrag(request);
+      const response = await startNativeFileDrag(request);
       archiveWorkspace.clearPasswordRetry();
       if (response.outcome === "cancelled") {
         setOperationalMessage("preview.dragCancelled");
@@ -3096,10 +3289,12 @@ function setBrowseState(next: BrowseState, message = "") {
   const snapshot = archiveWorkspace.setBrowseState(next);
   syncArchiveWorkspaceSnapshot(snapshot);
 
-  messageElement.className = `status ${next === "loaded" ? "status-loaded" : `status-${next}`}`;
+  renderArchiveBrowseMessage({ messageElement }, {
+    browseState: next,
+    ...(message ? { message } : {}),
+  });
   if (message) {
     browseError = message;
-    messageElement.textContent = message;
   }
 
   if (next === "loading") {
@@ -3196,14 +3391,20 @@ function updateCommandState() {
   const commandContext = snapshot.command;
   const commandState = currentCommandStateMap();
 
-  searchInput.disabled = !commandContext.canSearchEntries;
-  searchInput.setAttribute("aria-disabled", String(searchInput.disabled));
-  searchSubmitButton.disabled = searchInput.disabled;
-  searchSubmitButton.setAttribute("aria-disabled", String(searchSubmitButton.disabled));
-  clearSearchButton.disabled = searchInput.disabled || !snapshot.view.searchQuery.trim();
-  clearSearchButton.setAttribute("aria-disabled", String(clearSearchButton.disabled));
-  selectAllInput.disabled = !commandState.selectAll.enabled;
-  navBackButton.disabled = !commandContext.canNavigateBack;
+  const searchDisabled = !commandContext.canSearchEntries;
+  renderArchiveCommandControlState({
+    searchInput,
+    searchSubmitButton,
+    clearSearchButton,
+    selectAllInput,
+    navBackButton,
+  }, {
+    searchDisabled,
+    searchSubmitDisabled: searchDisabled,
+    clearSearchDisabled: searchDisabled || !snapshot.view.searchQuery.trim(),
+    selectAllDisabled: !commandState.selectAll.enabled,
+    navBackDisabled: !commandContext.canNavigateBack,
+  });
 
   applyCurrentCommandSurfaceState(commandState, commandContext.hasArchive);
 
@@ -3315,13 +3516,18 @@ function runRoutedCommand(commandId: CommandId, payload: CommandRouterPayload = 
 }
 
 function updateMeta() {
+  renderArchiveMetaText({ metaElement }, {
+    text: archiveMetaText(),
+  });
+}
+
+function archiveMetaText(): string {
   if (!currentArchivePath) {
-    metaElement.textContent = displayContext.translator.t("browse.statusReady");
-    return;
+    return displayContext.translator.t("browse.statusReady");
   }
 
   const folderLabel = currentArchiveFolder ? ` > ${currentArchiveFolder}` : "";
-  metaElement.textContent = `${getArchiveName(currentArchivePath, APP_TITLE)}${folderLabel} - ${browseEntries.length} entries`;
+  return `${getArchiveName(currentArchivePath, APP_TITLE)}${folderLabel} - ${browseEntries.length} entries`;
 }
 
 function renderWorkspaceMode() {
@@ -3330,43 +3536,72 @@ function renderWorkspaceMode() {
   if (isCompress) {
     renderCompressBrowser();
   }
-  workspaceElement.dataset.mode = mode;
-  modeCompressButton.classList.toggle("is-active", isCompress);
-  modeExtractButton.classList.toggle("is-active", !isCompress);
-  modeCompressButton.setAttribute("aria-selected", String(isCompress));
-  modeExtractButton.setAttribute("aria-selected", String(!isCompress));
-  modeCompressButton.setAttribute("aria-pressed", String(isCompress));
-  modeExtractButton.setAttribute("aria-pressed", String(!isCompress));
-
-  compressSurfaceElement.hidden = !isCompress;
-  tableShellElement.hidden = isCompress;
-  refreshArchiveButton.hidden = isCompress;
-  messageElement.hidden = isCompress;
-  detailsElement.hidden = isCompress;
-  compressOptionsPanel.hidden = !isCompress;
-  detailsPaneTitleElement.textContent = displayContext.translator.t(isCompress ? "compress.options" : "pane.details");
-  detailsPaneTitleElement.dataset.i18nText = isCompress ? "compress.options" : "pane.details";
 
   if (isCompress) {
-    workspaceTitleElement.textContent = displayContext.translator.t("compress.tableTitle");
-    metaElement.textContent = displayContext.translator.t("compress.tableDescription");
     const sourceSnapshot = syncCreateSourcesFromWorkspace();
     const includedCount = sourceSnapshot.plan.current ? sourceSnapshot.inclusion.includedCount : sourceSnapshot.sourceCount;
-    statusSelectionCountElement.textContent = displayContext.translator.t("compress.sourceStaged", {
-      count: includedCount,
-      sourceLabel: displayContext.translator.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+    renderArchiveWorkspaceModeChrome(workspaceChromeElements(), {
+      mode,
+      compressActive: true,
+      extractActive: false,
+      compressSurfaceHidden: false,
+      tableShellHidden: true,
+      refreshArchiveHidden: true,
+      messageHidden: true,
+      detailsHidden: true,
+      compressOptionsHidden: false,
+      detailsPaneTitle: displayContext.translator.t("compress.options"),
+      detailsPaneTitleI18nKey: "compress.options",
+      workspaceTitle: displayContext.translator.t("compress.tableTitle"),
+      metaText: displayContext.translator.t("compress.tableDescription"),
+      statusSelectionCountText: displayContext.translator.t("compress.sourceStaged", {
+        count: includedCount,
+        sourceLabel: displayContext.translator.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
+      }),
+      statusSelectionSizeText: "",
+      statusFocusedSizeText: "",
+      statusFocusedModifiedText: "",
     });
-    statusSelectionSizeElement.textContent = "";
-    statusFocusedSizeElement.textContent = "";
-    statusFocusedModifiedElement.textContent = "";
   } else {
-    workspaceTitleElement.textContent = displayContext.translator.t("extract.tableTitle");
-    if (!currentArchivePath) {
-      metaElement.textContent = displayContext.translator.t("extract.tableDescription");
-    }
+    renderArchiveWorkspaceModeChrome(workspaceChromeElements(), {
+      mode,
+      compressActive: false,
+      extractActive: true,
+      compressSurfaceHidden: true,
+      tableShellHidden: false,
+      refreshArchiveHidden: false,
+      messageHidden: false,
+      detailsHidden: false,
+      compressOptionsHidden: true,
+      detailsPaneTitle: displayContext.translator.t("pane.details"),
+      detailsPaneTitleI18nKey: "pane.details",
+      workspaceTitle: displayContext.translator.t("extract.tableTitle"),
+      metaText: currentArchivePath ? undefined : displayContext.translator.t("extract.tableDescription"),
+    });
     updateStatusBar();
   }
   applyCurrentCommandSurfaceState(currentCommandStateMap());
+}
+
+function workspaceChromeElements() {
+  return {
+    workspaceElement,
+    modeCompressButton,
+    modeExtractButton,
+    compressSurfaceElement,
+    tableShellElement,
+    refreshArchiveButton,
+    messageElement,
+    detailsElement,
+    compressOptionsPanel,
+    detailsPaneTitleElement,
+    workspaceTitleElement,
+    metaElement,
+    statusSelectionCountElement,
+    statusSelectionSizeElement,
+    statusFocusedSizeElement,
+    statusFocusedModifiedElement,
+  };
 }
 
 function setWorkspaceMode(mode: WorkspaceDropMode) {
@@ -3391,31 +3626,34 @@ function setWorkspaceMode(mode: WorkspaceDropMode) {
 }
 
 function renderPathBar() {
+  renderArchivePathBar({
+    pathFieldInput,
+    pathCrumbsElement,
+    document,
+  }, archivePathBarModel());
+}
+
+function archivePathBarModel(): ArchivePathBarModel {
   if (!currentArchivePath) {
-    pathFieldInput.value = displayContext.translator.t("browse.statusEmpty");
-    pathFieldInput.disabled = true;
-    pathFieldInput.readOnly = true;
-    pathCrumbsElement.textContent = displayContext.translator.t("browse.statusEmpty");
-    pathCrumbsElement.hidden = true;
-    document.title = APP_TITLE;
-    return;
+    return {
+      kind: "empty",
+      emptyLabel: displayContext.translator.t("browse.statusEmpty"),
+      documentTitle: APP_TITLE,
+    };
   }
 
-  pathFieldInput.value = currentArchiveDisplayPath();
-  pathFieldInput.disabled = false;
-  pathFieldInput.readOnly = true;
-  pathCrumbsElement.hidden = false;
-  document.title = currentArchiveFolder
-    ? `${getArchiveName(currentArchivePath, APP_TITLE)}\\${currentArchiveFolder.replace(/\//g, "\\")} - ${APP_TITLE}`
-    : `${getArchiveName(currentArchivePath, APP_TITLE)} - ${APP_TITLE}`;
-
-  const crumbs = archiveWorkspace.getSnapshot().view.breadcrumbs.flatMap((crumb, index) => {
-    const name = crumb.isRoot ? getArchiveName(currentArchivePath, APP_TITLE) : crumb.name;
-    const button = `<button type="button" data-crumb-path="${escapeHtml(crumb.path)}" aria-keyshortcuts="Enter Space">${escapeHtml(name)}</button>`;
-    return index === 0 ? [button] : [`<span aria-hidden="true">&gt;</span>`, button];
-  });
-
-  pathCrumbsElement.innerHTML = crumbs.join("");
+  const archiveName = getArchiveName(currentArchivePath, APP_TITLE);
+  return {
+    kind: "archive",
+    displayPath: currentArchiveDisplayPath(),
+    documentTitle: currentArchiveFolder
+      ? `${archiveName}\\${currentArchiveFolder.replace(/\//g, "\\")} - ${APP_TITLE}`
+      : `${archiveName} - ${APP_TITLE}`,
+    crumbs: archiveWorkspace.getSnapshot().view.breadcrumbs.map((crumb) => ({
+      name: crumb.isRoot ? archiveName : crumb.name,
+      path: crumb.path,
+    })),
+  };
 }
 
 function renderTree() {
@@ -3715,7 +3953,10 @@ function renderBrowse() {
 
   const visibleSelectedCount = archiveWorkspace.getSnapshot().view.selection.visibleSelectedCount;
   if (browseState === "loaded" && visibleSelectedCount > 0) {
-    messageElement.textContent = displayContext.translator.t("browse.selectedEntries", { count: visibleSelectedCount });
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState,
+      message: displayContext.translator.t("browse.selectedEntries", { count: visibleSelectedCount }),
+    });
   }
 
   queueSystemIconRefresh();
@@ -4223,13 +4464,11 @@ function renderJobStatusBar(snapshot: JobListSnapshot) {
 function renderJobs() {
   const nowMs = Date.now();
   const snapshot = jobsWorkspace.getJobListSnapshot(nowMs);
-  jobsListElement.innerHTML = renderJobsListHtml(jobsWorkspace.getJobsMap(), {
+  jobsListElement.innerHTML = renderJobsListHtml(snapshot.jobs, {
     i18n: displayContext.translator,
     escapeHtml,
     formatBytes,
-    formatJobKind,
-    canRetryJobWithPassword,
-    getOutputActions: (jobId) => [...jobsWorkspace.getReadyOutputActions(jobId)],
+    formatJobKind: (kind) => formatJobKind(kind as JobKind),
   });
   renderJobStatusBar(snapshot);
   renderQuickProgress(nowMs);
@@ -4237,40 +4476,11 @@ function renderJobs() {
 }
 
 function queuePlanRun() {
-  if (planDebounce !== null) {
-    clearTimeout(planDebounce);
-    planDebounce = null;
-  }
-
-  const queuedPlan = createWorkspace.queuePlan();
-  const revision = queuedPlan.revision;
-  const sourceSnapshot = syncCreateSourcesFromWorkspace(queuedPlan.snapshot);
-  if (sourceSnapshot.isEmpty) {
-    setCreatePlanState();
-    renderCreatePlanStatus(createPlanSummaryViewElements, {
-      message: displayContext.translator.t("create.plan.noSources"),
-    });
-    renderCompressBrowser();
-    return;
-  }
-
-  setCreatePlanState();
-  renderCreatePlanStatus(createPlanSummaryViewElements, {
-    message: displayContext.translator.t("create.plan.planning"),
-  });
-  renderCompressBrowser();
-
-  planDebounce = window.setTimeout(() => {
-    planDebounce = null;
-    void runPlan(revision);
-  }, 350);
+  createPlanController.queuePlanRun();
 }
 
 function cancelQueuedPlanRun() {
-  if (planDebounce !== null) {
-    clearTimeout(planDebounce);
-    planDebounce = null;
-  }
+  createPlanController.cancelQueuedPlanRun();
 }
 
 function refreshCreateStateAfterDestinationEdit() {
@@ -4297,10 +4507,7 @@ function updateCreatePlanOptionsFromControls() {
 type ExtractPathMode = "full" | "current" | "none";
 
 function recordExtractDestinationHistory(destination: string): void {
-  if (!pathHistoryStore.recordExtractDestinationHistory(destination)) {
-    return;
-  }
-  renderExtractDestinationHistory();
+  archiveOpenController.recordExtractDestinationHistory(destination);
 }
 
 function renderExtractDestinationHistory() {
@@ -4311,10 +4518,7 @@ function renderExtractDestinationHistory() {
 }
 
 function recordCreateDestinationHistory(destination: string): void {
-  if (!pathHistoryStore.recordCreateDestinationHistory(destination)) {
-    return;
-  }
-  renderCreateDestinationHistory();
+  archiveOpenController.recordCreateDestinationHistory(destination);
 }
 
 function renderCreateDestinationHistory() {
@@ -4329,7 +4533,7 @@ function renderCreateDestinationHistory() {
 }
 
 function recordRecentArchiveHistory(archivePath: string): void {
-  pathHistoryStore.recordRecentArchiveHistory(archivePath);
+  archiveOpenController.recordRecentArchiveHistory(archivePath);
 }
 
 function getExtractPathMode(): ExtractPathMode {
@@ -4564,14 +4768,14 @@ function bindMenuBehavior() {
   }
 }
 
-async function openNativeDialog(options: OpenDialogOptions) {
+async function openNativeDialog(options: NativeDialogOpenOptions) {
   return openRuntimeDialog(options, setOperationalStatus, {
     unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
     failed: message("nativeDialog.failed"),
   });
 }
 
-async function saveNativeDialog(options: SaveDialogOptions) {
+async function saveNativeDialog(options: NativeDialogSaveOptions) {
   return saveRuntimeDialog(options, setOperationalStatus, {
     unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
     failed: message("nativeDialog.failed"),
@@ -5003,7 +5207,10 @@ function navigateToFolder(folderPath: string) {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState,
+      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
+    });
   }
   focusFirstVisibleRow();
 }
@@ -5020,7 +5227,10 @@ function navigateBack() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState,
+      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
+    });
   }
   focusFirstVisibleRow();
 }
@@ -5040,7 +5250,10 @@ function navigateUp() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    messageElement.textContent = displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length });
+    renderArchiveBrowseMessage({ messageElement }, {
+      browseState,
+      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
+    });
   }
   focusFirstVisibleRow();
 }
@@ -5067,24 +5280,7 @@ function updateSelectionByIntent(
 
 function syncVisibleSelectionUi() {
   const selection = archiveWorkspace.getSnapshot().view.selection;
-  const selectedPaths = new Set(selection.selectedPaths);
-  selectAllInput.checked = selection.visibleSelectablePaths.length > 0
-    && selection.visibleSelectedCount === selection.visibleSelectablePaths.length;
-  selectAllInput.indeterminate = selection.visibleSelectedCount > 0
-    && selection.visibleSelectedCount < selection.visibleSelectablePaths.length;
-
-  for (const row of tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
-    const path = row.dataset.entryPath ?? "";
-    const selected = selectedPaths.has(path);
-    const focused = selection.focusedPath === path;
-    row.classList.toggle("is-selected", selected);
-    row.classList.toggle("is-focused-row", focused);
-    row.setAttribute("aria-selected", String(selected));
-    const checkbox = row.querySelector<HTMLInputElement>("input[type='checkbox']");
-    if (checkbox) {
-      checkbox.checked = selected;
-    }
-  }
+  syncArchiveVisibleSelection({ tableBody, selectAllInput }, selection);
 
   renderDetails();
   updateCommandState();
@@ -5152,7 +5348,7 @@ function focusTableRow(row: HTMLTableRowElement | null, focusedPath?: string) {
 }
 
 function focusFirstVisibleRow() {
-  window.setTimeout(() => {
+  uiDeferrals.schedule(() => {
     focusTableRow(getTableRows()[0] ?? null);
   }, 0);
 }
@@ -5470,7 +5666,7 @@ function selectFolderEntries(folderPath: string) {
 function showStartupContextMenu(x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = "";
-  const canPastePath = Boolean(navigator.clipboard?.readText);
+  const canPastePath = canReadClipboard();
   const { recentArchiveHistory } = pathHistoryStore.getSnapshot();
   const pastePath = canPastePath
     ? `<button type="button" role="menuitem" data-context-action="paste-archive-path"><span class="context-menu-label">${escapeHtml(message("command.pastePath"))}</span></button>`
@@ -6235,7 +6431,7 @@ async function savePreferencesFromDialog() {
   refreshDisplayFromPreferences();
   preferencesStatusElement.textContent = displayContext.translator.t("preferences.saved");
   preferencesStatusElement.className = "status status-success";
-  window.setTimeout(() => closeModal(preferencesDialog), 240);
+  uiDeferrals.schedule(() => closeModal(preferencesDialog), 240);
 }
 
 function openPreferencesDialog() {
@@ -6316,72 +6512,11 @@ function showCreateWorkspace() {
   createDestinationInput.focus();
 }
 
-type LoadArchiveOptions = {
-  preserveState?: boolean;
-};
-
-async function loadArchive(request: ListArchiveRequest, options: LoadArchiveOptions = {}) {
-  let password = request.password?.trim();
-  const preserveState = options.preserveState ?? false;
-  setWorkspaceMode("extract");
-
-  while (true) {
-    const requestPayload: ListArchiveRequest = {
-      archivePath: request.archivePath,
-      ...(password ? { password } : {}),
-    };
-
-    const loadingSnapshot = archiveWorkspace.beginLoading({
-      archivePath: request.archivePath,
-      preserveListing: preserveState,
-    });
-    syncArchiveWorkspaceSnapshot(loadingSnapshot);
-    syncArchiveWorkspaceViewSnapshot(loadingSnapshot);
-    setBrowseState("loading", displayContext.translator.t("browse.statusLoading"));
-    renderBrowse();
-
-    try {
-      const listing = await listArchiveCommand(requestPayload);
-
-      loadArchiveListingIntoState({
-        archivePath: listing.archivePath,
-        entries: listing.entries,
-        entryCount: listing.entryCount,
-        totalSize: listing.totalSize,
-      }, { preserveState });
-      return;
-    } catch (error) {
-      const commandError = asCommandError(error);
-      const retry = requestArchivePasswordRetry("listArchive", commandError);
-      if (!retry) {
-        syncArchiveWorkspaceSnapshot(archiveWorkspace.loadFailed(
-          commandError ?? { kind: "unknown" },
-        ));
-        setBrowseState(
-          "error",
-          commandError
-            ? `${commandError.message}${commandError.hint ? `\n${commandError.hint}` : ""}`
-            : message("browse.failedList"),
-        );
-        renderBrowse();
-        return;
-      }
-
-      const nextPassword = promptForArchivePasswordRetry(retry);
-      if (!nextPassword) {
-        syncArchiveWorkspaceSnapshot(archiveWorkspace.loadFailed(
-          commandError ?? { kind: "unknown" },
-        ));
-        setBrowseState("error", commandError?.message ?? message("browse.failedList"));
-        renderBrowse();
-        return;
-      }
-      password = nextPassword;
-    }
-  }
+async function loadArchive(request: ListArchiveRequest, options: ArchiveLoadOptions = {}) {
+  await archiveLoadController.loadArchive(request, options);
 }
 
-function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchiveOptions = {}) {
+function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLoadOptions = {}) {
   const preserveState = options.preserveState ?? false;
   const preservedState = preserveState
     ? {
@@ -6411,9 +6546,12 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: LoadArchi
 
   setBrowseState(listing.entries.length > 0 ? "loaded" : "empty", message("archive.loaded"));
 
-  messageElement.textContent = listing.entries.length > 0
-    ? message("browse.loadedEntries", { count: listing.entries.length })
-    : message("browse.validEmpty");
+  renderArchiveBrowseMessage({ messageElement }, {
+    browseState,
+    message: listing.entries.length > 0
+      ? message("browse.loadedEntries", { count: listing.entries.length })
+      : message("browse.validEmpty"),
+  });
 
   renderBrowse();
   if (focusedEntryPath) {
@@ -6478,84 +6616,7 @@ function loadLocalDevFixtureFromUrl() {
 }
 
 async function runPlan(revision?: number) {
-  if (planDebounce !== null) {
-    clearTimeout(planDebounce);
-    planDebounce = null;
-  }
-
-  const planStart = createWorkspace.beginPlan({
-    excludeNames: [],
-    excludeArchivePaths: [],
-    includeArchivePaths: [],
-    followSymlinks: false,
-  }, revision);
-  const planStartSnapshot = syncCreateSourcesFromWorkspace(planStart.snapshot);
-
-  if (!planStart.ready) {
-    if (planStart.reason === "needsSources") {
-      setCreatePlanState();
-      renderCreatePlanStatus(createPlanSummaryViewElements, {
-        message: displayContext.translator.t("create.plan.noSources"),
-      });
-      renderCompressBrowser();
-    }
-    return;
-  }
-
-  setCreatePlanState();
-  renderCreatePlanStatus(createPlanSummaryViewElements, {
-    message: createPlanStatusText(planStartSnapshot.plan.status) || displayContext.translator.t("create.plan.planning"),
-  });
-  renderCompressBrowser();
-
-  if (canUseBrowserCreatePlanPreview()) {
-    const result = browserCreatePlanPreview([...planStart.request.sources]);
-    const acceptedPlan = createWorkspace.acceptPlanResult(planStart.revision, result);
-    if (!acceptedPlan.accepted) {
-      return;
-    }
-    const snapshot = syncCreateSourcesFromWorkspace(acceptedPlan.snapshot);
-    const plan = snapshot.plan.current;
-    if (!plan) {
-      return;
-    }
-    refreshCreatePlanSummary();
-    setCreatePlanState();
-    renderCompressBrowser();
-    return;
-  }
-
-  try {
-    const result = await runPlanCreate(planStart.request);
-    const acceptedPlan = createWorkspace.acceptPlanResult(planStart.revision, result);
-    if (!acceptedPlan.accepted) {
-      return;
-    }
-
-    const snapshot = syncCreateSourcesFromWorkspace(acceptedPlan.snapshot);
-    const plan = snapshot.plan.current;
-    if (!plan) {
-      return;
-    }
-    refreshCreatePlanSummary();
-    setCreatePlanState();
-    renderCompressBrowser();
-  } catch (error) {
-    const commandError = asCommandError(error);
-    const acceptedError = createWorkspace.acceptPlanError(planStart.revision, {
-      fallbackText: commandError?.message ?? "Could not create archive plan.",
-    });
-    if (!acceptedError.accepted) {
-      return;
-    }
-
-    const errorSnapshot = syncCreateSourcesFromWorkspace(acceptedError.snapshot);
-    setCreatePlanState();
-    renderCreatePlanStatus(createPlanSummaryViewElements, {
-      message: createPlanStatusText(errorSnapshot.plan.status),
-    });
-    renderCompressBrowser();
-  }
+  await createPlanController.runPlan(revision);
 }
 
 function addSources(paths: string[]) {
@@ -6618,71 +6679,7 @@ async function openQuickActionArchive(paths: string[]) {
 }
 
 async function startQuickCreate(paths: string[], format: CreateArchiveFormat, cleanSource: boolean) {
-  const sources = uniqueQuickActionPaths(paths);
-  if (!sources.length) {
-    setOperationalMessage("quickCreate.needsSource");
-    return;
-  }
-
-  const destinationPath = buildQuickCreateDestination(
-    sources,
-    format,
-    appPreferences,
-    { nativeParentPath, joinNativePath },
-  );
-
-  if (!destinationPath) {
-    setOperationalMessage("quickCreate.needsDestination");
-    return;
-  }
-
-  setOperationalMessage("quickCreate.starting");
-  try {
-    const defaults = createDefaultsForFormat(appPreferences, format);
-    let password: string | undefined;
-    if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
-      const promptedPassword = jobPasswordPrompts.promptForNewArchivePassword();
-      if (!promptedPassword) {
-        setOperationalMessage("quickCreate.cancelled");
-        return;
-      }
-      password = promptedPassword;
-    }
-    const requestResult = buildQuickCreateStartRequest({
-      sources,
-      destinationPath,
-      format,
-      cleanSource,
-      replaceExisting: defaults.replaceExisting,
-      destinationCollisionStrategy: "rename",
-      preserveMetadata: defaults.preserveMetadata,
-      password,
-      compressionLevel: defaults.compressionLevel ?? undefined,
-      volumeSize: defaults.volumeSize ?? undefined,
-    });
-    if (!requestResult.ok) {
-      setOperationalMessage(
-        requestResult.reason === "needsSources"
-          ? "quickCreate.needsSource"
-          : "quickCreate.needsDestination",
-      );
-      return;
-    }
-
-    const request = requestResult.request;
-    const response = await runStartCreate(request);
-    recordCreateDestinationHistory(request.destinationPath);
-    addJobState(response, {
-      focusProgress: true,
-      autoCloseAction: "closeWindow",
-      progressContext: createJobProgressContext(request),
-      outputActions: createJobOutputActions(request),
-    });
-    setOperationalMessage("quickCreate.started");
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("quickCreate.unableStart"));
-  }
+  await quickActionController.startQuickCreate(paths, format, cleanSource);
 }
 
 async function openQuickCreateReview(
@@ -6690,140 +6687,19 @@ async function openQuickCreateReview(
   format: CreateArchiveFormat,
   cleanSource: boolean,
 ) {
-  const sources = uniqueQuickActionPaths(paths);
-  if (!sources.length) {
-    setOperationalMessage("quickCreate.needsSource");
-    return;
-  }
-
-  showCreateWorkspace();
-  const sourceSnapshot = syncCreateSourcesFromWorkspace(createWorkspace.setSources(sources).snapshot);
-  applyCreateDefaultsForFormat(format);
-  syncCreateSourcesFromWorkspace(createWorkspace.setOptions({ cleanSource }).snapshot);
-  syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(buildQuickCreateDestination(
-    [...sourceSnapshot.sources],
-    format,
-    appPreferences,
-    { nativeParentPath, joinNativePath },
-  )).snapshot);
-  cancelQueuedPlanRun();
-  renderCreateSources();
-  renderCompressBrowser();
-
-  setOperationalMessage("quickCreate.planning");
-  await runPlan();
-  const reviewSnapshot = syncCreateSourcesFromWorkspace();
-  if (reviewSnapshot.plan.state === "ready" && reviewSnapshot.plan.current !== null) {
-    setOperationalMessage("quickCreate.review");
-  } else {
-    setOperationalMessage("quickCreate.needsReview");
-  }
+  await quickActionController.openQuickCreateReview(paths, format, cleanSource);
 }
 
 async function openQuickExtractReview(paths: string[]) {
-  const archives = uniqueQuickActionPaths(paths);
-  if (archives.length !== 1) {
-    setOperationalMessage("quickExtract.oneArchiveAtATime");
-    return;
-  }
-
-  const archivePath = archives[0];
-  if (!isSupportedArchivePath(archivePath)) {
-    setOperationalMessage("archive.unsupported", { archivePath });
-    return;
-  }
-
-  currentArchivePath = archivePath;
-  await loadArchive({ archivePath });
-  if (browseState !== "loaded" && browseState !== "empty") {
-    return;
-  }
-
-  setOperationalMessage("quickExtract.chooseOptions");
-  openExtractDialog("archive");
+  await quickActionController.openQuickExtractReview(paths);
 }
 
 async function startQuickExtract(paths: string[], action: QuickActionExtractMode) {
-  const archives = uniqueQuickActionPaths(paths);
-  if (!archives.length) {
-    setOperationalMessage("quickExtract.needsArchive");
-    return;
-  }
-
-  for (const archivePath of archives) {
-    if (!isSupportedArchivePath(archivePath)) {
-      setOperationalMessage("archive.unsupported", { archivePath });
-      continue;
-    }
-
-    let password: string | undefined;
-    while (true) {
-      try {
-        const destinationPlan = quickExtractDestinationPlan(
-          archivePath,
-          action,
-          { nativeParentPath, joinNativePath },
-        );
-        if (!destinationPlan.destinationPath) {
-          setOperationalMessage("quickExtract.chooseDestination", { archivePath });
-          break;
-        }
-
-        const request = buildStartExtractRequest({
-          archivePath,
-          destinationPath: destinationPlan.destinationPath,
-          overwrite: "rename",
-          destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
-          stripComponents: destinationPlan.stripComponents,
-          ...(password ? { password } : {}),
-        });
-        const response = await runStartExtract(request);
-        recordExtractDestinationHistory(destinationPlan.destinationPath);
-        addJobState(response, {
-          retryContext: {
-            retryKind: "extractArchive",
-            archivePath,
-            destinationPath: destinationPlan.destinationPath,
-            overwrite: "rename",
-            destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
-            stripComponents: destinationPlan.stripComponents,
-          },
-          focusProgress: true,
-          autoCloseAction: "closeWindow",
-          progressContext: extractJobProgressContext(request),
-          outputActions: extractJobOutputActions(request),
-        });
-        break;
-      } catch (error) {
-        const commandError = asCommandError(error);
-        if (commandError && isPasswordCommandError(commandError)) {
-          const nextPassword = jobPasswordPrompts.promptForCommandRetry(commandError.code);
-          if (!nextPassword) {
-            setOperationalStatus(commandError.message);
-            break;
-          }
-          password = nextPassword;
-          continue;
-        }
-
-        setOperationalStatus(commandError?.message ?? message("quickExtract.unableExtract", { archivePath }));
-        if (commandError?.hint) {
-          setBrowseState("error", `${commandError.message}\n${commandError.hint}`);
-        }
-        break;
-      }
-    }
-  }
+  await quickActionController.startQuickExtract(paths, action);
 }
 
 async function handleQuickActionRequest(request: QuickActionRequestDto) {
-  await runQuickActionRequest(request, appPreferences, {
-    openArchive: openQuickActionArchive,
-    openCreateReview: openQuickCreateReview,
-    startCreate: startQuickCreate,
-    openExtractReview: openQuickExtractReview,
-    startExtract: startQuickExtract,
-  });
+  await quickActionController.handleQuickActionRequest(request);
 }
 
 async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
@@ -6839,325 +6715,71 @@ async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
 }
 
 async function handleStartupQuickAction() {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  let revealedWindow = false;
-  try {
-    while (true) {
-      const state = await fetchQuickActionStartupState();
-      if (!revealedWindow) {
-        await revealWindowForStartupQuickAction(state);
-        revealedWindow = true;
-      }
-      await handleQuickActionStartupState(state);
-      if (!state.launchedForQuickAction || state.error) {
-        break;
-      }
-    }
-  } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, message("jobs.quickActionStartupReadFailed")));
-    if (!revealedWindow) {
-      await revealNormalAppWindow();
-    }
-  }
+  await startupController.handleStartupQuickAction();
 }
 
 async function handleQuickActionStartupState(state: QuickActionStartupStateDto) {
-  if (!state.launchedForQuickAction) {
-    return;
-  }
-
-  if (state.error) {
-    setOperationalStatus(state.error.message);
-    if (state.error.hint) {
-      setBrowseState("error", `${state.error.message}\n${state.error.hint}`);
-    }
-    return;
-  }
-
-  if (state.quickActionJobs?.length) {
-    await activateQuickActionJobs(state.quickActionJobs);
-    return;
-  }
-
-  if (state.quickAction) {
-    const startupStatus = state.quickAction.kind === "open"
-      ? message("quickAction.openingArchive")
-      : message("quickAction.starting");
-    setOperationalStatus(startupStatus);
-    await handleQuickActionRequest(state.quickAction);
-  }
+  await startupController.handleQuickActionStartupState(state);
 }
 
 async function bindQuickActionLaunchEvents() {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  await listen<QuickActionStartupStateDto>("zmanager-quick-action", (event) => {
-    void handleQuickActionStartupState(event.payload);
-  });
+  await startupController.bindQuickActionLaunchEvents();
 }
 
 async function initializeDesktopRuntime() {
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  try {
-    await bindQuickActionLaunchEvents();
-    await handleStartupQuickAction();
-  } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, message("desktopIntegration.initFailed")));
-    await revealNormalAppWindow();
-  }
+  await startupController.initializeDesktopRuntime();
 }
 
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {
-  if (context.retryKind === "testArchive") {
-    return runTestArchive({
-      archivePath: context.archivePath,
-      entryPaths: context.entryPaths,
-      password,
-    });
-  }
-
-  return runStartExtract(buildStartExtractRequest({
-    archivePath: context.archivePath,
-    destinationPath: context.destinationPath,
-    overwrite: context.overwrite,
-    destinationCollisionStrategy: context.destinationCollisionStrategy,
-    entryPaths: context.entryPaths,
-    stripComponents: context.stripComponents,
-    password,
-  }));
+  return jobControlController.startPasswordRetryJob(context, password);
 }
 
 async function retryJobWithPasswordPrompt(jobId: string) {
-  const retryDetails = jobsWorkspace.getPasswordRetryDetails(jobId);
-  if (!retryDetails) {
-    setOperationalMessage("jobs.retryUnavailable");
-    return;
-  }
-
-  if (!retryDetails.failure.code) {
-    setOperationalMessage("jobs.retryUnavailable");
-    return;
-  }
-
-  const password = jobPasswordPrompts.promptForCommandRetry(retryDetails.failure.code);
-  if (!password) {
-    setOperationalMessage("jobs.passwordRetryCancelled");
-    return;
-  }
-
-  try {
-    const response = await startPasswordRetryJob(retryDetails.context, password);
-    addJobState(response, {
-      retryContext: retryDetails.context,
-      outputActions: retryJobOutputActions(retryDetails.context),
-    });
-    setOperationalMessage("jobs.passwordRetryStarted");
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.passwordRetryFailed"));
-  }
+  await jobControlController.retryJobWithPasswordPrompt(jobId);
 }
 
 async function maybePromptForJobPasswordRetry(jobId: string) {
-  if (!jobsWorkspace.markPasswordRetryPromptedIfEligible(jobId)) {
-    return;
-  }
-
-  await retryJobWithPasswordPrompt(jobId);
+  await jobControlController.maybePromptForJobPasswordRetry(jobId);
 }
 
 async function pollJobs() {
-  const decision = jobsWorkspace.beginPolling();
-  if (decision.action === "requestAgain") {
-    return;
-  }
-
-  if (decision.action === "stop") {
-    stopPolling();
-    renderJobs();
-    maybeCloseCompletedQuickActionWindow();
-    return;
-  }
-
-  try {
-    await Promise.all(
-      decision.jobIds.map(async (jobId) => {
-        if (!jobsWorkspace.hasJob(jobId)) {
-          return;
-        }
-        try {
-          const snapshot = await pollJobEventsCommand({ jobId });
-
-          jobsWorkspace.mergePolledSnapshot(snapshot);
-          await maybePromptForJobPasswordRetry(jobId);
-        } catch (error) {
-          const commandError = asCommandError(error);
-          if (commandError?.code === "not_found") {
-            jobsWorkspace.removeJob(jobId);
-            return;
-          }
-
-          const messageText = commandError?.message ?? message("jobs.readProgressFailed");
-          const failedEvent = {
-            eventType: "failed" as const,
-            code: commandError?.code,
-            hint: commandError?.hint,
-            severity: "error" as const,
-            retryable: true,
-            message: messageText,
-          };
-          jobsWorkspace.markJobFailed(jobId, failedEvent);
-          setOperationalStatus(messageText);
-        }
-      }),
-    );
-
-    renderJobs();
-    maybeCloseCompletedQuickActionWindow();
-  } finally {
-    const finish = jobsWorkspace.finishPolling();
-    if (finish.shouldPollAgain) {
-      void pollJobs();
-    }
-  }
+  await jobPollingController.pollJobs();
 }
 
 function schedulePolling() {
-  jobTimers.startPolling(() => {
-    void pollJobs();
-  });
+  jobPollingController.schedulePolling();
 }
 
 function scheduleProgressClock() {
-  jobTimers.startProgressClock(() => {
-    renderJobs();
-  });
+  jobPollingController.scheduleProgressClock();
 }
 
 function stopProgressClock() {
-  jobTimers.stopProgressClock();
+  jobPollingController.stopProgressClock();
 }
 
 function syncProgressClock(snapshot: ProgressClockSnapshot = jobsWorkspace.getProgressClockSnapshot()) {
-  if (snapshot.shouldRun) {
-    scheduleProgressClock();
-  } else {
-    stopProgressClock();
-  }
+  jobPollingController.syncProgressClock(snapshot);
 }
 
 function stopPolling() {
-  jobTimers.stopPolling();
+  jobPollingController.stopPolling();
 }
 
 async function onOpenArchive() {
-  const selected = await openNativeDialog({
-    title: displayContext.translator.t("nativeDialog.openArchive"),
-    directory: false,
-    multiple: false,
-    filters: [ARCHIVE_OPEN_FILTER],
-  });
-
-  if (!selected || typeof selected !== "string") {
-    return;
-  }
-
-  clearTrackedPreviewState();
-  currentArchivePath = selected;
-  recordRecentArchiveHistory(selected);
-  await loadArchive({ archivePath: selected });
+  await archiveOpenController.onOpenArchive();
 }
 
 async function openArchiveFromPath(archivePath: string) {
-  const selected = archivePath.trim();
-  if (!selected) {
-    return;
-  }
-
-  clearTrackedPreviewState();
-  currentArchivePath = selected;
-  recordRecentArchiveHistory(selected);
-  await loadArchive({ archivePath: selected });
+  await archiveOpenController.openArchiveFromPath(archivePath);
 }
 
 async function openArchiveFromClipboard() {
-  if (!navigator.clipboard?.readText) {
-    setOperationalStatus(UNSUPPORTED_OPERATION_MESSAGE);
-    return;
-  }
-
-  try {
-    const pastedPath = (await navigator.clipboard.readText()).trim().replace(/^["']|["']$/g, "");
-    if (!pastedPath) {
-      setOperationalMessage("browse.noArchiveOpen");
-      return;
-    }
-    await openArchiveFromPath(pastedPath);
-  } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, displayContext.translator.t("nativeDialog.failed")));
-  }
+  await archiveOpenController.openArchiveFromClipboard();
 }
 
 async function onTestArchive() {
-  if (!currentArchivePath) {
-    return;
-  }
-
-  let password = browsePasswordInput.value.trim() || undefined;
-  let requestResult = archiveWorkspace.buildTestRequest({ password });
-  if (!requestResult.ok) {
-    return;
-  }
-  let request = requestResult.request;
-
-  while (true) {
-    try {
-      const response = await runTestArchive(request);
-      addJobState(response, {
-        retryContext: {
-          retryKind: "testArchive",
-          archivePath: request.archivePath,
-          ...(request.entryPaths?.length ? { entryPaths: request.entryPaths } : {}),
-        },
-      });
-      archiveWorkspace.clearPasswordRetry();
-      return;
-    } catch (error) {
-      const commandError = asCommandError(error);
-      const retry = requestArchivePasswordRetry("testArchive", commandError);
-      if (retry) {
-        const nextPassword = promptForArchivePasswordRetry(retry);
-        if (!nextPassword) {
-          archiveWorkspace.clearPasswordRetry();
-          setBrowseState("error", commandError?.message ?? message("test.unableStart"));
-          return;
-        }
-        password = nextPassword;
-        requestResult = archiveWorkspace.buildTestRequest({ password });
-        if (!requestResult.ok) {
-          return;
-        }
-        request = requestResult.request;
-        continue;
-      }
-
-      if (!commandError) {
-        setBrowseState("error", message("test.unableStart"));
-        return;
-      }
-
-      setBrowseState("error", `${commandError.message}${commandError.hint ? `\n${commandError.hint}` : ""}`);
-      return;
-    }
-  }
+  await archiveTestController.testArchive();
 }
 
 async function onDeleteTemporaryFiles() {
@@ -7189,7 +6811,7 @@ async function copySelectedEntryPathsToClipboard() {
   }
 
   try {
-    await navigator.clipboard.writeText(selectedPaths.join("\n"));
+    await writeClipboardText(selectedPaths.join("\n"));
     setOperationalStatus(`Copied ${selectedPaths.length} archive path${selectedPaths.length === 1 ? "" : "s"}.`);
   } catch {
     setOperationalStatus("Could not copy the selected archive paths.");
@@ -7202,106 +6824,11 @@ async function copyTextToClipboard(value: string) {
   }
 
   try {
-    await navigator.clipboard.writeText(value);
+    await writeClipboardText(value);
     setOperationalMessage("status.copied");
   } catch {
     setOperationalStatus("Could not copy.");
   }
-}
-
-const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";
-
-function readJsonFromStorage<T>(key: string, fallback: T | null = null): T | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      return fallback;
-    }
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveJsonToStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Storage unavailable in restricted environments.
-  }
-}
-
-function loadWindowGeometryFromStorage(): WindowGeometry | null {
-  return normalizeStoredWindowGeometry(readJsonFromStorage<WindowGeometry>(WINDOW_GEOMETRY_KEY));
-}
-
-function saveWindowGeometryToStorage(geometry: WindowGeometry): void {
-  if (!isFiniteNumber(geometry.width) || !isFiniteNumber(geometry.height)) {
-    return;
-  }
-  saveJsonToStorage(WINDOW_GEOMETRY_KEY, geometry);
-}
-
-async function restoreWindowGeometry(): Promise<boolean> {
-  if (!isDesktopRuntime()) {
-    return false;
-  }
-
-  const storedGeometry = loadWindowGeometryFromStorage();
-  if (!storedGeometry) {
-    return false;
-  }
-
-  const currentWindow = getCurrentWindow();
-  const scaleFactor = await currentWindow.scaleFactor();
-  let monitors: Awaited<ReturnType<typeof availableMonitors>>;
-  try {
-    monitors = await availableMonitors();
-  } catch {
-    return false;
-  }
-  const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);
-  if (!geometry) {
-    return false;
-  }
-  if (geometry.width && geometry.height) {
-    await currentWindow.setSize(new LogicalSize(geometry.width, geometry.height));
-  }
-  if (isFiniteNumber(geometry.x) && isFiniteNumber(geometry.y)) {
-    await currentWindow.setPosition(new LogicalPosition(geometry.x, geometry.y));
-  }
-  return true;
-}
-
-async function placeNormalAppWindowBeforeShow(): Promise<void> {
-  const restored = await restoreWindowGeometry();
-  if (!restored) {
-    await getCurrentWindow().center();
-  }
-}
-
-async function persistWindowGeometry(): Promise<void> {
-  if (!isDesktopRuntime() || isQuickActionJobMode()) {
-    return;
-  }
-
-  const currentWindow = getCurrentWindow();
-  const scaleFactor = await currentWindow.scaleFactor();
-  const size = (await currentWindow.innerSize()).toLogical(scaleFactor);
-  const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);
-
-  const width = Math.floor(size.width);
-  const height = Math.floor(size.height);
-  const x = Math.floor(position.x);
-  const y = Math.floor(position.y);
-
-  saveWindowGeometryToStorage({
-    width,
-    height,
-    x,
-    y,
-    unit: "logical",
-  });
 }
 
 async function applyPreviewCleanupPolicyBeforeNextPreview(): Promise<void> {
@@ -7325,15 +6852,14 @@ function applyCleanupOnAppClose(): void {
     return;
   }
 
-  void persistWindowGeometry();
+  void appWindowController.persistCurrentWindowGeometry();
   if (appPreferences.previewCleanupPolicy === "whenAppCloses") {
     void cleanupPreviewRoots();
   }
 }
 
 function bindWindowLifecycleHandlers(): void {
-  window.addEventListener("pagehide", applyCleanupOnAppClose);
-  window.addEventListener("beforeunload", applyCleanupOnAppClose);
+  bindPreviewCleanupOnAppClose(applyCleanupOnAppClose);
 }
 
 async function onRefreshArchive() {
@@ -7366,226 +6892,19 @@ async function onSelectDestinationForExtract() {
 }
 
 async function startExtract(destinationMode: ExtractMode) {
-  if (!currentArchivePath) {
-    return;
-  }
-
-  const destination = resolveExtractDestination(extractDestinationInput.value);
-  if (!isExtractDestinationValid() || !destination) {
-    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
-    syncExtractDialogState();
-    extractDestinationInput.focus();
-    return;
-  }
-
-  const overwrite = getOverwritePolicyValue();
-  const stripComponentsBase = toNumberOrUndefined(browseStripInput.value) ?? 0;
-  const pathMode = getExtractPathMode();
-  const deduplicateRoot = extractDeduplicateRootCheckbox.checked;
-  let password = browsePasswordInput.value.trim() || undefined;
-  const entryReferences = archiveWorkspace.getExtractReferencePaths(destinationMode);
-
-  if (destinationMode === "archive") {
-    const stripComponents = resolveExtractStripComponents(
-      stripComponentsBase,
-      pathMode,
-      [...entryReferences],
-      deduplicateRoot,
-    );
-
-    while (true) {
-      try {
-        const requestResult = archiveWorkspace.buildExtractRequest({
-          mode: "archive",
-          destinationPath: destination,
-          overwrite,
-          stripComponents,
-          password,
-        });
-        if (!requestResult.ok) {
-          return;
-        }
-        const request = requestResult.request;
-        const response = await runStartExtract(request);
-        recordExtractDestinationHistory(destination);
-        closeModal(extractDialog);
-        archiveWorkspace.clearPasswordRetry();
-        addJobState(response, {
-          retryContext: {
-            retryKind: "extractArchive",
-            archivePath: request.archivePath,
-            destinationPath: destination,
-            overwrite,
-            entryPaths: undefined,
-            stripComponents,
-          },
-          focusProgress: true,
-          autoCloseAction: "returnToWorkspace",
-          progressContext: extractJobProgressContext(request),
-          outputActions: extractJobOutputActions(request),
-        });
-        return;
-      } catch (error) {
-        const commandError = asCommandError(error);
-        const retry = requestArchivePasswordRetry("extractArchive", commandError);
-        if (retry) {
-          requestExtractPasswordInDialog(retry);
-          return;
-        }
-        setBrowseState("error", commandError?.message ?? message("extract.unableStart"));
-        return;
-      }
-    }
-  }
-
-  if (!entryReferences.length) {
-    extractDialogMessage.textContent = message("extract.selectEntryFirst");
-    return;
-  }
-  const stripComponents = resolveExtractStripComponents(
-    stripComponentsBase,
-    pathMode,
-    [...entryReferences],
-    deduplicateRoot,
-  );
-
-  while (true) {
-    try {
-      const requestResult = archiveWorkspace.buildExtractRequest({
-        mode: "selection",
-        destinationPath: destination,
-        overwrite,
-        stripComponents,
-        password,
-      });
-      if (!requestResult.ok) {
-        extractDialogMessage.textContent = message("extract.selectEntryFirst");
-        return;
-      }
-      const request = requestResult.request;
-      const response = await runStartExtract(request);
-      recordExtractDestinationHistory(destination);
-      closeModal(extractDialog);
-      archiveWorkspace.clearPasswordRetry();
-      addJobState(response, {
-        retryContext: {
-          retryKind: "extractArchive",
-          archivePath: request.archivePath,
-          destinationPath: destination,
-          overwrite,
-          entryPaths: request.entryPaths,
-          stripComponents,
-        },
-        focusProgress: true,
-        autoCloseAction: "returnToWorkspace",
-        progressContext: extractJobProgressContext(request, "selection"),
-        outputActions: extractJobOutputActions(request),
-      });
-      return;
-    } catch (error) {
-      const commandError = asCommandError(error);
-      const retry = requestArchivePasswordRetry("extractSelection", commandError);
-      if (retry) {
-        requestExtractPasswordInDialog(retry);
-        return;
-      }
-      setBrowseState("error", commandError?.message ?? message("extract.unableSelected"));
-      return;
-    }
-  }
+  await extractStartController.startExtract(destinationMode);
 }
 
 async function onPreviewSelectedEntry() {
-  await runPreviewSelectedEntry(false);
+  await runPreviewSelectedEntry("preview");
 }
 
 async function onOpenOutsideSelectedEntry() {
-  await runPreviewSelectedEntry(true);
+  await runPreviewSelectedEntry("openOutside");
 }
 
-async function runPreviewSelectedEntry(openOutside: boolean) {
-  if (!currentArchivePath) {
-    return;
-  }
-
-  await applyPreviewCleanupPolicyBeforeNextPreview();
-
-  const overwrite = getOverwritePolicyValue();
-  const stripComponents = toNumberOrUndefined(browseStripInput.value) ?? 0;
-  let password = browsePasswordInput.value.trim() || undefined;
-  let requestResult = archiveWorkspace.buildPreviewRequest({
-    overwrite,
-    stripComponents,
-    password,
-  });
-  if (!requestResult.ok) {
-    setOperationalMessage("command.singleFileRequired");
-    return;
-  }
-  let request = requestResult.request;
-
-  const cachedPreviewPath = shellWorkspace.getCachedPreviewPathForEntry(request.entryPath);
-  if (openOutside && cachedPreviewPath) {
-    try {
-      await openDesktopPath(cachedPreviewPath);
-      archiveWorkspace.clearPasswordRetry();
-      setBrowseState("loaded", message("preview.openedCached"));
-      renderBrowse();
-      return;
-    } catch (error) {
-      clearTrackedPreviewState();
-    }
-  }
-
-  while (true) {
-    try {
-      const response = await runPreviewEntry(request);
-
-      await openDesktopPath(response.previewPath);
-      shellWorkspace.trackPreviewResultMetadata({
-        cleanupRoot: response.cleanupRoot,
-        previewPath: response.previewPath,
-        entryPath: request.entryPath,
-      });
-      archiveWorkspace.clearPasswordRetry();
-      if (openOutside) {
-        setBrowseState("loaded", message("preview.openedOutside", { size: formatBytes(response.writtenBytes) }));
-      } else {
-        setBrowseState("loaded", message("preview.ready", { size: formatBytes(response.writtenBytes) }));
-      }
-      renderBrowse();
-      return;
-    } catch (error) {
-      const commandError = asCommandError(error);
-      const retry = requestArchivePasswordRetry(
-        openOutside ? "openOutsideEntry" : "previewEntry",
-        commandError,
-      );
-      if (retry) {
-        const nextPassword = promptForArchivePasswordRetry(retry);
-        if (!nextPassword) {
-          archiveWorkspace.clearPasswordRetry();
-          setBrowseState("error", commandError?.message ?? message("preview.unablePreview"));
-          return;
-        }
-        password = nextPassword;
-        requestResult = archiveWorkspace.buildPreviewRequest({
-          overwrite,
-          stripComponents,
-          password,
-        });
-        if (!requestResult.ok) {
-          setOperationalMessage("command.singleFileRequired");
-          return;
-        }
-        request = requestResult.request;
-        continue;
-      }
-
-      setBrowseState("error", commandError?.message ?? message("preview.unablePreview"));
-      return;
-    }
-  }
+async function runPreviewSelectedEntry(mode: ArchivePreviewMode) {
+  await archivePreviewController.previewSelectedEntry(mode);
 }
 
 async function addSourcePathsFromDialog(mode: "files" | "folder") {
@@ -7629,149 +6948,31 @@ async function onSelectCreateDestination() {
 async function runCreate(
   options: { destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"] } = {},
 ) {
-  if (isCreateSubmissionInFlight()) {
-    return;
-  }
-
-  const sourceSnapshot = syncCreateSourcesFromWorkspace();
-  if (sourceSnapshot.isEmpty) {
-    return;
-  }
-
-  const requestResult = createWorkspace.buildStartCreateRequest({
-    password: createPasswordInput.value,
-    passwordConfirm: createPasswordConfirmInput.value,
-    destinationCollisionStrategy: options.destinationCollisionStrategy,
-  });
-  syncCreateSourcesFromWorkspace(requestResult.snapshot);
-  if (!requestResult.ok) {
-    setCreatePlanState();
-    return;
-  }
-
-  const request = requestResult.request;
-  syncCreateSourcesFromWorkspace(createWorkspace.setSubmissionInFlight(true).snapshot);
-  setCreatePlanState();
-
-  try {
-    const response = await runStartCreate(request);
-
-    clearCreatePasswordFields();
-    recordCreateDestinationHistory(request.destinationPath);
-    addJobState(response, {
-      focusProgress: true,
-      autoCloseAction: "returnToWorkspace",
-      progressContext: createJobProgressContext(request),
-      outputActions: createJobOutputActions(request),
-    });
-  } catch (error) {
-    const commandError = asCommandError(error);
-    syncCreateSourcesFromWorkspace(createWorkspace.setPlanError(
-      commandError?.message
-        ? { fallbackText: commandError.message }
-        : { messageKey: "create.error.unableStart" },
-    ));
-    setCreatePlanState();
-  } finally {
-    syncCreateSourcesFromWorkspace(createWorkspace.setSubmissionInFlight(false).snapshot);
-    setCreatePlanState();
-  }
+  await createStartController.runCreate(options);
 }
 
 async function onCancelJob(jobId: string) {
-  try {
-    await cancelJobCommand({ jobId });
-    await pollJobs();
-  } catch (error) {
-    const commandError = asCommandError(error);
-    if (commandError) {
-      setOperationalStatus(commandError.message);
-    }
-  }
+  await jobControlController.onCancelJob(jobId);
 }
 
 async function onPauseJob(jobId: string) {
-  try {
-    await pauseJobCommand({ jobId });
-    await pollJobs();
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
-  }
+  await jobControlController.onPauseJob(jobId);
 }
 
 async function onResumeJob(jobId: string) {
-  try {
-    await resumeJobCommand({ jobId });
-    await pollJobs();
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.updateFailed"));
-  }
+  await jobControlController.onResumeJob(jobId);
 }
 
 async function onJobOutputAction(jobId?: string, indexValue?: string, kind?: string) {
-  const resolution = jobsWorkspace.getOutputAction({
-    jobId,
-    index: Number(indexValue),
-    kind,
-  });
-  if (resolution.action === "unavailable") {
-    setOperationalMessage("jobs.outputUnavailable");
-    return;
-  }
-
-  try {
-    await jobOutputEffects.run(resolution.outputAction);
-  } catch (error) {
-    setOperationalStatus(unknownErrorMessage(error, message("jobs.outputOpenFailed")));
-  }
+  await jobControlController.onJobOutputAction(jobId, indexValue, kind);
 }
 
 async function onDismissJob(jobId: string) {
-  try {
-    await dismissJobCommand({ jobId });
-    jobsWorkspace.removeJob(jobId);
-    renderJobs();
-    if (!jobsWorkspace.hasJobs()) {
-      stopPolling();
-    }
-  } catch (error) {
-    const commandError = asCommandError(error);
-    if (commandError) {
-      setOperationalStatus(commandError.message);
-    }
-  }
+  await jobControlController.onDismissJob(jobId);
 }
 
 async function loadBootstrapState() {
-  try {
-    const [healthcheck, contract] = await Promise.all([
-      fetchHealthcheck(),
-      fetchProjectContract(),
-    ]);
-
-    latestHealthcheck = healthcheck;
-    latestContract = contract;
-    setOperationalStatus(healthcheck.ready ? message("status.ready") : message("status.backendUnavailable"));
-    renderAboutDiagnostics();
-    if (normalWorkspaceRendered && !isQuickActionJobMode()) {
-      renderBrowse();
-    }
-  } catch (error) {
-    latestHealthcheck = null;
-    latestContract = null;
-    if (isDesktopRuntime()) {
-      const commandError = asCommandError(error);
-      setOperationalStatus(commandError?.message ?? unknownErrorMessage(error, message("status.backendUnavailable")));
-    } else {
-      setOperationalMessage("status.readyBrowserPreview");
-    }
-    renderAboutDiagnostics();
-    if (normalWorkspaceRendered && !isQuickActionJobMode()) {
-      renderBrowse();
-    }
-  }
+  await startupController.loadBootstrapState();
 }
 
 function onCreateFormatChange() {
@@ -7920,7 +7121,7 @@ function bindActions() {
         }
 
         event.preventDefault();
-        void getCurrentWindow().startResizeDragging(direction);
+        void appWindowController.beginResizeDrag(direction);
       });
     }
   }
@@ -8171,13 +7372,6 @@ function viewportRectBetween(startX: number, startY: number, endX: number, endY:
   };
 }
 
-function viewportRectsIntersect(left: ViewportRect, right: DOMRect): boolean {
-  return left.left <= right.right &&
-    left.right >= right.left &&
-    left.top <= right.bottom &&
-    left.bottom >= right.top;
-}
-
 function ensureMarqueeSelectionElement(): HTMLDivElement {
   if (marqueeSelectionElement) {
     return marqueeSelectionElement;
@@ -8204,16 +7398,7 @@ function setMarqueeSelectionElementRect(rect: ViewportRect) {
 }
 
 function selectedRowsInMarqueeRect(rect: ViewportRect): string[] {
-  const paths: string[] = [];
-  for (const row of tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
-    if (viewportRectsIntersect(rect, row.getBoundingClientRect())) {
-      const path = row.dataset.entryPath;
-      if (path) {
-        paths.push(path);
-      }
-    }
-  }
-  return paths;
+  return archiveEntryPathsInViewportRect({ tableBody }, rect);
 }
 
 function canStartMarqueeSelection(event: PointerEvent): boolean {
@@ -8901,9 +8086,9 @@ tableBody.addEventListener("click", (event) => {
 
   copyDiagnosticsButton.addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText(diagnosticsText());
+      await writeClipboardText(diagnosticsText());
       copyDiagnosticsButton.textContent = message("status.copied");
-      window.setTimeout(() => {
+      uiDeferrals.schedule(() => {
         copyDiagnosticsButton.textContent = message("about.copyDiagnostics");
       }, 1400);
     } catch {

@@ -92,10 +92,10 @@ Last checked: 2026-07-08
 | 6 | Command router | Complete | Toolbar, menus, shortcuts, context menus, details, tree, and row actions execute through one router. |
 | 7 | Jobs workspace | Complete | Job merge, retry, polling decisions, quick-action state move behind `jobsWorkspace.ts`. |
 | 8 | Settings and display context | Complete | Preferences and locale/display refresh flow through one seam. |
-| 9 | UI view adapters | In progress | `main.ts` mostly binds intents and renders snapshots. |
-| 10 | Desktop adapters and controllers | Not started | Tauri imports are concentrated in `src/api` and `src/desktop`; controllers use injected adapters. |
+| 9 | UI view adapters | Complete | `main.ts` mostly binds intents and renders snapshots. |
+| 10 | Desktop adapters and controllers | Complete | Tauri imports are concentrated in `src/api` and `src/desktop`; controllers use injected adapters. |
 
-Active slice: 9
+Active slice: 10 complete
 
 ## Slice 0: Guardrails And Characterization
 
@@ -481,13 +481,13 @@ Likely files:
 
 Checklist:
 
-- [ ] Move archive browser render/update functions into UI modules.
+- [x] Move archive browser render/update functions into UI modules.
 - [x] Move create workspace render/update functions into UI modules.
 - [x] Move command surface binding into UI modules that emit command IDs.
 - [x] Move context-menu placement and keyboard focus into UI modules.
 - [x] Move generic modal focus trap, return focus, default/cancel, and Escape
   behavior into `modalController.ts`.
-- [ ] Keep workflow decisions out of UI modules.
+- [x] Keep workflow decisions out of UI modules.
 
 Completion gate:
 
@@ -511,6 +511,7 @@ New or deepened files:
 - `src/app/controllers/*`
 - `src/desktop/dialogs.ts`
 - `src/desktop/windowController.ts`
+- `src/desktop/fileManager.ts`
 - `src/desktop/fileDrop.ts`
 - `src/desktop/nativeDrag.ts`
 - `src/desktop/previewCleanup.ts`
@@ -521,14 +522,13 @@ New or deepened files:
 
 Checklist:
 
-- [ ] Move native dialogs behind desktop adapters.
-- [ ] Move file manager, clipboard, timers, preview cleanup, native drag-out,
-  file-drop event binding, and window geometry behind desktop adapters.
-- [ ] Add controllers that inject API, desktop, dialog, storage, timer,
+- [x] Move native dialogs behind desktop adapters.
+- [x] Move remaining small UI deferral timers behind desktop adapters.
+- [x] Add controllers that inject API, desktop, dialog, storage, timer,
   clipboard, and window adapters.
-- [ ] Keep controllers responsible for async sequencing, stale-result checks,
+- [x] Keep controllers responsible for async sequencing, stale-result checks,
   debounce, timers, and effect error mapping.
-- [ ] Keep workspaces deterministic and Tauri-free.
+- [x] Keep workspaces deterministic and Tauri-free.
 
 Completion gate:
 
@@ -1747,3 +1747,768 @@ Run this after slices that move visible workflow or command behavior:
   column geometry/style update mechanics live in UI modules. Secret password
   values, event orchestration, workspace mutation, and async planning remain in
   `src/main.ts` by design.
+
+### 2026-07-09 Slice 9 Worker 51
+
+- Added archive-browser chrome adapters to `src/ui/archiveWorkspaceView.ts`
+  for the path bar, archive meta text, workspace mode chrome, and
+  archive command/search control disabled states. The adapters receive
+  render-ready strings/booleans and only perform DOM updates.
+- Updated `src/main.ts` so it still owns archive path/folder decisions,
+  archive-workspace snapshot reads, archive naming, translator use, command
+  state calculation, command-surface state, preferences, status bar updates,
+  and workflow orchestration, while delegating the bounded chrome DOM writes to
+  the UI adapter.
+- Extended `src/ui/archiveWorkspaceView.test.ts` for no-archive and escaped
+  breadcrumb path bars, meta text, compress/extract chrome state, and
+  command/search disabled/ARIA states. Updated
+  `src/app/guiLayoutContracts.test.ts` so the contract follows the new
+  ownership split.
+- Validation passed: `npm.cmd run test:frontend --
+  src/ui/archiveWorkspaceView.test.ts src/app/workspaces/archiveWorkspace.test.ts
+  src/app/guiLayoutContracts.test.ts`, `npm.cmd run test:frontend`, and
+  `npm.cmd run build`.
+- The Slice 9 archive-browser checkbox remains unchecked. This worker moved the
+  bounded chrome seam requested for Worker 51, but meaningful archive-browser
+  DOM updates still remain in `src/main.ts`, notably browse-message text writes
+  and `syncVisibleSelectionUi` row/checkbox selection syncing.
+
+### 2026-07-09 Slice 9 Worker 52
+
+- Added archive-browser message/status and visible-selection sync adapters to
+  `src/ui/archiveWorkspaceView.ts`. The message adapter applies the prepared
+  browse status class and optional message text through `textContent`; the
+  selection adapter applies select-all state, selected/focused row classes,
+  `aria-selected`, and row checkbox state from readonly selection snapshots.
+  The archive table viewport hit-test helper for marquee selection also moved
+  to the UI adapter.
+- Updated `src/main.ts` so browse status/navigation/loaded/selected messages
+  are prepared in the composition root but rendered through the UI adapter.
+  `syncVisibleSelectionUi()` now delegates DOM row and checkbox writes while
+  keeping archive workspace selection state, hierarchical selection algorithms,
+  details rendering, command-state refresh, navigation decisions, event
+  handlers, and focus orchestration in `main.ts`.
+- Extended `src/ui/archiveWorkspaceView.test.ts` for browse status classes,
+  omitted-message preservation, `textContent` message rendering, select-all
+  none/all/partial states, selected/focused row class and ARIA sync, nested
+  checkbox sync, non-entry row ignore behavior, and viewport row hit testing.
+- The Slice 9 archive-browser render/update checklist item is now checked:
+  table/details/tree/path bar/meta/workspace chrome/command controls/message
+  status/visible-selection DOM update mechanics live in UI modules. Remaining
+  archive event handlers, focus orchestration, dialog/info flows, and workflow
+  decisions intentionally remain outside the UI adapter.
+
+### 2026-07-09 Slice 9 Worker 53
+
+- Resolved Reviewer 52's P2 by moving extract status-bar selection/focus DOM
+  rendering into `src/ui/shellView.ts`. The new shell status adapter accepts
+  render-ready selection count, selected size, focused size, and focused
+  modified strings and only assigns `textContent`.
+- Updated `src/main.ts` so `updateStatusBar()` still owns archive workspace
+  snapshot reads plus `message`, `formatBytes`, and `formatDate` formatting,
+  then delegates the DOM writes to `renderShellStatusBar()`. Compress-mode
+  status chrome remains routed through the existing workspace mode chrome path.
+- Extended `src/ui/shellView.test.ts` for populated and cleared optional status
+  fields, and added a GUI layout contract preventing direct status
+  selection/focus `textContent` writes from returning to `src/main.ts`.
+- The Slice 9 archive-browser render/update checklist item remains checked:
+  after this P2 fix, the meaningful archive-browser/status render/update DOM
+  mechanics are covered by UI modules while workflow decisions and orchestration
+  stay outside the UI adapters.
+
+### 2026-07-09 Slice 9 Worker 54
+
+- Performed the final Slice 9 UI-boundary audit across
+  `archiveWorkspaceView.ts`, `createWorkspaceView.ts`, `shellView.ts`,
+  `commandSurfaceView.ts`, `contextMenuView.ts`, `modalController.ts`, plus the
+  relevant jobs view seam called out by the Slice 7 ledger. The audited UI
+  adapters render/update DOM or decode DOM actions from render-ready models,
+  callbacks, strings, booleans, arrays, and element handles; workspace mutation,
+  command routing, runtime effects, storage, API/Tauri calls, and password value
+  handling remain outside the UI modules.
+- Removed the last small type-coupling drift in the Slice 9 adapters:
+  `shellView.ts` no longer imports shell-workspace snapshot types, and
+  `archiveWorkspaceView.ts` no longer imports API browse-state DTO types.
+- Closed the jobs-view Slice 9 drift by rendering jobs from the readonly
+  `JobListSnapshot.jobs` item array instead of passing a mutable jobs `Map` into
+  `src/ui/jobsView.ts`. Progress derivation, retry eligibility, terminal-state
+  classification, and completed-output readiness now come from
+  `jobsWorkspace.getJobListSnapshot()`; the jobs view only formats/renders the
+  prepared item model.
+- Added a GUI architecture contract that guards the Slice 9 UI adapters against
+  workspace/controller/API/desktop imports, command-router/runtime/storage/API
+  calls, password input reads, fetch/listen calls, and jobs-view regression to
+  `Map<string, JobState>` or `deriveJobProgress`.
+- Useful scans: `rg -n
+  "archiveWorkspace\\.|createWorkspace\\.|shellWorkspace\\.|commandRouter|runRoutedCommand|invoke|Tauri|openNativeDialog|localStorage|sessionStorage|passwordInput|passwordConfirm|\\.value.*password|password.*\\.value|fetch\\(|listen\\("
+  src/ui` returned no matches. A broader import scan still shows intentional
+  pure app/display imports such as formatting, translator, archive-table, command
+  definitions, jobs tests, and preferences UI helpers; it no longer shows
+  `../api`, `../app/shell`, `../app/workspaces`, or `../desktop` imports in the
+  audited Slice 9 source modules.
+- Remaining `src/main.ts` DOM seams are honest out-of-scope leftovers for later
+  slices or existing composition-root/bootstrap work: jobs drawer shell wiring,
+  dialogs/preferences, app bootstrap, pane resize, quick-progress rendering, and
+  assorted event/focus orchestration. Slice 9 is not claiming those seams are
+  fully moved.
+- Validation passed for the expanded focused audit set:
+  `npm.cmd run test:frontend --
+  src/ui/archiveWorkspaceView.test.ts src/ui/createWorkspaceView.test.ts
+  src/ui/shellView.test.ts src/ui/commandSurfaceView.test.ts
+  src/ui/contextMenuView.test.ts src/ui/modalController.test.ts
+  src/ui/jobsView.test.ts src/app/workspaces/jobsWorkspace.test.ts
+  src/app/guiLayoutContracts.test.ts` with 9 files and 125 tests.
+- The final Slice 9 checkbox is now checked: UI view adapters are bounded to DOM
+  rendering/update and DOM event decoding for the audited surfaces, with
+  workflow decisions kept in app/workspace/main/controller seams.
+
+### 2026-07-09 Slice 10 Worker 55
+
+- Started Slice 10 by making the native-dialog helper seam Tauri-free in
+  `src/app/dialogs.ts`. The app module now defines structural native dialog
+  filter, open/save option, result, and function types and keeps
+  `unknownErrorMessage`, `nativeDialogErrorMessage`, `runNativeOpenDialog`, and
+  `runNativeSaveDialog` pure and tested.
+- Updated `src/desktop/runtime.ts` so the concrete adapter owns the
+  `@tauri-apps/plugin-dialog` import and adapts Tauri `open`/`save` to the
+  app-level native dialog function types without re-exporting plugin dialog
+  types.
+- Updated `src/main.ts` to type its thin composition wrappers with the
+  Tauri-free app dialog option types. Existing open/save call sites and status
+  error mapping are preserved.
+- Validation passed: `npm.cmd run test:frontend -- src/app/dialogs.test.ts
+  src/app/guiLayoutContracts.test.ts` with 2 files and 28 tests;
+  `npm.cmd run test:frontend` with 39 files and 448 tests; `npm.cmd run build`.
+- Useful scans: `rg -n
+  "@tauri-apps/plugin-dialog|OpenDialogOptions|SaveDialogOptions" src/app
+  src/main.ts` returned no matches; `rg -n "@tauri|invoke\\(" src/app`
+  returned no matches.
+- The Slice 10 native-dialog checkbox is checked. `main.ts` still has thin
+  `openNativeDialog`/`saveNativeDialog` composition wrappers for status-message
+  injection, but concrete native dialog effects and Tauri plugin types are now
+  desktop-owned and app/main consume only Tauri-free structural types.
+- Next smallest safe action: move another concrete runtime effect behind a
+  desktop adapter, such as file manager/open-reveal, clipboard, timers, preview
+  cleanup, native drag-out, file-drop binding, or window geometry.
+
+### 2026-07-09 Slice 10 Worker 56
+
+- Added `src/desktop/clipboard.ts` as the browser clipboard adapter. It owns
+  the direct `navigator.clipboard` reference and exposes synchronous read/write
+  capability checks plus read/write text helpers.
+- Updated `src/main.ts` clipboard effects to call the adapter for startup
+  context-menu paste-path capability, open-archive-from-clipboard reads,
+  selected archive path copy, generic copy text actions, and the About
+  diagnostics copy button. User-facing success and failure messages are
+  preserved.
+- Added `src/desktop/clipboard.test.ts` coverage for unsupported read/write
+  environments and successful read/write calls through stubbed browser
+  clipboard APIs.
+- Validation passed: `npm.cmd run test:frontend --
+  src/desktop/clipboard.test.ts src/app/guiLayoutContracts.test.ts` with 2
+  files and 28 tests; `npm.cmd run test:frontend` with 40 files and 452 tests;
+  `npm.cmd run build`.
+- Useful scans: `rg -n "navigator\\.clipboard" src/main.ts` returned no
+  matches; `rg -n "navigator\\.clipboard" src/desktop/clipboard.ts` returned
+  the adapter-owned browser API reference.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Clipboard is
+  moved, but file manager/open-reveal, timers, preview cleanup, native drag-out,
+  file-drop event binding, and window geometry still need bounded desktop
+  adapter work.
+
+### 2026-07-09 Slice 10 Worker 57
+
+- Added `src/desktop/timers.ts` as the durable app timer adapter. It owns direct
+  `window.setTimeout`, `window.clearTimeout`, `window.setInterval`, and
+  `window.clearInterval` calls for job polling, the quick-progress clock,
+  quick-action auto-close, and create-plan debounce. The factory accepts
+  injectable clock functions for deterministic tests.
+- Updated `src/main.ts` so job polling/progress-clock scheduling,
+  quick-action auto-close pending/clear/schedule behavior, and create-plan
+  debounce scheduling/cancellation use the desktop timer adapter. Preserved
+  existing delays: `JOB_POLL_INTERVAL_MS`, 650ms quick-action auto-close, 1000ms
+  progress clock, and 350ms create-plan debounce.
+- Added `src/desktop/timers.test.ts` coverage for singleton polling and
+  progress-clock intervals, no duplicate interval callbacks, quick-action
+  auto-close pending/clear/fire behavior, and create-plan debounce
+  cancel/reschedule/fire semantics.
+- Validation passed: `npm.cmd run test:frontend --
+  src/desktop/timers.test.ts src/app/workspaces/jobsWorkspace.test.ts
+  src/app/workspaces/createWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 4 files and 97 tests; `npm.cmd run test:frontend` with 41 files and 458
+  tests; `npm.cmd run build`.
+- Useful scan: `rg -n
+  "window\\.setTimeout|window\\.setInterval|window\\.clearTimeout|window\\.clearInterval|setTimeout\\(|setInterval\\(|clearTimeout\\(|clearInterval\\("
+  src/main.ts` now shows only small UI deferrals left out of this worker's
+  scope: table focus-after-render at line 5165, preferences close animation at
+  line 6248, and diagnostics copy-button label reset at line 8900.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, and durable timers have moved, but remaining bounded work
+  still includes file manager/open-reveal, preview cleanup, native drag-out,
+  file-drop event binding, window geometry, and the small UI deferral timers
+  above.
+
+### 2026-07-09 Slice 10 Worker 58
+
+- Added `src/desktop/fileManager.ts` as the focused file manager/open-path
+  adapter. It owns the `@tauri-apps/plugin-opener` import and preserves the
+  existing `openDesktopPath()` and `revealInFileManager()` behavior.
+- Updated `src/desktop/runtime.ts` to remove the opener plugin imports and
+  file-manager exports, leaving it focused on runtime detection, native dialogs,
+  and desktop file-drop binding for now.
+- Updated `src/main.ts` so open/reveal call sites import from
+  `src/desktop/fileManager.ts` while runtime dialog/drop imports continue to
+  come from `src/desktop/runtime.ts`.
+- Did not add a wrapper test: a Vitest module mock was practical, but it made
+  the requested `src/desktop` opener ownership scan report the test file too.
+  This split is covered by build/type-check and the focused boundary scans.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/guiLayoutContracts.test.ts` with 1 file and 24 tests;
+  `npm.cmd run test:frontend` with 41 files and 458 tests; `npm.cmd run build`.
+- Useful scans: `rg -n "plugin-opener|openPath|revealItemInDir" src/desktop`
+  shows only `src/desktop/fileManager.ts`; `rg -n
+  "openDesktopPath|revealInFileManager" src/main.ts src/desktop` shows
+  `main.ts` importing from `fileManager.ts` and no stale runtime exports.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, durable timers, and file manager/open-reveal have moved,
+  but remaining bounded work still includes preview cleanup, native drag-out,
+  file-drop event binding, window geometry, and the small UI deferral timers.
+
+### 2026-07-09 Slice 10 Worker 59
+
+- Added `src/desktop/previewCleanup.ts` as the focused preview cleanup adapter.
+  It owns the API cleanup delegation and the `pagehide`/`beforeunload` app-close
+  lifecycle binding, with injectable window references for deterministic tests
+  and a no-op path when `window` is unavailable.
+- Updated `src/main.ts` so preview cleanup command sites call the desktop
+  adapter instead of importing the API command directly. The desktop runtime
+  guard, preference policy checks, shell preview metadata clearing/tracking, and
+  user-facing status messages remain in `main.ts` for now.
+- Added `src/desktop/previewCleanup.test.ts` coverage for API cleanup
+  delegation, lifecycle binding, lifecycle unbinding, and unavailable-window
+  behavior.
+- Validation passed: `npm.cmd run test:frontend --
+  src/desktop/previewCleanup.test.ts src/app/shell/shellWorkspace.test.ts
+  src/app/guiLayoutContracts.test.ts` with 3 files and 44 tests;
+  `npm.cmd run test:frontend` with 42 files and 462 tests;
+  `npm.cmd run build`.
+- Useful scans: `rg -n "cleanupPreviewRoots" src/main.ts src/api src/desktop`
+  shows `main.ts` importing/calling the desktop adapter, the API export, the
+  desktop adapter delegation, and the focused adapter test; `rg -n
+  "pagehide|beforeunload" src/main.ts src/desktop` shows lifecycle binding in
+  `src/desktop/previewCleanup.ts` and its test only.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, durable timers, file manager/open-reveal, and preview
+  cleanup have moved, but remaining bounded work still includes native drag-out,
+  file-drop event binding, window geometry, and the small UI deferral timers.
+
+### 2026-07-09 Slice 10 Worker 60
+
+- Added `src/desktop/nativeDrag.ts` as the focused native drag-out adapter. It
+  imports the native drag request/response DTO types from `src/api/types`,
+  delegates once to the API `runStartNativeFileDrag()` wrapper, and propagates
+  success or errors unchanged.
+- Updated `src/main.ts` so `startNativeDragOut()` calls the desktop
+  `startNativeFileDrag()` adapter instead of importing the API wrapper. The
+  desktop runtime guard, archive-workspace request building, password retry
+  loop, and user-facing status/messages remain in `main.ts`.
+- Added `src/desktop/nativeDrag.test.ts` coverage for API delegation and error
+  propagation through the thin adapter.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/workspaces/archiveWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 2 files and 58 tests; focused adapter run `npm.cmd run test:frontend --
+  src/desktop/nativeDrag.test.ts src/app/workspaces/archiveWorkspace.test.ts
+  src/app/guiLayoutContracts.test.ts` with 3 files and 60 tests;
+  `npm.cmd run test:frontend` with 43 files and 464 tests;
+  `npm.cmd run build`.
+- Useful scans: `rg -n "runStartNativeFileDrag" src/main.ts src/desktop
+  src/api` shows no `main.ts` import/call, the API export in
+  `src/api/commands.ts`, and desktop adapter/test ownership; `rg -n
+  "startNativeFileDrag|NativeFileDragRequest|NativeFileDragResponse"
+  src/main.ts src/desktop src/app/workspaces/archiveWorkspace.ts` shows
+  `main.ts` calling the desktop adapter, desktop owning concrete invocation,
+  and `archiveWorkspace.ts` only building the typed request.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, durable timers, file manager/open-reveal, preview cleanup,
+  and native drag-out have moved, but remaining bounded work still includes
+  file-drop event binding, window geometry, and the small UI deferral timers.
+
+### 2026-07-09 Slice 10 Worker 61
+
+- Added `src/desktop/fileDrop.ts` as the focused desktop file-drop adapter. It
+  owns `getCurrentWebview`, `DragDropEvent`, and dropped-path normalization,
+  with a small injectable binder factory for fake-webview tests.
+- Trimmed `src/desktop/runtime.ts` back to runtime/native-dialog concerns and
+  updated `src/main.ts` to import `bindDesktopFileDrop` and
+  `DesktopFileDropEvent` from the new adapter.
+- Added `src/desktop/fileDrop.test.ts` coverage for non-desktop no-op binding,
+  non-drop forwarding, drop path normalization, unlisten propagation, and the
+  default Tauri webview adapter wiring.
+- Validation for Worker 61: `npm.cmd run test:frontend --
+  src/desktop/fileDrop.test.ts src/app/guiLayoutContracts.test.ts` with 2
+  files and 28 tests; `npm.cmd run test:frontend` with 44 files and 468 tests;
+  `npm.cmd run build`.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, durable timers, file manager/open-reveal, preview cleanup,
+  native drag-out, and file-drop event binding have moved, but remaining bounded
+  work still includes window geometry and the small UI deferral timers.
+
+### 2026-07-09 Slice 10 Worker 62
+
+- Added `src/desktop/windowController.ts` as the focused desktop window-control
+  and geometry adapter. It owns the `@tauri-apps/api/window` imports, current
+  window close/minimize/maximize/show/progress sizing effects, Linux resize drag
+  delegation, monitor-aware normal-window restore, and `zmanager.windowGeometry`
+  storage persistence.
+- Kept `src/app/windowGeometry.ts` pure. The desktop adapter consumes
+  `normalizeStoredWindowGeometry`, `restorableWindowGeometry`, and
+  `WindowGeometry`, while storage, Tauri window handles, logical position/size
+  creation, monitor reads, desktop-runtime guards, and quick-action persistence
+  policy are injected or adapter-owned.
+- Updated `src/main.ts` so window buttons, quick-action normal/progress reveal,
+  progress minimize, normal restore, lifecycle geometry persistence, and Linux
+  resize handles route through `createWindowController()`. `main.ts` no longer
+  imports `@tauri-apps/api/window`, owns the window-geometry storage key, or
+  performs direct current-window/monitor calls.
+- Updated `src/app/desktopStartupWindow.test.ts` to assert the new ownership
+  boundary rather than requiring geometry implementation strings in `main.ts`.
+  Added `src/desktop/windowController.test.ts` coverage for normal restore,
+  center fallback, logical geometry persistence, quick-action persist skip,
+  progress-window sizing/show order, and resize-drag delegation.
+- Validation passed: `npm.cmd run test:frontend --
+  src/desktop/windowController.test.ts src/app/windowGeometry.test.ts
+  src/app/desktopStartupWindow.test.ts src/app/guiLayoutContracts.test.ts` with
+  4 files and 43 tests; `npm.cmd run test:frontend` with 45 files and 474
+  tests; `npm.cmd run build`.
+- Useful scans: `rg -n
+  "@tauri-apps/api/window|getCurrentWindow|availableMonitors|LogicalPosition|LogicalSize|startResizeDragging"
+  src/main.ts src/desktop src/app` shows Tauri window ownership in
+  `src/desktop/windowController.ts` plus adapter tests/contracts, with no
+  direct `main.ts` import or current-window/monitor call. `rg -n
+  "zmanager\\.windowGeometry|WINDOW_GEOMETRY_KEY|restoreWindowGeometry|persistWindowGeometry|placeNormalAppWindowBeforeShow"
+  src/main.ts src/desktop src/app` shows geometry storage ownership in
+  `src/desktop/windowController.ts` plus tests/contracts, with no geometry key
+  or old restore/persist helper left in `main.ts`.
+- The broad Slice 10 desktop-adapters checkbox remains unchecked. Native
+  dialogs, clipboard, durable timers, file manager/open-reveal, preview cleanup,
+  native drag-out, file-drop event binding, and window geometry have moved, but
+  small UI deferral timers remain: table focus-after-render, preferences close
+  animation, and diagnostics copy-button label reset.
+
+### 2026-07-09 Slice 10 Worker 63
+
+- Extended `src/desktop/timers.ts` with a generic one-shot UI deferral adapter
+  that uses the existing injectable `TimerClock` and owns the direct browser
+  `window.setTimeout/clearTimeout` calls.
+- Updated `src/main.ts` so table focus-after-render, preferences close
+  animation, and diagnostics copy-button label reset route through
+  `appTimers.uiDeferrals` with the existing 0ms, 240ms, and 1400ms delays.
+- Added `src/desktop/timers.test.ts` coverage for independent one-shot
+  scheduling with supplied delays and cancellation.
+- Checked `Move remaining small UI deferral timers behind desktop adapters.`
+  because `src/main.ts` no longer has direct timeout or interval API matches,
+  and the known remaining Slice 10 desktop-adapter effects from this broad item
+  are now behind desktop adapters.
+
+### 2026-07-09 Slice 10 Worker 64
+
+- Added `src/app/controllers/createPlanController.ts` as the first controller
+  seam. It owns create-plan debounce cancellation/scheduling, begin-plan
+  sequencing, browser-preview branching, async API execution, stale-result
+  guards, and command-error fallback mapping through injected workspace, API,
+  timer, render, translation, preview, and error-mapping callbacks.
+- Updated `src/main.ts` to instantiate the create-plan controller at the
+  composition root and reduced `queuePlanRun()`, `cancelQueuedPlanRun()`, and
+  `runPlan()` to thin delegations. UI rendering remains callback-driven from
+  `main.ts`, and `createWorkspace.ts` remains deterministic/Tauri-free.
+- Added `src/app/controllers/createPlanController.test.ts` coverage for empty
+  source queues, debounce scheduling/cancel, successful API acceptance,
+  stale async success/error suppression, browser preview, and error fallback
+  rendering.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/createPlanController.test.ts
+  src/app/workspaces/createWorkspace.test.ts src/desktop/timers.test.ts
+  src/app/guiLayoutContracts.test.ts` with 4 files and 90 tests;
+  `npm.cmd run test:frontend` with 46 files and 484 tests; `npm.cmd run build`.
+- Useful scans: create-plan API/debounce ownership now shows `main.ts`
+  composing `createPlanController` and thin delegates, while
+  `src/app/controllers/createPlanController.ts` owns `beginPlan`,
+  `acceptPlanResult`, `acceptPlanError`, and `runPlanCreate` sequencing.
+  `Select-String` checks found no `@tauri`, `invoke(`, or desktop imports in
+  `src/app/controllers/*` or `src/app/workspaces/createWorkspace.ts`.
+- The broad Slice 10 controller checkboxes remain unchecked. This lands the
+  first async orchestration controller seam; remaining controller work still
+  includes archive loading/testing/preview, extract/create job starts,
+  bootstrap, and job polling orchestration.
+
+### 2026-07-09 Slice 10 Worker 65
+
+- Added `src/app/controllers/jobPollingController.ts` as the job polling
+  orchestration seam. It owns polling timer scheduling, progress-clock timer
+  scheduling, `beginPolling`/`finishPolling` sequencing, concurrent poll
+  rerun requests, job-event API execution, not-found removal, non-not-found
+  error-to-failed-event mapping, retry-prompt callback sequencing, and
+  render/quick-action close callbacks through injected workspace, API, timer,
+  status, and render effects.
+- Updated `src/main.ts` so `pollJobs()`, `schedulePolling()`,
+  `scheduleProgressClock()`, `stopProgressClock()`, `syncProgressClock()`, and
+  `stopPolling()` delegate to `jobPollingController`, while the composition
+  root injects `pollJobEventsCommand`, `asCommandError`, message translation,
+  retry prompting, rendering, and quick-action close behavior.
+- Added `src/app/controllers/jobPollingController.test.ts` coverage for stop
+  decisions, successful multi-job polling and retry prompting, not-found
+  removal, failed-event/error-status mapping, in-flight rerun requests, polling
+  and progress-clock timer routing, and progress-clock snapshot syncing.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/jobPollingController.test.ts
+  src/app/workspaces/jobsWorkspace.test.ts src/desktop/timers.test.ts
+  src/app/guiLayoutContracts.test.ts` with 4 files and 56 tests;
+  `npm.cmd run test:frontend` with 47 files and 491 tests; `npm.cmd run build`;
+  `git diff --check` for the touched files.
+- Useful scans: `src/app/controllers/jobPollingController.ts` now owns
+  `mergePolledSnapshot`, `markJobFailed`, `beginPolling`, and `finishPolling`
+  sequencing; `src/main.ts` retains only composition-root injection of
+  `pollJobEventsCommand`. `rg` found no `@tauri`, `invoke(`, desktop imports,
+  or API command aliases in `src/app/controllers` or
+  `src/app/workspaces/jobsWorkspace.ts`.
+- The broad Slice 10 controller checkboxes remain unchecked. Create-plan and
+  job-polling orchestration now have controllers, but archive load/test/preview,
+  extract/create job starts, bootstrap, and storage-backed orchestration remain
+  to be moved before claiming the controller layer complete.
+
+### 2026-07-09 Slice 10 Worker 66
+
+- Added `src/app/controllers/archiveLoadController.ts` as the archive listing
+  load orchestration seam. It owns entering extract mode, loading-state
+  sequencing, `listArchive` API execution, initial password trimming,
+  password-required/invalid retry loops, retry cancellation, `loadFailed`
+  mapping, and user-facing error text selection through injected workspace,
+  API, render, message, and prompt callbacks.
+- Updated `src/main.ts` so `loadArchive()` delegates to
+  `archiveLoadController`. The composition root injects `listArchiveCommand`,
+  `asCommandError`, translated loading/failure text, password retry prompting,
+  and the existing `loadArchiveListingIntoState()` acceptance seam. Listing
+  acceptance remains in `main.ts` for now because it still owns preview cleanup,
+  archive row/tree rebuilds, focus restoration, and browser rendering.
+- Added `src/app/controllers/archiveLoadController.test.ts` coverage for
+  successful loading with preserve-state options, trimmed initial passwords,
+  password retry prompts, retry request payloads, command errors with hints,
+  cancelled retry errors without hints, and unknown-error fallback text.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/archiveLoadController.test.ts
+  src/app/workspaces/archiveWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 3 files and 63 tests; `npm.cmd run test:frontend` with 48 files and 496
+  tests; `npm.cmd run build`; `git diff --check` for the touched files.
+- Useful scans: archive load loop ownership now shows `beginLoading`,
+  `requestPasswordRetry`, and `loadFailed` in
+  `src/app/controllers/archiveLoadController.ts`, while `src/main.ts` retains
+  only controller composition plus the thin `loadArchive()` delegate and shared
+  retry helpers still used by test/extract/preview/native-drag flows. `rg`
+  found no `@tauri`, `invoke(`, desktop imports, or API command aliases in
+  `src/app/controllers` or `src/app/workspaces/archiveWorkspace.ts`.
+- The broad Slice 10 controller checkboxes remain unchecked. Archive loading
+  now has a controller, but archive test/preview, extract/create job starts,
+  bootstrap, and storage-backed orchestration still need controller seams.
+
+### 2026-07-09 Slice 10 Worker 67
+
+- Added `src/app/controllers/archiveTestController.ts` as the archive test-job
+  orchestration seam. It owns current-archive/request readiness checks,
+  initial password consumption through an injected reader, `buildTestRequest`
+  sequencing, `runTestArchive` API execution, retry-context construction,
+  password-required/invalid retry loops, retry cancellation, password retry
+  cleanup, and command/unknown error text mapping through injected workspace,
+  API, job, prompt, and status effects.
+- Updated `src/main.ts` so `onTestArchive()` delegates to
+  `archiveTestController`. The composition root injects `runTestArchive`,
+  `addJobState`, `asCommandError`, translated fallback text, current password
+  input reading, current-archive readiness, password retry prompting, and browse
+  error rendering.
+- Added `src/app/controllers/archiveTestController.test.ts` coverage for
+  successful job start and retry context, injected initial password handling,
+  password retry request rebuilding, cancelled retry cleanup/error text,
+  non-password command errors with hints, unknown-error fallback text, and the
+  no-current archive guard.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/archiveTestController.test.ts
+  src/app/workspaces/archiveWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 3 files and 64 tests; `npm.cmd run test:frontend` with 49 files and 502
+  tests; `npm.cmd run build`; `git diff --check` for the touched files.
+- Useful scans: `buildTestRequest` and `runTestArchive` sequencing now live in
+  `src/app/controllers/archiveTestController.ts`; `src/main.ts` retains only
+  `archiveTestController` composition, the thin `onTestArchive()` delegate, and
+  `runTestArchive` usage for existing password retry job restarts. `rg` found
+  no `@tauri`, `invoke(`, or desktop imports in controller/workspace code.
+- The broad Slice 10 controller checkboxes remain unchecked. Archive load and
+  test flows now have controllers, but archive preview, extract/create job
+  starts, bootstrap, and storage-backed orchestration still need controller
+  seams.
+
+### 2026-07-09 Slice 10 Worker 68
+
+- Added `src/app/controllers/archivePreviewController.ts` as the archive
+  preview/open-outside orchestration seam. It owns current-archive readiness,
+  preview cleanup sequencing, request readiness, cached open-outside preview
+  reuse, stale cached-preview cleanup, preview API execution, desktop open
+  sequencing through an injected effect, preview metadata tracking,
+  password-required/invalid retry loops, retry cancellation, and preview error
+  fallback mapping.
+- Updated `src/main.ts` so `onPreviewSelectedEntry()`,
+  `onOpenOutsideSelectedEntry()`, and `runPreviewSelectedEntry()` delegate to
+  `archivePreviewController`. The composition root injects overwrite/strip and
+  password input reads, preview cleanup policy, shell preview cache/metadata
+  effects, `runPreviewEntry`, `openDesktopPath`, `asCommandError`, translated
+  messages, byte formatting, and browse/operational status rendering.
+- Added `src/app/controllers/archivePreviewController.test.ts` coverage for
+  generated previews, open-outside cached preview reuse, stale cached-preview
+  fallback regeneration, mode-specific password retry operations, cancelled
+  password retry errors, single-file request unavailability, and unknown-error
+  fallback text.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/archivePreviewController.test.ts
+  src/app/workspaces/archiveWorkspace.test.ts src/app/shell/shellWorkspace.test.ts
+  src/app/guiLayoutContracts.test.ts` with 4 files and 81 tests;
+  `npm.cmd run test:frontend` with 50 files and 509 tests; `npm.cmd run build`;
+  `git diff --check` for the touched files.
+- Useful scans: `buildPreviewRequest`, cached preview handling, and
+  `runPreviewEntry` sequencing now live in
+  `src/app/controllers/archivePreviewController.ts`; `src/main.ts` retains only
+  controller composition and the thin preview delegates. `rg` found no `@tauri`,
+  `invoke(`, or desktop imports in controller/workspace/shell app modules.
+- Reviewer 68 found preview-specific regressions after the initial extraction.
+  The controller now checks the original request archive against an injected
+  `isCurrentArchive()` guard before applying async preview results, checks
+  open-outside cached previews before running before-next-preview cleanup, and
+  tracks generated preview metadata before invoking the desktop opener so
+  cleanup remains available even if the opener fails. Regression coverage was
+  added for stale preview suppression, cached open-outside reuse without
+  cleanup, and opener-failure metadata tracking.
+- The broad Slice 10 controller checkboxes remain unchecked. Archive
+  load/test/preview flows now have controllers, but extract/create job starts,
+  bootstrap, and storage-backed orchestration still need controller seams.
+
+### 2026-07-09 Slice 10 Worker 69
+
+- Added `src/app/controllers/createStartController.ts` as the create-job start
+  orchestration seam. It owns submission in-flight gating, source snapshot sync,
+  start-request validation, password/password-confirm handoff, submission
+  in-flight state transitions, `runStartCreate` execution, API error-to-plan
+  status mapping, and final submission cleanup through injected workspace, API,
+  render, sync, and success callbacks.
+- Updated `src/main.ts` so `runCreate()` delegates to
+  `createStartController`. The composition root injects current password input
+  reads, `runStartCreate`, `asCommandError`, `setCreatePlanState`,
+  create-source syncing, password field clearing, destination history recording,
+  job progress context construction, output action construction, and job
+  tracking.
+- Added `src/app/controllers/createStartController.test.ts` coverage for
+  successful start requests, destination collision strategy propagation,
+  password trimming via the workspace, validation failures, API command-error
+  mapping, unknown-error fallback mapping, final in-flight cleanup, in-flight
+  guard behavior, and empty-source guard behavior.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/createStartController.test.ts
+  src/app/workspaces/createWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 3 files and 80 tests; `npm.cmd run test:frontend` with 51 files and 515
+  tests; `npm.cmd run build`; `git diff --check` for the touched files.
+- Useful scans: `buildStartCreateRequest`, `setSubmissionInFlight`, and
+  `setPlanError` sequencing now live in
+  `src/app/controllers/createStartController.ts`; `src/main.ts` retains only
+  `createStartController` composition and the thin `runCreate()` delegate.
+  `rg` found no `@tauri`, `invoke(`, or desktop imports in controller/workspace
+  app modules.
+- The broad Slice 10 controller checkboxes remain unchecked. Create-plan,
+  create-start, archive load/test/preview, and job polling now have controllers,
+  but extract job starts, bootstrap, and storage-backed orchestration still need
+  controller seams.
+
+### 2026-07-09 Slice 10 Worker 70
+
+- Added `src/app/controllers/extractStartController.ts` as the extract-job
+  start orchestration seam. It owns destination and selection guards,
+  extract-request construction, `runStartExtract` execution, password retry
+  operation selection, retry cancellation, command-error fallback mapping,
+  destination history recording, dialog close sequencing, retry context,
+  focused progress context, output actions, and job tracking through injected
+  workspace, API, dialog, render, status, and job callbacks.
+- Updated `src/main.ts` so `startExtract()` delegates to
+  `extractStartController`. The composition root injects DOM-derived extract
+  inputs, `runStartExtract`, `asCommandError`, password retry prompting,
+  destination history, dialog closing, browse error rendering, progress context,
+  output actions, and job creation.
+- Added `src/app/controllers/extractStartController.test.ts` coverage for
+  archive and selection starts, missing destination and missing selection
+  guards, retry context/output action payloads, password retry prompting,
+  cancelled retry handling, command-error fallback, and null destination input.
+- Fixed the test harness to type its mutable input as `ExtractStartInput`, so
+  the null-destination case is accepted by TypeScript as well as Vitest.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/extractStartController.test.ts
+  src/app/workspaces/archiveWorkspace.test.ts
+  src/app/workspaces/jobsWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 4 files and 81 tests; `npm.cmd run build`.
+- Reviewer 70 found no behavior or architecture regressions. It verified the
+  controller remains Tauri-free and DOM-free, effects are injected, workspace
+  behavior stays deterministic, and `main.ts` is reduced to composition and a
+  thin `startExtract()` delegate.
+- The broad Slice 10 controller checkboxes remain unchecked. Extract job starts
+  now have a controller, but quick-action start/review flows, bootstrap,
+  job-control/password-retry orchestration, and storage-backed path-history
+  orchestration still need controller seams before claiming the controller layer
+  complete.
+
+### 2026-07-09 Slice 10 Worker 71
+
+- Added `src/app/controllers/quickActionController.ts` as the quick-action
+  orchestration seam. It owns quick create starts, quick create review setup,
+  quick extract review setup, quick extract starts, password retry loops,
+  quick-action dispatch through `runQuickActionRequest`, destination planning,
+  command-error fallback mapping, history recording, focused close-window job
+  metadata, and review/planning status messages through injected workspace,
+  API, render, status, dialog, path, and job callbacks.
+- Updated `src/main.ts` to instantiate `quickActionController` with the current
+  preferences, path helpers, password prompts, command runners, history
+  recorders, create workspace mutators, render seams, archive loading seam,
+  browse state seam, extract dialog seam, and job progress/output builders.
+  The existing `startQuickCreate`, `openQuickCreateReview`,
+  `openQuickExtractReview`, `startQuickExtract`, and
+  `handleQuickActionRequest` functions are now thin delegates.
+- Added `src/app/controllers/quickActionController.test.ts` coverage for
+  unique quick-create sources, destination/default propagation, password prompt
+  cancellation, focused create job metadata, create review setup and planning,
+  extract review guards, extract review loading/dialog behavior, quick extract
+  password retry, unsupported-path continuation, command hint browse errors,
+  and controller-level quick-action dispatch.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/quickActionController.test.ts src/app/quickActions.test.ts
+  src/app/workspaces/createWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 4 files and 96 tests; `npm.cmd run test:frontend` with 53 files and 531
+  tests; `npm.cmd run build`.
+- Useful scans: `rg` found no `@tauri`, `invoke(`, `desktop`,
+  `document.`, `window.`, `localStorage`, `HTMLElement`, or
+  `HTMLInputElement` matches in `src/app/controllers`, `src/app/workspaces`,
+  or `src/app/shell`.
+- The broad Slice 10 controller checkboxes remain unchecked. Quick-action
+  start/review orchestration now has a controller, but bootstrap,
+  job-control/password-retry orchestration, and storage-backed path-history
+  orchestration still need controller seams before claiming the controller
+  layer complete.
+
+### 2026-07-09 Slice 10 Worker 72
+
+- Added `src/app/controllers/jobControlController.ts` as the job-control and
+  password-retry orchestration seam. It owns focused quick-action pause/resume
+  and cancel sequencing, focused quick-action completion decisions and
+  auto-close scheduling, password retry availability/prompt/start handling,
+  row cancel/pause/resume/dismiss actions, and completed-output actions through
+  injected workspace, API, timer, prompt, render, status, output, and window
+  effects.
+- Updated `src/main.ts` so `toggleQuickActionPause()`,
+  `cancelFocusedQuickActionJobs()`,
+  `maybeCloseCompletedQuickActionWindow()`,
+  `startPasswordRetryJob()`, `retryJobWithPasswordPrompt()`,
+  `maybePromptForJobPasswordRetry()`, and job row actions are thin delegates.
+  The composition root still owns DOM buttons, runtime/window effects,
+  password prompt display, output effects, and job-render/poll callbacks.
+- Added `src/app/controllers/jobControlController.test.ts` coverage for
+  quick-action pause/resume status updates and failure fallback, quick-action
+  cancel return-to-workspace and close-window branches, completion wait,
+  needs-attention, and completed auto-close branches, password retry
+  test/extract/cancel/unavailable/error paths, one-shot auto prompting, row
+  cancel/pause/resume/dismiss actions, and output action unavailable/failure
+  behavior.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/jobControlController.test.ts
+  src/app/workspaces/jobsWorkspace.test.ts src/app/jobs.test.ts
+  src/app/guiLayoutContracts.test.ts` with 4 files and 73 tests;
+  `npm.cmd run test:frontend` with 54 files and 551 tests;
+  `npm.cmd run build`.
+- Useful scans: `rg` found no `@tauri`, `invoke(`, `document.`, `window.`,
+  `localStorage`, `HTMLElement`, `HTMLInputElement`, or desktop imports in
+  `src/app/controllers/jobControlController.ts`; the same scan across
+  `src/app/controllers`, `src/app/workspaces`, and `src/app/shell` returned no
+  matches.
+- The broad Slice 10 controller checkboxes remain unchecked. Job-control and
+  password-retry orchestration now have a controller, but bootstrap and
+  storage-backed path-history orchestration still need controller seams before
+  claiming the controller layer complete.
+
+### 2026-07-09 Slice 10 Worker 73
+
+- Added `src/app/controllers/startupController.ts` as the desktop
+  startup/bootstrap orchestration seam. It owns quick-action startup polling,
+  first-window reveal sequencing, startup-state handling, quick-action launch
+  event binding, desktop integration initialization fallback handling, and
+  healthcheck/project-contract bootstrap loading through injected API,
+  runtime, window, render, status, and error-mapping effects.
+- Updated `src/main.ts` so `handleStartupQuickAction()`,
+  `handleQuickActionStartupState()`, `bindQuickActionLaunchEvents()`,
+  `initializeDesktopRuntime()`, and `loadBootstrapState()` are thin delegates.
+  The composition root keeps the concrete Tauri listener, desktop runtime
+  guard, window reveal effects, latest healthcheck/contract storage, browse
+  render gate, diagnostics render, status messaging, and quick-action request
+  handling injection.
+- Added `src/app/controllers/startupController.test.ts` coverage for the
+  startup quick-action loop and stop conditions, first-read and later-read
+  startup errors, quick-action job activation, quick-action startup status
+  selection, launch-event binding/skipping, desktop initialization success and
+  failure, bootstrap success/not-ready status, desktop command/unknown
+  bootstrap errors, browser bootstrap fallback messaging, and browse render
+  gates.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/startupController.test.ts
+  src/app/shell/shellWorkspace.test.ts src/app/guiLayoutContracts.test.ts`
+  with 3 files and 57 tests; `npm.cmd run test:frontend` with 55 files and
+  568 tests; `npm.cmd run build`; `git diff --check` for touched files.
+- Useful scans: PowerShell `Select-String` found no `@tauri`, `invoke(`,
+  desktop imports, DOM globals/types, `window.`, or `localStorage` matches in
+  `src/app/controllers/*.ts`, and no direct `src/api/commands` imports in
+  controller files. `src/app/controllers/startupController.ts` imports only
+  DTO and translator types from app/API seams.
+- The broad Slice 10 controller checkboxes remain unchecked. Startup/bootstrap
+  orchestration now has a controller, but storage-backed path-history
+  orchestration still needs a controller seam before claiming the controller
+  layer complete.
+
+### 2026-07-09 Slice 10 Worker 74
+
+- Added `src/app/controllers/archiveOpenController.ts` as the final
+  storage-backed path-history and open-archive orchestration seam. It owns
+  extract/create/recent history recording, changed-history render routing,
+  native open-dialog sequencing, explicit-path trimming, clipboard
+  read/trim/quote-stripping handling, unsupported/empty/error clipboard status
+  mapping, preview-state clearing, current archive path setting, recent archive
+  recording, and archive load delegation through injected effects.
+- Updated `src/main.ts` so `recordExtractDestinationHistory()`,
+  `recordCreateDestinationHistory()`, `recordRecentArchiveHistory()`,
+  `onOpenArchive()`, `openArchiveFromPath()`, and
+  `openArchiveFromClipboard()` are thin delegates. The composition root injects
+  path history storage, DOM render seams, native dialog options, clipboard
+  effects, message/status mapping, preview cleanup, current-path assignment,
+  and the existing archive load controller seam.
+- Added `src/app/controllers/archiveOpenController.test.ts` coverage for
+  changed versus ignored history records, recent archive history without
+  immediate render, dialog cancel/non-string/open behavior, path trimming,
+  clipboard unsupported/empty/quoted/error behavior, and open ordering for
+  preview clearing, current-path assignment, recent history recording, and
+  archive loading.
+- Added `src/desktop/quickActionEvents.ts` so the remaining Tauri launch-event
+  listener import moved out of `src/main.ts` and into the desktop adapter
+  boundary.
+- Validation passed: `npm.cmd run test:frontend --
+  src/app/controllers/archiveOpenController.test.ts src/app/pathHistory.test.ts
+  src/app/guiLayoutContracts.test.ts` with 3 files and 45 tests;
+  `npm.cmd run test:frontend` with 56 files and 578 tests; `npm.cmd run build`;
+  `git diff --check` for touched files.
+- Useful scans: controller `Select-String` found no `@tauri`, `invoke(`,
+  direct API command imports, desktop imports, DOM globals/types, `window.`, or
+  `localStorage` matches in `src/app/controllers/*.ts`. `rg -n "@tauri|invoke\("
+  src/main.ts src/app src/ui src/desktop src/api` now shows production Tauri
+  imports only in `src/api/commands.ts` and `src/desktop/*`, with remaining
+  app matches limited to tests that assert boundaries.
+- `cd src-tauri && cargo check` was attempted but did not reach app code on
+  this machine because `zmanager-libarchive-sys` requires a configured vcpkg
+  root (`VCPKG_INSTALLATION_ROOT`, `VCPKG_ROOT`, or `CMAKE_TOOLCHAIN_FILE`).
+- Slice 10 is marked complete: the final path-history/open-archive controller
+  seam is in place, controllers remain Tauri-free and DOM-free, and direct
+  Tauri imports are concentrated in `src/api` and `src/desktop`.

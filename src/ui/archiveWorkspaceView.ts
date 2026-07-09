@@ -1,4 +1,3 @@
-import type { BrowseState } from "../api/types";
 import {
   archiveTableColumnLabel,
   formatArchiveTableValue,
@@ -8,6 +7,8 @@ import {
 } from "../app/archiveTable";
 import { escapeHtml } from "../app/formatting";
 import type { Translator } from "../app/i18n/translator";
+
+export type ArchiveBrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 
 export type ArchiveWorkspaceTableElements = {
   tableHead: HTMLTableSectionElement;
@@ -26,8 +27,36 @@ export type ArchiveWorkspaceTableSelection = {
   visibleSelectedCount: number;
 };
 
+export type ArchiveBrowseMessageElements = {
+  messageElement: HTMLElement;
+};
+
+export type ArchiveBrowseMessageModel = {
+  browseState: ArchiveBrowseState;
+  message?: string;
+};
+
+export type ArchiveVisibleSelectionElements = {
+  tableBody: HTMLTableSectionElement;
+  selectAllInput: HTMLInputElement;
+};
+
+export type ArchiveVisibleSelectionModel = {
+  selectedPaths: readonly string[];
+  focusedPath?: string | null;
+  visibleSelectablePaths: readonly string[];
+  visibleSelectedCount: number;
+};
+
+export type ArchiveViewportRect = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
 export type ArchiveWorkspaceTableRenderOptions = {
-  browseState: BrowseState;
+  browseState: ArchiveBrowseState;
   browseError: string;
   currentArchivePath?: string | null;
   rows: readonly ArchiveTableRow[];
@@ -144,6 +173,93 @@ export type ArchiveWorkspaceTreeRenderOptions =
       expandLabel: string;
     };
 
+export type ArchivePathBarCrumb = {
+  name: string;
+  path: string;
+};
+
+export type ArchivePathBarElements = {
+  pathFieldInput: HTMLInputElement;
+  pathCrumbsElement: HTMLElement;
+  document: Pick<Document, "title">;
+};
+
+export type ArchivePathBarModel =
+  | {
+      kind: "empty";
+      emptyLabel: string;
+      documentTitle: string;
+    }
+  | {
+      kind: "archive";
+      displayPath: string;
+      documentTitle: string;
+      crumbs: readonly ArchivePathBarCrumb[];
+    };
+
+export type ArchiveMetaElements = {
+  metaElement: HTMLElement;
+};
+
+export type ArchiveMetaModel = {
+  text: string;
+};
+
+export type ArchiveWorkspaceModeChromeElements = {
+  workspaceElement: HTMLElement;
+  modeCompressButton: HTMLButtonElement;
+  modeExtractButton: HTMLButtonElement;
+  compressSurfaceElement: HTMLElement;
+  tableShellElement: HTMLElement;
+  refreshArchiveButton: HTMLElement;
+  messageElement: HTMLElement;
+  detailsElement: HTMLElement;
+  compressOptionsPanel: HTMLElement;
+  detailsPaneTitleElement: HTMLElement;
+  workspaceTitleElement: HTMLElement;
+  metaElement: HTMLElement;
+  statusSelectionCountElement: HTMLElement;
+  statusSelectionSizeElement: HTMLElement;
+  statusFocusedSizeElement: HTMLElement;
+  statusFocusedModifiedElement: HTMLElement;
+};
+
+export type ArchiveWorkspaceModeChromeModel = {
+  mode: string;
+  compressActive: boolean;
+  extractActive: boolean;
+  compressSurfaceHidden: boolean;
+  tableShellHidden: boolean;
+  refreshArchiveHidden: boolean;
+  messageHidden: boolean;
+  detailsHidden: boolean;
+  compressOptionsHidden: boolean;
+  detailsPaneTitle: string;
+  detailsPaneTitleI18nKey: string;
+  workspaceTitle: string;
+  metaText?: string;
+  statusSelectionCountText?: string;
+  statusSelectionSizeText?: string;
+  statusFocusedSizeText?: string;
+  statusFocusedModifiedText?: string;
+};
+
+export type ArchiveCommandControlElements = {
+  searchInput: HTMLInputElement;
+  searchSubmitButton: HTMLButtonElement;
+  clearSearchButton: HTMLButtonElement;
+  selectAllInput: HTMLInputElement;
+  navBackButton: HTMLButtonElement;
+};
+
+export type ArchiveCommandControlState = {
+  searchDisabled: boolean;
+  searchSubmitDisabled: boolean;
+  clearSearchDisabled: boolean;
+  selectAllDisabled: boolean;
+  navBackDisabled: boolean;
+};
+
 type TreeRenderConfig = {
   buttonPathAttribute: "data-tree-path" | "data-compress-folder-path";
   toggleAttribute: "data-tree-toggle" | "data-compress-tree-toggle";
@@ -197,6 +313,125 @@ export function renderCreateNavigationTree(
   options: ArchiveWorkspaceTreeRenderOptions,
 ): void {
   elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, CREATE_TREE_CONFIG);
+}
+
+export function renderArchivePathBar(
+  elements: ArchivePathBarElements,
+  model: ArchivePathBarModel,
+): void {
+  elements.pathFieldInput.value = model.kind === "empty" ? model.emptyLabel : model.displayPath;
+  elements.pathFieldInput.disabled = model.kind === "empty";
+  elements.pathFieldInput.readOnly = true;
+  elements.pathCrumbsElement.hidden = model.kind === "empty";
+  elements.document.title = model.documentTitle;
+
+  if (model.kind === "empty") {
+    elements.pathCrumbsElement.textContent = model.emptyLabel;
+    return;
+  }
+
+  elements.pathCrumbsElement.innerHTML = model.crumbs
+    .flatMap((crumb, index) => {
+      const button = `<button type="button" data-crumb-path="${escapeHtml(crumb.path)}" aria-keyshortcuts="Enter Space">${escapeHtml(crumb.name)}</button>`;
+      return index === 0 ? [button] : [`<span aria-hidden="true">&gt;</span>`, button];
+    })
+    .join("");
+}
+
+export function renderArchiveMetaText(
+  elements: ArchiveMetaElements,
+  model: ArchiveMetaModel,
+): void {
+  elements.metaElement.textContent = model.text;
+}
+
+export function renderArchiveWorkspaceModeChrome(
+  elements: ArchiveWorkspaceModeChromeElements,
+  model: ArchiveWorkspaceModeChromeModel,
+): void {
+  elements.workspaceElement.dataset.mode = model.mode;
+  setActiveModeButton(elements.modeCompressButton, model.compressActive);
+  setActiveModeButton(elements.modeExtractButton, model.extractActive);
+
+  elements.compressSurfaceElement.hidden = model.compressSurfaceHidden;
+  elements.tableShellElement.hidden = model.tableShellHidden;
+  elements.refreshArchiveButton.hidden = model.refreshArchiveHidden;
+  elements.messageElement.hidden = model.messageHidden;
+  elements.detailsElement.hidden = model.detailsHidden;
+  elements.compressOptionsPanel.hidden = model.compressOptionsHidden;
+  elements.detailsPaneTitleElement.textContent = model.detailsPaneTitle;
+  elements.detailsPaneTitleElement.dataset.i18nText = model.detailsPaneTitleI18nKey;
+  elements.workspaceTitleElement.textContent = model.workspaceTitle;
+  setOptionalText(elements.metaElement, model.metaText);
+  setOptionalText(elements.statusSelectionCountElement, model.statusSelectionCountText);
+  setOptionalText(elements.statusSelectionSizeElement, model.statusSelectionSizeText);
+  setOptionalText(elements.statusFocusedSizeElement, model.statusFocusedSizeText);
+  setOptionalText(elements.statusFocusedModifiedElement, model.statusFocusedModifiedText);
+}
+
+export function renderArchiveCommandControlState(
+  elements: ArchiveCommandControlElements,
+  state: ArchiveCommandControlState,
+): void {
+  elements.searchInput.disabled = state.searchDisabled;
+  elements.searchInput.setAttribute("aria-disabled", String(state.searchDisabled));
+  elements.searchSubmitButton.disabled = state.searchSubmitDisabled;
+  elements.searchSubmitButton.setAttribute("aria-disabled", String(state.searchSubmitDisabled));
+  elements.clearSearchButton.disabled = state.clearSearchDisabled;
+  elements.clearSearchButton.setAttribute("aria-disabled", String(state.clearSearchDisabled));
+  elements.selectAllInput.disabled = state.selectAllDisabled;
+  elements.navBackButton.disabled = state.navBackDisabled;
+}
+
+export function renderArchiveBrowseMessage(
+  elements: ArchiveBrowseMessageElements,
+  model: ArchiveBrowseMessageModel,
+): void {
+  const statusClass = model.browseState === "loaded" ? "status-loaded" : `status-${model.browseState}`;
+  elements.messageElement.className = `status ${statusClass}`;
+  if (model.message) {
+    elements.messageElement.textContent = model.message;
+  }
+}
+
+export function syncArchiveVisibleSelection(
+  elements: ArchiveVisibleSelectionElements,
+  model: ArchiveVisibleSelectionModel,
+): void {
+  const selectedPaths = new Set(model.selectedPaths);
+  elements.selectAllInput.checked = model.visibleSelectablePaths.length > 0
+    && model.visibleSelectedCount === model.visibleSelectablePaths.length;
+  elements.selectAllInput.indeterminate = model.visibleSelectedCount > 0
+    && model.visibleSelectedCount < model.visibleSelectablePaths.length;
+
+  for (const row of elements.tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
+    const path = row.dataset.entryPath ?? "";
+    const selected = selectedPaths.has(path);
+    const focused = model.focusedPath === path;
+    row.classList.toggle("is-selected", selected);
+    row.classList.toggle("is-focused-row", focused);
+    row.setAttribute("aria-selected", String(selected));
+    const checkbox = row.querySelector<HTMLInputElement>("input[type='checkbox']");
+    if (checkbox) {
+      checkbox.checked = selected;
+    }
+  }
+}
+
+export function archiveEntryPathsInViewportRect(
+  elements: Pick<ArchiveVisibleSelectionElements, "tableBody">,
+  rect: ArchiveViewportRect,
+): string[] {
+  const paths: string[] = [];
+  for (const row of elements.tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-entry-path]")) {
+    if (viewportRectsIntersect(rect, row.getBoundingClientRect())) {
+      const path = row.dataset.entryPath;
+      if (path) {
+        paths.push(path);
+      }
+    }
+  }
+  return paths;
 }
 
 function renderArchiveWorkspaceTreeHtml(
@@ -344,6 +579,27 @@ function renderTreeFolder(
       <span class="tree-label">${escapeHtml(folder.label)}</span>
     </button>
   `;
+}
+
+function setActiveModeButton(button: HTMLButtonElement, active: boolean): void {
+  button.classList.toggle("is-active", active);
+  button.setAttribute("aria-selected", String(active));
+  button.setAttribute("aria-pressed", String(active));
+}
+
+function setOptionalText(element: HTMLElement, text: string | undefined): void {
+  if (text === undefined) {
+    return;
+  }
+
+  element.textContent = text;
+}
+
+function viewportRectsIntersect(left: ArchiveViewportRect, right: DOMRect): boolean {
+  return left.left <= right.right &&
+    left.right >= right.left &&
+    left.top <= right.bottom &&
+    left.bottom >= right.top;
 }
 
 function renderDetailActions(actions: readonly ArchiveDetailAction[]): string {
