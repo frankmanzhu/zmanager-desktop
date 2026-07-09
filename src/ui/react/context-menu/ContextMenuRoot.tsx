@@ -41,6 +41,25 @@ export function ContextMenuRoot() {
     contextMenuItems(menuElement)[0]?.focus();
   }, [menu]);
 
+  useEffect(() => {
+    if (!menu.visible) {
+      return;
+    }
+
+    const ownerDocument = menuRef.current?.ownerDocument ?? document;
+    const hideOnOutsideClick = (event: MouseEvent) => {
+      const menuElement = menuRef.current;
+      if (!menuElement || !(event.target instanceof Node) || menuElement.contains(event.target)) {
+        return;
+      }
+
+      actions.handleContextMenuIntent({ type: "hide" });
+    };
+
+    ownerDocument.addEventListener("click", hideOnOutsideClick);
+    return () => ownerDocument.removeEventListener("click", hideOnOutsideClick);
+  }, [actions, menu.visible, menu.id]);
+
   return (
     <div
       id="context-menu"

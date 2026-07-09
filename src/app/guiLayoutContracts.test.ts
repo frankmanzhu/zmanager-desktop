@@ -68,9 +68,7 @@ const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalControl
 const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
-type FutureForbiddenTargetId =
-  | "phase6.runtime-event-wiring"
-  | "phase7.hidden-legacy-root";
+type FutureForbiddenTargetId = "phase7.hidden-legacy-root";
 
 type FutureForbiddenTarget = Readonly<{
   id: FutureForbiddenTargetId;
@@ -79,11 +77,6 @@ type FutureForbiddenTarget = Readonly<{
 }>;
 
 const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase6.runtime-event-wiring",
-    phase: "Phase 6",
-    description: "runtime event wiring lives in React interaction adapters or desktop controllers",
-  },
   {
     id: "phase7.hidden-legacy-root",
     phase: "Phase 7",
@@ -222,52 +215,50 @@ const ALLOWED_LEGACY_EXCEPTIONS = [
 
 const ALLOWED_BROAD_DOM_ACCESS_FILES: readonly Readonly<{
   file: string;
-  targetId: FutureForbiddenTargetId;
   reason: string;
 }>[] = [
   {
     file: "src/runtimeBridge.ts",
-    targetId: "phase6.runtime-event-wiring",
-    reason: "The bridge still owns legacy DOM queries and event wiring during the migration.",
+    reason: "The bridge still queries the hidden runtime root until the bootstrap is deleted.",
   },
   {
     file: "src/ui/react/archive/ArchiveTable.tsx",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Archive table drag and marquee interactions still attach temporary document listeners.",
   },
   {
+    file: "src/ui/react/context-menu/ContextMenuRoot.tsx",
+    reason: "Context menu outside-click dismissal is owned by the React context menu surface.",
+  },
+  {
     file: "src/ui/react/create/CreateWorkspace.tsx",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Create table drag and marquee interactions still attach temporary document listeners.",
   },
   {
     file: "src/ui/react/dialogs/DialogRoot.tsx",
-    targetId: "phase6.runtime-event-wiring",
-    reason: "React dialogs still attach an escape-key document listener.",
+    reason: "React dialogs own escape-key and return-focus DOM interactions.",
+  },
+  {
+    file: "src/ui/react/shell/MenuBar.tsx",
+    reason: "Classic menu outside-click dismissal is owned by the React menu surface.",
   },
   {
     file: "src/ui/react/interaction/BrowserFileDropAdapter.tsx",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Browser file drop remains an explicit React interaction adapter.",
   },
   {
     file: "src/ui/react/interaction/PaneResizer.tsx",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Pane resizing remains an explicit React interaction adapter.",
   },
   {
     file: "src/ui/react/interaction/ShellKeyboardShortcuts.tsx",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Shell shortcuts remain an explicit React interaction adapter.",
   },
   {
     file: "src/ui/react/workspace/tableMarqueeSelection.ts",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Shared table marquee selection still attaches temporary document listeners.",
   },
   {
     file: "src/desktop/previewCleanup.ts",
-    targetId: "phase6.runtime-event-wiring",
     reason: "Preview cleanup is a named desktop adapter for page lifecycle events.",
   },
 ];
@@ -480,14 +471,12 @@ describe("GUI layout contracts", () => {
     const allowedExceptionIds = ALLOWED_LEGACY_EXCEPTIONS.map((exception) => exception.id);
     const usedTargetIds = new Set([
       ...ALLOWED_LEGACY_EXCEPTIONS.map((exception) => exception.targetId),
-      ...ALLOWED_BROAD_DOM_ACCESS_FILES.map((exception) => exception.targetId),
       ...ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS.map((exception) => exception.targetId),
     ]);
 
     expect(allowedExceptionIds.sort()).toEqual(uniqueSorted(allowedExceptionIds));
     expect(ALLOWED_LEGACY_EXCEPTIONS.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.id)).toEqual([]);
     expect(ALLOWED_LEGACY_EXCEPTIONS.filter((exception) => !scanIds.has(exception.scanId)).map((exception) => exception.id)).toEqual([]);
-    expect(ALLOWED_BROAD_DOM_ACCESS_FILES.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.file)).toEqual([]);
     expect(ALLOWED_REACT_API_DESKTOP_IMPORT_EXCEPTIONS.filter((exception) => !targetIds.has(exception.targetId)).map((exception) => exception.file)).toEqual([]);
     expect(FUTURE_FORBIDDEN_TARGETS.filter((target) => !usedTargetIds.has(target.id)).map((target) => target.id)).toEqual([]);
   });
@@ -537,6 +526,14 @@ describe("GUI layout contracts", () => {
     expect(uniqueSorted(sourceLineMatchesForScan("broadDomWiring").map((match) => match.file))).toEqual(
       ALLOWED_BROAD_DOM_ACCESS_FILES.map((exception) => exception.file).sort(),
     );
+  });
+
+  it("keeps runtime bridge DOM access limited to the Phase 7 hidden root query", () => {
+    expect(sourceLineMatches(["src/runtimeBridge.ts"], /document\.querySelector|getElementById|addEventListener/)
+      .map(sourceLineKey)
+      .sort()).toEqual([
+        JSON.stringify(["src/runtimeBridge.ts", 'const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");']),
+      ]);
   });
 
   it("keeps React UI modules from importing api or desktop directly except named interaction adapters", () => {
@@ -653,12 +650,13 @@ describe("GUI layout contracts", () => {
     expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
     expect(mainSource).toContain('data-dialog-default="#extract-start"');
     expect(mainSource).toContain('data-dialog-cancel="#extract-cancel"');
-    expect(mainSource).toContain('from "./ui/modalController"');
-    expect(mainSource).toContain("const modalController = createModalController");
-    expect(modalControllerSource).toContain("function resolveReturnFocus");
-    expect(modalControllerSource).toContain("function getDialogSurface");
-    expect(modalControllerSource).toContain("function dialogButtonFromSelector");
-    expect(modalControllerSource).toContain("function keepFocusInsideOpenModal");
+    expect(mainSource).not.toContain('from "./ui/modalController"');
+    expect(mainSource).not.toContain("const modalController = createModalController");
+    expect(dialogRootSource).toContain("function useDialogFocusRestoration");
+    expect(dialogRootSource).toContain("function dialogReturnFocusElement");
+    expect(dialogRootSource).toContain('element.closest("[hidden], .context-menu")');
+    expect(dialogRootSource).toContain("function focusTargetForClosedDialog");
+    expect(dialogRootSource).toContain('document.querySelector<HTMLElement>("#extract-toolbar")');
     expect(mainSource).not.toContain("browsePasswordInput");
     expect(styles).toContain(".task-dialog");
     expect(styles).toContain(".property-dialog");
@@ -767,9 +765,10 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain("syncReactExtractDialogSnapshot");
     expect(mainSource).not.toContain('extractDialog.addEventListener("keydown"');
     expect(mainSource).not.toContain('extractDestinationInput.addEventListener("input"');
-    expect(mainSource).toContain("function isDefaultSafeDialogTextEntry");
-    expect(mainSource).toContain("dialog === extractDialog");
-    expect(mainSource).toContain("target instanceof HTMLInputElement");
+    expect(mainSource).not.toContain("function isDefaultSafeDialogTextEntry");
+    expect(mainSource).not.toContain("dialog === extractDialog");
+    expect(mainSource).not.toContain("target instanceof HTMLInputElement");
+    expect(dialogRootSource).toContain('onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}');
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
     expect(mainSource).toContain('class="advanced-options extract-password-options"');
     expect(mainSource).not.toContain("browsePasswordInput");
@@ -972,7 +971,8 @@ describe("GUI layout contracts", () => {
     expect(appFrameSource).toContain("data-drop-target={snapshot.shell.dropOverlay.copy?.target}");
     expect(mainSource).toContain("setDropOverlayChoice(decision, dropCopyForDecision(decision));");
     expect(shellWorkspaceSource).toContain("setDropOverlayChoice(choice, copy)");
-    expect(mainSource).toContain('document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();');
+    expect(mainSource).not.toContain('document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();');
+    expect(dropOverlaySource).toContain("primaryActionRef.current?.focus();");
     expect(dropOverlaySource).toContain('actions.handleDesktopIntent({ type: "dropChoice", choice: "openArchive" })');
     expect(browserFileDropAdapterSource).toContain('droppedPathsFromDataTransfer');
     expect(mainSource).toContain('droppedPathsFromDesktopEvent');

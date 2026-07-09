@@ -194,11 +194,23 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "preferencesCancel" }>
   | Readonly<{ type: "closeCurrent" }>;
 
+export type ZManagerWindowResizeDirection =
+  | "North"
+  | "East"
+  | "South"
+  | "West"
+  | "NorthEast"
+  | "SouthEast"
+  | "SouthWest"
+  | "NorthWest";
+
 export type ZManagerDesktopIntent =
   | Readonly<{ type: "droppedPaths"; paths: readonly DroppedPath[] }>
   | Readonly<{ type: "dropEntered"; paths?: readonly DroppedPath[] }>
   | Readonly<{ type: "dropLeft" }>
-  | Readonly<{ type: "dropChoice"; choice: "openArchive" | "addToCompress" | "cancel" }>;
+  | Readonly<{ type: "dropChoice"; choice: "openArchive" | "addToCompress" | "cancel" }>
+  | Readonly<{ type: "windowControl"; control: "minimize" | "toggleMaximize" | "close" }>
+  | Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>;
 
 export type ZManagerContextMenuIntent =
   | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>

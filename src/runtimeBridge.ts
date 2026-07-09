@@ -304,9 +304,6 @@ import {
   createWindowController,
   type AppWindowResizeDirection,
 } from "./desktop/windowController";
-import {
-  createModalController,
-} from "./ui/modalController";
 type SelectableBrowserRow = Extract<ArchiveTableRow, { rowType: "folder" | "entry" }>;
 type CompressPlanRow = CreatePlanRow;
 type CommandSurfaceClassState = Partial<Record<CommandId, {
@@ -459,19 +456,12 @@ appRoot.innerHTML = `
 
 `;
 
-const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
-const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
-const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
-const windowMinimizeButton = document.querySelector<HTMLButtonElement>("#window-minimize")!;
-const windowMaximizeButton = document.querySelector<HTMLButtonElement>("#window-maximize")!;
-const windowCloseButton = document.querySelector<HTMLButtonElement>("#window-close")!;
-const windowResizeHandleElements = document.querySelectorAll<HTMLElement>("[data-window-resize-direction]");
-
-const extractDialog = document.querySelector<HTMLDivElement>("#extract-dialog")!;
-
-const contextMenu = document.querySelector<HTMLDivElement>("#legacy-context-menu")!;
-
 function privatizeLegacyExtractDialogIds() {
+  const extractDialog = appRoot.querySelector<HTMLDivElement>("#extract-dialog");
+  if (!extractDialog) {
+    return;
+  }
+
   const publicExtractIds = [
     "extract-dialog-close",
     "extract-title",
@@ -995,7 +985,6 @@ async function revealQuickActionJobWindow(
     void appWindowController.persistCurrentWindowGeometry();
   }
   shellWorkspace.setQuickActionWindowMode("jobOnly");
-  workspaceElement.dataset.quickActionMode = "job-only";
   document.body.classList.add("quick-action-job-mode");
   shellWorkspace.setJobDrawerOpen(false);
   publishReactSnapshot();
@@ -1040,7 +1029,6 @@ async function sendQuickActionJobsToBackground() {
   jobsWorkspace.resetFocusedQuickActionProgress();
   shellWorkspace.setQuickActionWindowMode("normal");
   document.body.classList.remove("quick-action-job-mode");
-  delete workspaceElement.dataset.quickActionMode;
   setOperationalMessage("jobs.background");
   openJobDrawer();
   renderJobs();
@@ -1051,7 +1039,6 @@ async function closeFocusedJobProgress() {
   jobsWorkspace.resetFocusedQuickActionProgress();
   shellWorkspace.setQuickActionWindowMode("normal");
   document.body.classList.remove("quick-action-job-mode");
-  delete workspaceElement.dataset.quickActionMode;
   shellWorkspace.setJobDrawerOpen(false);
   renderNormalWorkspaceOnce();
 
@@ -1133,15 +1120,6 @@ function renderQuickProgress() {
 
 function infoReturnFocusPath(): string {
   return archiveFocusedPath() || getSelectedEntryPaths()[0] || "";
-}
-
-function findActiveArchiveRow(path: string): HTMLTableRowElement | null {
-  if (!path) {
-    return null;
-  }
-
-  const selector = `tr[data-entry-path="${CSS.escape(path)}"]`;
-  return document.querySelector<HTMLTableRowElement>(selector);
 }
 
 function previewActionHint(): string {
@@ -1456,7 +1434,6 @@ async function startNativeDragOut(entryPath: string) {
       ...currentArchiveTableSelectionState(),
       path: entryPath,
     }));
-    findActiveArchiveRow(entryPath)?.focus();
   }
 
   let password: string | undefined;
@@ -2149,10 +2126,6 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
         closeReactDialog();
         break;
       }
-      const modal = getOpenModal();
-      if (modal) {
-        closeModal(modal);
-      }
       publishReactSnapshot();
       break;
     }
@@ -2177,6 +2150,20 @@ function handleReactDesktopIntent(intent: ZManagerDesktopIntent) {
     case "dropChoice":
       activatePendingDropChoice(intent.choice);
       break;
+    case "windowControl":
+      if (intent.control === "minimize") {
+        minimizeAppWindow();
+      } else if (intent.control === "toggleMaximize") {
+        toggleAppWindowMaximize();
+      } else {
+        closeAppWindow();
+      }
+      break;
+    case "beginWindowResize":
+      if (useLinuxWindowChrome) {
+        void appWindowController.beginResizeDrag(intent.direction as AppWindowResizeDirection);
+      }
+      break;
   }
 }
 
@@ -2194,34 +2181,21 @@ function handleReactContextMenuIntent(intent: ZManagerContextMenuIntent) {
 function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
   switch (intent.type) {
     case "escape":
-      if (hasOpenMenu()) {
-        closeOpenMenus();
-        return;
-      }
-
       hideContextMenu();
       if (preferencesDialogDraft) {
         cancelReactPreferencesDialog();
       } else if (reactDialogSnapshot.kind !== "none") {
         closeReactDialog();
+      } else if (shellWorkspace.getSnapshot().jobDrawerOpen) {
+        closeJobDrawer();
       } else {
-        const openDialogElement = getOpenModal();
-        if (openDialogElement) closeModal(openDialogElement);
-        else if (shellWorkspace.getSnapshot().jobDrawerOpen) closeJobDrawer();
-        else clearBrowseSelection();
+        clearBrowseSelection();
       }
       break;
     case "focusSearch": {
       if (!archiveSnapshot().command.canSearchEntries) {
         setOperationalMessage("browse.noArchiveOpen");
-        return;
       }
-      const publicSearchInput = document.querySelector<HTMLInputElement>("#search-entries");
-      if (!publicSearchInput) {
-        return;
-      }
-      publicSearchInput.focus();
-      publicSearchInput.select();
       break;
     }
   }
@@ -2465,93 +2439,6 @@ function currentExtractDialogStripComponents(): number {
   return toNumberOrUndefined(activeExtractDialogForm.stripComponents) ?? 0;
 }
 
-function closeOpenMenus(exceptMenu?: HTMLDetailsElement) {
-  for (const menu of document.querySelectorAll<HTMLDetailsElement>(".menu[open]")) {
-    if (menu === exceptMenu) {
-      continue;
-    }
-    menu.open = false;
-  }
-}
-
-function hasOpenMenu(): boolean {
-  return document.querySelector(".menu[open]") !== null;
-}
-
-function openMenu(menu: HTMLDetailsElement) {
-  closeOpenMenus(menu);
-  menu.open = true;
-}
-
-function bindMenuBehavior() {
-  const menus = Array.from(document.querySelectorAll<HTMLDetailsElement>(".menu"));
-
-  function focusAdjacentMenu(currentMenu: HTMLDetailsElement, offset: -1 | 1) {
-    const index = menus.indexOf(currentMenu);
-    if (index === -1) {
-      return;
-    }
-
-    const nextMenu = menus[(index + offset + menus.length) % menus.length];
-    openMenu(nextMenu);
-    nextMenu.querySelector<HTMLElement>("summary")?.focus();
-  }
-
-  for (const menu of menus) {
-    const summary = menu.querySelector<HTMLElement>("summary");
-    if (!summary) {
-      continue;
-    }
-
-    menu.addEventListener("pointerenter", () => openMenu(menu));
-    menu.addEventListener("focusin", () => openMenu(menu));
-
-    menu.addEventListener("pointerleave", () => {
-      if (!menu.matches(":focus-within")) {
-        menu.open = false;
-      }
-    });
-
-    summary.addEventListener("click", (event) => {
-      event.preventDefault();
-      openMenu(menu);
-    });
-
-    menu.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        menu.open = false;
-        summary.focus();
-        return;
-      }
-
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        focusAdjacentMenu(menu, 1);
-        return;
-      }
-
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        focusAdjacentMenu(menu, -1);
-        return;
-      }
-
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        openMenu(menu);
-        menu.querySelector<HTMLButtonElement>(".menu-popover button:not(:disabled)")?.focus();
-      }
-    });
-
-    menu.addEventListener("toggle", () => {
-      if (menu.open) {
-        closeOpenMenus(menu);
-      }
-    });
-  }
-}
-
 async function openNativeDialog(options: NativeDialogOpenOptions) {
   return openRuntimeDialog(options, setOperationalStatus, {
     unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
@@ -2565,49 +2452,6 @@ async function saveNativeDialog(options: NativeDialogSaveOptions) {
     failed: message("nativeDialog.failed"),
   });
 }
-
-function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
-  if (dialog === extractDialog) {
-    const row = findActiveArchiveRow(archiveFocusedPath());
-    return row ?? extractToolbarButton;
-  }
-
-  return null;
-}
-
-function onModalClosed(dialog: HTMLElement) {
-  if (dialog === extractDialog) {
-    archiveWorkspace.clearPasswordRetry();
-  }
-}
-
-const modalController = createModalController({
-  dialogs: () => [extractDialog],
-  fallbackFocus: fallbackFocusForDialog,
-  ignoredReturnFocusRoots: () => [
-    contextMenu,
-    ...Array.from(document.querySelectorAll<HTMLElement>("#context-menu")),
-  ],
-  onClose: onModalClosed,
-});
-
-function getOpenModal(): HTMLElement | null {
-  return modalController.getOpenModal();
-}
-
-function isDefaultSafeDialogTextEntry(dialog: HTMLElement, target: HTMLElement): boolean {
-  return dialog === extractDialog &&
-    target instanceof HTMLInputElement &&
-    !["button", "checkbox", "radio", "reset", "submit"].includes(target.type);
-}
-
-const openModal = (dialog: HTMLElement, focusSelector = "button, input, select", returnFocusOverride: HTMLElement | null = null) => {
-  modalController.open(dialog, focusSelector, returnFocusOverride);
-};
-
-const closeModal = (dialog: HTMLElement) => {
-  modalController.close(dialog);
-};
 
 function setReactDialogSnapshot(snapshot: ZManagerDialogSnapshot) {
   reactDialogSnapshot = snapshot;
@@ -2624,12 +2468,6 @@ function closeReactDialog() {
     });
   }
   publishReactSnapshot();
-
-  if (previous.kind === "info") {
-    (findActiveArchiveRow(previous.returnFocusPath) ?? infoToolbarButton).focus();
-  } else if (previous.kind === "extract") {
-    findActiveArchiveRow(archiveFocusedPath())?.focus();
-  }
 }
 
 function buildReactExtractDialogSnapshot(
@@ -2701,16 +2539,6 @@ function extractDialogFormFromIntent(
     deduplicateRoot: input.deduplicateRoot,
     passwordPromptOpen: activeExtractDialogForm.passwordPromptOpen,
   });
-}
-
-function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
-  return modalController.activateDefault(event, dialog, {
-    isDefaultSafeTextEntry: isDefaultSafeDialogTextEntry,
-  });
-}
-
-function cancelDialog(event: KeyboardEvent, dialog: HTMLElement): boolean {
-  return modalController.cancel(event, dialog);
 }
 
 function isCreateSubmissionInFlight(): boolean {
@@ -2916,7 +2744,6 @@ function handleDropDecision(decision: DropIntentDecision, chosenAction?: "openAr
       break;
     case "askAction":
       setDropOverlayChoice(decision, dropCopyForDecision(decision));
-      document.querySelector<HTMLButtonElement>("#drop-open-archive")?.focus();
       break;
     case "rejectUnsupportedDrop":
       rejectDrop(decision.reason);
@@ -4183,50 +4010,6 @@ function handleInfoDialogAction(action?: string, copyValue?: string) {
   }
 }
 
-function bindDialogCloseButtons() {
-  document.querySelector<HTMLButtonElement>("#extract-dialog-close")!.addEventListener("click", () => closeModal(extractDialog));
-  document.querySelector<HTMLButtonElement>("#extract-cancel")!.addEventListener("click", () => closeModal(extractDialog));
-}
-
-function bindActions() {
-  windowMinimizeButton.addEventListener("click", minimizeAppWindow);
-  windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
-  windowCloseButton.addEventListener("click", closeAppWindow);
-  if (useLinuxWindowChrome) {
-    for (const handle of windowResizeHandleElements) {
-      handle.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) {
-          return;
-        }
-        const direction = handle.dataset.windowResizeDirection as AppWindowResizeDirection | undefined;
-        if (!direction) {
-          return;
-        }
-
-        event.preventDefault();
-        void appWindowController.beginResizeDrag(direction);
-      });
-    }
-  }
-
-  document.addEventListener("click", (event) => {
-    if (!(event.target instanceof HTMLElement)) {
-      return;
-    }
-    if (!event.target.closest(".context-menu")) {
-      hideContextMenu();
-    }
-    if (!event.target.closest(".menu")) {
-      closeOpenMenus();
-    }
-  });
-
-  document.addEventListener("focusin", (event) => modalController.keepFocusInsideOpenModal(event));
-}
-
-bindMenuBehavior();
-bindDialogCloseButtons();
-bindActions();
 privatizeLegacyExtractDialogIds();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();
@@ -4261,10 +4044,6 @@ if (isLocalDevHost()) {
       }
       if (preferencesDialogDraft) {
         cancelReactPreferencesDialog();
-      }
-      const openDialog = getOpenModal();
-      if (openDialog) {
-        closeModal(openDialog);
       }
       closeJobDrawer();
     },

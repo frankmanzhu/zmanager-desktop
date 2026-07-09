@@ -9,6 +9,8 @@ export function DialogRoot() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
 
+  useDialogFocusRestoration(snapshot.dialog, snapshot.archive.view.selection.focusedPath);
+
   useEffect(() => {
     if (snapshot.dialog.kind === "none" && !snapshot.preferencesDraft) {
       return;
@@ -47,6 +49,69 @@ export function DialogRoot() {
   }
 
   return null;
+}
+
+function useDialogFocusRestoration(dialog: ZManagerDialogSnapshot, archiveFocusedPath: string) {
+  const previousDialogRef = useRef<ZManagerDialogSnapshot>({ kind: "none" });
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const previousDialog = previousDialogRef.current;
+    if (previousDialog.kind === "none" && dialog.kind !== "none") {
+      const activeElement = document.activeElement;
+      returnFocusRef.current = activeElement instanceof HTMLElement
+        ? dialogReturnFocusElement(activeElement)
+        : null;
+    }
+
+    if (previousDialog.kind !== "none" && dialog.kind === "none") {
+      const returnFocusTarget = returnFocusRef.current;
+      returnFocusRef.current = null;
+      window.requestAnimationFrame(() => {
+        const target = focusableConnectedElement(returnFocusTarget)
+          ?? focusTargetForClosedDialog(previousDialog, archiveFocusedPath);
+        target?.focus();
+      });
+    }
+
+    previousDialogRef.current = dialog;
+  }, [archiveFocusedPath, dialog]);
+}
+
+function focusableConnectedElement(element: HTMLElement | null): HTMLElement | null {
+  return dialogReturnFocusElement(element);
+}
+
+function dialogReturnFocusElement(element: HTMLElement | null): HTMLElement | null {
+  if (!element?.isConnected) {
+    return null;
+  }
+
+  if (element.closest("[hidden], .context-menu")) {
+    return null;
+  }
+
+  return element;
+}
+
+function focusTargetForClosedDialog(dialog: ZManagerDialogSnapshot, archiveFocusedPath: string): HTMLElement | null {
+  if (dialog.kind === "info") {
+    return archiveRowElement(dialog.returnFocusPath) ?? document.querySelector<HTMLElement>("#info-toolbar");
+  }
+
+  if (dialog.kind === "extract") {
+    return archiveRowElement(archiveFocusedPath) ?? document.querySelector<HTMLElement>("#extract-toolbar");
+  }
+
+  return null;
+}
+
+function archiveRowElement(path: string): HTMLElement | null {
+  if (!path) {
+    return null;
+  }
+
+  return document.querySelector<HTMLElement>(`tr[data-entry-path="${CSS.escape(path)}"]`);
 }
 
 function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapshot, { kind: "info" }> }>) {

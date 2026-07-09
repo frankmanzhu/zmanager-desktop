@@ -81,6 +81,9 @@ export function ShellKeyboardShortcuts() {
           break;
         case "focusSearch":
           event.preventDefault();
+          if (snapshot.archive.command.canSearchEntries && focusArchiveSearchInput()) {
+            break;
+          }
           actions.handleKeyboardIntent({ type: "focusSearch" });
           break;
         case "command":
@@ -105,4 +108,15 @@ function isEditableTarget(target: EventTarget | null): boolean {
   }
   const tagName = target.tagName.toLowerCase();
   return tagName === "input" || tagName === "textarea" || tagName === "select" || target.isContentEditable;
+}
+
+function focusArchiveSearchInput(): boolean {
+  const searchInput = document.querySelector<HTMLInputElement>("#search-entries");
+  if (!searchInput) {
+    return false;
+  }
+
+  searchInput.focus();
+  searchInput.select();
+  return true;
 }

@@ -1,14 +1,23 @@
 import type { ReactNode } from "react";
 
-import { useZManagerSnapshot } from "../AppProviders";
-import type { ZManagerReactSnapshot } from "../appRuntime";
+import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
+import type { ZManagerReactSnapshot, ZManagerWindowResizeDirection } from "../appRuntime";
 import { CommandToolbar } from "./CommandToolbar";
 import { DropOverlay } from "./DropOverlay";
 import { MenuBar } from "./MenuBar";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
 
-const WINDOW_RESIZE_DIRECTIONS = ["North", "East", "South", "West", "NorthEast", "SouthEast", "SouthWest", "NorthWest"] as const;
+const WINDOW_RESIZE_DIRECTIONS = [
+  "North",
+  "East",
+  "South",
+  "West",
+  "NorthEast",
+  "SouthEast",
+  "SouthWest",
+  "NorthWest",
+] as const satisfies readonly ZManagerWindowResizeDirection[];
 
 export type AppFrameProps = Readonly<{
   children?: ReactNode;
@@ -49,6 +58,8 @@ function quickActionModeAttribute(snapshot: ZManagerReactSnapshot): string | und
 }
 
 function WindowResizeHandles() {
+  const actions = useZManagerActions();
+
   return (
     <>
       {WINDOW_RESIZE_DIRECTIONS.map((direction) => (
@@ -56,6 +67,14 @@ function WindowResizeHandles() {
           className={`window-resize-handle window-resize-handle-${direction.toLowerCase()}`}
           data-window-resize-direction={direction}
           aria-hidden="true"
+          onPointerDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            event.preventDefault();
+            actions.handleDesktopIntent({ type: "beginWindowResize", direction });
+          }}
           key={direction}
         />
       ))}
