@@ -68,10 +68,8 @@ export type QuickActionControllerOptions = Readonly<{
   applyCreateDefaultsForFormat(format: CreateArchiveFormat): void;
   setCreateOptions(patch: CreateWorkspaceOptionPatch): CreateWorkspaceSnapshot;
   setCreateDestinationPath(path: string): CreateWorkspaceSnapshot;
-  syncCreateSources(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
+  publishCreateSnapshot(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   cancelQueuedPlanRun(): void;
-  renderCreateSources(): void;
-  renderCompressBrowser(): void;
   runPlan(): Promise<void>;
   setCurrentArchivePath(archivePath: string): void;
   loadArchive(request: ListArchiveRequest): Promise<void>;
@@ -179,22 +177,21 @@ export function createQuickActionController(
     }
 
     options.showCreateWorkspace();
-    const sourceSnapshot = options.syncCreateSources(options.setCreateSources(sources));
+    const sourceSnapshot = options.publishCreateSnapshot(options.setCreateSources(sources));
     options.applyCreateDefaultsForFormat(format);
-    options.syncCreateSources(options.setCreateOptions({ cleanSource }));
-    options.syncCreateSources(options.setCreateDestinationPath(quickCreateDestination(
+    options.publishCreateSnapshot();
+    options.publishCreateSnapshot(options.setCreateOptions({ cleanSource }));
+    options.publishCreateSnapshot(options.setCreateDestinationPath(quickCreateDestination(
       [...sourceSnapshot.sources],
       format,
       options.preferences(),
       options.pathHelpers,
     )));
     options.cancelQueuedPlanRun();
-    options.renderCreateSources();
-    options.renderCompressBrowser();
 
     options.setOperationalMessage("quickCreate.planning");
     await options.runPlan();
-    const reviewSnapshot = options.syncCreateSources();
+    const reviewSnapshot = options.publishCreateSnapshot();
     if (reviewSnapshot.plan.state === "ready" && reviewSnapshot.plan.current !== null) {
       options.setOperationalMessage("quickCreate.review");
     } else {

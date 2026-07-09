@@ -77,16 +77,15 @@ function createReadyWorkspace() {
 function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
   const workspace = createReadyWorkspace();
   const calls = {
-    sync: 0,
-    renderPlanState: 0,
+    published: 0,
     started: [] as unknown[],
   };
   const startCreate = vi.fn(async () => startJobResponse());
 
   const controller = createCreateStartController({
     workspace,
-    syncSources(snapshot = workspace.getSnapshot()) {
-      calls.sync += 1;
+    publishSnapshot(snapshot) {
+      calls.published += 1;
       return snapshot;
     },
     isSubmissionInFlight() {
@@ -100,9 +99,6 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
       return error && typeof error === "object" && "code" in error
         ? error as CommandErrorDto
         : null;
-    },
-    renderPlanState() {
-      calls.renderPlanState += 1;
     },
     ...overrides,
   });
@@ -142,7 +138,7 @@ describe("create start controller", () => {
       },
     });
     expect(harness.workspace.getSnapshot().options.submissionInFlight).toBe(false);
-    expect(harness.calls.renderPlanState).toBe(2);
+    expect(harness.calls.published).toBe(3);
   });
 
   it("renders validation errors without starting create", async () => {
@@ -159,7 +155,7 @@ describe("create start controller", () => {
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       messageKey: "create.error.passwordMismatch",
     });
-    expect(harness.calls.renderPlanState).toBe(1);
+    expect(harness.calls.published).toBe(1);
   });
 
   it("uses explicit submit passwords from the call site", async () => {
@@ -192,7 +188,7 @@ describe("create start controller", () => {
       fallbackText: "Create failed",
     });
     expect(harness.workspace.getSnapshot().options.submissionInFlight).toBe(false);
-    expect(harness.calls.renderPlanState).toBe(3);
+    expect(harness.calls.published).toBe(4);
   });
 
   it("uses generic create error text for unknown API failures", async () => {
@@ -223,15 +219,14 @@ describe("create start controller", () => {
     });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
-    expect(harness.calls.sync).toBe(0);
-    expect(harness.calls.renderPlanState).toBe(0);
+    expect(harness.calls.published).toBe(0);
   });
 
   it("does nothing when there are no sources", async () => {
     const emptyWorkspace = createCreateWorkspace();
     const harness = createHarness({
       workspace: emptyWorkspace,
-      syncSources: () => emptyWorkspace.getSnapshot(),
+      publishSnapshot: (snapshot) => snapshot,
       isSubmissionInFlight: () => false,
     });
 
@@ -243,6 +238,6 @@ describe("create start controller", () => {
     });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
-    expect(harness.calls.renderPlanState).toBe(0);
+    expect(harness.calls.published).toBe(0);
   });
 });

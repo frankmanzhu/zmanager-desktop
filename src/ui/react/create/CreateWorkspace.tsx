@@ -327,7 +327,7 @@ function armCreateMarqueeSelectionGesture(input: Readonly<{
   armTableMarqueeSelectionGesture({
     event,
     tableBody,
-    selectedPaths: snapshot.createSelection.selectedPaths,
+    selectedPaths: snapshot.create.selection.selectedPaths,
     visiblePaths: createVisibleSelectablePaths(snapshot),
     rowSelector: "tr[data-compress-path]",
     rowPath: (row) => row.dataset.compressPath,
@@ -482,8 +482,8 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
   const data = row.rowType === "entry" ? row.entry : undefined;
   const path = row.path;
   const selectable = row.rowType !== "parent";
-  const selected = selectable && snapshot.createSelection.selectedPaths.includes(path);
-  const focused = selectable && snapshot.createSelection.focusedPath === path;
+  const selected = selectable && snapshot.create.selection.selectedPaths.includes(path);
+  const focused = selectable && snapshot.create.selection.focusedPath === path;
   const rowClassName = [
     isFolder ? "folder-row" : "",
     row.rowType === "parent" ? "parent-row" : "",

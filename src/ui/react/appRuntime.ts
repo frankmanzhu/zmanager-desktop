@@ -50,11 +50,6 @@ export type ZManagerRuntimeSnapshot = Readonly<{
   isDesktop: boolean;
 }>;
 
-export type ZManagerCreateSelectionSnapshot = Readonly<{
-  selectedPaths: readonly string[];
-  focusedPath: string;
-}>;
-
 export type ZManagerContextMenuSnapshot =
   | Readonly<{ visible: false; id: number }>
   | Readonly<{
@@ -72,7 +67,6 @@ export type ZManagerReactSnapshot = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
-  createSelection: ZManagerCreateSelectionSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons: Readonly<Record<string, string | null>>;
@@ -238,7 +232,6 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
-  createSelection?: ZManagerCreateSelectionSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons?: Readonly<Record<string, string | null>>;
@@ -287,10 +280,6 @@ export function createZManagerReactSnapshot(
     shell: input.shell,
     archive: input.archive,
     create: input.create,
-    createSelection: {
-      selectedPaths: [...(input.createSelection?.selectedPaths ?? [])],
-      focusedPath: input.createSelection?.focusedPath ?? "",
-    },
     jobs: input.jobs,
     quickActionProgress: input.quickActionProgress,
     systemIcons: { ...(input.systemIcons ?? {}) },

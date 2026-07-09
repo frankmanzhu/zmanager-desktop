@@ -72,15 +72,13 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     jobs: [] as unknown[],
     shownCreateWorkspace: 0,
     cancelledPlans: 0,
-    renderedSources: 0,
-    renderedBrowser: 0,
     currentArchives: [] as string[],
     loadedArchives: [] as string[],
     browseErrors: [] as string[],
     extractDialogs: [] as string[],
     promptedNewPasswords: 0,
     promptedRetryCodes: [] as string[],
-    syncedSnapshots: 0,
+    publishedSnapshots: 0,
   };
   const runStartCreate = vi.fn(async () => startJobResponse({ kind: "zipCreate" }));
   const runStartExtract = vi.fn(async () => startJobResponse({ kind: "zipExtract" }));
@@ -178,18 +176,12 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     setCreateDestinationPath(path) {
       return workspace.setDestinationPath(path).snapshot;
     },
-    syncCreateSources(snapshot = workspace.getSnapshot()) {
-      calls.syncedSnapshots += 1;
+    publishCreateSnapshot(snapshot = workspace.getSnapshot()) {
+      calls.publishedSnapshots += 1;
       return snapshot;
     },
     cancelQueuedPlanRun() {
       calls.cancelledPlans += 1;
-    },
-    renderCreateSources() {
-      calls.renderedSources += 1;
-    },
-    renderCompressBrowser() {
-      calls.renderedBrowser += 1;
     },
     async runPlan() {
       const planStart = workspace.beginPlan();
@@ -313,8 +305,7 @@ describe("quick action controller", () => {
       destinationPath: "C:/work/report.txt.tzst",
     });
     expect(harness.calls.cancelledPlans).toBe(1);
-    expect(harness.calls.renderedSources).toBe(1);
-    expect(harness.calls.renderedBrowser).toBe(1);
+    expect(harness.calls.publishedSnapshots).toBeGreaterThanOrEqual(4);
     expect(harness.calls.messages.map((call) => call.key)).toContain("quickCreate.planning");
     expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.review", params: undefined });
   });

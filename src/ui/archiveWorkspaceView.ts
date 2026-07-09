@@ -209,12 +209,12 @@ export type ArchiveWorkspaceModeChromeElements = {
   workspaceElement: HTMLElement;
   modeCompressButton: HTMLButtonElement;
   modeExtractButton: HTMLButtonElement;
-  compressSurfaceElement: HTMLElement;
+  compressSurfaceElement?: HTMLElement;
   tableShellElement: HTMLElement;
   refreshArchiveButton: HTMLElement;
   messageElement: HTMLElement;
   detailsElement: HTMLElement;
-  compressOptionsPanel: HTMLElement;
+  compressOptionsPanel?: HTMLElement;
   detailsPaneTitleElement: HTMLElement;
   workspaceTitleElement: HTMLElement;
   metaElement: HTMLElement;
@@ -259,9 +259,9 @@ export type ArchiveCommandControlState = {
 };
 
 type TreeRenderConfig = {
-  buttonPathAttribute: "data-tree-path" | "data-compress-folder-path";
-  toggleAttribute: "data-tree-toggle" | "data-compress-tree-toggle";
-  togglePathAttribute: "data-tree-path" | "data-compress-folder-path";
+  buttonPathAttribute: "data-tree-path";
+  toggleAttribute: "data-tree-toggle";
+  togglePathAttribute: "data-tree-path";
 };
 
 const SELECTION_COLUMN_WIDTH = 28;
@@ -271,12 +271,6 @@ const ARCHIVE_TREE_CONFIG: TreeRenderConfig = {
   buttonPathAttribute: "data-tree-path",
   toggleAttribute: "data-tree-toggle",
   togglePathAttribute: "data-tree-path",
-};
-
-const CREATE_TREE_CONFIG: TreeRenderConfig = {
-  buttonPathAttribute: "data-compress-folder-path",
-  toggleAttribute: "data-compress-tree-toggle",
-  togglePathAttribute: "data-compress-folder-path",
 };
 
 export function middleTruncateDetailValue(value: string, maxLength = 88): string {
@@ -304,13 +298,6 @@ export function renderArchiveNavigationTree(
   options: ArchiveWorkspaceTreeRenderOptions,
 ): void {
   elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, ARCHIVE_TREE_CONFIG);
-}
-
-export function renderCreateNavigationTree(
-  elements: ArchiveWorkspaceTreeElements,
-  options: ArchiveWorkspaceTreeRenderOptions,
-): void {
-  elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, CREATE_TREE_CONFIG);
 }
 
 export function renderArchivePathBar(
@@ -351,12 +338,16 @@ export function renderArchiveWorkspaceModeChrome(
   setActiveModeButton(elements.modeCompressButton, model.compressActive);
   setActiveModeButton(elements.modeExtractButton, model.extractActive);
 
-  elements.compressSurfaceElement.hidden = model.compressSurfaceHidden;
+  if (elements.compressSurfaceElement) {
+    elements.compressSurfaceElement.hidden = model.compressSurfaceHidden;
+  }
   elements.tableShellElement.hidden = model.tableShellHidden;
   elements.refreshArchiveButton.hidden = model.refreshArchiveHidden;
   elements.messageElement.hidden = model.messageHidden;
   elements.detailsElement.hidden = model.detailsHidden;
-  elements.compressOptionsPanel.hidden = model.compressOptionsHidden;
+  if (elements.compressOptionsPanel) {
+    elements.compressOptionsPanel.hidden = model.compressOptionsHidden;
+  }
   elements.detailsPaneTitleElement.textContent = model.detailsPaneTitle;
   elements.detailsPaneTitleElement.dataset.i18nText = model.detailsPaneTitleI18nKey;
   elements.workspaceTitleElement.textContent = model.workspaceTitle;

@@ -28,6 +28,16 @@ import {
   type CreatePlanRow,
   type CreatePathHelpers,
 } from "../createFlow";
+import {
+  applyHierarchicalRowSelectionIntent,
+  cleanupHierarchicalTableSelection,
+  clearHierarchicalTableSelection,
+  ensureHierarchicalTablePathSelected,
+  focusHierarchicalTablePath,
+  selectableHierarchicalRowPaths,
+  toggleHierarchicalTablePathSelection,
+  type HierarchicalTableSelectionResult,
+} from "../hierarchicalTable";
 import type { FormatCreateDefaults } from "../preferences";
 
 export type CreateWorkspacePlanMessageKey =
@@ -76,6 +86,15 @@ export type CreateWorkspacePlanViewSnapshot = Readonly<{
   treeFolders: readonly CreateWorkspaceTreeFolder[];
 }>;
 
+export type CreateWorkspaceSelectionSnapshot = Readonly<{
+  selectedPaths: readonly string[];
+  selectedCount: number;
+  focusedPath: string;
+  anchorPath: string;
+  visibleSelectablePaths: readonly string[];
+  visibleSelectedPaths: readonly string[];
+}>;
+
 export type CreateWorkspacePasswordOptionSnapshot = Readonly<{
   supportsPassword: boolean;
   visible: boolean;
@@ -117,6 +136,7 @@ export type CreateWorkspaceSnapshot = Readonly<{
   plan: CreateWorkspacePlanSnapshot;
   inclusion: CreateWorkspaceInclusionSnapshot;
   view: CreateWorkspacePlanViewSnapshot;
+  selection: CreateWorkspaceSelectionSnapshot;
   options: CreateWorkspaceOptionsSnapshot;
 }>;
 
@@ -246,6 +266,11 @@ export type CreateWorkspaceDestinationMutation = Readonly<{
   destinationPath: string;
 }>;
 
+export type CreateWorkspaceSelectionMutation = Readonly<{
+  snapshot: CreateWorkspaceSnapshot;
+  changed: boolean;
+}>;
+
 export type CreateWorkspaceIncludeAllControlState = Readonly<{
   checked: boolean;
   indeterminate: boolean;
@@ -291,6 +316,15 @@ export type CreateWorkspace = {
   clearSearch(): CreateWorkspaceSnapshot;
   toggleTreeFolder(folderPath: string): CreateWorkspaceNavigationMutation;
   setTreeFolderExpanded(folderPath: string, expanded: boolean): CreateWorkspaceNavigationMutation;
+  selectRow(
+    path: string,
+    modifiers?: Readonly<{ ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }>,
+  ): CreateWorkspaceSelectionMutation;
+  updateSelection(selection: HierarchicalTableSelectionResult): CreateWorkspaceSelectionMutation;
+  toggleRowSelection(path: string): CreateWorkspaceSelectionMutation;
+  focusRow(path: string): CreateWorkspaceSelectionMutation;
+  ensureRowSelected(path: string): CreateWorkspaceSelectionMutation;
+  clearSelection(): CreateWorkspaceSelectionMutation;
   setPathIncluded(path: string, included: boolean): CreateWorkspaceInclusionMutation;
   setAllPathsIncluded(included: boolean): CreateWorkspaceInclusionMutation;
   setCurrentFolderIncluded(folderPath: string | null | undefined, included: boolean): CreateWorkspaceInclusionMutation;
@@ -309,7 +343,14 @@ type MutableCreateWorkspaceState = {
   currentFolder: string;
   searchQuery: string;
   expandedTreeFolders: Set<string>;
+  selection: MutableCreateWorkspaceSelection;
   options: MutableCreateWorkspaceOptions;
+};
+
+type MutableCreateWorkspaceSelection = {
+  selectedPaths: string[];
+  focusedPath: string;
+  anchorPath: string;
 };
 
 type MutableCreateWorkspaceOptions = {
@@ -386,6 +427,7 @@ export function createCreateWorkspace(): CreateWorkspace {
     currentFolder: CREATE_PLAN_ROOT_PATH,
     searchQuery: "",
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+    selection: emptyCreateSelection(),
     options: cloneDefaultCreateOptions(),
   };
 
@@ -490,6 +532,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         currentFolder: CREATE_PLAN_ROOT_PATH,
         searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+        selection: emptyCreateSelection(),
         options: cloneDefaultCreateOptions(),
       };
       return mutationResult(state, true, [], removedSources);
@@ -573,6 +616,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         currentFolder: CREATE_PLAN_ROOT_PATH,
         searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+        selection: emptyCreateSelection(),
       };
       return Object.freeze({
         snapshot: snapshotFromState(state),
@@ -830,6 +874,7 @@ export function createCreateWorkspace(): CreateWorkspace {
           nextFolder,
         )),
       };
+      state = cleanupSelectionForState(state);
       return navigationMutationResult(state, true, true);
     },
 
@@ -842,6 +887,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         ...state,
         searchQuery: nextQuery,
       };
+      state = cleanupSelectionForState(state);
       return snapshotFromState(state);
     },
 
@@ -853,6 +899,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         ...state,
         searchQuery: "",
       };
+      state = cleanupSelectionForState(state);
       return snapshotFromState(state);
     },
 
@@ -908,6 +955,53 @@ export function createCreateWorkspace(): CreateWorkspace {
         };
       }
       return navigationMutationResult(state, true, changed);
+    },
+
+    selectRow(path, modifiers) {
+      const result = applyHierarchicalRowSelectionIntent({
+        path: normalizeCreateArchivePath(path),
+        visiblePaths: visibleSelectablePathsForState(state),
+        currentSelection: new Set(state.selection.selectedPaths),
+        anchorPath: state.selection.anchorPath,
+        ctrlKey: modifiers?.ctrlKey,
+        metaKey: modifiers?.metaKey,
+        shiftKey: modifiers?.shiftKey,
+      });
+      return applySelectionResult(result);
+    },
+
+    updateSelection(selection) {
+      return applySelectionResult(selection);
+    },
+
+    toggleRowSelection(path) {
+      return applySelectionResult(toggleHierarchicalTablePathSelection({
+        selectedPaths: new Set(state.selection.selectedPaths),
+        focusedPath: state.selection.focusedPath,
+        anchorPath: state.selection.anchorPath,
+        path: normalizeCreateArchivePath(path),
+      }));
+    },
+
+    focusRow(path) {
+      return applySelectionResult(focusHierarchicalTablePath({
+        selectedPaths: new Set(state.selection.selectedPaths),
+        focusedPath: state.selection.focusedPath,
+        anchorPath: state.selection.anchorPath,
+      }, normalizeCreateArchivePath(path)));
+    },
+
+    ensureRowSelected(path) {
+      return applySelectionResult(ensureHierarchicalTablePathSelected({
+        selectedPaths: new Set(state.selection.selectedPaths),
+        focusedPath: state.selection.focusedPath,
+        anchorPath: state.selection.anchorPath,
+        path: normalizeCreateArchivePath(path),
+      }));
+    },
+
+    clearSelection() {
+      return applySelectionResult(clearHierarchicalTableSelection());
     },
 
     setPathIncluded(path, included) {
@@ -997,6 +1091,24 @@ export function createCreateWorkspace(): CreateWorkspace {
       return includeAllControlState(state, path);
     },
   };
+
+  function applySelectionResult(selection: HierarchicalTableSelectionResult): CreateWorkspaceSelectionMutation {
+    const nextSelection = selectionFromResult(cleanupHierarchicalTableSelection({
+      selectedPaths: selection.selectedPaths,
+      focusedPath: selection.focusedPath,
+      anchorPath: selection.anchorPath,
+      visiblePaths: visibleSelectablePathsForState(state),
+      preserveHiddenSelection: false,
+    }));
+    const changed = !sameCreateSelection(state.selection, nextSelection);
+    if (changed) {
+      state = {
+        ...state,
+        selection: nextSelection,
+      };
+    }
+    return selectionMutationResult(state, changed);
+  }
 }
 
 function normalizeSourcePaths(paths: readonly unknown[]): string[] {
@@ -1022,6 +1134,14 @@ function normalizeSourcePaths(paths: readonly unknown[]): string[] {
 
 function cloneDefaultCreateOptions(): MutableCreateWorkspaceOptions {
   return { ...DEFAULT_CREATE_OPTIONS };
+}
+
+function emptyCreateSelection(): MutableCreateWorkspaceSelection {
+  return {
+    selectedPaths: [],
+    focusedPath: "",
+    anchorPath: "",
+  };
 }
 
 function applyDefaultsToOptions(
@@ -1180,6 +1300,7 @@ function isPlanInitial(state: MutableCreateWorkspaceState): boolean {
     state.currentFolder === CREATE_PLAN_ROOT_PATH &&
     state.searchQuery === "" &&
     sameStringSet(state.expandedTreeFolders, new Set([CREATE_PLAN_ROOT_PATH])) &&
+    sameCreateSelection(state.selection, emptyCreateSelection()) &&
     sameOptions(state.options, DEFAULT_CREATE_OPTIONS)
   );
 }
@@ -1194,6 +1315,7 @@ function resetPlanState(state: MutableCreateWorkspaceState): MutableCreateWorksp
     currentFolder: CREATE_PLAN_ROOT_PATH,
     searchQuery: "",
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+    selection: emptyCreateSelection(),
   };
 }
 
@@ -1212,6 +1334,7 @@ function beginQueuedPlanState(
       currentFolder: CREATE_PLAN_ROOT_PATH,
       searchQuery: "",
       expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+      selection: emptyCreateSelection(),
     };
   }
 
@@ -1221,6 +1344,7 @@ function beginQueuedPlanState(
     currentPlan: null,
     planStatus: freezePlanStatus({ messageKey: "create.plan.planning" }),
     planRevision: revision,
+    selection: emptyCreateSelection(),
   };
 }
 
@@ -1281,6 +1405,7 @@ function setPlanErrorState(
     currentFolder: nextView.currentFolder,
     searchQuery: nextView.searchQuery,
     expandedTreeFolders: nextView.expandedTreeFolders,
+    selection: state.currentPlan ? state.selection : emptyCreateSelection(),
   };
 }
 
@@ -1359,6 +1484,11 @@ function reconcileViewForPlan(state: MutableCreateWorkspaceState): MutableCreate
     ...state,
     currentFolder,
     expandedTreeFolders: new Set(expandedTreeFolders),
+    selection: cleanupSelectionForRows(state.selection, buildCreatePlanRows({
+      entries: state.currentPlan.planEntries,
+      currentFolder,
+      searchQuery: state.searchQuery,
+    })),
   };
 }
 
@@ -1613,6 +1743,84 @@ function freezeIncludeAllControlState(
   return Object.freeze({ ...state });
 }
 
+function visibleRowsForState(state: MutableCreateWorkspaceState): readonly CreatePlanRow[] {
+  return buildCreatePlanRows({
+    entries: state.currentPlan?.planEntries ?? [],
+    currentFolder: state.currentFolder,
+    searchQuery: state.searchQuery,
+  });
+}
+
+function visibleSelectablePathsForState(state: MutableCreateWorkspaceState): string[] {
+  return selectableHierarchicalRowPaths(visibleRowsForState(state));
+}
+
+function cleanupSelectionForState(state: MutableCreateWorkspaceState): MutableCreateWorkspaceState {
+  const selection = cleanupSelectionForRows(state.selection, visibleRowsForState(state));
+  if (sameCreateSelection(state.selection, selection)) {
+    return state;
+  }
+  return {
+    ...state,
+    selection,
+  };
+}
+
+function cleanupSelectionForRows(
+  selection: MutableCreateWorkspaceSelection,
+  rows: readonly CreatePlanRow[],
+): MutableCreateWorkspaceSelection {
+  return selectionFromResult(cleanupHierarchicalTableSelection({
+    selectedPaths: new Set(selection.selectedPaths),
+    focusedPath: selection.focusedPath,
+    anchorPath: selection.anchorPath,
+    visiblePaths: selectableHierarchicalRowPaths(rows),
+    preserveHiddenSelection: false,
+  }));
+}
+
+function selectionFromResult(
+  selection: HierarchicalTableSelectionResult,
+): MutableCreateWorkspaceSelection {
+  return {
+    selectedPaths: normalizeCreateSelectedPaths(selection.selectedPaths),
+    focusedPath: normalizeCreateArchivePath(selection.focusedPath),
+    anchorPath: normalizeCreateArchivePath(selection.anchorPath),
+  };
+}
+
+function normalizeCreateSelectedPaths(paths: Iterable<string>): string[] {
+  const normalized = new Set<string>();
+  for (const path of paths) {
+    const normalizedPath = normalizeCreateArchivePath(path);
+    if (normalizedPath) {
+      normalized.add(normalizedPath);
+    }
+  }
+  return [...normalized].sort((left, right) => left.localeCompare(right));
+}
+
+function sameCreateSelection(
+  left: MutableCreateWorkspaceSelection,
+  right: MutableCreateWorkspaceSelection,
+): boolean {
+  return (
+    sameOrderedSources(left.selectedPaths, right.selectedPaths) &&
+    left.focusedPath === right.focusedPath &&
+    left.anchorPath === right.anchorPath
+  );
+}
+
+function selectionMutationResult(
+  state: MutableCreateWorkspaceState,
+  changed: boolean,
+): CreateWorkspaceSelectionMutation {
+  return Object.freeze({
+    snapshot: snapshotFromState(state),
+    changed,
+  });
+}
+
 function mutationResult(
   state: MutableCreateWorkspaceState,
   changed: boolean,
@@ -1701,11 +1909,8 @@ function snapshotFromState(state: MutableCreateWorkspaceState): CreateWorkspaceS
     state.expandedTreeFolders,
     currentFolder,
   ));
-  const rows = freezeCreatePlanRows(buildCreatePlanRows({
-    entries: currentPlan?.planEntries ?? [],
-    currentFolder,
-    searchQuery,
-  }));
+  const rows = freezeCreatePlanRows(visibleRowsForState(state));
+  const selection = createSelectionSnapshot(state, rows);
   const view = Object.freeze({
     currentFolder,
     searchQuery,
@@ -1726,7 +1931,26 @@ function snapshotFromState(state: MutableCreateWorkspaceState): CreateWorkspaceS
     plan,
     inclusion,
     view,
+    selection,
     options,
+  });
+}
+
+function createSelectionSnapshot(
+  state: MutableCreateWorkspaceState,
+  rows: readonly CreatePlanRow[],
+): CreateWorkspaceSelectionSnapshot {
+  const visibleSelectablePaths = selectableHierarchicalRowPaths(rows);
+  const visiblePathSet = new Set(visibleSelectablePaths);
+  const selectedPaths = [...state.selection.selectedPaths];
+  const visibleSelectedPaths = selectedPaths.filter((path) => visiblePathSet.has(path));
+  return Object.freeze({
+    selectedPaths: Object.freeze(selectedPaths),
+    selectedCount: selectedPaths.length,
+    focusedPath: state.selection.focusedPath,
+    anchorPath: state.selection.anchorPath,
+    visibleSelectablePaths: Object.freeze(visibleSelectablePaths),
+    visibleSelectedPaths: Object.freeze(visibleSelectedPaths),
   });
 }
 

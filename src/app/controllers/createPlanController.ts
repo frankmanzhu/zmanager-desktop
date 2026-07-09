@@ -37,13 +37,7 @@ export type CreatePlanControllerOptions = Readonly<{
   workspace: CreatePlanControllerWorkspace;
   debounceTimer: CreatePlanDebounceTimer;
   runPlanCreate(request: PlanCreateRequest): Promise<CreatePlanResponse>;
-  syncSources(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
-  renderPlanState(): void;
-  renderPlanStatus(message: string): void;
-  renderCreateBrowser(): void;
-  refreshPlanSummary(): void;
-  planStatusText(status: CreateWorkspacePlanStatus | null): string;
-  translate(key: "create.plan.noSources" | "create.plan.planning"): string;
+  publishSnapshot(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   canUseBrowserPreview(): boolean;
   browserPreview(sources: readonly string[]): CreatePlanResponse;
   toCommandError(error: unknown): CreatePlanCommandError | null;
@@ -65,49 +59,26 @@ const DEFAULT_PLAN_OPTIONS: Partial<CreateWorkspacePlanOptions> = {
 export function createCreatePlanController(
   options: CreatePlanControllerOptions,
 ): CreatePlanController {
-  function renderNoSources(): void {
-    options.renderPlanState();
-    options.renderPlanStatus(options.translate("create.plan.noSources"));
-    options.renderCreateBrowser();
-  }
-
-  function renderPlanning(snapshot: CreateWorkspaceSnapshot): void {
-    options.renderPlanState();
-    options.renderPlanStatus(
-      options.planStatusText(snapshot.plan.status) || options.translate("create.plan.planning"),
-    );
-    options.renderCreateBrowser();
-  }
-
   function renderAcceptedPlan(acceptedPlan: CreateWorkspacePlanResultAcceptance): void {
     if (!acceptedPlan.accepted) {
       return;
     }
 
-    const snapshot = options.syncSources(acceptedPlan.snapshot);
+    const snapshot = options.publishSnapshot(acceptedPlan.snapshot);
     if (!snapshot.plan.current) {
       return;
     }
-
-    options.refreshPlanSummary();
-    options.renderPlanState();
-    options.renderCreateBrowser();
   }
 
   async function runPlan(revision?: number): Promise<void> {
     options.debounceTimer.cancel();
 
     const planStart = options.workspace.beginPlan(DEFAULT_PLAN_OPTIONS, revision);
-    const planStartSnapshot = options.syncSources(planStart.snapshot);
+    options.publishSnapshot(planStart.snapshot);
 
     if (!planStart.ready) {
-      if (planStart.reason === "needsSources") {
-        renderNoSources();
-      }
       return;
     }
-
-    renderPlanning(planStartSnapshot);
 
     if (options.canUseBrowserPreview()) {
       const result = options.browserPreview(planStart.request.sources);
@@ -127,10 +98,7 @@ export function createCreatePlanController(
         return;
       }
 
-      const errorSnapshot = options.syncSources(acceptedError.snapshot);
-      options.renderPlanState();
-      options.renderPlanStatus(options.planStatusText(errorSnapshot.plan.status));
-      options.renderCreateBrowser();
+      options.publishSnapshot(acceptedError.snapshot);
     }
   }
 
@@ -139,13 +107,10 @@ export function createCreatePlanController(
       options.debounceTimer.cancel();
 
       const queuedPlan = options.workspace.queuePlan();
-      const sourceSnapshot = options.syncSources(queuedPlan.snapshot);
-      if (sourceSnapshot.isEmpty) {
-        renderNoSources();
+      options.publishSnapshot(queuedPlan.snapshot);
+      if (queuedPlan.snapshot.isEmpty) {
         return;
       }
-
-      renderPlanning(sourceSnapshot);
       options.debounceTimer.schedule(() => {
         void runPlan(queuedPlan.revision);
       });

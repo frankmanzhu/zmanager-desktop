@@ -127,7 +127,6 @@ import {
   renderArchivePathBar,
   renderArchiveWorkspaceModeChrome,
   renderArchiveWorkspaceTable,
-  renderCreateNavigationTree,
   syncArchiveVisibleSelection,
   type ArchiveDetailsModel,
   type ArchivePathBarModel,
@@ -166,11 +165,7 @@ import {
 import {
   CREATE_ARCHIVE_FILTERS,
   getArchiveName,
-  TZAP_RECOVERY_PERCENTAGE_DEFAULT,
-  TZAP_RECOVERY_PERCENTAGE_MAX,
-  TZAP_RECOVERY_PERCENTAGE_MIN,
   sourcePathForCreatePlanRow,
-  type CreateArchiveUnavailableReason,
   type CreateArchiveFormat,
   type CreatePlanRow,
 } from "./app/createFlow";
@@ -344,26 +339,6 @@ import {
   type AppWindowResizeDirection,
 } from "./desktop/windowController";
 import {
-  bindCreateSourceListActions,
-  findCompressSourceRowByPath,
-  focusFirstCompressSourceRow,
-  getCompressSourceRows,
-  getCompressSourceSelectableRows,
-  readCompressIncludeAllChecked,
-  readCreateOptionControlPatch,
-  renderCompressIncludeAllControl,
-  renderCreateActionState,
-  renderCompressSourceTable,
-  renderCreateDestinationHistory as renderCreateDestinationHistoryView,
-  renderCreateOptionControls,
-  renderCreatePlanStatus,
-  renderCreatePlanSummary,
-  renderCreateSourceList,
-  syncCompressSourceInclusionControls,
-  syncCompressSourceSelectionUi,
-  type CompressSourceTableRowModel,
-} from "./ui/createWorkspaceView";
-import {
   createModalController,
 } from "./ui/modalController";
 type BrowserRow = ArchiveTableRow;
@@ -520,33 +495,6 @@ appRoot.innerHTML = `
     </section>
 
     <section class="browser-shell" data-i18n-aria-label="workspace.archiveWorkspace.aria" aria-label="Archive workspace">
-      <div class="compress-create-panel" data-i18n-aria-label="compress.createArchive.aria" aria-label="Create archive">
-        <div class="compress-create-row">
-          <label class="compress-destination-field">
-            <span data-i18n-text="compress.destination">Destination</span>
-            <div class="inline-field">
-              <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" list="create-destination-history" />
-              <button id="browse-create-destination" type="button" data-i18n-text="common.browse" data-i18n-title="create.destination.browse.title" title="Browse for archive path">Browse...</button>
-              <select id="create-destination-recent" class="recent-location-select" data-i18n-aria-label="create.destination.recent.aria" data-i18n-title="create.destination.recent.title" aria-label="Recent destinations" title="Recent destinations" disabled>
-                <option value="" data-i18n-text="create.destination.recent">Recent</option>
-              </select>
-            </div>
-            <datalist id="create-destination-history"></datalist>
-          </label>
-          <div class="compress-create-actions">
-            <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
-            <button id="include-all-sources" class="quiet-action" type="button" data-i18n-text="compress.includeAll" hidden>Include All</button>
-            <button id="exclude-all-sources" class="quiet-action" type="button" data-i18n-text="compress.excludeAll" hidden>Exclude All</button>
-            <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources" hidden>Clear All Sources</button>
-            <span class="compress-action-divider" aria-hidden="true"></span>
-            <button id="start-create" class="secondary-action" type="button" data-i18n-text="compress.createArchive" aria-describedby="create-plan-meta" disabled>Create Archive</button>
-          </div>
-        </div>
-        <div class="compress-plan-row">
-          <p id="create-plan-meta" data-i18n-text="compress.dropSourcesHint">Drop files or folders here, or add sources from disk.</p>
-        </div>
-      </div>
-
       <aside id="navigation-pane" class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
         <div class="pane-header">
           <h2 data-i18n-text="pane.folders">Folders</h2>
@@ -576,33 +524,6 @@ appRoot.innerHTML = `
           <button id="refresh-archive" class="quiet-action" type="button" data-command-id="refresh" data-i18n-text="common.refresh" disabled>Refresh</button>
         </div>
         <p id="browse-message" class="status status-idle" data-i18n-text="browse.statusIdle">No archive selected.</p>
-        <div id="compress-surface" class="compress-surface" hidden>
-          <div class="compress-table-shell">
-            <table id="compress-source-table">
-              <thead>
-                <tr>
-                  <th class="inclusion-column">
-                    <input id="compress-include-all" type="checkbox" data-i18n-aria-label="compress.includeAll" aria-label="Include All" disabled />
-                  </th>
-                  <th data-compress-column-id="name" data-i18n-text="table.name">Name<span class="column-resizer" data-column-resizer="name" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="size" data-i18n-text="table.size">Size<span class="column-resizer" data-column-resizer="size" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="modified" data-i18n-text="table.modified">Modified<span class="column-resizer" data-column-resizer="modified" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="kind" data-i18n-text="table.kind">Kind<span class="column-resizer" data-column-resizer="kind" aria-hidden="true"></span></th>
-                </tr>
-              </thead>
-              <tbody id="compress-source-body">
-                <tr>
-                  <td colspan="5" class="compress-empty-cell">
-                    <div class="compress-empty-state">
-                      <strong data-i18n-text="compress.emptyTable">Drop files or folders to build a new archive.</strong>
-                      <span data-i18n-text="compress.dragSourcesHint">Drag files or folders anywhere in this window, or use Add Sources.</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
         <div class="table-shell" tabindex="0">
           <div id="marquee-hit-surface" class="marquee-hit-surface" aria-hidden="true"></div>
           <div id="archive-empty-state" class="archive-empty-state" hidden>
@@ -655,79 +576,6 @@ appRoot.innerHTML = `
           <h2 id="details-pane-title" data-i18n-text="pane.details">Details</h2>
         </div>
         <div id="details-content" class="details-content"></div>
-        <details id="compress-options-panel" class="compress-options-panel" hidden>
-          <summary class="compress-options-summary">
-            <span class="compress-options-summary-title" data-i18n-text="create.options.title">Archive Options</span>
-            <span class="compress-options-summary-description" data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</span>
-          </summary>
-          <div class="compress-options-intro">
-            <h3 data-i18n-text="create.options.title">Archive Options</h3>
-            <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
-          </div>
-          <div class="plan-header">
-            <div>
-              <h3 data-i18n-text="create.plan.title">Plan</h3>
-              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
-            </div>
-          </div>
-          <div id="create-plan-summary" class="summary-card">
-            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
-          </div>
-          <ul id="source-list" class="list-box" hidden></ul>
-          <div class="form-grid create-options-grid">
-            <label>
-              <span data-i18n-text="create.archiveFormat">Archive format</span>
-              <select id="create-format">
-                <option value="zip">ZIP</option>
-                <option value="tarZst">TZST</option>
-                <option value="tzap">TZAP</option>
-                <option value="sevenZ">7Z</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.compressionLevel">Compression level</span>
-              <select id="create-compression-level">
-                <option value="" data-i18n-text="create.compression.normal">Normal</option>
-                <option value="0" data-i18n-text="common.store">Store</option>
-                <option value="1" data-i18n-text="common.fastest">Fastest</option>
-                <option value="3" data-i18n-text="common.fast">Fast</option>
-                <option value="9" data-i18n-text="common.maximum">Maximum</option>
-                <option value="22" data-i18n-text="common.ultra">Ultra</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.splitVolumes">Split to volumes, bytes</span>
-              <input id="create-volume" type="number" min="0" data-i18n-placeholder="common.optional" placeholder="Optional" />
-            </label>
-            <label id="create-tzap-recovery-field" hidden>
-              <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
-              <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
-            </label>
-          </div>
-          <div class="toggle-grid">
-            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
-            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
-            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
-            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> <span data-i18n-text="create.respectGitignore">Respect .gitignore</span></label>
-          </div>
-          <details class="advanced-options">
-            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
-            <div id="create-password-options" class="form-grid form-grid-compact">
-              <label>
-                <span data-i18n-text="create.enterPassword">Enter password</span>
-                <input id="create-password" type="password" autocomplete="off" />
-              </label>
-              <label>
-                <span data-i18n-text="create.reenterPassword">Reenter password</span>
-                <input id="create-password-confirm" type="password" autocomplete="off" />
-              </label>
-              <label class="checkbox-row">
-                <input id="create-show-password" type="checkbox" />
-                <span data-i18n-text="extract.showPassword">Show Password</span>
-              </label>
-            </div>
-          </details>
-        </details>
       </aside>
     </section>
     <div id="legacy-context-menu" class="context-menu" role="menu" hidden></div>
@@ -843,8 +691,6 @@ const paneResizerElements = document.querySelectorAll<HTMLElement>("[data-pane-r
 const detailsPaneTitleElement = document.querySelector<HTMLHeadingElement>("#details-pane-title")!;
 const treeContentElement = document.querySelector<HTMLDivElement>("#tree-content")!;
 const detailsElement = document.querySelector<HTMLDivElement>("#details-content")!;
-const compressOptionsPanel = document.querySelector<HTMLDetailsElement>("#compress-options-panel")!;
-const compactCompressOptionsQuery = window.matchMedia("(max-width: 1100px), (max-height: 640px)");
 
 const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
@@ -860,10 +706,6 @@ const clearSearchButton = document.querySelector<HTMLButtonElement>("#clear-sear
 const searchCountElement = document.querySelector<HTMLOutputElement>("#search-count")!;
 const workspaceTitleElement = document.querySelector<HTMLHeadingElement>("#workspace-title")!;
 const messageElement = document.querySelector<HTMLParagraphElement>("#browse-message")!;
-const compressSurfaceElement = document.querySelector<HTMLDivElement>("#compress-surface")!;
-const compressSourceBody = document.querySelector<HTMLTableSectionElement>("#compress-source-body")!;
-const compressSourceTable = document.querySelector<HTMLTableElement>("#compress-source-table")!;
-const compressIncludeAllInput = document.querySelector<HTMLInputElement>("#compress-include-all")!;
 const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-head")!;
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
@@ -886,68 +728,6 @@ const legacyArchiveSurfaceClassEntries: ReadonlyArray<readonly [HTMLElement, str
 ];
 
 const extractDialog = document.querySelector<HTMLDivElement>("#extract-dialog")!;
-
-const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
-const includeAllSourcesButton = document.querySelector<HTMLButtonElement>("#include-all-sources")!;
-const excludeAllSourcesButton = document.querySelector<HTMLButtonElement>("#exclude-all-sources")!;
-const clearSourcesButton = document.querySelector<HTMLButtonElement>("#clear-sources")!;
-const sourceListElement = document.querySelector<HTMLUListElement>("#source-list")!;
-const createFormatSelect = document.querySelector<HTMLSelectElement>("#create-format")!;
-const createDestinationInput = document.querySelector<HTMLInputElement>("#create-destination")!;
-const createDestinationHistoryList = document.querySelector<HTMLDataListElement>("#create-destination-history")!;
-const createDestinationRecentSelect = document.querySelector<HTMLSelectElement>("#create-destination-recent")!;
-const browseCreateDestinationButton = document.querySelector<HTMLButtonElement>("#browse-create-destination")!;
-const createCleanSourceCheckbox = document.querySelector<HTMLInputElement>("#create-clean-source")!;
-const createPreserveMetadataCheckbox = document.querySelector<HTMLInputElement>("#create-preserve-metadata")!;
-const createReplaceExistingCheckbox = document.querySelector<HTMLInputElement>("#create-replace-existing")!;
-const createRespectGitignoreCheckbox = document.querySelector<HTMLInputElement>("#create-respect-gitignore")!;
-const createPasswordInput = document.querySelector<HTMLInputElement>("#create-password")!;
-const createPasswordConfirmInput = document.querySelector<HTMLInputElement>("#create-password-confirm")!;
-const createShowPasswordInput = document.querySelector<HTMLInputElement>("#create-show-password")!;
-const createPasswordOptions = document.querySelector<HTMLDivElement>("#create-password-options")!;
-const createCompressionInput = document.querySelector<HTMLSelectElement>("#create-compression-level")!;
-const createVolumeInput = document.querySelector<HTMLInputElement>("#create-volume")!;
-const createTzapRecoveryField = document.querySelector<HTMLLabelElement>("#create-tzap-recovery-field")!;
-const createTzapRecoveryInput = document.querySelector<HTMLInputElement>("#create-tzap-recovery")!;
-const createPlanMeta = document.querySelector<HTMLParagraphElement>("#create-plan-meta")!;
-const createPlanSummary = document.querySelector<HTMLDivElement>("#create-plan-summary")!;
-const startCreateButton = document.querySelector<HTMLButtonElement>("#start-create")!;
-const createSourceListViewElements = {
-  sourceListElement,
-  clearSourcesButton,
-  includeAllSourcesButton,
-  excludeAllSourcesButton,
-};
-const createActionStateViewElements = {
-  addSourceButton,
-  startCreateButton,
-  createPlanMeta,
-};
-const createPlanSummaryViewElements = {
-  createPlanSummary,
-};
-const createDestinationHistoryViewElements = {
-  createDestinationHistoryList,
-  createDestinationRecentSelect,
-};
-const compressIncludeAllControlViewElements = {
-  compressIncludeAllInput,
-};
-const compressSourceTableViewElements = {
-  compressSourceBody,
-};
-const createOptionControlViewElements = {
-  createFormatSelect,
-  createCleanSourceCheckbox,
-  createPreserveMetadataCheckbox,
-  createReplaceExistingCheckbox,
-  createRespectGitignoreCheckbox,
-  createCompressionInput,
-  createVolumeInput,
-  createTzapRecoveryField,
-  createTzapRecoveryInput,
-  createPasswordOptions,
-};
 
 const contextMenu = document.querySelector<HTMLDivElement>("#legacy-context-menu")!;
 
@@ -1027,50 +807,6 @@ function privatizeLegacyExtractDialogIds() {
   }
 }
 
-function privatizeLegacyCreateWorkspaceIds() {
-  const publicCreateIds = [
-    "create-destination",
-    "browse-create-destination",
-    "create-destination-recent",
-    "create-destination-history",
-    "add-source",
-    "include-all-sources",
-    "exclude-all-sources",
-    "clear-sources",
-    "start-create",
-    "create-plan-meta",
-    "compress-surface",
-    "compress-source-table",
-    "compress-source-body",
-    "compress-include-all",
-    "source-list",
-    "compress-options-panel",
-    "create-plan-summary",
-    "create-format",
-    "create-clean-source",
-    "create-preserve-metadata",
-    "create-replace-existing",
-    "create-respect-gitignore",
-    "create-password",
-    "create-password-confirm",
-    "create-show-password",
-    "create-password-options",
-    "create-compression-level",
-    "create-volume",
-    "create-tzap-recovery-field",
-    "create-tzap-recovery",
-  ];
-
-  for (const id of publicCreateIds) {
-    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-}
-
 function syncLegacyArchiveSurfaceOwnership() {
   const showLegacyArchiveSurface = false;
 
@@ -1127,7 +863,6 @@ let browseState: BrowseState = initialArchiveWorkspaceSnapshot.browseState;
 let browseError = "";
 let browseEntries: ArchiveEntryDto[] = [...initialArchiveWorkspaceSnapshot.entries];
 let selectedEntries = new Set<string>();
-let selectedCompressRows = new Set<string>();
 let navigationHistory: string[] = [...initialArchiveWorkspaceSnapshot.view.navigationHistory];
 let displayContext = createDisplayContext(appPreferences.locale);
 let preferencesDialogDraft: AppPreferences | null = null;
@@ -1143,8 +878,6 @@ let sortAscending = initialArchiveWorkspaceSnapshot.view.sort.ascending;
 let isFlatView = initialArchiveWorkspaceSnapshot.view.flatView;
 let focusedEntryPath = "";
 let selectionAnchorPath = "";
-let focusedCompressRowPath = "";
-let compressSelectionAnchorPath = "";
 let activeExtractMode: ExtractMode = "archive";
 let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogFormSnapshot();
 let activeExtractDialogMessage = "";
@@ -1180,28 +913,17 @@ const createPlanController = createCreatePlanController({
   workspace: createWorkspace,
   debounceTimer: createPlanDebounce,
   runPlanCreate,
-  syncSources: syncCreateSourcesFromWorkspace,
-  renderPlanState: setCreatePlanState,
-  renderPlanStatus: (text) => {
-    renderCreatePlanStatus(createPlanSummaryViewElements, {
-      message: text,
-    });
-  },
-  renderCreateBrowser: renderCompressBrowser,
-  refreshPlanSummary: refreshCreatePlanSummary,
-  planStatusText: createPlanStatusText,
-  translate: (key) => displayContext.translator.t(key),
+  publishSnapshot: publishCreateWorkspaceSnapshot,
   canUseBrowserPreview: canUseBrowserCreatePlanPreview,
   browserPreview: (sources) => browserCreatePlanPreview([...sources]),
   toCommandError: asCommandError,
 });
 const createStartController = createCreateStartController({
   workspace: createWorkspace,
-  syncSources: syncCreateSourcesFromWorkspace,
+  publishSnapshot: publishCreateWorkspaceSnapshot,
   isSubmissionInFlight: isCreateSubmissionInFlight,
   startCreate: runStartCreate,
   onCreateStarted: (response, request) => {
-    clearCreatePasswordFields();
     recordCreateDestinationHistory(request.destinationPath);
     addJobState(response, {
       focusProgress: true,
@@ -1211,7 +933,6 @@ const createStartController = createCreateStartController({
     });
   },
   toCommandError: asCommandError,
-  renderPlanState: setCreatePlanState,
 });
 const jobPollingController = createJobPollingController({
   workspace: jobsWorkspace,
@@ -1257,7 +978,7 @@ const archiveLoadController = createArchiveLoadController({
 const archiveOpenController = createArchiveOpenController({
   pathHistoryStore,
   renderExtractDestinationHistory: () => renderExtractDestinationHistory(),
-  renderCreateDestinationHistory: () => renderCreateDestinationHistory(),
+  renderCreateDestinationHistory: () => publishReactSnapshot(),
   openArchiveDialogOptions: () => ({
     title: displayContext.translator.t("nativeDialog.openArchive"),
     directory: false,
@@ -1428,10 +1149,8 @@ const quickActionController = createQuickActionController({
   applyCreateDefaultsForFormat,
   setCreateOptions: (patch) => createWorkspace.setOptions(patch).snapshot,
   setCreateDestinationPath: (path) => createWorkspace.setDestinationPath(path).snapshot,
-  syncCreateSources: syncCreateSourcesFromWorkspace,
+  publishCreateSnapshot: publishCreateWorkspaceSnapshot,
   cancelQueuedPlanRun,
-  renderCreateSources,
-  renderCompressBrowser,
   runPlan,
   setCurrentArchivePath: (archivePath) => {
     currentArchivePath = archivePath;
@@ -1583,19 +1302,11 @@ function renderNormalWorkspaceOnce() {
     return;
   }
 
-  syncCompressOptionsPanelDisclosure();
   renderExtractDestinationHistory();
-  renderCreateDestinationHistory();
-  renderCreateSources();
-  renderCompressBrowser();
   renderBrowse();
   renderJobs();
   normalWorkspaceRendered = true;
   publishReactSnapshot();
-}
-
-function syncCompressOptionsPanelDisclosure() {
-  compressOptionsPanel.open = !compactCompressOptionsQuery.matches;
 }
 
 async function revealNormalAppWindow() {
@@ -1738,9 +1449,6 @@ function applyPreferenceClasses() {
   entryTable.classList.toggle("show-grid", appPreferences.showGridLines);
   entryTable.classList.toggle("full-row-select", appPreferences.fullRowSelect);
   entryTable.classList.toggle("single-click-open", appPreferences.singleClickOpen);
-  compressSourceTable.classList.toggle("show-grid", appPreferences.showGridLines);
-  compressSourceTable.classList.toggle("full-row-select", appPreferences.fullRowSelect);
-  compressSourceTable.classList.toggle("single-click-open", appPreferences.singleClickOpen);
 }
 
 function formatBytes(value?: number): string {
@@ -2031,38 +1739,18 @@ function createPlanStatusText(status: CreateWorkspacePlanStatus | null): string 
 function syncCreateSourcesFromWorkspace(
   snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
 ): CreateWorkspaceSnapshot {
-  syncCreateOptionControls(snapshot);
+  return snapshot;
+}
+
+function publishCreateWorkspaceSnapshot(
+  snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
+): CreateWorkspaceSnapshot {
+  publishReactSnapshot();
   return snapshot;
 }
 
 function suggestedCreateArchiveName(sources = createWorkspace.getSnapshot().sources): string {
   return createWorkspace.suggestedArchiveName(sources);
-}
-
-function syncCreateOptionControls(snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot()) {
-  const options = snapshot.options;
-  if (createDestinationInput.value !== options.destinationPath) {
-    createDestinationInput.value = options.destinationPath;
-  }
-  renderCreateOptionControls(createOptionControlViewElements, {
-    format: options.format,
-    cleanSource: options.cleanSource,
-    preserveMetadata: options.preserveMetadata,
-    replaceExisting: options.replaceExisting,
-    respectGitignore: options.respectGitignore,
-    compressionLevel: options.compressionLevel,
-    volumeSize: options.volumeSize,
-    tzapRecoveryPercentage: options.tzapRecoveryPercentage,
-    tzapRecoveryVisible: options.tzapRecovery.visible,
-    tzapRecoveryDisabled: options.tzapRecovery.disabled,
-    passwordVisible: options.password.visible,
-  });
-  createPasswordInput.disabled = options.password.disabled;
-  createPasswordConfirmInput.disabled = options.password.disabled;
-  createShowPasswordInput.disabled = options.password.disabled;
-  if (!options.password.supportsPassword) {
-    clearCreatePasswordFields();
-  }
 }
 
 function createDestinationSuggestionOptions() {
@@ -2583,10 +2271,6 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
-    createSelection: {
-      selectedPaths: Array.from(selectedCompressRows),
-      focusedPath: focusedCompressRowPath,
-    },
     jobs: jobsWorkspace.getJobListSnapshot(nowMs),
     quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     systemIcons: Object.fromEntries(systemIconDataUrls),
@@ -2784,110 +2468,74 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
       break;
     case "setDestinationPath":
-      syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(intent.destinationPath).snapshot);
-      refreshCreateStateAfterDestinationEdit();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPath(intent.destinationPath).snapshot);
       break;
     case "browseDestination":
       void onSelectCreateDestination();
       break;
     case "changeFormat": {
       const defaults = createDefaultsForFormat(appPreferences, intent.format);
-      syncCreateSourcesFromWorkspace(createWorkspace.changeFormat(intent.format, defaults).snapshot);
-      clearCreatePasswordFields();
-      setCreatePlanState();
+      publishCreateWorkspaceSnapshot(createWorkspace.changeFormat(intent.format, defaults).snapshot);
       queuePlanRun();
-      publishReactSnapshot();
       break;
     }
     case "setOptions":
-      syncCreateSourcesFromWorkspace(createWorkspace.setOptions(intent.patch).snapshot);
-      setCreatePlanState();
+      publishCreateWorkspaceSnapshot(createWorkspace.setOptions(intent.patch).snapshot);
       queuePlanRun();
-      publishReactSnapshot();
       break;
     case "navigateToFolder": {
       const navigation = createWorkspace.navigateToFolder(intent.folderPath);
       if (navigation.changed) {
-        syncCreateSourcesFromWorkspace(navigation.snapshot);
-        renderCompressBrowser();
+        publishCreateWorkspaceSnapshot(navigation.snapshot);
+      } else {
+        publishReactSnapshot();
       }
-      publishReactSnapshot();
       break;
     }
     case "setSearchQuery":
-      syncCreateSourcesFromWorkspace(createWorkspace.setSearchQuery(intent.query));
-      renderCompressBrowser();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.setSearchQuery(intent.query));
       break;
     case "clearSearch":
-      syncCreateSourcesFromWorkspace(createWorkspace.clearSearch());
-      renderCompressBrowser();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.clearSearch());
       break;
     case "toggleTreeFolder": {
       const navigation = createWorkspace.toggleTreeFolder(intent.folderPath);
       if (navigation.changed) {
-        syncCreateSourcesFromWorkspace(navigation.snapshot);
-        renderCompressSourceTree();
+        publishCreateWorkspaceSnapshot(navigation.snapshot);
+      } else {
+        publishReactSnapshot();
       }
-      publishReactSnapshot();
       break;
     }
     case "setPathIncluded":
-      setCompressPathIncluded(intent.path, intent.included);
-      refreshCreatePlanSummary();
-      renderCreateSources();
-      renderCompressBrowser();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.setPathIncluded(intent.path, intent.included).snapshot);
       break;
     case "setAllIncluded":
-      setAllCompressPathsIncluded(intent.included);
-      refreshCreatePlanSummary();
-      renderCreateSources();
-      renderCompressBrowser();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.setAllPathsIncluded(intent.included).snapshot);
       break;
     case "setCurrentFolderIncluded":
-      setCurrentCompressFolderIncluded(intent.included);
-      refreshCreatePlanSummary();
-      renderCreateSources();
-      renderCompressBrowser();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(
+        createWorkspace.setCurrentFolderIncluded(
+          createWorkspace.getSnapshot().view.currentFolder,
+          intent.included,
+        ).snapshot,
+      );
       break;
     case "selectRow":
-      updateCompressSelectionByIntent(intent.path, {
-        ctrl: intent.ctrlKey,
-        meta: intent.metaKey,
-        shift: intent.shiftKey,
-      });
-      syncCompressSelectionUi();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.selectRow(intent.path, intent).snapshot);
       break;
     case "applySelection":
-      applyCompressTableSelection({
+      publishCreateWorkspaceSnapshot(createWorkspace.updateSelection({
         selectedPaths: new Set(intent.selectedPaths),
         focusedPath: intent.focusedPath,
         anchorPath: intent.anchorPath,
-      });
-      syncCompressSelectionUi();
-      publishReactSnapshot();
+      }).snapshot);
       break;
     case "toggleRowSelection":
-      applyCompressTableSelection(toggleHierarchicalTablePathSelection({
-        ...currentCompressTableSelectionState(),
-        path: intent.path,
-      }));
-      syncCompressSelectionUi();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.toggleRowSelection(intent.path).snapshot);
       break;
     case "focusRow":
-      applyCompressTableSelection(focusHierarchicalTablePath(
-        currentCompressTableSelectionState(),
-        intent.path,
-      ));
-      syncCompressSelectionUi();
-      publishReactSnapshot();
+      publishCreateWorkspaceSnapshot(createWorkspace.focusRow(intent.path).snapshot);
       break;
     case "removeSelectedSources": {
       const selectedSourcePaths = selectedCompressSourcePaths();
@@ -2903,16 +2551,11 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       break;
     }
     case "showCompressRowContextMenu": {
-      const row = findCompressSourceRowByPath(compressSourceTableViewElements, intent.path);
-      if (row) {
-        if (!selectedCompressRows.has(intent.path)) {
-          applyCompressTableSelection(ensureHierarchicalTablePathSelected({
-            ...currentCompressTableSelectionState(),
-            path: intent.path,
-          }));
-          syncCompressSelectionUi();
+      if (visibleCompressRowForPath(intent.path)) {
+        if (!createWorkspace.getSnapshot().selection.selectedPaths.includes(intent.path)) {
+          publishCreateWorkspaceSnapshot(createWorkspace.ensureRowSelected(intent.path).snapshot);
         }
-        showCompressRowContextMenu(row, intent.x, intent.y);
+        showCompressRowContextMenuForPath(intent.path, intent.sourcePath ?? "", intent.x, intent.y);
       } else if (intent.sourcePath) {
         showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
       }
@@ -3150,9 +2793,6 @@ function renderWorkspaceMode() {
   const mode = currentWorkspaceMode();
   const isCompress = mode === "compress";
   syncLegacyArchiveSurfaceOwnership();
-  if (isCompress) {
-    renderCompressBrowser();
-  }
 
   if (isCompress) {
     const sourceSnapshot = syncCreateSourcesFromWorkspace();
@@ -3204,12 +2844,10 @@ function workspaceChromeElements() {
     workspaceElement,
     modeCompressButton,
     modeExtractButton,
-    compressSurfaceElement,
     tableShellElement,
     refreshArchiveButton,
     messageElement,
     detailsElement,
-    compressOptionsPanel,
     detailsPaneTitleElement,
     workspaceTitleElement,
     metaElement,
@@ -3273,11 +2911,6 @@ function archivePathBarModel(): ArchivePathBarModel {
 }
 
 function renderTree() {
-  if (currentWorkspaceMode() === "compress") {
-    renderCompressSourceTree();
-    return;
-  }
-
   if (!currentArchivePath) {
     renderArchiveNavigationTree({ treeContentElement }, {
       kind: "empty",
@@ -3313,73 +2946,12 @@ function renderTree() {
   });
 }
 
-function renderCompressSourceTree() {
-  const sourceSnapshot = syncCreateSourcesFromWorkspace();
-  if (!sourceSnapshot.hasSources) {
-    renderCreateNavigationTree({ treeContentElement }, {
-      kind: "empty",
-      message: displayContext.translator.t("compress.noSources"),
-    });
-    return;
-  }
-
-  const plan = sourceSnapshot.plan.current;
-  const planEntries = plan?.planEntries ?? [];
-  if (sourceSnapshot.plan.state === "loading" || !plan) {
-    const planStatusText = createPlanStatusText(sourceSnapshot.plan.status);
-    renderCreateNavigationTree({ treeContentElement }, {
-      kind: "empty",
-      message: planStatusText || displayContext.translator.t("create.plan.planning"),
-    });
-    return;
-  }
-
-  if (!planEntries.length) {
-    renderCreateNavigationTree({ treeContentElement }, {
-      kind: "empty",
-      message: displayContext.translator.t("create.plan.none"),
-    });
-    return;
-  }
-
-  const currentFolder = sourceSnapshot.view.currentFolder;
-  const folders: ArchiveWorkspaceTreeFolder[] = sourceSnapshot.view.treeFolders
-    .map((folder) => {
-      const isRoot = folder.path === archiveTreeRootPath;
-      const label = isRoot ? suggestedCreateArchiveName() || APP_TITLE : folder.name;
-      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentFolder, displayContext.translator);
-      const iconDataUrl = systemIconDataUrlForRequest(
-        isRoot
-          ? systemIconRequestForPath(sourceSnapshot.sources[0] ?? "folder", true)
-          : systemIconRequestForPath("folder", true),
-      );
-      return {
-        path: folder.path,
-        label,
-        depth: folder.depth,
-        canToggle: folder.hasChildren && !isRoot,
-        isExpanded: folder.isExpanded,
-        isActive: folder.path === currentFolder,
-        iconHtml: renderEntryIcon(icon, "tree-icon", iconDataUrl),
-      };
-    });
-  renderCreateNavigationTree({ treeContentElement }, {
-    kind: "folders",
-    folders,
-    collapseLabel: "Collapse",
-    expandLabel: "Expand",
-  });
-}
-
 function navigateToCompressFolder(folderPath: string) {
   const navigation = createWorkspace.navigateToFolder(folderPath);
-  syncCreateSourcesFromWorkspace(navigation.snapshot);
   if (!navigation.accepted) {
     return;
   }
-  renderCompressSourceTree();
-  renderCompressSources();
-  focusFirstCompressRow();
+  publishCreateWorkspaceSnapshot(navigation.snapshot);
 }
 
 function archiveWorkspaceRowIcon(row: BrowserRow) {
@@ -3579,56 +3151,6 @@ function renderBrowse() {
   publishReactSnapshot();
 }
 
-function createUnavailableReasonText(
-  reason: CreateArchiveUnavailableReason,
-  snapshot: CreateWorkspaceSnapshot,
-): string {
-  switch (reason) {
-    case "needsSources":
-      return message("create.status.needsSources");
-    case "needsIncludedEntries":
-      return message("create.status.needsIncludedEntries");
-    case "needsDestination":
-      return message("create.status.needsDestination");
-    case "planning":
-      return message("create.status.planning");
-    case "needsPlan":
-      return createPlanStatusText(snapshot.plan.status) || message("create.status.needsPlan");
-    case "starting":
-      return message("create.status.starting");
-  }
-}
-
-function createReadyStatusText(snapshot: CreateWorkspaceSnapshot): string {
-  const plan = snapshot.plan.current;
-  const includedCount = plan?.includedCount ?? 0;
-  const filteredPlan = filteredCreatePlan(snapshot);
-  const totalBytes = filteredPlan ? formatBytes(filteredPlan.totalBytes) : "";
-  return message("create.status.ready", {
-    count: filteredPlan?.includedCount ?? includedCount,
-    size: totalBytes,
-  });
-}
-
-function setCreatePlanState() {
-  const sourceSnapshot = syncCreateSourcesFromWorkspace();
-  const unavailableReason = sourceSnapshot.options.readiness.unavailableReason;
-  const canCreate = sourceSnapshot.options.readiness.canCreate;
-  const statusText = unavailableReason
-    ? createUnavailableReasonText(unavailableReason, sourceSnapshot)
-    : createReadyStatusText(sourceSnapshot);
-
-  renderCreateActionState(createActionStateViewElements, {
-    canCreate,
-    hasSources: sourceSnapshot.hasSources,
-    isEmpty: sourceSnapshot.isEmpty,
-    statusText,
-    createArchiveLabel: message("compress.createArchive"),
-    isWarning: unavailableReason !== null && unavailableReason !== "needsSources",
-  });
-  publishReactSnapshot();
-}
-
 function browserCreatePlanPreview(paths: string[]): CreatePlanResponse {
   const planEntries: CreatePlanEntryDto[] = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)))
     .map((path) => {
@@ -3661,156 +3183,29 @@ function createPlanEntries(snapshot: CreateWorkspaceSnapshot = syncCreateSources
   return snapshot.plan.current?.planEntries ?? [];
 }
 
-function filteredCreatePlan(snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace()): CreatePlanResponse | null {
-  return snapshot.inclusion.filteredPlan;
-}
-
 function compressRowInclusionState(row: CompressPlanRow): "included" | "excluded" | "partial" {
   return createWorkspace.getRowInclusionState(row);
-}
-
-function compressInclusionLabel(state: "included" | "excluded" | "partial"): string {
-  switch (state) {
-    case "included":
-      return message("compress.inclusion.included");
-    case "excluded":
-      return message("compress.inclusion.excluded");
-    case "partial":
-      return message("compress.inclusion.partial");
-  }
 }
 
 function setCompressPathIncluded(path: string, included: boolean) {
   syncCreateSourcesFromWorkspace(createWorkspace.setPathIncluded(path, included).snapshot);
 }
 
-function setAllCompressPathsIncluded(included: boolean) {
-  syncCreateSourcesFromWorkspace(createWorkspace.setAllPathsIncluded(included).snapshot);
-}
-
-function setCurrentCompressFolderIncluded(included: boolean) {
-  const snapshot = syncCreateSourcesFromWorkspace();
-  syncCreateSourcesFromWorkspace(createWorkspace.setCurrentFolderIncluded(snapshot.view.currentFolder, included).snapshot);
-}
-
-function syncCompressIncludeAllControl() {
-  const snapshot = syncCreateSourcesFromWorkspace();
-  const state = createWorkspace.getIncludeAllControlState(snapshot.view.currentFolder);
-  renderCompressIncludeAllControl(compressIncludeAllControlViewElements, state);
-}
-
-function syncCompressInclusionControls() {
-  syncCompressSourceInclusionControls(compressSourceTableViewElements);
-  syncCompressIncludeAllControl();
-}
-
-function refreshCreatePlanSummary() {
-  const plan = filteredCreatePlan();
-  if (!plan) {
-    return;
-  }
-  renderCreatePlanSummary(createPlanSummaryViewElements, {
-    plan,
-    translator: displayContext.translator,
-    formatBytes,
-  });
-}
-
-function renderCreateSources() {
-  const sourceSnapshot = syncCreateSourcesFromWorkspace();
-
-  renderCreateSourceList(createSourceListViewElements, {
-    sources: sourceSnapshot.sources,
-    isEmpty: sourceSnapshot.isEmpty,
-    includeAllDisabled: sourceSnapshot.isEmpty || sourceSnapshot.inclusion.excludedArchivePaths.length === 0,
-    excludeAllDisabled: sourceSnapshot.isEmpty || sourceSnapshot.inclusion.includedCount === 0,
-    noSourcesLabel: displayContext.translator.t("compress.noSources"),
-    removeSourceLabel: displayContext.translator.t("compress.removeSource"),
-  });
-
-  setCreatePlanState();
-}
-
 function clearCreateSources() {
-  syncCreateSourcesFromWorkspace(createWorkspace.clearSources().snapshot);
-  applyCompressTableSelection(clearHierarchicalTableSelection());
-  renderCreateSources();
-  renderCompressBrowser();
+  const result = createWorkspace.clearSources();
+  createWorkspace.clearSelection();
+  publishCreateWorkspaceSnapshot(result.snapshot);
   queuePlanRun();
-  publishReactSnapshot();
 }
 
 function removeCreateSources(sourcePaths: string[]) {
   const result = createWorkspace.removeSources(sourcePaths);
-  syncCreateSourcesFromWorkspace(result.snapshot);
   if (!result.changed) {
     return;
   }
-  applyCompressTableSelection(clearHierarchicalTableSelection());
-  renderCreateSources();
-  renderCompressBrowser();
+  createWorkspace.clearSelection();
+  publishCreateWorkspaceSnapshot(result.snapshot);
   queuePlanRun();
-}
-
-function renderCompressSources() {
-  const sourceSnapshot = syncCreateSourcesFromWorkspace();
-  if (sourceSnapshot.isEmpty) {
-    applyCompressTableSelection(clearHierarchicalTableSelection());
-    renderCompressSourceTable(compressSourceTableViewElements, {
-      state: "emptySources",
-      emptyTitle: displayContext.translator.t("compress.emptyTable"),
-      emptyHint: displayContext.translator.t("compress.dragSourcesHint"),
-    });
-    if (currentWorkspaceMode() === "compress") {
-      renderCompressSourceTree();
-    }
-    syncCompressIncludeAllControl();
-    return;
-  }
-
-  if (sourceSnapshot.plan.state === "loading" || !sourceSnapshot.plan.current) {
-    const planStatusText = createPlanStatusText(sourceSnapshot.plan.status);
-    applyCompressTableSelection(clearHierarchicalTableSelection());
-    renderCompressSourceTable(compressSourceTableViewElements, {
-      state: "planning",
-      message: planStatusText || displayContext.translator.t("create.plan.planning"),
-    });
-    if (currentWorkspaceMode() === "compress") {
-      renderCompressSourceTree();
-    }
-    syncCompressIncludeAllControl();
-    return;
-  }
-
-  const rows = [...sourceSnapshot.view.rows];
-  if (!rows.length) {
-    applyCompressTableSelection(clearHierarchicalTableSelection());
-    renderCompressSourceTable(compressSourceTableViewElements, {
-      state: "folderEmpty",
-      message: displayContext.translator.t("browse.folderEmpty"),
-    });
-    if (currentWorkspaceMode() === "compress") {
-      renderCompressSourceTree();
-    }
-    syncCompressIncludeAllControl();
-    return;
-  }
-
-  applyCompressTableSelection(cleanupHierarchicalTableSelection({
-    ...currentCompressTableSelectionState(),
-    visiblePaths: selectableHierarchicalRowPaths(rows),
-    preserveHiddenSelection: false,
-  }));
-
-  renderCompressSourceTable(compressSourceTableViewElements, {
-    state: "rows",
-    rows: compressSourceTableRowModels(rows, sourceSnapshot),
-  });
-  syncCompressInclusionControls();
-
-  if (currentWorkspaceMode() === "compress") {
-    renderCompressSourceTree();
-  }
 }
 
 function visibleCompressRows(): CompressPlanRow[] {
@@ -3822,72 +3217,6 @@ function visibleCompressRowForPath(path: string): CompressPlanRow | undefined {
   return visibleCompressRows().find((row) => normalizeEntryPath(row.path) === normalizedPath);
 }
 
-function compressSourceTableRowModels(
-  rows: readonly CompressPlanRow[],
-  snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
-): CompressSourceTableRowModel[] {
-  return rows.map((row) => compressSourceTableRowModel(row, snapshot));
-}
-
-function compressSourceTableRowModel(
-  row: CompressPlanRow,
-  snapshot: CreateWorkspaceSnapshot,
-): CompressSourceTableRowModel {
-  if (row.rowType === "parent") {
-    const icon = compressSourceTableRowIcon(row, snapshot);
-    return {
-      rowType: "parent",
-      path: row.path,
-      name: row.name,
-      iconHtml: icon.html,
-      iconLabel: icon.label,
-      ariaLabel: displayContext.translator.t("browse.parentFolder.aria"),
-      kindText: displayContext.translator.t("icon.parentFolder"),
-    };
-  }
-
-  if (row.rowType === "folder") {
-    const inclusionState = compressRowInclusionState(row);
-    const icon = compressSourceTableRowIcon(row, snapshot);
-    return {
-      rowType: "folder",
-      path: row.path,
-      sourcePath: sourcePathForCompressRow(row, snapshot) || null,
-      name: row.name,
-      selected: selectedCompressRows.has(row.path),
-      focused: focusedCompressRowPath === row.path,
-      inclusionState,
-      inclusionLabel: compressInclusionLabel(inclusionState),
-      includeAriaLabel: compressInclusionAriaLabel(row, inclusionState),
-      iconHtml: icon.html,
-      iconLabel: icon.label,
-      ariaLabel: displayContext.translator.t("browse.openFolder.aria", { name: row.name }),
-      sizeText: row.entry?.size === undefined ? "" : formatBytes(row.entry.size),
-      modifiedText: row.entry?.modified ? formatDate(row.entry.modified) : "",
-      kindText: displayContext.translator.t("detail.directory"),
-    };
-  }
-
-  const inclusionState = compressRowInclusionState(row);
-  const icon = compressSourceTableRowIcon(row, snapshot);
-  return {
-    rowType: "entry",
-    path: row.path,
-    sourcePath: sourcePathForCompressRow(row, snapshot) || null,
-    name: row.name,
-    selected: selectedCompressRows.has(row.path),
-    focused: focusedCompressRowPath === row.path,
-    inclusionState,
-    inclusionLabel: compressInclusionLabel(inclusionState),
-    includeAriaLabel: compressInclusionAriaLabel(row, inclusionState),
-    iconHtml: icon.html,
-    iconLabel: icon.label,
-    sizeText: row.entry.size === undefined ? "" : formatBytes(row.entry.size),
-    modifiedText: row.entry.modified ? formatDate(row.entry.modified) : "",
-    kindText: normalizeArchiveKindLabel(row.entry.kind),
-  };
-}
-
 function sourcePathForCompressRow(
   row: CompressPlanRow,
   snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
@@ -3895,81 +3224,25 @@ function sourcePathForCompressRow(
   return sourcePathForCreatePlanRow(row, createPlanEntries(snapshot), snapshot.sources);
 }
 
-function compressSourceTableRowIcon(
-  row: CompressPlanRow,
-  snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
-): { html: string; label: string } {
-  const icon = row.rowType === "parent"
-    ? archiveRowIconDescriptor(row, displayContext.translator)
-    : row.rowType === "folder"
-      ? archiveTreeIconDescriptor(false, row.path === snapshot.view.currentFolder, displayContext.translator)
-      : archiveEntryIconDescriptor(row.entry, displayContext.translator);
-  const iconDataUrl = row.rowType === "folder" || row.rowType === "parent"
-    ? systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))
-    : systemIconDataUrlForRequest(systemIconRequestForPath(row.entry.sourcePath || row.entry.path, false));
-  return {
-    html: renderEntryIcon(icon, "row-icon", iconDataUrl),
-    label: icon.label,
-  };
-}
-
-function compressInclusionAriaLabel(
-  row: Extract<CompressPlanRow, { rowType: "folder" | "entry" }>,
-  state: "included" | "excluded" | "partial",
-): string {
-  return message(
-    state === "excluded"
-      ? "compress.includeItem.aria"
-      : "compress.excludeItem.aria",
-    { name: row.name },
-  );
-}
-
-function focusFirstCompressRow() {
-  focusFirstCompressSourceRow(compressSourceTableViewElements);
-}
-
-function getVisibleCompressSelectablePaths(): string[] {
-  return selectableHierarchicalRowPaths(visibleCompressRows());
-}
-
-function currentCompressTableSelectionState() {
-  return {
-    selectedPaths: selectedCompressRows,
-    focusedPath: focusedCompressRowPath,
-    anchorPath: compressSelectionAnchorPath,
-  };
-}
-
-function applyCompressTableSelection(result: HierarchicalTableSelectionResult) {
-  selectedCompressRows = new Set(result.selectedPaths);
-  focusedCompressRowPath = result.focusedPath;
-  compressSelectionAnchorPath = result.anchorPath;
-}
-
-function getCompressRows(): HTMLTableRowElement[] {
-  return getCompressSourceRows(compressSourceTableViewElements);
-}
-
-function getCompressSelectableRows(): HTMLTableRowElement[] {
-  return getCompressSourceSelectableRows(compressSourceTableViewElements);
-}
-
 function selectedCompressSourcePaths(): string[] {
-  return Array.from(new Set(getCompressSelectableRows()
-    .filter((row) => selectedCompressRows.has(row.dataset.compressPath ?? ""))
-    .map((row) => removableSourcePathForCompressRow(row))
-    .filter(Boolean)));
+  const snapshot = createWorkspace.getSnapshot();
+  return Array.from(new Set(
+    snapshot.selection.selectedPaths
+      .map((rowPath) => removableSourcePathForCompressPath(rowPath, snapshot))
+      .filter(Boolean),
+  ));
 }
 
-function removableSourcePathForCompressRow(row: HTMLTableRowElement): string {
-  const snapshot = syncCreateSourcesFromWorkspace();
-  const rowPath = row.dataset.compressPath ?? "";
+function removableSourcePathForCompressPath(
+  rowPath: string,
+  snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
+): string {
   if (!rowPath || snapshot.view.currentFolder) {
     return "";
   }
 
-  const sourcePath = row.dataset.compressSourcePath ?? "";
+  const row = visibleCompressRowForPath(rowPath);
+  const sourcePath = row ? sourcePathForCompressRow(row, snapshot) : "";
   return snapshot.sources.includes(sourcePath) &&
       normalizeEntryPath(rowPath) === getPathBasename(sourcePath)
     ? sourcePath
@@ -3987,91 +3260,15 @@ function sourcePathsForCompressMenu(rowSourcePath: string): string[] {
 }
 
 function compressPathsForContextAction(rowPath: string): string[] {
+  const selection = createWorkspace.getSnapshot().selection;
   if (!rowPath) {
     return [];
   }
-  if (selectedCompressRows.has(rowPath) && selectedCompressRows.size > 1) {
-    const visiblePaths = new Set(getVisibleCompressSelectablePaths());
-    return Array.from(selectedCompressRows).filter((path) => visiblePaths.has(path));
+  if (selection.selectedPaths.includes(rowPath) && selection.selectedPaths.length > 1) {
+    const visiblePaths = new Set(selection.visibleSelectablePaths);
+    return selection.selectedPaths.filter((path) => visiblePaths.has(path));
   }
   return [rowPath];
-}
-
-function updateCompressSelectionByIntent(
-  rowPath: string,
-  options?: { shift?: boolean; ctrl?: boolean; meta?: boolean },
-) {
-  applyCompressTableSelection(applyHierarchicalRowSelectionIntent({
-    path: rowPath,
-    visiblePaths: getVisibleCompressSelectablePaths(),
-    currentSelection: selectedCompressRows,
-    anchorPath: compressSelectionAnchorPath,
-    shiftKey: Boolean(options?.shift),
-    ctrlKey: Boolean(options?.ctrl),
-    metaKey: Boolean(options?.meta),
-  }));
-}
-
-function syncCompressSelectionUi() {
-  syncCompressSourceSelectionUi(compressSourceTableViewElements, {
-    selectedPaths: Array.from(selectedCompressRows),
-    focusedPath: focusedCompressRowPath,
-  });
-}
-
-function focusCompressRow(row: HTMLTableRowElement | null, focusedPath?: string) {
-  if (!row) {
-    return;
-  }
-  row.focus();
-  applyCompressTableSelection(focusHierarchicalTablePath(
-    currentCompressTableSelectionState(),
-    focusedPath ?? row.dataset.compressPath ?? "",
-  ));
-  syncCompressSelectionUi();
-}
-
-function focusRelativeCompressRow(currentRow: HTMLTableRowElement, direction: 1 | -1) {
-  const rows = getCompressRows();
-  const currentIndex = rows.indexOf(currentRow);
-  if (currentIndex < 0) {
-    return;
-  }
-
-  const nextFocus = moveHierarchicalTableFocus({
-    rows: visibleCompressRows(),
-    currentIndex,
-    direction,
-  });
-  focusCompressRow(rows[nextFocus.rowIndex] ?? null, nextFocus.focusedPath);
-}
-
-function toggleCompressRowSelection(row: HTMLTableRowElement) {
-  const rowPath = row.dataset.compressPath;
-  if (!rowPath) {
-    return;
-  }
-
-  applyCompressTableSelection(toggleHierarchicalTablePathSelection({
-    ...currentCompressTableSelectionState(),
-    path: rowPath,
-  }));
-  syncCompressSelectionUi();
-}
-
-function activateCompressRow(row: HTMLTableRowElement) {
-  const folderPath = row.dataset.compressFolderRow;
-  if (folderPath !== undefined) {
-    navigateToCompressFolder(folderPath);
-  }
-}
-
-function renderCompressBrowser() {
-  if (currentWorkspaceMode() === "compress") {
-    renderCompressSourceTree();
-    renderCompressSources();
-  }
-  setCreatePlanState();
 }
 
 function renderJobs() {
@@ -4089,27 +3286,6 @@ function cancelQueuedPlanRun() {
   createPlanController.cancelQueuedPlanRun();
 }
 
-function refreshCreateStateAfterDestinationEdit() {
-  syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(createDestinationInput.value).snapshot);
-  setCreatePlanState();
-}
-
-function setCreateOptionsFromControls() {
-  syncCreateSourcesFromWorkspace(createWorkspace.setOptions(
-    readCreateOptionControlPatch(createOptionControlViewElements),
-  ).snapshot);
-}
-
-function updateCreateOptionsFromControls() {
-  setCreateOptionsFromControls();
-  setCreatePlanState();
-}
-
-function updateCreatePlanOptionsFromControls() {
-  setCreateOptionsFromControls();
-  queuePlanRun();
-}
-
 function recordExtractDestinationHistory(destination: string): void {
   archiveOpenController.recordExtractDestinationHistory(destination);
 }
@@ -4124,17 +3300,6 @@ function renderExtractDestinationHistory() {
 
 function recordCreateDestinationHistory(destination: string): void {
   archiveOpenController.recordCreateDestinationHistory(destination);
-}
-
-function renderCreateDestinationHistory() {
-  const { createDestinationHistory } = pathHistoryStore.getSnapshot();
-  renderCreateDestinationHistoryView(createDestinationHistoryViewElements, {
-    entries: createDestinationHistory.map((entry) => ({
-      value: entry,
-      label: middleTruncateDetailValue(entry, 54),
-    })),
-    recentLabel: message("create.destination.recent"),
-  });
 }
 
 function recordRecentArchiveHistory(archivePath: string): void {
@@ -4422,14 +3587,6 @@ function cancelDialog(event: KeyboardEvent, dialog: HTMLElement): boolean {
   return modalController.cancel(event, dialog);
 }
 
-function clearCreatePasswordFields() {
-  createPasswordInput.value = "";
-  createPasswordConfirmInput.value = "";
-  createPasswordInput.type = "password";
-  createPasswordConfirmInput.type = "password";
-  createShowPasswordInput.checked = false;
-}
-
 function isCreateSubmissionInFlight(): boolean {
   return createWorkspace.getSnapshot().options.submissionInFlight;
 }
@@ -4597,7 +3754,6 @@ function addDroppedSources(paths: string[]) {
   applyCreatePreferenceDefaults();
   addSources(paths);
   setWorkspaceMode("compress");
-  createDestinationInput.focus();
   setOperationalMessage("drop.sourcesAdded", {
     count: paths.length,
     sourceLabel: message(paths.length === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
@@ -5048,11 +4204,23 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
   }));
 }
 
-function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: number) {
-  const rowPath = row.dataset.compressPath ?? "";
-  const folderPath = row.dataset.compressFolderRow;
-  const sourcePath = row.dataset.compressSourcePath ?? "";
-  const removableSourcePath = removableSourcePathForCompressRow(row);
+function showCompressRowContextMenuForPath(
+  rowPath: string,
+  rowSourcePath: string,
+  x: number,
+  y: number,
+) {
+  const snapshot = createWorkspace.getSnapshot();
+  const row = visibleCompressRowForPath(rowPath);
+  if (!row) {
+    return;
+  }
+
+  const folderPath = row.rowType === "folder" || (row.rowType === "entry" && row.entry.kind === "directory")
+    ? row.path
+    : undefined;
+  const sourcePath = rowSourcePath || sourcePathForCompressRow(row, snapshot);
+  const removableSourcePath = removableSourcePathForCompressPath(row.path, snapshot);
   const removableSourcePaths = removableSourcePath ? sourcePathsForCompressMenu(removableSourcePath) : [];
   const contextPaths = compressPathsForContextAction(rowPath);
   const contextRows = contextPaths
@@ -5072,7 +4240,7 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
     removableSourceCount: removableSourcePaths.length,
     canInclude,
     canExclude,
-    hasSources: syncCreateSourcesFromWorkspace().hasSources,
+    hasSources: snapshot.hasSources,
   }));
 }
 
@@ -5220,9 +4388,7 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
       for (const compressPath of compressPathsForContextAction(path)) {
         setCompressPathIncluded(compressPath, action === "include-compress-path");
       }
-      refreshCreatePlanSummary();
-      renderCreateSources();
-      renderCompressBrowser();
+      publishReactSnapshot();
     }
     return;
   }
@@ -5370,7 +4536,7 @@ function refreshDisplayFromPreferences() {
     documentElement: document.documentElement,
     translationRoot: document.body,
     renderBrowse,
-    renderCreate: renderCompressBrowser,
+    renderCreate: publishReactSnapshot,
     renderJobs,
   });
 }
@@ -5430,7 +4596,6 @@ function updateReactCreateDefaultsDraft(
 function applyCreatePreferenceDefaults() {
   const format = appPreferences.defaultArchiveFormat;
   applyCreateDefaultsForFormat(format, { suggestDestinationIfBlank: true });
-  setCreatePlanState();
 }
 
 function applyCreateDefaultsForFormat(
@@ -5443,8 +4608,7 @@ function applyCreateDefaultsForFormat(
     defaults,
     options.suggestDestinationIfBlank ? createDestinationSuggestionOptions() : undefined,
   );
-  clearCreatePasswordFields();
-  syncCreateSourcesFromWorkspace(result.snapshot);
+  publishCreateWorkspaceSnapshot(result.snapshot);
 }
 
 async function savePreferencesFromDialog() {
@@ -5534,14 +4698,10 @@ function showCreateWorkspace() {
   applyCreatePreferenceDefaults();
   const { createDestinationHistory } = pathHistoryStore.getSnapshot();
   if (!createWorkspace.getSnapshot().options.destinationPath.trim() && createDestinationHistory[0]) {
-    syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPathIfBlank(createDestinationHistory[0]).snapshot);
+    publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPathIfBlank(createDestinationHistory[0]).snapshot);
   }
   setWorkspaceMode("compress");
-  setCreatePlanState();
-  renderCreateSources();
-  renderCompressBrowser();
-  renderCreateDestinationHistory();
-  createDestinationInput.focus();
+  publishReactSnapshot();
 }
 
 async function loadArchive(request: ListArchiveRequest, options: ArchiveLoadOptions = {}) {
@@ -5652,17 +4812,14 @@ async function runPlan(revision?: number) {
 function addSources(paths: string[]) {
   const previousSnapshot = syncCreateSourcesFromWorkspace();
   const result = createWorkspace.addSources(paths);
-  let sourceSnapshot = syncCreateSourcesFromWorkspace(result.snapshot);
+  let sourceSnapshot = result.snapshot;
   if (!result.changed) {
     return;
   }
   if (!previousSnapshot.hasSources && sourceSnapshot.hasSources && !sourceSnapshot.options.destinationPath.trim()) {
-    sourceSnapshot = syncCreateSourcesFromWorkspace(
-      createWorkspace.suggestDestinationPathIfBlank(createDestinationSuggestionOptions()).snapshot,
-    );
+    sourceSnapshot = createWorkspace.suggestDestinationPathIfBlank(createDestinationSuggestionOptions()).snapshot;
   }
-  renderCreateSources();
-  renderCompressBrowser();
+  publishCreateWorkspaceSnapshot(sourceSnapshot);
   queuePlanRun();
 }
 
@@ -5971,10 +5128,9 @@ async function onSelectCreateDestination() {
   if (!selected || typeof selected !== "string") {
     return;
   }
-  syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(
+  publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPath(
     createWorkspace.destinationPathWithFormatExtension(selected),
   ).snapshot);
-  refreshCreateStateAfterDestinationEdit();
 }
 
 async function runCreate(
@@ -6013,15 +5169,6 @@ async function loadBootstrapState() {
   await startupController.loadBootstrapState();
 }
 
-function onCreateFormatChange() {
-  const format = createFormatSelect.value as CreateArchiveFormat;
-  const defaults = createDefaultsForFormat(appPreferences, format);
-  syncCreateSourcesFromWorkspace(createWorkspace.changeFormat(format, defaults).snapshot);
-  clearCreatePasswordFields();
-
-  queuePlanRun();
-}
-
 function handleInfoDialogAction(action?: string, copyValue?: string) {
   if (copyValue) {
     void copyTextToClipboard(copyValue);
@@ -6044,7 +5191,6 @@ function bindDialogCloseButtons() {
 }
 
 function bindActions() {
-  compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
   windowMinimizeButton.addEventListener("click", minimizeAppWindow);
   windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
   windowCloseButton.addEventListener("click", closeAppWindow);
@@ -6118,24 +5264,6 @@ function bindActions() {
   });
 
   treeContentElement.addEventListener("click", (event) => {
-    const compressToggleTarget = (event.target as HTMLElement).closest<HTMLElement>("[data-compress-tree-toggle]");
-    if (compressToggleTarget) {
-      event.preventDefault();
-      const folderPath = compressToggleTarget.dataset.compressFolderPath ?? "";
-      const toggleResult = createWorkspace.toggleTreeFolder(folderPath);
-      syncCreateSourcesFromWorkspace(toggleResult.snapshot);
-      if (toggleResult.accepted) {
-        renderCompressSourceTree();
-      }
-      return;
-    }
-
-    const compressFolderTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-compress-folder-path]");
-    if (compressFolderTarget) {
-      navigateToCompressFolder(compressFolderTarget.dataset.compressFolderPath ?? "");
-      return;
-    }
-
     const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-action]");
     const routedTreeCommand = selectTreeCommand(actionTarget?.dataset.treeAction);
     if (routedTreeCommand) {
@@ -6174,189 +5302,6 @@ function bindActions() {
     }
   });
 
-  addSourceButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    showAddSourcesMenu(addSourceButton);
-  });
-  bindCreateSourceListActions(createSourceListViewElements, {
-    onRemoveSource: (sourcePath) => {
-      removeCreateSources([sourcePath]);
-    },
-  });
-  clearSourcesButton.addEventListener("click", () => {
-    clearCreateSources();
-  });
-  includeAllSourcesButton.addEventListener("click", () => {
-    setAllCompressPathsIncluded(true);
-    refreshCreatePlanSummary();
-    renderCreateSources();
-    renderCompressBrowser();
-  });
-  excludeAllSourcesButton.addEventListener("click", () => {
-    setAllCompressPathsIncluded(false);
-    refreshCreatePlanSummary();
-    renderCreateSources();
-    renderCompressBrowser();
-  });
-  compressIncludeAllInput.addEventListener("change", () => {
-    setCurrentCompressFolderIncluded(readCompressIncludeAllChecked(compressIncludeAllControlViewElements));
-    refreshCreatePlanSummary();
-    renderCreateSources();
-    renderCompressBrowser();
-  });
-  sourceListElement.addEventListener("contextmenu", (event) => {
-    const row = (event.target as HTMLElement).closest<HTMLElement>("li[data-source-path]");
-    if (!row?.dataset.sourcePath) {
-      return;
-    }
-    event.preventDefault();
-    showSourceContextMenu(row.dataset.sourcePath, event.clientX, event.clientY);
-  });
-
-  compressSourceBody.addEventListener("click", (event) => {
-    const includeControl = (event.target as HTMLElement).closest<HTMLInputElement>("[data-compress-include]");
-    if (includeControl) {
-      event.stopPropagation();
-      const rowPath = includeControl.dataset.compressPath;
-      if (rowPath) {
-        const nextIncluded = includeControl.checked;
-        setCompressPathIncluded(rowPath, nextIncluded);
-        refreshCreatePlanSummary();
-        renderCreateSources();
-        renderCompressBrowser();
-        focusCompressRow(findCompressSourceRowByPath(compressSourceTableViewElements, rowPath));
-      }
-      return;
-    }
-
-    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
-    if (!row) {
-      return;
-    }
-
-    const folderPath = row.dataset.compressFolderRow;
-    const rowPath = row.dataset.compressPath;
-    const plainPrimaryClick = !event.ctrlKey && !event.metaKey && !event.shiftKey;
-
-    if (rowPath) {
-      updateCompressSelectionByIntent(rowPath, { ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey });
-      renderCompressSources();
-      focusCompressRow(findCompressSourceRowByPath(compressSourceTableViewElements, rowPath));
-    }
-
-    if (folderPath !== undefined && (event.detail >= 2 || (appPreferences.singleClickOpen && plainPrimaryClick))) {
-      navigateToCompressFolder(folderPath);
-    }
-  });
-
-  compressSourceBody.addEventListener("keydown", (event) => {
-    if ((event.target as HTMLElement).closest("[data-compress-include]")) {
-      return;
-    }
-
-    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
-    if (!row) {
-      return;
-    }
-
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      focusRelativeCompressRow(row, event.key === "ArrowDown" ? 1 : -1);
-      return;
-    }
-
-    if (event.key === " " || event.key === "Spacebar") {
-      event.preventDefault();
-      toggleCompressRowSelection(row);
-      event.stopPropagation();
-      return;
-    }
-
-    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-      event.preventDefault();
-      const rowPath = row.dataset.compressPath;
-      if (rowPath && !selectedCompressRows.has(rowPath)) {
-        applyCompressTableSelection(ensureHierarchicalTablePathSelected({
-          ...currentCompressTableSelectionState(),
-          path: rowPath,
-        }));
-        syncCompressSelectionUi();
-      }
-      const rect = row.getBoundingClientRect();
-      showCompressRowContextMenu(row, rect.left + 24, rect.top + Math.min(rect.height - 2, 24));
-      return;
-    }
-
-    if (event.key === "Delete") {
-      event.preventDefault();
-      const sourcePaths = selectedCompressSourcePaths();
-      const fallbackSourcePath = removableSourcePathForCompressRow(row);
-      removeCreateSources(sourcePaths.length > 0 ? sourcePaths : fallbackSourcePath ? [fallbackSourcePath] : []);
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      event.stopPropagation();
-      activateCompressRow(row);
-    }
-  });
-
-  compressSourceBody.addEventListener("contextmenu", (event) => {
-    const row = (event.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-compress-folder-row], tr[data-compress-entry-row]");
-    if (!row) {
-      return;
-    }
-
-    event.preventDefault();
-    const rowPath = row.dataset.compressPath;
-    if (rowPath && !selectedCompressRows.has(rowPath)) {
-      applyCompressTableSelection(ensureHierarchicalTablePathSelected({
-        ...currentCompressTableSelectionState(),
-        path: rowPath,
-      }));
-      syncCompressSelectionUi();
-    }
-    showCompressRowContextMenu(row, event.clientX, event.clientY);
-  });
-
-  createFormatSelect.addEventListener("change", onCreateFormatChange);
-  createDestinationInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
-  createDestinationRecentSelect.addEventListener("change", () => {
-    const destination = createDestinationRecentSelect.value;
-    if (destination) {
-      syncCreateSourcesFromWorkspace(createWorkspace.setDestinationPath(destination).snapshot);
-      setCreatePlanState();
-    }
-    createDestinationRecentSelect.value = "";
-  });
-  browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
-  startCreateButton.addEventListener("click", () => void runCreate({
-    passwordInput: {
-      password: "",
-      passwordConfirm: "",
-    },
-  }));
-  createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
-  createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
-  for (const button of [
-    createCleanSourceCheckbox,
-    createPreserveMetadataCheckbox,
-    createReplaceExistingCheckbox,
-    createRespectGitignoreCheckbox,
-  ]) {
-    button.addEventListener("change", updateCreatePlanOptionsFromControls);
-  }
-  createCompressionInput.addEventListener("change", updateCreateOptionsFromControls);
-  createVolumeInput.addEventListener("change", updateCreateOptionsFromControls);
-  createTzapRecoveryInput.addEventListener("change", updateCreateOptionsFromControls);
-
-  createShowPasswordInput.addEventListener("change", () => {
-    const type = createShowPasswordInput.checked ? "text" : "password";
-    createPasswordInput.type = type;
-    createPasswordConfirmInput.type = type;
-  });
-
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof HTMLElement)) {
       return;
@@ -6376,12 +5321,10 @@ bindMenuBehavior();
 bindDialogCloseButtons();
 bindActions();
 privatizeLegacyExtractDialogIds();
-privatizeLegacyCreateWorkspaceIds();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();
 pathHistoryStore.load();
 applyCreatePreferenceDefaults();
-setCreatePlanState();
 setBrowseState("idle", displayContext.translator.t("browse.statusIdle"));
 if (isLocalDevHost()) {
   window.__zmanagerDev = {

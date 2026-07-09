@@ -58,6 +58,7 @@ describe("React create workspace", () => {
     const html = renderCreateWorkspace(createSnapshot("tarZst", {
       selectedPaths: ["quarterly-report.pdf"],
       focusedPath: "quarterly-report.pdf",
+      anchorPath: "quarterly-report.pdf",
     }));
 
     expect(html).toMatch(/class="is-selected is-focused-row"[^>]*data-compress-path="quarterly-report\.pdf"/);
@@ -79,7 +80,11 @@ function renderCreateWorkspace(snapshot: ZManagerReactSnapshot): string {
 
 function createSnapshot(
   format: "tarZst" | "sevenZ" = "tarZst",
-  createSelection?: ZManagerReactSnapshot["createSelection"],
+  createSelection?: Readonly<{
+    selectedPaths: readonly string[];
+    focusedPath: string;
+    anchorPath: string;
+  }>,
 ): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const workspace = createCreateWorkspace();
@@ -98,6 +103,13 @@ function createSnapshot(
     throw new Error("Expected create plan to be ready");
   }
   workspace.acceptPlanResult(started.revision, createPlan());
+  if (createSelection) {
+    workspace.updateSelection({
+      selectedPaths: new Set(createSelection.selectedPaths),
+      focusedPath: createSelection.focusedPath,
+      anchorPath: createSelection.anchorPath,
+    });
+  }
 
   return createZManagerReactSnapshot({
     shell: {
@@ -106,7 +118,6 @@ function createSnapshot(
     },
     archive: initial.archive,
     create: workspace.getSnapshot(),
-    createSelection,
     jobs: initial.jobs,
     quickActionProgress: initial.quickActionProgress,
     preferences: initial.preferences,

@@ -148,6 +148,14 @@ describe("create workspace source state", () => {
           isExpanded: true,
         }],
       },
+      selection: {
+        selectedPaths: [],
+        selectedCount: 0,
+        focusedPath: "",
+        anchorPath: "",
+        visibleSelectablePaths: [],
+        visibleSelectedPaths: [],
+      },
       options: {
         destinationPath: "",
         format: "tarZst",
@@ -186,6 +194,10 @@ describe("create workspace source state", () => {
     expect(Object.isFrozen(snapshot.view.expandedTreeFolders)).toBe(true);
     expect(Object.isFrozen(snapshot.view.rows)).toBe(true);
     expect(Object.isFrozen(snapshot.view.treeFolders)).toBe(true);
+    expect(Object.isFrozen(snapshot.selection)).toBe(true);
+    expect(Object.isFrozen(snapshot.selection.selectedPaths)).toBe(true);
+    expect(Object.isFrozen(snapshot.selection.visibleSelectablePaths)).toBe(true);
+    expect(Object.isFrozen(snapshot.selection.visibleSelectedPaths)).toBe(true);
     expect(Object.isFrozen(snapshot.options)).toBe(true);
     expect(Object.isFrozen(snapshot.options.password)).toBe(true);
     expect(Object.isFrozen(snapshot.options.tzapRecovery)).toBe(true);
@@ -707,6 +719,42 @@ describe("create workspace plan navigation", () => {
       ["project", true],
       ["project/src", true],
     ]);
+  });
+
+  it("owns create row selection and cleans it when visible rows change", () => {
+    const workspace = readyWorkspace();
+
+    const selected = workspace.selectRow("project");
+
+    expect(selected.changed).toBe(true);
+    expect(selected.snapshot.selection).toMatchObject({
+      selectedPaths: ["project"],
+      selectedCount: 1,
+      focusedPath: "project",
+      anchorPath: "project",
+      visibleSelectablePaths: ["project", "notes.txt"],
+      visibleSelectedPaths: ["project"],
+    });
+
+    const focused = workspace.focusRow("notes.txt");
+
+    expect(focused.changed).toBe(true);
+    expect(focused.snapshot.selection).toMatchObject({
+      selectedPaths: ["project"],
+      focusedPath: "notes.txt",
+      anchorPath: "project",
+    });
+
+    const searched = workspace.setSearchQuery("notes");
+
+    expect(searched.selection).toEqual({
+      selectedPaths: [],
+      selectedCount: 0,
+      focusedPath: "notes.txt",
+      anchorPath: "notes.txt",
+      visibleSelectablePaths: ["notes.txt"],
+      visibleSelectedPaths: [],
+    });
   });
 
   it("resets navigation when sources change or the plan becomes unavailable", () => {

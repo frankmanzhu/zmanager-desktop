@@ -59,6 +59,7 @@ const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react"
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const dialogSnapshotsSource = normalizedWorkspaceFile("src", "app", "display", "dialogSnapshots.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
+const createWorkspaceStateSource = normalizedWorkspaceFile("src", "app", "workspaces", "createWorkspace.ts");
 const contextMenuModelSource = normalizedWorkspaceFile("src", "app", "commands", "contextMenuModel.ts");
 const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
@@ -66,7 +67,6 @@ const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs",
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 type FutureForbiddenTargetId =
-  | "phase4.create-legacy-render-helpers"
   | "phase5.archive-legacy-render-helpers"
   | "phase6.runtime-event-wiring"
   | "phase7.hidden-legacy-root";
@@ -78,11 +78,6 @@ type FutureForbiddenTarget = Readonly<{
 }>;
 
 const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase4.create-legacy-render-helpers",
-    phase: "Phase 4",
-    description: "create workspace no longer imports legacy string render helpers",
-  },
   {
     id: "phase5.archive-legacy-render-helpers",
     phase: "Phase 5",
@@ -198,14 +193,6 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
   },
   {
-    id: "create-workspace-id-privatizer",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "function privatizeLegacyCreateWorkspaceIds() {",
-    reason: "Create workspace hidden controls still exist while create ownership moves into workspace/controller seams.",
-  },
-  {
     id: "archive-row-attribute-privatizer-call",
     scanId: "hiddenLegacyDom",
     targetId: "phase5.archive-legacy-render-helpers",
@@ -238,14 +225,6 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
   },
   {
-    id: "create-workspace-id-privatizer-call",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "privatizeLegacyCreateWorkspaceIds();",
-    reason: "Create workspace hidden controls still exist while create ownership moves into workspace/controller seams.",
-  },
-  {
     id: "runtime-bridge-root-css",
     scanId: "hiddenLegacyDom",
     targetId: "phase7.hidden-legacy-root",
@@ -264,22 +243,6 @@ const ALLOWED_DANGEROUS_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
     line: "html: renderEntryIcon(icon, \"row-icon\", iconDataUrl),",
     reason: "Archive rows still pass rendered icon HTML into legacy table helpers.",
   },
-  {
-    id: "create-row-icon-html-return-type",
-    scanId: "dangerousHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "): { html: string; label: string } {",
-    reason: "Create rows still expose rendered icon HTML to legacy table helpers.",
-  },
-  {
-    id: "create-row-icon-html-return",
-    scanId: "dangerousHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "html: renderEntryIcon(icon, \"row-icon\", iconDataUrl),",
-    reason: "Create rows still pass rendered icon HTML into legacy table helpers.",
-  },
 ];
 
 const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] = [
@@ -291,89 +254,9 @@ const ALLOWED_LEGACY_VIEW_IMPORT_EXCEPTIONS: readonly AllowedLegacyException[] =
     line: "} from \"./ui/archiveWorkspaceView\";",
     reason: "Archive string render helpers remain until archive workspace deepening deletes them.",
   },
-  {
-    id: "runtime-imports-create-legacy-view",
-    scanId: "legacyViewImports",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/runtimeBridge.ts",
-    line: "} from \"./ui/createWorkspaceView\";",
-    reason: "Create string render helpers remain until create workspace deepening deletes them.",
-  },
 ];
 
 const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
-  {
-    id: "create-source-list-empty-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.sourceListElement.innerHTML = `<li class=\"empty\">${escapeHtml(options.noSourcesLabel)}</li>`;",
-    reason: "Create source list still has legacy string rendering.",
-  },
-  {
-    id: "create-source-list-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.sourceListElement.innerHTML = options.sources",
-    reason: "Create source list still has legacy string rendering.",
-  },
-  {
-    id: "create-plan-summary-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.createPlanSummary.innerHTML = createPlanSummaryHtml(options);",
-    reason: "Create plan summary still has legacy string rendering.",
-  },
-  {
-    id: "create-plan-summary-message-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.createPlanSummary.innerHTML = `<p>${escapeHtml(options.message)}</p>`;",
-    reason: "Create plan summary still has legacy string rendering.",
-  },
-  {
-    id: "create-destination-history-datalist-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.createDestinationHistoryList.innerHTML = options.entries",
-    reason: "Create destination history still has legacy datalist rendering.",
-  },
-  {
-    id: "create-destination-recent-select-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.createDestinationRecentSelect.innerHTML = `",
-    reason: "Create destination recent select still has legacy option rendering.",
-  },
-  {
-    id: "create-compress-source-loading-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.compressSourceBody.innerHTML = `",
-    reason: "Create source table still has legacy string rendering.",
-  },
-  {
-    id: "create-compress-source-empty-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.compressSourceBody.innerHTML = `",
-    reason: "Create source table still has legacy string rendering.",
-  },
-  {
-    id: "create-compress-source-rows-html",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/createWorkspaceView.ts",
-    line: "elements.compressSourceBody.innerHTML = options.rows",
-    reason: "Create source table still has legacy string rendering.",
-  },
   {
     id: "archive-details-html",
     scanId: "innerHtml",
@@ -389,14 +272,6 @@ const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
     file: "src/ui/archiveWorkspaceView.ts",
     line: "elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, ARCHIVE_TREE_CONFIG);",
     reason: "Archive tree still has legacy string rendering.",
-  },
-  {
-    id: "create-tree-html-from-archive-view-helper",
-    scanId: "innerHtml",
-    targetId: "phase4.create-legacy-render-helpers",
-    file: "src/ui/archiveWorkspaceView.ts",
-    line: "elements.treeContentElement.innerHTML = renderArchiveWorkspaceTreeHtml(options, CREATE_TREE_CONFIG);",
-    reason: "Create tree still uses the shared legacy archive view helper.",
   },
   {
     id: "archive-path-crumbs-html",
@@ -767,6 +642,19 @@ describe("GUI layout contracts", () => {
     expectScanMatchesOnlyAllowed("legacyViewImports");
   });
 
+  it("keeps create workspace rendering and selection out of hidden legacy bridge controls", () => {
+    expect(productionSourceFilesFromRoots(["src"])).not.toContain("src/ui/createWorkspaceView.ts");
+    expect(mainSource).not.toContain("./ui/createWorkspaceView");
+    expect(mainSource).not.toContain("selectedCompressRows");
+    expect(mainSource).not.toContain("focusedCompressRowPath");
+    expect(mainSource).not.toContain("compressSelectionAnchorPath");
+    expect(appRuntimeSource).not.toContain("createSelection:");
+    expect(createWorkspaceStateSource).toContain("export type CreateWorkspaceSelectionSnapshot");
+    expect(createWorkspaceStateSource).toContain("selection: CreateWorkspaceSelectionSnapshot;");
+    expect(createWorkspaceSource).toContain("snapshot.create.selection.selectedPaths");
+    expect(createWorkspaceSource).toContain("snapshot.create.selection.focusedPath");
+  });
+
   it("names the remaining innerHTML legacy renderer exceptions", () => {
     expectScanMatchesOnlyAllowed("innerHtml");
   });
@@ -970,16 +858,16 @@ describe("GUI layout contracts", () => {
     expect(contextMenuModelSource).toContain('action: "reveal-source"');
     expect(contextMenuModelSource).toContain('action: "remove-source"');
     expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
-    expect(mainSource).toContain("function removableSourcePathForCompressRow");
+    expect(mainSource).toContain("function removableSourcePathForCompressPath");
     expect(mainSource).toContain("if (!rowPath || snapshot.view.currentFolder)");
     expect(mainSource).toContain("normalizeEntryPath(rowPath) === getPathBasename(sourcePath)");
     expect(mainSource).toContain("removableSourcePath ? sourcePathsForCompressMenu(removableSourcePath) : []");
     expect(mainSource).toContain("function sourcePathsForCompressMenu");
     expect(contextMenuModelSource).toContain('command.removeSelectedSources');
-    expect(mainSource).toContain('event.key === "Delete"');
+    expect(createWorkspaceSource).toContain('event.key === "Delete"');
     expect(mainSource).not.toContain('<button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>');
-    expect(mainSource).toContain('createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
-    expect(mainSource).toContain('createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
+    expect(mainSource).not.toContain('createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
+    expect(mainSource).not.toContain('createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
     expect(mainSource).not.toContain("createPasswordInput.value = intent.password");
     expect(mainSource).not.toContain("createPasswordConfirmInput.value = intent.passwordConfirm");
     expect(styles).toContain(".compress-destination-field .inline-field");
@@ -1113,8 +1001,10 @@ describe("GUI layout contracts", () => {
     expect(contextMenuRootSource).toContain("function handleContextMenuKeyboard");
     expect(contextMenuRootSource).toContain("onClick={(event) =>");
     expect(archiveTableSource).toContain('<table id="entry-table">');
-    expect(mainSource).toContain("function updateCompressSelectionByIntent");
-    expect(mainSource).toContain("showCompressRowContextMenu");
+    expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
+    expect(createWorkspaceStateSource).toContain("selectRow(path, modifiers)");
+    expect(mainSource).toContain("createWorkspace.selectRow(intent.path, intent)");
+    expect(mainSource).toContain("showCompressRowContextMenuForPath");
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
     expect(styles).toContain(".table-shell.has-start-empty #entry-table tbody .empty");
     expect(styles).toContain('tbody tr[aria-selected="true"] .row-primary::before');

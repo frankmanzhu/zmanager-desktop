@@ -14,17 +14,16 @@ export type CreateStartOptions = Readonly<{
 
 export type CreateStartControllerWorkspace = Pick<
   CreateWorkspace,
-  "buildStartCreateRequest" | "setPlanError" | "setSubmissionInFlight"
+  "buildStartCreateRequest" | "getSnapshot" | "setPlanError" | "setSubmissionInFlight"
 >;
 
 export type CreateStartControllerOptions = Readonly<{
   workspace: CreateStartControllerWorkspace;
-  syncSources(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
+  publishSnapshot(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   isSubmissionInFlight(): boolean;
   startCreate(request: StartCreateRequest): Promise<StartJobResponseDto>;
   onCreateStarted(response: StartJobResponseDto, request: StartCreateRequest): void;
   toCommandError(error: unknown): CommandErrorDto | null;
-  renderPlanState(): void;
 }>;
 
 export type CreateStartController = Readonly<{
@@ -39,7 +38,7 @@ export function createCreateStartController(
       return;
     }
 
-    const sourceSnapshot = options.syncSources();
+    const sourceSnapshot = options.workspace.getSnapshot();
     if (sourceSnapshot.isEmpty) {
       return;
     }
@@ -49,30 +48,26 @@ export function createCreateStartController(
       passwordConfirm: createOptions.passwordInput.passwordConfirm,
       destinationCollisionStrategy: createOptions.destinationCollisionStrategy,
     });
-    options.syncSources(requestResult.snapshot);
+    options.publishSnapshot(requestResult.snapshot);
     if (!requestResult.ok) {
-      options.renderPlanState();
       return;
     }
 
     const request = requestResult.request;
-    options.syncSources(options.workspace.setSubmissionInFlight(true).snapshot);
-    options.renderPlanState();
+    options.publishSnapshot(options.workspace.setSubmissionInFlight(true).snapshot);
 
     try {
       const response = await options.startCreate(request);
       options.onCreateStarted(response, request);
     } catch (error) {
       const commandError = options.toCommandError(error);
-      options.syncSources(options.workspace.setPlanError(
+      options.publishSnapshot(options.workspace.setPlanError(
         commandError?.message
           ? { fallbackText: commandError.message }
           : { messageKey: "create.error.unableStart" },
       ));
-      options.renderPlanState();
     } finally {
-      options.syncSources(options.workspace.setSubmissionInFlight(false).snapshot);
-      options.renderPlanState();
+      options.publishSnapshot(options.workspace.setSubmissionInFlight(false).snapshot);
     }
   }
 
