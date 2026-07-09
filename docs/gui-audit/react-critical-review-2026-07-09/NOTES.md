@@ -56,23 +56,25 @@ the frontend architecture seams.
 
 ## Verification Run
 
-- `npm.cmd run test:frontend`: passed, 62 files / 533 tests.
+- `npm.cmd run test:frontend`: passed, 62 files / 534 tests.
 - `npm.cmd run build`: passed.
 - `npm.cmd run ast:lint`: passed.
 - `npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts`: passed, 6 tests.
-- Focused Create coverage:
-  `npm.cmd run test:frontend -- src\ui\react\create\CreateWorkspace.test.tsx src\app\guiLayoutContracts.test.ts src\app\workspaces\createWorkspace.test.ts`
-  passed, 3 files / 78 tests.
 - Current focused regression coverage:
-  `npm.cmd run test:frontend -- src\app\controllers\createStartController.test.ts src\app\guiLayoutContracts.test.ts src\ui\react\create\CreateWorkspace.test.tsx`
-  passed, 3 files / 35 tests.
+  `npm.cmd run test:frontend -- src\app\workspaces\createWorkspace.test.ts src\app\controllers\createStartController.test.ts src\ui\react\create\CreateWorkspace.test.tsx src\app\guiLayoutContracts.test.ts`
+  passed, 4 files / 85 tests.
 - Password lifecycle regression:
   `npm.cmd run test:e2e -- e2e/gui-visual-scan.spec.ts --grep "create password fields clear"`
   passed, 1 test.
+- Full end-to-end suite:
+  `npm.cmd run test:e2e` passed, 32 tests.
 
 ## Evidence Limits
 
 - I did not run the native Tauri shell in this pass.
-- I did not run `cargo check` or `cargo test`.
+- `cargo check` was attempted but blocked by the existing Windows
+  libarchive/vcpkg environment requirement:
+  `Set VCPKG_INSTALLATION_ROOT or VCPKG_ROOT, or set CMAKE_TOOLCHAIN_FILE to vcpkg.cmake`.
+  I did not run `cargo test`.
 - The Playwright GUI scan is browser-stubbed; it does not prove real native
   dialogs, real OS drag-out, or packaged app behavior.
