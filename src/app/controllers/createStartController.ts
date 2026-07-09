@@ -6,7 +6,7 @@ import type {
 
 export type CreateStartOptions = Readonly<{
   destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
-  passwordInput?: Readonly<{
+  passwordInput: Readonly<{
     password: string;
     passwordConfirm: string;
   }>;
@@ -21,7 +21,6 @@ export type CreateStartControllerOptions = Readonly<{
   workspace: CreateStartControllerWorkspace;
   syncSources(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   isSubmissionInFlight(): boolean;
-  passwordInput(): { password: string; passwordConfirm: string };
   startCreate(request: StartCreateRequest): Promise<StartJobResponseDto>;
   onCreateStarted(response: StartJobResponseDto, request: StartCreateRequest): void;
   toCommandError(error: unknown): CommandErrorDto | null;
@@ -29,13 +28,13 @@ export type CreateStartControllerOptions = Readonly<{
 }>;
 
 export type CreateStartController = Readonly<{
-  runCreate(options?: CreateStartOptions): Promise<void>;
+  runCreate(options: CreateStartOptions): Promise<void>;
 }>;
 
 export function createCreateStartController(
   options: CreateStartControllerOptions,
 ): CreateStartController {
-  async function runCreate(createOptions: CreateStartOptions = {}): Promise<void> {
+  async function runCreate(createOptions: CreateStartOptions): Promise<void> {
     if (options.isSubmissionInFlight()) {
       return;
     }
@@ -45,10 +44,9 @@ export function createCreateStartController(
       return;
     }
 
-    const passwordInput = createOptions.passwordInput ?? options.passwordInput();
     const requestResult = options.workspace.buildStartCreateRequest({
-      password: passwordInput.password,
-      passwordConfirm: passwordInput.passwordConfirm,
+      password: createOptions.passwordInput.password,
+      passwordConfirm: createOptions.passwordInput.passwordConfirm,
       destinationCollisionStrategy: createOptions.destinationCollisionStrategy,
     });
     options.syncSources(requestResult.snapshot);

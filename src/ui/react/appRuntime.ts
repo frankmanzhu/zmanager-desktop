@@ -7,7 +7,7 @@ import {
 import type { CommandRouterPayload } from "../../app/commands/commandRouter";
 import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
-import type { ExtractMode } from "../../app/extractFlow";
+import type { ExtractMode, ExtractOverwritePolicy } from "../../app/extractFlow";
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
 import { DEFAULT_APP_PREFERENCES, preferencesWithPatch, type AppPreferencePatch, type AppPreferences, type FormatCreateDefaults } from "../../app/preferences";
 import { createPathHistoryStore, type PathHistorySnapshot } from "../../app/pathHistory";
@@ -89,7 +89,7 @@ export type ZManagerDialogSnapshot =
       useSubfolder: boolean;
       subfolder: string;
       pathMode: "full" | "current" | "none";
-      overwrite: string;
+      overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
       passwordPromptOpen: boolean;
@@ -213,7 +213,7 @@ export type ZManagerDialogIntent =
       useSubfolder: boolean;
       subfolder: string;
       pathMode: "full" | "current" | "none";
-      overwrite: string;
+      overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
       password: string;
@@ -224,7 +224,7 @@ export type ZManagerDialogIntent =
       useSubfolder: boolean;
       subfolder: string;
       pathMode: "full" | "current" | "none";
-      overwrite: string;
+      overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
     }>

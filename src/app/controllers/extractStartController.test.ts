@@ -7,12 +7,11 @@ import type {
   StartExtractRequest,
   StartJobResponseDto,
 } from "../../api/types";
-import type { ExtractMode } from "../extractFlow";
+import type { ExtractMode, ExtractStartInput } from "../extractFlow";
 import { createArchiveWorkspace, type ArchiveWorkspace } from "../workspaces/archiveWorkspace";
 import {
   createExtractStartController,
   type ExtractStartControllerOptions,
-  type ExtractStartInput,
 } from "./extractStartController";
 
 const startedAt = "2026-06-11T00:00:00Z";
@@ -74,12 +73,14 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     errors: [] as string[],
   };
   let input: ExtractStartInput = {
-    destination: "C:/out/demo",
-    destinationValid: true,
+    destinationBasePath: "C:/out",
+    useSubfolder: true,
+    subfolder: "demo",
+    pathMode: "full",
     overwrite: "ask" as StartExtractRequest["overwrite"],
-    stripComponents: 1,
+    stripComponents: "1",
+    deduplicateRoot: false,
     password: undefined as string | undefined,
-    entryReferences: [] as string[],
   };
   const startExtract = vi.fn(async () => startJobResponse());
 
@@ -88,8 +89,8 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     hasCurrentArchive() {
       return Boolean(workspace.getSnapshot().currentArchivePath);
     },
-    readInput() {
-      return input;
+    joinNativePath(parentPath, childName) {
+      return `${parentPath}/${childName}`;
     },
     startExtract,
     toCommandError(error) {
@@ -143,6 +144,9 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     setInput(next: Partial<ExtractStartInput>) {
       input = { ...input, ...next };
     },
+    startWithInput(mode: ExtractMode) {
+      return controller.startExtract(mode, input);
+    },
     startExtract,
     workspace,
   };
@@ -152,7 +156,7 @@ describe("extract start controller", () => {
   it("starts archive extraction and records job metadata", async () => {
     const harness = createHarness();
 
-    await harness.controller.startExtract("archive");
+    await harness.startWithInput("archive");
 
     expect(harness.startExtract).toHaveBeenCalledWith({
       archivePath: "C:/archives/demo.zip",
@@ -182,9 +186,8 @@ describe("extract start controller", () => {
   it("starts selection extraction with selected entry paths", async () => {
     const harness = createHarness();
     selectPaths(harness.workspace, ["docs/readme.txt"]);
-    harness.setInput({ entryReferences: ["docs/readme.txt"] });
 
-    await harness.controller.startExtract("selection");
+    await harness.startWithInput("selection");
 
     expect(harness.startExtract).toHaveBeenCalledWith({
       archivePath: "C:/archives/demo.zip",
@@ -208,9 +211,9 @@ describe("extract start controller", () => {
 
   it("prompts for a destination before building requests", async () => {
     const harness = createHarness();
-    harness.setInput({ destination: null, destinationValid: false });
+    harness.setInput({ destinationBasePath: "" });
 
-    await harness.controller.startExtract("archive");
+    await harness.startWithInput("archive");
 
     expect(harness.calls.chooseDestinationFirst).toBe(1);
     expect(harness.startExtract).not.toHaveBeenCalled();
@@ -219,7 +222,7 @@ describe("extract start controller", () => {
   it("prompts for selection before building selection requests", async () => {
     const harness = createHarness();
 
-    await harness.controller.startExtract("selection");
+    await harness.startWithInput("selection");
 
     expect(harness.calls.selectEntryFirst).toBe(1);
     expect(harness.startExtract).not.toHaveBeenCalled();
@@ -232,7 +235,7 @@ describe("extract start controller", () => {
       message: "Password required",
     }));
 
-    await harness.controller.startExtract("archive");
+    await harness.startWithInput("archive");
 
     expect(harness.calls.retries).toEqual(["browse.passwordRequired"]);
     expect(harness.calls.errors).toEqual([]);
@@ -242,16 +245,15 @@ describe("extract start controller", () => {
     const commandHarness = createHarness();
     commandHarness.startExtract.mockRejectedValueOnce(commandError({ message: "Disk full" }));
 
-    await commandHarness.controller.startExtract("archive");
+    await commandHarness.startWithInput("archive");
 
     expect(commandHarness.calls.errors).toEqual(["Disk full"]);
 
     const unknownHarness = createHarness();
     selectPaths(unknownHarness.workspace, ["docs/readme.txt"]);
-    unknownHarness.setInput({ entryReferences: ["docs/readme.txt"] });
     unknownHarness.startExtract.mockRejectedValueOnce(new Error("boom"));
 
-    await unknownHarness.controller.startExtract("selection");
+    await unknownHarness.startWithInput("selection");
 
     expect(unknownHarness.calls.errors).toEqual(["Unable to extract selection."]);
   });

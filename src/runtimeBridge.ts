@@ -173,7 +173,16 @@ import {
 } from "./app/dialogs";
 import {
   type ExtractMode,
+  type ExtractOverwritePolicy,
+  type ExtractStartInput,
 } from "./app/extractFlow";
+import {
+  createExtractDialogFormSnapshot,
+  extractStartInputFromDialogForm,
+  patchExtractDialogFormSnapshot,
+  type ExtractDialogFormPatch,
+  type ExtractDialogFormSnapshot,
+} from "./app/extractDialogState";
 import {
   ARCHIVE_OPEN_FILTER,
   getKnownArchiveSuffix,
@@ -900,21 +909,6 @@ const legacyArchiveSurfaceClassEntries: ReadonlyArray<readonly [HTMLElement, str
 ];
 
 const extractDialog = document.querySelector<HTMLDivElement>("#extract-dialog")!;
-const extractTitle = document.querySelector<HTMLHeadingElement>("#extract-title")!;
-const extractDialogMessage = document.querySelector<HTMLParagraphElement>("#extract-dialog-message")!;
-const extractStartButton = document.querySelector<HTMLButtonElement>("#extract-start")!;
-const extractDestinationInput = document.querySelector<HTMLInputElement>("#extract-destination")!;
-const extractDestinationHistoryList = document.querySelector<HTMLDataListElement>("#extract-destination-history")!;
-const browseExtractDestinationButton = document.querySelector<HTMLButtonElement>("#browse-extract-destination")!;
-const browsePasswordInput = document.querySelector<HTMLInputElement>("#browse-password")!;
-const browseShowPasswordInput = document.querySelector<HTMLInputElement>("#browse-show-password")!;
-const extractPasswordOptions = document.querySelector<HTMLDetailsElement>(".extract-password-options")!;
-const browseOverwriteSelect = document.querySelector<HTMLSelectElement>("#browse-overwrite")!;
-const browseStripInput = document.querySelector<HTMLInputElement>("#browse-strip-components")!;
-const extractUseSubfolderCheckbox = document.querySelector<HTMLInputElement>("#extract-use-subfolder")!;
-const extractSubfolderInput = document.querySelector<HTMLInputElement>("#extract-subfolder")!;
-const extractPathModeSelect = document.querySelector<HTMLSelectElement>("#extract-path-mode")!;
-const extractDeduplicateRootCheckbox = document.querySelector<HTMLInputElement>("#extract-deduplicate-root")!;
 
 const addSourceButton = document.querySelector<HTMLButtonElement>("#add-source")!;
 const includeAllSourcesButton = document.querySelector<HTMLButtonElement>("#include-all-sources")!;
@@ -1221,6 +1215,8 @@ let selectionAnchorPath = "";
 let focusedCompressRowPath = "";
 let compressSelectionAnchorPath = "";
 let activeExtractMode: ExtractMode = "archive";
+let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogFormSnapshot();
+let activeExtractDialogMessage = "";
 let contextEntryPath = "";
 let contextSourcePath = "";
 let reactContextMenuSnapshot: ZManagerContextMenuSnapshot = { visible: false, id: 0 };
@@ -1272,10 +1268,6 @@ const createStartController = createCreateStartController({
   workspace: createWorkspace,
   syncSources: syncCreateSourcesFromWorkspace,
   isSubmissionInFlight: isCreateSubmissionInFlight,
-  passwordInput: () => ({
-    password: createPasswordInput.value,
-    passwordConfirm: createPasswordConfirmInput.value,
-  }),
   startCreate: runStartCreate,
   onCreateStarted: (response, request) => {
     clearCreatePasswordFields();
@@ -1358,7 +1350,7 @@ const archiveOpenController = createArchiveOpenController({
 const archiveTestController = createArchiveTestController({
   workspace: archiveWorkspace,
   hasCurrentArchive: () => Boolean(currentArchivePath),
-  initialPassword: () => browsePasswordInput.value.trim() || undefined,
+  initialPassword: () => undefined,
   runTestArchive,
   addJob: addJobState,
   toCommandError: asCommandError,
@@ -1372,9 +1364,9 @@ const archivePreviewController = createArchivePreviewController({
   isCurrentArchive: (archivePath) => currentArchivePath === archivePath,
   cleanupBeforePreview: applyPreviewCleanupPolicyBeforeNextPreview,
   previewRequestInput: (password) => ({
-    overwrite: getOverwritePolicyValue(),
-    stripComponents: toNumberOrUndefined(browseStripInput.value) ?? 0,
-    password: password ?? (browsePasswordInput.value.trim() || undefined),
+    overwrite: activeExtractDialogForm.overwrite,
+    stripComponents: currentExtractDialogStripComponents(),
+    ...(password ? { password } : {}),
   }),
   cachedPreviewPathForEntry: (entryPath) => shellWorkspace.getCachedPreviewPathForEntry(entryPath),
   runPreviewEntry,
@@ -1399,38 +1391,19 @@ const archivePreviewController = createArchivePreviewController({
 const extractStartController = createExtractStartController({
   workspace: archiveWorkspace,
   hasCurrentArchive: () => Boolean(currentArchivePath),
-  readInput: (mode) => {
-    const destination = resolveExtractDestination(extractDestinationInput.value);
-    const entryReferences = archiveWorkspace.getExtractReferencePaths(mode);
-    const stripComponentsBase = toNumberOrUndefined(browseStripInput.value) ?? 0;
-    const pathMode = getExtractPathMode();
-    const deduplicateRoot = extractDeduplicateRootCheckbox.checked;
-    return {
-      destination,
-      destinationValid: isExtractDestinationValid(),
-      overwrite: getOverwritePolicyValue(),
-      stripComponents: resolveExtractStripComponents(
-        stripComponentsBase,
-        pathMode,
-        [...entryReferences],
-        deduplicateRoot,
-      ),
-      password: browsePasswordInput.value.trim() || undefined,
-      entryReferences,
-    };
-  },
+  joinNativePath,
   startExtract: runStartExtract,
   toCommandError: asCommandError,
   requestPasswordInDialog: requestExtractPasswordInDialog,
   chooseDestinationFirst: () => {
-    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
-    syncExtractDialogState();
-    syncReactExtractDialogSnapshot(message("extract.chooseDestinationFirst"));
-    extractDestinationInput.focus();
+    updateOpenExtractDialogSnapshot({
+      messageText: message("extract.chooseDestinationFirst"),
+    });
   },
   selectEntryFirst: () => {
-    extractDialogMessage.textContent = message("extract.selectEntryFirst");
-    syncReactExtractDialogSnapshot(message("extract.selectEntryFirst"));
+    updateOpenExtractDialogSnapshot({
+      messageText: message("extract.selectEntryFirst"),
+    });
   },
   recordDestination: recordExtractDestinationHistory,
   closeExtractDialog: closeReactDialog,
@@ -2424,7 +2397,7 @@ async function startNativeDragOut(entryPath: string) {
     findActiveArchiveRow(entryPath)?.focus();
   }
 
-  let password = browsePasswordInput.value.trim() || undefined;
+  let password: string | undefined;
   let requestResult = archiveWorkspace.buildNativeDragRequest({ entryPath, password });
   if (!requestResult.ok) {
     setOperationalMessage("preview.selectEntryToDrag");
@@ -3234,18 +3207,16 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       openExtractHereDialog(intent.mode);
       break;
     case "submitExtract":
-      writeReactExtractFormToLegacyControls(intent);
       activeExtractMode = intent.mode;
-      browsePasswordInput.value = intent.password.trim();
-      syncExtractDialogState();
-      void startExtract(intent.mode);
+      activeExtractDialogForm = extractDialogFormFromIntent(intent);
+      activeExtractDialogMessage = extractDialogMessageForMode(intent.mode);
+      void startExtract(
+        intent.mode,
+        extractStartInputFromDialogForm(activeExtractDialogForm, intent.password),
+      );
       break;
     case "browseExtractDestination":
-      writeReactExtractFormToLegacyControls(intent);
-      syncExtractDialogState();
-      void onSelectDestinationForExtract().finally(() => {
-        syncReactExtractDialogSnapshot();
-      });
+      void onSelectDestinationForExtract(extractDialogFormFromIntent(intent));
       break;
     case "preferences":
       openPreferencesDialog();
@@ -4366,17 +4337,16 @@ function updateCreatePlanOptionsFromControls() {
   queuePlanRun();
 }
 
-type ExtractPathMode = "full" | "current" | "none";
-
 function recordExtractDestinationHistory(destination: string): void {
   archiveOpenController.recordExtractDestinationHistory(destination);
 }
 
 function renderExtractDestinationHistory() {
-  const { extractDestinationHistory } = pathHistoryStore.getSnapshot();
-  extractDestinationHistoryList.innerHTML = extractDestinationHistory
-    .map((entry) => `<option value="${escapeHtml(entry)}"></option>`)
-    .join("");
+  if (reactDialogSnapshot.kind === "extract") {
+    updateOpenExtractDialogSnapshot();
+  } else {
+    publishReactSnapshot();
+  }
 }
 
 function recordCreateDestinationHistory(destination: string): void {
@@ -4398,43 +4368,6 @@ function recordRecentArchiveHistory(archivePath: string): void {
   archiveOpenController.recordRecentArchiveHistory(archivePath);
 }
 
-function getExtractPathMode(): ExtractPathMode {
-  const value = extractPathModeSelect.value;
-  return value === "current" || value === "none" ? value : "full";
-}
-
-function getCurrentArchiveFolderDepth(): number {
-  const normalizedFolder = normalizeFolderPath(currentArchiveFolder);
-  return normalizedFolder ? normalizedFolder.split("/").filter(Boolean).length : 0;
-}
-
-function archivePathDepth(entryPath: string): number {
-  return normalizeEntryPath(entryPath).split("/").filter(Boolean).length;
-}
-
-function hasSingleRootFolder(entryPaths: string[]): boolean {
-  const normalized = entryPaths
-    .map((entryPath) => normalizeEntryPath(entryPath).split("/").filter(Boolean))
-    .filter((parts) => parts.length > 0);
-  if (!normalized.length) {
-    return false;
-  }
-  const root = normalized[0][0];
-  return root ? normalized.every((parts) => parts[0] === root) : false;
-}
-
-function resolveExtractDestination(baseDestination: string): string {
-  if (!extractUseSubfolderCheckbox.checked) {
-    return baseDestination.trim();
-  }
-  const subfolder = extractSubfolderInput.value.trim();
-  return subfolder ? joinNativePath(baseDestination.trim(), subfolder) : baseDestination.trim();
-}
-
-function isExtractDestinationValid(): boolean {
-  return extractDestinationInput.value.trim().length > 0;
-}
-
 function extractDialogMessageForMode(mode: ExtractMode): string {
   const selectedCount = selectedEntries.size;
   return mode === "selection"
@@ -4445,94 +4378,13 @@ function extractDialogMessageForMode(mode: ExtractMode): string {
     : message("extract.archiveMessage");
 }
 
-function syncExtractDialogState() {
-  const canExtract = isExtractDestinationValid();
-  extractStartButton.disabled = !canExtract;
-  extractStartButton.classList.toggle("primary-action", canExtract);
-  extractStartButton.setAttribute("aria-disabled", String(!canExtract));
-  if (canExtract && extractDialogMessage.textContent === message("extract.chooseDestinationFirst")) {
-    extractDialogMessage.textContent = extractDialogMessageForMode(activeExtractMode);
-  }
-  syncReactExtractDialogSnapshot();
-}
-
 function requestExtractPasswordInDialog(retry: ArchiveWorkspacePasswordRetry) {
-  extractDialogMessage.textContent = message(retry.promptKey);
-  extractPasswordOptions.open = true;
-  browsePasswordInput.value = "";
-  browsePasswordInput.type = "password";
-  browseShowPasswordInput.checked = false;
-  syncExtractDialogState();
-  syncReactExtractDialogSnapshot(message(retry.promptKey));
-  browsePasswordInput.focus();
-}
-
-function handleExtractDialogEnter(event: KeyboardEvent) {
-  if (
-    event.key !== "Enter" ||
-    event.altKey ||
-    event.ctrlKey ||
-    event.metaKey ||
-    event.shiftKey
-  ) {
-    return;
-  }
-
-  const target = event.target instanceof HTMLElement ? event.target : null;
-  if (
-    target?.closest("button, a, summary") ||
-    target instanceof HTMLSelectElement ||
-    !(target instanceof HTMLInputElement)
-  ) {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-  if (!isExtractDestinationValid()) {
-    extractDialogMessage.textContent = message("extract.chooseDestinationFirst");
-    syncExtractDialogState();
-    extractDestinationInput.focus();
-    return;
-  }
-
-  void startExtract(activeExtractMode);
-}
-
-function resolveExtractStripComponents(
-  baseStripComponents: number,
-  pathMode: ExtractPathMode,
-  entryPaths: string[],
-  deduplicateRoot: boolean,
-): number {
-  const references = entryPaths.length > 0 ? [...entryPaths] : browseEntries.map((entry) => entry.path);
-  let stripComponents = Math.max(0, baseStripComponents);
-
-  if (pathMode === "current") {
-    stripComponents = Math.max(stripComponents, getCurrentArchiveFolderDepth());
-  }
-  if (pathMode === "none") {
-    let maxDepth = 0;
-    for (const path of references) {
-      maxDepth = Math.max(maxDepth, archivePathDepth(path));
-    }
-    stripComponents = Math.max(stripComponents, maxDepth);
-  }
-
-  if (deduplicateRoot && hasSingleRootFolder(references)) {
-    stripComponents += 1;
-  }
-
-  return stripComponents;
-}
-
-function getOverwritePolicyValue(): "refuse" | "replace" | "rename" | "ask" {
-  const value = browseOverwriteSelect.value;
-  if (value === "replace" || value === "rename" || value === "ask") {
-    return value;
-  }
-
-  return "refuse";
+  updateOpenExtractDialogSnapshot({
+    messageText: message(retry.promptKey),
+    formPatch: {
+      passwordPromptOpen: true,
+    },
+  });
 }
 
 function toNumberOrUndefined(value: string): number | undefined {
@@ -4543,6 +4395,10 @@ function toNumberOrUndefined(value: string): number | undefined {
 
   const parsed = Number(normalized);
   return Number.isNaN(parsed) ? undefined : Math.trunc(parsed);
+}
+
+function currentExtractDialogStripComponents(): number {
+  return toNumberOrUndefined(activeExtractDialogForm.stripComponents) ?? 0;
 }
 
 function closeOpenMenus(exceptMenu?: HTMLDetailsElement) {
@@ -4663,9 +4519,6 @@ function fallbackFocusForDialog(dialog: HTMLElement): HTMLElement | null {
 function onModalClosed(dialog: HTMLElement) {
   if (dialog === extractDialog) {
     archiveWorkspace.clearPasswordRetry();
-    browsePasswordInput.value = "";
-    browsePasswordInput.type = "password";
-    browseShowPasswordInput.checked = false;
   }
 }
 
@@ -4707,9 +4560,9 @@ function closeReactDialog() {
   reactDialogSnapshot = { kind: "none" };
   if (previous.kind === "extract") {
     archiveWorkspace.clearPasswordRetry();
-    browsePasswordInput.value = "";
-    browsePasswordInput.type = "password";
-    browseShowPasswordInput.checked = false;
+    activeExtractDialogForm = patchExtractDialogFormSnapshot(activeExtractDialogForm, {
+      passwordPromptOpen: false,
+    });
   }
   publishReactSnapshot();
 
@@ -4720,9 +4573,10 @@ function closeReactDialog() {
   }
 }
 
-function currentReactExtractDialogSnapshot(
-  mode: ExtractMode = activeExtractMode,
-  messageText = extractDialogMessage.textContent || extractDialogMessageForMode(mode),
+function buildReactExtractDialogSnapshot(
+  mode: ExtractMode,
+  messageText: string,
+  form: ExtractDialogFormSnapshot,
 ): Extract<ZManagerDialogSnapshot, { kind: "extract" }> {
   return {
     kind: "extract",
@@ -4730,37 +4584,64 @@ function currentReactExtractDialogSnapshot(
     title: message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle"),
     message: messageText,
     startLabel: message(mode === "selection" ? "extract.selectedAction" : "extract.allAction"),
-    destination: extractDestinationInput.value,
+    destination: form.destination,
     destinationHistory: [...pathHistoryStore.getSnapshot().extractDestinationHistory],
-    useSubfolder: extractUseSubfolderCheckbox.checked,
-    subfolder: extractSubfolderInput.value,
-    pathMode: getExtractPathMode(),
-    overwrite: getOverwritePolicyValue(),
-    stripComponents: browseStripInput.value,
-    deduplicateRoot: extractDeduplicateRootCheckbox.checked,
-    passwordPromptOpen: extractPasswordOptions.open,
+    useSubfolder: form.useSubfolder,
+    subfolder: form.subfolder,
+    pathMode: form.pathMode,
+    overwrite: form.overwrite,
+    stripComponents: form.stripComponents,
+    deduplicateRoot: form.deduplicateRoot,
+    passwordPromptOpen: form.passwordPromptOpen,
   };
 }
 
-function syncReactExtractDialogSnapshot(
-  messageText = extractDialogMessage.textContent || extractDialogMessageForMode(activeExtractMode),
-) {
+function updateOpenExtractDialogSnapshot(options: Readonly<{
+  mode?: ExtractMode;
+  messageText?: string;
+  formPatch?: ExtractDialogFormPatch;
+  form?: ExtractDialogFormSnapshot;
+}> = {}) {
   if (reactDialogSnapshot.kind !== "extract") {
     return;
   }
 
-  setReactDialogSnapshot(currentReactExtractDialogSnapshot(activeExtractMode, messageText));
+  activeExtractMode = options.mode ?? activeExtractMode;
+  activeExtractDialogForm = options.form
+    ?? patchExtractDialogFormSnapshot(activeExtractDialogForm, options.formPatch ?? {});
+  activeExtractDialogMessage = options.messageText
+    ?? (activeExtractDialogMessage || extractDialogMessageForMode(activeExtractMode));
+  setReactDialogSnapshot(buildReactExtractDialogSnapshot(
+    activeExtractMode,
+    activeExtractDialogMessage,
+    activeExtractDialogForm,
+  ));
 }
 
-function writeReactExtractFormToLegacyControls(input: Extract<ZManagerDialogIntent, { type: "submitExtract" | "browseExtractDestination" }>) {
-  extractDestinationInput.value = input.destination;
-  extractUseSubfolderCheckbox.checked = input.useSubfolder;
-  extractSubfolderInput.value = input.subfolder;
-  extractSubfolderInput.disabled = !input.useSubfolder;
-  extractPathModeSelect.value = input.pathMode;
-  browseOverwriteSelect.value = input.overwrite;
-  browseStripInput.value = input.stripComponents;
-  extractDeduplicateRootCheckbox.checked = input.deduplicateRoot;
+function openReactExtractDialogSnapshot(
+  mode: ExtractMode,
+  form: ExtractDialogFormSnapshot,
+  messageText: string,
+) {
+  activeExtractMode = mode;
+  activeExtractDialogForm = form;
+  activeExtractDialogMessage = messageText;
+  setReactDialogSnapshot(buildReactExtractDialogSnapshot(mode, messageText, form));
+}
+
+function extractDialogFormFromIntent(
+  input: Extract<ZManagerDialogIntent, { type: "submitExtract" | "browseExtractDestination" }>,
+): ExtractDialogFormSnapshot {
+  return createExtractDialogFormSnapshot({
+    destination: input.destination,
+    useSubfolder: input.useSubfolder,
+    subfolder: input.subfolder,
+    pathMode: input.pathMode,
+    overwrite: input.overwrite as ExtractOverwritePolicy,
+    stripComponents: input.stripComponents,
+    deduplicateRoot: input.deduplicateRoot,
+    passwordPromptOpen: activeExtractDialogForm.passwordPromptOpen,
+  });
 }
 
 function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
@@ -6147,37 +6028,31 @@ function openExtractDialog(mode: ExtractMode) {
   }
 
   archiveWorkspace.clearPasswordRetry();
-  activeExtractMode = mode;
-  extractTitle.textContent = message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle");
-  extractDialogMessage.textContent = extractDialogMessageForMode(mode);
-  extractStartButton.textContent = message(mode === "selection" ? "extract.selectedAction" : "extract.allAction");
   const { extractDestinationHistory } = pathHistoryStore.getSnapshot();
-  if (!extractDestinationInput.value.trim() && extractDestinationHistory[0]) {
-    extractDestinationInput.value = extractDestinationHistory[0];
-  }
-  extractUseSubfolderCheckbox.checked = false;
-  extractSubfolderInput.value = "";
-  extractSubfolderInput.disabled = true;
-  extractPathModeSelect.value = "full";
-  extractDeduplicateRootCheckbox.checked = false;
-  browseShowPasswordInput.checked = false;
-  browsePasswordInput.type = "password";
-  extractPasswordOptions.open = false;
-  renderExtractDestinationHistory();
-  syncExtractDialogState();
-  setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));
+  openReactExtractDialogSnapshot(
+    mode,
+    createExtractDialogFormSnapshot({
+      destination: extractDestinationHistory[0] ?? "",
+      overwrite: activeExtractDialogForm.overwrite,
+      stripComponents: activeExtractDialogForm.stripComponents,
+    }),
+    extractDialogMessageForMode(mode),
+  );
 }
 
 function openExtractHereDialog(mode: ExtractMode) {
   const parent = nativeParentPath(currentArchivePath);
   openExtractDialog(mode);
   if (parent) {
-    extractDestinationInput.value = parent;
-    extractDialogMessage.textContent = mode === "selection"
-      ? message("extract.hereSelected", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) })
-      : message("extract.hereArchive", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) });
-    syncExtractDialogState();
-    setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode, extractDialogMessage.textContent));
+    updateOpenExtractDialogSnapshot({
+      mode,
+      formPatch: {
+        destination: parent,
+      },
+      messageText: mode === "selection"
+        ? message("extract.hereSelected", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) })
+        : message("extract.hereArchive", { archiveName: getArchiveName(currentArchivePath, APP_TITLE) }),
+    });
   }
 }
 
@@ -6550,13 +6425,13 @@ async function onRefreshArchive() {
 
   await loadArchive({
     archivePath: currentArchivePath,
-    ...(browsePasswordInput.value.trim() ? { password: browsePasswordInput.value.trim() } : {}),
   }, {
     preserveState: true,
   });
 }
 
-async function onSelectDestinationForExtract() {
+async function onSelectDestinationForExtract(form: ExtractDialogFormSnapshot = activeExtractDialogForm) {
+  activeExtractDialogForm = form;
   const selected = await openNativeDialog({
     title: displayContext.translator.t("nativeDialog.chooseExtractDestination"),
     directory: true,
@@ -6567,13 +6442,15 @@ async function onSelectDestinationForExtract() {
     return;
   }
 
-  extractDestinationInput.value = selected;
-  syncExtractDialogState();
-  extractDestinationInput.focus();
+  updateOpenExtractDialogSnapshot({
+    form: patchExtractDialogFormSnapshot(form, {
+      destination: selected,
+    }),
+  });
 }
 
-async function startExtract(destinationMode: ExtractMode) {
-  await extractStartController.startExtract(destinationMode);
+async function startExtract(destinationMode: ExtractMode, input: ExtractStartInput) {
+  await extractStartController.startExtract(destinationMode, input);
 }
 
 async function onPreviewSelectedEntry() {
@@ -6629,11 +6506,11 @@ async function onSelectCreateDestination() {
 async function runCreate(
   options: {
     destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
-    passwordInput?: {
+    passwordInput: {
       password: string;
       passwordConfirm: string;
     };
-  } = {},
+  },
 ) {
   await createStartController.runCreate(options);
 }
@@ -6834,12 +6711,6 @@ function bindActions() {
     }
   });
 
-  browseExtractDestinationButton.addEventListener("click", () => void onSelectDestinationForExtract());
-  extractStartButton.addEventListener("click", () => void startExtract(activeExtractMode));
-  extractDialog.addEventListener("keydown", handleExtractDialogEnter);
-  extractDestinationInput.addEventListener("input", syncExtractDialogState);
-  extractDestinationInput.addEventListener("change", syncExtractDialogState);
-
   addSourceButton.addEventListener("click", (event) => {
     event.stopPropagation();
     showAddSourcesMenu(addSourceButton);
@@ -6997,7 +6868,12 @@ function bindActions() {
     createDestinationRecentSelect.value = "";
   });
   browseCreateDestinationButton.addEventListener("click", () => void onSelectCreateDestination());
-  startCreateButton.addEventListener("click", () => void runCreate());
+  startCreateButton.addEventListener("click", () => void runCreate({
+    passwordInput: {
+      password: "",
+      passwordConfirm: "",
+    },
+  }));
   createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
   createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);
   for (const button of [
@@ -7012,17 +6888,10 @@ function bindActions() {
   createVolumeInput.addEventListener("change", updateCreateOptionsFromControls);
   createTzapRecoveryInput.addEventListener("change", updateCreateOptionsFromControls);
 
-  browseShowPasswordInput.addEventListener("change", () => {
-    browsePasswordInput.type = browseShowPasswordInput.checked ? "text" : "password";
-  });
   createShowPasswordInput.addEventListener("change", () => {
     const type = createShowPasswordInput.checked ? "text" : "password";
     createPasswordInput.type = type;
     createPasswordConfirmInput.type = type;
-  });
-  extractUseSubfolderCheckbox.addEventListener("change", () => {
-    extractSubfolderInput.disabled = !extractUseSubfolderCheckbox.checked;
-    syncExtractDialogState();
   });
 
   copyDiagnosticsButton.addEventListener("click", () => void copyAboutDiagnostics());

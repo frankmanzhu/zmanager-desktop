@@ -208,9 +208,20 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
     setOverwrite(dialog.overwrite);
     setStripComponents(dialog.stripComponents);
     setDeduplicateRoot(dialog.deduplicateRoot);
+  }, [
+    dialog.destination,
+    dialog.useSubfolder,
+    dialog.subfolder,
+    dialog.pathMode,
+    dialog.overwrite,
+    dialog.stripComponents,
+    dialog.deduplicateRoot,
+  ]);
+
+  useEffect(() => {
     setPassword("");
     setShowPassword(false);
-  }, [dialog]);
+  }, [dialog.mode, dialog.passwordPromptOpen]);
 
   useEffect(() => {
     destinationRef.current?.focus();
@@ -325,7 +336,7 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
                 <select
                   id="browse-overwrite"
                   value={overwrite}
-                  onChange={(event) => setOverwrite(event.currentTarget.value)}
+                  onChange={(event) => setOverwrite(event.currentTarget.value as typeof overwrite)}
                 >
                   <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
                   <option value="ask">{i18n.t("extract.overwrite.ask")}</option>

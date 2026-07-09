@@ -1,5 +1,10 @@
 import type { CommandErrorDto, StartExtractRequest, StartJobResponseDto } from "../../api/types";
-import type { ExtractMode } from "../extractFlow";
+import {
+  resolveExtractStartInput,
+  type ExtractMode,
+  type ExtractStartInput,
+  type ResolvedExtractStartInput,
+} from "../extractFlow";
 import type { JobOutputAction, FocusedJobProgressContext } from "../workspaces/jobsWorkspace";
 import type {
   ArchiveWorkspace,
@@ -9,24 +14,19 @@ import type {
 } from "../workspaces/archiveWorkspace";
 import type { JobRetryContext } from "../jobs";
 
-export type ExtractStartInput = Readonly<{
-  destination: string | null;
-  destinationValid: boolean;
-  overwrite: StartExtractRequest["overwrite"];
-  stripComponents: number;
-  password?: string;
-  entryReferences: readonly string[];
-}>;
-
 export type ExtractStartControllerWorkspace = Pick<
   ArchiveWorkspace,
-  "buildExtractRequest" | "clearPasswordRetry" | "requestPasswordRetry"
+  | "buildExtractRequest"
+  | "clearPasswordRetry"
+  | "getExtractReferencePaths"
+  | "getSnapshot"
+  | "requestPasswordRetry"
 >;
 
 export type ExtractStartControllerOptions = Readonly<{
   workspace: ExtractStartControllerWorkspace;
   hasCurrentArchive(): boolean;
-  readInput(mode: ExtractMode): ExtractStartInput;
+  joinNativePath(parentPath: string, childName: string): string;
   startExtract(request: StartExtractRequest): Promise<StartJobResponseDto>;
   toCommandError(error: unknown): CommandErrorDto | null;
   requestPasswordInDialog(retry: ArchiveWorkspacePasswordRetry): void;
@@ -51,12 +51,12 @@ export type ExtractStartControllerOptions = Readonly<{
 }>;
 
 export type ExtractStartController = Readonly<{
-  startExtract(mode: ExtractMode): Promise<void>;
+  startExtract(mode: ExtractMode, input: ExtractStartInput): Promise<void>;
 }>;
 
 function retryContextForRequest(
   request: StartExtractRequest,
-  input: ExtractStartInput,
+  input: ResolvedExtractStartInput,
   mode: ExtractMode,
 ): JobRetryContext {
   return {
@@ -76,18 +76,24 @@ function passwordRetryOperation(mode: ExtractMode): "extractArchive" | "extractS
 export function createExtractStartController(
   options: ExtractStartControllerOptions,
 ): ExtractStartController {
-  async function startExtract(mode: ExtractMode): Promise<void> {
+  async function startExtract(mode: ExtractMode, input: ExtractStartInput): Promise<void> {
     if (!options.hasCurrentArchive()) {
       return;
     }
 
-    const input = options.readInput(mode);
-    if (!input.destinationValid || !input.destination) {
+    const snapshot = options.workspace.getSnapshot();
+    const resolvedInput = resolveExtractStartInput(input, {
+      currentFolder: snapshot.view.currentFolder,
+      allEntryPaths: snapshot.entries.map((entry) => entry.path),
+      entryReferences: options.workspace.getExtractReferencePaths(mode),
+      joinNativePath: options.joinNativePath,
+    });
+    if (!resolvedInput.destinationValid || !resolvedInput.destination) {
       options.chooseDestinationFirst();
       return;
     }
 
-    if (mode === "selection" && input.entryReferences.length === 0) {
+    if (mode === "selection" && resolvedInput.entryReferences.length === 0) {
       options.selectEntryFirst();
       return;
     }
@@ -95,10 +101,10 @@ export function createExtractStartController(
     let requestResult: ArchiveWorkspaceRequestResult<StartExtractRequest, ArchiveWorkspaceExtractUnavailableReason> =
       options.workspace.buildExtractRequest({
         mode,
-        destinationPath: input.destination,
-        overwrite: input.overwrite,
-        stripComponents: input.stripComponents,
-        password: input.password,
+        destinationPath: resolvedInput.destination,
+        overwrite: resolvedInput.overwrite,
+        stripComponents: resolvedInput.stripComponents,
+        password: resolvedInput.password,
       });
     if (!requestResult.ok) {
       if (mode === "selection") {
@@ -110,11 +116,11 @@ export function createExtractStartController(
 
     try {
       const response = await options.startExtract(request);
-      options.recordDestination(input.destination);
+      options.recordDestination(resolvedInput.destination);
       options.closeExtractDialog();
       options.workspace.clearPasswordRetry();
       options.addJob(response, {
-        retryContext: retryContextForRequest(request, input, mode),
+        retryContext: retryContextForRequest(request, resolvedInput, mode),
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
         progressContext: options.progressContext(request, mode),

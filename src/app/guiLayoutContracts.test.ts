@@ -63,7 +63,6 @@ const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs",
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 type FutureForbiddenTargetId =
-  | "phase1.extract-hidden-control-sync"
   | "phase2.info-about-hidden-html"
   | "phase3.typed-context-menu"
   | "phase4.create-legacy-render-helpers"
@@ -78,11 +77,6 @@ type FutureForbiddenTarget = Readonly<{
 }>;
 
 const FUTURE_FORBIDDEN_TARGETS: readonly FutureForbiddenTarget[] = [
-  {
-    id: "phase1.extract-hidden-control-sync",
-    phase: "Phase 1",
-    description: "extract dialog state no longer syncs through hidden controls",
-  },
   {
     id: "phase2.info-about-hidden-html",
     phase: "Phase 2",
@@ -207,10 +201,10 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
   {
     id: "extract-dialog-id-privatizer",
     scanId: "hiddenLegacyDom",
-    targetId: "phase1.extract-hidden-control-sync",
+    targetId: "phase7.hidden-legacy-root",
     file: "src/runtimeBridge.ts",
     line: "function privatizeLegacyExtractDialogIds() {",
-    reason: "Extract hidden controls still exist while dialog input moves to explicit controller input.",
+    reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
   },
   {
     id: "info-about-id-privatizer",
@@ -253,36 +247,12 @@ const ALLOWED_HIDDEN_LEGACY_DOM_EXCEPTIONS: readonly AllowedLegacyException[] = 
     reason: "Archive legacy DOM IDs are still rewritten while archive string render helpers remain imported.",
   },
   {
-    id: "extract-submit-writes-react-form-to-legacy-controls",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase1.extract-hidden-control-sync",
-    file: "src/runtimeBridge.ts",
-    line: "writeReactExtractFormToLegacyControls(intent);",
-    reason: "React extract submit still syncs through hidden controls before controller start.",
-  },
-  {
-    id: "extract-browse-writes-react-form-to-legacy-controls",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase1.extract-hidden-control-sync",
-    file: "src/runtimeBridge.ts",
-    line: "writeReactExtractFormToLegacyControls(intent);",
-    reason: "React extract browse still syncs through hidden controls before native browse.",
-  },
-  {
-    id: "extract-hidden-control-sync-function",
-    scanId: "hiddenLegacyDom",
-    targetId: "phase1.extract-hidden-control-sync",
-    file: "src/runtimeBridge.ts",
-    line: "function writeReactExtractFormToLegacyControls(input: Extract<ZManagerDialogIntent, { type: \"submitExtract\" | \"browseExtractDestination\" }>) {",
-    reason: "The temporary sync function is the Phase 1 deletion target.",
-  },
-  {
     id: "extract-dialog-id-privatizer-call",
     scanId: "hiddenLegacyDom",
-    targetId: "phase1.extract-hidden-control-sync",
+    targetId: "phase7.hidden-legacy-root",
     file: "src/runtimeBridge.ts",
     line: "privatizeLegacyExtractDialogIds();",
-    reason: "Extract hidden controls still exist while dialog input moves to explicit controller input.",
+    reason: "Extract hidden dialog IDs are still rewritten while the hidden legacy root remains.",
   },
   {
     id: "info-about-id-privatizer-call",
@@ -548,14 +518,6 @@ const ALLOWED_INNER_HTML_EXCEPTIONS: readonly AllowedLegacyException[] = [
     file: "src/runtimeBridge.ts",
     line: "detailsElement.innerHTML = \"\";",
     reason: "Runtime bridge still imperatively clears the archive details pane.",
-  },
-  {
-    id: "extract-destination-history-inner-html",
-    scanId: "innerHtml",
-    targetId: "phase1.extract-hidden-control-sync",
-    file: "src/runtimeBridge.ts",
-    line: "extractDestinationHistoryList.innerHTML = extractDestinationHistory",
-    reason: "Extract destination history still renders through hidden datalist controls.",
   },
   {
     id: "archive-info-dialog-inner-html",
@@ -870,7 +832,7 @@ describe("GUI layout contracts", () => {
     expect(FUTURE_FORBIDDEN_TARGETS.filter((target) => !usedTargetIds.has(target.id)).map((target) => target.id)).toEqual([]);
   });
 
-  it("names the remaining hidden legacy DOM and extract sync exceptions", () => {
+  it("names the remaining hidden legacy DOM exceptions", () => {
     expectScanMatchesOnlyAllowed("hiddenLegacyDom");
   });
 
@@ -1012,7 +974,7 @@ describe("GUI layout contracts", () => {
     expect(modalControllerSource).toContain("function getDialogSurface");
     expect(modalControllerSource).toContain("function dialogButtonFromSelector");
     expect(modalControllerSource).toContain("function keepFocusInsideOpenModal");
-    expect(mainSource).toContain('browsePasswordInput.type = "password";');
+    expect(mainSource).not.toContain("browsePasswordInput");
     expect(styles).toContain(".task-dialog");
     expect(styles).toContain(".property-dialog");
     expect(styles).toContain(".dialog-section");
@@ -1103,26 +1065,29 @@ describe("GUI layout contracts", () => {
 
   it("keeps Extract selected validation and optional fields native", () => {
     expect(mainSource).toContain('<button id="extract-start" type="button" data-dialog-default-button data-i18n-text="command.extract" disabled>Extract</button>');
-    expect(mainSource).toContain("function isExtractDestinationValid");
-    expect(mainSource).toContain("function syncExtractDialogState");
     expect(mainSource).toContain("function requestExtractPasswordInDialog");
-    expect(mainSource).toContain("function handleExtractDialogEnter");
-    expect(mainSource).toContain('extractStartButton.classList.toggle("primary-action", canExtract);');
     expect(appShellSource).toContain("<DialogRoot />");
     expect(dialogRootSource).toContain('id="extract-destination"');
     expect(dialogRootSource).toContain('type: "submitExtract"');
     expect(dialogRootSource).toContain('type: "browseExtractDestination"');
-    expect(mainSource).toContain("setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));");
+    expect(mainSource).toContain("function buildReactExtractDialogSnapshot");
+    expect(mainSource).toContain("function updateOpenExtractDialogSnapshot");
+    expect(mainSource).toContain("function extractDialogFormFromIntent");
+    expect(mainSource).toContain("extractStartInputFromDialogForm(activeExtractDialogForm, intent.password)");
     expect(mainSource).toContain("closeExtractDialog: closeReactDialog");
-    expect(mainSource).toContain("writeReactExtractFormToLegacyControls(intent);");
-    expect(mainSource).toContain('extractDialog.addEventListener("keydown", handleExtractDialogEnter);');
-    expect(mainSource).toContain('extractDestinationInput.addEventListener("input", syncExtractDialogState);');
+    expect(mainSource).not.toContain("writeReactExtractFormToLegacyControls");
+    expect(mainSource).not.toContain("currentReactExtractDialogSnapshot");
+    expect(mainSource).not.toContain("syncReactExtractDialogSnapshot");
+    expect(mainSource).not.toContain('extractDialog.addEventListener("keydown"');
+    expect(mainSource).not.toContain('extractDestinationInput.addEventListener("input"');
     expect(mainSource).toContain("function isDefaultSafeDialogTextEntry");
     expect(mainSource).toContain("dialog === extractDialog");
     expect(mainSource).toContain("target instanceof HTMLInputElement");
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
     expect(mainSource).toContain('class="advanced-options extract-password-options"');
-    expect(mainSource).toContain('browsePasswordInput.type = "password";');
+    expect(mainSource).not.toContain("browsePasswordInput");
+    expect(extractStartControllerSource).not.toContain("readInput");
+    expect(extractStartControllerSource).toContain("startExtract(mode: ExtractMode, input: ExtractStartInput)");
     expect(extractStartControllerSource).toContain('operation: passwordRetryOperation(mode)');
     expect(extractStartControllerSource).toContain('"extractArchive" : "extractSelection"');
     expect(extractStartControllerSource).toContain("options.requestPasswordInDialog(retry);");

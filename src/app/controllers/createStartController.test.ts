@@ -81,8 +81,6 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
     renderPlanState: 0,
     started: [] as unknown[],
   };
-  let password = "";
-  let passwordConfirm = "";
   const startCreate = vi.fn(async () => startJobResponse());
 
   const controller = createCreateStartController({
@@ -93,9 +91,6 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
     },
     isSubmissionInFlight() {
       return workspace.getSnapshot().options.submissionInFlight;
-    },
-    passwordInput() {
-      return { password, passwordConfirm };
     },
     startCreate,
     onCreateStarted(response, request) {
@@ -115,10 +110,6 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
   return {
     calls,
     controller,
-    setPasswords(nextPassword: string, nextPasswordConfirm = nextPassword) {
-      password = nextPassword;
-      passwordConfirm = nextPasswordConfirm;
-    },
     startCreate,
     workspace,
   };
@@ -127,10 +118,15 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
 describe("create start controller", () => {
   it("builds a request, starts create, and runs success effects", async () => {
     const harness = createHarness();
-    harness.setPasswords(" secret ", "secret");
     harness.startCreate.mockResolvedValueOnce(startJobResponse({ jobId: "job-1" }));
 
-    await harness.controller.runCreate({ destinationCollisionStrategy: "rename" });
+    await harness.controller.runCreate({
+      destinationCollisionStrategy: "rename",
+      passwordInput: {
+        password: " secret ",
+        passwordConfirm: "secret",
+      },
+    });
 
     expect(harness.startCreate).toHaveBeenCalledWith(expect.objectContaining({
       sources: ["C:/work/project"],
@@ -151,9 +147,13 @@ describe("create start controller", () => {
 
   it("renders validation errors without starting create", async () => {
     const harness = createHarness();
-    harness.setPasswords("one", "two");
 
-    await harness.controller.runCreate();
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: "one",
+        passwordConfirm: "two",
+      },
+    });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
@@ -162,9 +162,8 @@ describe("create start controller", () => {
     expect(harness.calls.renderPlanState).toBe(1);
   });
 
-  it("uses explicit submit passwords instead of the injected reader when provided", async () => {
+  it("uses explicit submit passwords from the call site", async () => {
     const harness = createHarness();
-    harness.setPasswords("legacy secret", "legacy secret");
 
     await harness.controller.runCreate({
       passwordInput: {
@@ -182,7 +181,12 @@ describe("create start controller", () => {
     const harness = createHarness();
     harness.startCreate.mockRejectedValueOnce(commandError({ message: "Create failed" }));
 
-    await harness.controller.runCreate();
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: "",
+        passwordConfirm: "",
+      },
+    });
 
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       fallbackText: "Create failed",
@@ -195,7 +199,12 @@ describe("create start controller", () => {
     const harness = createHarness();
     harness.startCreate.mockRejectedValueOnce(new Error("boom"));
 
-    await harness.controller.runCreate();
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: "",
+        passwordConfirm: "",
+      },
+    });
 
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       messageKey: "create.error.unableStart",
@@ -206,7 +215,12 @@ describe("create start controller", () => {
     const harness = createHarness();
     harness.workspace.setSubmissionInFlight(true);
 
-    await harness.controller.runCreate();
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: "",
+        passwordConfirm: "",
+      },
+    });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.calls.sync).toBe(0);
@@ -221,7 +235,12 @@ describe("create start controller", () => {
       isSubmissionInFlight: () => false,
     });
 
-    await harness.controller.runCreate();
+    await harness.controller.runCreate({
+      passwordInput: {
+        password: "",
+        passwordConfirm: "",
+      },
+    });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.calls.renderPlanState).toBe(0);
