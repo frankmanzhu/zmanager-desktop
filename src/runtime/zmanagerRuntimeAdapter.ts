@@ -212,7 +212,6 @@ import {
   type ZManagerKeyboardIntent,
   type ZManagerReactRuntimeAdapter,
   type ZManagerReactSnapshot,
-  type ZManagerReactSnapshotListener,
 } from "../ui/react/appRuntime";
 import {
   uniqueQuickActionPaths,
@@ -298,6 +297,9 @@ import {
 import {
   createRuntimeContextMenu,
 } from "./contextMenuRuntime";
+import {
+  createReactRuntimeStore,
+} from "./reactRuntimeStore";
 type SelectableBrowserRow = Extract<ArchiveTableRow, { rowType: "folder" | "entry" }>;
 type CompressPlanRow = CreatePlanRow;
 type CommandSurfaceClassState = Partial<Record<CommandId, {
@@ -365,9 +367,11 @@ let normalWorkspaceRendered = false;
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let reactDialogSnapshot: ZManagerDialogSnapshot = { kind: "none" };
-const reactRuntimeSubscribers = new Set<ZManagerReactSnapshotListener>();
+const reactRuntimeStore = createReactRuntimeStore({
+  createSnapshot: createCurrentReactSnapshot,
+});
 const contextMenuRuntime = createRuntimeContextMenu({
-  publishSnapshot: publishReactSnapshot,
+  publishSnapshot: () => reactRuntimeStore.publishSnapshot(),
 });
 
 const appTimers = createAppTimers({
@@ -1589,14 +1593,7 @@ function commandIdsWithClass(
 }
 
 function publishReactSnapshot() {
-  if (reactRuntimeSubscribers.size === 0) {
-    return;
-  }
-
-  const snapshot = createCurrentReactSnapshot();
-  for (const subscriber of reactRuntimeSubscribers) {
-    subscriber(snapshot);
-  }
+  reactRuntimeStore.publishSnapshot();
 }
 
 function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
@@ -1996,14 +1993,8 @@ function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
 
 export function getZManagerRuntimeAdapter(): ZManagerReactRuntimeAdapter {
   return {
-    getSnapshot: createCurrentReactSnapshot,
-    subscribe(listener) {
-      reactRuntimeSubscribers.add(listener);
-      listener(createCurrentReactSnapshot());
-      return () => {
-        reactRuntimeSubscribers.delete(listener);
-      };
-    },
+    getSnapshot: reactRuntimeStore.getSnapshot,
+    subscribe: reactRuntimeStore.subscribe,
     actions: {
       executeCommand: runRoutedCommand,
       setWorkspaceMode,
