@@ -686,6 +686,14 @@ Deletion gate:
 - Remove hidden archive DOM refs and `privatizeLegacyArchiveSurfaceIds`.
 - Remove legacy archive row attribute privatization.
 
+Status 2026-07-10: deletion gate complete. `runtimeBridge.ts` no longer imports
+or calls `src/ui/archiveWorkspaceView.ts`, the file was deleted, archive
+path/tree/table/details/status rendering now flows through React snapshots, the
+duplicate hidden archive search/path/tree/details listeners were removed, and
+the legacy archive row-focus restoration path was deleted. The hidden runtime
+root removal in Phase 7 also deleted `privatizeLegacyArchiveSurfaceIds` and the
+legacy row-attribute privatization code.
+
 ## Phase 6: Runtime Event Wiring
 
 Goal: move remaining event wiring to React interaction adapters or desktop/app
@@ -769,6 +777,12 @@ Deletion gate:
 
 - `rg -n "zmanager-runtime-bridge-root|appRoot\.innerHTML|privatizeLegacy" src`
   returns no matches.
+
+Status 2026-07-10: deletion gate complete. `AppShell` no longer mounts
+`#zmanager-runtime-bridge-root`, `runtimeBridge.ts` no longer generates hidden
+DOM with `appRoot.innerHTML`, `privatizeLegacy*` collision-avoidance code was
+deleted, and the GUI contract test now forbids the hidden root and
+privatization strings in `src`.
 
 ## Phase 8: Shrink Or Delete `runtimeBridge.ts`
 

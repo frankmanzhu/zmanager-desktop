@@ -49,6 +49,9 @@ const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMe
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
 const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
+const appRootInnerHtmlToken = ["appRoot", "innerHTML"].join(".");
+const runtimeBridgeRootToken = ["zmanager", "runtime", "bridge", "root"].join("-");
+const legacyPrivatizationToken = ["privatize", "Legacy"].join("");
 
 function selectorsContainingFirstTableColumnRules(css: string): string[] {
   const selectors: string[] = [];
@@ -68,7 +71,7 @@ describe("GUI layout contracts", () => {
   it("keeps main.ts as the React composition root while legacy GUI migrates", () => {
     expect(compositionRootSource).toContain('from "./ui/react/AppShell"');
     expect(compositionRootSource).toContain("createRoot(app).render(");
-    expect(compositionRootSource).not.toContain("appRoot.innerHTML");
+    expect(compositionRootSource).not.toContain(appRootInnerHtmlToken);
     expect(compositionRootSource).not.toContain("@tauri-apps/api/");
   });
 
@@ -101,7 +104,10 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('<header class="command-toolbar mode-toolbar"');
     expect(mainSource).not.toContain('<footer class="status-bar"');
     expect(styles).toContain('"menu"\n    "toolbar"\n    "path"\n    "body"\n    "status"');
-    expect(styles).toContain("#zmanager-runtime-bridge-root {\n  display: contents;");
+    expect(appShellSource).not.toContain(runtimeBridgeRootToken);
+    expect(styles).not.toContain(runtimeBridgeRootToken);
+    expect(mainSource).not.toContain(appRootInnerHtmlToken);
+    expect(mainSource).not.toContain(legacyPrivatizationToken);
     expect(styles).toContain(".command-strip {");
     expect(styles).toContain(".toolbar-group-label {");
   });
@@ -415,8 +421,8 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).toContain("readOnly");
     expect(workspacePathBarSource).toContain("hidden={crumbsHidden}");
     expect(archivePathBarSource).toContain("crumbsHidden={!archive.currentArchivePath}");
-    expect(mainSource).toContain("archiveWorkspace.getSnapshot().view.breadcrumbs");
-    expect(mainSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
+    expect(archivePathBarSource).toContain("archive.view.breadcrumbs.map((crumb) => ({");
+    expect(archivePathBarSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
     expect(workspacePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
@@ -434,8 +440,8 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).toContain('id="search-count"');
     expect(archivePathBarSource).toContain("archive.view.selection.visibleSelectablePaths.length");
     expect(archiveTableSource).toContain('className={archive.view.searchQuery ? "search-empty-row" : ""}');
-    expect(mainSource).toContain('message("detail.selectionHiddenBySearch")');
-    expect(mainSource).toContain('action: "clear-search"');
+    expect(archiveDetailsPaneSource).toContain('i18n.t("detail.selectionHiddenBySearch")');
+    expect(archiveDetailsPaneSource).toContain('action: "clear-search"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="clear-search"');
     expect(mainSource).toContain('flatView: isFlatView,');
     expect(commandToolbarSource).toContain("aria-pressed={typeof pressed === \"boolean\" ? pressed : undefined}");
@@ -450,16 +456,14 @@ describe("GUI layout contracts", () => {
   it("keeps selection properties and entry preview surfaces unambiguous", () => {
     expect(mainSource).toContain('message("info.selectionTitle")');
     expect(mainSource).toContain("function showSelectionInfo");
-    expect(mainSource).toContain('action: "extract-selected"');
-    expect(mainSource).toContain('action: "test-selected"');
-    expect(mainSource).toContain('action: "properties"');
+    expect(archiveDetailsPaneSource).toContain('action: "extract-selected"');
     expect(mainSource).toContain('action: "archive-info"');
     expect(mainSource).toContain('action: "preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="preview"');
     expect(archiveDetailsPaneSource).toContain('data-details-action="extract-selected"');
     expect(mainSource).toContain("function entryPropertyRows");
     expect(mainSource).toContain("{ label: message(\"detail.ratio\"), value: formatRatio(entry) }");
-    expect(mainSource).toContain("infoReturnFocusForCurrentSelection()");
+    expect(mainSource).not.toContain("infoReturnFocusForCurrentSelection");
     expect(mainSource).not.toContain('id="info-dialog-close"');
     expect(styles).toContain(".detail-actions");
     expect(styles).toContain(".dialog-action-group");

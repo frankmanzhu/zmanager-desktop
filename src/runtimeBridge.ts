@@ -114,16 +114,6 @@ import {
   createCreateWorkspaceSelection,
 } from "./app/workspaces/createWorkspaceSelection";
 import {
-  archiveEntryIconDescriptor,
-  archiveFileIconDescriptor,
-  archiveRowIconDescriptor,
-  archiveTreeIconDescriptor,
-  type ArchiveEntryIconDescriptor,
-} from "./app/archiveEntryIcons";
-import {
-  type IconNode,
-} from "lucide";
-import {
   pathsWithSameExtension,
 } from "./app/selection";
 import {
@@ -356,11 +346,6 @@ declare global {
   }
 }
 
-const app = document.querySelector<HTMLElement>("#zmanager-runtime-bridge-root");
-if (!app) {
-  throw new Error("missing runtime bridge root");
-}
-const appRoot = app;
 const useLinuxWindowChrome = isDesktopRuntime() && /\bLinux\b/i.test(navigator.userAgent);
 if (useLinuxWindowChrome) {
   document.body.classList.add("linux-window-chrome");
@@ -379,308 +364,6 @@ document.documentElement.style.setProperty("--zmanager-details-pane-width", `${A
 document.documentElement.style.setProperty("--zmanager-details-pane-max", `${APP_DETAILS_PANE_MAX_WIDTH_PX}px`);
 document.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
 
-function toolbarIcon(
-  name:
-    | "open"
-    | "new"
-    | "add"
-    | "extract"
-    | "test"
-    | "copy"
-    | "move"
-    | "delete"
-    | "preview"
-    | "info"
-    | "jobs"
-    | "settings"
-    | "refresh"
-    | "select"
-    | "flat"
-    | "help",
-): string {
-  const paths = {
-    open: '<path d="M3 6.5h4.2l1.3 1.5H13v6H3z" /><path d="M3 6.5V4h3.8l1.3 1.5H13V8" />',
-    new: '<path d="M7.5 3v9" /><path d="M3 7.5h9" /><path d="M13.5 5v9H4.5" />',
-    add: '<path d="M3 5.5h4.2L8.5 7H13v6H3z" /><path d="M8 8.5v3" /><path d="M6.5 10h3" />',
-    extract: '<path d="M7.5 3v7" /><path d="M4.5 7.5l3 3 3-3" /><path d="M3 13h9" />',
-    test: '<path d="M3.5 8l2.5 2.5 5.5-6" /><path d="M13 8a5.5 5.5 0 1 1-2-4.2" />',
-    copy: '<path d="M5 3.5h6.5v7H5z" /><path d="M3.5 5.5v6h6" />',
-    move: '<path d="M3 7.5h8" /><path d="M8.5 5l2.5 2.5L8.5 10" /><path d="M3 11.5h4" />',
-    delete: '<path d="M4 5h7" /><path d="M6 5V3.5h3V5" /><path d="M5 6.5l.5 6h4l.5-6" />',
-    preview: '<path d="M2.5 8s2-3.5 5-3.5 5 3.5 5 3.5-2 3.5-5 3.5-5-3.5-5-3.5z" /><path d="M7.5 6.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
-    info: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M7.5 7v3" /><path d="M7.5 5h.01" />',
-    jobs: '<path d="M3 4.5h9" /><path d="M3 7.5h9" /><path d="M3 10.5h6" />',
-    settings: '<path d="M6.5 2.5h2l.4 1.5 1.3.5 1.4-.8 1 1.7-1.1 1.1.2 1.5 1.1 1.1-1 1.7-1.4-.8-1.3.5-.4 1.5h-2l-.4-1.5-1.3-.5-1.4.8-1-1.7 1.1-1.1-.2-1.5-1.1-1.1 1-1.7 1.4.8 1.3-.5z" /><path d="M7.5 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" />',
-    refresh: '<path d="M12 5.5A4.8 4.8 0 0 0 3.6 4" /><path d="M3.5 2.5V4h1.7" /><path d="M3 9.5A4.8 4.8 0 0 0 11.4 11" /><path d="M11.5 12.5V11H9.8" />',
-    select: '<path d="M3.5 3.5h8v8h-8z" /><path d="M5.2 7.4l1.7 1.7 3-3.5" />',
-    flat: '<path d="M3 4h9" /><path d="M3 7.5h9" /><path d="M3 11h9" />',
-    help: '<path d="M7.5 13a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z" /><path d="M6 6a1.7 1.7 0 1 1 2.5 1.5c-.7.4-1 .8-1 1.5" /><path d="M7.5 10.8h.01" />',
-  } satisfies Record<typeof name, string>;
-
-  return `<svg class="tool-icon" aria-hidden="true" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
-}
-
-function renderIconNode(iconNode: IconNode, className: string): string {
-  const children = iconNode
-    .map(([tag, attrs]) => {
-      const attributes = Object.entries(attrs)
-        .map(([key, value]) => `${key}="${escapeHtmlValue(String(value))}"`)
-        .join(" ");
-      return `<${tag} ${attributes}></${tag}>`;
-    })
-    .join("");
-
-  return `<svg class="${escapeHtmlValue(className)}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${children}</svg>`;
-}
-
-function renderEntryIcon(
-  descriptor: ArchiveEntryIconDescriptor,
-  className: "row-icon" | "tree-icon" | "detail-icon",
-  dataUrl?: string | null,
-): string {
-  return `
-    <span
-      class="${className} ${className}-${descriptor.kind}"
-      title="${escapeHtmlValue(descriptor.label)}"
-      aria-hidden="true"
-      draggable="false"
-    >
-      ${dataUrl
-        ? `<img class="${className}-native-image" src="${escapeHtmlValue(dataUrl)}" alt="" draggable="false" />`
-        : renderIconNode(descriptor.icon, `${className}-svg`)}
-    </span>
-  `;
-}
-
-appRoot.innerHTML = `
-    <section class="path-bar" data-i18n-aria-label="workspace.archiveLocation.aria" aria-label="Archive location">
-      <label class="path-location">
-        <span class="path-location-label" data-i18n-text="path.fileLocation">File Location</span>
-        <input id="path-field" class="path-field" type="text" data-i18n-aria-label="path.archivePath.aria" aria-label="Archive path" value="Open or create an archive to begin." readonly disabled />
-      </label>
-      <div id="path-crumbs" class="path-crumbs" aria-live="polite" hidden data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</div>
-      <div class="search-box" role="search">
-        <label class="search-field">
-          <span class="sr-only" data-i18n-text="search.entries">Search entries</span>
-          <input id="search-entries" type="search" data-i18n-placeholder="search.placeholder" placeholder="Search archive" aria-keyshortcuts="Control+F" disabled />
-        </label>
-        <button id="search-submit" class="search-action" type="button" data-i18n-text="search.button" disabled>Search</button>
-        <button id="clear-search" class="search-action quiet-action" type="button" data-i18n-text="search.clear" data-i18n-aria-label="search.clear.aria" aria-label="Clear search" disabled>Clear</button>
-        <output id="search-count" class="search-count" for="search-entries" aria-live="polite"></output>
-      </div>
-    </section>
-
-    <section class="browser-shell" data-i18n-aria-label="workspace.archiveWorkspace.aria" aria-label="Archive workspace">
-      <div class="compress-create-panel" data-i18n-aria-label="compress.createArchive.aria" aria-label="Create archive">
-        <div class="compress-create-row">
-          <label class="compress-destination-field">
-            <span data-i18n-text="compress.destination">Destination</span>
-            <div class="inline-field">
-              <input id="create-destination" type="text" data-i18n-placeholder="compress.destination.placeholder" placeholder="Choose output archive" />
-              <button id="browse-create-destination" type="button" data-i18n-text="common.browse" data-i18n-title="create.destination.browse.title" title="Browse for archive path">Browse...</button>
-            </div>
-          </label>
-          <div class="compress-create-actions">
-            <button id="add-source" class="secondary-action" type="button" data-i18n-text="compress.addSources">Add Sources</button>
-            <button id="include-all-sources" class="quiet-action" type="button" data-i18n-text="compress.includeAll" hidden>Include All</button>
-            <button id="exclude-all-sources" class="quiet-action" type="button" data-i18n-text="compress.excludeAll" hidden>Exclude All</button>
-            <button id="clear-sources" class="quiet-action" type="button" data-i18n-text="command.clearAllSources" hidden>Clear All Sources</button>
-            <span class="compress-action-divider" aria-hidden="true"></span>
-            <button id="start-create" class="secondary-action" type="button" data-i18n-text="compress.createArchive" aria-describedby="create-plan-meta" disabled>Create Archive</button>
-          </div>
-        </div>
-        <div class="compress-plan-row">
-          <p id="create-plan-meta" data-i18n-text="compress.dropSourcesHint">Drop files or folders here, or add sources from disk.</p>
-        </div>
-      </div>
-
-      <aside id="navigation-pane" class="navigation-pane" data-i18n-aria-label="workspace.archiveNavigation.aria" aria-label="Archive navigation">
-        <div class="pane-header">
-          <h2 data-i18n-text="pane.folders">Folders</h2>
-        </div>
-        <div id="tree-content" class="tree-content"></div>
-      </aside>
-      <div
-        class="pane-resizer"
-        data-pane-resizer="navigation"
-        role="separator"
-        tabindex="0"
-        aria-orientation="vertical"
-        aria-controls="navigation-pane"
-        aria-label="Resize folder pane"
-        aria-valuemin="${APP_NAV_PANE_MIN_WIDTH_PX}"
-        aria-valuemax="${APP_NAV_PANE_MAX_WIDTH_PX}"
-        aria-valuenow="${APP_NAV_PANE_DEFAULT_WIDTH_PX}"
-        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
-      ><span class="pane-resizer-grip" aria-hidden="true"></span></div>
-
-      <section class="archive-table-pane" data-i18n-aria-label="workspace.archiveEntries.aria" aria-label="Archive entries">
-        <div class="table-pane-header">
-          <div>
-            <h1 id="workspace-title">${APP_TITLE}</h1>
-            <p id="browse-meta" data-i18n-text="browse.statusReady">Open an archive to browse entries.</p>
-          </div>
-          <button id="refresh-archive" class="quiet-action" type="button" data-command-id="refresh" data-i18n-text="common.refresh" disabled>Refresh</button>
-        </div>
-        <p id="browse-message" class="status status-idle" data-i18n-text="browse.statusIdle">No archive selected.</p>
-        <div id="compress-surface" class="compress-surface" hidden>
-          <div class="compress-table-shell">
-            <table id="compress-source-table">
-              <thead>
-                <tr>
-                  <th class="inclusion-column">
-                    <input id="compress-include-all" type="checkbox" data-i18n-aria-label="compress.includeAll" aria-label="Include All" disabled />
-                  </th>
-                  <th data-compress-column-id="name" data-i18n-text="table.name">Name<span class="column-resizer" data-column-resizer="name" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="size" data-i18n-text="table.size">Size<span class="column-resizer" data-column-resizer="size" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="modified" data-i18n-text="table.modified">Modified<span class="column-resizer" data-column-resizer="modified" aria-hidden="true"></span></th>
-                  <th data-compress-column-id="kind" data-i18n-text="table.kind">Kind<span class="column-resizer" data-column-resizer="kind" aria-hidden="true"></span></th>
-                </tr>
-              </thead>
-              <tbody id="compress-source-body">
-                <tr>
-                  <td colspan="5" class="compress-empty-cell">
-                    <div class="compress-empty-state">
-                      <strong data-i18n-text="compress.emptyTable">Drop files or folders to build a new archive.</strong>
-                      <span data-i18n-text="compress.dragSourcesHint">Drag files or folders anywhere in this window, or use Add Sources.</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="table-shell" tabindex="0">
-          <div id="marquee-hit-surface" class="marquee-hit-surface" aria-hidden="true"></div>
-          <div id="archive-empty-state" class="archive-empty-state" hidden>
-            <div class="archive-empty-state-inner">
-              <span class="archive-empty-state-icon" aria-hidden="true">${toolbarIcon("open")}</span>
-              <div class="archive-empty-copy">
-                <h2 data-i18n-text="browse.emptyTitle">Archive contents</h2>
-                <p data-i18n-text="browse.emptyDescription">Drop an archive here to inspect its files and folders.</p>
-              </div>
-              <button class="primary-action" type="button" data-empty-action="open-archive" data-i18n-text="browse.emptyOpenAction">Open Archive</button>
-              <p class="archive-empty-hint" data-i18n-text="browse.emptyDropHint">Drag entries out of this table to extract selected items.</p>
-            </div>
-          </div>
-          <table id="entry-table">
-            <thead id="entry-table-head">
-              <tr>
-                <th class="selection-column">
-                  <input id="select-all" type="checkbox" data-i18n-aria-label="table.selectVisibleEntries" aria-label="Select visible entries" disabled />
-                </th>
-                <th data-sort-key="name" data-i18n-text="table.name">Name</th>
-                <th data-sort-key="size" class="align-right" data-i18n-text="table.size">Size</th>
-                <th data-sort-key="compressedSize" class="align-right" data-i18n-text="table.packedSize">Packed Size</th>
-                <th data-sort-key="modified" data-i18n-text="table.modified">Modified</th>
-              </tr>
-            </thead>
-            <tbody id="entry-table-body">
-              <tr>
-                <td colspan="5" class="empty" data-i18n-text="browse.statusEmpty">Open or create an archive to begin.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <div
-        class="pane-resizer"
-        data-pane-resizer="details"
-        role="separator"
-        tabindex="0"
-        aria-orientation="vertical"
-        aria-controls="details-pane"
-        aria-label="Resize details pane"
-        aria-valuemin="${APP_DETAILS_PANE_MIN_WIDTH_PX}"
-        aria-valuemax="${APP_DETAILS_PANE_MAX_WIDTH_PX}"
-        aria-valuenow="${APP_DETAILS_PANE_DEFAULT_WIDTH_PX}"
-        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
-      ><span class="pane-resizer-grip" aria-hidden="true"></span></div>
-
-      <aside id="details-pane" class="details-pane" data-i18n-aria-label="workspace.details.aria" aria-label="Details and actions">
-        <div class="pane-header">
-          <h2 id="details-pane-title" data-i18n-text="pane.details">Details</h2>
-        </div>
-        <div id="details-content" class="details-content"></div>
-        <details id="compress-options-panel" class="compress-options-panel" hidden>
-          <summary class="compress-options-summary">
-            <span class="compress-options-summary-title" data-i18n-text="create.options.title">Archive Options</span>
-            <span class="compress-options-summary-description" data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</span>
-          </summary>
-          <div class="compress-options-intro">
-            <h3 data-i18n-text="create.options.title">Archive Options</h3>
-            <p data-i18n-text="create.options.description">Format, compression, password, and archive safety settings.</p>
-          </div>
-          <div class="plan-header">
-            <div>
-              <h3 data-i18n-text="create.plan.title">Plan</h3>
-              <p data-i18n-text="create.plan.description">Detailed inclusion preview for the staged sources.</p>
-            </div>
-          </div>
-          <div id="create-plan-summary" class="summary-card">
-            <p data-i18n-text="create.plan.empty">No plan available yet.</p>
-          </div>
-          <ul id="source-list" class="list-box" hidden></ul>
-          <div class="form-grid create-options-grid">
-            <label>
-              <span data-i18n-text="create.archiveFormat">Archive format</span>
-              <select id="create-format">
-                <option value="zip">ZIP</option>
-                <option value="tarZst">TZST</option>
-                <option value="tzap">TZAP</option>
-                <option value="sevenZ">7Z</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.compressionLevel">Compression level</span>
-              <select id="create-compression-level">
-                <option value="" data-i18n-text="create.compression.normal">Normal</option>
-                <option value="0" data-i18n-text="common.store">Store</option>
-                <option value="1" data-i18n-text="common.fastest">Fastest</option>
-                <option value="3" data-i18n-text="common.fast">Fast</option>
-                <option value="9" data-i18n-text="common.maximum">Maximum</option>
-                <option value="22" data-i18n-text="common.ultra">Ultra</option>
-              </select>
-            </label>
-            <label>
-              <span data-i18n-text="create.splitVolumes">Split to volumes, bytes</span>
-              <input id="create-volume" type="number" min="0" data-i18n-placeholder="common.optional" placeholder="Optional" />
-            </label>
-            <label id="create-tzap-recovery-field" hidden>
-              <span data-i18n-text="create.tzapRecovery">TZAP recovery, %</span>
-              <input id="create-tzap-recovery" type="number" min="${TZAP_RECOVERY_PERCENTAGE_MIN}" max="${TZAP_RECOVERY_PERCENTAGE_MAX}" value="${TZAP_RECOVERY_PERCENTAGE_DEFAULT}" />
-            </label>
-          </div>
-          <div class="toggle-grid">
-            <label class="toggle-line"><input id="create-clean-source" type="checkbox" /> <span data-i18n-text="create.cleanSource">Clean source</span></label>
-            <label class="toggle-line"><input id="create-preserve-metadata" type="checkbox" checked /> <span data-i18n-text="create.preserveMetadata">Preserve metadata</span></label>
-            <label class="toggle-line"><input id="create-replace-existing" type="checkbox" /> <span data-i18n-text="create.replaceExisting">Replace existing</span></label>
-            <label class="toggle-line"><input id="create-respect-gitignore" type="checkbox" /> <span data-i18n-text="create.respectGitignore">Respect .gitignore</span></label>
-          </div>
-          <details class="advanced-options">
-            <summary data-i18n-text="extract.advancedOptions">Advanced options</summary>
-            <div id="create-password-options" class="form-grid form-grid-compact">
-              <label>
-                <span data-i18n-text="create.enterPassword">Enter password</span>
-                <input id="create-password" type="password" autocomplete="off" />
-              </label>
-              <label>
-                <span data-i18n-text="create.reenterPassword">Reenter password</span>
-                <input id="create-password-confirm" type="password" autocomplete="off" />
-              </label>
-              <label class="checkbox-row">
-                <input id="create-show-password" type="checkbox" />
-                <span data-i18n-text="extract.showPassword">Show Password</span>
-              </label>
-            </div>
-          </details>
-        </details>
-      </aside>
-    </section>
-    <div id="legacy-context-menu" class="context-menu" role="menu" hidden></div>
-
-`;
-
 const workspaceElement = document.querySelector<HTMLElement>(".workspace")!;
 const modeCompressButton = document.querySelector<HTMLButtonElement>("#mode-compress")!;
 const modeExtractButton = document.querySelector<HTMLButtonElement>("#mode-extract")!;
@@ -697,8 +380,6 @@ const paneResizerElements = document.querySelectorAll<HTMLElement>("[data-pane-r
 const detailsPaneTitleElement = document.querySelector<HTMLHeadingElement>("#details-pane-title")!;
 const treeContentElement = document.querySelector<HTMLDivElement>("#tree-content")!;
 const detailsElement = document.querySelector<HTMLDivElement>("#details-content")!;
-const compressOptionsPanel = document.querySelector<HTMLDetailsElement>("#compress-options-panel")!;
-const compactCompressOptionsQuery = window.matchMedia("(max-width: 1100px), (max-height: 640px)");
 
 const extractToolbarButton = document.querySelector<HTMLButtonElement>("#extract-toolbar")!;
 const infoToolbarButton = document.querySelector<HTMLButtonElement>("#info-toolbar")!;
@@ -719,150 +400,7 @@ const tableHead = document.querySelector<HTMLTableSectionElement>("#entry-table-
 const tableBody = document.querySelector<HTMLTableSectionElement>("#entry-table-body")!;
 const entryTable = document.querySelector<HTMLTableElement>("#entry-table")!;
 const tableShellElement = document.querySelector<HTMLDivElement>(".table-shell")!;
-const archiveTablePaneElement = document.querySelector<HTMLElement>(".archive-table-pane")!;
-const archiveEmptyStateElement = document.querySelector<HTMLDivElement>("#archive-empty-state")!;
 const metaElement = document.querySelector<HTMLParagraphElement>("#browse-meta")!;
-let selectAllInput = document.querySelector<HTMLInputElement>("#select-all")!;
-const legacyArchivePathBarElement = pathFieldInput.closest<HTMLElement>(".path-bar")!;
-const legacyArchiveSurfaceClassEntries: ReadonlyArray<readonly [HTMLElement, string]> = [
-  [legacyArchivePathBarElement, "path-bar"],
-  [browserShellElement, "browser-shell"],
-  [navigationPaneElement, "navigation-pane"],
-  [treeContentElement, "tree-content"],
-  [archiveTablePaneElement, "archive-table-pane"],
-  [tableShellElement, "table-shell"],
-  [archiveEmptyStateElement, "archive-empty-state"],
-  [detailsPaneElement, "details-pane"],
-  [detailsElement, "details-content"],
-];
-
-const contextMenu = document.querySelector<HTMLDivElement>("#legacy-context-menu")!;
-
-function privatizeLegacyArchiveSurfaceIds() {
-  const publicArchiveIds = [
-    "path-field",
-    "path-crumbs",
-    "search-entries",
-    "search-submit",
-    "clear-search",
-    "search-count",
-    "navigation-pane",
-    "tree-content",
-    "workspace-title",
-    "browse-meta",
-    "refresh-archive",
-    "browse-message",
-    "marquee-hit-surface",
-    "archive-empty-state",
-    "entry-table",
-    "entry-table-head",
-    "select-all",
-    "entry-table-body",
-    "details-pane",
-    "details-pane-title",
-    "details-content",
-  ];
-
-  for (const id of publicArchiveIds) {
-    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-
-  for (const resizer of paneResizerElements) {
-    if (resizer.getAttribute("aria-controls") === "navigation-pane") {
-      resizer.setAttribute("aria-controls", "legacy-navigation-pane");
-    } else if (resizer.getAttribute("aria-controls") === "details-pane") {
-      resizer.setAttribute("aria-controls", "legacy-details-pane");
-    }
-  }
-
-  navigationPaneElement.id = "legacy-navigation-pane";
-  detailsPaneElement.id = "legacy-details-pane";
-}
-
-function privatizeLegacyCreateWorkspaceIds() {
-  const publicCreateIds = [
-    "create-destination",
-    "browse-create-destination",
-    "add-source",
-    "include-all-sources",
-    "exclude-all-sources",
-    "clear-sources",
-    "start-create",
-    "create-plan-meta",
-    "compress-surface",
-    "compress-source-table",
-    "compress-source-body",
-    "compress-include-all",
-    "source-list",
-    "compress-options-panel",
-    "create-plan-summary",
-    "create-format",
-    "create-clean-source",
-    "create-preserve-metadata",
-    "create-replace-existing",
-    "create-respect-gitignore",
-    "create-password",
-    "create-password-confirm",
-    "create-show-password",
-    "create-password-options",
-    "create-compression-level",
-    "create-volume",
-    "create-tzap-recovery-field",
-    "create-tzap-recovery",
-  ];
-
-  for (const id of publicCreateIds) {
-    const element = appRoot.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
-    if (!element) {
-      continue;
-    }
-    element.dataset.legacyId = id;
-    element.removeAttribute("id");
-  }
-}
-
-function syncLegacyArchiveSurfaceOwnership() {
-  const showLegacyArchiveSurface = false;
-
-  legacyArchivePathBarElement.hidden = !showLegacyArchiveSurface;
-  browserShellElement.hidden = !showLegacyArchiveSurface;
-  for (const [element, className] of legacyArchiveSurfaceClassEntries) {
-    element.classList.toggle(className, showLegacyArchiveSurface);
-  }
-  if (!showLegacyArchiveSurface) {
-    privatizeLegacyArchiveRowAttributes();
-  }
-}
-
-function privatizeLegacyArchiveRowAttributes() {
-  for (const header of tableHead.querySelectorAll<HTMLElement>("[data-column-id], [data-sort-key]")) {
-    if (header.dataset.columnId) {
-      header.dataset.legacyColumnId = header.dataset.columnId;
-      delete header.dataset.columnId;
-    }
-    if (header.dataset.sortKey) {
-      header.dataset.legacySortKey = header.dataset.sortKey;
-      delete header.dataset.sortKey;
-    }
-  }
-
-  for (const row of tableBody.querySelectorAll<HTMLElement>("[data-entry-path], [data-folder-path]")) {
-    if (row.dataset.entryPath) {
-      row.dataset.legacyEntryPath = row.dataset.entryPath;
-      delete row.dataset.entryPath;
-    }
-    if (row.dataset.folderPath) {
-      row.dataset.legacyFolderPath = row.dataset.folderPath;
-      delete row.dataset.folderPath;
-    }
-    row.removeAttribute("aria-label");
-  }
-}
 
 let appPreferences: AppPreferences = loadAppPreferences();
 const shellWorkspace = createShellWorkspace();
@@ -921,9 +459,6 @@ let reactContextMenuSequence = 0;
 const archiveTreeRootPath = "";
 const expandedArchiveTreeFolders = new Set<string>([archiveTreeRootPath]);
 let archiveTreeChildrenByParent = new Map<string, string[]>();
-
-privatizeLegacyArchiveSurfaceIds();
-syncLegacyArchiveSurfaceOwnership();
 
 let dropUnlisten: (() => void) | null = null;
 
@@ -1340,7 +875,6 @@ function renderNormalWorkspaceOnce() {
     return;
   }
 
-  syncCompressOptionsPanelDisclosure();
   renderExtractDestinationHistory();
   renderCreateSources();
   renderCompressBrowser();
@@ -1348,10 +882,6 @@ function renderNormalWorkspaceOnce() {
   renderJobs();
   normalWorkspaceRendered = true;
   publishReactSnapshot();
-}
-
-function syncCompressOptionsPanelDisclosure() {
-  compressOptionsPanel.open = !compactCompressOptionsQuery.matches;
 }
 
 async function revealNormalAppWindow() {
@@ -1996,10 +1526,6 @@ function buildArchiveTreeChildren(entries: ArchiveEntryDto[]): Map<string, strin
   return sortedChildren;
 }
 
-function nativeDragRowAttributes(): string {
-  return "";
-}
-
 async function startNativeDragOut(entryPath: string) {
   if (!currentArchivePath) {
     return;
@@ -2168,12 +1694,6 @@ function syncArchiveWorkspaceViewSnapshot(snapshot: ArchiveWorkspaceSnapshot) {
   selectedEntries = new Set(snapshot.view.selection.selectedPaths);
   focusedEntryPath = snapshot.view.selection.focusedPath;
   selectionAnchorPath = snapshot.view.selection.anchorPath;
-}
-
-function formatSearchCount(count: number): string {
-  return count === 1
-    ? message("search.oneResult", { count })
-    : message("search.results", { count });
 }
 
 function clearSearch() {
@@ -3010,15 +2530,6 @@ function navigateToCompressFolder(folderPath: string) {
   }
   syncCompressSelectionForSnapshot(navigation.snapshot);
   publishReactSnapshot();
-}
-
-function archiveWorkspaceRowIcon(row: BrowserRow) {
-  const icon = archiveRowIconDescriptor(row, displayContext.translator);
-  const iconDataUrl = systemIconDataUrlForRequest(systemIconRequestForRow(row));
-  return {
-    html: renderEntryIcon(icon, "row-icon", iconDataUrl),
-    label: icon.label,
-  };
 }
 
 function renderBrowseRows() {
@@ -5320,7 +4831,6 @@ function handleInfoDialogAction(action?: string, copyValue?: string) {
 }
 
 function bindActions() {
-  compactCompressOptionsQuery.addEventListener("change", syncCompressOptionsPanelDisclosure);
   windowMinimizeButton.addEventListener("click", minimizeAppWindow);
   windowMaximizeButton.addEventListener("click", toggleAppWindowMaximize);
   windowCloseButton.addEventListener("click", closeAppWindow);
@@ -5341,97 +4851,6 @@ function bindActions() {
     }
   }
 
-  searchSubmitButton.addEventListener("click", () => {
-    if (searchInput.disabled) {
-      setOperationalMessage("browse.noArchiveOpen");
-      return;
-    }
-    syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setSearchQuery(searchInput.value));
-    renderBrowse();
-    searchInput.focus();
-  });
-
-  clearSearchButton.addEventListener("click", clearSearch);
-
-  searchInput.addEventListener("input", () => {
-    if (!currentArchivePath) {
-      searchInput.value = "";
-      syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setSearchQuery(""));
-      setOperationalMessage("browse.noArchiveOpen");
-      return;
-    }
-    syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setSearchQuery(searchInput.value));
-    renderBrowse();
-  });
-
-  pathCrumbsElement.addEventListener("click", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-crumb-path]");
-    if (!target) {
-      return;
-    }
-    navigateToFolder(target.dataset.crumbPath ?? "");
-  });
-
-  pathCrumbsElement.addEventListener("keydown", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-crumb-path]");
-    if (!target || (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar")) {
-      return;
-    }
-    event.preventDefault();
-    navigateToFolder(target.dataset.crumbPath ?? "");
-  });
-
-  pathFieldInput.addEventListener("focus", () => {
-    if (currentArchivePath) {
-      pathFieldInput.select();
-    }
-  });
-
-  pathFieldInput.addEventListener("click", () => {
-    if (currentArchivePath) {
-      pathFieldInput.select();
-    }
-  });
-
-  treeContentElement.addEventListener("click", (event) => {
-    const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-action]");
-    const routedTreeCommand = selectTreeCommand(actionTarget?.dataset.treeAction);
-    if (routedTreeCommand) {
-      runRoutedCommand(routedTreeCommand.commandId, routedTreeCommand.payload);
-      return;
-    }
-
-    const toggleTarget = (event.target as HTMLElement).closest<HTMLElement>("[data-tree-toggle]");
-    if (toggleTarget) {
-      event.preventDefault();
-      const folderPath = toggleTarget.dataset.treePath ?? "";
-      syncArchiveWorkspaceViewSnapshot(archiveWorkspace.toggleTreeFolder(folderPath));
-      renderBrowse();
-      return;
-    }
-
-    const target = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-path]");
-    if (!target) {
-      return;
-    }
-    navigateToFolder(target.dataset.treePath ?? "");
-  });
-
-  detailsElement.addEventListener("click", (event) => {
-    const copyTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-copy-value]");
-    if (copyTarget) {
-      void copyTextToClipboard(copyTarget.dataset.copyValue ?? "");
-      return;
-    }
-
-    const actionTarget = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-details-action]");
-    const action = actionTarget?.dataset.detailsAction;
-    const routedCommand = selectDetailsCommand(action);
-    if (routedCommand) {
-      runRoutedCommand(routedCommand.commandId, routedCommand.payload);
-    }
-  });
-
   document.addEventListener("click", (event) => {
     if (!(event.target instanceof HTMLElement)) {
       return;
@@ -5448,7 +4867,6 @@ function bindActions() {
 
 bindMenuBehavior();
 bindActions();
-privatizeLegacyCreateWorkspaceIds();
 bindWindowLifecycleHandlers();
 refreshDisplayFromPreferences();
 pathHistoryStore.load();

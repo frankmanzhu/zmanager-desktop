@@ -71,7 +71,6 @@ export function AppShell() {
         <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
           <QuickActionProgress />
           <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
-          <div id="zmanager-runtime-bridge-root" />
           <JobsDrawer />
           <ContextMenuRoot />
           <DialogRoot />
@@ -84,7 +83,7 @@ export function AppShell() {
 function ReactWorkspaceSurfaces({ runtimeBridgeState }: Readonly<{ runtimeBridgeState: RuntimeBridgeState }>) {
   const snapshot = useZManagerSnapshot();
 
-  if (runtimeBridgeState !== "ready") {
+  if (runtimeBridgeState === "failed") {
     return null;
   }
 
