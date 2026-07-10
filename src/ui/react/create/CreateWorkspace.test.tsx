@@ -17,7 +17,7 @@ import { CreateWorkspace } from "./CreateWorkspace";
 type CreatePlan = NonNullable<CreateWorkspaceSnapshot["plan"]["current"]>;
 
 describe("React create workspace", () => {
-  it("renders create sources, plan rows, options, and the top create command", () => {
+  it("renders create sources, plan rows, and options", () => {
     const html = renderCreateWorkspace(createSnapshot());
 
     expect(html).toContain('class="path-bar"');
@@ -26,9 +26,8 @@ describe("React create workspace", () => {
     expect(html).not.toContain('id="nav-back"');
     expect(html).not.toContain('id="nav-up"');
     expect(html).toContain('id="create-destination"');
-    expect(html).toContain('id="add-source"');
-    expect(html).toContain('id="start-create"');
-    expect(html.match(/id="start-create"/g)).toHaveLength(1);
+    expect(html).not.toContain('id="add-source"');
+    expect(html).not.toContain('id="start-create"');
     expect(html).toContain('data-pane-resizer="navigation"');
     expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
     expect(html).toContain('id="compress-source-body"');

@@ -179,6 +179,11 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #search-entries")).toHaveAttribute("placeholder", "Search sources");
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #browse-create-destination")).toHaveCount(0);
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress'] #start-create")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #include-all-sources")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #exclude-all-sources")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #clear-sources")).toBeVisible();
+  await expect(page.locator("#new-archive")).toHaveCount(0);
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toHaveCount(0);
   await expect(page.locator("#zmanager-runtime-bridge-root > .browser-shell")).toBeHidden();
   await page.locator("#add-archive").click();
@@ -381,7 +386,7 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
   await waitForCompressSources(page);
   await expect(page.locator("#create-password")).toHaveCount(0);
   await page.locator("#start-create").click();
-  await expect(page.locator("#create-plan-meta")).not.toContainText("Password confirmation does not match.");
+  await expect(page.locator(".workspace")).not.toContainText("Password confirmation does not match.");
 
   await page.locator("#create-format").selectOption("sevenZ");
   await waitForCompressSources(page);
@@ -677,7 +682,7 @@ async function waitForCompressSources(page: Page) {
     page.locator("#compress-source-body tr[data-compress-folder-row], #compress-source-body tr[data-compress-entry-row]").first(),
   ).toBeVisible();
   await expect(page.locator("#start-create")).toBeEnabled();
-  await expect(page.locator("#start-create")).toHaveClass(/primary-action/);
+  await expect(page.locator("#start-create")).toHaveClass(/is-primary-command/);
 }
 
 async function expectOverlayInsideWorkspaceBody(page: Page) {

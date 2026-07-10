@@ -37,7 +37,6 @@ export type CommandId =
   | "crcAll"
   | "diff"
   | "createFolder"
-  | "createFile"
   | "exit"
   | "selectAll"
   | "deselectAll"
@@ -135,7 +134,6 @@ export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   crcAll: { id: "crcAll", label: "All", unsupported: true },
   diff: { id: "diff", label: "Diff", unsupported: true },
   createFolder: { id: "createFolder", label: "Create Folder", shortcut: "F7", unsupported: true, mutation: true },
-  createFile: { id: "createFile", label: "Create File", labelKey: "command.createFile", shortcut: "Ctrl+N", tooltip: "Create archive (Ctrl+N)" },
   exit: { id: "exit", label: "Exit", labelKey: "command.exit", shortcut: "Alt+F4" },
   selectAll: { id: "selectAll", label: "Select All", labelKey: "command.selectAll", shortcut: "Ctrl+A" },
   deselectAll: { id: "deselectAll", label: "Deselect All", labelKey: "command.deselectAll", shortcut: "Shift+Numpad Minus" },
@@ -190,8 +188,6 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
       { kind: "separator" },
       { kind: "command", id: "properties" },
       { kind: "separator" },
-      { kind: "command", id: "createFile" },
-      { kind: "separator" },
       { kind: "command", id: "exit" },
     ],
   },
@@ -244,7 +240,7 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
 ];
 
 export const CLASSIC_TOOLBAR_GROUPS: CommandBarGroup[] = [
-  { id: "compress", label: "Compress", items: ["add", "createFile"] },
+  { id: "compress", label: "Compress", items: ["add"] },
   { id: "extract", label: "Extract", items: ["open", "extract", "test"] },
   { id: "table", label: "Table actions", items: ["view", "copy", "info", "refresh", "selectAll", "flatView"] },
   { id: "jobs", label: "Jobs", items: ["jobs"] },
@@ -347,7 +343,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
     }
   };
 
-  enable(["open", "createFile", "add", "options", "helpContents", "about", "jobs", "archiveToolbar", "standardToolbar", "largeButtons", "showButtonText", "exit"]);
+  enable(["open", "add", "options", "helpContents", "about", "jobs", "archiveToolbar", "standardToolbar", "largeButtons", "showButtonText", "exit"]);
   enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
   enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
   enable(["view", "openOutside"], hasOneSelection && canListEntries, hasOneSelection ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
@@ -365,7 +361,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   enable(mutationIds, mutationsEnabled && hasSelection, context.jobRunning ? JOB_RUNNING_MESSAGE : NO_SELECTION_MESSAGE);
 
   if (context.jobRunning) {
-    enable(["open", "createFile", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
+    enable(["open", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
   }
 
   for (const id of Object.keys(COMMAND_DEFINITIONS) as CommandId[]) {

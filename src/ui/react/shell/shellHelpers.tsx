@@ -64,8 +64,6 @@ export function commandButtonId(commandId: CommandId): string {
       return "info-toolbar";
     case "open":
       return "open-archive";
-    case "createFile":
-      return "new-archive";
     case "options":
       return "preferences-toolbar";
     case "jobs":
@@ -89,7 +87,6 @@ export function commandShortcut(commandId: CommandId): string | undefined {
 export function commandIcon(commandId: CommandId): LucideIcon {
   switch (commandId) {
     case "add":
-    case "createFile":
       return Plus;
     case "open":
       return FolderOpen;

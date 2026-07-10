@@ -7,7 +7,6 @@ export type WorkspaceBrowserShellProps = Readonly<{
   navigation: ReactNode;
   table: ReactNode;
   sidePane: ReactNode;
-  topPanel?: ReactNode;
 }>;
 
 export function WorkspaceBrowserShell({
@@ -15,11 +14,9 @@ export function WorkspaceBrowserShell({
   navigation,
   table,
   sidePane,
-  topPanel,
 }: WorkspaceBrowserShellProps) {
   return (
     <section className="browser-shell" aria-label={ariaLabel}>
-      {topPanel}
       {navigation}
       <PaneResizer pane="navigation" controls="navigation-pane" label="Resize folder pane" />
       {table}

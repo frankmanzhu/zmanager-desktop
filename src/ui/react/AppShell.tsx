@@ -6,6 +6,7 @@ import { noopZManagerReactActions, type ZManagerReactRuntimeAdapter } from "./ap
 import { ArchiveWorkspace } from "./archive/ArchiveWorkspace";
 import { useZManagerSnapshot } from "./AppProviders";
 import { ContextMenuRoot } from "./context-menu/ContextMenuRoot";
+import { CreatePasswordProvider } from "./create/CreatePasswordContext";
 import { CreateWorkspace } from "./create/CreateWorkspace";
 import { DialogRoot } from "./dialogs/DialogRoot";
 import { BrowserFileDropAdapter } from "./interaction/BrowserFileDropAdapter";
@@ -68,13 +69,15 @@ export function AppShell() {
             ZManager failed to start.
           </div>
         ) : null}
-        <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
-          <QuickActionProgress />
-          <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
-          <JobsDrawer />
-          <ContextMenuRoot />
-          <DialogRoot />
-        </AppFrame>
+        <CreatePasswordProvider>
+          <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
+            <QuickActionProgress />
+            <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
+            <JobsDrawer />
+            <ContextMenuRoot />
+            <DialogRoot />
+          </AppFrame>
+        </CreatePasswordProvider>
       </div>
     </ZManagerAppRuntimeProvider>
   );

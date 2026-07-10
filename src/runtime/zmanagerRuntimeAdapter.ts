@@ -1604,7 +1604,6 @@ const commandRouter = createCommandRouter({
       }
       void onOpenArchive();
     },
-    createArchive: showCreateWorkspace,
     addSources: (anchor) => {
       if (anchor) {
         showAddSourcesMenuAt(anchor.x, anchor.y);

@@ -59,7 +59,6 @@ export const zhCnMessages = {
   "command.pastePath": "粘贴路径",
   "command.openRecent": "打开最近项",
   "command.chooseColumns": "选择列",
-  "command.createFile": "创建文件",
   "command.exit": "退出",
   "command.selectAll": "全选",
   "command.deselectAll": "取消全选",

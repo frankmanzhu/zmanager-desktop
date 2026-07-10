@@ -63,7 +63,6 @@ export const enMessages = {
   "command.pastePath": "Paste Path",
   "command.openRecent": "Open Recent",
   "command.chooseColumns": "Choose Columns",
-  "command.createFile": "Create File",
   "command.exit": "Exit",
   "command.selectAll": "Select All",
   "command.deselectAll": "Deselect All",

@@ -5,6 +5,7 @@ import { formatBytes } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
+import { useCreatePasswordState } from "./CreatePasswordContext";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { WorkspaceBrowserShell } from "../workspace/WorkspaceBrowserShell";
 import { WorkspacePathBar } from "../workspace/WorkspacePathBar";
@@ -32,45 +33,21 @@ const useBrowserLayoutEffect = typeof window === "undefined" ? useEffect : useLa
 
 export function CreateWorkspace() {
   const snapshot = useZManagerSnapshot();
-  const actions = useZManagerActions();
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const { reset: resetCreatePassword } = useCreatePasswordState();
 
   useBrowserLayoutEffect(() => {
-    setPassword("");
-    setPasswordConfirm("");
-    setShowPassword(false);
-  }, [snapshot.create.options.format, snapshot.create.options.password.visible]);
-
-  const submitCreate = () => {
-    const canSubmitPassword = snapshot.create.options.password.visible && !snapshot.create.options.password.disabled;
-    actions.handleCreateIntent({
-      type: "runCreate",
-      password: canSubmitPassword ? password : "",
-      passwordConfirm: canSubmitPassword ? passwordConfirm : "",
-    });
-    setPassword("");
-    setPasswordConfirm("");
-    setShowPassword(false);
-  };
+    resetCreatePassword();
+    return () => resetCreatePassword();
+  }, [resetCreatePassword, snapshot.create.options.format, snapshot.create.options.password.visible]);
 
   return (
     <>
       <CreatePathBar />
       <WorkspaceBrowserShell
         ariaLabel="Create archive workspace"
-        topPanel={<CreatePanel onRunCreate={submitCreate} />}
         navigation={<CreateTree />}
         table={<CreateTable />}
-        sidePane={<CreateOptions
-          password={password}
-          passwordConfirm={passwordConfirm}
-          showPassword={showPassword}
-          setPassword={setPassword}
-          setPasswordConfirm={setPasswordConfirm}
-          setShowPassword={setShowPassword}
-        />}
+        sidePane={<CreateOptions />}
       />
     </>
   );
@@ -142,58 +119,6 @@ function createBreadcrumbs(currentFolder: string, rootName: string) {
     crumbs.push({ name: segment, path });
   }
   return crumbs;
-}
-
-function CreatePanel({
-  onRunCreate,
-}: Readonly<{
-  onRunCreate(): void;
-}>) {
-  const snapshot = useZManagerSnapshot();
-  const actions = useZManagerActions();
-  const i18n = translatorForSnapshot(snapshot);
-  const create = snapshot.create;
-
-  const includedCount = create.plan.current ? create.inclusion.includedCount : create.sourceCount;
-  const statusText = create.options.readiness.unavailableReason
-    ? createUnavailableText(create.options.readiness.unavailableReason, snapshot)
-    : i18n.t("create.status.ready", {
-      count: create.inclusion.filteredPlan?.includedCount ?? create.plan.current?.includedCount ?? 0,
-      size: formatBytes(create.inclusion.filteredPlan?.totalBytes, { locale: snapshot.display.resolvedLocale }),
-    });
-
-  return (
-    <div className="compress-create-panel" aria-label={i18n.t("compress.createArchive.aria")}>
-      <div className="compress-create-row">
-        <div className="compress-create-actions">
-          <button
-            id="add-source"
-            className="secondary-action"
-            type="button"
-            onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              actions.handleCreateIntent({ type: "showAddSourcesMenu", x: rect.left, y: rect.bottom + 4 });
-            }}
-          >
-            {i18n.t("compress.addSources")}
-          </button>
-          <button id="include-all-sources" className="quiet-action" type="button" hidden={create.isEmpty} disabled={create.isEmpty || create.inclusion.excludedArchivePaths.length === 0} onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: true })}>{i18n.t("compress.includeAll")}</button>
-          <button id="exclude-all-sources" className="quiet-action" type="button" hidden={create.isEmpty} disabled={create.isEmpty || create.inclusion.includedCount === 0} onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: false })}>{i18n.t("compress.excludeAll")}</button>
-          <button id="clear-sources" className="quiet-action" type="button" hidden={create.isEmpty} onClick={() => actions.handleCreateIntent({ type: "clearSources" })}>{i18n.t("command.clearAllSources")}</button>
-          <span className="compress-action-divider" aria-hidden="true" />
-          <button id="start-create" className={create.options.readiness.canCreate ? "primary-action" : "secondary-action"} type="button" disabled={!create.options.readiness.canCreate} onClick={onRunCreate}>
-            {i18n.t("compress.createArchive")}
-          </button>
-        </div>
-      </div>
-      <div className="compress-plan-row">
-        <p id="create-plan-meta" className={create.options.readiness.unavailableReason && create.options.readiness.unavailableReason !== "needsSources" ? "status status-warning" : undefined}>
-          {create.isEmpty ? i18n.t("compress.dropSourcesHint") : statusText}
-        </p>
-        <span className="sr-only">{i18n.t("compress.sourceStaged", { count: includedCount, sourceLabel: i18n.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural") })}</span>
-      </div>
-    </div>
-  );
 }
 
 function CreateTree() {
@@ -648,23 +573,17 @@ function compressInclusionText(
   }
 }
 
-function CreateOptions({
-  password,
-  passwordConfirm,
-  showPassword,
-  setPassword,
-  setPasswordConfirm,
-  setShowPassword,
-}: Readonly<{
-  password: string;
-  passwordConfirm: string;
-  showPassword: boolean;
-  setPassword(value: string): void;
-  setPasswordConfirm(value: string): void;
-  setShowPassword(value: boolean): void;
-}>) {
+function CreateOptions() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  const {
+    password,
+    passwordConfirm,
+    showPassword,
+    setPassword,
+    setPasswordConfirm,
+    setShowPassword,
+  } = useCreatePasswordState();
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
   const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
@@ -710,18 +629,6 @@ function CreateOptions({
       </details>
     </aside>
   );
-}
-
-function createUnavailableText(reason: string, snapshot: ReturnType<typeof useZManagerSnapshot>): string {
-  const i18n = translatorForSnapshot(snapshot);
-  switch (reason) {
-    case "needsSources": return i18n.t("create.status.needsSources");
-    case "needsIncludedEntries": return i18n.t("create.status.needsIncludedEntries");
-    case "needsDestination": return i18n.t("create.status.needsDestination");
-    case "planning": return i18n.t("create.status.planning");
-    case "starting": return i18n.t("create.status.starting");
-    default: return snapshot.create.plan.status?.fallbackText ?? i18n.t("create.status.needsPlan");
-  }
 }
 
 function includeAllState(snapshot: ReturnType<typeof useZManagerSnapshot>) {

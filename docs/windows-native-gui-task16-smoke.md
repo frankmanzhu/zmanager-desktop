@@ -13,7 +13,7 @@ Date: 2026-07-08
 
 - `docs/gui-audit/manual-tauri-01-launched.png`: real Tauri shell launched and responsive.
 - `docs/gui-audit/manual-tauri-02-open-archive-picker.png`: native Windows `Open archive` picker opened from File > Open.
-- `docs/gui-audit/manual-tauri-04-file-menu.png`: keyboard-accessible File menu with Open, Open in Archive, Open Outside, View, Properties, Create File, and Exit.
+- `docs/gui-audit/manual-tauri-04-file-menu.png`: keyboard-accessible File menu with Open, Open in Archive, Open Outside, View, Properties, and Exit.
 - `docs/gui-audit/manual-tauri-05-view-menu.png`: keyboard-accessible View menu with sort and toolbar options.
 - `docs/gui-audit/manual-tauri-06-extract-loaded-native.png`: archive loaded in the Tauri shell after selecting `bundle.zip`.
 - `docs/gui-audit/manual-tauri-08-tools-menu.png`: keyboard-accessible Tools menu with Options and Delete Temporary Files.
@@ -48,4 +48,3 @@ These require a hands-on smoke pass or a controllable WebView2 automation channe
 - Reveal in File Explorer.
 - Extract destination folder picker path.
 - Fine-grained focus return after closing every modal/menu.
-

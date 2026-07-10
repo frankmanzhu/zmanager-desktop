@@ -52,7 +52,6 @@ export type CommandExecutionResult = {
 
 export type CommandRouterEffects = {
   openArchive: (source: RoutedOpenSource, archivePath?: string) => void | Promise<void>;
-  createArchive: () => void | Promise<void>;
   addSources: (anchor?: RoutedMenuAnchor) => void | Promise<void>;
   selectAll: () => void | Promise<void>;
   deselectAll: () => void | Promise<void>;
@@ -102,7 +101,7 @@ export function selectKeyboardCommand(input: KeyboardCommandInput): RoutedComman
   }
 
   if (input.ctrlKey && lowerKey === "n") {
-    return { commandId: "createFile" };
+    return { commandId: "add" };
   }
 
   if (input.ctrlKey && lowerKey === "a") {
@@ -159,8 +158,6 @@ export function selectTreeCommand(action?: string): RoutedCommand | null {
   switch (action) {
     case "open":
       return { commandId: "open" };
-    case "create":
-      return { commandId: "createFile" };
     default:
       return null;
   }
@@ -176,8 +173,6 @@ export function selectContextCommand(action?: ContextMenuAction | string, option
       return options.archivePath
         ? { commandId: "open", payload: { openSource: "path", archivePath: options.archivePath } }
         : null;
-    case "create-archive":
-      return { commandId: "createFile" };
     case "open-outside":
       return { commandId: "openOutside" };
     case "preview":
@@ -244,9 +239,6 @@ export function createCommandRouter(options: CommandRouterOptions): CommandRoute
       switch (commandId) {
         case "open":
           void effects.openArchive(payload.openSource ?? "dialog", payload.archivePath);
-          return executed(commandId);
-        case "createFile":
-          void effects.createArchive();
           return executed(commandId);
         case "add":
           void effects.addSources(payload.addSourcesMenuAnchor);

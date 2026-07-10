@@ -82,7 +82,6 @@ describe("classic command definitions", () => {
     ]);
     expect(CLASSIC_TOOLBAR_ORDER.map((id) => COMMAND_DEFINITIONS[id].label)).toEqual([
       "Add",
-      "Create File",
       "Open...",
       "Extract",
       "Test",
@@ -106,7 +105,6 @@ describe("classic command definitions", () => {
     ]);
     expect(toolbarGroupsForWorkspaceMode("compress").flatMap((group) => group.items)).toEqual([
       "add",
-      "createFile",
     ]);
 
     expect(toolbarGroupsForWorkspaceMode("extract").map((group) => group.id)).toEqual([
@@ -146,12 +144,11 @@ describe("command state selector", () => {
     jobRunning: false,
   };
 
-  it("enables open and create-style commands before an archive is open", () => {
+  it("enables open and add-source commands before an archive is open", () => {
     const state = selectCommandState(baseContext);
 
     expect(state.open.enabled).toBe(true);
     expect(state.add.enabled).toBe(true);
-    expect(state.createFile.enabled).toBe(true);
     expect(state.jobs.enabled).toBe(true);
     expect(state.extract.enabled).toBe(false);
     expect(state.extract.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
@@ -286,7 +283,6 @@ describe("command state selector", () => {
     });
 
     expect(state.add.enabled).toBe(true);
-    expect(state.createFile.enabled).toBe(true);
     expect(state.extract.enabled).toBe(true);
     expect(state.test.enabled).toBe(true);
     expect(state.jobs.enabled).toBe(true);

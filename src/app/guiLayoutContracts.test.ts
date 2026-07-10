@@ -56,6 +56,7 @@ const archiveTreeSource = normalizedWorkspaceFile("src", "ui", "react", "archive
 const archivePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchivePathBar.tsx");
 const archiveDetailsPaneSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveDetailsPane.tsx");
 const createWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "create", "CreateWorkspace.tsx");
+const createPasswordContextSource = normalizedWorkspaceFile("src", "ui", "react", "create", "CreatePasswordContext.tsx");
 const workspaceBrowserShellSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "WorkspaceBrowserShell.tsx");
 const workspacePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "WorkspacePathBar.tsx");
 const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "tableMarqueeSelection.ts");
@@ -635,7 +636,7 @@ describe("GUI layout contracts", () => {
 
   it("centers the empty archive message inside the whole drop surface", () => {
     expect(styles).toContain(".browser-shell {\n  grid-area: body;\n  display: grid;\n  grid-template-rows: minmax(0, 1fr);");
-    expect(styles).toContain(".workspace[data-mode=\"compress\"] .browser-shell {\n  grid-template-rows: auto minmax(0, 1fr);");
+    expect(styles).not.toContain(".workspace[data-mode=\"compress\"] .browser-shell {\n  grid-template-rows: auto minmax(0, 1fr);");
     expect(styles).toContain(".archive-table-pane {\n  min-width: 0;\n  min-height: 0;\n  display: grid;\n  grid-template-rows: auto minmax(0, 1fr);");
     expect(styles).toContain(".table-shell.has-start-empty {\n  overflow: auto;");
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
@@ -662,16 +663,31 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps Compress create canonical in-window with validation and source actions", () => {
-    expect(createWorkspaceSource).toContain('className="compress-create-panel"');
+    expect(createWorkspaceSource).not.toContain('className="compress-create-panel"');
     expect(mainSource).not.toContain('id="create-dialog"');
+    expect(commandToolbarSource).toContain('<ToolbarButton commandId="add" />');
+    expect(commandToolbarSource).toContain('id="browse-create-destination"');
+    expect(commandToolbarSource).toContain('id="start-create"');
+    expect(commandToolbarSource).toContain('id="include-all-sources"');
+    expect(commandToolbarSource).toContain('id="exclude-all-sources"');
+    expect(commandToolbarSource).toContain('id="clear-sources"');
     expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
-    expect(createWorkspaceSource).toContain('id="clear-sources"');
-    expect(createWorkspaceSource).toContain('id="create-plan-meta"');
-    expect(createWorkspaceSource).toContain("create.options.readiness.unavailableReason");
+    expect(commandToolbarSource).not.toContain('commandId="createFile"');
+    expect(commandToolbarSource).toContain("create.options.readiness.unavailableReason");
+    expect(commandToolbarSource).toContain('type: "runCreate"');
+    expect(createWorkspaceSource).not.toContain('id="add-source"');
+    expect(createWorkspaceSource).not.toContain('id="start-create"');
+    expect(createWorkspaceSource).not.toContain('id="create-plan-meta"');
     expect(mainSource).not.toContain("createArchiveUnavailableReason({");
     expect(createWorkspaceSource).toContain('className="compress-options-summary"');
     expect(createWorkspaceSource).toContain("const useBrowserLayoutEffect = typeof window");
     expect(createWorkspaceSource).toContain("useBrowserLayoutEffect(() => {");
+    expect(appShellSource).toContain("<CreatePasswordProvider>");
+    expect(commandToolbarSource).toContain("useCreatePasswordState");
+    expect(createWorkspaceSource).toContain("useCreatePasswordState");
+    expect(createPasswordContextSource).toContain("useState(\"\")");
+    expect(createPasswordContextSource).toContain("setPasswordConfirm(\"\")");
+    expect(createPasswordContextSource).toContain("setShowPassword(false)");
     expect(createWorkspaceSource).toContain("sourcePathForCreatePlanRow(row");
     expect(createWorkspaceSource).toContain("data-compress-source-path={sourcePath || undefined}");
     expect(contextMenuModelSource).toContain('action: "reveal-source"');
@@ -689,10 +705,11 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain('createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
     expect(mainSource).not.toContain("createPasswordInput.value = intent.password");
     expect(mainSource).not.toContain("createPasswordConfirmInput.value = intent.passwordConfirm");
-    expect(styles).toContain(".compress-destination-field .inline-field");
     expect(styles).toContain(".source-stage-badge");
-    expect(styles).toContain(".plan-validation");
-    expect(styles).toContain("#start-create:not(:disabled)");
+    expect(styles).toContain(".tool-button.is-primary-command");
+    expect(styles).not.toContain(".compress-destination-field");
+    expect(styles).not.toContain(".plan-validation");
+    expect(styles).not.toContain("#start-create:not(:disabled)");
   });
 
   it("keeps Extract selected validation and optional fields native", () => {
@@ -736,6 +753,7 @@ describe("GUI layout contracts", () => {
   it("keeps the three-pane workspace splitters visible and keyboard reachable", () => {
     expect(archiveWorkspaceSource).toContain("<WorkspaceBrowserShell");
     expect(createWorkspaceSource).toContain("<WorkspaceBrowserShell");
+    expect(workspaceBrowserShellSource).not.toContain("topPanel");
     expect(workspaceBrowserShellSource).toContain('<PaneResizer pane="navigation"');
     expect(workspaceBrowserShellSource).toContain('<PaneResizer pane="details"');
     expect(createWorkspaceSource).toContain('id="navigation-pane"');
@@ -757,8 +775,11 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain('type: "setSearchQuery"');
     expect(workspacePathBarSource).not.toContain("pathActions");
     expect(workspacePathBarSource).not.toContain("pathDatalist");
-    expect(commandToolbarSource).toContain("function CompressDestinationToolbarControls");
+    expect(commandToolbarSource).toContain("function CompressDestinationToolbarButton");
+    expect(commandToolbarSource).toContain("function CreateArchiveToolbarButton");
+    expect(commandToolbarSource).toContain("function CompressSourceToolbarButtons");
     expect(commandToolbarSource).toContain('id="browse-create-destination"');
+    expect(commandToolbarSource).toContain('id="start-create"');
     expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
     expect(createWorkspaceSource).not.toContain('<label className="compress-destination-field">');
     expect(createWorkspaceSource).not.toContain("pathActions=");
@@ -782,9 +803,9 @@ describe("GUI layout contracts", () => {
   it("keeps compact and minimum workspace pane behavior explicit", () => {
     expect(styles).toContain("@media (max-width: 1100px)");
     expect(styles).toContain("grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);");
-    expect(styles).toContain(".workspace[data-mode=\"compress\"] .details-pane {\n    grid-row: 3;");
+    expect(styles).toContain(".workspace[data-mode=\"compress\"] .details-pane {\n    grid-row: 4;");
     expect(styles).toContain("@media (max-width: 760px), (max-height: 520px)");
-    expect(styles).toContain("grid-template-rows: auto minmax(36px, auto) minmax(150px, 1fr) minmax(36px, auto);");
+    expect(styles).toContain("grid-template-rows: minmax(42px, auto) minmax(156px, 1fr) minmax(146px, auto);");
     expect(styles).toContain(".workspace[data-mode=\"compress\"] .archive-table-pane {\n    grid-row: 3;");
     expect(styles).toContain("max-height: 56px;");
     expect(styles).toContain(".navigation-pane .tree-content {\n    min-width: 0;\n    display: flex;");

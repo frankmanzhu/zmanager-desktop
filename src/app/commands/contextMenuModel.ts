@@ -12,7 +12,6 @@ export type ContextMenuAction =
   | "add-source-folder"
   | "clear-sources"
   | "compress-open-folder"
-  | "create-archive"
   | "deselect-by-type"
   | "exclude-compress-path"
   | "extract"

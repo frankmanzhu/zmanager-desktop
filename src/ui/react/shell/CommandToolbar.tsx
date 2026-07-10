@@ -1,4 +1,11 @@
-import { FolderOpen } from "lucide-react";
+import {
+  CheckSquare,
+  FileArchive,
+  FolderOpen,
+  SquareMinus,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
   toolbarGroupsForWorkspaceMode,
@@ -9,6 +16,7 @@ import type { CommandRouterPayload } from "../../../app/commands/commandRouter";
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
+import { useCreatePasswordState } from "../create/CreatePasswordContext";
 import {
   commandButtonId,
   commandIcon,
@@ -34,9 +42,11 @@ export function CommandToolbar() {
     <header className={className} role="toolbar" aria-label={i18n.t("workspace.toolbar.aria")}>
       <WorkspaceModeTabs />
       <div className="command-strip">
-        {toolbarGroups.map((group, index) => (
-          <ToolbarGroup group={group} key={group.id} showSeparator={index > 0} />
-        ))}
+        {snapshot.shell.activeMode === "compress"
+          ? <CompressToolbarGroups />
+          : toolbarGroups.map((group, index) => (
+            <ToolbarGroup group={group} key={group.id} showSeparator={index > 0} />
+          ))}
       </div>
       <div className="toolbar-spacer" />
     </header>
@@ -93,13 +103,30 @@ function ToolbarGroup({
         {group.items.map((commandId) => (
           <ToolbarButton commandId={commandId} key={commandId} />
         ))}
-        {group.id === "compress" ? <CompressDestinationToolbarControls /> : null}
       </div>
     </>
   );
 }
 
-function CompressDestinationToolbarControls() {
+function CompressToolbarGroups() {
+  return (
+    <>
+      <div className="toolbar-group" role="group" aria-label="Compress" data-command-group="compress">
+        <span className="toolbar-group-label">Compress</span>
+        <ToolbarButton commandId="add" />
+        <CompressDestinationToolbarButton />
+        <CreateArchiveToolbarButton />
+      </div>
+      <div className="toolbar-separator" aria-hidden="true" />
+      <div className="toolbar-group" role="group" aria-label="Source actions" data-command-group="compress-table">
+        <span className="toolbar-group-label">Source actions</span>
+        <CompressSourceToolbarButtons />
+      </div>
+    </>
+  );
+}
+
+function CompressDestinationToolbarButton() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
@@ -109,20 +136,126 @@ function CompressDestinationToolbarControls() {
   }
 
   return (
+    <ToolbarActionButton
+      id="browse-create-destination"
+      label={i18n.t("common.browse")}
+      title={i18n.t("create.destination.browse.title")}
+      Icon={FolderOpen}
+      onClick={() => actions.handleCreateIntent({ type: "browseDestination" })}
+    />
+  );
+}
+
+function CreateArchiveToolbarButton() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const createPassword = useCreatePasswordState();
+  const canSubmitPassword = snapshot.create.options.password.visible && !snapshot.create.options.password.disabled;
+  const canCreate = snapshot.create.options.readiness.canCreate;
+
+  if (snapshot.shell.activeMode !== "compress") {
+    return null;
+  }
+
+  return (
+    <ToolbarActionButton
+      id="start-create"
+      label={i18n.t("compress.createArchive")}
+      title={canCreate ? i18n.t("compress.createArchive") : createToolbarUnavailableText(snapshot)}
+      Icon={FileArchive}
+      primary={canCreate}
+      disabled={!canCreate}
+      onClick={() => {
+        actions.handleCreateIntent({
+          type: "runCreate",
+          password: canSubmitPassword ? createPassword.password : "",
+          passwordConfirm: canSubmitPassword ? createPassword.passwordConfirm : "",
+        });
+        createPassword.reset();
+      }}
+    />
+  );
+}
+
+function CompressSourceToolbarButtons() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const create = snapshot.create;
+
+  if (snapshot.shell.activeMode !== "compress") {
+    return null;
+  }
+
+  return (
     <>
-      <Button
-        id="browse-create-destination"
-        variant="toolbar"
-        size="unset"
-        className="tool-button"
-        type="button"
-        title={i18n.t("create.destination.browse.title")}
-        onClick={() => actions.handleCreateIntent({ type: "browseDestination" })}
-      >
-        <FolderOpen className="tool-icon" aria-hidden="true" />
-        <span className="tool-label">{i18n.t("common.browse")}</span>
-      </Button>
+      <ToolbarActionButton
+        id="include-all-sources"
+        label={i18n.t("compress.includeAll")}
+        title={i18n.t("compress.includeAll")}
+        Icon={CheckSquare}
+        disabled={create.isEmpty || create.inclusion.excludedArchivePaths.length === 0}
+        onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: true })}
+      />
+      <ToolbarActionButton
+        id="exclude-all-sources"
+        label={i18n.t("compress.excludeAll")}
+        title={i18n.t("compress.excludeAll")}
+        Icon={SquareMinus}
+        disabled={create.isEmpty || create.inclusion.includedCount === 0}
+        onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: false })}
+      />
+      <ToolbarActionButton
+        id="clear-sources"
+        label={i18n.t("command.clearAllSources")}
+        title={i18n.t("command.clearAllSources")}
+        Icon={Trash2}
+        disabled={create.isEmpty}
+        onClick={() => actions.handleCreateIntent({ type: "clearSources" })}
+      />
     </>
+  );
+}
+
+function ToolbarActionButton({
+  disabled,
+  Icon,
+  id,
+  label,
+  onClick,
+  primary,
+  title,
+}: Readonly<{
+  disabled?: boolean;
+  Icon: LucideIcon;
+  id: string;
+  label: string;
+  onClick(): void;
+  primary?: boolean;
+  title?: string;
+}>) {
+  const className = [
+    "tool-button",
+    primary ? "is-primary-command" : "",
+  ].filter(Boolean).join(" ");
+
+  return (
+    <Button
+      id={id}
+      variant="toolbar"
+      size="unset"
+      className={className}
+      type="button"
+      title={title ?? label}
+      aria-label={label}
+      disabled={disabled}
+      aria-disabled={disabled ? true : undefined}
+      onClick={onClick}
+    >
+      <Icon className="tool-icon" aria-hidden="true" />
+      <span className="tool-label">{label}</span>
+    </Button>
   );
 }
 
@@ -176,7 +309,33 @@ function toolbarCommandLabel(commandId: CommandId, snapshot: ZManagerReactSnapsh
     }
   }
 
+  if (snapshot.shell.activeMode === "compress" && commandId === "add") {
+    return i18n.t("compress.addSources");
+  }
+
   return localizedCommandLabel(commandId, snapshot);
+}
+
+function createToolbarUnavailableText(snapshot: ZManagerReactSnapshot): string {
+  const i18n = translatorForSnapshot(snapshot);
+  const reason = snapshot.create.options.readiness.unavailableReason;
+
+  switch (reason) {
+    case "needsSources":
+      return i18n.t("create.status.needsSources");
+    case "needsIncludedEntries":
+      return i18n.t("create.status.needsIncludedEntries");
+    case "needsDestination":
+      return i18n.t("create.status.needsDestination");
+    case "planning":
+      return i18n.t("create.status.planning");
+    case "starting":
+      return i18n.t("create.status.starting");
+    case "needsPlan":
+      return i18n.t("create.status.needsPlan");
+    case null:
+      return i18n.t("compress.createArchive");
+  }
 }
 
 function toolbarCommandPayload(commandId: CommandId, button: HTMLElement): CommandRouterPayload | undefined {

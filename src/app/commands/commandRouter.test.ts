@@ -26,7 +26,6 @@ function recordingEffects(log: string[]): CommandRouterEffects {
 
   return {
     openArchive: (source, archivePath) => record(`openArchive:${source}:${archivePath ?? ""}`),
-    createArchive: () => record("createArchive"),
     addSources: (anchor) => record(`addSources:${anchor ? `${anchor.x},${anchor.y}` : ""}`),
     selectAll: () => record("selectAll"),
     deselectAll: () => record("deselectAll"),
@@ -68,13 +67,12 @@ describe("command router", () => {
     });
 
     expect(router.run("open")).toEqual({ commandId: "open", status: "executed" });
-    expect(router.run("createFile")).toEqual({ commandId: "createFile", status: "executed" });
     expect(router.run("add")).toEqual({ commandId: "add", status: "executed" });
     expect(router.run("selectAll")).toEqual({ commandId: "selectAll", status: "executed" });
     expect(router.run("refresh")).toEqual({ commandId: "refresh", status: "executed" });
     expect(router.run("about")).toEqual({ commandId: "about", status: "executed" });
 
-    expect(log).toEqual(["openArchive:dialog:", "createArchive", "addSources:", "selectAll", "refresh", "about"]);
+    expect(log).toEqual(["openArchive:dialog:", "addSources:", "selectAll", "refresh", "about"]);
   });
 
   it("passes payload for commands whose behavior depends on the surface context", () => {
@@ -157,7 +155,7 @@ describe("command router", () => {
 describe("keyboard command selector", () => {
   it("maps global shortcuts to command ids", () => {
     expect(selectKeyboardCommand({ key: "o", ctrlKey: true })).toEqual({ commandId: "open" });
-    expect(selectKeyboardCommand({ key: "N", ctrlKey: true })).toEqual({ commandId: "createFile" });
+    expect(selectKeyboardCommand({ key: "N", ctrlKey: true })).toEqual({ commandId: "add" });
     expect(selectKeyboardCommand({ key: "a", ctrlKey: true })).toEqual({ commandId: "selectAll" });
     expect(selectKeyboardCommand({ key: "r", ctrlKey: true })).toEqual({ commandId: "refresh" });
     expect(selectKeyboardCommand({ key: "Backspace" })).toEqual({ commandId: "upOneLevel" });
@@ -217,7 +215,6 @@ describe("context command selector", () => {
       commandId: "open",
       payload: { openSource: "path", archivePath: "C:/archives/app.zip" },
     });
-    expect(selectContextCommand("create-archive")).toEqual({ commandId: "createFile" });
     expect(selectContextCommand("open-outside")).toEqual({ commandId: "openOutside" });
     expect(selectContextCommand("preview")).toEqual({ commandId: "view" });
     expect(selectContextCommand("view-entry")).toEqual({ commandId: "view" });
@@ -244,6 +241,7 @@ describe("context command selector", () => {
 
   it("ignores context actions that are not classic commands", () => {
     expect(selectContextCommand("open-recent-archive")).toBeNull();
+    expect(selectContextCommand("create-archive")).toBeNull();
     expect(selectContextCommand("open-folder")).toBeNull();
     expect(selectContextCommand("toggle-column")).toBeNull();
     expect(selectContextCommand(undefined)).toBeNull();
@@ -253,10 +251,10 @@ describe("context command selector", () => {
 describe("tree command selector", () => {
   it("maps explicit tree actions to command ids", () => {
     expect(selectTreeCommand("open")).toEqual({ commandId: "open" });
-    expect(selectTreeCommand("create")).toEqual({ commandId: "createFile" });
   });
 
   it("ignores tree actions that are not classic commands", () => {
+    expect(selectTreeCommand("create")).toBeNull();
     expect(selectTreeCommand("toggle")).toBeNull();
     expect(selectTreeCommand(undefined)).toBeNull();
   });
