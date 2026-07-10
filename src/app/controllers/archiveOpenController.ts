@@ -13,8 +13,7 @@ export type ArchiveOpenControllerPathHistoryStore = Pick<
 
 export type ArchiveOpenControllerOptions = Readonly<{
   pathHistoryStore: ArchiveOpenControllerPathHistoryStore;
-  renderExtractDestinationHistory(snapshot: PathHistorySnapshot): void;
-  renderCreateDestinationHistory(snapshot: PathHistorySnapshot): void;
+  publishPathHistorySnapshot(snapshot: PathHistorySnapshot): void;
   openArchiveDialogOptions(): ArchiveOpenDialogOptions;
   openArchiveDialog(options: ArchiveOpenDialogOptions): Promise<NativeOpenDialogResult>;
   canReadClipboard(): boolean;
@@ -50,7 +49,7 @@ export function createArchiveOpenController(
     if (!snapshot) {
       return;
     }
-    options.renderExtractDestinationHistory(snapshot);
+    options.publishPathHistorySnapshot(snapshot);
   }
 
   function recordCreateDestinationHistory(destination: string): void {
@@ -58,7 +57,7 @@ export function createArchiveOpenController(
     if (!snapshot) {
       return;
     }
-    options.renderCreateDestinationHistory(snapshot);
+    options.publishPathHistorySnapshot(snapshot);
   }
 
   function recordRecentArchiveHistory(archivePath: string): void {

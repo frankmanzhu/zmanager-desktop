@@ -69,9 +69,8 @@ export type QuickActionControllerOptions = Readonly<{
   setCreateOptions(patch: CreateWorkspaceOptionPatch): CreateWorkspaceSnapshot;
   setCreateDestinationPath(path: string): CreateWorkspaceSnapshot;
   syncCreateSources(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
+  publishCreateSnapshot(snapshot: CreateWorkspaceSnapshot): void;
   cancelQueuedPlanRun(): void;
-  renderCreateSources(): void;
-  renderCompressBrowser(): void;
   runPlan(): Promise<void>;
   setCurrentArchivePath(archivePath: string): void;
   loadArchive(request: ListArchiveRequest): Promise<void>;
@@ -189,8 +188,7 @@ export function createQuickActionController(
       options.pathHelpers,
     )));
     options.cancelQueuedPlanRun();
-    options.renderCreateSources();
-    options.renderCompressBrowser();
+    options.publishCreateSnapshot(options.syncCreateSources());
 
     options.setOperationalMessage("quickCreate.planning");
     await options.runPlan();

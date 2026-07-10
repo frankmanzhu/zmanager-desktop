@@ -406,13 +406,20 @@ function cloneContextMenuSnapshot(contextMenu: ZManagerContextMenuSnapshot): ZMa
     ...contextMenu,
     items: contextMenu.items.map((item) => {
       if (item.type === "action") {
-        return { ...item, payload: { ...item.payload } };
+        return { ...item, payload: cloneContextMenuPayload(item.payload) };
       }
       if (item.type === "checkbox") {
-        return { ...item, payload: { ...item.payload } };
+        return { ...item, payload: cloneContextMenuPayload(item.payload) };
       }
       return { ...item };
     }),
+  };
+}
+
+function cloneContextMenuPayload(payload: ZManagerContextMenuActionPayload): ZManagerContextMenuActionPayload {
+  return {
+    ...payload,
+    ...(payload.sourcePaths ? { sourcePaths: [...payload.sourcePaths] } : {}),
   };
 }
 

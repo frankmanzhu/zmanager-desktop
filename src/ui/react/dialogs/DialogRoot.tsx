@@ -147,7 +147,7 @@ function AboutDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsh
           </button>
         </div>
         <div className="dialog-body">
-          <div id="about-diagnostics" className="diagnostics">
+          <div id="about-diagnostics" className="diagnostics diagnostics-groups">
             {dialog.groups.map((group) => (
               <section className="diagnostic-group" data-diagnostics-group key={group.title}>
                 <h3>{group.title}</h3>

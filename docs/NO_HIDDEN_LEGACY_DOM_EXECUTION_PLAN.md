@@ -425,14 +425,19 @@ Deletion gate:
 - Remove hidden create password reads from `createStartController` setup.
 - Remove extract hidden-control sync functions.
 
-Status 2026-07-10: partially complete for extract. `createExtractStartController`
+Status 2026-07-10: complete for the live extract dialog path. `createExtractStartController`
 now receives explicit `ExtractStartInput` in `startExtract(mode, input)`, the
-runtime bridge no longer configures a controller `readInput` callback, and React
-extract submit/browse no longer writes form state into hidden extract controls.
-The legacy extract dialog still uses hidden controls for its own direct button
-and keyboard paths, and `currentReactExtractDialogSnapshot` /
-`syncReactExtractDialogSnapshot` remain until the full dialog-state module
-replaces that ownership path.
+runtime bridge no longer configures a controller `readInput` callback, React
+extract submit/browse no longer writes form state into hidden extract controls,
+and the hidden legacy extract dialog HTML plus its captured controls and
+listeners were deleted. Extract dialog snapshots are now built from typed
+runtime form state and React-local submit password state.
+
+Create status 2026-07-10: partially complete. `createCreateStartController`
+now requires explicit submit password input and no longer accepts an injected
+`passwordInput()` callback. A small legacy create adapter in `runtimeBridge.ts`
+still reads hidden create password fields for the old `#start-create` listener
+until the hidden create controls are deleted.
 
 ## Phase 2: Snapshot-Only Info And About Dialogs
 
@@ -484,6 +489,12 @@ Deletion gate:
 - Remove `diagnosticsText()` DOM parsing.
 - Remove hidden `aboutDialog`, `infoDialog`, `infoActionGroup`, and their close
   button listeners once React modal focus is covered.
+
+Status 2026-07-10: complete for the live info/about dialog path. Info dialog
+builders now publish React snapshots only, About diagnostics are serialized from
+snapshot data instead of hidden DOM, and the hidden info/about dialog HTML,
+captured elements, modal-controller wiring, and close/action listeners were
+deleted from `src/runtimeBridge.ts`.
 
 ## Phase 3: Typed Context Menu Snapshots
 
@@ -599,6 +610,24 @@ Deletion gate:
 - Remove bridge-level `selectedCompressRows`, `focusedCompressRowPath`, and
   `compressSelectionAnchorPath` unless they have been moved into a named create
   workspace module with tests.
+
+Status 2026-07-10: deletion gate complete. `createCreateStartController` and
+`createCreatePlanController` now publish snapshots instead of invoking
+controller render callbacks such as `renderPlanState`, `renderPlanStatus`,
+`renderCreateBrowser`, or `refreshPlanSummary`. `createQuickActionController`
+also publishes the create workspace snapshot for create-review startup instead
+of invoking `renderCreateSources` or `renderCompressBrowser`. Bridge-level
+create row selection/focus/anchor globals were moved into
+`src/app/workspaces/createWorkspaceSelection.ts` with interface-level tests, and
+React create destination/search/navigation/inclusion intents no longer refresh a
+hidden create browser. `createArchiveOpenController` now publishes
+`PathHistorySnapshot` changes instead of invoking separate hidden
+extract/create destination-history render callbacks. `runtimeBridge.ts` no
+longer imports `src/ui/createWorkspaceView.ts`, that legacy view file was
+deleted, hidden create DOM refs/listeners were removed from `runtimeBridge.ts`,
+and the old bridge-level `selectedCompressRows`, `focusedCompressRowPath`, and
+`compressSelectionAnchorPath` state no longer exists. The remaining hidden DOM
+bootstrap is now an archive/shell concern for later phases.
 
 ## Phase 5: Archive Workspace Deepening
 

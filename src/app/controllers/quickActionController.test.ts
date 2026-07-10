@@ -15,7 +15,11 @@ import {
   DEFAULT_APP_PREFERENCES,
   type AppPreferences,
 } from "../preferences";
-import { createCreateWorkspace, type CreateWorkspace } from "../workspaces/createWorkspace";
+import {
+  createCreateWorkspace,
+  type CreateWorkspace,
+  type CreateWorkspaceSnapshot,
+} from "../workspaces/createWorkspace";
 import { createQuickActionController, type QuickActionControllerOptions } from "./quickActionController";
 
 const startedAt = "2026-06-11T00:00:00Z";
@@ -72,8 +76,7 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     jobs: [] as unknown[],
     shownCreateWorkspace: 0,
     cancelledPlans: 0,
-    renderedSources: 0,
-    renderedBrowser: 0,
+    publishedSnapshots: [] as CreateWorkspaceSnapshot[],
     currentArchives: [] as string[],
     loadedArchives: [] as string[],
     browseErrors: [] as string[],
@@ -182,14 +185,11 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
       calls.syncedSnapshots += 1;
       return snapshot;
     },
+    publishCreateSnapshot(snapshot) {
+      calls.publishedSnapshots.push(snapshot);
+    },
     cancelQueuedPlanRun() {
       calls.cancelledPlans += 1;
-    },
-    renderCreateSources() {
-      calls.renderedSources += 1;
-    },
-    renderCompressBrowser() {
-      calls.renderedBrowser += 1;
     },
     async runPlan() {
       const planStart = workspace.beginPlan();
@@ -313,8 +313,8 @@ describe("quick action controller", () => {
       destinationPath: "C:/work/report.txt.tzst",
     });
     expect(harness.calls.cancelledPlans).toBe(1);
-    expect(harness.calls.renderedSources).toBe(1);
-    expect(harness.calls.renderedBrowser).toBe(1);
+    expect(harness.calls.publishedSnapshots).toHaveLength(1);
+    expect(harness.calls.publishedSnapshots[0]?.sources).toEqual(["C:/work/report.txt"]);
     expect(harness.calls.messages.map((call) => call.key)).toContain("quickCreate.planning");
     expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.review", params: undefined });
   });

@@ -149,18 +149,18 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps dialogs on shared native task and property primitives", () => {
-    expect(mainSource).toContain('class="dialog task-dialog"');
-    expect(mainSource).toContain('class="dialog property-dialog"');
+    expect(dialogRootSource).toContain('className="dialog task-dialog"');
+    expect(dialogRootSource).toContain('className="dialog property-dialog"');
     expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
-    expect(mainSource).toContain('data-dialog-default="#extract-start"');
-    expect(mainSource).toContain('data-dialog-cancel="#extract-cancel"');
-    expect(mainSource).toContain('from "./ui/modalController"');
-    expect(mainSource).toContain("const modalController = createModalController");
+    expect(mainSource).not.toContain('data-dialog-default="#extract-start"');
+    expect(mainSource).not.toContain('data-dialog-cancel="#extract-cancel"');
+    expect(mainSource).not.toContain('from "./ui/modalController"');
+    expect(mainSource).not.toContain("const modalController = createModalController");
     expect(modalControllerSource).toContain("function resolveReturnFocus");
     expect(modalControllerSource).toContain("function getDialogSurface");
     expect(modalControllerSource).toContain("function dialogButtonFromSelector");
     expect(modalControllerSource).toContain("function keepFocusInsideOpenModal");
-    expect(mainSource).toContain('browsePasswordInput.type = "password";');
+    expect(mainSource).not.toContain("browsePasswordInput");
     expect(styles).toContain(".task-dialog");
     expect(styles).toContain(".property-dialog");
     expect(styles).toContain(".dialog-section");
@@ -170,10 +170,13 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps About diagnostics in the dialog body layout", () => {
-    expect(mainSource).toContain('<div class="dialog-body property-dialog-body about-property-body">');
-    expect(mainSource).toContain('<div id="about-diagnostics" class="diagnostics diagnostics-groups"></div>');
+    expect(mainSource).not.toContain('id="about-dialog"');
+    expect(mainSource).not.toContain('id="info-dialog"');
+    expect(mainSource).not.toContain('id="about-diagnostics"');
+    expect(dialogRootSource).toContain('<div id="about-diagnostics" className="diagnostics diagnostics-groups">');
     expect(mainSource).toContain('function diagnosticsText(): string');
-    expect(mainSource).toContain('for (const group of aboutDiagnostics.querySelectorAll<HTMLElement>("[data-diagnostics-group]"))');
+    expect(mainSource).toContain("function serializeAboutDiagnostics");
+    expect(mainSource).not.toContain("aboutDiagnostics.querySelectorAll");
     expect(styles).toContain(".detail-list > div {\n  display: contents;");
     expect(styles).toContain(".diagnostics-groups");
   });
@@ -228,19 +231,23 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain("useBrowserLayoutEffect(() => {");
     expect(createWorkspaceSource).toContain("sourcePathForCreatePlanRow(row");
     expect(createWorkspaceSource).toContain("data-compress-source-path={sourcePath || undefined}");
-    expect(mainSource).toContain('{ action: "reveal-source" }');
-    expect(mainSource).toContain('{ action: "remove-source" }');
+    expect(mainSource).toContain('{ action: "reveal-source", sourcePath }');
+    expect(mainSource).toContain('{ action: "remove-source", sourcePath, sourcePaths: [sourcePath] }');
     expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
-    expect(mainSource).toContain("function removableSourcePathForCompressRow");
+    expect(mainSource).not.toContain("function removableSourcePathForCompressRow");
+    expect(mainSource).toContain("function removableSourcePathForCompressPath");
+    expect(mainSource).toContain("createCreateWorkspaceSelection");
+    expect(mainSource).toContain("createWorkspaceSelection.has(row.path)");
     expect(mainSource).toContain("if (!rowPath || snapshot.view.currentFolder)");
     expect(mainSource).toContain("normalizeEntryPath(rowPath) === getPathBasename(sourcePath)");
     expect(mainSource).toContain("removableSourcePath ? sourcePathsForCompressMenu(removableSourcePath) : []");
     expect(mainSource).toContain("function sourcePathsForCompressMenu");
     expect(mainSource).toContain('message("command.removeSelectedSources"');
-    expect(mainSource).toContain('event.key === "Delete"');
+    expect(mainSource).not.toContain('event.key === "Delete"');
     expect(mainSource).not.toContain('<button type="button" data-command-id="helpContents" data-i18n-text="common.help">Help</button>');
-    expect(mainSource).toContain('createPasswordInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
-    expect(mainSource).toContain('createPasswordConfirmInput.addEventListener("input", refreshCreateStateAfterDestinationEdit);');
+    expect(mainSource).not.toContain('createPasswordInput.addEventListener("input"');
+    expect(mainSource).not.toContain('createPasswordConfirmInput.addEventListener("input"');
+    expect(mainSource).not.toContain('startCreateButton.addEventListener("click"');
     expect(mainSource).not.toContain("createPasswordInput.value = intent.password");
     expect(mainSource).not.toContain("createPasswordConfirmInput.value = intent.passwordConfirm");
     expect(styles).toContain(".compress-destination-field .inline-field");
@@ -249,31 +256,30 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("#start-create:not(:disabled)");
   });
 
-  it("keeps Extract selected validation and optional fields native", () => {
-    expect(mainSource).toContain('<button id="extract-start" type="button" data-dialog-default-button data-i18n-text="command.extract" disabled>Extract</button>');
-    expect(mainSource).toContain("function isExtractDestinationValid");
-    expect(mainSource).toContain("function syncExtractDialogState");
+  it("keeps Extract selected validation and optional fields in React state", () => {
+    expect(mainSource).not.toContain('id="extract-dialog"');
+    expect(mainSource).not.toContain('<button id="extract-start"');
+    expect(mainSource).not.toContain("function isExtractDestinationValid");
+    expect(mainSource).not.toContain("function syncExtractDialogState");
     expect(mainSource).toContain("function requestExtractPasswordInDialog");
-    expect(mainSource).toContain("function handleExtractDialogEnter");
-    expect(mainSource).toContain('extractStartButton.classList.toggle("primary-action", canExtract);');
+    expect(mainSource).not.toContain("function handleExtractDialogEnter");
     expect(appShellSource).toContain("<DialogRoot />");
     expect(dialogRootSource).toContain('id="extract-destination"');
+    expect(dialogRootSource).toContain('id="extract-start"');
     expect(dialogRootSource).toContain('type: "submitExtract"');
     expect(dialogRootSource).toContain('type: "browseExtractDestination"');
     expect(mainSource).toContain("setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));");
     expect(mainSource).toContain("closeExtractDialog: closeReactDialog");
     expect(mainSource).toContain("extractStartInputFromFormValues(intent.mode");
-    expect(mainSource).toContain("extractStartInputFromLegacyControls(destinationMode)");
+    expect(mainSource).not.toContain("extractStartInputFromLegacyControls");
     expect(mainSource).not.toContain("writeReactExtractFormToLegacyControls");
     expect(extractStartControllerSource).not.toContain("readInput");
-    expect(mainSource).toContain('extractDialog.addEventListener("keydown", handleExtractDialogEnter);');
-    expect(mainSource).toContain('extractDestinationInput.addEventListener("input", syncExtractDialogState);');
-    expect(mainSource).toContain("function isDefaultSafeDialogTextEntry");
-    expect(mainSource).toContain("dialog === extractDialog");
-    expect(mainSource).toContain("target instanceof HTMLInputElement");
+    expect(mainSource).not.toContain('extractDialog.addEventListener("keydown"');
+    expect(mainSource).not.toContain("extractDestinationInput");
+    expect(mainSource).not.toContain("function isDefaultSafeDialogTextEntry");
+    expect(mainSource).not.toContain("dialog === extractDialog");
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
-    expect(mainSource).toContain('class="advanced-options extract-password-options"');
-    expect(mainSource).toContain('browsePasswordInput.type = "password";');
+    expect(dialogRootSource).toContain('className="advanced-options extract-password-options"');
     expect(extractStartControllerSource).toContain('operation: passwordRetryOperation(mode)');
     expect(extractStartControllerSource).toContain('"extractArchive" : "extractSelection"');
     expect(extractStartControllerSource).toContain("options.requestPasswordInDialog(retry);");

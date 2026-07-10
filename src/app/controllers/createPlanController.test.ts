@@ -43,9 +43,7 @@ function createHarness(overrides: Partial<CreatePlanControllerOptions> = {}) {
     cancel: 0,
     schedule: 0,
     sync: 0,
-    renderPlanState: 0,
-    renderCreateBrowser: 0,
-    refreshPlanSummary: 0,
+    published: [] as ReturnType<typeof workspace.getSnapshot>[],
     statuses: [] as string[],
     browserPreviewSources: [] as string[][],
   };
@@ -68,23 +66,9 @@ function createHarness(overrides: Partial<CreatePlanControllerOptions> = {}) {
       calls.sync += 1;
       return snapshot;
     },
-    renderPlanState() {
-      calls.renderPlanState += 1;
-    },
-    renderPlanStatus(message) {
-      calls.statuses.push(message);
-    },
-    renderCreateBrowser() {
-      calls.renderCreateBrowser += 1;
-    },
-    refreshPlanSummary() {
-      calls.refreshPlanSummary += 1;
-    },
-    planStatusText(status) {
-      return status?.fallbackText ?? (status?.messageKey ? status.messageKey : "");
-    },
-    translate(key) {
-      return key;
+    publishSnapshot(snapshot) {
+      calls.published.push(snapshot);
+      calls.statuses.push(snapshot.plan.status?.fallbackText ?? snapshot.plan.status?.messageKey ?? "");
     },
     canUseBrowserPreview() {
       return false;
@@ -126,8 +110,7 @@ describe("create plan controller", () => {
     expect(harness.hasScheduled()).toBe(false);
     expect(harness.runPlanCreate).not.toHaveBeenCalled();
     expect(harness.calls.statuses).toEqual(["create.plan.noSources"]);
-    expect(harness.calls.renderPlanState).toBe(1);
-    expect(harness.calls.renderCreateBrowser).toBe(1);
+    expect(harness.calls.published).toHaveLength(1);
   });
 
   it("schedules a debounced run for non-empty sources", () => {
@@ -169,9 +152,8 @@ describe("create plan controller", () => {
       followSymlinks: false,
     });
     expect(harness.workspace.getSnapshot().plan.current?.totalBytes).toBe(99);
-    expect(harness.calls.refreshPlanSummary).toBe(1);
-    expect(harness.calls.statuses).toEqual(["create.plan.planning"]);
-    expect(harness.calls.renderCreateBrowser).toBe(2);
+    expect(harness.calls.statuses).toEqual(["create.plan.planning", ""]);
+    expect(harness.calls.published).toHaveLength(2);
   });
 
   it("ignores stale async results", async () => {
@@ -187,8 +169,7 @@ describe("create plan controller", () => {
     await run;
 
     expect(harness.workspace.getSnapshot().plan.current).toBeNull();
-    expect(harness.calls.refreshPlanSummary).toBe(0);
-    expect(harness.calls.renderCreateBrowser).toBe(1);
+    expect(harness.calls.published).toHaveLength(1);
   });
 
   it("uses browser preview without calling the API", async () => {
@@ -202,7 +183,7 @@ describe("create plan controller", () => {
     expect(harness.runPlanCreate).not.toHaveBeenCalled();
     expect(harness.calls.browserPreviewSources).toEqual([["C:/work/project"]]);
     expect(harness.workspace.getSnapshot().plan.current).not.toBeNull();
-    expect(harness.calls.refreshPlanSummary).toBe(1);
+    expect(harness.calls.published).toHaveLength(2);
   });
 
   it("maps API errors to accepted fallback plan errors", async () => {
@@ -219,7 +200,7 @@ describe("create plan controller", () => {
       fallbackText: "planning failed",
     });
     expect(harness.calls.statuses).toEqual(["create.plan.planning", "planning failed"]);
-    expect(harness.calls.renderCreateBrowser).toBe(2);
+    expect(harness.calls.published).toHaveLength(2);
   });
 
   it("ignores stale async errors", async () => {
@@ -238,6 +219,6 @@ describe("create plan controller", () => {
       messageKey: "create.plan.planning",
     });
     expect(harness.calls.statuses).toEqual(["create.plan.planning"]);
-    expect(harness.calls.renderCreateBrowser).toBe(1);
+    expect(harness.calls.published).toHaveLength(1);
   });
 });

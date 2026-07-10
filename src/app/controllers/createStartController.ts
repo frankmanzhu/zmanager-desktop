@@ -6,7 +6,7 @@ import type {
 
 export type CreateStartOptions = Readonly<{
   destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
-  passwordInput?: Readonly<{
+  passwordInput: Readonly<{
     password: string;
     passwordConfirm: string;
   }>;
@@ -21,21 +21,20 @@ export type CreateStartControllerOptions = Readonly<{
   workspace: CreateStartControllerWorkspace;
   syncSources(snapshot?: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   isSubmissionInFlight(): boolean;
-  passwordInput(): { password: string; passwordConfirm: string };
   startCreate(request: StartCreateRequest): Promise<StartJobResponseDto>;
   onCreateStarted(response: StartJobResponseDto, request: StartCreateRequest): void;
   toCommandError(error: unknown): CommandErrorDto | null;
-  renderPlanState(): void;
+  publishSnapshot(snapshot: CreateWorkspaceSnapshot): void;
 }>;
 
 export type CreateStartController = Readonly<{
-  runCreate(options?: CreateStartOptions): Promise<void>;
+  runCreate(options: CreateStartOptions): Promise<void>;
 }>;
 
 export function createCreateStartController(
   options: CreateStartControllerOptions,
 ): CreateStartController {
-  async function runCreate(createOptions: CreateStartOptions = {}): Promise<void> {
+  async function runCreate(createOptions: CreateStartOptions): Promise<void> {
     if (options.isSubmissionInFlight()) {
       return;
     }
@@ -45,36 +44,32 @@ export function createCreateStartController(
       return;
     }
 
-    const passwordInput = createOptions.passwordInput ?? options.passwordInput();
+    const passwordInput = createOptions.passwordInput;
     const requestResult = options.workspace.buildStartCreateRequest({
       password: passwordInput.password,
       passwordConfirm: passwordInput.passwordConfirm,
       destinationCollisionStrategy: createOptions.destinationCollisionStrategy,
     });
-    options.syncSources(requestResult.snapshot);
+    options.publishSnapshot(options.syncSources(requestResult.snapshot));
     if (!requestResult.ok) {
-      options.renderPlanState();
       return;
     }
 
     const request = requestResult.request;
-    options.syncSources(options.workspace.setSubmissionInFlight(true).snapshot);
-    options.renderPlanState();
+    options.publishSnapshot(options.syncSources(options.workspace.setSubmissionInFlight(true).snapshot));
 
     try {
       const response = await options.startCreate(request);
       options.onCreateStarted(response, request);
     } catch (error) {
       const commandError = options.toCommandError(error);
-      options.syncSources(options.workspace.setPlanError(
+      options.publishSnapshot(options.syncSources(options.workspace.setPlanError(
         commandError?.message
           ? { fallbackText: commandError.message }
           : { messageKey: "create.error.unableStart" },
-      ));
-      options.renderPlanState();
+      )));
     } finally {
-      options.syncSources(options.workspace.setSubmissionInFlight(false).snapshot);
-      options.renderPlanState();
+      options.publishSnapshot(options.syncSources(options.workspace.setSubmissionInFlight(false).snapshot));
     }
   }
 

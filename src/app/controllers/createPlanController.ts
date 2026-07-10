@@ -38,12 +38,7 @@ export type CreatePlanControllerOptions = Readonly<{
   debounceTimer: CreatePlanDebounceTimer;
   runPlanCreate(request: PlanCreateRequest): Promise<CreatePlanResponse>;
   syncSources(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
-  renderPlanState(): void;
-  renderPlanStatus(message: string): void;
-  renderCreateBrowser(): void;
-  refreshPlanSummary(): void;
-  planStatusText(status: CreateWorkspacePlanStatus | null): string;
-  translate(key: "create.plan.noSources" | "create.plan.planning"): string;
+  publishSnapshot(snapshot: CreateWorkspaceSnapshot): void;
   canUseBrowserPreview(): boolean;
   browserPreview(sources: readonly string[]): CreatePlanResponse;
   toCommandError(error: unknown): CreatePlanCommandError | null;
@@ -65,20 +60,6 @@ const DEFAULT_PLAN_OPTIONS: Partial<CreateWorkspacePlanOptions> = {
 export function createCreatePlanController(
   options: CreatePlanControllerOptions,
 ): CreatePlanController {
-  function renderNoSources(): void {
-    options.renderPlanState();
-    options.renderPlanStatus(options.translate("create.plan.noSources"));
-    options.renderCreateBrowser();
-  }
-
-  function renderPlanning(snapshot: CreateWorkspaceSnapshot): void {
-    options.renderPlanState();
-    options.renderPlanStatus(
-      options.planStatusText(snapshot.plan.status) || options.translate("create.plan.planning"),
-    );
-    options.renderCreateBrowser();
-  }
-
   function renderAcceptedPlan(acceptedPlan: CreateWorkspacePlanResultAcceptance): void {
     if (!acceptedPlan.accepted) {
       return;
@@ -89,9 +70,7 @@ export function createCreatePlanController(
       return;
     }
 
-    options.refreshPlanSummary();
-    options.renderPlanState();
-    options.renderCreateBrowser();
+    options.publishSnapshot(snapshot);
   }
 
   async function runPlan(revision?: number): Promise<void> {
@@ -102,12 +81,12 @@ export function createCreatePlanController(
 
     if (!planStart.ready) {
       if (planStart.reason === "needsSources") {
-        renderNoSources();
+        options.publishSnapshot(planStartSnapshot);
       }
       return;
     }
 
-    renderPlanning(planStartSnapshot);
+    options.publishSnapshot(planStartSnapshot);
 
     if (options.canUseBrowserPreview()) {
       const result = options.browserPreview(planStart.request.sources);
@@ -128,9 +107,7 @@ export function createCreatePlanController(
       }
 
       const errorSnapshot = options.syncSources(acceptedError.snapshot);
-      options.renderPlanState();
-      options.renderPlanStatus(options.planStatusText(errorSnapshot.plan.status));
-      options.renderCreateBrowser();
+      options.publishSnapshot(errorSnapshot);
     }
   }
 
@@ -141,11 +118,11 @@ export function createCreatePlanController(
       const queuedPlan = options.workspace.queuePlan();
       const sourceSnapshot = options.syncSources(queuedPlan.snapshot);
       if (sourceSnapshot.isEmpty) {
-        renderNoSources();
+        options.publishSnapshot(sourceSnapshot);
         return;
       }
 
-      renderPlanning(sourceSnapshot);
+      options.publishSnapshot(sourceSnapshot);
       options.debounceTimer.schedule(() => {
         void runPlan(queuedPlan.revision);
       });

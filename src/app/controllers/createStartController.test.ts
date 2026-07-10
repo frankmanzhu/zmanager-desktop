@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { CommandErrorDto, CreatePlanResponse, StartJobResponseDto } from "../../api/types";
+import type { CommandErrorDto, CreatePlanResponse, StartCreateRequest, StartJobResponseDto } from "../../api/types";
 import type { FormatCreateDefaults } from "../preferences";
-import { createCreateWorkspace } from "../workspaces/createWorkspace";
+import { createCreateWorkspace, type CreateWorkspaceSnapshot } from "../workspaces/createWorkspace";
 import { createCreateStartController, type CreateStartControllerOptions } from "./createStartController";
 
 const startedAt = "2026-06-11T00:00:00Z";
@@ -78,11 +78,9 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
   const workspace = createReadyWorkspace();
   const calls = {
     sync: 0,
-    renderPlanState: 0,
+    published: [] as CreateWorkspaceSnapshot[],
     started: [] as unknown[],
   };
-  let password = "";
-  let passwordConfirm = "";
   const startCreate = vi.fn(async () => startJobResponse());
 
   const controller = createCreateStartController({
@@ -94,9 +92,6 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
     isSubmissionInFlight() {
       return workspace.getSnapshot().options.submissionInFlight;
     },
-    passwordInput() {
-      return { password, passwordConfirm };
-    },
     startCreate,
     onCreateStarted(response, request) {
       calls.started.push({ response, request });
@@ -106,8 +101,8 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
         ? error as CommandErrorDto
         : null;
     },
-    renderPlanState() {
-      calls.renderPlanState += 1;
+    publishSnapshot(snapshot) {
+      calls.published.push(snapshot);
     },
     ...overrides,
   });
@@ -115,9 +110,18 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
   return {
     calls,
     controller,
-    setPasswords(nextPassword: string, nextPasswordConfirm = nextPassword) {
-      password = nextPassword;
-      passwordConfirm = nextPasswordConfirm;
+    runCreate(next: {
+      destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
+      password?: string;
+      passwordConfirm?: string;
+    } = {}) {
+      return controller.runCreate({
+        destinationCollisionStrategy: next.destinationCollisionStrategy,
+        passwordInput: {
+          password: next.password ?? "",
+          passwordConfirm: next.passwordConfirm ?? next.password ?? "",
+        },
+      });
     },
     startCreate,
     workspace,
@@ -127,10 +131,13 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
 describe("create start controller", () => {
   it("builds a request, starts create, and runs success effects", async () => {
     const harness = createHarness();
-    harness.setPasswords(" secret ", "secret");
     harness.startCreate.mockResolvedValueOnce(startJobResponse({ jobId: "job-1" }));
 
-    await harness.controller.runCreate({ destinationCollisionStrategy: "rename" });
+    await harness.runCreate({
+      destinationCollisionStrategy: "rename",
+      password: " secret ",
+      passwordConfirm: "secret",
+    });
 
     expect(harness.startCreate).toHaveBeenCalledWith(expect.objectContaining({
       sources: ["C:/work/project"],
@@ -146,32 +153,25 @@ describe("create start controller", () => {
       },
     });
     expect(harness.workspace.getSnapshot().options.submissionInFlight).toBe(false);
-    expect(harness.calls.renderPlanState).toBe(2);
+    expect(harness.calls.published).toHaveLength(3);
   });
 
   it("renders validation errors without starting create", async () => {
     const harness = createHarness();
-    harness.setPasswords("one", "two");
 
-    await harness.controller.runCreate();
+    await harness.runCreate({ password: "one", passwordConfirm: "two" });
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       messageKey: "create.error.passwordMismatch",
     });
-    expect(harness.calls.renderPlanState).toBe(1);
+    expect(harness.calls.published).toHaveLength(1);
   });
 
-  it("uses explicit submit passwords instead of the injected reader when provided", async () => {
+  it("uses explicit submit passwords", async () => {
     const harness = createHarness();
-    harness.setPasswords("legacy secret", "legacy secret");
 
-    await harness.controller.runCreate({
-      passwordInput: {
-        password: " react secret ",
-        passwordConfirm: "react secret",
-      },
-    });
+    await harness.runCreate({ password: " react secret ", passwordConfirm: "react secret" });
 
     expect(harness.startCreate).toHaveBeenCalledWith(expect.objectContaining({
       password: "react secret",
@@ -182,20 +182,20 @@ describe("create start controller", () => {
     const harness = createHarness();
     harness.startCreate.mockRejectedValueOnce(commandError({ message: "Create failed" }));
 
-    await harness.controller.runCreate();
+    await harness.runCreate();
 
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       fallbackText: "Create failed",
     });
     expect(harness.workspace.getSnapshot().options.submissionInFlight).toBe(false);
-    expect(harness.calls.renderPlanState).toBe(3);
+    expect(harness.calls.published).toHaveLength(4);
   });
 
   it("uses generic create error text for unknown API failures", async () => {
     const harness = createHarness();
     harness.startCreate.mockRejectedValueOnce(new Error("boom"));
 
-    await harness.controller.runCreate();
+    await harness.runCreate();
 
     expect(harness.workspace.getSnapshot().plan.status).toEqual({
       messageKey: "create.error.unableStart",
@@ -206,11 +206,11 @@ describe("create start controller", () => {
     const harness = createHarness();
     harness.workspace.setSubmissionInFlight(true);
 
-    await harness.controller.runCreate();
+    await harness.runCreate();
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.calls.sync).toBe(0);
-    expect(harness.calls.renderPlanState).toBe(0);
+    expect(harness.calls.published).toHaveLength(0);
   });
 
   it("does nothing when there are no sources", async () => {
@@ -221,9 +221,9 @@ describe("create start controller", () => {
       isSubmissionInFlight: () => false,
     });
 
-    await harness.controller.runCreate();
+    await harness.runCreate();
 
     expect(harness.startCreate).not.toHaveBeenCalled();
-    expect(harness.calls.renderPlanState).toBe(0);
+    expect(harness.calls.published).toHaveLength(0);
   });
 });
