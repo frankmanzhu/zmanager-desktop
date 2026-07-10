@@ -33,7 +33,6 @@ import {
   buildSourceContextMenuItems,
   buildStartupContextMenuItems,
   type ContextMenuActionPayload,
-  type ContextMenuItem,
 } from "../app/commands/contextMenuModel";
 import {
   createArchiveLoadController,
@@ -205,7 +204,6 @@ import {
   displaySnapshotFromContext,
   type ZManagerArchiveIntent,
   type ZManagerContextMenuIntent,
-  type ZManagerContextMenuSnapshot,
   type ZManagerCreateIntent,
   type ZManagerDesktopIntent,
   type ZManagerDialogIntent,
@@ -297,6 +295,9 @@ import {
 import {
   createBrowserPasswordPromptAdapter,
 } from "./passwordPromptAdapter";
+import {
+  createRuntimeContextMenu,
+} from "./contextMenuRuntime";
 type SelectableBrowserRow = Extract<ArchiveTableRow, { rowType: "folder" | "entry" }>;
 type CompressPlanRow = CreatePlanRow;
 type CommandSurfaceClassState = Partial<Record<CommandId, {
@@ -356,8 +357,6 @@ let tableColumnSettings: ArchiveTableColumnSettings = normalizeColumnSettings({
 let activeExtractMode: ExtractMode = "archive";
 let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogFormSnapshot();
 let activeExtractDialogMessage = "";
-let reactContextMenuSnapshot: ZManagerContextMenuSnapshot = { visible: false, id: 0 };
-let reactContextMenuSequence = 0;
 
 let dropUnlisten: (() => void) | null = null;
 
@@ -367,6 +366,9 @@ let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let reactDialogSnapshot: ZManagerDialogSnapshot = { kind: "none" };
 const reactRuntimeSubscribers = new Set<ZManagerReactSnapshotListener>();
+const contextMenuRuntime = createRuntimeContextMenu({
+  publishSnapshot: publishReactSnapshot,
+});
 
 const appTimers = createAppTimers({
   jobPollIntervalMs: JOB_POLL_INTERVAL_MS,
@@ -1572,7 +1574,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
       primaryCommandIds: commandIdsWithClass(commandClassState, "primary"),
       secondaryCommandIds: commandIdsWithClass(commandClassState, "secondary"),
     },
-    contextMenu: reactContextMenuSnapshot,
+    contextMenu: contextMenuRuntime.getSnapshot(),
     runtime: { isDesktop: isDesktopRuntime() },
     dialog: reactDialogSnapshot,
   });
@@ -1595,29 +1597,6 @@ function publishReactSnapshot() {
   for (const subscriber of reactRuntimeSubscribers) {
     subscriber(snapshot);
   }
-}
-
-function showContextMenu(x: number, y: number, items: readonly ContextMenuItem[]) {
-  reactContextMenuSnapshot = {
-    visible: true,
-    id: reactContextMenuSequence += 1,
-    x,
-    y,
-    items,
-  };
-  publishReactSnapshot();
-}
-
-function hideContextMenu() {
-  if (!reactContextMenuSnapshot.visible) {
-    return;
-  }
-
-  reactContextMenuSnapshot = {
-    visible: false,
-    id: reactContextMenuSnapshot.id,
-  };
-  publishReactSnapshot();
 }
 
 function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
@@ -1728,7 +1707,7 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       showCreateWorkspace();
       break;
     case "showAddSourcesMenu":
-      showContextMenu(intent.x, intent.y, buildAddSourcesContextMenuItems(displayContext.translator));
+      contextMenuRuntime.show(intent.x, intent.y, buildAddSourcesContextMenuItems(displayContext.translator));
       break;
     case "clearSources":
       clearCreateSources();
@@ -1989,20 +1968,13 @@ function handleReactDesktopIntent(intent: ZManagerDesktopIntent) {
 }
 
 function handleReactContextMenuIntent(intent: ZManagerContextMenuIntent) {
-  switch (intent.type) {
-    case "action":
-      handleContextMenuAction(intent.payload);
-      break;
-    case "hide":
-      hideContextMenu();
-      break;
-  }
+  contextMenuRuntime.handleIntent(intent, handleContextMenuAction);
 }
 
 function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
   switch (intent.type) {
     case "escape":
-      hideContextMenu();
+      contextMenuRuntime.hide();
       if (preferencesDialogDraft) {
         cancelReactPreferencesDialog();
       } else if (reactDialogSnapshot.kind !== "none") {
@@ -2817,7 +2789,7 @@ function selectFolderEntries(folderPath: string) {
 }
 
 function showStartupContextMenu(x: number, y: number) {
-  showContextMenu(x, y, buildStartupContextMenuItems({
+  contextMenuRuntime.show(x, y, buildStartupContextMenuItems({
     translator: displayContext.translator,
     canPastePath: canReadClipboard(),
     recentArchiveHistory: pathHistoryStore.getSnapshot().recentArchiveHistory,
@@ -2825,7 +2797,7 @@ function showStartupContextMenu(x: number, y: number) {
 }
 
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
-  showContextMenu(x, y, buildArchiveFolderContextMenuItems({
+  contextMenuRuntime.show(x, y, buildArchiveFolderContextMenuItems({
     translator: displayContext.translator,
     folderPath,
     entryPath,
@@ -2843,7 +2815,7 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   }
   const entry = getEntryByPath(entryPath);
   const selectedCount = getSelectedEntryPaths().length;
-  showContextMenu(x, y, buildArchiveEntryContextMenuItems({
+  contextMenuRuntime.show(x, y, buildArchiveEntryContextMenuItems({
     translator: displayContext.translator,
     entryPath,
     canOpenInside: entry?.kind === "directory",
@@ -2855,7 +2827,7 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
 }
 
 function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: ArchiveTableColumnId) {
-  showContextMenu(x, y, buildArchiveHeaderContextMenuItems({
+  contextMenuRuntime.show(x, y, buildArchiveHeaderContextMenuItems({
     translator: displayContext.translator,
     tableColumnSettings,
     selectedColumnId,
@@ -2886,7 +2858,7 @@ function showCompressRowContextMenuForPath(
     .filter((candidate): candidate is CompressPlanRow => Boolean(candidate));
   const canInclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "included");
   const canExclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "excluded");
-  showContextMenu(x, y, buildCompressRowContextMenuItems({
+  contextMenuRuntime.show(x, y, buildCompressRowContextMenuItems({
     translator: displayContext.translator,
     rowPath,
     folderPath,
@@ -2900,7 +2872,7 @@ function showCompressRowContextMenuForPath(
 }
 
 function showSourceContextMenu(sourcePath: string, x: number, y: number) {
-  showContextMenu(x, y, buildSourceContextMenuItems({
+  contextMenuRuntime.show(x, y, buildSourceContextMenuItems({
     translator: displayContext.translator,
     sourcePath,
   }));
@@ -2908,7 +2880,7 @@ function showSourceContextMenu(sourcePath: string, x: number, y: number) {
 
 function showAddSourcesMenu(anchor: HTMLElement) {
   const rect = anchor.getBoundingClientRect();
-  showContextMenu(rect.left, rect.bottom + 4, buildAddSourcesContextMenuItems(displayContext.translator));
+  contextMenuRuntime.show(rect.left, rect.bottom + 4, buildAddSourcesContextMenuItems(displayContext.translator));
 }
 
 function handleContextMenuAction(payload: ContextMenuActionPayload) {
@@ -2918,8 +2890,6 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
   const archivePath = payload.archivePath;
   const entryPath = payload.entryPath ?? "";
   const sourcePath = payload.sourcePath ?? "";
-  hideContextMenu();
-
   const routedContextCommand = selectContextCommand(action, {
     archivePath,
     entryPath,
@@ -3399,7 +3369,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
     : false;
 
   clearTrackedPreviewState();
-  hideContextMenu();
+  contextMenuRuntime.hide();
   shellWorkspace.setWorkspaceMode("extract");
   const snapshot = archiveWorkspace.loadSucceeded(archiveListingFromFixture(listing), {
     preserveState: preservedState,

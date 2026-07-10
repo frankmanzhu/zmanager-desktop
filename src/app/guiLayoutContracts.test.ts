@@ -37,6 +37,7 @@ const styles = normalizedWorkspaceFile("src", "styles.css");
 const compositionRootSource = normalizedWorkspaceFile("src", "main.ts");
 const runtimeBridgeSource = normalizedWorkspaceFile("src", "runtimeBridge.ts");
 const mainSource = normalizedWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
+const contextMenuRuntimeSource = normalizedWorkspaceFile("src", "runtime", "contextMenuRuntime.ts");
 const appShellSource = normalizedWorkspaceFile("src", "ui", "react", "AppShell.tsx");
 const appFrameSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
 const menuBarSource = normalizedWorkspaceFile("src", "ui", "react", "shell", "MenuBar.tsx");
@@ -435,7 +436,10 @@ describe("GUI layout contracts", () => {
   it("keeps context menus as typed snapshots rendered by React without raw HTML", () => {
     expect(appRuntimeSource).toContain("items: readonly ContextMenuItem[];");
     expect(appRuntimeSource).not.toContain("html: string;");
-    expect(mainSource).toContain("function showContextMenu(x: number, y: number, items: readonly ContextMenuItem[])");
+    expect(contextMenuRuntimeSource).toContain("show(x: number, y: number, items: readonly ContextMenuItem[]): void;");
+    expect(contextMenuRuntimeSource).toContain("let snapshot: ZManagerContextMenuSnapshot");
+    expect(mainSource).toContain("contextMenuRuntime.show(");
+    expect(mainSource).not.toContain("function showContextMenu(");
     expect(mainSource).not.toContain("function showContextMenu(x: number, y: number, html: string)");
     expect(mainSource).not.toContain("data-context-action");
     expect(contextMenuModelSource).toContain("export type ContextMenuItem");
