@@ -14,7 +14,6 @@ import {
   type TextDirection,
 } from "../i18n/locale";
 import {
-  applyTranslations as applyTranslatorTranslations,
   createTranslator,
   type Translator,
 } from "../i18n/translator";
@@ -59,12 +58,7 @@ export type DisplayDocumentElement = {
 export type DisplayRefreshEffects = {
   commitContext?: (context: DisplayContextSnapshot) => void;
   documentElement?: DisplayDocumentElement;
-  translationRoot?: ParentNode;
   refreshCommands?: (context: DisplayContextSnapshot) => void;
-  renderBrowse?: (context: DisplayContextSnapshot) => void;
-  renderCreate?: (context: DisplayContextSnapshot) => void;
-  renderJobs?: (context: DisplayContextSnapshot) => void;
-  renderPreferences?: (context: DisplayContextSnapshot) => void;
 };
 
 type DisplayFormatBytesOptions = Omit<FormatBytesOptions, "locale">;
@@ -91,47 +85,24 @@ export function createDisplayContext(
 
 export function refreshDisplayContext(
   localePreference: LocalePreference,
-  state: DisplayRefreshState,
   effects: DisplayRefreshEffects,
   options: CreateDisplayContextOptions = {},
 ): DisplayContextSnapshot {
   const context = createDisplayContext(localePreference, options);
   effects.commitContext?.(context);
-  applyDisplayContextRefresh(context, state, effects);
+  applyDisplayContextRefresh(context, effects);
   return context;
 }
 
 export function applyDisplayContextRefresh(
   context: DisplayContextSnapshot,
-  state: DisplayRefreshState,
   effects: DisplayRefreshEffects,
 ): void {
   if (effects.documentElement) {
     applyDisplayDocumentMetadata(effects.documentElement, context);
   }
 
-  if (effects.translationRoot) {
-    applyDisplayTranslations(effects.translationRoot, context);
-  }
-
   effects.refreshCommands?.(context);
-
-  for (const surface of selectDisplayRefreshSurfaces(state)) {
-    switch (surface) {
-      case "browse":
-        effects.renderBrowse?.(context);
-        break;
-      case "create":
-        effects.renderCreate?.(context);
-        break;
-      case "jobs":
-        effects.renderJobs?.(context);
-        break;
-      case "preferences":
-        effects.renderPreferences?.(context);
-        break;
-    }
-  }
 }
 
 export function selectDisplayRefreshSurfaces(
@@ -153,10 +124,6 @@ export function applyDisplayDocumentMetadata(
 ): void {
   element.lang = context.documentLanguage;
   element.dir = context.documentDirection;
-}
-
-export function applyDisplayTranslations(root: ParentNode, context: DisplayContextSnapshot): void {
-  applyTranslatorTranslations(root, context.translator);
 }
 
 function createDisplayFormatters(locale: SupportedLocale): DisplayFormatters {

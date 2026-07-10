@@ -3,19 +3,6 @@ import {
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
   JOB_POLL_INTERVAL_MS,
-  APP_MIN_WINDOW_WIDTH_PX,
-  APP_MIN_WINDOW_HEIGHT_PX,
-  APP_MENU_BAR_HEIGHT_PX,
-  APP_TOOLBAR_HEIGHT_PX,
-  APP_PATH_BAR_HEIGHT_PX,
-  APP_STATUS_BAR_HEIGHT_PX,
-  APP_NAV_PANE_MIN_WIDTH_PX,
-  APP_NAV_PANE_DEFAULT_WIDTH_PX,
-  APP_NAV_PANE_MAX_WIDTH_PX,
-  APP_DETAILS_PANE_MIN_WIDTH_PX,
-  APP_DETAILS_PANE_DEFAULT_WIDTH_PX,
-  APP_DETAILS_PANE_MAX_WIDTH_PX,
-  APP_STATUS_BAR_PARTS,
 } from "../app/constants";
 import {
   COMMAND_DEFINITIONS,
@@ -203,6 +190,7 @@ import {
 import {
   createDisplayContext,
   refreshDisplayContext,
+  selectDisplayRefreshSurfaces,
   type DisplayRefreshWorkspace,
 } from "../app/display/displayContext";
 import {
@@ -303,6 +291,12 @@ import {
   createWindowController,
   type AppWindowResizeDirection,
 } from "../desktop/windowController";
+import {
+  createBrowserDocumentAdapter,
+} from "./browserDocumentAdapter";
+import {
+  createBrowserPasswordPromptAdapter,
+} from "./passwordPromptAdapter";
 type SelectableBrowserRow = Extract<ArchiveTableRow, { rowType: "folder" | "entry" }>;
 type CompressPlanRow = CreatePlanRow;
 type CommandSurfaceClassState = Partial<Record<CommandId, {
@@ -334,23 +328,11 @@ declare global {
   }
 }
 
-const useLinuxWindowChrome = isDesktopRuntime() && /\bLinux\b/i.test(navigator.userAgent);
-if (useLinuxWindowChrome) {
-  document.body.classList.add("linux-window-chrome");
-}
-document.documentElement.style.setProperty("--zmanager-min-window-width", `${APP_MIN_WINDOW_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-min-window-height", `${APP_MIN_WINDOW_HEIGHT_PX}px`);
-document.documentElement.style.setProperty("--zmanager-menu-height", `${APP_MENU_BAR_HEIGHT_PX}px`);
-document.documentElement.style.setProperty("--zmanager-toolbar-height", `${APP_TOOLBAR_HEIGHT_PX}px`);
-document.documentElement.style.setProperty("--zmanager-pathbar-height", `${APP_PATH_BAR_HEIGHT_PX}px`);
-document.documentElement.style.setProperty("--zmanager-statusbar-height", `${APP_STATUS_BAR_HEIGHT_PX}px`);
-document.documentElement.style.setProperty("--zmanager-nav-pane-min", `${APP_NAV_PANE_MIN_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-nav-pane-width", `${APP_NAV_PANE_DEFAULT_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-nav-pane-max", `${APP_NAV_PANE_MAX_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-details-pane-min", `${APP_DETAILS_PANE_MIN_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-details-pane-width", `${APP_DETAILS_PANE_DEFAULT_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-details-pane-max", `${APP_DETAILS_PANE_MAX_WIDTH_PX}px`);
-document.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
+const browserDocument = createBrowserDocumentAdapter({
+  isDesktopRuntime,
+});
+const passwordPromptAdapter = createBrowserPasswordPromptAdapter();
+browserDocument.initializeLayout();
 
 let appPreferences: AppPreferences = loadAppPreferences();
 const shellWorkspace = createShellWorkspace();
@@ -374,8 +356,6 @@ let tableColumnSettings: ArchiveTableColumnSettings = normalizeColumnSettings({
 let activeExtractMode: ExtractMode = "archive";
 let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogFormSnapshot();
 let activeExtractDialogMessage = "";
-let contextEntryPath = "";
-let contextSourcePath = "";
 let reactContextMenuSnapshot: ZManagerContextMenuSnapshot = { visible: false, id: 0 };
 let reactContextMenuSequence = 0;
 
@@ -695,9 +675,7 @@ const startupController = createStartupController({
     latestHealthcheck = state.healthcheck;
     latestContract = state.contract;
   },
-  refreshAboutDialogSnapshot,
-  shouldRenderBrowseAfterBootstrap: () => normalWorkspaceRendered && !isQuickActionJobMode(),
-  renderBrowse,
+  onBootstrapStateChanged: publishBootstrapStateSnapshot,
 });
 
 const jobOutputEffects = {
@@ -844,7 +822,7 @@ async function revealQuickActionJobWindow(
     void appWindowController.persistCurrentWindowGeometry();
   }
   shellWorkspace.setQuickActionWindowMode("jobOnly");
-  document.body.classList.add("quick-action-job-mode");
+  browserDocument.setQuickActionJobMode(true);
   shellWorkspace.setJobDrawerOpen(false);
   publishReactSnapshot();
   renderQuickProgress();
@@ -887,7 +865,7 @@ async function sendQuickActionJobsToBackground() {
 
   jobsWorkspace.resetFocusedQuickActionProgress();
   shellWorkspace.setQuickActionWindowMode("normal");
-  document.body.classList.remove("quick-action-job-mode");
+  browserDocument.setQuickActionJobMode(false);
   setOperationalMessage("jobs.background");
   openJobDrawer();
   renderJobs();
@@ -897,7 +875,7 @@ async function closeFocusedJobProgress() {
   clearQuickActionAutoCloseTimer();
   jobsWorkspace.resetFocusedQuickActionProgress();
   shellWorkspace.setQuickActionWindowMode("normal");
-  document.body.classList.remove("quick-action-job-mode");
+  browserDocument.setQuickActionJobMode(false);
   shellWorkspace.setJobDrawerOpen(false);
   renderNormalWorkspaceOnce();
 
@@ -1213,12 +1191,6 @@ function createPlanStatusText(status: CreateWorkspacePlanStatus | null): string 
   return status.fallbackText ?? "";
 }
 
-function syncCreateSourcesFromWorkspace(
-  snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
-): CreateWorkspaceSnapshot {
-  return snapshot;
-}
-
 function publishCreateWorkspaceSnapshot(
   snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
 ): CreateWorkspaceSnapshot {
@@ -1425,13 +1397,7 @@ function currentCommandClassState(hasArchive = Boolean(archiveCurrentPath())): C
 }
 
 function promptForArchivePassword(promptMessage: string): string | null {
-  const value = window.prompt(promptMessage);
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
+  return passwordPromptAdapter.promptForPassword(promptMessage);
 }
 
 function getArchivePasswordPrompt(commandCode: string): string {
@@ -1643,8 +1609,6 @@ function showContextMenu(x: number, y: number, items: readonly ContextMenuItem[]
 }
 
 function hideContextMenu() {
-  contextEntryPath = "";
-  contextSourcePath = "";
   if (!reactContextMenuSnapshot.visible) {
     return;
   }
@@ -1764,8 +1728,6 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
       showCreateWorkspace();
       break;
     case "showAddSourcesMenu":
-      contextEntryPath = "";
-      contextSourcePath = "";
       showContextMenu(intent.x, intent.y, buildAddSourcesContextMenuItems(displayContext.translator));
       break;
     case "clearSources":
@@ -2019,7 +1981,7 @@ function handleReactDesktopIntent(intent: ZManagerDesktopIntent) {
       }
       break;
     case "beginWindowResize":
-      if (useLinuxWindowChrome) {
+      if (browserDocument.usesLinuxWindowChrome()) {
         void appWindowController.beginResizeDrag(intent.direction as AppWindowResizeDirection);
       }
       break;
@@ -2138,7 +2100,7 @@ function canUseBrowserCreatePlanPreview(): boolean {
   return !isDesktopRuntime();
 }
 
-function createPlanEntries(snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace()): CreatePlanEntryDto[] {
+function createPlanEntries(snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot()): CreatePlanEntryDto[] {
   return snapshot.plan.current?.planEntries ?? [];
 }
 
@@ -2147,7 +2109,7 @@ function compressRowInclusionState(row: CompressPlanRow): "included" | "excluded
 }
 
 function setCompressPathIncluded(path: string, included: boolean) {
-  syncCreateSourcesFromWorkspace(createWorkspace.setPathIncluded(path, included).snapshot);
+  createWorkspace.setPathIncluded(path, included);
 }
 
 function clearCreateSources() {
@@ -2168,7 +2130,7 @@ function removeCreateSources(sourcePaths: string[]) {
 }
 
 function visibleCompressRows(): CompressPlanRow[] {
-  return [...syncCreateSourcesFromWorkspace().view.rows];
+  return [...createWorkspace.getSnapshot().view.rows];
 }
 
 function visibleCompressRowForPath(path: string): CompressPlanRow | undefined {
@@ -2178,7 +2140,7 @@ function visibleCompressRowForPath(path: string): CompressPlanRow | undefined {
 
 function sourcePathForCompressRow(
   row: CompressPlanRow,
-  snapshot: CreateWorkspaceSnapshot = syncCreateSourcesFromWorkspace(),
+  snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
 ): string {
   return sourcePathForCreatePlanRow(row, createPlanEntries(snapshot), snapshot.sources);
 }
@@ -2855,8 +2817,6 @@ function selectFolderEntries(folderPath: string) {
 }
 
 function showStartupContextMenu(x: number, y: number) {
-  contextEntryPath = "";
-  contextSourcePath = "";
   showContextMenu(x, y, buildStartupContextMenuItems({
     translator: displayContext.translator,
     canPastePath: canReadClipboard(),
@@ -2865,8 +2825,6 @@ function showStartupContextMenu(x: number, y: number) {
 }
 
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
-  contextEntryPath = entryPath;
-  contextSourcePath = "";
   showContextMenu(x, y, buildArchiveFolderContextMenuItems({
     translator: displayContext.translator,
     folderPath,
@@ -2877,8 +2835,6 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
 }
 
 function showEntryContextMenu(entryPath: string, x: number, y: number) {
-  contextEntryPath = entryPath;
-  contextSourcePath = "";
   if (!archiveSelectedPathSet().has(entryPath)) {
     applyArchiveTableSelection(ensureHierarchicalTablePathSelected({
       ...currentArchiveTableSelectionState(),
@@ -2930,9 +2886,6 @@ function showCompressRowContextMenuForPath(
     .filter((candidate): candidate is CompressPlanRow => Boolean(candidate));
   const canInclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "included");
   const canExclude = contextRows.some((compressRow) => compressRowInclusionState(compressRow) !== "excluded");
-  contextEntryPath = "";
-  contextSourcePath = sourcePath;
-
   showContextMenu(x, y, buildCompressRowContextMenuItems({
     translator: displayContext.translator,
     rowPath,
@@ -2947,8 +2900,6 @@ function showCompressRowContextMenuForPath(
 }
 
 function showSourceContextMenu(sourcePath: string, x: number, y: number) {
-  contextEntryPath = "";
-  contextSourcePath = sourcePath;
   showContextMenu(x, y, buildSourceContextMenuItems({
     translator: displayContext.translator,
     sourcePath,
@@ -2957,8 +2908,6 @@ function showSourceContextMenu(sourcePath: string, x: number, y: number) {
 
 function showAddSourcesMenu(anchor: HTMLElement) {
   const rect = anchor.getBoundingClientRect();
-  contextEntryPath = "";
-  contextSourcePath = "";
   showContextMenu(rect.left, rect.bottom + 4, buildAddSourcesContextMenuItems(displayContext.translator));
 }
 
@@ -2967,8 +2916,8 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
   const folderPath = payload.folderPath;
   const columnId = payload.columnId;
   const archivePath = payload.archivePath;
-  const entryPath = payload.entryPath ?? contextEntryPath;
-  const sourcePath = payload.sourcePath ?? contextSourcePath;
+  const entryPath = payload.entryPath ?? "";
+  const sourcePath = payload.sourcePath ?? "";
   hideContextMenu();
 
   const routedContextCommand = selectContextCommand(action, {
@@ -3173,6 +3122,13 @@ function refreshAboutDialogSnapshot() {
   }
 }
 
+function publishBootstrapStateSnapshot() {
+  refreshAboutDialogSnapshot();
+  if (normalWorkspaceRendered && !isQuickActionJobMode()) {
+    renderBrowse();
+  }
+}
+
 async function copyAboutDiagnostics() {
   try {
     const snapshot = reactDialogSnapshot.kind === "about"
@@ -3226,20 +3182,33 @@ function activeDisplayWorkspace(): DisplayRefreshWorkspace {
 }
 
 function refreshDisplayFromPreferences() {
-  refreshDisplayContext(appPreferences.locale, {
+  const refreshSurfaces = selectDisplayRefreshSurfaces({
     activeWorkspace: activeDisplayWorkspace(),
     jobsVisible: shellWorkspace.getSnapshot().jobDrawerOpen || isQuickActionJobMode(),
     preferencesVisible: Boolean(preferencesDialogDraft),
-  }, {
+  });
+
+  refreshDisplayContext(appPreferences.locale, {
     commitContext: (nextDisplayContext) => {
       displayContext = nextDisplayContext;
     },
-    documentElement: document.documentElement,
-    translationRoot: document.body,
-    renderBrowse,
-    renderCreate: publishReactSnapshot,
-    renderJobs,
   });
+
+  browserDocument.applyDisplayMetadata(displayContext);
+  for (const surface of refreshSurfaces) {
+    switch (surface) {
+      case "browse":
+        renderBrowse();
+        break;
+      case "create":
+      case "preferences":
+        publishReactSnapshot();
+        break;
+      case "jobs":
+        renderJobs();
+        break;
+    }
+  }
 }
 
 function localizedCommandStateReason(reason?: string): string | undefined {
@@ -3493,7 +3462,7 @@ async function runPlan(revision?: number) {
 }
 
 function addSources(paths: string[]) {
-  const previousSnapshot = syncCreateSourcesFromWorkspace();
+  const previousSnapshot = createWorkspace.getSnapshot();
   const result = createWorkspace.addSources(paths);
   let sourceSnapshot = result.snapshot;
   if (!result.changed) {
@@ -3800,7 +3769,7 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 }
 
 async function onSelectCreateDestination() {
-  const optionSnapshot = syncCreateSourcesFromWorkspace().options;
+  const optionSnapshot = createWorkspace.getSnapshot().options;
   const selected = await saveNativeDialog({
     title: displayContext.translator.t("nativeDialog.chooseDestinationArchive"),
     defaultPath: optionSnapshot.destinationPath.trim()

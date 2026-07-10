@@ -7,6 +7,7 @@ import {
   TZAP_RECOVERY_PERCENTAGE_MIN,
 } from "../../../app/createFlow";
 import { createDefaultsForFormat, type AppPreferences, type FormatCreateDefaults } from "../../../app/preferences";
+import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 
@@ -56,15 +57,17 @@ export function PreferencesDialog() {
             <h2 id="preferences-title">{i18n.t("preferences.title")}</h2>
             <p>{i18n.t("preferences.description")}</p>
           </div>
-          <button
+          <Button
             id="preferences-dialog-close"
+            variant="dialog"
+            size="unset"
             className="icon-button"
             type="button"
             aria-label={i18n.t("preferences.close.aria")}
             onClick={() => actions.handleDialogIntent({ type: "preferencesCancel" })}
           >
             {i18n.t("common.close")}
-          </button>
+          </Button>
         </div>
         <div className="dialog-body property-dialog-body preferences-property-body">
           <div className="property-sheet">
@@ -106,8 +109,8 @@ export function PreferencesDialog() {
           </p>
         </div>
         <div className="dialog-actions">
-          <button id="preferences-save" type="button" disabled={customOutputMissing} onClick={() => actions.handleDialogIntent({ type: "preferencesSave" })}>{i18n.t("common.save")}</button>
-          <button id="preferences-cancel" type="button" onClick={() => actions.handleDialogIntent({ type: "preferencesCancel" })}>{i18n.t("common.cancel")}</button>
+          <Button id="preferences-save" type="button" variant="dialogPrimary" size="unset" disabled={customOutputMissing} onClick={() => actions.handleDialogIntent({ type: "preferencesSave" })}>{i18n.t("common.save")}</Button>
+          <Button id="preferences-cancel" type="button" variant="dialog" size="unset" onClick={() => actions.handleDialogIntent({ type: "preferencesCancel" })}>{i18n.t("common.cancel")}</Button>
         </div>
       </section>
     </div>
@@ -171,9 +174,9 @@ function FoldersPage({
               onChange={(event) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { customOutputFolderPath: event.currentTarget.value } })}
               onBlur={() => setCustomOutputFocused(false)}
             />
-            <button id="pref-choose-output" type="button" disabled={!customOutputSelected} onClick={() => actions.handleDialogIntent({ type: "preferencesChooseOutput" })}>
+            <Button id="pref-choose-output" type="button" variant="dialog" size="unset" disabled={!customOutputSelected} onClick={() => actions.handleDialogIntent({ type: "preferencesChooseOutput" })}>
               {i18n.t("common.browse")}
-            </button>
+            </Button>
           </div>
           <p id="pref-custom-output-help" className="setting-description">{i18n.t("preferences.folders.customHelp")}</p>
           <p id="pref-custom-output-validation" className={customOutputMissing ? "setting-validation status-error" : "setting-validation"} aria-live="polite" hidden={!customOutputMissing}>

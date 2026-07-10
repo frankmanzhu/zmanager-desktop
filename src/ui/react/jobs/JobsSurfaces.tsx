@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { formatBytes, formatCompressionRatio, getPathBasename } from "../../../app/formatting";
+import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -25,8 +26,8 @@ export function JobsDrawer() {
           <p>{i18n.t("jobs.description")}</p>
         </div>
         <div className="job-drawer-actions">
-          <button id="refresh-jobs" type="button" onClick={() => actions.handleJobsIntent({ type: "poll" })}>{i18n.t("common.refresh")}</button>
-          <button id="job-drawer-close" type="button" onClick={() => actions.handleJobsIntent({ type: "closeDrawer" })}>{i18n.t("common.close")}</button>
+          <Button id="refresh-jobs" type="button" variant="dialog" size="unset" onClick={() => actions.handleJobsIntent({ type: "poll" })}>{i18n.t("common.refresh")}</Button>
+          <Button id="job-drawer-close" type="button" variant="dialog" size="unset" onClick={() => actions.handleJobsIntent({ type: "closeDrawer" })}>{i18n.t("common.close")}</Button>
         </div>
       </div>
       <div id="jobs-list" className="jobs-list" onFocus={() => actions.handleJobsIntent({ type: "poll" })}>
@@ -84,8 +85,8 @@ function FailedJobBody({ job }: Readonly<{ job: JobItem }>) {
         {failedItem ? <small>{i18n.t("jobs.failed.item")} {failedItem}</small> : null}
       </div>
       <div className="job-actions">
-        {job.canRetryPassword ? <button type="button" data-retry-password={job.jobId} onClick={() => actions.handleJobsIntent({ type: "retryPassword", jobId: job.jobId })}>{i18n.t("jobs.action.retryPassword")}</button> : null}
-        {job.canDismiss ? <button type="button" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</button> : null}
+        {job.canRetryPassword ? <Button type="button" variant="dialog" size="unset" data-retry-password={job.jobId} onClick={() => actions.handleJobsIntent({ type: "retryPassword", jobId: job.jobId })}>{i18n.t("jobs.action.retryPassword")}</Button> : null}
+        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
       </div>
     </>
   );
@@ -103,7 +104,7 @@ function CompletedJobBody({ job }: Readonly<{ job: JobItem }>) {
       </div>
       <JobOutputActions job={job} />
       <div className="job-actions">
-        {job.canDismiss ? <button type="button" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</button> : null}
+        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
       </div>
       <JobProgressBar job={job} />
     </>
@@ -122,7 +123,7 @@ function CancelledJobBody({ job }: Readonly<{ job: JobItem }>) {
         <span>{currentItem}</span>
       </div>
       <div className="job-actions">
-        {job.canDismiss ? <button type="button" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</button> : null}
+        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
       </div>
       <JobProgressBar job={job} />
     </>
@@ -148,10 +149,10 @@ function LiveJobBody({ job }: Readonly<{ job: JobItem }>) {
         <span><strong>{processedText(job, snapshot)}</strong> {i18n.t("jobs.metric.processed")}</span>
       </div>
       <div className="job-actions">
-        {job.status === "running" ? <button type="button" data-pause={job.jobId} onClick={() => actions.handleJobsIntent({ type: "pause", jobId: job.jobId })}>{i18n.t("jobs.action.pause")}</button> : null}
-        {job.status === "paused" ? <button type="button" data-resume={job.jobId} onClick={() => actions.handleJobsIntent({ type: "resume", jobId: job.jobId })}>{i18n.t("common.continue")}</button> : null}
+        {job.status === "running" ? <Button type="button" variant="dialog" size="unset" data-pause={job.jobId} onClick={() => actions.handleJobsIntent({ type: "pause", jobId: job.jobId })}>{i18n.t("jobs.action.pause")}</Button> : null}
+        {job.status === "paused" ? <Button type="button" variant="dialog" size="unset" data-resume={job.jobId} onClick={() => actions.handleJobsIntent({ type: "resume", jobId: job.jobId })}>{i18n.t("common.continue")}</Button> : null}
         {job.status === "queued" || job.status === "running" || job.status === "paused"
-          ? <button type="button" data-cancel={job.jobId} onClick={() => actions.handleJobsIntent({ type: "cancel", jobId: job.jobId })}>{i18n.t("jobs.action.cancel")}</button>
+          ? <Button type="button" variant="dialog" size="unset" data-cancel={job.jobId} onClick={() => actions.handleJobsIntent({ type: "cancel", jobId: job.jobId })}>{i18n.t("jobs.action.cancel")}</Button>
           : null}
       </div>
     </>
@@ -187,8 +188,10 @@ function JobOutputActions({ job }: Readonly<{ job: JobItem }>) {
       {job.readyOutputActions.map((action, index) => {
         const label = action.kind === "open" ? i18n.t("jobs.action.openOutput") : i18n.t("jobs.action.revealOutput");
         return (
-          <button
+          <Button
             type="button"
+            variant="dialog"
+            size="unset"
             data-output-action={action.kind}
             data-output-job={job.jobId}
             data-output-index={index}
@@ -196,7 +199,7 @@ function JobOutputActions({ job }: Readonly<{ job: JobItem }>) {
             key={`${action.kind}:${action.path}:${index}`}
           >
             {label}
-          </button>
+          </Button>
         );
       })}
     </div>
@@ -384,8 +387,10 @@ function QuickActions({
   const controlsPending = pendingAction !== null;
   return (
     <div className="quick-progress-actions">
-      <button
+      <Button
         id="quick-background"
+        variant="dialog"
+        size="unset"
         type="button"
         disabled={controlsPending || backgroundDisabled}
         onClick={() => {
@@ -394,9 +399,11 @@ function QuickActions({
         }}
       >
         {i18n.t("quick.background")}
-      </button>
-      <button
+      </Button>
+      <Button
         id="quick-continue"
+        variant="dialogPrimary"
+        size="unset"
         type="button"
         disabled={controlsPending || continueDisabled}
         onClick={() => {
@@ -405,9 +412,11 @@ function QuickActions({
         }}
       >
         {continueLabel}
-      </button>
-      <button
+      </Button>
+      <Button
         id="quick-cancel"
+        variant="dialog"
+        size="unset"
         type="button"
         disabled={controlsPending || cancelDisabled}
         onClick={() => {
@@ -416,7 +425,7 @@ function QuickActions({
         }}
       >
         {i18n.t("common.cancel")}
-      </button>
+      </Button>
     </div>
   );
 }

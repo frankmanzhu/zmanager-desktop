@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerDialogSnapshot } from "../appRuntime";
 import { PreferencesDialog } from "../preferences/PreferencesDialog";
@@ -159,8 +160,10 @@ function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsho
         <div className="dialog-actions">
           <div id="info-action-group" className="dialog-action-group">
             {dialog.actions.map((action) => (
-              <button
+              <Button
                 type="button"
+                variant={action.primary ? "dialogPrimary" : "dialog"}
+                size="unset"
                 className={action.primary ? "primary-action" : undefined}
                 title={action.title}
                 aria-label={action.title ? `${action.label}: ${action.title}` : undefined}
@@ -172,12 +175,12 @@ function InfoDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsho
                 key={`${action.label}:${action.action ?? action.copyValue ?? ""}`}
               >
                 {action.label}
-              </button>
+              </Button>
             ))}
           </div>
-          <button id="info-close" type="button" onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}>
+          <Button id="info-close" type="button" variant="dialog" size="unset" onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}>
             {i18n.t("common.close")}
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -203,15 +206,17 @@ function AboutDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsh
             <h2 id="about-title">{dialog.title}</h2>
             <p>{i18n.t("about.description")}</p>
           </div>
-          <button
+          <Button
             id="about-dialog-close"
+            variant="dialog"
+            size="unset"
             className="icon-button"
             type="button"
             aria-label={i18n.t("about.close.aria")}
             onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}
           >
             {i18n.t("common.close")}
-          </button>
+          </Button>
         </div>
         <div className="dialog-body property-dialog-body about-property-body">
           <div id="about-diagnostics" className="diagnostics diagnostics-groups">
@@ -231,9 +236,11 @@ function AboutDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsh
           </div>
         </div>
         <div className="dialog-actions">
-          <button
+          <Button
             id="copy-diagnostics"
             type="button"
+            variant="dialog"
+            size="unset"
             onClick={() => {
               actions.handleDialogIntent({ type: "copyAboutDiagnostics" });
               setCopied(true);
@@ -241,10 +248,10 @@ function AboutDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnapsh
             }}
           >
             {copied ? i18n.t("status.copied") : i18n.t("about.copyDiagnostics")}
-          </button>
-          <button id="about-close" type="button" onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}>
+          </Button>
+          <Button id="about-close" type="button" variant="dialog" size="unset" onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}>
             {i18n.t("common.close")}
-          </button>
+          </Button>
         </div>
       </section>
     </div>
@@ -323,15 +330,17 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
             <h2 id="extract-title">{dialog.title}</h2>
             <p id="extract-dialog-message">{dialog.message}</p>
           </div>
-          <button
+          <Button
             id="extract-dialog-close"
+            variant="dialog"
+            size="unset"
             className="icon-button"
             type="button"
             aria-label={i18n.t("extract.close.aria")}
             onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}
           >
             {i18n.t("common.close")}
-          </button>
+          </Button>
         </div>
         <div className="dialog-body">
           <section className="dialog-section">
@@ -353,13 +362,15 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
                     <option value={entry} key={entry} />
                   ))}
                 </datalist>
-                <button
+                <Button
                   id="browse-extract-destination"
+                  variant="dialog"
+                  size="unset"
                   type="button"
                   onClick={() => actions.handleDialogIntent({ type: "browseExtractDestination", ...form })}
                 >
                   {i18n.t("common.browse")}
-                </button>
+                </Button>
               </div>
             </label>
             <label className="checkbox-row">
@@ -455,8 +466,10 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
           </section>
         </div>
         <div className="dialog-actions">
-          <button
+          <Button
             id="extract-start"
+            variant={canExtract ? "dialogPrimary" : "dialog"}
+            size="unset"
             type="button"
             className={canExtract ? "primary-action" : undefined}
             aria-disabled={!canExtract}
@@ -469,14 +482,16 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
             })}
           >
             {dialog.startLabel}
-          </button>
-          <button
+          </Button>
+          <Button
             id="extract-cancel"
+            variant="dialog"
+            size="unset"
             type="button"
             onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}
           >
             {i18n.t("common.cancel")}
-          </button>
+          </Button>
         </div>
       </section>
     </div>

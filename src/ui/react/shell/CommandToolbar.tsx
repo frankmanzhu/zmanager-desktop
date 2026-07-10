@@ -1,6 +1,7 @@
 import { FolderOpen } from "lucide-react";
 
 import { CLASSIC_TOOLBAR_GROUPS } from "../../../app/classicCommands";
+import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import {
   commandButtonId,
@@ -43,8 +44,10 @@ function WorkspaceModeTabs() {
 
   return (
     <div className="mode-switch" role="tablist" aria-label={i18n.t("workspace.mode.aria")}>
-      <button
+      <Button
         id="mode-compress"
+        variant="mode"
+        size="unset"
         className={`mode-button${isCompress ? " is-active" : ""}`}
         type="button"
         role="tab"
@@ -53,9 +56,11 @@ function WorkspaceModeTabs() {
         onClick={() => actions.setWorkspaceMode("compress")}
       >
         {i18n.t("workspace.mode.compress")}
-      </button>
-      <button
+      </Button>
+      <Button
         id="mode-extract"
+        variant="mode"
+        size="unset"
         className={`mode-button${!isCompress ? " is-active" : ""}`}
         type="button"
         role="tab"
@@ -64,7 +69,7 @@ function WorkspaceModeTabs() {
         onClick={() => actions.setWorkspaceMode("extract")}
       >
         {i18n.t("workspace.mode.extract")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -101,8 +106,10 @@ function CompressDestinationToolbarControls() {
 
   return (
     <>
-      <button
+      <Button
         id="browse-create-destination"
+        variant="toolbar"
+        size="unset"
         className="tool-button"
         type="button"
         title={i18n.t("create.destination.browse.title")}
@@ -110,7 +117,7 @@ function CompressDestinationToolbarControls() {
       >
         <FolderOpen className="tool-icon" aria-hidden="true" />
         <span className="tool-label">{i18n.t("common.browse")}</span>
-      </button>
+      </Button>
       <select
         id="create-destination-recent"
         className="toolbar-select recent-location-select"
@@ -149,8 +156,10 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: ToolbarGroupType["it
   ].filter(Boolean).join(" ");
 
   return (
-    <button
+    <Button
       id={commandButtonId(commandId)}
+      variant="toolbar"
+      size="unset"
       className={className}
       type="button"
       data-command-id={commandId}
@@ -164,6 +173,6 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: ToolbarGroupType["it
     >
       <Icon className="tool-icon" aria-hidden="true" />
       <span className="tool-label">{localizedCommandLabel(commandId, snapshot)}</span>
-    </button>
+    </Button>
   );
 }

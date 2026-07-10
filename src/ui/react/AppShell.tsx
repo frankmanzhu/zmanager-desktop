@@ -32,7 +32,7 @@ export function AppShell() {
         if (!cancelled) {
           const runtime = runtimeModule.getZManagerRuntimeAdapter?.();
           if (!runtime) {
-            throw new Error("legacy React runtime adapter is unavailable");
+            throw new Error("ZManager React runtime adapter is unavailable");
           }
 
           store.setActions(runtime.actions);

@@ -83,7 +83,6 @@ function commandError(overrides: Partial<CommandErrorDto> = {}): CommandErrorDto
 
 function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
   let desktopRuntime = true;
-  let shouldRenderBrowse = true;
   let launchListener: ((event: QuickActionLaunchEvent) => void) | null = null;
   const startupStates: QuickActionStartupStateDto[] = [];
   const calls = {
@@ -95,8 +94,7 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     messages: [] as string[],
     browseErrors: [] as string[],
     bootstrapStates: [] as { healthcheck: HealthcheckResponse | null; contract: ProjectContract | null }[],
-    diagnostics: 0,
-    browseRenders: 0,
+    bootstrapNotifications: 0,
   };
 
   const fetchHealthcheck = vi.fn(async () => healthcheck());
@@ -155,14 +153,8 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     setBootstrapState(state) {
       calls.bootstrapStates.push(state);
     },
-    refreshAboutDialogSnapshot() {
-      calls.diagnostics += 1;
-    },
-    shouldRenderBrowseAfterBootstrap() {
-      return shouldRenderBrowse;
-    },
-    renderBrowse() {
-      calls.browseRenders += 1;
+    onBootstrapStateChanged() {
+      calls.bootstrapNotifications += 1;
     },
     ...overrides,
   });
@@ -179,9 +171,6 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     },
     setDesktopRuntime(value: boolean) {
       desktopRuntime = value;
-    },
-    setShouldRenderBrowse(value: boolean) {
-      shouldRenderBrowse = value;
     },
     emitQuickActionLaunch(state: QuickActionStartupStateDto) {
       if (!launchListener) {
@@ -354,7 +343,7 @@ describe("startup controller", () => {
     expect(harness.calls.revealNormal).toBe(1);
   });
 
-  it("loads bootstrap state in parallel and renders ready diagnostics and browse", async () => {
+  it("loads bootstrap state in parallel and notifies after ready bootstrap state", async () => {
     const order: string[] = [];
     const readyHealthcheck = healthcheck({ ready: true });
     const readyContract = contract();
@@ -377,8 +366,7 @@ describe("startup controller", () => {
       contract: readyContract,
     }]);
     expect(harness.calls.statuses).toEqual(["translated:status.ready"]);
-    expect(harness.calls.diagnostics).toBe(1);
-    expect(harness.calls.browseRenders).toBe(1);
+    expect(harness.calls.bootstrapNotifications).toBe(1);
   });
 
   it("sets backend unavailable when bootstrap healthcheck is not ready", async () => {
@@ -405,8 +393,7 @@ describe("startup controller", () => {
     expect(harness.calls.bootstrapStates).toEqual([{ healthcheck: null, contract: null }]);
     expect(harness.calls.statuses).toEqual(["Command backend unavailable"]);
     expect(harness.calls.messages).toEqual([]);
-    expect(harness.calls.diagnostics).toBe(1);
-    expect(harness.calls.browseRenders).toBe(1);
+    expect(harness.calls.bootstrapNotifications).toBe(1);
   });
 
   it("uses the unknown backend fallback for non-command desktop bootstrap failures", async () => {
@@ -438,9 +425,8 @@ describe("startup controller", () => {
     expect(harness.calls.bootstrapStates).toEqual([{ healthcheck: null, contract: null }]);
   });
 
-  it("honors the bootstrap browse render gate on success and failure", async () => {
+  it("notifies after bootstrap success and failure", async () => {
     const successHarness = createHarness();
-    successHarness.setShouldRenderBrowse(false);
     await successHarness.controller.loadBootstrapState();
 
     const failureHarness = createHarness({
@@ -448,12 +434,9 @@ describe("startup controller", () => {
         throw new Error("down");
       },
     });
-    failureHarness.setShouldRenderBrowse(false);
     await failureHarness.controller.loadBootstrapState();
 
-    expect(successHarness.calls.diagnostics).toBe(1);
-    expect(successHarness.calls.browseRenders).toBe(0);
-    expect(failureHarness.calls.diagnostics).toBe(1);
-    expect(failureHarness.calls.browseRenders).toBe(0);
+    expect(successHarness.calls.bootstrapNotifications).toBe(1);
+    expect(failureHarness.calls.bootstrapNotifications).toBe(1);
   });
 });

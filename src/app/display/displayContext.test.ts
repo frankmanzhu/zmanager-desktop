@@ -56,42 +56,21 @@ describe("display context", () => {
     })).toEqual(["create", "jobs", "preferences"]);
   });
 
-  it("refreshes display context effects before active view renders", () => {
+  it("refreshes display context metadata after committing the new locale", () => {
     const documentElement = { lang: "", dir: "" };
-    const translatedElement = {
-      dataset: { i18nText: "workspace.mode.compress" },
-      textContent: "Compress",
-    };
-    const translationRoot = {
-      querySelectorAll: (selector: string) =>
-        selector === "[data-i18n-text]" ? [translatedElement] : [],
-    } as unknown as ParentNode;
     const calls: string[] = [];
 
     const display = refreshDisplayContext("zh-CN", {
-      activeWorkspace: "browse",
-      jobsVisible: true,
-      preferencesVisible: true,
-    }, {
       commitContext: (context) => calls.push(`commit:${context.resolvedLocale}`),
       documentElement,
-      translationRoot,
       refreshCommands: (context) => calls.push(`commands:${context.translator.locale}`),
-      renderBrowse: (context) => calls.push(`browse:${context.translator.locale}`),
-      renderCreate: () => calls.push("create"),
-      renderJobs: (context) => calls.push(`jobs:${context.translator.locale}`),
-      renderPreferences: (context) => calls.push(`preferences:${context.translator.locale}`),
     });
 
     expect(display.resolvedLocale).toBe("zh-CN");
     expect(documentElement).toEqual({ lang: "zh-CN", dir: "ltr" });
-    expect(translatedElement.textContent).toBe("压缩");
     expect(calls).toEqual([
       "commit:zh-CN",
       "commands:zh-CN",
-      "browse:zh-CN",
-      "jobs:zh-CN",
-      "preferences:zh-CN",
     ]);
   });
 
@@ -105,13 +84,10 @@ describe("display context", () => {
     const calls: string[] = [];
 
     refreshDisplayContext("en", {
-      activeWorkspace: "browse",
-    }, {
-      renderBrowse: () => calls.push("browse"),
-      renderCreate: () => calls.push("create"),
+      refreshCommands: () => calls.push("commands"),
     });
 
-    expect(calls).toEqual(["browse"]);
+    expect(calls).toEqual(["commands"]);
     expect(archiveViewOptions).toEqual({
       sortKey: "size",
       sortAscending: false,

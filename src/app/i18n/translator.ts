@@ -43,19 +43,6 @@ export function createTranslatorFromCatalog(
   };
 }
 
-export function applyTranslations(root: ParentNode, translator: Translator): void {
-  for (const element of root.querySelectorAll<HTMLElement>("[data-i18n-text]")) {
-    const key = element.dataset.i18nText as MessageKey | undefined;
-    if (key) {
-      element.textContent = translator.t(key);
-    }
-  }
-
-  applyTranslatedAttribute(root, "data-i18n-aria-label", "aria-label", translator);
-  applyTranslatedAttribute(root, "data-i18n-title", "title", translator);
-  applyTranslatedAttribute(root, "data-i18n-placeholder", "placeholder", translator);
-}
-
 export function interpolateMessage(message: string, params: MessageParams): string {
   return message.replace(INTERPOLATION_PATTERN, (source, name: string) => {
     if (!Object.prototype.hasOwnProperty.call(params, name)) {
@@ -63,18 +50,4 @@ export function interpolateMessage(message: string, params: MessageParams): stri
     }
     return String(params[name] ?? "");
   });
-}
-
-function applyTranslatedAttribute(
-  root: ParentNode,
-  sourceAttribute: string,
-  targetAttribute: string,
-  translator: Translator,
-): void {
-  for (const element of root.querySelectorAll<HTMLElement>(`[${sourceAttribute}]`)) {
-    const key = element.getAttribute(sourceAttribute) as MessageKey | null;
-    if (key) {
-      element.setAttribute(targetAttribute, translator.t(key));
-    }
-  }
 }

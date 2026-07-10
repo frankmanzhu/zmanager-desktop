@@ -34,9 +34,7 @@ export type StartupControllerOptions = Readonly<{
   toCommandError(error: unknown): CommandErrorDto | null;
   message(key: MessageKey, params?: MessageParams): string;
   setBootstrapState(state: BootstrapState): void;
-  refreshAboutDialogSnapshot(): void;
-  shouldRenderBrowseAfterBootstrap(): boolean;
-  renderBrowse(): void;
+  onBootstrapStateChanged(): void;
 }>;
 
 export type StartupController = Readonly<{
@@ -50,13 +48,6 @@ export type StartupController = Readonly<{
 export function createStartupController(
   options: StartupControllerOptions,
 ): StartupController {
-  function renderBootstrapViews(): void {
-    options.refreshAboutDialogSnapshot();
-    if (options.shouldRenderBrowseAfterBootstrap()) {
-      options.renderBrowse();
-    }
-  }
-
   async function handleQuickActionStartupState(state: QuickActionStartupStateDto): Promise<void> {
     if (!state.launchedForQuickAction) {
       return;
@@ -154,7 +145,7 @@ export function createStartupController(
           ? options.message("status.ready")
           : options.message("status.backendUnavailable"),
       );
-      renderBootstrapViews();
+      options.onBootstrapStateChanged();
     } catch (error) {
       options.setBootstrapState({ healthcheck: null, contract: null });
       if (options.isDesktopRuntime()) {
@@ -166,7 +157,7 @@ export function createStartupController(
       } else {
         options.setOperationalMessage("status.readyBrowserPreview");
       }
-      renderBootstrapViews();
+      options.onBootstrapStateChanged();
     }
   }
 
