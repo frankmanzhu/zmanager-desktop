@@ -47,7 +47,7 @@ export function ContextMenuRoot() {
     }
 
     const ownerDocument = menuRef.current?.ownerDocument ?? document;
-    const hideOnOutsideClick = (event: MouseEvent) => {
+    const hideOnOutsidePointerDown = (event: PointerEvent) => {
       const menuElement = menuRef.current;
       if (!menuElement || !(event.target instanceof Node) || menuElement.contains(event.target)) {
         return;
@@ -56,8 +56,8 @@ export function ContextMenuRoot() {
       actions.handleContextMenuIntent({ type: "hide" });
     };
 
-    ownerDocument.addEventListener("click", hideOnOutsideClick);
-    return () => ownerDocument.removeEventListener("click", hideOnOutsideClick);
+    ownerDocument.addEventListener("pointerdown", hideOnOutsidePointerDown);
+    return () => ownerDocument.removeEventListener("pointerdown", hideOnOutsidePointerDown);
   }, [actions, menu.visible, menu.id]);
 
   return (

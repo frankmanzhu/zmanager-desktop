@@ -179,8 +179,13 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #search-entries")).toHaveAttribute("placeholder", "Search sources");
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #browse-create-destination")).toHaveCount(0);
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toHaveCount(0);
   await expect(page.locator("#zmanager-runtime-bridge-root > .browser-shell")).toBeHidden();
+  await page.locator("#add-archive").click();
+  await expect(page.locator("#context-menu [data-context-action='add-source-files']")).toContainText("Files...");
+  await expect(page.locator("#context-menu [data-context-action='add-source-folder']")).toContainText("Folder...");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#context-menu")).toBeHidden();
 
   await captureAndScan(page, "03-compress-empty");
   await captureReadmeHero(page, "00-readme-hero", ".workspace");

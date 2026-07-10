@@ -1,8 +1,14 @@
 import { FolderOpen } from "lucide-react";
 
-import { CLASSIC_TOOLBAR_GROUPS } from "../../../app/classicCommands";
+import {
+  toolbarGroupsForWorkspaceMode,
+  type CommandBarGroup,
+  type CommandId,
+} from "../../../app/classicCommands";
+import type { CommandRouterPayload } from "../../../app/commands/commandRouter";
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
+import type { ZManagerReactSnapshot } from "../appRuntime";
 import {
   commandButtonId,
   commandIcon,
@@ -16,6 +22,7 @@ import {
 export function CommandToolbar() {
   const snapshot = useZManagerSnapshot();
   const i18n = translatorForSnapshot(snapshot);
+  const toolbarGroups = toolbarGroupsForWorkspaceMode(snapshot.shell.activeMode);
   const className = [
     "command-toolbar",
     "mode-toolbar",
@@ -27,7 +34,7 @@ export function CommandToolbar() {
     <header className={className} role="toolbar" aria-label={i18n.t("workspace.toolbar.aria")}>
       <WorkspaceModeTabs />
       <div className="command-strip">
-        {CLASSIC_TOOLBAR_GROUPS.map((group, index) => (
+        {toolbarGroups.map((group, index) => (
           <ToolbarGroup group={group} key={group.id} showSeparator={index > 0} />
         ))}
       </div>
@@ -74,12 +81,10 @@ function WorkspaceModeTabs() {
   );
 }
 
-type ToolbarGroupType = (typeof CLASSIC_TOOLBAR_GROUPS)[number];
-
 function ToolbarGroup({
   group,
   showSeparator,
-}: Readonly<{ group: ToolbarGroupType; showSeparator: boolean }>) {
+}: Readonly<{ group: CommandBarGroup; showSeparator: boolean }>) {
   return (
     <>
       {showSeparator ? <div className="toolbar-separator" aria-hidden="true" /> : null}
@@ -98,7 +103,6 @@ function CompressDestinationToolbarControls() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const history = snapshot.pathHistory.createDestinationHistory;
 
   if (snapshot.shell.activeMode !== "compress") {
     return null;
@@ -118,30 +122,11 @@ function CompressDestinationToolbarControls() {
         <FolderOpen className="tool-icon" aria-hidden="true" />
         <span className="tool-label">{i18n.t("common.browse")}</span>
       </Button>
-      <select
-        id="create-destination-recent"
-        className="toolbar-select recent-location-select"
-        aria-label={i18n.t("create.destination.recent.aria")}
-        title={i18n.t("create.destination.recent.title")}
-        disabled={!history.length}
-        value=""
-        onChange={(event) => {
-          const destinationPath = event.currentTarget.value;
-          if (destinationPath) {
-            actions.handleCreateIntent({ type: "setDestinationPath", destinationPath });
-          }
-        }}
-      >
-        <option value="">{i18n.t("create.destination.recent")}</option>
-        {history.map((entry) => (
-          <option value={entry} key={entry}>{entry}</option>
-        ))}
-      </select>
     </>
   );
 }
 
-function ToolbarButton({ commandId }: Readonly<{ commandId: ToolbarGroupType["items"][number] }>) {
+function ToolbarButton({ commandId }: Readonly<{ commandId: CommandId }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const state = commandStateFor(snapshot.commands.states, commandId);
@@ -149,6 +134,7 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: ToolbarGroupType["it
   const primary = snapshot.commands.primaryCommandIds.includes(commandId);
   const secondary = snapshot.commands.secondaryCommandIds.includes(commandId);
   const pressed = snapshot.commands.pressed[commandId];
+  const label = toolbarCommandLabel(commandId, snapshot);
   const className = [
     "tool-button",
     primary ? "is-primary-command" : "",
@@ -163,16 +149,51 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: ToolbarGroupType["it
       className={className}
       type="button"
       data-command-id={commandId}
-      aria-label={localizedCommandLabel(commandId, snapshot)}
+      aria-label={label}
       title={state.reason && !state.enabled ? state.reason : localizedCommandTooltip(commandId, snapshot)}
       aria-keyshortcuts={commandShortcut(commandId)}
       aria-disabled={!state.enabled}
       aria-pressed={typeof pressed === "boolean" ? pressed : undefined}
       disabled={!state.enabled}
-      onClick={() => actions.executeCommand(commandId)}
+      onClick={(event) => actions.executeCommand(commandId, toolbarCommandPayload(commandId, event.currentTarget))}
     >
       <Icon className="tool-icon" aria-hidden="true" />
-      <span className="tool-label">{localizedCommandLabel(commandId, snapshot)}</span>
+      <span className="tool-label">{label}</span>
     </Button>
   );
+}
+
+function toolbarCommandLabel(commandId: CommandId, snapshot: ZManagerReactSnapshot): string {
+  const i18n = translatorForSnapshot(snapshot);
+
+  if (snapshot.shell.activeMode === "extract") {
+    if (commandId === "open") {
+      return i18n.t("common.browse");
+    }
+
+    if (commandId === "extract") {
+      return i18n.t("extract.allAction");
+    }
+  }
+
+  return localizedCommandLabel(commandId, snapshot);
+}
+
+function toolbarCommandPayload(commandId: CommandId, button: HTMLElement): CommandRouterPayload | undefined {
+  if (commandId === "add") {
+    const rect = button.getBoundingClientRect();
+
+    return {
+      addSourcesMenuAnchor: {
+        x: rect.left,
+        y: rect.bottom + 4,
+      },
+    };
+  }
+
+  if (commandId === "extract") {
+    return { extractMode: "archive" };
+  }
+
+  return undefined;
 }

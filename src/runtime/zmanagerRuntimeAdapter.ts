@@ -411,7 +411,7 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
 const createRuntimeActions = createCreateRuntimeActions({
   showWorkspace: showCreateWorkspace,
   showAddSourcesMenu: (x, y) => {
-    contextMenuRuntime.show(x, y, buildAddSourcesContextMenuItems(displayContext.translator));
+    showAddSourcesMenuAt(x, y);
   },
   clearSources: clearCreateSources,
   removeSources: (sourcePaths) => removeCreateSources([...sourcePaths]),
@@ -1605,6 +1605,14 @@ const commandRouter = createCommandRouter({
       void onOpenArchive();
     },
     createArchive: showCreateWorkspace,
+    addSources: (anchor) => {
+      if (anchor) {
+        showAddSourcesMenuAt(anchor.x, anchor.y);
+        return;
+      }
+
+      void addSourcePathsFromDialog("files");
+    },
     selectAll: selectVisibleEntries,
     deselectAll: clearBrowseSelection,
     invertSelection: invertVisibleSelectionEntries,
@@ -2794,9 +2802,8 @@ function showSourceContextMenu(sourcePath: string, x: number, y: number) {
   }));
 }
 
-function showAddSourcesMenu(anchor: HTMLElement) {
-  const rect = anchor.getBoundingClientRect();
-  contextMenuRuntime.show(rect.left, rect.bottom + 4, buildAddSourcesContextMenuItems(displayContext.translator));
+function showAddSourcesMenuAt(x: number, y: number) {
+  contextMenuRuntime.show(x, y, buildAddSourcesContextMenuItems(displayContext.translator));
 }
 
 function handleContextMenuAction(payload: ContextMenuActionPayload) {

@@ -254,6 +254,19 @@ export const CLASSIC_TOOLBAR_GROUPS: CommandBarGroup[] = [
 
 export const CLASSIC_TOOLBAR_ORDER: CommandId[] = CLASSIC_TOOLBAR_GROUPS.flatMap((group) => group.items);
 
+export type ToolbarWorkspaceMode = "compress" | "extract";
+
+const TOOLBAR_GROUP_IDS_BY_MODE: Record<ToolbarWorkspaceMode, readonly CommandBarGroupId[]> = {
+  compress: ["compress"],
+  extract: ["extract", "table"],
+};
+
+export function toolbarGroupsForWorkspaceMode(mode: ToolbarWorkspaceMode): CommandBarGroup[] {
+  const visibleGroupIds = TOOLBAR_GROUP_IDS_BY_MODE[mode];
+
+  return CLASSIC_TOOLBAR_GROUPS.filter((group) => visibleGroupIds.includes(group.id));
+}
+
 export type CommandContext = {
   browseState: BrowseState;
   hasArchive: boolean;

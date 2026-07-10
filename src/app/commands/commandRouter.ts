@@ -11,6 +11,7 @@ export type RoutedExtractDestination = "dialog" | "here";
 export type RoutedSortKey = "name" | "kind" | "modified" | "size";
 export type RoutedInfoTarget = "current" | "archive" | "context";
 export type RoutedOpenSource = "dialog" | "clipboard" | "path";
+export type RoutedMenuAnchor = Readonly<{ x: number; y: number }>;
 
 export type CommandRouterPayload = {
   readonly extractMode?: RoutedExtractMode;
@@ -20,6 +21,7 @@ export type CommandRouterPayload = {
   readonly archivePath?: string;
   readonly openSource?: RoutedOpenSource;
   readonly entryPath?: string;
+  readonly addSourcesMenuAnchor?: RoutedMenuAnchor;
 };
 
 export type KeyboardCommandInput = {
@@ -51,6 +53,7 @@ export type CommandExecutionResult = {
 export type CommandRouterEffects = {
   openArchive: (source: RoutedOpenSource, archivePath?: string) => void | Promise<void>;
   createArchive: () => void | Promise<void>;
+  addSources: (anchor?: RoutedMenuAnchor) => void | Promise<void>;
   selectAll: () => void | Promise<void>;
   deselectAll: () => void | Promise<void>;
   invertSelection: () => void | Promise<void>;
@@ -243,8 +246,10 @@ export function createCommandRouter(options: CommandRouterOptions): CommandRoute
           void effects.openArchive(payload.openSource ?? "dialog", payload.archivePath);
           return executed(commandId);
         case "createFile":
-        case "add":
           void effects.createArchive();
+          return executed(commandId);
+        case "add":
+          void effects.addSources(payload.addSourcesMenuAnchor);
           return executed(commandId);
         case "selectAll":
           void effects.selectAll();

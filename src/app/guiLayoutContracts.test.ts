@@ -445,6 +445,8 @@ describe("GUI layout contracts", () => {
     expect(contextMenuModelSource).toContain("export type ContextMenuItem");
     expect(contextMenuModelSource).toContain("export type ContextMenuActionPayload");
     expect(contextMenuRootSource).toContain("function renderContextMenuItem");
+    expect(contextMenuRootSource).toContain('addEventListener("pointerdown"');
+    expect(contextMenuRootSource).not.toContain('addEventListener("click"');
     expect(contextMenuRootSource).not.toContain("dangerouslySetInnerHTML");
   });
 
@@ -662,7 +664,7 @@ describe("GUI layout contracts", () => {
   it("keeps Compress create canonical in-window with validation and source actions", () => {
     expect(createWorkspaceSource).toContain('className="compress-create-panel"');
     expect(mainSource).not.toContain('id="create-dialog"');
-    expect(commandToolbarSource).toContain('id="create-destination-recent"');
+    expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
     expect(createWorkspaceSource).toContain('id="clear-sources"');
     expect(createWorkspaceSource).toContain('id="create-plan-meta"');
     expect(createWorkspaceSource).toContain("create.options.readiness.unavailableReason");
@@ -757,7 +759,7 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).not.toContain("pathDatalist");
     expect(commandToolbarSource).toContain("function CompressDestinationToolbarControls");
     expect(commandToolbarSource).toContain('id="browse-create-destination"');
-    expect(commandToolbarSource).toContain('id="create-destination-recent"');
+    expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
     expect(createWorkspaceSource).not.toContain('<label className="compress-destination-field">');
     expect(createWorkspaceSource).not.toContain("pathActions=");
     expect(createWorkspaceSource).not.toContain("pathDatalist=");

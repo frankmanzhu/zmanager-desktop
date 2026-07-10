@@ -18,6 +18,7 @@ import {
   type MenuItem,
   UNSUPPORTED_OPERATION_MESSAGE,
   selectCommandState,
+  toolbarGroupsForWorkspaceMode,
 } from "./classicCommands";
 import { createTranslatorFromCatalog } from "./i18n/translator";
 import { zhCnMessages } from "./i18n/messages.zh-CN";
@@ -96,6 +97,32 @@ describe("classic command definitions", () => {
       "Delete Temporary Files...",
       "Contents...",
       "About ZManager...",
+    ]);
+  });
+
+  it("selects mode-relevant toolbar command groups", () => {
+    expect(toolbarGroupsForWorkspaceMode("compress").map((group) => group.id)).toEqual([
+      "compress",
+    ]);
+    expect(toolbarGroupsForWorkspaceMode("compress").flatMap((group) => group.items)).toEqual([
+      "add",
+      "createFile",
+    ]);
+
+    expect(toolbarGroupsForWorkspaceMode("extract").map((group) => group.id)).toEqual([
+      "extract",
+      "table",
+    ]);
+    expect(toolbarGroupsForWorkspaceMode("extract").flatMap((group) => group.items)).toEqual([
+      "open",
+      "extract",
+      "test",
+      "view",
+      "copy",
+      "info",
+      "refresh",
+      "selectAll",
+      "flatView",
     ]);
   });
 

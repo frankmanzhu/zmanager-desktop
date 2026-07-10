@@ -27,6 +27,7 @@ function recordingEffects(log: string[]): CommandRouterEffects {
   return {
     openArchive: (source, archivePath) => record(`openArchive:${source}:${archivePath ?? ""}`),
     createArchive: () => record("createArchive"),
+    addSources: (anchor) => record(`addSources:${anchor ? `${anchor.x},${anchor.y}` : ""}`),
     selectAll: () => record("selectAll"),
     deselectAll: () => record("deselectAll"),
     invertSelection: () => record("invertSelection"),
@@ -67,12 +68,13 @@ describe("command router", () => {
     });
 
     expect(router.run("open")).toEqual({ commandId: "open", status: "executed" });
+    expect(router.run("createFile")).toEqual({ commandId: "createFile", status: "executed" });
     expect(router.run("add")).toEqual({ commandId: "add", status: "executed" });
     expect(router.run("selectAll")).toEqual({ commandId: "selectAll", status: "executed" });
     expect(router.run("refresh")).toEqual({ commandId: "refresh", status: "executed" });
     expect(router.run("about")).toEqual({ commandId: "about", status: "executed" });
 
-    expect(log).toEqual(["openArchive:dialog:", "createArchive", "selectAll", "refresh", "about"]);
+    expect(log).toEqual(["openArchive:dialog:", "createArchive", "addSources:", "selectAll", "refresh", "about"]);
   });
 
   it("passes payload for commands whose behavior depends on the surface context", () => {
@@ -85,9 +87,16 @@ describe("command router", () => {
     router.run("extract", { extractMode: "selection" });
     router.run("extract");
     router.run("extract", { extractMode: "archive", extractDestination: "here" });
+    router.run("add", { addSourcesMenuAnchor: { x: 12, y: 24 } });
     router.run("sortDate");
 
-    expect(log).toEqual(["extract:selection:dialog", "extract:archive:dialog", "extract:archive:here", "sort:modified"]);
+    expect(log).toEqual([
+      "extract:selection:dialog",
+      "extract:archive:dialog",
+      "extract:archive:here",
+      "addSources:12,24",
+      "sort:modified",
+    ]);
   });
 
   it("normalizes disabled commands before executing effects", () => {
