@@ -10,11 +10,10 @@ import {
 function createHarness(overrides: Partial<ArchiveOpenControllerOptions> = {}) {
   const pathHistoryStore = createPathHistoryStore(null);
   const calls: string[] = [];
-  const renderExtractDestinationHistory = vi.fn((snapshot: PathHistorySnapshot) => {
-    calls.push(`render-extract:${snapshot.extractDestinationHistory.join("|")}`);
-  });
-  const renderCreateDestinationHistory = vi.fn((snapshot: PathHistorySnapshot) => {
-    calls.push(`render-create:${snapshot.createDestinationHistory.join("|")}`);
+  const publishPathHistorySnapshot = vi.fn((snapshot: PathHistorySnapshot) => {
+    calls.push(
+      `publish-history:${snapshot.extractDestinationHistory.join("|")}:${snapshot.createDestinationHistory.join("|")}`,
+    );
   });
   const dialogOptions: ArchiveOpenDialogOptions = {
     title: "Open archive",
@@ -42,8 +41,7 @@ function createHarness(overrides: Partial<ArchiveOpenControllerOptions> = {}) {
 
   const controller = createArchiveOpenController({
     pathHistoryStore,
-    renderExtractDestinationHistory,
-    renderCreateDestinationHistory,
+    publishPathHistorySnapshot,
     openArchiveDialogOptions: () => dialogOptions,
     openArchiveDialog,
     canReadClipboard: () => true,
@@ -67,51 +65,49 @@ function createHarness(overrides: Partial<ArchiveOpenControllerOptions> = {}) {
     loadArchive,
     openArchiveDialog,
     pathHistoryStore,
+    publishPathHistorySnapshot,
     readClipboardText,
-    renderCreateDestinationHistory,
-    renderExtractDestinationHistory,
     setCurrentArchivePath,
     setOperationalStatus,
   };
 }
 
 describe("archive open controller", () => {
-  it("renders extract destination history only when the store records a value", () => {
+  it("publishes extract destination history only when the store records a value", () => {
     const harness = createHarness();
 
     harness.controller.recordExtractDestinationHistory(" C:/out ");
     harness.controller.recordExtractDestinationHistory("   ");
 
-    expect(harness.renderExtractDestinationHistory).toHaveBeenCalledTimes(1);
-    expect(harness.renderExtractDestinationHistory).toHaveBeenCalledWith(
+    expect(harness.publishPathHistorySnapshot).toHaveBeenCalledTimes(1);
+    expect(harness.publishPathHistorySnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         extractDestinationHistory: ["C:/out"],
       }),
     );
   });
 
-  it("renders create destination history only when the store records a value", () => {
+  it("publishes create destination history only when the store records a value", () => {
     const harness = createHarness();
 
     harness.controller.recordCreateDestinationHistory(" C:/created/app.zip ");
     harness.controller.recordCreateDestinationHistory("");
 
-    expect(harness.renderCreateDestinationHistory).toHaveBeenCalledTimes(1);
-    expect(harness.renderCreateDestinationHistory).toHaveBeenCalledWith(
+    expect(harness.publishPathHistorySnapshot).toHaveBeenCalledTimes(1);
+    expect(harness.publishPathHistorySnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         createDestinationHistory: ["C:/created/app.zip"],
       }),
     );
   });
 
-  it("records recent archive history without rendering destination datalists", () => {
+  it("records recent archive history without publishing destination history", () => {
     const harness = createHarness();
 
     harness.controller.recordRecentArchiveHistory(" C:/archives/app.zip ");
 
     expect(harness.pathHistoryStore.getSnapshot().recentArchiveHistory).toEqual(["C:/archives/app.zip"]);
-    expect(harness.renderExtractDestinationHistory).not.toHaveBeenCalled();
-    expect(harness.renderCreateDestinationHistory).not.toHaveBeenCalled();
+    expect(harness.publishPathHistorySnapshot).not.toHaveBeenCalled();
   });
 
   it("opens the dialog with injected options and noops on cancel or non-string selection", async () => {

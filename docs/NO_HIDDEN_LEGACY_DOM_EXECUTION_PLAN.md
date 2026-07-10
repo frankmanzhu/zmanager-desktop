@@ -29,9 +29,9 @@ interfaces:
 - `runtimeBridge.ts` should only compose adapters, publish snapshots, and route
   commands while the final runtime module is extracted.
 
-## Current Smell Inventory
+## Original Smell Inventory
 
-Observed current state:
+Observed starting state before the cleanup:
 
 - `src/main.ts` is already a small React composition root.
 - `src/ui/react/AppShell.tsx` dynamically imports `src/runtimeBridge.ts` and
@@ -260,6 +260,20 @@ Deletion gate:
 - Remove hidden create password reads from `createStartController` setup.
 - Remove extract hidden-control sync functions.
 
+Status 2026-07-10: complete for the live extract dialog path. `createExtractStartController`
+now receives explicit `ExtractStartInput` in `startExtract(mode, input)`, the
+runtime bridge no longer configures a controller `readInput` callback, React
+extract submit/browse no longer writes form state into hidden extract controls,
+and the hidden legacy extract dialog HTML plus its captured controls and
+listeners were deleted. Extract dialog snapshots are now built from typed
+runtime form state and React-local submit password state.
+
+Create status 2026-07-10: complete for the live create submit path.
+`createCreateStartController` now requires explicit submit password input and
+no longer accepts an injected `passwordInput()` callback. React create submit
+local state now feeds the controller directly, and the hidden create submit
+controls were deleted with the hidden runtime bootstrap.
+
 ## Phase 2: Snapshot-Only Info And About Dialogs
 
 Goal: make info/about snapshots the only dialog content source.
@@ -311,6 +325,12 @@ Deletion gate:
 - Remove hidden `aboutDialog`, `infoDialog`, `infoActionGroup`, and their close
   button listeners once React modal focus is covered.
 
+Status 2026-07-10: complete for the live info/about dialog path. Info dialog
+builders now publish React snapshots only, About diagnostics are serialized from
+snapshot data instead of hidden DOM, and the hidden info/about dialog HTML,
+captured elements, modal-controller wiring, and close/action listeners were
+deleted from `src/runtimeBridge.ts`.
+
 ## Phase 3: Typed Context Menu Snapshots
 
 Goal: delete raw HTML context menu payloads and React
@@ -360,6 +380,12 @@ Deletion gate:
   `showContextMenu(x, y, items)`.
 - Remove `dangerouslySetInnerHTML`.
 - Remove string context menu builders from `runtimeBridge.ts`.
+
+Status 2026-07-10: complete for the live React context-menu path. Context menu
+snapshots now carry typed `ContextMenuModelItem` rows from
+`src/app/commands/contextMenuModel.ts`; `ContextMenuRoot` renders those rows
+without `dangerouslySetInnerHTML`; `decodeContextMenuAction` was deleted; and
+`src/app/guiLayoutContracts.test.ts` now guards the typed snapshot seam.
 
 ## Phase 4: Create Workspace Deepening
 
@@ -420,6 +446,24 @@ Deletion gate:
   `compressSelectionAnchorPath` unless they have been moved into a named create
   workspace module with tests.
 
+Status 2026-07-10: deletion gate complete. `createCreateStartController` and
+`createCreatePlanController` now publish snapshots instead of invoking
+controller render callbacks such as `renderPlanState`, `renderPlanStatus`,
+`renderCreateBrowser`, or `refreshPlanSummary`. `createQuickActionController`
+also publishes the create workspace snapshot for create-review startup instead
+of invoking `renderCreateSources` or `renderCompressBrowser`. Bridge-level
+create row selection/focus/anchor globals were deleted in favour of the
+selection state already owned by `src/app/workspaces/createWorkspace.ts`, and
+React create destination/search/navigation/inclusion intents no longer refresh a
+hidden create browser. `createArchiveOpenController` now publishes
+`PathHistorySnapshot` changes instead of invoking separate hidden
+extract/create destination-history render callbacks. `runtimeBridge.ts` no
+longer imports `src/ui/createWorkspaceView.ts`, that legacy view file was
+deleted, hidden create DOM refs/listeners were removed from `runtimeBridge.ts`,
+and the old bridge-level `selectedCompressRows`, `focusedCompressRowPath`, and
+`compressSelectionAnchorPath` state no longer exists. The hidden DOM bootstrap
+was removed in Phase 7.
+
 ## Phase 5: Archive Workspace Deepening
 
 Goal: delete archive legacy render helpers and bridge-held archive mirrors.
@@ -476,6 +520,14 @@ Deletion gate:
 - Delete `src/ui/archiveWorkspaceView.ts`.
 - Remove hidden archive DOM refs and `privatizeLegacyArchiveSurfaceIds`.
 - Remove legacy archive row attribute privatization.
+
+Status 2026-07-10: deletion gate complete. `runtimeBridge.ts` no longer imports
+or calls `src/ui/archiveWorkspaceView.ts`, the file was deleted, archive
+path/tree/table/details/status rendering now flows through React snapshots, the
+duplicate hidden archive search/path/tree/details listeners were removed, and
+the legacy archive row-focus restoration path was deleted. The hidden runtime
+root removal in Phase 7 also deleted `privatizeLegacyArchiveSurfaceIds` and the
+legacy row-attribute privatization code.
 
 ## Phase 6: Runtime Event Wiring
 
@@ -561,6 +613,12 @@ Deletion gate:
 - `rg -n "zmanager-runtime-bridge-root|appRoot\.innerHTML|privatizeLegacy" src`
   returns no matches.
 
+Status 2026-07-10: deletion gate complete. `AppShell` no longer mounts
+`#zmanager-runtime-bridge-root`, `runtimeBridge.ts` no longer generates hidden
+DOM with `appRoot.innerHTML`, `privatizeLegacy*` collision-avoidance code was
+deleted, and the GUI contract test now forbids the hidden root and
+privatization strings in `src`.
+
 ## Phase 8: Shrink Or Delete `runtimeBridge.ts`
 
 Goal: make the runtime adapter deep enough to keep, or delete the bridge name.
@@ -603,6 +661,13 @@ Completion gate:
 - `runtimeBridge.ts` passes the deletion test. If deleting it only requires
   changing one import, delete it. If it earns its keep, it should expose a small
   runtime adapter interface and hide meaningful composition behind it.
+
+Status 2026-07-10: completion gate met with a compatibility bridge.
+`src/runtimeBridge.ts` is now a tiny export-only bridge that imports styles and
+re-exports `getZManagerRuntimeAdapter()` from
+`src/runtime/zmanagerRuntimeAdapter.ts`. The large runtime composition moved
+behind that named adapter module, and GUI guardrails now keep the bridge free of
+hidden DOM construction and broad UI event wiring.
 
 ## Phase 9: Final Guardrails And Validation
 

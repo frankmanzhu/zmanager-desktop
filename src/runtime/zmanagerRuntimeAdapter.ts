@@ -497,8 +497,7 @@ const archiveLoadController = createArchiveLoadController({
 });
 const archiveOpenController = createArchiveOpenController({
   pathHistoryStore,
-  renderExtractDestinationHistory: () => renderExtractDestinationHistory(),
-  renderCreateDestinationHistory: () => publishReactSnapshot(),
+  publishPathHistorySnapshot: () => renderExtractDestinationHistory(),
   openArchiveDialogOptions: () => ({
     title: displayContext.translator.t("nativeDialog.openArchive"),
     directory: false,

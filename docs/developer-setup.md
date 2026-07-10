@@ -67,7 +67,7 @@ archiving stack.
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf pkg-config
 ```
 
 These packages provide `cmake` for the bundled libarchive build and the GTK/WebKit
@@ -126,4 +126,3 @@ src-tauri/
 - password prompt through non-logging UI state
 - progress and cancellation
 - platform packaging
-
