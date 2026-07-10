@@ -22,6 +22,7 @@ import {
   isLocalePreference,
   type LocalePreference,
 } from "./i18n/locale";
+import type { ExtractOverwritePolicy, ExtractPathMode } from "./extractFlow";
 
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
 export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extractToFolder";
@@ -45,6 +46,10 @@ export type AppPreferences = {
   defaultOutputLocation: DefaultOutputLocation;
   customOutputFolderPath: string;
   defaultExtractionBehavior: DefaultExtractionBehavior;
+  defaultExtractPathMode: ExtractPathMode;
+  defaultExtractOverwrite: ExtractOverwritePolicy;
+  defaultExtractStripComponents: number;
+  defaultExtractDeduplicateRoot: boolean;
   previewCleanupPolicy: PreviewCleanupPolicy;
   showParentFolderItem: boolean;
   showRealFileIcons: boolean;
@@ -110,6 +115,10 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultOutputLocation: "sourceFolder",
   customOutputFolderPath: "",
   defaultExtractionBehavior: "askEveryTime",
+  defaultExtractPathMode: "full",
+  defaultExtractOverwrite: "ask",
+  defaultExtractStripComponents: 0,
+  defaultExtractDeduplicateRoot: false,
   previewCleanupPolicy: "beforeNextPreview",
   showParentFolderItem: true,
   showRealFileIcons: true,
@@ -131,6 +140,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ"] as const;
 const OUTPUT_LOCATIONS = ["sourceFolder", "customFolder"] as const;
 const EXTRACTION_BEHAVIORS = ["askEveryTime", "extractHere", "extractToFolder"] as const;
+const EXTRACT_PATH_MODES = ["full", "current", "none"] as const;
+const EXTRACT_OVERWRITE_POLICIES = ["refuse", "ask", "rename", "replace"] as const;
 const PREVIEW_CLEANUP_POLICIES = ["beforeNextPreview", "whenAppCloses"] as const;
 const TABLE_SORT_KEYS = [
   "name",
@@ -286,6 +297,9 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   const locale = storage.getItem(PREFERENCE_KEYS.locale);
   const defaultOutputLocation = storage.getItem(PREFERENCE_KEYS.defaultOutputLocation);
   const defaultExtractionBehavior = storage.getItem(PREFERENCE_KEYS.defaultExtractionBehavior);
+  const defaultExtractPathMode = storage.getItem(PREFERENCE_KEYS.defaultExtractPathMode);
+  const defaultExtractOverwrite = storage.getItem(PREFERENCE_KEYS.defaultExtractOverwrite);
+  const defaultExtractStripComponents = storage.getItem(PREFERENCE_KEYS.defaultExtractStripComponents);
   const previewCleanupPolicy = storage.getItem(PREFERENCE_KEYS.previewCleanupPolicy);
   const tableSortKey = storage.getItem(PREFERENCE_KEYS.tableSortKey);
   const defaultCleanSourceEnabled = storedBool(
@@ -310,6 +324,22 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     defaultExtractionBehavior: isOneOf(EXTRACTION_BEHAVIORS, defaultExtractionBehavior)
       ? defaultExtractionBehavior
       : DEFAULT_APP_PREFERENCES.defaultExtractionBehavior,
+    defaultExtractPathMode: isOneOf(EXTRACT_PATH_MODES, defaultExtractPathMode)
+      ? defaultExtractPathMode
+      : DEFAULT_APP_PREFERENCES.defaultExtractPathMode,
+    defaultExtractOverwrite: isOneOf(EXTRACT_OVERWRITE_POLICIES, defaultExtractOverwrite)
+      ? defaultExtractOverwrite
+      : DEFAULT_APP_PREFERENCES.defaultExtractOverwrite,
+    defaultExtractStripComponents: defaultExtractStripComponents === null
+      ? DEFAULT_APP_PREFERENCES.defaultExtractStripComponents
+      : storedNumber(
+          Number(defaultExtractStripComponents),
+          DEFAULT_APP_PREFERENCES.defaultExtractStripComponents,
+        ) ?? 0,
+    defaultExtractDeduplicateRoot: storedBool(
+      storage.getItem(PREFERENCE_KEYS.defaultExtractDeduplicateRoot),
+      DEFAULT_APP_PREFERENCES.defaultExtractDeduplicateRoot,
+    ),
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
       ? previewCleanupPolicy
       : DEFAULT_APP_PREFERENCES.previewCleanupPolicy,
@@ -377,6 +407,10 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.createFormatDefaults, JSON.stringify(preferences.createFormatDefaults));
   storage.setItem(PREFERENCE_KEYS.defaultOutputLocation, preferences.defaultOutputLocation);
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
+  storage.setItem(PREFERENCE_KEYS.defaultExtractPathMode, preferences.defaultExtractPathMode);
+  storage.setItem(PREFERENCE_KEYS.defaultExtractOverwrite, preferences.defaultExtractOverwrite);
+  storage.setItem(PREFERENCE_KEYS.defaultExtractStripComponents, String(preferences.defaultExtractStripComponents));
+  storage.setItem(PREFERENCE_KEYS.defaultExtractDeduplicateRoot, String(preferences.defaultExtractDeduplicateRoot));
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
   storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
   storage.setItem(PREFERENCE_KEYS.showRealFileIcons, String(preferences.showRealFileIcons));

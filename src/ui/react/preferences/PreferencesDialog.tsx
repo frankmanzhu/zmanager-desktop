@@ -289,6 +289,36 @@ function ExtractionPage({ draft, active }: Readonly<{ draft: AppPreferences; act
           <p className="setting-description"><span className="quick-action-badge">{i18n.t("preferences.quickActions.badge")}</span> <span>{i18n.t("preferences.extraction.quickDescription")}</span></p>
         </div>
       </div>
+      <div className="setting-grid">
+        <div className="setting-row">
+          <label htmlFor="pref-extract-path-mode">{i18n.t("extract.pathMode")}</label>
+          <div className="setting-control">
+            <select id="pref-extract-path-mode" value={draft.defaultExtractPathMode} onChange={(event) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultExtractPathMode: event.currentTarget.value as AppPreferences["defaultExtractPathMode"] } })}>
+              <option value="full">{i18n.t("extract.pathMode.full")}</option>
+              <option value="current">{i18n.t("extract.pathMode.current")}</option>
+              <option value="none">{i18n.t("extract.pathMode.none")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="setting-row">
+          <label htmlFor="pref-extract-overwrite">{i18n.t("extract.overwritePolicy")}</label>
+          <div className="setting-control">
+            <select id="pref-extract-overwrite" value={draft.defaultExtractOverwrite} onChange={(event) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultExtractOverwrite: event.currentTarget.value as AppPreferences["defaultExtractOverwrite"] } })}>
+              <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
+              <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
+              <option value="rename">{i18n.t("extract.overwrite.rename")}</option>
+              <option value="replace">{i18n.t("extract.overwrite.replace")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="setting-row">
+          <label htmlFor="pref-extract-strip-components">{i18n.t("extract.stripComponents")}</label>
+          <div className="setting-control">
+            <input id="pref-extract-strip-components" type="number" min="0" value={draft.defaultExtractStripComponents} onChange={(event) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultExtractStripComponents: Math.max(0, Number.parseInt(event.currentTarget.value, 10) || 0) } })} />
+          </div>
+        </div>
+      </div>
+      <PreferenceCheckbox id="pref-extract-deduplicate-root" label={i18n.t("extract.deduplicateRoot")} checked={draft.defaultExtractDeduplicateRoot} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultExtractDeduplicateRoot: checked } })} />
     </section>
   );
 }

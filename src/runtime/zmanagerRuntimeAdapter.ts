@@ -96,6 +96,11 @@ import {
   type CreateWorkspaceSnapshot,
 } from "../app/workspaces/createWorkspace";
 import {
+  createExtractWorkspace,
+  type ExtractWorkspaceDefaults,
+  type ExtractWorkspaceOptionPatch,
+} from "../app/workspaces/extractWorkspace";
+import {
   pathsWithSameExtension,
 } from "../app/selection";
 import {
@@ -117,7 +122,6 @@ import {
   normalizeArchivePath,
 } from "../app/archiveTree";
 import {
-  CREATE_ARCHIVE_FILTERS,
   getArchiveName,
   sourcePathForCreatePlanRow,
   type CreateArchiveFormat,
@@ -126,7 +130,6 @@ import {
 import {
   unknownErrorMessage,
   type NativeDialogOpenOptions,
-  type NativeDialogSaveOptions,
 } from "../app/dialogs";
 import {
   type ExtractMode,
@@ -254,7 +257,6 @@ import type {
 import {
   isDesktopRuntime,
   openNativeDialog as openRuntimeDialog,
-  saveNativeDialog as saveRuntimeDialog,
 } from "../desktop/runtime";
 import {
   bindDesktopFileDrop,
@@ -338,6 +340,7 @@ const archiveWorkspace = createArchiveWorkspace({
   sortAscending: appPreferences.tableSortAscending,
 });
 const createWorkspace = createCreateWorkspace();
+const extractWorkspace = createExtractWorkspace();
 let displayContext = createDisplayContext(appPreferences.locale);
 let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
@@ -402,6 +405,20 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
   },
   startNativeDrag: startNativeDragOut,
   copyDetailsValue: copyTextToClipboard,
+  setExtractDestination: (destinationPath) => {
+    extractWorkspace.setOptions({ destinationPath });
+    publishReactSnapshot();
+  },
+  browseExtractDestination: onSelectWorkspaceExtractDestination,
+  setExtractOptions: (patch) => {
+    extractWorkspace.setOptions(patch);
+    publishReactSnapshot();
+  },
+  resetExtractDefaults: () => {
+    extractWorkspace.resetToDefaults();
+    publishReactSnapshot();
+  },
+  runExtract: (mode, password) => startExtract(mode, extractWorkspace.buildStartInput(password)),
   showEmptyContextMenu: showStartupContextMenu,
   showColumnContextMenu: (columnId, x, y) => showTableHeaderContextMenu(x, y, columnId),
   showFolderContextMenu: (path, x, y) => showFolderContextMenu(path, x, y, path),
@@ -454,9 +471,6 @@ const createRuntimeActions = createCreateRuntimeActions({
   setPathIncluded: (path, included) => {
     publishCreateWorkspaceSnapshot(createWorkspace.setPathIncluded(path, included).snapshot);
   },
-  setAllIncluded: (included) => {
-    publishCreateWorkspaceSnapshot(createWorkspace.setAllPathsIncluded(included).snapshot);
-  },
   setCurrentFolderIncluded: (included) => {
     publishCreateWorkspaceSnapshot(
       createWorkspace.setCurrentFolderIncluded(
@@ -464,6 +478,9 @@ const createRuntimeActions = createCreateRuntimeActions({
         included,
       ).snapshot,
     );
+  },
+  setVisibleRowsIncluded: (included) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setVisibleRowsIncluded(included).snapshot);
   },
   selectRow: (intent) => {
     publishCreateWorkspaceSnapshot(createWorkspace.selectRow(intent.path, intent).snapshot);
@@ -657,8 +674,8 @@ const archivePreviewController = createArchivePreviewController({
   isCurrentArchive: (archivePath) => archiveCurrentPath() === archivePath,
   cleanupBeforePreview: applyPreviewCleanupPolicyBeforeNextPreview,
   previewRequestInput: (password) => ({
-    overwrite: activeExtractDialogForm.overwrite,
-    stripComponents: currentExtractDialogStripComponents(),
+    overwrite: extractWorkspace.getSnapshot().overwrite,
+    stripComponents: extractWorkspace.getSnapshot().stripComponents,
     ...(password ? { password } : {}),
   }),
   cachedPreviewPathForEntry: (entryPath) => shellWorkspace.getCachedPreviewPathForEntry(entryPath),
@@ -688,14 +705,10 @@ const extractStartController = createExtractStartController({
   toCommandError: asCommandError,
   requestPasswordInDialog: requestExtractPasswordInDialog,
   chooseDestinationFirst: () => {
-    updateOpenExtractDialogSnapshot({
-      messageText: message("extract.chooseDestinationFirst"),
-    });
+    setOperationalStatus(message("extract.chooseDestinationFirst"));
   },
   selectEntryFirst: () => {
-    updateOpenExtractDialogSnapshot({
-      messageText: message("extract.selectEntryFirst"),
-    });
+    setOperationalStatus(message("extract.selectEntryFirst"));
   },
   recordDestination: recordExtractDestinationHistory,
   closeExtractDialog: closeReactDialog,
@@ -1342,10 +1355,6 @@ function publishCreateWorkspaceSnapshot(
   return snapshot;
 }
 
-function suggestedCreateArchiveName(sources = createWorkspace.getSnapshot().sources): string {
-  return createWorkspace.suggestedArchiveName(sources);
-}
-
 function createDestinationSuggestionOptions() {
   return {
     defaultDirectory: defaultCreateDirectory(appPreferences),
@@ -1364,6 +1373,36 @@ function joinNativePath(parentPath: string, childName: string): string {
 
 function suggestedCreateArchiveDefaultPath(_sources = createWorkspace.getSnapshot().sources): string {
   return createWorkspace.suggestedDestinationPath(createDestinationSuggestionOptions());
+}
+
+function createOutputFolderDefaultPath(destinationPath: string): string {
+  const trimmed = destinationPath.trim();
+  return nativeParentPath(trimmed || suggestedCreateArchiveDefaultPath());
+}
+
+function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefaults {
+  const parent = nativeParentPath(archivePath);
+  const configuredBase = defaultCreateDirectory(appPreferences) ?? parent;
+  const suffix = getKnownArchiveSuffix(archivePath);
+  const archiveName = getPathBasename(archivePath, APP_TITLE);
+  const folderName = suffix && archiveName.toLowerCase().endsWith(suffix.toLowerCase())
+    ? archiveName.slice(0, -suffix.length)
+    : archiveName;
+  const destinationPath = appPreferences.defaultExtractionBehavior === "extractHere"
+    ? parent
+    : joinNativePath(configuredBase, folderName || APP_TITLE);
+
+  return {
+    destinationPath,
+    pathMode: appPreferences.defaultExtractPathMode,
+    overwrite: appPreferences.defaultExtractOverwrite,
+    stripComponents: appPreferences.defaultExtractStripComponents,
+    deduplicateRoot: appPreferences.defaultExtractDeduplicateRoot,
+  };
+}
+
+function applyExtractPreferenceDefaults(archivePath = archiveCurrentPath()) {
+  extractWorkspace.applyDefaults(extractionDefaultsForArchive(archivePath));
 }
 
 function nativeParentPath(path: string): string {
@@ -1630,10 +1669,14 @@ const commandRouter = createCommandRouter({
     openOutside: () => void onOpenOutsideSelectedEntry(),
     extract: (mode, destination) => {
       if (destination === "here") {
-        openExtractHereDialog(mode);
+        const parent = nativeParentPath(archiveCurrentPath());
+        void startExtract(mode, {
+          ...extractWorkspace.buildStartInput(),
+          destinationBasePath: parent,
+        });
         return;
       }
-      openExtractDialog(mode);
+      void startExtract(mode, extractWorkspace.buildStartInput());
     },
     test: () => void onTestArchive(),
     view: () => void onPreviewSelectedEntry(),
@@ -1706,6 +1749,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
+    extract: extractWorkspace.getSnapshot(),
     jobs: jobsWorkspace.getJobListSnapshot(nowMs),
     quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     systemIcons: Object.fromEntries(systemIconDataUrls),
@@ -2133,12 +2177,9 @@ function extractDialogMessageForMode(mode: ExtractMode): string {
 }
 
 function requestExtractPasswordInDialog(retry: ArchiveWorkspacePasswordRetry) {
-  updateOpenExtractDialogSnapshot({
-    messageText: message(retry.promptKey),
-    formPatch: {
-      passwordPromptOpen: true,
-    },
-  });
+  extractWorkspace.setOptions({ passwordPromptOpen: true });
+  setOperationalStatus(message(retry.promptKey));
+  publishReactSnapshot();
 }
 
 function toNumberOrUndefined(value: string): number | undefined {
@@ -2162,13 +2203,6 @@ async function openNativeDialog(options: NativeDialogOpenOptions) {
   });
 }
 
-async function saveNativeDialog(options: NativeDialogSaveOptions) {
-  return saveRuntimeDialog(options, setOperationalStatus, {
-    unavailableInBrowser: message("nativeDialog.unavailableInBrowser"),
-    failed: message("nativeDialog.failed"),
-  });
-}
-
 function setReactDialogSnapshot(snapshot: ZManagerDialogSnapshot) {
   reactDialogSnapshot = snapshot;
   publishReactSnapshot();
@@ -2177,6 +2211,7 @@ function setReactDialogSnapshot(snapshot: ZManagerDialogSnapshot) {
 function closeReactDialog() {
   const previous = reactDialogSnapshot;
   reactDialogSnapshot = { kind: "none" };
+  extractWorkspace.setOptions({ passwordPromptOpen: false });
   if (previous.kind === "extract") {
     archiveWorkspace.clearPasswordRetry();
     activeExtractDialogForm = patchExtractDialogFormSnapshot(activeExtractDialogForm, {
@@ -2422,6 +2457,7 @@ function rejectDrop(reason: string) {
 
 function addDroppedSources(paths: string[]) {
   applyCreatePreferenceDefaults();
+  applyExtractPreferenceDefaults();
   addSources(paths);
   setWorkspaceMode("compress");
   setOperationalMessage("drop.sourcesAdded", {
@@ -3296,6 +3332,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
   const snapshot = archiveWorkspace.loadSucceeded(archiveListingFromFixture(listing), {
     preserveState: preservedState,
   });
+  applyExtractPreferenceDefaults(listing.archivePath);
   publishArchiveSnapshot(snapshot);
   setOperationalMessage("archive.loaded");
 }
@@ -3576,6 +3613,23 @@ async function onSelectDestinationForExtract(form: ExtractDialogFormSnapshot = a
   });
 }
 
+async function onSelectWorkspaceExtractDestination() {
+  const current = extractWorkspace.getSnapshot().destinationPath;
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseExtractDestination"),
+    directory: true,
+    multiple: false,
+    ...(current ? { defaultPath: current } : {}),
+  });
+
+  if (!selected || typeof selected !== "string") {
+    return;
+  }
+
+  extractWorkspace.setOptions({ destinationPath: selected });
+  publishReactSnapshot();
+}
+
 async function startExtract(destinationMode: ExtractMode, input: ExtractStartInput) {
   await extractStartController.startExtract(destinationMode, input);
 }
@@ -3613,19 +3667,19 @@ async function addSourcePathsFromDialog(mode: "files" | "folder") {
 
 async function onSelectCreateDestination() {
   const optionSnapshot = createWorkspace.getSnapshot().options;
-  const selected = await saveNativeDialog({
-    title: displayContext.translator.t("nativeDialog.chooseDestinationArchive"),
-    defaultPath: optionSnapshot.destinationPath.trim()
-      ? createWorkspace.destinationPathWithFormatExtension(optionSnapshot.destinationPath)
-      : suggestedCreateArchiveDefaultPath(),
-    filters: CREATE_ARCHIVE_FILTERS,
+  const defaultPath = createOutputFolderDefaultPath(optionSnapshot.destinationPath);
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseCreateOutputFolder"),
+    directory: true,
+    multiple: false,
+    ...(defaultPath ? { defaultPath } : {}),
   });
 
   if (!selected || typeof selected !== "string") {
     return;
   }
   publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPath(
-    createWorkspace.destinationPathWithFormatExtension(selected),
+    createWorkspace.destinationPathForOutputFolder(selected, optionSnapshot.destinationPath),
   ).snapshot);
 }
 

@@ -1,5 +1,5 @@
 import { Archive, Copy, File, Folder } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
 import { formatBytes } from "../../../app/formatting";
@@ -7,6 +7,7 @@ import type { ArchiveWorkspaceDetailsModel } from "../../../app/workspaces/archi
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { nativeIconDataUrlForArchivePath, nativeIconDataUrlForEntry, nativeIconDataUrlForFolder } from "./archiveNativeIcons";
+import { useExtractPasswordState } from "./ExtractPasswordContext";
 
 type ArchiveEntryKind = Extract<ArchiveWorkspaceDetailsModel, { kind: "entry" }>["entry"]["kind"];
 
@@ -17,12 +18,88 @@ export function ArchiveDetailsPane() {
   return (
     <aside id="details-pane" className="details-pane" aria-label={i18n.t("workspace.details.aria")}>
       <div className="pane-header">
-        <h2 id="details-pane-title">{i18n.t("pane.details")}</h2>
+        <h2 id="details-pane-title">{i18n.t("compress.options")}</h2>
       </div>
-      <div id="details-content" className="details-content">
-        <DetailsContent model={snapshot.archive.view.details} />
+      <div className="extract-side-pane-content">
+        <ExtractOptions />
+        <section className="extract-details-section" aria-labelledby="extract-details-title">
+          <h2 id="extract-details-title">{i18n.t("pane.details")}</h2>
+          <div id="details-content" className="details-content">
+            <DetailsContent model={snapshot.archive.view.details} />
+          </div>
+        </section>
       </div>
     </aside>
+  );
+}
+
+function ExtractOptions() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const options = snapshot.extract;
+  const passwordState = useExtractPasswordState();
+  const [advancedOpen, setAdvancedOpen] = useState(options.passwordPromptOpen);
+
+  useEffect(() => {
+    if (options.passwordPromptOpen) {
+      setAdvancedOpen(true);
+    }
+  }, [options.passwordPromptOpen]);
+
+  return (
+    <section className="extract-options-panel" aria-labelledby="extract-options-title">
+      <div className="compress-options-intro">
+        <h3 id="extract-options-title">{i18n.t("extract.options.title")}</h3>
+        <p>{options.usesGlobalDefaults ? i18n.t("extract.usingGlobalDefaults") : i18n.t("extract.overriddenDefaults")}</p>
+      </div>
+      <div className="form-grid extract-options-grid">
+        <label>
+          <span>{i18n.t("extract.pathMode")}</span>
+          <select id="extract-path-mode" value={options.pathMode} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { pathMode: event.currentTarget.value as typeof options.pathMode } })}>
+            <option value="full">{i18n.t("extract.pathMode.full")}</option>
+            <option value="current">{i18n.t("extract.pathMode.current")}</option>
+            <option value="none">{i18n.t("extract.pathMode.none")}</option>
+          </select>
+        </label>
+        <label>
+          <span>{i18n.t("extract.overwritePolicy")}</span>
+          <select id="extract-overwrite" value={options.overwrite} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { overwrite: event.currentTarget.value as typeof options.overwrite } })}>
+            <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
+            <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
+            <option value="rename">{i18n.t("extract.overwrite.rename")}</option>
+            <option value="replace">{i18n.t("extract.overwrite.replace")}</option>
+          </select>
+        </label>
+        <label className="checkbox-row">
+          <input id="extract-deduplicate-root" type="checkbox" checked={options.deduplicateRoot} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { deduplicateRoot: event.currentTarget.checked } })} />
+          <span>{i18n.t("extract.deduplicateRoot")}</span>
+        </label>
+      </div>
+      <button className="link-action" type="button" onClick={() => {
+        actions.handleArchiveIntent({ type: "resetExtractDefaults" });
+        passwordState.reset();
+      }}>
+        {i18n.t("extract.resetGlobalDefaults")}
+      </button>
+      <details className="advanced-options" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+        <summary>{i18n.t("extract.advancedOptions")}</summary>
+        <div className="form-grid form-grid-compact extract-advanced-grid">
+          <label>
+            <span>{i18n.t("extract.stripComponents")}</span>
+            <input id="extract-strip-components" type="number" min="0" value={options.stripComponents} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { stripComponents: Math.max(0, Number.parseInt(event.currentTarget.value, 10) || 0) } })} />
+          </label>
+          <label>
+            <span>{i18n.t("extract.password")}</span>
+            <input id="extract-password" type={passwordState.showPassword ? "text" : "password"} value={passwordState.password} onChange={(event) => passwordState.setPassword(event.currentTarget.value)} />
+          </label>
+          <label className="checkbox-row">
+            <input id="extract-show-password" type="checkbox" checked={passwordState.showPassword} onChange={(event) => passwordState.setShowPassword(event.currentTarget.checked)} />
+            <span>{i18n.t("extract.showPassword")}</span>
+          </label>
+        </div>
+      </details>
+    </section>
   );
 }
 

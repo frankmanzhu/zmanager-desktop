@@ -49,6 +49,10 @@ describe("preferences helpers", () => {
       "zmanager.defaultOutputLocation": "customFolder",
       "zmanager.customOutputFolderPath": " C:/Archives ",
       "zmanager.defaultExtractionBehavior": "extractToFolder",
+      "zmanager.defaultExtractPathMode": "current",
+      "zmanager.defaultExtractOverwrite": "rename",
+      "zmanager.defaultExtractStripComponents": "2",
+      "zmanager.defaultExtractDeduplicateRoot": "true",
       "zmanager.previewCleanupPolicy": "whenAppCloses",
       "zmanager.showParentFolderItem": "false",
       "zmanager.showRealFileIcons": "false",
@@ -112,6 +116,10 @@ describe("preferences helpers", () => {
       defaultOutputLocation: "customFolder",
       customOutputFolderPath: "C:/Archives",
       defaultExtractionBehavior: "extractToFolder",
+      defaultExtractPathMode: "current",
+      defaultExtractOverwrite: "rename",
+      defaultExtractStripComponents: 2,
+      defaultExtractDeduplicateRoot: true,
       previewCleanupPolicy: "whenAppCloses",
       showParentFolderItem: false,
       showRealFileIcons: false,
@@ -174,6 +182,7 @@ describe("preferences helpers", () => {
 
     saveAppPreferences(
       {
+        ...DEFAULT_APP_PREFERENCES,
         defaultArchiveFormat: "sevenZ",
         defaultCleanSourceEnabled: false,
         createFormatDefaults: {
@@ -230,6 +239,10 @@ describe("preferences helpers", () => {
       }),
       "zmanager.defaultOutputLocation": "sourceFolder",
       "zmanager.defaultExtractionBehavior": "extractHere",
+      "zmanager.defaultExtractPathMode": "full",
+      "zmanager.defaultExtractOverwrite": "ask",
+      "zmanager.defaultExtractStripComponents": "0",
+      "zmanager.defaultExtractDeduplicateRoot": "false",
       "zmanager.previewCleanupPolicy": "whenAppCloses",
       "zmanager.showParentFolderItem": "false",
       "zmanager.showRealFileIcons": "true",

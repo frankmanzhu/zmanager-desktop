@@ -18,6 +18,7 @@ import { createPathHistoryStore, type PathHistorySnapshot } from "../../app/path
 import { createShellWorkspace, type ShellWorkspaceSnapshot } from "../../app/shell/shellWorkspace";
 import { createArchiveWorkspace, type ArchiveWorkspaceSnapshot } from "../../app/workspaces/archiveWorkspace";
 import { createCreateWorkspace, type CreateWorkspaceOptionPatch, type CreateWorkspaceSnapshot } from "../../app/workspaces/createWorkspace";
+import { createExtractWorkspace, type ExtractWorkspaceOptionPatch, type ExtractWorkspaceSnapshot } from "../../app/workspaces/extractWorkspace";
 import {
   createJobsWorkspace,
   type FocusedQuickActionProgressSnapshot,
@@ -67,6 +68,7 @@ export type ZManagerReactSnapshot = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
+  extract: ExtractWorkspaceSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons: Readonly<Record<string, string | null>>;
@@ -109,6 +111,11 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "activateRow"; path: string; rowKind: "folder" | "entry" | "parent" }>
   | Readonly<{ type: "startNativeDrag"; entryPath: string }>
   | Readonly<{ type: "copyDetailsValue"; value: string }>
+  | Readonly<{ type: "setExtractDestination"; destinationPath: string }>
+  | Readonly<{ type: "browseExtractDestination" }>
+  | Readonly<{ type: "setExtractOptions"; patch: ExtractWorkspaceOptionPatch }>
+  | Readonly<{ type: "resetExtractDefaults" }>
+  | Readonly<{ type: "runExtract"; mode: ExtractMode; password: string }>
   | Readonly<{ type: "showEmptyContextMenu"; x: number; y: number }>
   | Readonly<{ type: "showColumnContextMenu"; columnId: ArchiveTableColumnId; x: number; y: number }>
   | Readonly<{ type: "showRowContextMenu"; path: string; rowKind: "folder" | "entry" | "parent"; x: number; y: number }>
@@ -129,8 +136,8 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "clearSearch" }>
   | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
   | Readonly<{ type: "setPathIncluded"; path: string; included: boolean }>
-  | Readonly<{ type: "setAllIncluded"; included: boolean }>
   | Readonly<{ type: "setCurrentFolderIncluded"; included: boolean }>
+  | Readonly<{ type: "setVisibleRowsIncluded"; included: boolean }>
   | Readonly<{ type: "selectRow"; path: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }>
   | Readonly<{ type: "applySelection"; selectedPaths: readonly string[]; focusedPath: string; anchorPath: string }>
   | Readonly<{ type: "toggleRowSelection"; path: string }>
@@ -244,6 +251,7 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
+  extract?: ExtractWorkspaceSnapshot;
   jobs: JobListSnapshot;
   quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons?: Readonly<Record<string, string | null>>;
@@ -292,6 +300,7 @@ export function createZManagerReactSnapshot(
     shell: input.shell,
     archive: input.archive,
     create: input.create,
+    extract: { ...(input.extract ?? createExtractWorkspace().getSnapshot()) },
     jobs: input.jobs,
     quickActionProgress: input.quickActionProgress,
     systemIcons: { ...(input.systemIcons ?? {}) },
@@ -324,6 +333,7 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
     sortAscending: DEFAULT_APP_PREFERENCES.tableSortAscending,
   });
   const createWorkspace = createCreateWorkspace();
+  const extractWorkspace = createExtractWorkspace();
   const jobsWorkspace = createJobsWorkspace();
   const archive = archiveWorkspace.getSnapshot();
   const display = createDisplayContext(DEFAULT_APP_PREFERENCES.locale);
@@ -333,6 +343,7 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
+    extract: extractWorkspace.getSnapshot(),
     jobs: jobsWorkspace.getJobListSnapshot(nowMs),
     quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     preferences: DEFAULT_APP_PREFERENCES,

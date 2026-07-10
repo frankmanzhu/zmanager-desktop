@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export type WorkspacePathCrumb = Readonly<{
   name: string;
@@ -32,6 +32,7 @@ export type WorkspacePathBarProps = Readonly<{
   crumbs: readonly WorkspacePathCrumb[];
   crumbsHidden: boolean;
   emptyCrumbsText: string;
+  pathAccessory?: ReactNode;
   search: WorkspacePathSearch;
   onPathChange?: (path: string) => void;
   onCrumbClick?: (path: string) => void;
@@ -49,6 +50,7 @@ export function WorkspacePathBar({
   crumbs,
   crumbsHidden,
   emptyCrumbsText,
+  pathAccessory,
   search,
   onPathChange,
   onCrumbClick,
@@ -71,19 +73,23 @@ export function WorkspacePathBar({
           />
         </span>
       </label>
-      <div id="path-crumbs" className="path-crumbs" aria-live="polite" hidden={crumbsHidden}>
-        {crumbsHidden
-          ? emptyCrumbsText
-          : crumbs.map((crumb, index) => (
-            <PathCrumb
-              key={`${crumb.path}-${index}`}
-              name={crumb.name}
-              path={crumb.path}
-              showSeparator={index > 0}
-              onClick={onCrumbClick}
-            />
-          ))}
-      </div>
+      {pathAccessory ? (
+        <div className="path-accessory">{pathAccessory}</div>
+      ) : (
+        <div id="path-crumbs" className="path-crumbs" aria-live="polite" hidden={crumbsHidden}>
+          {crumbsHidden
+            ? emptyCrumbsText
+            : crumbs.map((crumb, index) => (
+              <PathCrumb
+                key={`${crumb.path}-${index}`}
+                name={crumb.name}
+                path={crumb.path}
+                showSeparator={index > 0}
+                onClick={onCrumbClick}
+              />
+            ))}
+        </div>
+      )}
       <WorkspaceSearchControls search={search} />
     </section>
   );

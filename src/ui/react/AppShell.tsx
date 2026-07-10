@@ -4,6 +4,7 @@ import { ReactRuntimeMetadata, ZManagerAppRuntimeProvider } from "./AppProviders
 import { createZManagerAppStore } from "./appStore";
 import { noopZManagerReactActions, type ZManagerReactRuntimeAdapter } from "./appRuntime";
 import { ArchiveWorkspace } from "./archive/ArchiveWorkspace";
+import { ExtractPasswordProvider } from "./archive/ExtractPasswordContext";
 import { useZManagerSnapshot } from "./AppProviders";
 import { ContextMenuRoot } from "./context-menu/ContextMenuRoot";
 import { CreatePasswordProvider } from "./create/CreatePasswordContext";
@@ -70,13 +71,15 @@ export function AppShell() {
           </div>
         ) : null}
         <CreatePasswordProvider>
-          <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
+          <ExtractPasswordProvider>
+            <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
             <QuickActionProgress />
             <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
             <JobsDrawer />
             <ContextMenuRoot />
             <DialogRoot />
-          </AppFrame>
+            </AppFrame>
+          </ExtractPasswordProvider>
         </CreatePasswordProvider>
       </div>
     </ZManagerAppRuntimeProvider>

@@ -908,6 +908,36 @@ describe("create workspace inclusion state", () => {
     expect(included.snapshot.inclusion.includedCount).toBe(6);
   });
 
+  it("includes and excludes only the visible table rows", () => {
+    const workspace = readyWorkspace();
+    workspace.navigateToFolder("project");
+
+    const excluded = workspace.setVisibleRowsIncluded(false);
+
+    expect(excluded.changed).toBe(true);
+    expect(excluded.snapshot.view.currentFolder).toBe("project");
+    expect(excluded.snapshot.view.rows.map((row) => row.path)).toEqual([
+      "",
+      "project/src",
+      "project/readme.md",
+    ]);
+    expect(excluded.snapshot.inclusion.excludedArchivePaths).toEqual([
+      "project/readme.md",
+      "project/src",
+      "project/src/app.ts",
+      "project/src/unused.ts",
+    ]);
+    expect(excluded.snapshot.inclusion.includedEntries.map((entry) => entry.path)).toEqual([
+      "project",
+      "notes.txt",
+    ]);
+
+    const included = workspace.setVisibleRowsIncluded(true);
+
+    expect(included.changed).toBe(true);
+    expect(included.snapshot.inclusion.excludedArchivePaths).toEqual([]);
+  });
+
   it("derives include-all control facts for the current folder", () => {
     const workspace = readyWorkspace();
 
@@ -1124,6 +1154,20 @@ describe("create workspace option and readiness state", () => {
     ]);
 
     expect(workspace.suggestedDestinationPath(pathHelpers)).toBe("archive.tzst");
+  });
+
+  it("builds create destinations from a selected output folder", () => {
+    const workspace = createCreateWorkspace();
+    workspace.addSources(["C:/work/project"]);
+
+    expect(workspace.destinationPathForOutputFolder("D:/archives")).toBe("D:/archives/project.tzst");
+
+    workspace.setDestinationPath("C:/old/custom-name.zip");
+
+    expect(workspace.destinationPathForOutputFolder("D:/archives")).toBe("D:/archives/custom-name.tzst");
+    expect(workspace.destinationPathForOutputFolder("D:\\archives", "C:\\old\\typed-name")).toBe(
+      "D:\\archives\\typed-name.tzst",
+    );
   });
 
   it("changes formats by applying defaults and replacing an existing destination extension", () => {

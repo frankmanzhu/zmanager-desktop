@@ -1,4 +1,5 @@
 import {
+  ArchiveRestore,
   CheckSquare,
   FileArchive,
   FolderOpen,
@@ -7,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { createPlanRowInclusionState } from "../../../app/createFlow";
 import {
   toolbarGroupsForWorkspaceMode,
   type CommandBarGroup,
@@ -17,6 +19,7 @@ import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "../create/CreatePasswordContext";
+import { useExtractPasswordState } from "../archive/ExtractPasswordContext";
 import {
   commandButtonId,
   commandIcon,
@@ -44,12 +47,55 @@ export function CommandToolbar() {
       <div className="command-strip">
         {snapshot.shell.activeMode === "compress"
           ? <CompressToolbarGroups />
-          : toolbarGroups.map((group, index) => (
-            <ToolbarGroup group={group} key={group.id} showSeparator={index > 0} />
-          ))}
+          : <ExtractToolbarGroups groups={toolbarGroups} />}
       </div>
       <div className="toolbar-spacer" />
     </header>
+  );
+}
+
+function ExtractToolbarGroups({ groups }: Readonly<{ groups: readonly CommandBarGroup[] }>) {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const passwordState = useExtractPasswordState();
+  const canExtract = snapshot.archive.command.canUseArchive && Boolean(snapshot.extract.destinationPath.trim());
+  const selectedCount = snapshot.archive.view.selection.selectedCount;
+
+  return (
+    <>
+      <div className="toolbar-group" role="group" aria-label="Extract" data-command-group="extract">
+        <span className="toolbar-group-label">Extract</span>
+        <ToolbarButton commandId="open" />
+        <ToolbarActionButton
+          id="extract-all"
+          label={i18n.t("extract.allAction")}
+          title={canExtract ? i18n.t("extract.allAction") : i18n.t("extract.chooseDestinationFirst")}
+          Icon={ArchiveRestore}
+          primary={canExtract}
+          disabled={!canExtract}
+          onClick={() => {
+            actions.handleArchiveIntent({ type: "runExtract", mode: "archive", password: passwordState.password });
+            passwordState.reset();
+          }}
+        />
+        <ToolbarActionButton
+          id="extract-selected"
+          label={i18n.t("extract.selectedCountAction", { count: selectedCount })}
+          title={selectedCount ? i18n.t("extract.selectedAction") : i18n.t("extract.selectEntryFirst")}
+          Icon={ArchiveRestore}
+          disabled={!canExtract || selectedCount === 0}
+          onClick={() => {
+            actions.handleArchiveIntent({ type: "runExtract", mode: "selection", password: passwordState.password });
+            passwordState.reset();
+          }}
+        />
+        <ToolbarButton commandId="test" />
+      </div>
+      {groups.slice(1).map((group) => (
+        <ToolbarGroup group={group} key={group.id} showSeparator />
+      ))}
+    </>
   );
 }
 
@@ -118,9 +164,9 @@ function CompressToolbarGroups() {
         <CreateArchiveToolbarButton />
       </div>
       <div className="toolbar-separator" aria-hidden="true" />
-      <div className="toolbar-group" role="group" aria-label="Source actions" data-command-group="compress-table">
-        <span className="toolbar-group-label">Source actions</span>
-        <CompressSourceToolbarButtons />
+      <div className="toolbar-group" role="group" aria-label="Table actions" data-command-group="table">
+        <span className="toolbar-group-label">Table actions</span>
+        <CompressTableToolbarButtons />
       </div>
     </>
   );
@@ -138,7 +184,7 @@ function CompressDestinationToolbarButton() {
   return (
     <ToolbarActionButton
       id="browse-create-destination"
-      label={i18n.t("common.browse")}
+      label={i18n.t("compress.outputFolder")}
       title={i18n.t("create.destination.browse.title")}
       Icon={FolderOpen}
       onClick={() => actions.handleCreateIntent({ type: "browseDestination" })}
@@ -178,11 +224,12 @@ function CreateArchiveToolbarButton() {
   );
 }
 
-function CompressSourceToolbarButtons() {
+function CompressTableToolbarButtons() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const create = snapshot.create;
+  const tableInclusion = compressTableInclusionSummary(snapshot);
 
   if (snapshot.shell.activeMode !== "compress") {
     return null;
@@ -195,16 +242,16 @@ function CompressSourceToolbarButtons() {
         label={i18n.t("compress.includeAll")}
         title={i18n.t("compress.includeAll")}
         Icon={CheckSquare}
-        disabled={create.isEmpty || create.inclusion.excludedArchivePaths.length === 0}
-        onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: true })}
+        disabled={!tableInclusion.canInclude}
+        onClick={() => actions.handleCreateIntent({ type: "setVisibleRowsIncluded", included: true })}
       />
       <ToolbarActionButton
         id="exclude-all-sources"
         label={i18n.t("compress.excludeAll")}
         title={i18n.t("compress.excludeAll")}
         Icon={SquareMinus}
-        disabled={create.isEmpty || create.inclusion.includedCount === 0}
-        onClick={() => actions.handleCreateIntent({ type: "setAllIncluded", included: false })}
+        disabled={!tableInclusion.canExclude}
+        onClick={() => actions.handleCreateIntent({ type: "setVisibleRowsIncluded", included: false })}
       />
       <ToolbarActionButton
         id="clear-sources"
@@ -216,6 +263,35 @@ function CompressSourceToolbarButtons() {
       />
     </>
   );
+}
+
+function compressTableInclusionSummary(snapshot: ZManagerReactSnapshot): Readonly<{
+  canInclude: boolean;
+  canExclude: boolean;
+}> {
+  const currentPlan = snapshot.create.plan.current;
+  const visibleRows = snapshot.create.view.rows.filter((row) => row.rowType !== "parent");
+  if (!currentPlan || visibleRows.length === 0) {
+    return { canInclude: false, canExclude: false };
+  }
+
+  let canInclude = false;
+  let canExclude = false;
+  for (const row of visibleRows) {
+    const inclusion = createPlanRowInclusionState(
+      row,
+      currentPlan.planEntries,
+      snapshot.create.inclusion.excludedArchivePaths,
+    );
+    if (inclusion !== "included") {
+      canInclude = true;
+    }
+    if (inclusion !== "excluded") {
+      canExclude = true;
+    }
+  }
+
+  return { canInclude, canExclude };
 }
 
 function ToolbarActionButton({
@@ -301,7 +377,7 @@ function toolbarCommandLabel(commandId: CommandId, snapshot: ZManagerReactSnapsh
 
   if (snapshot.shell.activeMode === "extract") {
     if (commandId === "open") {
-      return i18n.t("common.browse");
+      return i18n.t("commands.openArchive");
     }
 
     if (commandId === "extract") {

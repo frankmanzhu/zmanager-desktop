@@ -1,7 +1,7 @@
 import { File, Folder } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
-import { formatBytes } from "../../../app/formatting";
+import { formatBytes, getPathBasename } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
@@ -65,7 +65,9 @@ function CreatePathBar() {
   }, [create.options.destinationPath]);
 
   const currentFolder = create.view.currentFolder;
-  const breadcrumbs = createBreadcrumbs(currentFolder, i18n.t("compress.tableTitle"));
+  const fallbackTitle = i18n.t("compress.tableTitle");
+  const archiveTitle = compressArchiveDisplayName(destination, fallbackTitle);
+  const breadcrumbs = createBreadcrumbs(currentFolder, archiveTitle);
   const searchResultText = create.plan.current
     ? i18n.t(
       create.view.rows.filter((row) => row.rowType !== "parent").length === 1
@@ -78,7 +80,7 @@ function CreatePathBar() {
   return (
     <WorkspacePathBar
       ariaLabel={i18n.t("workspace.archiveLocation.aria")}
-      locationLabel={i18n.t("path.fileLocation")}
+      locationLabel={i18n.t("compress.destination")}
       pathAriaLabel={i18n.t("compress.destination")}
       pathInputId="create-destination"
       displayPath={destination}
@@ -91,7 +93,7 @@ function CreatePathBar() {
       }}
       crumbs={breadcrumbs}
       crumbsHidden={!create.hasSources}
-      emptyCrumbsText={i18n.t("compress.tableTitle")}
+      emptyCrumbsText={archiveTitle}
       onCrumbClick={(path) => actions.handleCreateIntent({ type: "navigateToFolder", folderPath: path })}
       search={{
         query: create.view.searchQuery,
@@ -119,6 +121,11 @@ function createBreadcrumbs(currentFolder: string, rootName: string) {
     crumbs.push({ name: segment, path });
   }
   return crumbs;
+}
+
+function compressArchiveDisplayName(destinationPath: string, fallback: string): string {
+  const archiveName = getPathBasename(destinationPath, "").trim();
+  return archiveName || fallback;
 }
 
 function CreateTree() {
@@ -159,6 +166,10 @@ function CreateTable() {
   const i18n = translatorForSnapshot(snapshot);
   const rows = snapshot.create.view.rows;
   const includeAll = includeAllState(snapshot);
+  const workspaceTitle = compressArchiveDisplayName(
+    snapshot.create.options.destinationPath,
+    i18n.t("compress.tableTitle"),
+  );
 
   useEffect(() => {
     const tableShell = tableShellRef.current;
@@ -179,7 +190,7 @@ function CreateTable() {
     <section className="archive-table-pane" aria-label={i18n.t("workspace.archiveEntries.aria")}>
       <div className="table-pane-header">
         <div>
-          <h1 id="workspace-title">{i18n.t("compress.tableTitle")}</h1>
+          <h1 id="workspace-title">{workspaceTitle}</h1>
           <p id="browse-meta">{i18n.t("compress.tableDescription")}</p>
         </div>
       </div>

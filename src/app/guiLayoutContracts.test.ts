@@ -662,15 +662,26 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("var(--compress-source-name-column-width, 42%)");
   });
 
-  it("keeps Compress create canonical in-window with validation and source actions", () => {
+  it("keeps Compress create canonical in-window with validation and table actions", () => {
     expect(createWorkspaceSource).not.toContain('className="compress-create-panel"');
     expect(mainSource).not.toContain('id="create-dialog"');
     expect(commandToolbarSource).toContain('<ToolbarButton commandId="add" />');
     expect(commandToolbarSource).toContain('id="browse-create-destination"');
+    expect(commandToolbarSource).toContain('label={i18n.t("compress.outputFolder")}');
+    expect(commandToolbarSource).not.toContain('label={i18n.t("common.browse")}');
+    expect(mainSource).toContain('title: displayContext.translator.t("nativeDialog.chooseCreateOutputFolder")');
+    expect(mainSource).toContain("directory: true");
+    expect(mainSource).toContain("destinationPathForOutputFolder(selected, optionSnapshot.destinationPath)");
+    expect(mainSource).not.toContain("CREATE_ARCHIVE_FILTERS");
+    expect(mainSource).not.toContain("saveNativeDialog");
     expect(commandToolbarSource).toContain('id="start-create"');
     expect(commandToolbarSource).toContain('id="include-all-sources"');
     expect(commandToolbarSource).toContain('id="exclude-all-sources"');
     expect(commandToolbarSource).toContain('id="clear-sources"');
+    expect(commandToolbarSource).toContain('data-command-group="table"');
+    expect(commandToolbarSource).toContain("setVisibleRowsIncluded");
+    expect(commandToolbarSource).toContain("createPlanRowInclusionState");
+    expect(commandToolbarSource).not.toContain("setAllIncluded");
     expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
     expect(commandToolbarSource).not.toContain('commandId="createFile"');
     expect(commandToolbarSource).toContain("create.options.readiness.unavailableReason");
@@ -777,8 +788,9 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).not.toContain("pathDatalist");
     expect(commandToolbarSource).toContain("function CompressDestinationToolbarButton");
     expect(commandToolbarSource).toContain("function CreateArchiveToolbarButton");
-    expect(commandToolbarSource).toContain("function CompressSourceToolbarButtons");
+    expect(commandToolbarSource).toContain("function CompressTableToolbarButtons");
     expect(commandToolbarSource).toContain('id="browse-create-destination"');
+    expect(commandToolbarSource).toContain("compress.outputFolder");
     expect(commandToolbarSource).toContain('id="start-create"');
     expect(commandToolbarSource).not.toContain('id="create-destination-recent"');
     expect(createWorkspaceSource).not.toContain('<label className="compress-destination-field">');
@@ -857,17 +869,20 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain("white-space: nowrap;");
   });
 
-  it("keeps Extract empty and loaded archive navigation understandable", () => {
+  it("keeps Extract destination, defaults, and archive navigation understandable", () => {
     expect(archiveTableSource).toContain('data-empty-action="open-archive"');
     expect(archiveDetailsPaneSource).toContain("<h3");
     expect(archiveDetailsPaneSource).toContain('data-details-action="open-archive"');
     expect(archiveDetailsPaneSource).toContain("data-copy-value={value}");
-    expect(archivePathBarSource).toContain("const displayPath = archive.currentArchivePath");
+    expect(archivePathBarSource).toContain('pathInputId="extract-destination"');
+    expect(archivePathBarSource).toContain('type: "setExtractDestination"');
+    expect(archivePathBarSource).toContain('type: "browseExtractDestination"');
+    expect(archiveDetailsPaneSource).toContain("<ExtractOptions />");
+    expect(archiveDetailsPaneSource).toContain('className="advanced-options"');
+    expect(archiveDetailsPaneSource).toContain('id="extract-password"');
     expect(workspacePathBarSource).toContain("readOnly");
     expect(workspacePathBarSource).toContain("hidden={crumbsHidden}");
-    expect(archivePathBarSource).toContain("crumbsHidden={!archive.currentArchivePath}");
-    expect(archivePathBarSource).toContain("archive.view.breadcrumbs.map");
-    expect(archivePathBarSource).toContain("name: crumb.isRoot ? archiveName : crumb.name");
+    expect(workspacePathBarSource).toContain("pathAccessory ?");
     expect(archiveTreeSource).toContain("archive.view.treeFolders.map");
     expect(workspacePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');

@@ -12,6 +12,10 @@ export type PreferenceStorageKey =
   | "defaultOutputLocation"
   | "customOutputFolderPath"
   | "defaultExtractionBehavior"
+  | "defaultExtractPathMode"
+  | "defaultExtractOverwrite"
+  | "defaultExtractStripComponents"
+  | "defaultExtractDeduplicateRoot"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
   | "showRealFileIcons"
@@ -37,6 +41,10 @@ export const PREFERENCE_KEYS = {
   defaultOutputLocation: "zmanager.defaultOutputLocation",
   customOutputFolderPath: "zmanager.customOutputFolderPath",
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",
+  defaultExtractPathMode: "zmanager.defaultExtractPathMode",
+  defaultExtractOverwrite: "zmanager.defaultExtractOverwrite",
+  defaultExtractStripComponents: "zmanager.defaultExtractStripComponents",
+  defaultExtractDeduplicateRoot: "zmanager.defaultExtractDeduplicateRoot",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
   showRealFileIcons: "zmanager.showRealFileIcons",

@@ -49,6 +49,23 @@ describe("archive runtime actions", () => {
     expect(effects.showEntryContextMenu).toHaveBeenCalledWith("a.txt", 5, 6);
     expect(effects.showFolderContextMenu).toHaveBeenCalledWith("..", 7, 8);
   });
+
+  it("routes direct extraction destination, options, and start intents", () => {
+    const effects = createEffects();
+    const actions = createArchiveRuntimeActions(effects);
+
+    actions.handleIntent({ type: "setExtractDestination", destinationPath: "C:/output" });
+    actions.handleIntent({ type: "setExtractOptions", patch: { overwrite: "rename" } });
+    actions.handleIntent({ type: "browseExtractDestination" });
+    actions.handleIntent({ type: "resetExtractDefaults" });
+    actions.handleIntent({ type: "runExtract", mode: "archive", password: "secret" });
+
+    expect(effects.setExtractDestination).toHaveBeenCalledWith("C:/output");
+    expect(effects.setExtractOptions).toHaveBeenCalledWith({ overwrite: "rename" });
+    expect(effects.browseExtractDestination).toHaveBeenCalled();
+    expect(effects.resetExtractDefaults).toHaveBeenCalled();
+    expect(effects.runExtract).toHaveBeenCalledWith("archive", "secret");
+  });
 });
 
 function createEffects(
@@ -73,6 +90,11 @@ function createEffects(
     runEntryDefaultAction: vi.fn(),
     startNativeDrag: vi.fn(),
     copyDetailsValue: vi.fn(),
+    setExtractDestination: vi.fn(),
+    browseExtractDestination: vi.fn(),
+    setExtractOptions: vi.fn(),
+    resetExtractDefaults: vi.fn(),
+    runExtract: vi.fn(),
     showEmptyContextMenu: vi.fn(),
     showColumnContextMenu: vi.fn(),
     showFolderContextMenu: vi.fn(),

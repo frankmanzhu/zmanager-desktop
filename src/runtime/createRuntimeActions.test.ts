@@ -31,6 +31,7 @@ describe("create runtime actions", () => {
       anchorPath: "a.txt",
     });
     actions.handleIntent({ type: "setPathIncluded", path: "a.txt", included: false });
+    actions.handleIntent({ type: "setVisibleRowsIncluded", included: false });
 
     expect(effects.applySelection).toHaveBeenCalledWith({
       type: "applySelection",
@@ -39,6 +40,7 @@ describe("create runtime actions", () => {
       anchorPath: "a.txt",
     });
     expect(effects.setPathIncluded).toHaveBeenCalledWith("a.txt", false);
+    expect(effects.setVisibleRowsIncluded).toHaveBeenCalledWith(false);
   });
 
   it("fire-and-forgets create submission with password inputs", () => {
@@ -69,8 +71,8 @@ function createEffects(
     clearSearch: vi.fn(),
     toggleTreeFolder: vi.fn(),
     setPathIncluded: vi.fn(),
-    setAllIncluded: vi.fn(),
     setCurrentFolderIncluded: vi.fn(),
+    setVisibleRowsIncluded: vi.fn(),
     selectRow: vi.fn(),
     applySelection: vi.fn(),
     toggleRowSelection: vi.fn(),

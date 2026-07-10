@@ -19,8 +19,8 @@ export type CreateRuntimeActionEffects = Readonly<{
   clearSearch(): void;
   toggleTreeFolder(folderPath: string): void;
   setPathIncluded(path: string, included: boolean): void;
-  setAllIncluded(included: boolean): void;
   setCurrentFolderIncluded(included: boolean): void;
+  setVisibleRowsIncluded(included: boolean): void;
   selectRow(intent: Extract<ZManagerCreateIntent, { type: "selectRow" }>): void;
   applySelection(input: Extract<ZManagerCreateIntent, { type: "applySelection" }>): void;
   toggleRowSelection(path: string): void;
@@ -78,11 +78,11 @@ export function createCreateRuntimeActions(
         case "setPathIncluded":
           effects.setPathIncluded(intent.path, intent.included);
           break;
-        case "setAllIncluded":
-          effects.setAllIncluded(intent.included);
-          break;
         case "setCurrentFolderIncluded":
           effects.setCurrentFolderIncluded(intent.included);
+          break;
+        case "setVisibleRowsIncluded":
+          effects.setVisibleRowsIncluded(intent.included);
           break;
         case "selectRow":
           effects.selectRow(intent);

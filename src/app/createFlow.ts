@@ -12,13 +12,6 @@ import {
 
 export type CreateArchiveFormat = StartCreateRequest["format"];
 
-export const CREATE_ARCHIVE_FILTERS = [
-  {
-    name: "Archive",
-    extensions: ["zip", "tzst", "tar.zst", "tzap", "7z"],
-  },
-];
-
 const CREATE_FORMAT_EXTENSIONS = {
   zip: "zip",
   tarZst: "tzst",

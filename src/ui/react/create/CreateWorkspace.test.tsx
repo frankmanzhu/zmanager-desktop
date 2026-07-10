@@ -22,7 +22,7 @@ describe("React create workspace", () => {
 
     expect(html).toContain('class="path-bar"');
     expect(html).toContain('class="path-location"');
-    expect(html).toContain("File Location");
+    expect(html).toContain("Destination");
     expect(html).not.toContain('id="nav-back"');
     expect(html).not.toContain('id="nav-up"');
     expect(html).toContain('id="create-destination"');
@@ -31,6 +31,7 @@ describe("React create workspace", () => {
     expect(html).toContain('data-pane-resizer="navigation"');
     expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
     expect(html).toContain('id="compress-source-body"');
+    expect(html).toContain('<h1 id="workspace-title">bundle.tzst</h1>');
     expect(html).toContain('id="compress-marquee-hit-surface"');
     expect(html).toContain('class="compress-table-shell" tabindex="0"');
     expect(html).toContain('<th class="inclusion-column"><input id="compress-include-all"');
@@ -40,6 +41,14 @@ describe("React create workspace", () => {
     expect(html).toContain('id="compress-options-panel"');
     expect(html).toMatch(/<details[^>]*id="compress-options-panel"[^>]*open=""/);
     expect(html).toContain('id="create-format"');
+  });
+
+  it("labels the compress workspace from the destination archive name", () => {
+    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, "C:/abc/abc.zip"));
+
+    expect(html).toContain('<h1 id="workspace-title">abc.zip</h1>');
+    expect(html).toContain('data-crumb-path="" aria-keyshortcuts="Enter Space">abc.zip</button>');
+    expect(html).not.toContain('<h1 id="workspace-title">Files to compress</h1>');
   });
 
   it("renders password-capable formats without serializing password values", () => {
@@ -84,6 +93,7 @@ function createSnapshot(
     focusedPath: string;
     anchorPath: string;
   }>,
+  destinationPath = format === "sevenZ" ? "C:/work/bundle.7z" : "C:/work/bundle.tzst",
 ): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const workspace = createCreateWorkspace();
@@ -95,7 +105,7 @@ function createSnapshot(
   if (format === "sevenZ") {
     workspace.changeFormat("sevenZ", DEFAULT_APP_PREFERENCES.createFormatDefaults.sevenZ);
   }
-  workspace.setDestinationPath(format === "sevenZ" ? "C:/work/bundle.7z" : "C:/work/bundle.tzst");
+  workspace.setDestinationPath(destinationPath);
   const started = workspace.beginPlan();
   expect(started.ready).toBe(true);
   if (!started.ready) {

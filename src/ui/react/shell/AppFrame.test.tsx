@@ -31,7 +31,10 @@ describe("React AppFrame shell", () => {
     expect(html).toContain('id="mode-compress"');
     expect(html).toContain('id="add-archive"');
     expect(html).toContain('id="browse-create-destination"');
+    expect(html).toContain("Output Folder...");
     expect(html).toContain('id="start-create"');
+    expect(html).toContain("Table actions");
+    expect(html).not.toContain("Source actions");
     expect(html).toContain('id="include-all-sources"');
     expect(html).toContain('id="exclude-all-sources"');
     expect(html).toContain('id="clear-sources"');
@@ -62,8 +65,10 @@ describe("React AppFrame shell", () => {
     );
 
     expect(html).toContain('id="open-archive"');
-    expect(html).toContain("Browse...");
-    expect(html).toContain('id="extract-toolbar"');
+    expect(html).toContain("Open archive");
+    expect(html).toContain('data-command-group="extract"');
+    expect(html).toContain('id="extract-all"');
+    expect(html).toContain('id="extract-selected"');
     expect(html).toContain("Extract All");
     expect(html).toContain('id="test-archive"');
     expect(html).toContain('id="toolbar-view"');

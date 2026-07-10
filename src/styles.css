@@ -818,6 +818,32 @@ button svg {
   font-family: inherit;
 }
 
+.path-accessory {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.path-accessory-button {
+  width: 34px;
+  min-width: 34px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.path-default-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .path-field[readonly]:not(:disabled) {
   cursor: text;
 }
@@ -1145,6 +1171,63 @@ body.is-resizing-pane {
   align-content: start;
   gap: 10px;
   overflow: auto;
+}
+
+.extract-side-pane-content {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow: auto;
+}
+
+.extract-options-panel {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.extract-options-panel .extract-options-grid,
+.extract-options-panel .extract-advanced-grid {
+  grid-template-columns: 1fr;
+}
+
+.extract-options-panel .form-grid > label:first-child {
+  grid-column: auto;
+}
+
+.extract-options-grid > label,
+.extract-advanced-grid > label {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.42fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.extract-options-grid > label.checkbox-row,
+.extract-advanced-grid > label.checkbox-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.extract-options-panel .link-action {
+  justify-self: start;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+}
+
+.extract-options-panel .link-action:hover {
+  text-decoration: underline;
+}
+
+.extract-details-section {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .detail-actions,

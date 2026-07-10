@@ -15,14 +15,16 @@ import {
 import { ArchiveWorkspace } from "./ArchiveWorkspace";
 
 describe("React archive workspace", () => {
-  it("renders archive path, search, tree, table, and details from an archive snapshot", () => {
+  it("renders extraction destination, options, search, tree, table, and archive details", () => {
     const snapshot = archiveSnapshot();
     const html = renderArchiveWorkspace(snapshot);
 
     expect(html).toContain('class="path-bar"');
     expect(html).toContain('class="path-location"');
-    expect(html).toContain("File Location");
-    expect(html).toContain('id="path-field"');
+    expect(html).toContain("Extract to");
+    expect(html).toContain('id="extract-destination"');
+    expect(html).toContain("C:/output/demo");
+    expect(html).toContain('id="browse-extract-destination"');
     expect(html).not.toContain('id="nav-back"');
     expect(html).not.toContain('id="nav-up"');
     expect(html).toContain("demo.zip");
@@ -35,6 +37,10 @@ describe("React archive workspace", () => {
     expect(html).toContain('data-entry-path="docs/readme.txt"');
     expect(html).toContain('data-column-id="name"');
     expect(html).toContain('id="details-content"');
+    expect(html).toContain('id="extract-path-mode"');
+    expect(html).toContain('id="extract-overwrite"');
+    expect(html).toContain('id="extract-password"');
+    expect(html).toContain("Using global defaults");
     expect(html).toContain("C:/archives/demo.zip");
   });
 
@@ -113,6 +119,10 @@ function archiveSnapshot(): ZManagerReactSnapshot {
     },
     archive,
     create: initial.create,
+    extract: {
+      ...initial.extract,
+      destinationPath: "C:/output/demo",
+    },
     jobs: initial.jobs,
     quickActionProgress: initial.quickActionProgress,
     preferences: initial.preferences,

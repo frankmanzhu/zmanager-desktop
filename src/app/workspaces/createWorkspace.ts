@@ -16,6 +16,7 @@ import {
   createPlanEntriesForPath,
   createPlanRowInclusionState,
   filterCreatePlanByIncludedPaths,
+  getArchiveName,
   isCreatePlanPathIncluded,
   normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
@@ -308,6 +309,7 @@ export type CreateWorkspace = {
   setDestinationPathIfBlank(path: string): CreateWorkspaceDestinationMutation;
   suggestDestinationPathIfBlank(options: CreateWorkspaceDestinationSuggestionOptions): CreateWorkspaceDestinationMutation;
   destinationPathWithFormatExtension(path?: string): string;
+  destinationPathForOutputFolder(folderPath: string, destinationPath?: string): string;
   ensureDestinationExtension(): CreateWorkspaceDestinationMutation;
   buildStartCreateRequest(input?: CreateWorkspaceStartRequestInput): CreateWorkspaceStartRequestResult;
   setSubmissionInFlight(inFlight: boolean): CreateWorkspaceOptionsMutation;
@@ -328,6 +330,7 @@ export type CreateWorkspace = {
   setPathIncluded(path: string, included: boolean): CreateWorkspaceInclusionMutation;
   setAllPathsIncluded(included: boolean): CreateWorkspaceInclusionMutation;
   setCurrentFolderIncluded(folderPath: string | null | undefined, included: boolean): CreateWorkspaceInclusionMutation;
+  setVisibleRowsIncluded(included: boolean): CreateWorkspaceInclusionMutation;
   getPathInclusionState(path: string): CreatePlanInclusionState;
   getRowInclusionState(row: CreatePlanRow): CreatePlanInclusionState;
   getIncludeAllControlState(path: string | null | undefined): CreateWorkspaceIncludeAllControlState;
@@ -766,6 +769,13 @@ export function createCreateWorkspace(): CreateWorkspace {
       return withCreateArchiveExtension(path ?? state.options.destinationPath, state.options.format);
     },
 
+    destinationPathForOutputFolder(folderPath, destinationPath) {
+      return withCreateArchiveExtension(
+        joinNativePath(folderPath, archiveNameForOutputFolder(state, destinationPath ?? state.options.destinationPath)),
+        state.options.format,
+      );
+    },
+
     ensureDestinationExtension() {
       const destinationPath = withCreateArchiveExtension(
         state.options.destinationPath,
@@ -1075,6 +1085,38 @@ export function createCreateWorkspace(): CreateWorkspace {
       return inclusionMutationResult(state, changed);
     },
 
+    setVisibleRowsIncluded(included) {
+      if (!state.currentPlan) {
+        return inclusionMutationResult(state, false);
+      }
+
+      const visiblePaths = visibleRowsForState(state)
+        .filter((row) => row.rowType !== "parent")
+        .map((row) => normalizeCreateArchivePath(row.path))
+        .filter(Boolean);
+      if (visiblePaths.length === 0) {
+        return inclusionMutationResult(state, false);
+      }
+
+      let nextExcludedPaths = new Set(state.excludedArchivePaths);
+      for (const path of visiblePaths) {
+        nextExcludedPaths = applyCreatePlanPathInclusion({
+          entries: state.currentPlan.planEntries,
+          excludedPaths: nextExcludedPaths,
+          path,
+          included,
+        });
+      }
+      const changed = !sameStringSet(state.excludedArchivePaths, nextExcludedPaths);
+      if (changed) {
+        state = {
+          ...state,
+          excludedArchivePaths: nextExcludedPaths,
+        };
+      }
+      return inclusionMutationResult(state, changed);
+    },
+
     getPathInclusionState(path) {
       return pathInclusionState(state, path);
     },
@@ -1203,6 +1245,17 @@ function suggestedDestinationPathFromState(
   options: CreateWorkspaceDestinationSuggestionOptions,
 ): string {
   return suggestedDestinationPathFromOptions(state.sources, state.options.format, options);
+}
+
+function archiveNameForOutputFolder(
+  state: MutableCreateWorkspaceState,
+  destinationPath: string,
+): string {
+  const archiveName = getArchiveName(
+    withCreateArchiveExtension(destinationPath, state.options.format),
+    "",
+  ).trim();
+  return archiveName || suggestedCreateArchiveName(state.sources, state.options.format);
 }
 
 function suggestedDestinationPathFromOptions(

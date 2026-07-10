@@ -1,5 +1,7 @@
 import type { ArchiveTableColumnId } from "../app/archiveTable";
 import type { ZManagerArchiveIntent } from "../ui/react/appRuntime";
+import type { ExtractMode } from "../app/extractFlow";
+import type { ExtractWorkspaceOptionPatch } from "../app/workspaces/extractWorkspace";
 
 export type ArchiveRuntimeActions = Readonly<{
   handleIntent(intent: ZManagerArchiveIntent): void;
@@ -24,6 +26,11 @@ export type ArchiveRuntimeActionEffects = Readonly<{
   runEntryDefaultAction(path: string): void;
   startNativeDrag(entryPath: string): void | Promise<void>;
   copyDetailsValue(value: string): void | Promise<void>;
+  setExtractDestination(destinationPath: string): void;
+  browseExtractDestination(): void | Promise<void>;
+  setExtractOptions(patch: ExtractWorkspaceOptionPatch): void;
+  resetExtractDefaults(): void;
+  runExtract(mode: ExtractMode, password: string): void | Promise<void>;
   showEmptyContextMenu(x: number, y: number): void;
   showColumnContextMenu(columnId: ArchiveTableColumnId, x: number, y: number): void;
   showFolderContextMenu(path: string, x: number, y: number): void;
@@ -111,6 +118,21 @@ export function createArchiveRuntimeActions(
           break;
         case "copyDetailsValue":
           void effects.copyDetailsValue(intent.value);
+          break;
+        case "setExtractDestination":
+          effects.setExtractDestination(intent.destinationPath);
+          break;
+        case "browseExtractDestination":
+          void effects.browseExtractDestination();
+          break;
+        case "setExtractOptions":
+          effects.setExtractOptions(intent.patch);
+          break;
+        case "resetExtractDefaults":
+          effects.resetExtractDefaults();
+          break;
+        case "runExtract":
+          void effects.runExtract(intent.mode, intent.password);
           break;
         case "showEmptyContextMenu":
           effects.showEmptyContextMenu(intent.x, intent.y);

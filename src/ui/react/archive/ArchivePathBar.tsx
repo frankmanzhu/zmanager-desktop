@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { getPathBasename } from "../../../app/formatting";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
@@ -10,12 +11,13 @@ export function ArchivePathBar() {
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const archive = snapshot.archive;
+  const extract = snapshot.extract;
+  const [destination, setDestination] = useState(extract.destinationPath);
   const archiveName = getPathBasename(archive.currentArchivePath, "ZManager");
-  const displayPath = archive.currentArchivePath
-    ? archive.view.currentFolder
-      ? `${archive.currentArchivePath}\\${archive.view.currentFolder.replace(/\//g, "\\")}\\`
-      : `${archive.currentArchivePath}\\`
-    : i18n.t("browse.statusEmpty");
+
+  useEffect(() => {
+    setDestination(extract.destinationPath);
+  }, [extract.destinationPath]);
 
   useEffect(() => {
     document.title = archive.currentArchivePath
@@ -27,18 +29,39 @@ export function ArchivePathBar() {
 
   return (
     <WorkspacePathBar
-      ariaLabel={i18n.t("workspace.archiveLocation.aria")}
-      locationLabel={i18n.t("path.fileLocation")}
-      pathAriaLabel={i18n.t("path.archivePath.aria")}
-      displayPath={displayPath}
+      ariaLabel={i18n.t("extract.destination")}
+      locationLabel={i18n.t("extract.destination")}
+      pathAriaLabel={i18n.t("extract.destination")}
+      pathInputId="extract-destination"
+      displayPath={destination}
       pathDisabled={!archive.currentArchivePath}
-      crumbsHidden={!archive.currentArchivePath}
-      emptyCrumbsText={i18n.t("browse.statusEmpty")}
-      crumbs={archive.view.breadcrumbs.map((crumb) => ({
-        name: crumb.isRoot ? archiveName : crumb.name,
-        path: crumb.path,
-      }))}
-      onCrumbClick={(path) => actions.handleArchiveIntent({ type: "navigateToFolder", folderPath: path })}
+      pathReadOnly={false}
+      pathPlaceholder={i18n.t("extract.destination.placeholder")}
+      onPathChange={(path) => {
+        setDestination(path);
+        actions.handleArchiveIntent({ type: "setExtractDestination", destinationPath: path });
+      }}
+      crumbs={[]}
+      crumbsHidden
+      emptyCrumbsText=""
+      pathAccessory={(
+        <>
+          <button
+            id="browse-extract-destination"
+            className="path-accessory-button"
+            type="button"
+            aria-label={i18n.t("nativeDialog.chooseExtractDestination")}
+            title={i18n.t("nativeDialog.chooseExtractDestination")}
+            disabled={!archive.currentArchivePath}
+            onClick={() => actions.handleArchiveIntent({ type: "browseExtractDestination" })}
+          >
+            <FolderOpen className="tool-icon" aria-hidden="true" />
+          </button>
+          <span className="path-default-status">
+            {extract.usesGlobalDefaults ? i18n.t("extract.globalDefault") : i18n.t("extract.customDestination")}
+          </span>
+        </>
+      )}
       search={{
         query: archive.view.searchQuery,
         disabled: !archive.command.canSearchEntries,

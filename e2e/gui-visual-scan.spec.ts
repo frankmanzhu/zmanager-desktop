@@ -179,10 +179,11 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #search-entries")).toHaveAttribute("placeholder", "Search sources");
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #browse-create-destination")).toHaveCount(0);
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toContainText("Output Folder...");
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #start-create")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #include-all-sources")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #exclude-all-sources")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='compress-table'] #clear-sources")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='table'] #include-all-sources")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='table'] #exclude-all-sources")).toBeVisible();
+  await expect(page.locator(".toolbar-group[data-command-group='table'] #clear-sources")).toBeVisible();
   await expect(page.locator("#new-archive")).toHaveCount(0);
   await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toHaveCount(0);
   await expect(page.locator("#zmanager-runtime-bridge-root > .browser-shell")).toBeHidden();
