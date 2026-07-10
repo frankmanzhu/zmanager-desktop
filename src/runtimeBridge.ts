@@ -121,23 +121,6 @@ import {
   type ArchiveEntryIconDescriptor,
 } from "./app/archiveEntryIcons";
 import {
-  middleTruncateDetailValue,
-  renderArchiveBrowseMessage,
-  renderArchiveCommandControlState,
-  renderArchiveDetails,
-  renderArchiveMetaText,
-  renderArchiveNavigationTree,
-  renderArchivePathBar,
-  renderArchiveWorkspaceModeChrome,
-  renderArchiveWorkspaceTable,
-  renderDetailRows as renderArchiveDetailRows,
-  syncArchiveVisibleSelection,
-  type ArchiveDetailsModel,
-  type ArchivePathBarModel,
-  type ArchiveWorkspaceTreeFolder,
-  type DetailRow,
-} from "./ui/archiveWorkspaceView";
-import {
   type IconNode,
 } from "lucide";
 import {
@@ -342,6 +325,12 @@ type CommandSurfaceClassState = Partial<Record<CommandId, {
   primary?: boolean;
   secondary?: boolean;
 }>>;
+type DetailValueMode = "wrap" | "middle";
+type DetailRow = {
+  label: string;
+  value?: string | null;
+  mode?: DetailValueMode;
+};
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 type ArchiveFixture = {
   archivePath: string;
@@ -1537,6 +1526,16 @@ function formatRatio(entry: ArchiveEntryDto): string {
   return displayContext.format.ratio(entry.size, entry.compressedSize, { fractionDigits: 0 });
 }
 
+function middleTruncateDetailValue(value: string, maxLength = 88): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const headLength = Math.max(12, Math.ceil((maxLength - 3) * 0.52));
+  const tailLength = Math.max(12, maxLength - headLength - 3);
+  return `${value.slice(0, headLength)}...${value.slice(-tailLength)}`;
+}
+
 function detailRowsToText(rows: readonly DetailRow[]): string {
   return rows
     .filter((row): row is DetailRow & { value: string } => Boolean(row.value))
@@ -1597,30 +1596,8 @@ function selectionPropertyRows(selectedRows: readonly SelectableBrowserRow[]): D
   ];
 }
 
-function infoReturnFocusForCurrentSelection(): HTMLElement | null {
-  const selectedPath = focusedEntryPath || getSelectedEntryPaths()[0] || "";
-  return findActiveArchiveRow(selectedPath);
-}
-
-function findActiveArchiveRow(path: string): HTMLTableRowElement | null {
-  if (!path) {
-    return null;
-  }
-
-  const selector = `tr[data-entry-path="${CSS.escape(path)}"]`;
-  return document.querySelector<HTMLTableRowElement>(selector)
-    ?? tableBody.querySelector<HTMLTableRowElement>(selector);
-}
-
 function previewActionHint(): string {
   return message("preview.openTempOutsideHint");
-}
-
-function detailRenderHelpers() {
-  return {
-    copyLabel: message("command.copy"),
-    copyIconHtml: toolbarIcon("copy"),
-  };
 }
 
 function formatOptionalBytes(value?: number): string | null {
@@ -2039,7 +2016,6 @@ async function startNativeDragOut(entryPath: string) {
       path: entryPath,
     }));
     renderBrowse();
-    findActiveArchiveRow(entryPath)?.focus();
   }
 
   let password: string | undefined;
@@ -2181,7 +2157,6 @@ function syncArchiveWorkspaceSnapshot(snapshot: ArchiveWorkspaceSnapshot) {
 function syncArchiveWorkspaceViewSnapshot(snapshot: ArchiveWorkspaceSnapshot) {
   currentArchiveFolder = snapshot.view.currentFolder;
   currentArchiveSearchQuery = snapshot.view.searchQuery;
-  searchInput.value = snapshot.view.searchQuery;
   navigationHistory = [...snapshot.view.navigationHistory];
   isFlatView = snapshot.view.flatView;
   expandedArchiveTreeFolders.clear();
@@ -2207,7 +2182,6 @@ function clearSearch() {
   }
   syncArchiveWorkspaceViewSnapshot(archiveWorkspace.clearSearch());
   renderBrowse();
-  searchInput.focus();
 }
 
 function visibleRows(): BrowserRow[] {
@@ -2240,11 +2214,6 @@ function currentArchiveDisplayPath(): string {
 function setBrowseState(next: BrowseState, message = "") {
   const snapshot = archiveWorkspace.setBrowseState(next);
   syncArchiveWorkspaceSnapshot(snapshot);
-
-  renderArchiveBrowseMessage({ messageElement }, {
-    browseState: next,
-    ...(message ? { message } : {}),
-  });
   if (message) {
     browseError = message;
   }
@@ -2321,23 +2290,6 @@ function currentCommandStateMap() {
 }
 
 function updateCommandState() {
-  const snapshot = archiveWorkspace.getSnapshot();
-  const commandContext = snapshot.command;
-  const commandState = currentCommandStateMap();
-
-  const searchDisabled = !commandContext.canSearchEntries;
-  renderArchiveCommandControlState({
-    searchInput,
-    searchSubmitButton,
-    clearSearchButton,
-    selectAllInput,
-  }, {
-    searchDisabled,
-    searchSubmitDisabled: searchDisabled,
-    clearSearchDisabled: searchDisabled || !snapshot.view.searchQuery.trim(),
-    selectAllDisabled: !commandState.selectAll.enabled,
-  });
-
   applyPreferenceClasses();
   updateStatusBar();
   publishReactSnapshot();
@@ -2535,7 +2487,6 @@ function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
       navigateUp();
       break;
     case "setSearchQuery":
-      searchInput.value = intent.query;
       syncArchiveWorkspaceViewSnapshot(archiveWorkspace.setSearchQuery(intent.query));
       renderBrowse();
       break;
@@ -2957,11 +2908,11 @@ function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
       }
       break;
     case "focusSearch": {
-      if (searchInput.disabled) {
+      const publicSearchInput = document.querySelector<HTMLInputElement>("#search-entries");
+      if (!publicSearchInput || !archiveWorkspace.getSnapshot().command.canSearchEntries) {
         setOperationalMessage("browse.noArchiveOpen");
         return;
       }
-      const publicSearchInput = document.querySelector<HTMLInputElement>("#search-entries") ?? searchInput;
       publicSearchInput.focus();
       publicSearchInput.select();
       break;
@@ -2994,9 +2945,7 @@ export function getZManagerRuntimeAdapter(): ZManagerReactRuntimeAdapter {
 }
 
 function updateMeta() {
-  renderArchiveMetaText({ metaElement }, {
-    text: archiveMetaText(),
-  });
+  publishReactSnapshot();
 }
 
 function archiveMetaText(): string {
@@ -3009,77 +2958,11 @@ function archiveMetaText(): string {
 }
 
 function renderWorkspaceMode() {
-  const mode = currentWorkspaceMode();
-  const isCompress = mode === "compress";
-  syncLegacyArchiveSurfaceOwnership();
-  if (isCompress) {
+  if (currentWorkspaceMode() === "compress") {
     renderCompressBrowser();
   }
-
-  if (isCompress) {
-    const sourceSnapshot = syncCreateSourcesFromWorkspace();
-    const includedCount = sourceSnapshot.plan.current ? sourceSnapshot.inclusion.includedCount : sourceSnapshot.sourceCount;
-    renderArchiveWorkspaceModeChrome(workspaceChromeElements(), {
-      mode,
-      compressActive: true,
-      extractActive: false,
-      compressSurfaceHidden: false,
-      tableShellHidden: true,
-      refreshArchiveHidden: true,
-      messageHidden: true,
-      detailsHidden: true,
-      compressOptionsHidden: false,
-      detailsPaneTitle: displayContext.translator.t("compress.options"),
-      detailsPaneTitleI18nKey: "compress.options",
-      workspaceTitle: displayContext.translator.t("compress.tableTitle"),
-      metaText: displayContext.translator.t("compress.tableDescription"),
-      statusSelectionCountText: displayContext.translator.t("compress.sourceStaged", {
-        count: includedCount,
-        sourceLabel: displayContext.translator.t(includedCount === 1 ? "compress.sourceSingular" : "compress.sourcePlural"),
-      }),
-      statusSelectionSizeText: "",
-      statusFocusedSizeText: "",
-      statusFocusedModifiedText: "",
-    });
-  } else {
-    renderArchiveWorkspaceModeChrome(workspaceChromeElements(), {
-      mode,
-      compressActive: false,
-      extractActive: true,
-      compressSurfaceHidden: true,
-      tableShellHidden: false,
-      refreshArchiveHidden: false,
-      messageHidden: false,
-      detailsHidden: false,
-      compressOptionsHidden: true,
-      detailsPaneTitle: displayContext.translator.t("pane.details"),
-      detailsPaneTitleI18nKey: "pane.details",
-      workspaceTitle: displayContext.translator.t("extract.tableTitle"),
-      metaText: currentArchivePath ? undefined : displayContext.translator.t("extract.tableDescription"),
-    });
-    updateStatusBar();
-  }
-}
-
-function workspaceChromeElements() {
-  return {
-    workspaceElement,
-    modeCompressButton,
-    modeExtractButton,
-    compressSurfaceElement,
-    tableShellElement,
-    refreshArchiveButton,
-    messageElement,
-    detailsElement,
-    compressOptionsPanel,
-    detailsPaneTitleElement,
-    workspaceTitleElement,
-    metaElement,
-    statusSelectionCountElement,
-    statusSelectionSizeElement,
-    statusFocusedSizeElement,
-    statusFocusedModifiedElement,
-  };
+  updateStatusBar();
+  publishReactSnapshot();
 }
 
 function setWorkspaceMode(mode: WorkspaceDropMode) {
@@ -3104,75 +2987,19 @@ function setWorkspaceMode(mode: WorkspaceDropMode) {
 }
 
 function renderPathBar() {
-  renderArchivePathBar({
-    pathFieldInput,
-    pathCrumbsElement,
-    document,
-  }, archivePathBarModel());
-}
-
-function archivePathBarModel(): ArchivePathBarModel {
   if (!currentArchivePath) {
-    return {
-      kind: "empty",
-      emptyLabel: displayContext.translator.t("browse.statusEmpty"),
-      documentTitle: APP_TITLE,
-    };
+    document.title = APP_TITLE;
+    return;
   }
 
   const archiveName = getArchiveName(currentArchivePath, APP_TITLE);
-  return {
-    kind: "archive",
-    displayPath: currentArchiveDisplayPath(),
-    documentTitle: currentArchiveFolder
-      ? `${archiveName}\\${currentArchiveFolder.replace(/\//g, "\\")} - ${APP_TITLE}`
-      : `${archiveName} - ${APP_TITLE}`,
-    crumbs: archiveWorkspace.getSnapshot().view.breadcrumbs.map((crumb) => ({
-      name: crumb.isRoot ? archiveName : crumb.name,
-      path: crumb.path,
-    })),
-  };
+  document.title = currentArchiveFolder
+    ? `${archiveName}\\${currentArchiveFolder.replace(/\//g, "\\")} - ${APP_TITLE}`
+    : `${archiveName} - ${APP_TITLE}`;
 }
 
 function renderTree() {
-  if (currentWorkspaceMode() === "compress") {
-    publishReactSnapshot();
-    return;
-  }
-
-  if (!currentArchivePath) {
-    renderArchiveNavigationTree({ treeContentElement }, {
-      kind: "empty",
-      message: displayContext.translator.t("browse.noArchiveOpen"),
-    });
-    return;
-  }
-
-  const folders: ArchiveWorkspaceTreeFolder[] = getKnownFolderPaths()
-    .map((folder) => {
-      const isRoot = folder.path === archiveTreeRootPath;
-      const icon = archiveTreeIconDescriptor(isRoot, folder.path === currentArchiveFolder, displayContext.translator);
-      const iconDataUrl = systemIconDataUrlForRequest(
-        isRoot
-          ? systemIconRequestForPath(currentArchivePath, false)
-          : systemIconRequestForPath("folder", true),
-      );
-      return {
-        path: folder.path,
-        label: folder.name,
-        depth: folder.depth,
-        canToggle: folder.hasChildren && !isRoot,
-        isExpanded: folder.isExpanded,
-        isActive: folder.path === currentArchiveFolder,
-        iconHtml: renderEntryIcon(icon, "tree-icon", iconDataUrl),
-      };
-    });
-  renderArchiveNavigationTree({ treeContentElement }, {
-    kind: "folders",
-    folders,
-    collapseLabel: "Collapse",
-    expandLabel: "Expand",
-  });
+  publishReactSnapshot();
 }
 
 function navigateToCompressFolder(folderPath: string) {
@@ -3195,170 +3022,11 @@ function archiveWorkspaceRowIcon(row: BrowserRow) {
 }
 
 function renderBrowseRows() {
-  const snapshot = archiveWorkspace.getSnapshot();
-  const result = renderArchiveWorkspaceTable({
-    tableHead,
-    tableBody,
-    entryTable,
-    tableShellElement,
-    archiveEmptyStateElement,
-    searchCountElement,
-  }, {
-    browseState,
-    browseError,
-    currentArchivePath,
-    rows: [...snapshot.view.rows],
-    searchQuery: snapshot.view.searchQuery,
-    flatView: snapshot.view.flatView,
-    selection: snapshot.view.selection,
-    columns: visibleColumns(tableColumnSettings),
-    sortKey,
-    sortAscending,
-    translator: displayContext.translator,
-    formatSearchCount,
-    renderRowIcon: archiveWorkspaceRowIcon,
-    nativeDragAttributes: nativeDragRowAttributes(),
-  });
-  selectAllInput = result.selectAllInput;
+  publishReactSnapshot();
 }
 
 function renderDetails() {
-  if (currentWorkspaceMode() === "compress") {
-    detailsElement.innerHTML = "";
-    return;
-  }
-
-  const details = archiveWorkspace.getSnapshot().view.details;
-  let model: ArchiveDetailsModel;
-
-  switch (details.kind) {
-    case "noArchive":
-      model = {
-        kind: "noArchive",
-        title: "No archive open",
-        message: message("detail.openArchiveFirst"),
-        openArchiveLabel: message("browse.emptyOpenAction"),
-      };
-      break;
-
-    case "hiddenSelection": {
-      const rows: DetailRow[] = [
-        { label: message("detail.selected"), value: message("detail.selectedEntries", { count: details.selectedCount }) },
-        { label: message("detail.search"), value: details.searchQuery },
-        ...(details.firstSelectedEntryName ? [{ label: message("detail.name"), value: details.firstSelectedEntryName }] : []),
-        ...(details.firstSelectedEntryPath ? [{ label: message("detail.path"), value: details.firstSelectedEntryPath }] : []),
-      ];
-
-      model = {
-        kind: "hiddenSelection",
-        title: message("detail.selectionHiddenBySearch"),
-        description: message("detail.selectionHiddenBySearchDescription"),
-        actions: [
-          { label: message("search.clear"), action: "clear-search", primary: true },
-          { label: message("info.archiveTitle"), action: "archive-info" },
-        ],
-        rows,
-      };
-      break;
-    }
-
-    case "archiveSummary": {
-      const unpackedSize = details.unpackedSize === null ? null : formatBytes(details.unpackedSize);
-      const format = formatArchiveTypeFromPath(details.archivePath);
-      const title = getArchiveName(details.archivePath, APP_TITLE);
-      model = {
-        kind: "archiveSummary",
-        title,
-        iconHtml: renderEntryIcon(
-          archiveFileIconDescriptor(details.archivePath, false, displayContext.translator),
-          "detail-icon",
-          systemIconDataUrlForRequest(systemIconRequestForPath(details.archivePath, false)),
-        ),
-        rows: [
-          { label: message("detail.archiveName"), value: title },
-          { label: message("detail.path"), value: details.archivePath },
-          { label: message("detail.size"), value: unpackedSize },
-          { label: message("detail.format"), value: format },
-          { label: message("detail.entryCount"), value: String(details.entryCount) },
-          { label: message("detail.packedSize"), value: details.packedSize === null ? null : formatBytes(details.packedSize) },
-          { label: message("detail.lastTestStatus"), value: formatLastTestStatusForCurrentArchive() },
-          { label: message("detail.folder"), value: details.currentFolder || "/" },
-        ],
-      };
-      break;
-    }
-
-    case "syntheticFolder": {
-      const row = details.row;
-      const icon = archiveTreeIconDescriptor(false, row.path === currentArchiveFolder, displayContext.translator);
-      const rows: DetailRow[] = [
-        { label: message("detail.name"), value: row.name },
-        { label: message("detail.type"), value: message("detail.directory") },
-        { label: message("detail.path"), value: row.path || "/" },
-      ];
-      model = {
-        kind: "syntheticFolder",
-        title: row.name,
-        iconHtml: renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForPath("folder", true))),
-        rows,
-      };
-      break;
-    }
-
-    case "entry": {
-      const entry = details.entry;
-      const icon = archiveEntryIconDescriptor(entry, displayContext.translator);
-      const rows = entryPropertyRows(entry);
-      const canPreview = entry.kind !== "directory";
-      const previewHint = previewActionHint();
-      const previewLabel = message("command.view");
-      model = {
-        kind: "entry",
-        title: getBaseName(entry.path),
-        iconHtml: renderEntryIcon(icon, "detail-icon", systemIconDataUrlForRequest(systemIconRequestForEntry(entry))),
-        actions: canPreview
-          ? [{
-              label: previewLabel,
-              action: "preview",
-              primary: true,
-              title: previewHint,
-              ariaLabel: `${previewLabel}: ${previewHint}`,
-            }]
-          : [],
-        rows,
-      };
-      break;
-    }
-
-    case "multipleSelection": {
-      const rows: DetailRow[] = [
-        { label: message("detail.entries"), value: String(details.selectedCount) },
-        { label: message("detail.selectedFiles"), value: String(details.selectedFiles) },
-        { label: message("detail.selectedFolders"), value: String(details.selectedFolders) },
-        { label: message("detail.totalSize"), value: details.totalSize === null ? null : formatBytes(details.totalSize) },
-        { label: message("detail.packedSize"), value: details.packedSize === null ? null : formatBytes(details.packedSize) },
-        { label: message("detail.pathPreview"), value: truncatedPathPreview([...details.pathPreviewPaths]) },
-      ];
-
-      model = {
-        kind: "multipleSelection",
-        title: message("detail.selectedEntries", { count: details.selectedCount }),
-        actions: [
-          { label: message("extract.selectedAction"), action: "extract-selected", primary: true },
-          { label: message("test.selectedAction"), action: "test-selected" },
-          { label: message("command.properties"), action: "properties" },
-          { label: message("info.archiveTitle"), action: "archive-info" },
-        ],
-        rows,
-      };
-      break;
-    }
-  }
-
-  renderArchiveDetails({ detailsElement }, {
-    model,
-    ...detailRenderHelpers(),
-  });
+  publishReactSnapshot();
 }
 
 function renderBrowse() {
@@ -3372,10 +3040,7 @@ function renderBrowse() {
 
   const visibleSelectedCount = archiveWorkspace.getSnapshot().view.selection.visibleSelectedCount;
   if (browseState === "loaded" && visibleSelectedCount > 0) {
-    renderArchiveBrowseMessage({ messageElement }, {
-      browseState,
-      message: displayContext.translator.t("browse.selectedEntries", { count: visibleSelectedCount }),
-    });
+    setOperationalStatus(displayContext.translator.t("browse.selectedEntries", { count: visibleSelectedCount }));
   }
 
   queueSystemIconRefresh();
@@ -3857,12 +3522,6 @@ function closeReactDialog() {
     archiveWorkspace.clearPasswordRetry();
   }
   publishReactSnapshot();
-
-  if (previous.kind === "info") {
-    findActiveArchiveRow(previous.returnFocusPath)?.focus();
-  } else if (previous.kind === "extract") {
-    findActiveArchiveRow(focusedEntryPath)?.focus();
-  }
 }
 
 function currentReactExtractDialogSnapshot(
@@ -4232,12 +3891,8 @@ function navigateToFolder(folderPath: string) {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    renderArchiveBrowseMessage({ messageElement }, {
-      browseState,
-      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
-    });
+    setOperationalStatus(displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }));
   }
-  focusFirstVisibleRow();
 }
 
 function navigateBack() {
@@ -4252,12 +3907,8 @@ function navigateBack() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    renderArchiveBrowseMessage({ messageElement }, {
-      browseState,
-      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
-    });
+    setOperationalStatus(displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }));
   }
-  focusFirstVisibleRow();
 }
 
 function navigateUp() {
@@ -4275,16 +3926,8 @@ function navigateUp() {
   syncArchiveWorkspaceViewSnapshot(snapshot);
   renderBrowse();
   if (currentArchivePath) {
-    renderArchiveBrowseMessage({ messageElement }, {
-      browseState,
-      message: displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }),
-    });
+    setOperationalStatus(displayContext.translator.t("browse.loadedEntries", { count: getVisibleSelectablePaths().length }));
   }
-  focusFirstVisibleRow();
-}
-
-function getTableRows(): HTMLTableRowElement[] {
-  return Array.from(tableBody.querySelectorAll<HTMLTableRowElement>("tr[data-folder-path], tr[data-entry-path]"));
 }
 
 function updateSelectionByIntent(
@@ -4304,11 +3947,8 @@ function updateSelectionByIntent(
 }
 
 function syncVisibleSelectionUi() {
-  const selection = archiveWorkspace.getSnapshot().view.selection;
-  syncArchiveVisibleSelection({ tableBody, selectAllInput }, selection);
-
-  renderDetails();
   updateCommandState();
+  publishReactSnapshot();
 }
 
 function selectAllVisibleEntries() {
@@ -4358,74 +3998,6 @@ function selectEntriesByType(mode: "add" | "remove") {
     anchorPath: selection.anchorPath,
   }));
   renderBrowse();
-}
-
-function focusTableRow(row: HTMLTableRowElement | null, focusedPath?: string) {
-  if (!row) {
-    return;
-  }
-  row.focus();
-  applyArchiveTableSelection(focusHierarchicalTablePath(
-    currentArchiveTableSelectionState(),
-    focusedPath ?? row.dataset.entryPath ?? "",
-  ));
-  syncVisibleSelectionUi();
-}
-
-function focusFirstVisibleRow() {
-  uiDeferrals.schedule(() => {
-    focusTableRow(getTableRows()[0] ?? null);
-  }, 0);
-}
-
-function focusRelativeTableRow(currentRow: HTMLTableRowElement, direction: 1 | -1) {
-  const rows = getTableRows();
-  const currentIndex = rows.indexOf(currentRow);
-  if (currentIndex < 0) {
-    return;
-  }
-
-  const nextFocus = moveHierarchicalTableFocus({
-    rows: visibleRows(),
-    currentIndex,
-    direction,
-  });
-  focusTableRow(rows[nextFocus.rowIndex] ?? null, nextFocus.focusedPath);
-}
-
-function activateTableRow(row: HTMLTableRowElement) {
-  const folderPath = row.dataset.folderPath;
-  if (folderPath !== undefined) {
-    navigateToFolder(folderPath);
-    return;
-  }
-
-  const entryPath = row.dataset.entryPath;
-  if (!entryPath) {
-    return;
-  }
-
-  applyArchiveTableSelection(replaceHierarchicalTableSelection({
-    paths: [entryPath],
-    focusedPath: focusedEntryPath,
-    anchorPath: selectionAnchorPath,
-  }));
-  renderBrowse();
-  runRoutedCommand("view");
-}
-
-function toggleTableRowSelection(row: HTMLTableRowElement) {
-  const entryPath = row.dataset.entryPath;
-  if (!entryPath) {
-    return;
-  }
-
-  applyArchiveTableSelection(toggleHierarchicalTablePathSelection({
-    ...currentArchiveTableSelectionState(),
-    path: entryPath,
-  }));
-  renderBrowse();
-  focusTableRow(tableBody.querySelector<HTMLTableRowElement>(`tr[data-entry-path="${CSS.escape(entryPath)}"]`));
 }
 
 function selectVisibleEntries() {
@@ -5304,22 +4876,10 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
 
   setBrowseState(listing.entries.length > 0 ? "loaded" : "empty", message("archive.loaded"));
 
-  renderArchiveBrowseMessage({ messageElement }, {
-    browseState,
-    message: listing.entries.length > 0
-      ? message("browse.loadedEntries", { count: listing.entries.length })
-      : message("browse.validEmpty"),
-  });
-
+  setOperationalStatus(listing.entries.length > 0
+    ? message("browse.loadedEntries", { count: listing.entries.length })
+    : message("browse.validEmpty"));
   renderBrowse();
-  if (focusedEntryPath) {
-    const restoredFocus = findActiveArchiveRow(focusedEntryPath);
-    if (restoredFocus) {
-      focusTableRow(restoredFocus);
-      return;
-    }
-  }
-  focusFirstVisibleRow();
 }
 
 function isLocalDevHost() {
