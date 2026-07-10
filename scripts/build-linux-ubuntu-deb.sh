@@ -22,7 +22,7 @@ Release baseline:
 
 Ubuntu prerequisites:
   sudo apt-get update
-  sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf
+  sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf pkg-config
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
   sudo apt-get install nodejs
@@ -116,6 +116,7 @@ ubuntu_packages=(
   libwebkit2gtk-4.1-dev
   libxdo-dev
   patchelf
+  pkg-config
 )
 
 source_cargo_env() {
@@ -156,6 +157,23 @@ rust_install_required() {
   [[ -z "$rust_major" || -z "$rust_minor" || "$rust_major" -lt 1 || ("$rust_major" -eq 1 && "$rust_minor" -lt 85) ]]
 }
 
+npm_packages=(
+  @tailwindcss/vite
+  @tauri-apps/cli
+  @vitejs/plugin-react
+  typescript
+  vite
+  vitest
+)
+
+npm_install_required() {
+  if [[ ! -d node_modules ]]; then
+    return 0
+  fi
+
+  ! npm ls --depth=0 "${npm_packages[@]}" >/dev/null 2>&1
+}
+
 collect_missing_commands() {
   local command_name
   missing_commands=()
@@ -173,19 +191,51 @@ collect_missing_commands() {
   done
 }
 
-if ((install_deps)); then
-  if ! sudo -n true 2>/dev/null; then
-    echo "Installing Ubuntu packages requires sudo access." >&2
-    echo "Run this command in a terminal first, then rerun the build:" >&2
-    echo "  sudo apt-get update && sudo apt-get install ${ubuntu_packages[*]}" >&2
+run_apt_get() {
+  if ((EUID == 0)); then
+    apt-get "$@"
+  else
+    sudo apt-get "$@"
+  fi
+}
+
+ensure_package_install_access() {
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "Installing Ubuntu packages requires apt-get." >&2
     exit 1
   fi
-  sudo apt-get update
-  sudo apt-get install -y "${ubuntu_packages[@]}"
+
+  if ((EUID == 0)); then
+    return
+  fi
+
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "Installing Ubuntu packages requires sudo or a root shell." >&2
+    echo "Run as root or install these packages first:" >&2
+    echo "  apt-get update && apt-get install ${ubuntu_packages[*]}" >&2
+    exit 1
+  fi
+
+  echo "Installing Ubuntu packages requires sudo access."
+  sudo -v
+}
+
+run_nodesource_setup() {
+  if ((EUID == 0)); then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  else
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  fi
+}
+
+if ((install_deps)); then
+  ensure_package_install_access
+  run_apt_get update
+  run_apt_get install -y "${ubuntu_packages[@]}"
 
   if node_install_required; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+    run_nodesource_setup
+    run_apt_get install -y nodejs
   fi
 
   if rust_install_required; then
@@ -243,7 +293,7 @@ if ((!skip_tests && node_major < 20)); then
   exit 1
 fi
 
-if [[ ! -d node_modules ]]; then
+if npm_install_required; then
   npm install
 fi
 
@@ -254,7 +304,7 @@ fi
 
 npm run tauri -- build --bundles deb
 
-apt_stage_dir="/tmp/zmanager-desktop-deb"
+apt_stage_dir="${ZMANAGER_DEB_STAGE_DIR:-/tmp/zmanager-desktop-deb}"
 install -d -m 0755 "$apt_stage_dir"
 
 deb_count=0

@@ -1,9 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 
-import {
-  contextMenuItems,
-  decodeContextMenuAction,
-} from "../../contextMenuHelpers";
+import type { ContextMenuModelItem } from "../../../app/commands/contextMenuModel";
+import { contextMenuItems } from "../../contextMenuHelpers";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 
 export function ContextMenuRoot() {
@@ -49,16 +47,6 @@ export function ContextMenuRoot() {
       role="menu"
       hidden={!menu.visible}
       style={menu.visible ? { left: menu.x, top: menu.y } : undefined}
-      dangerouslySetInnerHTML={{ __html: menu.visible ? menu.html : "" }}
-      onClick={(event) => {
-        const payload = decodeContextMenuAction(event.target);
-        if (!payload) {
-          return;
-        }
-
-        event.preventDefault();
-        actions.handleContextMenuIntent({ type: "action", payload });
-      }}
       onKeyDown={(event) => {
         if (handleContextMenuKeyboard(event.currentTarget, event.nativeEvent)) {
           actions.handleContextMenuIntent({ type: "hide" });
@@ -70,7 +58,77 @@ export function ContextMenuRoot() {
           returnFocusRef.current = event.relatedTarget;
         }
       }}
-    />
+    >
+      {menu.visible ? menu.items.map((item, index) => (
+        <ContextMenuRow
+          // Context menu rows are rebuilt for each snapshot; index is stable enough inside one menu instance.
+          key={`${menu.id}-${index}`}
+          item={item}
+          onAction={(payload) => {
+            actions.handleContextMenuIntent({ type: "action", payload });
+          }}
+        />
+      )) : null}
+    </div>
+  );
+}
+
+function ContextMenuRow({
+  item,
+  onAction,
+}: Readonly<{
+  item: ContextMenuModelItem;
+  onAction: (payload: Extract<ContextMenuModelItem, { type: "action" | "checkbox" }>["payload"]) => void;
+}>) {
+  if (item.type === "separator") {
+    return <div className="context-menu-separator" role="separator" />;
+  }
+
+  if (item.type === "caption") {
+    return <div className="context-menu-caption">{item.label}</div>;
+  }
+
+  const disabled = Boolean(item.disabled);
+  const commonProps = {
+    type: "button" as const,
+    disabled,
+    title: item.title ?? item.disabledReason,
+    "data-context-action": item.payload.action,
+    "data-archive-path": item.payload.archivePath,
+    "data-column-id": item.payload.columnId,
+    "data-compress-menu-path": item.payload.compressMenuPath,
+    "data-entry-path": item.payload.entryPath,
+    "data-folder-path": item.payload.folderPath,
+    "data-source-path": item.payload.sourcePath,
+    onClick: (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      if (!disabled) {
+        onAction(item.payload);
+      }
+    },
+  };
+
+  if (item.type === "checkbox") {
+    return (
+      <button
+        {...commonProps}
+        className="context-check-item"
+        role="menuitemcheckbox"
+        aria-checked={item.checked}
+        aria-disabled={disabled || undefined}
+      >
+        <span className="context-check" aria-hidden="true" />
+        <span className="context-menu-label">{item.label}</span>
+        {item.shortcut ? <span className="context-menu-shortcut">{item.shortcut}</span> : null}
+      </button>
+    );
+  }
+
+  return (
+    <button {...commonProps} role="menuitem" aria-disabled={disabled || undefined}>
+      <span className="context-menu-label">{item.label}</span>
+      {item.shortcut ? <span className="context-menu-shortcut">{item.shortcut}</span> : null}
+    </button>
   );
 }
 

@@ -73,7 +73,7 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     retries: [] as string[],
     errors: [] as string[],
   };
-  let input: ExtractStartInput = {
+  const defaultInput: ExtractStartInput = {
     destination: "C:/out/demo",
     destinationValid: true,
     overwrite: "ask" as StartExtractRequest["overwrite"],
@@ -87,9 +87,6 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     workspace,
     hasCurrentArchive() {
       return Boolean(workspace.getSnapshot().currentArchivePath);
-    },
-    readInput() {
-      return input;
     },
     startExtract,
     toCommandError(error) {
@@ -140,8 +137,8 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
   return {
     calls,
     controller,
-    setInput(next: Partial<ExtractStartInput>) {
-      input = { ...input, ...next };
+    start(mode: ExtractMode, next: Partial<ExtractStartInput> = {}) {
+      return controller.startExtract(mode, { ...defaultInput, ...next });
     },
     startExtract,
     workspace,
@@ -152,7 +149,7 @@ describe("extract start controller", () => {
   it("starts archive extraction and records job metadata", async () => {
     const harness = createHarness();
 
-    await harness.controller.startExtract("archive");
+    await harness.start("archive");
 
     expect(harness.startExtract).toHaveBeenCalledWith({
       archivePath: "C:/archives/demo.zip",
@@ -182,9 +179,8 @@ describe("extract start controller", () => {
   it("starts selection extraction with selected entry paths", async () => {
     const harness = createHarness();
     selectPaths(harness.workspace, ["docs/readme.txt"]);
-    harness.setInput({ entryReferences: ["docs/readme.txt"] });
 
-    await harness.controller.startExtract("selection");
+    await harness.start("selection", { entryReferences: ["docs/readme.txt"] });
 
     expect(harness.startExtract).toHaveBeenCalledWith({
       archivePath: "C:/archives/demo.zip",
@@ -208,9 +204,8 @@ describe("extract start controller", () => {
 
   it("prompts for a destination before building requests", async () => {
     const harness = createHarness();
-    harness.setInput({ destination: null, destinationValid: false });
 
-    await harness.controller.startExtract("archive");
+    await harness.start("archive", { destination: null, destinationValid: false });
 
     expect(harness.calls.chooseDestinationFirst).toBe(1);
     expect(harness.startExtract).not.toHaveBeenCalled();
@@ -219,7 +214,7 @@ describe("extract start controller", () => {
   it("prompts for selection before building selection requests", async () => {
     const harness = createHarness();
 
-    await harness.controller.startExtract("selection");
+    await harness.start("selection");
 
     expect(harness.calls.selectEntryFirst).toBe(1);
     expect(harness.startExtract).not.toHaveBeenCalled();
@@ -232,7 +227,7 @@ describe("extract start controller", () => {
       message: "Password required",
     }));
 
-    await harness.controller.startExtract("archive");
+    await harness.start("archive");
 
     expect(harness.calls.retries).toEqual(["browse.passwordRequired"]);
     expect(harness.calls.errors).toEqual([]);
@@ -242,16 +237,15 @@ describe("extract start controller", () => {
     const commandHarness = createHarness();
     commandHarness.startExtract.mockRejectedValueOnce(commandError({ message: "Disk full" }));
 
-    await commandHarness.controller.startExtract("archive");
+    await commandHarness.start("archive");
 
     expect(commandHarness.calls.errors).toEqual(["Disk full"]);
 
     const unknownHarness = createHarness();
     selectPaths(unknownHarness.workspace, ["docs/readme.txt"]);
-    unknownHarness.setInput({ entryReferences: ["docs/readme.txt"] });
     unknownHarness.startExtract.mockRejectedValueOnce(new Error("boom"));
 
-    await unknownHarness.controller.startExtract("selection");
+    await unknownHarness.start("selection", { entryReferences: ["docs/readme.txt"] });
 
     expect(unknownHarness.calls.errors).toEqual(["Unable to extract selection."]);
   });

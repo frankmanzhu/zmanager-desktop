@@ -32,6 +32,7 @@ const browserFileDropAdapterSource = normalizedWorkspaceFile("src", "ui", "react
 const paneResizerSource = normalizedWorkspaceFile("src", "ui", "react", "interaction", "PaneResizer.tsx");
 const dialogRootSource = normalizedWorkspaceFile("src", "ui", "react", "dialogs", "DialogRoot.tsx");
 const contextMenuRootSource = normalizedWorkspaceFile("src", "ui", "react", "context-menu", "ContextMenuRoot.tsx");
+const appRuntimeSource = normalizedWorkspaceFile("src", "ui", "react", "appRuntime.ts");
 const preferencesDialogSource = normalizedWorkspaceFile("src", "ui", "react", "preferences", "PreferencesDialog.tsx");
 const archiveWorkspaceSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveWorkspace.tsx");
 const archiveTableSource = normalizedWorkspaceFile("src", "ui", "react", "archive", "ArchiveTable.tsx");
@@ -43,6 +44,7 @@ const workspacePathBarSource = normalizedWorkspaceFile("src", "ui", "react", "wo
 const tableMarqueeSelectionSource = normalizedWorkspaceFile("src", "ui", "react", "workspace", "tableMarqueeSelection.ts");
 const extractStartControllerSource = normalizedWorkspaceFile("src", "app", "controllers", "extractStartController.ts");
 const shellWorkspaceSource = normalizedWorkspaceFile("src", "app", "shell", "shellWorkspace.ts");
+const contextMenuModelSource = normalizedWorkspaceFile("src", "app", "commands", "contextMenuModel.ts");
 const contextMenuHelpersSource = normalizedWorkspaceFile("src", "ui", "contextMenuHelpers.ts");
 const modalControllerSource = normalizedWorkspaceFile("src", "ui", "modalController.ts");
 const jobsSurfacesSource = normalizedWorkspaceFile("src", "ui", "react", "jobs", "JobsSurfaces.tsx");
@@ -226,8 +228,8 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain("useBrowserLayoutEffect(() => {");
     expect(createWorkspaceSource).toContain("sourcePathForCreatePlanRow(row");
     expect(createWorkspaceSource).toContain("data-compress-source-path={sourcePath || undefined}");
-    expect(mainSource).toContain('data-context-action="reveal-source"');
-    expect(mainSource).toContain('data-context-action="remove-source"');
+    expect(mainSource).toContain('{ action: "reveal-source" }');
+    expect(mainSource).toContain('{ action: "remove-source" }');
     expect(createWorkspaceSource).toContain('aria-keyshortcuts={selectable ? "Space Enter Delete ContextMenu Shift+F10"');
     expect(mainSource).toContain("function removableSourcePathForCompressRow");
     expect(mainSource).toContain("if (!rowPath || snapshot.view.currentFolder)");
@@ -260,7 +262,10 @@ describe("GUI layout contracts", () => {
     expect(dialogRootSource).toContain('type: "browseExtractDestination"');
     expect(mainSource).toContain("setReactDialogSnapshot(currentReactExtractDialogSnapshot(mode));");
     expect(mainSource).toContain("closeExtractDialog: closeReactDialog");
-    expect(mainSource).toContain("writeReactExtractFormToLegacyControls(intent);");
+    expect(mainSource).toContain("extractStartInputFromFormValues(intent.mode");
+    expect(mainSource).toContain("extractStartInputFromLegacyControls(destinationMode)");
+    expect(mainSource).not.toContain("writeReactExtractFormToLegacyControls");
+    expect(extractStartControllerSource).not.toContain("readInput");
     expect(mainSource).toContain('extractDialog.addEventListener("keydown", handleExtractDialogEnter);');
     expect(mainSource).toContain('extractDestinationInput.addEventListener("input", syncExtractDialogState);');
     expect(mainSource).toContain("function isDefaultSafeDialogTextEntry");
@@ -358,22 +363,35 @@ describe("GUI layout contracts", () => {
   it("keeps Explorer-like table keyboard and empty-state contracts explicit", () => {
     expect(archiveTableSource).toContain('aria-keyshortcuts="Enter Space ContextMenu Shift+F10"');
     expect(archiveTableSource).toContain('aria-keyshortcuts="Space Enter ContextMenu Shift+F10"');
-    expect(mainSource).toContain('data-context-action="sort-ascending"');
-    expect(mainSource).toContain('data-context-action="sort-descending"');
-    expect(mainSource).toContain('data-context-action="extract-here"');
-    expect(mainSource).toContain('data-context-action="paste-archive-path"');
-    expect(mainSource).toContain('data-context-action="open-recent-archive"');
-    expect(mainSource).toContain('data-context-action="reset-columns"');
+    expect(contextMenuModelSource).toContain("export type ContextMenuModelItem");
+    expect(mainSource).toContain('{ action: "sort-ascending"');
+    expect(mainSource).toContain('{ action: "sort-descending"');
+    expect(mainSource).toContain('{ action: "extract-here"');
+    expect(mainSource).toContain('{ action: "paste-archive-path"');
+    expect(mainSource).toContain('action: "open-recent-archive"');
+    expect(mainSource).toContain('{ action: "reset-columns"');
     expect(contextMenuHelpersSource).toContain("export function contextMenuItems");
+    expect(contextMenuHelpersSource).not.toContain("decodeContextMenuAction");
     expect(contextMenuHelpersSource).not.toContain("addEventListener");
     expect(contextMenuRootSource).toContain("function handleContextMenuKeyboard");
-    expect(contextMenuRootSource).toContain("onClick={(event) =>");
+    expect(contextMenuRootSource).toContain("onClick: (event: MouseEvent<HTMLButtonElement>) =>");
+    expect(contextMenuRootSource).toContain('actions.handleContextMenuIntent({ type: "action", payload });');
+    expect(contextMenuRootSource).not.toContain("dangerouslySetInnerHTML");
     expect(archiveTableSource).toContain('<table id="entry-table">');
     expect(mainSource).toContain("function updateCompressSelectionByIntent");
     expect(mainSource).toContain("showCompressRowContextMenu");
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
     expect(styles).toContain(".table-shell.has-start-empty #entry-table tbody .empty");
     expect(styles).toContain('tbody tr[aria-selected="true"] .row-primary::before');
+  });
+
+  it("keeps context menu snapshots typed instead of hidden HTML", () => {
+    expect(appRuntimeSource).toContain("items: readonly ContextMenuModelItem[]");
+    expect(appRuntimeSource).not.toContain("html: string");
+    expect(contextMenuRootSource).not.toContain("dangerouslySetInnerHTML");
+    expect(contextMenuRootSource).not.toContain("decodeContextMenuAction");
+    expect(mainSource).toContain("function showContextMenu(x: number, y: number, items: readonly ContextMenuModelItem[])");
+    expect(mainSource).not.toContain("function showContextMenu(x: number, y: number, html: string)");
   });
 
   it("keeps screen-reader-only text fully clipped out of visual rows", () => {

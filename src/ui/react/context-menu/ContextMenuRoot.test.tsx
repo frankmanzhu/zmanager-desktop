@@ -13,7 +13,7 @@ import {
 import { ContextMenuRoot } from "./ContextMenuRoot";
 
 describe("React context menu root", () => {
-  it("renders visible context menu html at the requested point", () => {
+  it("renders visible typed context menu items at the requested point", () => {
     const html = renderContextMenu(contextMenuSnapshot());
 
     expect(html).toContain('id="context-menu"');
@@ -22,6 +22,9 @@ describe("React context menu root", () => {
     expect(html).toContain("top:48px");
     expect(html).toContain('data-context-action="open-archive"');
     expect(html).toContain("Open Archive");
+    expect(html).toContain('role="menuitemcheckbox"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).not.toContain("dangerouslySetInnerHTML");
   });
 
   it("keeps hidden context menus empty", () => {
@@ -63,7 +66,19 @@ function contextMenuSnapshot(): ZManagerReactSnapshot {
       id: 1,
       x: 24,
       y: 48,
-      html: '<button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">Open Archive</span></button>',
+      items: [
+        {
+          type: "action",
+          label: "Open Archive",
+          payload: { action: "open-archive" },
+        },
+        {
+          type: "checkbox",
+          label: "Name",
+          payload: { action: "toggle-column", columnId: "name" },
+          checked: true,
+        },
+      ],
     },
   });
 }

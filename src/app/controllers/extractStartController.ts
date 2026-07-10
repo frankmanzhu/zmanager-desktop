@@ -26,7 +26,6 @@ export type ExtractStartControllerWorkspace = Pick<
 export type ExtractStartControllerOptions = Readonly<{
   workspace: ExtractStartControllerWorkspace;
   hasCurrentArchive(): boolean;
-  readInput(mode: ExtractMode): ExtractStartInput;
   startExtract(request: StartExtractRequest): Promise<StartJobResponseDto>;
   toCommandError(error: unknown): CommandErrorDto | null;
   requestPasswordInDialog(retry: ArchiveWorkspacePasswordRetry): void;
@@ -51,7 +50,7 @@ export type ExtractStartControllerOptions = Readonly<{
 }>;
 
 export type ExtractStartController = Readonly<{
-  startExtract(mode: ExtractMode): Promise<void>;
+  startExtract(mode: ExtractMode, input: ExtractStartInput): Promise<void>;
 }>;
 
 function retryContextForRequest(
@@ -76,12 +75,11 @@ function passwordRetryOperation(mode: ExtractMode): "extractArchive" | "extractS
 export function createExtractStartController(
   options: ExtractStartControllerOptions,
 ): ExtractStartController {
-  async function startExtract(mode: ExtractMode): Promise<void> {
+  async function startExtract(mode: ExtractMode, input: ExtractStartInput): Promise<void> {
     if (!options.hasCurrentArchive()) {
       return;
     }
 
-    const input = options.readInput(mode);
     if (!input.destinationValid || !input.destination) {
       options.chooseDestinationFirst();
       return;

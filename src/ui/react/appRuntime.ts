@@ -4,6 +4,10 @@ import {
   type CommandId,
   type CommandStateMap,
 } from "../../app/classicCommands";
+import type {
+  ContextMenuActionPayload,
+  ContextMenuModelItem,
+} from "../../app/commands/contextMenuModel";
 import type { CommandRouterPayload } from "../../app/commands/commandRouter";
 import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
@@ -49,18 +53,10 @@ export type ZManagerContextMenuSnapshot =
       id: number;
       x: number;
       y: number;
-      html: string;
+      items: readonly ContextMenuModelItem[];
     }>;
 
-export type ZManagerContextMenuActionPayload = Readonly<{
-  action: string;
-  archivePath?: string;
-  columnId?: string;
-  compressMenuPath?: string;
-  entryPath?: string;
-  folderPath?: string;
-  sourcePath?: string;
-}>;
+export type ZManagerContextMenuActionPayload = ContextMenuActionPayload;
 
 export type ZManagerDialogDetailRow = Readonly<{
   label: string;
@@ -406,7 +402,18 @@ function cloneContextMenuSnapshot(contextMenu: ZManagerContextMenuSnapshot): ZMa
     return { visible: false, id: contextMenu.id };
   }
 
-  return { ...contextMenu };
+  return {
+    ...contextMenu,
+    items: contextMenu.items.map((item) => {
+      if (item.type === "action") {
+        return { ...item, payload: { ...item.payload } };
+      }
+      if (item.type === "checkbox") {
+        return { ...item, payload: { ...item.payload } };
+      }
+      return { ...item };
+    }),
+  };
 }
 
 function cloneDialogSnapshot(dialog: ZManagerDialogSnapshot): ZManagerDialogSnapshot {

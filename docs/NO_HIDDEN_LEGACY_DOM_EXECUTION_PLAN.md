@@ -151,6 +151,171 @@ Do not start by deleting `appRoot.innerHTML`; that only becomes safe after
 extract, create, info/about, context menu, and remaining render callbacks no
 longer depend on captured hidden elements.
 
+## Continuation Audit: 2026-07-10
+
+The React migration is not complete. Treat the current codebase as a hybrid
+runtime until the tasks below are closed. The evidence from the latest review:
+
+- `src/ui/react/AppShell.tsx` still imports `src/runtimeBridge.ts` dynamically
+  and mounts `#zmanager-runtime-bridge-root`.
+- `src/runtimeBridge.ts` is still a 7,000+ line live runtime that builds a
+  hidden DOM tree with `appRoot.innerHTML`, captures hidden controls, runs
+  `privatizeLegacy*` collision-avoidance code, and binds UI behaviour manually.
+- `src/ui/archiveWorkspaceView.ts` and `src/ui/createWorkspaceView.ts` are still
+  live legacy string-render modules with `innerHTML` writers.
+- Context menus still move through an `html: string` snapshot and React renders
+  it with `dangerouslySetInnerHTML`.
+- Extract/create controller seams still accept hidden-control-style callbacks
+  such as `readInput`, `passwordInput`, `renderPlanState`,
+  `renderCreateBrowser`, `renderCreateSources`, and
+  `renderCreateDestinationHistory`.
+- The project has React 19 and Tailwind 4 dependencies, but most production UI
+  styling is still centralized in `src/styles.css`; `src/styles.tailwind.css`
+  only imports Tailwind, and shadcn coverage is currently limited to the local
+  button primitive. Do not claim a full shadcn/Tailwind migration until the
+  styling and component ownership is intentionally completed or explicitly
+  scoped out.
+- `npm run test:frontend` could not be used as proof during this audit because
+  the local `node_modules` install was missing `@vitejs/plugin-react`.
+
+### Continuation Task Ledger
+
+Use this ledger as the remaining execution queue. A task is complete only when
+the old ownership path is deleted or reduced to a small named adapter with a
+deletion plan, and the changed behaviour has characterization or interface-level
+tests.
+
+1. Restore local verification before changing behaviour.
+   - Run `npm install` if dependencies are missing.
+   - Confirm `npm run test:frontend` starts and record the baseline.
+   - Add or update a contract test that lists every remaining allowed legacy
+     exception: `zmanager-runtime-bridge-root`, `appRoot.innerHTML`,
+     `privatizeLegacy`, `dangerouslySetInnerHTML`, legacy view imports, and
+     controller render/input callbacks.
+
+2. Stop using hidden extract controls as the extract source of truth.
+   - Change `createExtractStartController` from `startExtract(mode)` plus
+     `readInput(mode)` to an explicit `startExtract(mode, input)` seam.
+   - Move destination/path-mode/overwrite/strip/deduplicate/password input
+     construction into React dialog local state and pure request builders.
+   - Delete `writeReactExtractFormToLegacyControls`,
+     `currentReactExtractDialogSnapshot`, and
+     `syncReactExtractDialogSnapshot` once React no longer mirrors into hidden
+     inputs.
+   - Add tests for submit validation, browse-destination patching, password
+     retry, archive extract, and selection extract without hidden DOM reads.
+
+3. Stop using hidden create controls as create source of truth.
+   - Change `createCreateStartController` so the submit path receives explicit
+     password input from React rather than defaulting to `passwordInput()`.
+   - Move destination, format, advanced options, password visibility, and
+     password confirmation ownership fully into `CreateWorkspace` state/intents.
+   - Delete hidden create password/destination/option reads from
+     `runtimeBridge.ts`.
+   - Add tests for password mismatch, encrypted format requirements,
+     destination collision strategy, and successful request construction.
+
+4. Remove controller render callbacks.
+   - Replace `renderPlanState`, `renderPlanStatus`, `renderCreateBrowser`,
+     `renderCreateSources`, and `renderCreateDestinationHistory` callbacks with
+     workspace state changes and snapshot publication.
+   - Controllers should coordinate effects and return/feed intents; they should
+     not know which UI surface rerenders.
+   - Add controller tests proving plan success/failure updates snapshots without
+     invoking DOM render callbacks.
+
+5. Make info/about dialogs snapshot-only.
+   - Build about diagnostics text from the same snapshot data rendered by React,
+     not by querying `#about-diagnostics`.
+   - Delete hidden `aboutDialog`, `aboutDiagnostics`, `infoDialog`,
+     `infoDialogBody`, and `infoActionGroup` ownership from `runtimeBridge.ts`.
+   - Add tests for info rows/actions, about diagnostics copy text, close/focus
+     behaviour, and no password leakage in dialog snapshots.
+
+6. Replace context-menu HTML strings with typed menu snapshots.
+   - Replace `ZManagerContextMenuSnapshot.html` with typed menu sections/items:
+     label, command/action id, payload, disabled reason, checked state, role,
+     separator, submenu if needed, and keyboard metadata.
+   - Render menu items in React without `dangerouslySetInnerHTML`.
+   - Delete HTML attribute payload decoding as the primary command path.
+   - Add tests covering archive row menus, empty archive menus, column menus,
+     create source menus, add-source menus, disabled states, checked states, and
+     keyboard navigation.
+
+7. Delete `src/ui/createWorkspaceView.ts`.
+   - Port any remaining source-list, create-plan summary, destination history,
+     option-control, and compress-source table behaviour into React components
+     or app workspace snapshots.
+   - Remove all imports of `createWorkspaceView.ts` from `runtimeBridge.ts`.
+   - Delete the file and its legacy-focused tests, replacing them with React
+     component or workspace tests at the public seam.
+
+8. Delete `src/ui/archiveWorkspaceView.ts`.
+   - Port remaining archive details, tree, path crumbs, browse table, selection,
+     empty state, and status rendering into React components or app workspace
+     snapshots.
+   - Remove all imports of `archiveWorkspaceView.ts` from `runtimeBridge.ts`.
+   - Delete the file and its legacy-focused tests, replacing them with React
+     component or workspace tests at the public seam.
+
+9. Move runtime event wiring out of hidden DOM.
+   - Window chrome events should live in React shell components or desktop
+     adapters.
+   - Archive tree/table/path/search events should live in React archive
+     components and dispatch typed archive intents.
+   - Create tree/table/source/destination/options events should live in React
+     create components and dispatch typed create intents.
+   - Global document listeners should be limited to named React interaction
+     adapters for keyboard shortcuts, drag/drop, pointer tracking, focus, or
+     resize mechanics.
+
+10. Delete the hidden runtime root.
+    - Remove `<div id="zmanager-runtime-bridge-root" />` from `AppShell`.
+    - Remove `appRoot.innerHTML`, hidden DOM queries, and `privatizeLegacy*`.
+    - Remove CSS that exists only for hidden legacy scaffolding after React
+      screenshot/Playwright checks prove visible surfaces still render.
+    - Add a browser smoke test that boots with no
+      `#zmanager-runtime-bridge-root`.
+
+11. Split or delete `src/runtimeBridge.ts`.
+    - If it remains, keep it under 150 lines and limit it to exporting
+      `getZManagerRuntimeAdapter()` by delegating to deeper runtime modules.
+    - Move startup, controller composition, command execution, quick actions,
+      jobs, desktop effects, path history, preferences, and snapshot publication
+      into named modules with injected adapters and tests.
+    - If deleting it only requires changing one import, delete it.
+
+12. Finish styling/component ownership intentionally.
+    - Decide whether this cleanup also requires converting the app to
+      Tailwind/shadcn component composition or whether the native desktop CSS
+      layer remains an explicit product decision.
+    - If Tailwind/shadcn is required, migrate repeated controls to local
+      shadcn-style primitives and remove unused legacy CSS selectors as each
+      surface moves.
+    - If native CSS remains, document that Tailwind/shadcn is not the source of
+      truth for the whole UI and remove misleading migration claims.
+
+13. Add final guardrails.
+    - Forbid `zmanager-runtime-bridge-root`, `appRoot.innerHTML`,
+      `privatizeLegacy`, and live imports of `archiveWorkspaceView.ts` or
+      `createWorkspaceView.ts`.
+    - Forbid `dangerouslySetInnerHTML` in `src/ui/react`.
+    - Forbid broad `innerHTML` in runtime/app/controller modules.
+    - Forbid direct Tauri imports outside `src/api` and `src/desktop`.
+    - Forbid controller imports from React UI modules.
+    - Add a password-safety scan/test for snapshots, storage, diagnostics, and
+      logs.
+
+14. Run and record final validation.
+    - `npm run test:frontend`
+    - `npm run build`
+    - `npm run ast:lint`
+    - `npm run test:e2e`
+    - `cd src-tauri && cargo check`
+    - `cd src-tauri && cargo test`
+    - Record any command that cannot run with the exact environment reason and
+      the residual risk.
+
 ## Phase 0: Audit And Guardrails
 
 Goal: make the remaining legacy paths visible and prevent new ones.
@@ -260,6 +425,15 @@ Deletion gate:
 - Remove hidden create password reads from `createStartController` setup.
 - Remove extract hidden-control sync functions.
 
+Status 2026-07-10: partially complete for extract. `createExtractStartController`
+now receives explicit `ExtractStartInput` in `startExtract(mode, input)`, the
+runtime bridge no longer configures a controller `readInput` callback, and React
+extract submit/browse no longer writes form state into hidden extract controls.
+The legacy extract dialog still uses hidden controls for its own direct button
+and keyboard paths, and `currentReactExtractDialogSnapshot` /
+`syncReactExtractDialogSnapshot` remain until the full dialog-state module
+replaces that ownership path.
+
 ## Phase 2: Snapshot-Only Info And About Dialogs
 
 Goal: make info/about snapshots the only dialog content source.
@@ -360,6 +534,12 @@ Deletion gate:
   `showContextMenu(x, y, items)`.
 - Remove `dangerouslySetInnerHTML`.
 - Remove string context menu builders from `runtimeBridge.ts`.
+
+Status 2026-07-10: complete for the live React context-menu path. Context menu
+snapshots now carry typed `ContextMenuModelItem` rows from
+`src/app/commands/contextMenuModel.ts`; `ContextMenuRoot` renders those rows
+without `dangerouslySetInnerHTML`; `decodeContextMenuAction` was deleted; and
+`src/app/guiLayoutContracts.test.ts` now guards the typed snapshot seam.
 
 ## Phase 4: Create Workspace Deepening
 

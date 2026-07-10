@@ -41,6 +41,14 @@ import {
   type CommandRouterPayload,
 } from "./app/commands/commandRouter";
 import {
+  contextMenuAction,
+  contextMenuCaption,
+  contextMenuCheckbox,
+  contextMenuSeparator,
+  type ContextMenuActionPayload,
+  type ContextMenuModelItem,
+} from "./app/commands/contextMenuModel";
+import {
   createArchiveLoadController,
   type ArchiveLoadOptions,
 } from "./app/controllers/archiveLoadController";
@@ -62,6 +70,7 @@ import {
 } from "./app/controllers/createStartController";
 import {
   createExtractStartController,
+  type ExtractStartInput,
 } from "./app/controllers/extractStartController";
 import {
   createJobControlController,
@@ -341,9 +350,6 @@ import {
 import {
   createModalController,
 } from "./ui/modalController";
-import {
-  type ContextMenuActionPayload,
-} from "./ui/contextMenuHelpers";
 type BrowserRow = ArchiveTableRow;
 type SelectableBrowserRow = Extract<BrowserRow, { rowType: "folder" | "entry" }>;
 type ArchiveTreeFolder = {
@@ -1399,26 +1405,6 @@ const archivePreviewController = createArchivePreviewController({
 const extractStartController = createExtractStartController({
   workspace: archiveWorkspace,
   hasCurrentArchive: () => Boolean(currentArchivePath),
-  readInput: (mode) => {
-    const destination = resolveExtractDestination(extractDestinationInput.value);
-    const entryReferences = archiveWorkspace.getExtractReferencePaths(mode);
-    const stripComponentsBase = toNumberOrUndefined(browseStripInput.value) ?? 0;
-    const pathMode = getExtractPathMode();
-    const deduplicateRoot = extractDeduplicateRootCheckbox.checked;
-    return {
-      destination,
-      destinationValid: isExtractDestinationValid(),
-      overwrite: getOverwritePolicyValue(),
-      stripComponents: resolveExtractStripComponents(
-        stripComponentsBase,
-        pathMode,
-        [...entryReferences],
-        deduplicateRoot,
-      ),
-      password: browsePasswordInput.value.trim() || undefined,
-      entryReferences,
-    };
-  },
   startExtract: runStartExtract,
   toCommandError: asCommandError,
   requestPasswordInDialog: requestExtractPasswordInDialog,
@@ -2880,13 +2866,13 @@ function publishReactSnapshot() {
   }
 }
 
-function showContextMenu(x: number, y: number, html: string) {
+function showContextMenu(x: number, y: number, items: readonly ContextMenuModelItem[]) {
   reactContextMenuSnapshot = {
     visible: true,
     id: reactContextMenuSequence += 1,
     x,
     y,
-    html,
+    items: [...items],
   };
   publishReactSnapshot();
 }
@@ -3023,10 +3009,7 @@ function handleReactCreateIntent(intent: ZManagerCreateIntent) {
     case "showAddSourcesMenu":
       contextEntryPath = "";
       contextSourcePath = "";
-      showContextMenu(intent.x, intent.y, `
-        <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">${escapeHtml(message("command.filesWithEllipsis"))}</span></button>
-        <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">${escapeHtml(message("command.folderWithEllipsis"))}</span></button>
-      `);
+      showContextMenu(intent.x, intent.y, addSourcesContextMenuItems());
       break;
     case "clearSources":
       clearCreateSources();
@@ -3234,18 +3217,20 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       openExtractHereDialog(intent.mode);
       break;
     case "submitExtract":
-      writeReactExtractFormToLegacyControls(intent);
       activeExtractMode = intent.mode;
-      browsePasswordInput.value = intent.password.trim();
-      syncExtractDialogState();
-      void startExtract(intent.mode);
+      void extractStartController.startExtract(intent.mode, extractStartInputFromFormValues(intent.mode, {
+        destination: intent.destination,
+        useSubfolder: intent.useSubfolder,
+        subfolder: intent.subfolder,
+        pathMode: normalizeExtractPathMode(intent.pathMode),
+        overwrite: normalizeOverwritePolicyValue(intent.overwrite),
+        stripComponents: intent.stripComponents,
+        deduplicateRoot: intent.deduplicateRoot,
+        password: intent.password,
+      }));
       break;
     case "browseExtractDestination":
-      writeReactExtractFormToLegacyControls(intent);
-      syncExtractDialogState();
-      void onSelectDestinationForExtract().finally(() => {
-        syncReactExtractDialogSnapshot();
-      });
+      void onSelectDestinationForReactExtractForm(intent);
       break;
     case "preferences":
       openPreferencesDialog();
@@ -4367,6 +4352,16 @@ function updateCreatePlanOptionsFromControls() {
 }
 
 type ExtractPathMode = "full" | "current" | "none";
+type ExtractFormValues = Readonly<{
+  destination: string;
+  useSubfolder: boolean;
+  subfolder: string;
+  pathMode: ExtractPathMode;
+  overwrite: ExtractStartInput["overwrite"];
+  stripComponents: string;
+  deduplicateRoot: boolean;
+  password?: string;
+}>;
 
 function recordExtractDestinationHistory(destination: string): void {
   archiveOpenController.recordExtractDestinationHistory(destination);
@@ -4403,6 +4398,10 @@ function getExtractPathMode(): ExtractPathMode {
   return value === "current" || value === "none" ? value : "full";
 }
 
+function normalizeExtractPathMode(value: string): ExtractPathMode {
+  return value === "current" || value === "none" ? value : "full";
+}
+
 function getCurrentArchiveFolderDepth(): number {
   const normalizedFolder = normalizeFolderPath(currentArchiveFolder);
   return normalizedFolder ? normalizedFolder.split("/").filter(Boolean).length : 0;
@@ -4423,16 +4422,59 @@ function hasSingleRootFolder(entryPaths: string[]): boolean {
   return root ? normalized.every((parts) => parts[0] === root) : false;
 }
 
-function resolveExtractDestination(baseDestination: string): string {
-  if (!extractUseSubfolderCheckbox.checked) {
+function resolveExtractDestinationFromValues(
+  baseDestination: string,
+  useSubfolder: boolean,
+  subfolderValue: string,
+): string {
+  if (!useSubfolder) {
     return baseDestination.trim();
   }
-  const subfolder = extractSubfolderInput.value.trim();
+  const subfolder = subfolderValue.trim();
   return subfolder ? joinNativePath(baseDestination.trim(), subfolder) : baseDestination.trim();
+}
+
+function resolveExtractDestination(baseDestination: string): string {
+  return resolveExtractDestinationFromValues(
+    baseDestination,
+    extractUseSubfolderCheckbox.checked,
+    extractSubfolderInput.value,
+  );
 }
 
 function isExtractDestinationValid(): boolean {
   return extractDestinationInput.value.trim().length > 0;
+}
+
+function extractStartInputFromFormValues(mode: ExtractMode, form: ExtractFormValues): ExtractStartInput {
+  const entryReferences = archiveWorkspace.getExtractReferencePaths(mode);
+  const stripComponentsBase = toNumberOrUndefined(form.stripComponents) ?? 0;
+  return {
+    destination: resolveExtractDestinationFromValues(form.destination, form.useSubfolder, form.subfolder),
+    destinationValid: form.destination.trim().length > 0,
+    overwrite: form.overwrite,
+    stripComponents: resolveExtractStripComponents(
+      stripComponentsBase,
+      form.pathMode,
+      [...entryReferences],
+      form.deduplicateRoot,
+    ),
+    password: form.password?.trim() || undefined,
+    entryReferences,
+  };
+}
+
+function extractStartInputFromLegacyControls(mode: ExtractMode): ExtractStartInput {
+  return extractStartInputFromFormValues(mode, {
+    destination: extractDestinationInput.value,
+    useSubfolder: extractUseSubfolderCheckbox.checked,
+    subfolder: extractSubfolderInput.value,
+    pathMode: getExtractPathMode(),
+    overwrite: getOverwritePolicyValue(),
+    stripComponents: browseStripInput.value,
+    deduplicateRoot: extractDeduplicateRootCheckbox.checked,
+    password: browsePasswordInput.value,
+  });
 }
 
 function extractDialogMessageForMode(mode: ExtractMode): string {
@@ -4527,7 +4569,10 @@ function resolveExtractStripComponents(
 }
 
 function getOverwritePolicyValue(): "refuse" | "replace" | "rename" | "ask" {
-  const value = browseOverwriteSelect.value;
+  return normalizeOverwritePolicyValue(browseOverwriteSelect.value);
+}
+
+function normalizeOverwritePolicyValue(value: string): "refuse" | "replace" | "rename" | "ask" {
   if (value === "replace" || value === "rename" || value === "ask") {
     return value;
   }
@@ -4742,6 +4787,29 @@ function currentReactExtractDialogSnapshot(
   };
 }
 
+function reactExtractDialogSnapshotFromFormValues(
+  mode: ExtractMode,
+  form: Omit<ExtractFormValues, "password">,
+  messageText = extractDialogMessage.textContent || extractDialogMessageForMode(mode),
+): Extract<ZManagerDialogSnapshot, { kind: "extract" }> {
+  return {
+    kind: "extract",
+    mode,
+    title: message(mode === "selection" ? "extract.selectedTitle" : "extract.archiveTitle"),
+    message: messageText,
+    startLabel: message(mode === "selection" ? "extract.selectedAction" : "extract.allAction"),
+    destination: form.destination,
+    destinationHistory: [...pathHistoryStore.getSnapshot().extractDestinationHistory],
+    useSubfolder: form.useSubfolder,
+    subfolder: form.subfolder,
+    pathMode: form.pathMode,
+    overwrite: form.overwrite,
+    stripComponents: form.stripComponents,
+    deduplicateRoot: form.deduplicateRoot,
+    passwordPromptOpen: extractPasswordOptions.open,
+  };
+}
+
 function syncReactExtractDialogSnapshot(
   messageText = extractDialogMessage.textContent || extractDialogMessageForMode(activeExtractMode),
 ) {
@@ -4750,17 +4818,6 @@ function syncReactExtractDialogSnapshot(
   }
 
   setReactDialogSnapshot(currentReactExtractDialogSnapshot(activeExtractMode, messageText));
-}
-
-function writeReactExtractFormToLegacyControls(input: Extract<ZManagerDialogIntent, { type: "submitExtract" | "browseExtractDestination" }>) {
-  extractDestinationInput.value = input.destination;
-  extractUseSubfolderCheckbox.checked = input.useSubfolder;
-  extractSubfolderInput.value = input.subfolder;
-  extractSubfolderInput.disabled = !input.useSubfolder;
-  extractPathModeSelect.value = input.pathMode;
-  browseOverwriteSelect.value = input.overwrite;
-  browseStripInput.value = input.stripComponents;
-  extractDeduplicateRootCheckbox.checked = input.deduplicateRoot;
 }
 
 function activateDialogDefault(event: KeyboardEvent, dialog: HTMLElement): boolean {
@@ -5351,25 +5408,25 @@ function showStartupContextMenu(x: number, y: number) {
   contextSourcePath = "";
   const canPastePath = canReadClipboard();
   const { recentArchiveHistory } = pathHistoryStore.getSnapshot();
-  const pastePath = canPastePath
-    ? `<button type="button" role="menuitem" data-context-action="paste-archive-path"><span class="context-menu-label">${escapeHtml(message("command.pastePath"))}</span></button>`
-    : "";
-  const recentRows = recentArchiveHistory.length
-    ? `
-      <div class="context-menu-separator" role="separator"></div>
-      <div class="context-menu-caption">${escapeHtml(message("command.openRecent"))}</div>
-      ${recentArchiveHistory.slice(0, 4).map((archivePath) => `
-        <button type="button" role="menuitem" data-context-action="open-recent-archive" data-archive-path="${escapeHtml(archivePath)}">
-          <span class="context-menu-label">${escapeHtml(middleTruncateDetailValue(archivePath, 46))}</span>
-        </button>
-      `).join("")}
-    `
-    : "";
-  showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-archive"><span class="context-menu-label">${escapeHtml(displayContext.translator.t("browse.emptyOpenAction"))}</span></button>
-    ${pastePath}
-    ${recentRows}
-  `);
+  const items: ContextMenuModelItem[] = [
+    contextMenuAction(displayContext.translator.t("browse.emptyOpenAction"), { action: "open-archive" }),
+  ];
+  if (canPastePath) {
+    items.push(contextMenuAction(message("command.pastePath"), { action: "paste-archive-path" }));
+  }
+  if (recentArchiveHistory.length) {
+    items.push(
+      contextMenuSeparator(),
+      contextMenuCaption(message("command.openRecent")),
+      ...recentArchiveHistory.slice(0, 4).map((archivePath) =>
+        contextMenuAction(middleTruncateDetailValue(archivePath, 46), {
+          action: "open-recent-archive",
+          archivePath,
+        }),
+      ),
+    );
+  }
+  showContextMenu(x, y, items);
 }
 
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
@@ -5377,23 +5434,23 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
   contextSourcePath = "";
   const selectedPaths = getSelectedEntryPaths();
   if (selectedPaths.length > 1) {
-    showContextMenu(x, y, `
-      <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("extract.selectedAction"))}</span></button>
-      <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
-      <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
-      <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
-    `);
+    showContextMenu(x, y, [
+      contextMenuAction(message("extract.selectedAction"), { action: "extract" }),
+      contextMenuAction(message("command.extractHere"), { action: "extract-here" }),
+      contextMenuAction(message("test.selectedAction"), { action: "test" }, { disabled: !currentArchivePath }),
+      contextMenuAction(message("command.properties"), { action: "info" }),
+    ]);
     return;
   }
 
-  showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="open-folder" data-folder-path="${escapeHtml(folderPath)}"><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
-    ${entryPath ? `<button type="button" role="menuitem" data-context-action="open-inside"><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>` : ""}
-    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.test"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
-  `);
+  showContextMenu(x, y, [
+    contextMenuAction(message("command.openFolder"), { action: "open-folder", folderPath }),
+    ...(entryPath ? [contextMenuAction(message("command.openInside"), { action: "open-inside" })] : []),
+    contextMenuAction(message("command.extractWithEllipsis"), { action: "extract" }),
+    contextMenuAction(message("command.extractHere"), { action: "extract-here" }),
+    contextMenuAction(message("command.test"), { action: "test" }, { disabled: !currentArchivePath }),
+    contextMenuAction(message("command.properties"), { action: "info" }),
+  ]);
 }
 
 function showEntryContextMenu(entryPath: string, x: number, y: number) {
@@ -5409,30 +5466,28 @@ function showEntryContextMenu(entryPath: string, x: number, y: number) {
   const entry = getEntryByPath(entryPath);
   const canOpenInside = entry?.kind === "directory";
   const hasSingleSelection = getSelectedEntryPaths().length === 1;
-  const optionalOpenOutside = hasSingleSelection && entry?.kind !== "directory"
-    ? `<button type="button" role="menuitem" data-context-action="open-outside"><span class="context-menu-label">${escapeHtml(message("command.openOutside"))}</span></button>`
-    : "";
-  const singleSelectionMenu = `
-    <button type="button" role="menuitem" data-context-action="open-entry"><span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span></button>
-    ${canOpenInside ? `<button type="button" role="menuitem" data-context-action="open-inside"><span class="context-menu-label">${escapeHtml(message("command.openInside"))}</span></button>` : ""}
-    ${optionalOpenOutside}
-    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("command.extractWithEllipsis"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
-  `;
-  const multiSelectionMenu = `
-    <button type="button" role="menuitem" data-context-action="extract"><span class="context-menu-label">${escapeHtml(message("extract.selectedAction"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="extract-here"><span class="context-menu-label">${escapeHtml(message("command.extractHere"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="test" ${!currentArchivePath ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("test.selectedAction"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="info"><span class="context-menu-label">${escapeHtml(message("command.properties"))}</span></button>
-  `;
-  showContextMenu(x, y, `
-    ${hasSingleSelection ? singleSelectionMenu : multiSelectionMenu}
-    <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="select-by-type"><span class="context-menu-label">${escapeHtml(message("command.selectByType"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="deselect-by-type" ${selectedEntries.size === 0 ? "disabled" : ""}><span class="context-menu-label">${escapeHtml(message("command.deselectByType"))}</span></button>
-  `);
+  const selectionItems: ContextMenuModelItem[] = hasSingleSelection
+    ? [
+        contextMenuAction(message("command.openFolder"), { action: "open-entry" }),
+        ...(canOpenInside ? [contextMenuAction(message("command.openInside"), { action: "open-inside" })] : []),
+        ...(entry?.kind !== "directory" ? [contextMenuAction(message("command.openOutside"), { action: "open-outside" })] : []),
+        contextMenuAction(message("command.extractWithEllipsis"), { action: "extract" }),
+        contextMenuAction(message("command.extractHere"), { action: "extract-here" }),
+        contextMenuAction(message("test.selectedAction"), { action: "test" }, { disabled: !currentArchivePath }),
+        contextMenuAction(message("command.properties"), { action: "info" }),
+      ]
+    : [
+        contextMenuAction(message("extract.selectedAction"), { action: "extract" }),
+        contextMenuAction(message("command.extractHere"), { action: "extract-here" }),
+        contextMenuAction(message("test.selectedAction"), { action: "test" }, { disabled: !currentArchivePath }),
+        contextMenuAction(message("command.properties"), { action: "info" }),
+      ];
+  showContextMenu(x, y, [
+    ...selectionItems,
+    contextMenuSeparator(),
+    contextMenuAction(message("command.selectByType"), { action: "select-by-type" }),
+    contextMenuAction(message("command.deselectByType"), { action: "deselect-by-type" }, { disabled: selectedEntries.size === 0 }),
+  ]);
 }
 
 function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: ArchiveTableColumnId) {
@@ -5444,72 +5499,44 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
   const selectedColumnIndex = selectedColumnId
     ? visibleColumnOrder.indexOf(selectedColumnId)
     : -1;
-  const selectedColumnMenu = selectedColumn ? `
-    <div class="context-menu-caption">${escapeHtml(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, displayContext.translator) }))}</div>
-    <button type="button" role="menuitem" data-context-action="sort-ascending" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">${escapeHtml(message("command.sortAscending"))}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="sort-descending" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">${escapeHtml(message("command.sortDescending"))}</span>
-    </button>
-    <div class="context-menu-separator" role="separator"></div>
-    <button
-      type="button"
-      role="menuitem"
-      data-context-action="move-column-left"
-      data-column-id="${escapeHtml(selectedColumn.id)}"
-      ${selectedColumn.id === "name" || selectedColumnIndex <= 1 ? "disabled" : ""}
-    >
-      <span class="context-menu-label">${escapeHtml(message("command.moveLeft"))}</span>
-    </button>
-    <button
-      type="button"
-      role="menuitem"
-      data-context-action="move-column-right"
-      data-column-id="${escapeHtml(selectedColumn.id)}"
-      ${selectedColumn.id === "name" || selectedColumnIndex < 1 || selectedColumnIndex >= visibleColumnOrder.length - 1 ? "disabled" : ""}
-    >
-      <span class="context-menu-label">${escapeHtml(message("command.moveRight"))}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="narrow-column" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">${escapeHtml(message("command.narrower"))}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="widen-column" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">${escapeHtml(message("command.wider"))}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="reset-column-width" data-column-id="${escapeHtml(selectedColumn.id)}">
-      <span class="context-menu-label">${escapeHtml(message("command.resetWidth"))}</span>
-    </button>
-    <div class="context-menu-separator" role="separator"></div>
-  ` : "";
+  const selectedColumnMenu: ContextMenuModelItem[] = selectedColumn ? [
+    contextMenuCaption(message("detail.columnCaption", { label: archiveTableColumnLabel(selectedColumn, displayContext.translator) })),
+    contextMenuAction(message("command.sortAscending"), { action: "sort-ascending", columnId: selectedColumn.id }),
+    contextMenuAction(message("command.sortDescending"), { action: "sort-descending", columnId: selectedColumn.id }),
+    contextMenuSeparator(),
+    contextMenuAction(message("command.moveLeft"), { action: "move-column-left", columnId: selectedColumn.id }, {
+      disabled: selectedColumn.id === "name" || selectedColumnIndex <= 1,
+    }),
+    contextMenuAction(message("command.moveRight"), { action: "move-column-right", columnId: selectedColumn.id }, {
+      disabled: selectedColumn.id === "name" || selectedColumnIndex < 1 || selectedColumnIndex >= visibleColumnOrder.length - 1,
+    }),
+    contextMenuAction(message("command.narrower"), { action: "narrow-column", columnId: selectedColumn.id }),
+    contextMenuAction(message("command.wider"), { action: "widen-column", columnId: selectedColumn.id }),
+    contextMenuAction(message("command.resetWidth"), { action: "reset-column-width", columnId: selectedColumn.id }),
+    contextMenuSeparator(),
+  ] : [];
 
   const menuRows = ARCHIVE_TABLE_COLUMNS.map((column) => {
     const isNameColumn = column.id === "name";
     const checked = isNameColumn || tableColumnSettings.visibleColumnIds.includes(column.id);
-    return `
-      <button
-        type="button"
-        class="context-check-item"
-        role="menuitemcheckbox"
-        aria-checked="${checked ? "true" : "false"}"
-        data-context-action="toggle-column"
-        data-column-id="${escapeHtml(column.id)}"
-        ${isNameColumn ? 'disabled aria-disabled="true"' : ""}
-      >
-        <span class="context-check" aria-hidden="true"></span>
-        <span class="context-menu-label">${escapeHtml(archiveTableColumnLabel(column, displayContext.translator))}</span>
-      </button>
-    `;
-  }).join("");
+    return contextMenuCheckbox(
+      archiveTableColumnLabel(column, displayContext.translator),
+      { action: "toggle-column", columnId: column.id },
+      checked,
+      { disabled: isNameColumn },
+    );
+  });
 
   showContextMenu(
     x,
     y,
-    `${selectedColumnMenu}
-      <button type="button" role="menuitem" data-context-action="reset-columns"><span class="context-menu-label">${escapeHtml(message("command.resetColumns"))}</span></button>
-      <div class="context-menu-separator" role="separator"></div>
-      <div class="context-menu-caption">${escapeHtml(message("command.chooseColumns"))}</div>${menuRows}
-    `,
+    [
+      ...selectedColumnMenu,
+      contextMenuAction(message("command.resetColumns"), { action: "reset-columns" }),
+      contextMenuSeparator(),
+      contextMenuCaption(message("command.chooseColumns")),
+      ...menuRows,
+    ],
   );
 }
 
@@ -5537,49 +5564,45 @@ function showCompressRowContextMenu(row: HTMLTableRowElement, x: number, y: numb
   contextEntryPath = "";
   contextSourcePath = sourcePath;
 
-  showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="compress-open-folder" data-folder-path="${escapeHtml(folderPath ?? "")}" ${folderPath === undefined ? "disabled" : ""}>
-      <span class="context-menu-label">${escapeHtml(message("command.openFolder"))}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="reveal-source" ${sourcePath ? "" : "disabled"}>
-      <span class="context-menu-label">${escapeHtml(message("command.revealInFileManager"))}</span>
-    </button>
-    <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="include-compress-path" data-compress-menu-path="${escapeHtml(rowPath)}" ${canInclude ? "" : "disabled"}>
-      <span class="context-menu-label">${escapeHtml(includeLabel)}</span>
-    </button>
-    <button type="button" role="menuitem" data-context-action="exclude-compress-path" data-compress-menu-path="${escapeHtml(rowPath)}" ${canExclude ? "" : "disabled"}>
-      <span class="context-menu-label">${escapeHtml(excludeLabel)}</span>
-    </button>
-    <div class="context-menu-separator" role="separator"></div>
-    ${removableSourcePaths.length ? `<button type="button" role="menuitem" data-context-action="remove-source">
-      <span class="context-menu-label">${escapeHtml(removeLabel)}</span>
-    </button>` : ""}
-    <button type="button" role="menuitem" data-context-action="clear-sources" ${syncCreateSourcesFromWorkspace().hasSources ? "" : "disabled"}>
-      <span class="context-menu-label">${escapeHtml(message("command.clearAllSources"))}</span>
-    </button>
-  `);
+  showContextMenu(x, y, [
+    contextMenuAction(message("command.openFolder"), { action: "compress-open-folder", folderPath: folderPath ?? "" }, {
+      disabled: folderPath === undefined,
+    }),
+    contextMenuAction(message("command.revealInFileManager"), { action: "reveal-source" }, { disabled: !sourcePath }),
+    contextMenuSeparator(),
+    contextMenuAction(includeLabel, { action: "include-compress-path", compressMenuPath: rowPath }, { disabled: !canInclude }),
+    contextMenuAction(excludeLabel, { action: "exclude-compress-path", compressMenuPath: rowPath }, { disabled: !canExclude }),
+    contextMenuSeparator(),
+    ...(removableSourcePaths.length ? [contextMenuAction(removeLabel, { action: "remove-source" })] : []),
+    contextMenuAction(message("command.clearAllSources"), { action: "clear-sources" }, {
+      disabled: !syncCreateSourcesFromWorkspace().hasSources,
+    }),
+  ]);
 }
 
 function showSourceContextMenu(sourcePath: string, x: number, y: number) {
   contextEntryPath = "";
   contextSourcePath = sourcePath;
-  showContextMenu(x, y, `
-    <button type="button" role="menuitem" data-context-action="reveal-source">${escapeHtml(message("command.revealInFileManager"))}</button>
-    <button type="button" role="menuitem" data-context-action="remove-source">${escapeHtml(message("command.removeSource"))}</button>
-    <div class="context-menu-separator" role="separator"></div>
-    <button type="button" role="menuitem" data-context-action="clear-sources">${escapeHtml(message("command.clearAllSources"))}</button>
-  `);
+  showContextMenu(x, y, [
+    contextMenuAction(message("command.revealInFileManager"), { action: "reveal-source" }),
+    contextMenuAction(message("command.removeSource"), { action: "remove-source" }),
+    contextMenuSeparator(),
+    contextMenuAction(message("command.clearAllSources"), { action: "clear-sources" }),
+  ]);
 }
 
 function showAddSourcesMenu(anchor: HTMLElement) {
   const rect = anchor.getBoundingClientRect();
   contextEntryPath = "";
   contextSourcePath = "";
-  showContextMenu(rect.left, rect.bottom + 4, `
-    <button type="button" role="menuitem" data-context-action="add-source-files"><span class="context-menu-label">${escapeHtml(message("command.filesWithEllipsis"))}</span></button>
-    <button type="button" role="menuitem" data-context-action="add-source-folder"><span class="context-menu-label">${escapeHtml(message("command.folderWithEllipsis"))}</span></button>
-  `);
+  showContextMenu(rect.left, rect.bottom + 4, addSourcesContextMenuItems());
+}
+
+function addSourcesContextMenuItems(): readonly ContextMenuModelItem[] {
+  return [
+    contextMenuAction(message("command.filesWithEllipsis"), { action: "add-source-files" }),
+    contextMenuAction(message("command.folderWithEllipsis"), { action: "add-source-folder" }),
+  ];
 }
 
 function handleContextMenuAction(payload: ContextMenuActionPayload) {
@@ -6572,8 +6595,32 @@ async function onSelectDestinationForExtract() {
   extractDestinationInput.focus();
 }
 
+async function onSelectDestinationForReactExtractForm(
+  input: Extract<ZManagerDialogIntent, { type: "browseExtractDestination" }>,
+) {
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseExtractDestination"),
+    directory: true,
+    multiple: false,
+  });
+
+  if (!selected || typeof selected !== "string") {
+    return;
+  }
+
+  setReactDialogSnapshot(reactExtractDialogSnapshotFromFormValues(activeExtractMode, {
+    destination: selected,
+    useSubfolder: input.useSubfolder,
+    subfolder: input.subfolder,
+    pathMode: normalizeExtractPathMode(input.pathMode),
+    overwrite: normalizeOverwritePolicyValue(input.overwrite),
+    stripComponents: input.stripComponents,
+    deduplicateRoot: input.deduplicateRoot,
+  }));
+}
+
 async function startExtract(destinationMode: ExtractMode) {
-  await extractStartController.startExtract(destinationMode);
+  await extractStartController.startExtract(destinationMode, extractStartInputFromLegacyControls(destinationMode));
 }
 
 async function onPreviewSelectedEntry() {
