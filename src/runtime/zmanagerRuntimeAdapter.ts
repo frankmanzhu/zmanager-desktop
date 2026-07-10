@@ -202,9 +202,7 @@ import {
 import {
   createZManagerReactSnapshot,
   displaySnapshotFromContext,
-  type ZManagerArchiveIntent,
   type ZManagerContextMenuIntent,
-  type ZManagerCreateIntent,
   type ZManagerDesktopIntent,
   type ZManagerDialogIntent,
   type ZManagerDialogSnapshot,
@@ -300,6 +298,22 @@ import {
 import {
   createReactRuntimeStore,
 } from "./reactRuntimeStore";
+import {
+  createArchiveRuntimeActions,
+} from "./archiveRuntimeActions";
+import {
+  createCreateRuntimeActions,
+} from "./createRuntimeActions";
+import type {
+  ArchiveFixture,
+} from "./runtimeArchiveFixtures";
+import {
+  installRuntimeDevTools,
+  loadLocalDevFixtureFromUrl as loadRuntimeLocalDevFixtureFromUrl,
+} from "./runtimeDevTools";
+import {
+  startZManagerRuntime,
+} from "./runtimeStartup";
 type SelectableBrowserRow = Extract<ArchiveTableRow, { rowType: "folder" | "entry" }>;
 type CompressPlanRow = CreatePlanRow;
 type CommandSurfaceClassState = Partial<Record<CommandId, {
@@ -307,29 +321,6 @@ type CommandSurfaceClassState = Partial<Record<CommandId, {
   secondary?: boolean;
 }>>;
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
-type ArchiveFixture = {
-  archivePath: string;
-  entries: ArchiveEntryDto[];
-  entryCount?: number;
-  totalSize?: number;
-};
-
-type DevDialogName = "about" | "preferences" | "info" | "jobs";
-type DevJobFixture = JobState & {
-  outputActions?: JobOutputAction[];
-};
-
-declare global {
-  interface Window {
-    __zmanagerDev?: {
-      loadArchiveFixture: (fixture: ArchiveFixture) => void;
-      setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
-      setJobFixtures: (fixtures: DevJobFixture[]) => void;
-      openSurface: (surface: DevDialogName) => void;
-      closeModal: () => void;
-    };
-  }
-}
 
 const browserDocument = createBrowserDocumentAdapter({
   isDesktopRuntime,
@@ -372,6 +363,153 @@ const reactRuntimeStore = createReactRuntimeStore({
 });
 const contextMenuRuntime = createRuntimeContextMenu({
   publishSnapshot: () => reactRuntimeStore.publishSnapshot(),
+});
+const archiveRuntimeActions = createArchiveRuntimeActions({
+  navigateToFolder,
+  navigateBack,
+  navigateUp,
+  setSearchQuery: (query) => {
+    publishArchiveSnapshot(archiveWorkspace.setSearchQuery(query));
+  },
+  clearSearch,
+  setFlatView,
+  setColumnWidth: setTableColumnWidth,
+  toggleTreeFolder: (folderPath) => {
+    publishArchiveSnapshot(archiveWorkspace.toggleTreeFolder(folderPath));
+  },
+  sortByColumn: applySortCommand,
+  selectAllVisible: selectVisibleEntries,
+  clearSelection: clearBrowseSelection,
+  selectRow: (path, modifiers) => updateSelectionByIntent(path, modifiers),
+  setRowSelected: (path, selected) => {
+    applyArchiveTableSelection(setHierarchicalTablePathSelected({
+      ...currentArchiveTableSelectionState(),
+      path,
+      selected,
+    }));
+  },
+  hasActiveJob,
+  applySelection: (input) => {
+    applyArchiveTableSelection({
+      selectedPaths: new Set(input.selectedPaths),
+      focusedPath: input.focusedPath,
+      anchorPath: input.anchorPath,
+    });
+  },
+  runEntryDefaultAction: (path) => {
+    updateSelectionByIntent(path);
+    runRoutedCommand("view");
+  },
+  startNativeDrag: startNativeDragOut,
+  copyDetailsValue: copyTextToClipboard,
+  showEmptyContextMenu: showStartupContextMenu,
+  showColumnContextMenu: (columnId, x, y) => showTableHeaderContextMenu(x, y, columnId),
+  showFolderContextMenu: (path, x, y) => showFolderContextMenu(path, x, y, path),
+  showEntryContextMenu,
+  runDetailsAction: handleArchiveDetailsAction,
+});
+const createRuntimeActions = createCreateRuntimeActions({
+  showWorkspace: showCreateWorkspace,
+  showAddSourcesMenu: (x, y) => {
+    contextMenuRuntime.show(x, y, buildAddSourcesContextMenuItems(displayContext.translator));
+  },
+  clearSources: clearCreateSources,
+  removeSources: (sourcePaths) => removeCreateSources([...sourcePaths]),
+  showSourceContextMenu,
+  setDestinationPath: (destinationPath) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPath(destinationPath).snapshot);
+  },
+  browseDestination: onSelectCreateDestination,
+  changeFormat: (format) => {
+    const defaults = createDefaultsForFormat(appPreferences, format);
+    publishCreateWorkspaceSnapshot(createWorkspace.changeFormat(format, defaults).snapshot);
+    queuePlanRun();
+  },
+  setOptions: (patch) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setOptions(patch).snapshot);
+    queuePlanRun();
+  },
+  navigateToFolder: (folderPath) => {
+    const navigation = createWorkspace.navigateToFolder(folderPath);
+    if (navigation.changed) {
+      publishCreateWorkspaceSnapshot(navigation.snapshot);
+    } else {
+      publishReactSnapshot();
+    }
+  },
+  setSearchQuery: (query) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setSearchQuery(query));
+  },
+  clearSearch: () => {
+    publishCreateWorkspaceSnapshot(createWorkspace.clearSearch());
+  },
+  toggleTreeFolder: (folderPath) => {
+    const navigation = createWorkspace.toggleTreeFolder(folderPath);
+    if (navigation.changed) {
+      publishCreateWorkspaceSnapshot(navigation.snapshot);
+    } else {
+      publishReactSnapshot();
+    }
+  },
+  setPathIncluded: (path, included) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setPathIncluded(path, included).snapshot);
+  },
+  setAllIncluded: (included) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setAllPathsIncluded(included).snapshot);
+  },
+  setCurrentFolderIncluded: (included) => {
+    publishCreateWorkspaceSnapshot(
+      createWorkspace.setCurrentFolderIncluded(
+        createWorkspace.getSnapshot().view.currentFolder,
+        included,
+      ).snapshot,
+    );
+  },
+  selectRow: (intent) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.selectRow(intent.path, intent).snapshot);
+  },
+  applySelection: (input) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.updateSelection({
+      selectedPaths: new Set(input.selectedPaths),
+      focusedPath: input.focusedPath,
+      anchorPath: input.anchorPath,
+    }).snapshot);
+  },
+  toggleRowSelection: (path) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.toggleRowSelection(path).snapshot);
+  },
+  focusRow: (path) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.focusRow(path).snapshot);
+  },
+  removeSelectedSources: (fallbackSourcePath) => {
+    const selectedSourcePaths = selectedCompressSourcePaths();
+    const trimmedFallbackSourcePath = fallbackSourcePath?.trim();
+    removeCreateSources(
+      selectedSourcePaths.length > 0
+        ? selectedSourcePaths
+        : trimmedFallbackSourcePath
+          ? [trimmedFallbackSourcePath]
+          : [],
+    );
+    publishReactSnapshot();
+  },
+  showCompressRowContextMenu: (path, sourcePath, x, y) => {
+    if (visibleCompressRowForPath(path)) {
+      if (!createWorkspace.getSnapshot().selection.selectedPaths.includes(path)) {
+        publishCreateWorkspaceSnapshot(createWorkspace.ensureRowSelected(path).snapshot);
+      }
+      showCompressRowContextMenuForPath(path, sourcePath ?? "", x, y);
+    } else if (sourcePath) {
+      showSourceContextMenu(sourcePath, x, y);
+    }
+    publishReactSnapshot();
+  },
+  runCreate: (password, passwordConfirm) => runCreate({
+    passwordInput: {
+      password,
+      passwordConfirm,
+    },
+  }),
 });
 
 const appTimers = createAppTimers({
@@ -1345,7 +1483,7 @@ function currentSearchQuery(): string {
 function archiveListingFromFixture(listing: ArchiveFixture): ArchiveListingDto {
   return {
     archivePath: listing.archivePath,
-    entries: listing.entries,
+    entries: [...listing.entries],
     entryCount: typeof listing.entryCount === "number" ? listing.entryCount : listing.entries.length,
     ...(typeof listing.totalSize === "number" ? { totalSize: listing.totalSize } : {}),
   };
@@ -1596,231 +1734,6 @@ function publishReactSnapshot() {
   reactRuntimeStore.publishSnapshot();
 }
 
-function handleReactArchiveIntent(intent: ZManagerArchiveIntent) {
-  switch (intent.type) {
-    case "navigateToFolder":
-      navigateToFolder(intent.folderPath);
-      break;
-    case "navigateBack":
-      navigateBack();
-      break;
-    case "navigateUp":
-      navigateUp();
-      break;
-    case "setSearchQuery":
-      publishArchiveSnapshot(archiveWorkspace.setSearchQuery(intent.query));
-      break;
-    case "clearSearch":
-      clearSearch();
-      break;
-    case "setFlatView":
-      setFlatView(intent.flatView, Boolean(intent.persistPreference));
-      break;
-    case "setColumnWidth":
-      setTableColumnWidth(intent.columnId, intent.width, intent.persist);
-      break;
-    case "toggleTreeFolder":
-      publishArchiveSnapshot(archiveWorkspace.toggleTreeFolder(intent.folderPath));
-      break;
-    case "sortByColumn":
-      applySortCommand(intent.columnId);
-      break;
-    case "selectAllVisible":
-      selectVisibleEntries();
-      break;
-    case "clearSelection":
-      clearBrowseSelection();
-      break;
-    case "selectRow":
-      updateSelectionByIntent(intent.path, {
-        ctrl: intent.ctrlKey,
-        meta: intent.metaKey,
-        shift: intent.shiftKey,
-      });
-      break;
-    case "setRowSelected":
-      applyArchiveTableSelection(setHierarchicalTablePathSelected({
-        ...currentArchiveTableSelectionState(),
-        path: intent.path,
-        selected: intent.selected,
-      }));
-      break;
-    case "applySelection":
-      if (hasActiveJob()) {
-        break;
-      }
-      applyArchiveTableSelection({
-        selectedPaths: new Set(intent.selectedPaths),
-        focusedPath: intent.focusedPath,
-        anchorPath: intent.anchorPath,
-      });
-      break;
-    case "activateRow":
-      if (intent.rowKind === "folder" || intent.rowKind === "parent") {
-        navigateToFolder(intent.path);
-        break;
-      }
-      updateSelectionByIntent(intent.path);
-      runRoutedCommand("view");
-      break;
-    case "startNativeDrag":
-      if (!hasActiveJob()) {
-        void startNativeDragOut(intent.entryPath);
-      }
-      break;
-    case "copyDetailsValue":
-      void copyTextToClipboard(intent.value);
-      break;
-    case "showEmptyContextMenu":
-      showStartupContextMenu(intent.x, intent.y);
-      break;
-    case "showColumnContextMenu":
-      showTableHeaderContextMenu(intent.x, intent.y, intent.columnId);
-      break;
-    case "showRowContextMenu":
-      if (intent.rowKind === "folder" || intent.rowKind === "parent") {
-        showFolderContextMenu(intent.path, intent.x, intent.y, intent.path);
-      } else {
-        showEntryContextMenu(intent.path, intent.x, intent.y);
-      }
-      break;
-    case "runDetailsAction": {
-      if (intent.action === "clear-search") {
-        clearSearch();
-        break;
-      }
-      const routedCommand = selectDetailsCommand(intent.action);
-      if (routedCommand) {
-        runRoutedCommand(routedCommand.commandId, routedCommand.payload);
-      }
-      break;
-    }
-  }
-}
-
-function handleReactCreateIntent(intent: ZManagerCreateIntent) {
-  switch (intent.type) {
-    case "showWorkspace":
-      showCreateWorkspace();
-      break;
-    case "showAddSourcesMenu":
-      contextMenuRuntime.show(intent.x, intent.y, buildAddSourcesContextMenuItems(displayContext.translator));
-      break;
-    case "clearSources":
-      clearCreateSources();
-      break;
-    case "removeSources":
-      removeCreateSources([...intent.sourcePaths]);
-      break;
-    case "showSourceContextMenu":
-      showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
-      break;
-    case "setDestinationPath":
-      publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPath(intent.destinationPath).snapshot);
-      break;
-    case "browseDestination":
-      void onSelectCreateDestination();
-      break;
-    case "changeFormat": {
-      const defaults = createDefaultsForFormat(appPreferences, intent.format);
-      publishCreateWorkspaceSnapshot(createWorkspace.changeFormat(intent.format, defaults).snapshot);
-      queuePlanRun();
-      break;
-    }
-    case "setOptions":
-      publishCreateWorkspaceSnapshot(createWorkspace.setOptions(intent.patch).snapshot);
-      queuePlanRun();
-      break;
-    case "navigateToFolder": {
-      const navigation = createWorkspace.navigateToFolder(intent.folderPath);
-      if (navigation.changed) {
-        publishCreateWorkspaceSnapshot(navigation.snapshot);
-      } else {
-        publishReactSnapshot();
-      }
-      break;
-    }
-    case "setSearchQuery":
-      publishCreateWorkspaceSnapshot(createWorkspace.setSearchQuery(intent.query));
-      break;
-    case "clearSearch":
-      publishCreateWorkspaceSnapshot(createWorkspace.clearSearch());
-      break;
-    case "toggleTreeFolder": {
-      const navigation = createWorkspace.toggleTreeFolder(intent.folderPath);
-      if (navigation.changed) {
-        publishCreateWorkspaceSnapshot(navigation.snapshot);
-      } else {
-        publishReactSnapshot();
-      }
-      break;
-    }
-    case "setPathIncluded":
-      publishCreateWorkspaceSnapshot(createWorkspace.setPathIncluded(intent.path, intent.included).snapshot);
-      break;
-    case "setAllIncluded":
-      publishCreateWorkspaceSnapshot(createWorkspace.setAllPathsIncluded(intent.included).snapshot);
-      break;
-    case "setCurrentFolderIncluded":
-      publishCreateWorkspaceSnapshot(
-        createWorkspace.setCurrentFolderIncluded(
-          createWorkspace.getSnapshot().view.currentFolder,
-          intent.included,
-        ).snapshot,
-      );
-      break;
-    case "selectRow":
-      publishCreateWorkspaceSnapshot(createWorkspace.selectRow(intent.path, intent).snapshot);
-      break;
-    case "applySelection":
-      publishCreateWorkspaceSnapshot(createWorkspace.updateSelection({
-        selectedPaths: new Set(intent.selectedPaths),
-        focusedPath: intent.focusedPath,
-        anchorPath: intent.anchorPath,
-      }).snapshot);
-      break;
-    case "toggleRowSelection":
-      publishCreateWorkspaceSnapshot(createWorkspace.toggleRowSelection(intent.path).snapshot);
-      break;
-    case "focusRow":
-      publishCreateWorkspaceSnapshot(createWorkspace.focusRow(intent.path).snapshot);
-      break;
-    case "removeSelectedSources": {
-      const selectedSourcePaths = selectedCompressSourcePaths();
-      const fallbackSourcePath = intent.fallbackSourcePath?.trim();
-      removeCreateSources(
-        selectedSourcePaths.length > 0
-          ? selectedSourcePaths
-          : fallbackSourcePath
-            ? [fallbackSourcePath]
-            : [],
-      );
-      publishReactSnapshot();
-      break;
-    }
-    case "showCompressRowContextMenu": {
-      if (visibleCompressRowForPath(intent.path)) {
-        if (!createWorkspace.getSnapshot().selection.selectedPaths.includes(intent.path)) {
-          publishCreateWorkspaceSnapshot(createWorkspace.ensureRowSelected(intent.path).snapshot);
-        }
-        showCompressRowContextMenuForPath(intent.path, intent.sourcePath ?? "", intent.x, intent.y);
-      } else if (intent.sourcePath) {
-        showSourceContextMenu(intent.sourcePath, intent.x, intent.y);
-      }
-      publishReactSnapshot();
-      break;
-    }
-    case "runCreate":
-      void runCreate({
-        passwordInput: {
-          password: intent.password,
-          passwordConfirm: intent.passwordConfirm,
-        },
-      });
-      break;
-  }
-}
-
 function handleReactJobsIntent(intent: ZManagerJobsIntent) {
   switch (intent.type) {
     case "openDrawer":
@@ -1968,6 +1881,18 @@ function handleReactContextMenuIntent(intent: ZManagerContextMenuIntent) {
   contextMenuRuntime.handleIntent(intent, handleContextMenuAction);
 }
 
+function handleArchiveDetailsAction(action: string) {
+  if (action === "clear-search") {
+    clearSearch();
+    return;
+  }
+
+  const routedCommand = selectDetailsCommand(action);
+  if (routedCommand) {
+    runRoutedCommand(routedCommand.commandId, routedCommand.payload);
+  }
+}
+
 function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
   switch (intent.type) {
     case "escape":
@@ -1998,8 +1923,8 @@ export function getZManagerRuntimeAdapter(): ZManagerReactRuntimeAdapter {
     actions: {
       executeCommand: runRoutedCommand,
       setWorkspaceMode,
-      handleArchiveIntent: handleReactArchiveIntent,
-      handleCreateIntent: handleReactCreateIntent,
+      handleArchiveIntent: archiveRuntimeActions.handleIntent,
+      handleCreateIntent: createRuntimeActions.handleIntent,
       handleJobsIntent: handleReactJobsIntent,
       handleDialogIntent: handleReactDialogIntent,
       handleDesktopIntent: handleReactDesktopIntent,
@@ -3369,55 +3294,6 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
   setOperationalMessage("archive.loaded");
 }
 
-function isLocalDevHost() {
-  return import.meta.env.DEV && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost");
-}
-
-function loadLocalDevFixtureFromUrl() {
-  if (!isLocalDevHost() || !normalWorkspaceRendered || isQuickActionJobMode()) {
-    return;
-  }
-
-  const fixtureName = new URLSearchParams(window.location.search).get("fixture");
-  if (fixtureName !== "archive") {
-    return;
-  }
-
-  loadArchiveListingIntoState({
-    archivePath: "C:/Users/Frank/Downloads/photos.zip",
-    entries: [
-      {
-        path: "wedding/",
-        kind: "directory",
-        size: 0,
-        compressedSize: 0,
-        modified: "1781085600",
-      },
-      {
-        path: "wedding/raw/photo01.jpg",
-        kind: "file",
-        size: 5_242_880,
-        compressedSize: 3_145_728,
-        modified: "1781085660",
-      },
-      {
-        path: "wedding/raw/photo02.jpg",
-        kind: "file",
-        size: 6_291_456,
-        compressedSize: 4_194_304,
-        modified: "1781085720",
-      },
-      {
-        path: "docs/readme.txt",
-        kind: "file",
-        size: 1_200,
-        compressedSize: 600,
-        modified: "1780995600",
-      },
-    ],
-  });
-}
-
 async function runPlan(revision?: number) {
   await createPlanController.runPlan(revision);
 }
@@ -3783,6 +3659,54 @@ async function loadBootstrapState() {
   await startupController.loadBootstrapState();
 }
 
+function runtimeDevToolsOptions() {
+  return {
+    isDev: import.meta.env.DEV,
+    windowRef: window,
+    normalWorkspaceRendered: () => normalWorkspaceRendered,
+    isQuickActionJobMode,
+    api: {
+      loadArchiveFixture: loadArchiveListingIntoState,
+      setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
+        systemIconDataUrls = new Map(Object.entries(fixtures));
+        renderBrowse();
+      },
+      setJobFixtures: (fixtures: JobState[]) => {
+        jobsWorkspace.replaceJobs(fixtures);
+        renderJobs();
+      },
+      openSurface: (surface: "about" | "preferences" | "info" | "jobs") => {
+        if (surface === "about") {
+          openAboutDialog();
+        } else if (surface === "preferences") {
+          openPreferencesDialog();
+        } else if (surface === "info") {
+          showCurrentInfo();
+        } else if (surface === "jobs") {
+          openJobDrawer();
+        }
+      },
+      closeModal: () => {
+        if (reactDialogSnapshot.kind !== "none") {
+          closeReactDialog();
+        }
+        if (preferencesDialogDraft) {
+          cancelReactPreferencesDialog();
+        }
+        closeJobDrawer();
+      },
+    },
+  };
+}
+
+function installRuntimeDevApi() {
+  installRuntimeDevTools(runtimeDevToolsOptions());
+}
+
+function loadLocalDevFixtureFromUrl() {
+  loadRuntimeLocalDevFixtureFromUrl(runtimeDevToolsOptions());
+}
+
 function handleInfoDialogAction(action?: string, copyValue?: string) {
   if (copyValue) {
     void copyTextToClipboard(copyValue);
@@ -3799,52 +3723,17 @@ function handleInfoDialogAction(action?: string, copyValue?: string) {
   }
 }
 
-bindWindowLifecycleHandlers();
-refreshDisplayFromPreferences();
-pathHistoryStore.load();
-applyCreatePreferenceDefaults();
-setBrowseState("idle", displayContext.translator.t("browse.statusIdle"));
-if (isLocalDevHost()) {
-  window.__zmanagerDev = {
-    loadArchiveFixture: loadArchiveListingIntoState,
-    setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
-      systemIconDataUrls = new Map(Object.entries(fixtures));
-      renderBrowse();
-    },
-    setJobFixtures: (fixtures: DevJobFixture[]) => {
-      jobsWorkspace.replaceJobs(fixtures);
-      renderJobs();
-    },
-    openSurface: (surface: DevDialogName) => {
-      if (surface === "about") {
-        openAboutDialog();
-      } else if (surface === "preferences") {
-        openPreferencesDialog();
-      } else if (surface === "info") {
-        showCurrentInfo();
-      } else if (surface === "jobs") {
-        openJobDrawer();
-      }
-    },
-    closeModal: () => {
-      if (reactDialogSnapshot.kind !== "none") {
-        closeReactDialog();
-      }
-      if (preferencesDialogDraft) {
-        cancelReactPreferencesDialog();
-      }
-      closeJobDrawer();
-    },
-  };
-}
-void bindTauriFileDrop();
-if (isDesktopRuntime()) {
-  void initializeDesktopRuntime().finally(() => {
-    loadLocalDevFixtureFromUrl();
-    void loadBootstrapState();
-  });
-} else {
-  renderNormalWorkspaceOnce();
-  loadLocalDevFixtureFromUrl();
-  void loadBootstrapState();
-}
+startZManagerRuntime({
+  bindWindowLifecycleHandlers,
+  refreshDisplayFromPreferences,
+  loadPathHistory: () => pathHistoryStore.load(),
+  applyCreatePreferenceDefaults,
+  setInitialBrowseState: () => setBrowseState("idle", displayContext.translator.t("browse.statusIdle")),
+  installRuntimeDevTools: installRuntimeDevApi,
+  bindFileDrop: bindTauriFileDrop,
+  isDesktopRuntime,
+  initializeDesktopRuntime,
+  renderNormalWorkspaceOnce,
+  loadLocalDevFixtureFromUrl,
+  loadBootstrapState,
+});

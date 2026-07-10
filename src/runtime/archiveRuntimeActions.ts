@@ -1,0 +1,134 @@
+import type { ArchiveTableColumnId } from "../app/archiveTable";
+import type { ZManagerArchiveIntent } from "../ui/react/appRuntime";
+
+export type ArchiveRuntimeActions = Readonly<{
+  handleIntent(intent: ZManagerArchiveIntent): void;
+}>;
+
+export type ArchiveRuntimeActionEffects = Readonly<{
+  navigateToFolder(folderPath: string): void;
+  navigateBack(): void;
+  navigateUp(): void;
+  setSearchQuery(query: string): void;
+  clearSearch(): void;
+  setFlatView(flatView: boolean, persistPreference: boolean): void;
+  setColumnWidth(columnId: ArchiveTableColumnId, width: number, persist: boolean): void;
+  toggleTreeFolder(folderPath: string): void;
+  sortByColumn(columnId: ArchiveTableColumnId): void;
+  selectAllVisible(): void;
+  clearSelection(): void;
+  selectRow(path: string, modifiers?: ArchiveRuntimeSelectionModifiers): void;
+  setRowSelected(path: string, selected: boolean): void;
+  hasActiveJob(): boolean;
+  applySelection(input: ArchiveRuntimeSelectionInput): void;
+  runEntryDefaultAction(path: string): void;
+  startNativeDrag(entryPath: string): void | Promise<void>;
+  copyDetailsValue(value: string): void | Promise<void>;
+  showEmptyContextMenu(x: number, y: number): void;
+  showColumnContextMenu(columnId: ArchiveTableColumnId, x: number, y: number): void;
+  showFolderContextMenu(path: string, x: number, y: number): void;
+  showEntryContextMenu(path: string, x: number, y: number): void;
+  runDetailsAction(action: string): void;
+}>;
+
+export type ArchiveRuntimeSelectionModifiers = Readonly<{
+  ctrl?: boolean;
+  meta?: boolean;
+  shift?: boolean;
+}>;
+
+export type ArchiveRuntimeSelectionInput = Readonly<{
+  selectedPaths: readonly string[];
+  focusedPath: string;
+  anchorPath: string;
+}>;
+
+export function createArchiveRuntimeActions(
+  effects: ArchiveRuntimeActionEffects,
+): ArchiveRuntimeActions {
+  return {
+    handleIntent(intent) {
+      switch (intent.type) {
+        case "navigateToFolder":
+          effects.navigateToFolder(intent.folderPath);
+          break;
+        case "navigateBack":
+          effects.navigateBack();
+          break;
+        case "navigateUp":
+          effects.navigateUp();
+          break;
+        case "setSearchQuery":
+          effects.setSearchQuery(intent.query);
+          break;
+        case "clearSearch":
+          effects.clearSearch();
+          break;
+        case "setFlatView":
+          effects.setFlatView(intent.flatView, Boolean(intent.persistPreference));
+          break;
+        case "setColumnWidth":
+          effects.setColumnWidth(intent.columnId, intent.width, intent.persist);
+          break;
+        case "toggleTreeFolder":
+          effects.toggleTreeFolder(intent.folderPath);
+          break;
+        case "sortByColumn":
+          effects.sortByColumn(intent.columnId);
+          break;
+        case "selectAllVisible":
+          effects.selectAllVisible();
+          break;
+        case "clearSelection":
+          effects.clearSelection();
+          break;
+        case "selectRow":
+          effects.selectRow(intent.path, {
+            ctrl: intent.ctrlKey,
+            meta: intent.metaKey,
+            shift: intent.shiftKey,
+          });
+          break;
+        case "setRowSelected":
+          effects.setRowSelected(intent.path, intent.selected);
+          break;
+        case "applySelection":
+          if (!effects.hasActiveJob()) {
+            effects.applySelection(intent);
+          }
+          break;
+        case "activateRow":
+          if (intent.rowKind === "folder" || intent.rowKind === "parent") {
+            effects.navigateToFolder(intent.path);
+          } else {
+            effects.runEntryDefaultAction(intent.path);
+          }
+          break;
+        case "startNativeDrag":
+          if (!effects.hasActiveJob()) {
+            void effects.startNativeDrag(intent.entryPath);
+          }
+          break;
+        case "copyDetailsValue":
+          void effects.copyDetailsValue(intent.value);
+          break;
+        case "showEmptyContextMenu":
+          effects.showEmptyContextMenu(intent.x, intent.y);
+          break;
+        case "showColumnContextMenu":
+          effects.showColumnContextMenu(intent.columnId, intent.x, intent.y);
+          break;
+        case "showRowContextMenu":
+          if (intent.rowKind === "folder" || intent.rowKind === "parent") {
+            effects.showFolderContextMenu(intent.path, intent.x, intent.y);
+          } else {
+            effects.showEntryContextMenu(intent.path, intent.x, intent.y);
+          }
+          break;
+        case "runDetailsAction":
+          effects.runDetailsAction(intent.action);
+          break;
+      }
+    },
+  };
+}
