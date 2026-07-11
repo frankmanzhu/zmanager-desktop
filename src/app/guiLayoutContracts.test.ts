@@ -402,7 +402,8 @@ describe("GUI layout contracts", () => {
 
   it("keeps runtimeBridge.ts as a tiny compatibility export", () => {
     expect(runtimeBridgeSource.split("\n").filter((line) => line.trim()).length).toBeLessThanOrEqual(5);
-    expect(runtimeBridgeSource).toContain('import "./styles.tailwind.css";');
+    expect(compositionRootSource).toContain('import "./styles.tailwind.css";');
+    expect(runtimeBridgeSource).not.toContain('import "./styles.tailwind.css";');
     expect(normalizedWorkspaceFile("src", "styles.tailwind.css")).toContain('@import "./styles.css";');
     expect(runtimeBridgeSource).toContain('export { getZManagerRuntimeAdapter } from "./runtime/zmanagerRuntimeAdapter";');
     expect(runtimeBridgeSource).not.toContain("createCommandRouter");

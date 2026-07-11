@@ -1,6 +1,8 @@
 import { StrictMode, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
+import "./styles.tailwind.css";
+
 import { AppShell } from "./ui/react/AppShell";
 import { DisposableTaskRuntimeApp } from "./runtime/DisposableTaskRuntimeApp";
 
