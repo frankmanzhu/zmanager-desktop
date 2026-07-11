@@ -12,6 +12,9 @@ Linux file-manager integration.
 - The menu icon is `zmanager-desktop.exe`.
 - Menu order is explicit through ordered `ExtendedSubCommandsKey` entries.
 - Every registered verb uses `MultiSelectModel=Player`.
+- Selected-item verbs are `IExplorerCommand` COM handlers. Explorer supplies
+  the complete selection as one `IShellItemArray`.
+- Folder-background verbs remain single-path executable commands using `%V`.
 - Installer uninstall removes the current verbs, legacy direct verbs, and retired
   CommandStore entries, then calls `SHChangeNotify` to refresh Explorer.
 
@@ -39,13 +42,12 @@ Windows registration covers `.001`, `.7z`, `.apk`, `.appx`, `.br`, `.bz2`,
 
 ## Non-Archive File And Folder Selection
 
-Right-clicking a non-archive file does not register a generic `ZManager`
-`*\shell` cascade. Windows 11's compact context menu can surface that static
-cascade as an empty `ZManager` submenu during archive multi-selection, while the
-classic `Show more options` menu resolves the archive submenu correctly. Retiring
-the generic file cascade removes the broken compact-menu entry until ZManager has
-a future ExplorerCommand/COM handler that can receive the full selected-item data
-object.
+Right-clicking a non-archive file shows the create actions through the generic
+`ZManager` `*\shell` cascade. Its selected-item commands are COM handlers, so
+multi-file selections arrive as one array. The current NSIS registration targets
+the classic Explorer context menu. First-tier Windows 11 compact-menu placement
+requires package-identity registration and does not change the atomic selection
+contract.
 
 Right-clicking a selected folder shows `ZManager` with the create actions:
 
@@ -60,18 +62,21 @@ current folder as the target.
 
 ## Command Contract
 
-Explorer verbs launch the GUI through quick-action arguments:
+Selected-item verbs write one versioned shell-action request and launch:
 
-- `zmanager-desktop.exe --quick-action extract-here --path "%1"`
-- `zmanager-desktop.exe --quick-action extract-to-folder --path "%1"`
-- `zmanager-desktop.exe --quick-action open --path "%1"`
-- `zmanager-desktop.exe --quick-action compress --path "%1"`
-- `zmanager-desktop.exe --quick-action compress-tzap --path "%1"`
-- `zmanager-desktop.exe --quick-action compress-zip --path "%1"`
-- `zmanager-desktop.exe --quick-action compress-7z --path "%1"`
-- `zmanager-desktop.exe --quick-action compress-tzst --path "%1"`
+- `zmanager-desktop.exe --shell-action-request "<request.json>"`
 
-Folder-background create actions use `%V` instead of `%1`.
+The request contains the action and every selected path. Folder-background
+verbs launch the GUI directly through quick-action arguments:
+
+- `zmanager-desktop.exe --quick-action compress --path "%V"`
+- `zmanager-desktop.exe --quick-action compress-tzap --path "%V"`
+- `zmanager-desktop.exe --quick-action compress-zip --path "%V"`
+- `zmanager-desktop.exe --quick-action compress-7z --path "%V"`
+- `zmanager-desktop.exe --quick-action compress-tzst --path "%V"`
+
+Legacy `%1` parsing remains available for compatibility but is not used by new
+selected-item registrations.
 
 The app validates every quick action again before starting work:
 
@@ -87,18 +92,15 @@ The app validates every quick action again before starting work:
 Static Explorer registry verbs do not receive Explorer's full selected-item data
 object. They also cannot produce dynamic labels such as `Add to docs.zip`.
 
-Create quick actions may arrive as separate launches. `Add to archive...`
-forwards each launch immediately and appends its paths to the singleton Main
-Window's active Create Workspace. Fixed-format create actions coalesce pending
-launches by action before starting one job, so a multi-selection produces one
-archive containing all selected sources. The structured
-`--quick-action-request` JSON contract remains available for a future
-ExplorerCommand or COM handler that receives the full selection in one process.
+Selected-item actions arrive as one atomic request; the app does not use a
+timing window or coalesce launches. `Add to archive...` appends the request's
+paths to the singleton Main Window's active Create Workspace. Fixed-format
+create actions start one job containing every path in the request.
 
 ## Linux Parity Target
 
 Linux file-manager integration should mirror the Windows action labels, ordering,
-and quick-action contract wherever the desktop environment supports it:
+and versioned shell-action contract wherever the desktop environment supports it:
 
 - Archive selections should expose extraction/open actions first, followed by
   create actions.

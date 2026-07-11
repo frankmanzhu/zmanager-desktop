@@ -15,10 +15,8 @@ use tauri::Manager;
 fn main() {
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
     let job_registry = job_registry::JobRegistry::new();
-    let startup_state =
-        quick_action::prestart_independent_direct_quick_action(startup_window_state, &job_registry);
     let quick_action_launch_coordinator =
-        quick_action::QuickActionLaunchCoordinator::from_startup_state(startup_state);
+        quick_action::QuickActionLaunchCoordinator::from_startup_state(startup_window_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
 
     let builder = tauri::Builder::default();

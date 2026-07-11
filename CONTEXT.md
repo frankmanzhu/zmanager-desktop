@@ -31,6 +31,14 @@ A shell or startup request that begins a specific operation with its inputs and
 destination already implied. Quick actions normally use a Disposable Task
 Window. The general **Add to archive** action targets the singleton Main Window.
 
+### Shell Action Request
+
+The atomic, versioned request produced from one operating-system shell
+selection. It contains a language-neutral action and every selected local path.
+Windows builds it from `IShellItemArray`; Linux integrations may build the same
+contract from their native multi-selection mechanism. Shell integrations never
+perform archive operations themselves.
+
 ### Compress Workspace / Create Workspace
 
 **Compress** is the user-facing mode for choosing sources, reviewing the

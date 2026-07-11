@@ -40,7 +40,9 @@ impl ShellActionRequest {
         let request = serde_json::from_str::<Self>(json)
             .map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))?;
         if request.version != SHELL_ACTION_REQUEST_VERSION {
-            return Err(ShellActionContractError::UnsupportedVersion(request.version));
+            return Err(ShellActionContractError::UnsupportedVersion(
+                request.version,
+            ));
         }
         Ok(request)
     }
@@ -60,9 +62,14 @@ pub enum ShellActionContractError {
 impl fmt::Display for ShellActionContractError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidJson(message) => write!(formatter, "invalid shell-action request JSON: {message}"),
+            Self::InvalidJson(message) => {
+                write!(formatter, "invalid shell-action request JSON: {message}")
+            }
             Self::UnsupportedVersion(version) => {
-                write!(formatter, "unsupported shell-action request version: {version}")
+                write!(
+                    formatter,
+                    "unsupported shell-action request version: {version}"
+                )
             }
         }
     }

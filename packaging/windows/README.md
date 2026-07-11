@@ -3,49 +3,52 @@
 The Windows bundle uses the Tauri NSIS target plus `nsis-context-menu.nsh`, wired by
 `src-tauri/tauri.conf.json` at `bundle.windows.nsis.installerHooks`.
 
-The hook registers current-user Explorer verbs under `HKCU\Software\Classes` after
-install and removes the same keys before uninstall. Commands launch the GUI with the
-quick-action CLI contract:
+The hook installs an architecture-matched `IExplorerCommand` COM DLL and registers
+current-user Explorer verbs under `HKCU\Software\Classes`. Selected-item commands
+receive one `IShellItemArray`, write one versioned request, and launch:
 
-- `zmanager-desktop.exe --quick-action open --path "<archive>"`
-- `zmanager-desktop.exe --quick-action extract-here --path "<archive>"`
-- `zmanager-desktop.exe --quick-action extract-to-folder --path "<archive>"`
+- `zmanager-desktop.exe --shell-action-request "<request.json>"`
+
+Folder-background commands have one target and continue to use the quick-action
+CLI contract:
+
 - `zmanager-desktop.exe --quick-action compress --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-tzap --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-zip --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-7z --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-tzst --path "<target>"`
-- `zmanager-desktop.exe --quick-action-request "<request.json>"`
+- `zmanager-desktop.exe --quick-action-request "<legacy-request.json>"`
 
 Explorer shows a single `ZManager` cascaded menu. Supported archive extensions show
 `Extract Here`, `Extract to Archive Folder`, and `Open archive` first, followed by `Add to archive...`,
 `Add to .tzap`, `Add to .zip`, `Add to .7z`, and `Add to .tzst`, so archive files
 can also be archived again. Selected folders and folder backgrounds show the same
-add actions. Generic file selection does not register a `*\shell` cascade because
-Windows 11's compact context menu can surface that static cascade as an empty
-`ZManager` submenu for multi-file archive selections; archive extension verbs keep
-the correct classic `Show more options` menu. The hook uses explicit ordered per-user
-`ExtendedSubCommandsKey` entries so Explorer does not choose the
-submenu order. The generic `Add to archive...` action opens the regular Create
+add actions. The installed COM-backed `*\shell` cascade gives generic file
+selections the same create actions in the classic context menu and receives the
+complete selection. Windows 11's compact context menu has separate
+package-identity requirements. The hook uses explicit ordered per-user
+`ExtendedSubCommandsKey` entries so Explorer does not choose the submenu order.
+The generic `Add to archive...` action opens the regular Create
 Archive dialog with the selected item preloaded. Fixed-format actions use the same
 create workflow and start with rename-on-collision enabled. Extraction is registered
 for supported archive extensions through `SystemFileAssociations`.
 
-Static registry verbs do not receive Explorer's full selection data object, so they
-cannot reliably produce dynamic labels such as `Add to docs.zip` or collapse a
-multi-select into one process. The app-level `--quick-action-request` contract is
-available for a future ExplorerCommand/COM handler that receives the selected items
-and writes one structured request file.
+The selected-item COM handler receives Explorer's full selection data object and
+does not use a timing heuristic. Static `%1` registry verbs are retained only as
+an accepted compatibility input, not as the installed selected-item workflow.
 
 Release wiring:
 
 1. Keep the NSIS target enabled in `src-tauri/tauri.conf.json`.
-2. Build the installer with the existing Tauri/package scripts.
+2. Build the installer with `scripts/build-windows-static.ps1`; it builds the
+   architecture-matched shell extension before invoking Tauri.
 3. The installer includes `packaging/windows/nsis-context-menu.nsh` automatically via
    `installerHooks`.
-4. Validate install/uninstall by checking the Explorer verbs appear after install and
-   disappear after uninstall.
+4. Validate install/uninstall by checking the DLL and CLSIDs appear after install
+   and disappear after uninstall.
 
 Next packaging steps remain code signing, WinGet metadata after public artifacts are
-stable, and MSIX only if Store-style install semantics become necessary.
+stable, and a signed package-with-external-location registration if first-tier
+Windows 11 compact-menu placement is required. That packaging enhancement reuses
+the same COM DLL and versioned request boundary.
 

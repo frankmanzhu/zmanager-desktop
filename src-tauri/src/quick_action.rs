@@ -3,8 +3,6 @@ use std::{
     fs,
     path::Path,
     sync::{Arc, Mutex},
-    thread,
-    time::Duration,
 };
 
 use tauri::{AppHandle, Emitter, Url};
@@ -28,8 +26,7 @@ const SHELL_ACTION_REQUEST_ARG: &str = "--shell-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
 const QUICK_ACTION_EVENT: &str = "zmanager-quick-action";
-const QUICK_ACTION_BURST_DEBOUNCE: Duration = Duration::from_millis(450);
-
+const MAX_SHELL_ACTION_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
 
@@ -37,7 +34,6 @@ const TZAP_VOLUME_MARKER: &str = ".vol";
 pub enum QuickActionStartupState {
     NotRequested,
     Requested(QuickActionRequestDto),
-    StartedJobs(Vec<StartJobResponseDto>),
     Invalid(QuickActionError),
 }
 
@@ -79,12 +75,6 @@ impl QuickActionStartupState {
                 quick_action_jobs: Vec::new(),
                 error: None,
             },
-            Self::StartedJobs(jobs) => QuickActionStartupStateDto {
-                launched_for_quick_action: true,
-                quick_action: None,
-                quick_action_jobs: jobs.clone(),
-                error: None,
-            },
             Self::Invalid(error) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 quick_action: None,
@@ -103,35 +93,18 @@ pub struct QuickActionLaunchCoordinator {
 #[derive(Debug)]
 struct QuickActionLaunchState {
     startup: QuickActionStartupState,
-    pending_creates: Vec<QuickActionRequestDto>,
-    pending_generation: u64,
-    flush_scheduled: bool,
 }
 
 impl QuickActionLaunchCoordinator {
     pub fn from_startup_state(state: QuickActionStartupState) -> Self {
         let coordinator = Self {
-            inner: Arc::new(Mutex::new(QuickActionLaunchState {
-                startup: QuickActionStartupState::NotRequested,
-                pending_creates: Vec::new(),
-                pending_generation: 0,
-                flush_scheduled: false,
-            })),
+            inner: Arc::new(Mutex::new(QuickActionLaunchState { startup: state })),
         };
-        coordinator.ingest_startup_state(state);
         coordinator
     }
 
     pub fn startup_state(&self) -> QuickActionStartupState {
-        if self.has_pending_creates() {
-            thread::sleep(QUICK_ACTION_BURST_DEBOUNCE);
-        }
-
         let mut inner = self.inner.lock().expect("quick-action lock poisoned");
-        if let Some(request) = pop_pending_create(&mut inner) {
-            return QuickActionStartupState::Requested(request);
-        }
-
         std::mem::replace(&mut inner.startup, QuickActionStartupState::NotRequested)
     }
 
@@ -141,81 +114,8 @@ impl QuickActionLaunchCoordinator {
         app: AppHandle,
         registry: JobRegistry,
     ) {
-        match QuickActionStartupState::from_process_or_user_args(args) {
-            QuickActionStartupState::Requested(request)
-                if is_coalesced_create_quick_action(request.kind) =>
-            {
-                self.add_pending_create(request);
-                self.schedule_flush(app, registry);
-            }
-            state => {
-                let _ = app.emit(QUICK_ACTION_EVENT, startup_state_to_dto(state, &registry));
-            }
-        }
-    }
-
-    fn ingest_startup_state(&self, state: QuickActionStartupState) {
-        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
-        match state {
-            QuickActionStartupState::Requested(request)
-                if is_coalesced_create_quick_action(request.kind) =>
-            {
-                add_pending_create_locked(&mut inner, request);
-            }
-            other => {
-                inner.startup = other;
-            }
-        }
-    }
-
-    fn has_pending_creates(&self) -> bool {
-        !self
-            .inner
-            .lock()
-            .expect("quick-action lock poisoned")
-            .pending_creates
-            .is_empty()
-    }
-
-    fn add_pending_create(&self, request: QuickActionRequestDto) {
-        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
-        add_pending_create_locked(&mut inner, request);
-    }
-
-    fn schedule_flush(&self, app: AppHandle, registry: JobRegistry) {
-        let coordinator = self.clone();
-        let mut inner = self.inner.lock().expect("quick-action lock poisoned");
-        if inner.flush_scheduled {
-            return;
-        }
-        inner.flush_scheduled = true;
-        let mut observed_generation = inner.pending_generation;
-        drop(inner);
-
-        thread::spawn(move || {
-            loop {
-                thread::sleep(QUICK_ACTION_BURST_DEBOUNCE);
-                let requests = {
-                    let mut inner = coordinator
-                        .inner
-                        .lock()
-                        .expect("quick-action lock poisoned");
-                    if inner.pending_generation != observed_generation {
-                        observed_generation = inner.pending_generation;
-                        continue;
-                    }
-
-                    inner.flush_scheduled = false;
-                    drain_pending_creates(&mut inner)
-                };
-
-                for request in requests {
-                    let state = QuickActionStartupState::Requested(request);
-                    let _ = app.emit(QUICK_ACTION_EVENT, startup_state_to_dto(state, &registry));
-                }
-                break;
-            }
-        });
+        let state = QuickActionStartupState::from_process_or_user_args(args);
+        let _ = app.emit(QUICK_ACTION_EVENT, startup_state_to_dto(state, &registry));
     }
 }
 
@@ -241,24 +141,6 @@ pub fn startup_state_to_dto(
             }
         }
         other => other.to_dto(),
-    }
-}
-
-pub fn prestart_independent_direct_quick_action(
-    state: QuickActionStartupState,
-    registry: &JobRegistry,
-) -> QuickActionStartupState {
-    match state {
-        QuickActionStartupState::Requested(request)
-            if is_direct_job_quick_action(request.kind)
-                && !is_coalesced_create_quick_action(request.kind) =>
-        {
-            match start_direct_quick_action_jobs(&request, registry) {
-                Ok(jobs) => QuickActionStartupState::StartedJobs(jobs),
-                Err(error) => QuickActionStartupState::Invalid(QuickActionError::from(error)),
-            }
-        }
-        other => other,
     }
 }
 
@@ -346,17 +228,6 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
         .and_then(|current_exe| current_exe.file_name().map(|name| name.to_owned()))
         .and_then(|current_exe_name| current_exe_name.to_str().map(str::to_owned))
         .is_some_and(|current_exe_name| current_exe_name == file_name)
-}
-
-fn is_coalesced_create_quick_action(kind: QuickActionKindDto) -> bool {
-    matches!(
-        kind,
-        QuickActionKindDto::CompressZip
-            | QuickActionKindDto::CompressTzap
-            | QuickActionKindDto::CompressSevenZ
-            | QuickActionKindDto::CompressTarZst
-            | QuickActionKindDto::CompressCleanSource
-    )
 }
 
 pub fn is_direct_job_quick_action(kind: QuickActionKindDto) -> bool {
@@ -482,46 +353,13 @@ fn start_direct_extract_jobs(
     Ok(responses)
 }
 
-fn add_pending_create_locked(inner: &mut QuickActionLaunchState, request: QuickActionRequestDto) {
-    inner.pending_generation = inner.pending_generation.saturating_add(1);
-    if let Some(existing) = inner
-        .pending_creates
-        .iter_mut()
-        .find(|existing| existing.kind == request.kind)
-    {
-        append_unique_paths(&mut existing.paths, request.paths);
-        return;
-    }
-
-    inner.pending_creates.push(QuickActionRequestDto {
-        kind: request.kind,
-        paths: unique_paths(request.paths),
-    });
-}
-
-fn drain_pending_creates(inner: &mut QuickActionLaunchState) -> Vec<QuickActionRequestDto> {
-    inner.pending_creates.drain(..).collect()
-}
-
-fn pop_pending_create(inner: &mut QuickActionLaunchState) -> Option<QuickActionRequestDto> {
-    if inner.pending_creates.is_empty() {
-        None
-    } else {
-        Some(inner.pending_creates.remove(0))
-    }
-}
-
-fn append_unique_paths(target: &mut Vec<String>, paths: Vec<String>) {
-    for path in paths {
-        if !target.iter().any(|existing| existing == &path) {
-            target.push(path);
-        }
-    }
-}
-
 fn unique_paths(paths: Vec<String>) -> Vec<String> {
     let mut unique = Vec::new();
-    append_unique_paths(&mut unique, paths);
+    for path in paths {
+        if !unique.iter().any(|existing| existing == &path) {
+            unique.push(path);
+        }
+    }
     unique
 }
 
@@ -834,10 +672,19 @@ fn read_quick_action_request_file(
         )));
     }
 
-    let content = fs::read_to_string(trimmed_path).map_err(|error| {
+    let content = fs::read(trimmed_path).map_err(|error| {
         QuickActionError::invalid(format!("unable to read quick-action request: {error}"))
     })?;
     let _ = fs::remove_file(trimmed_path);
+    if content.len() > MAX_SHELL_ACTION_REQUEST_BYTES {
+        return Err(QuickActionError::invalid(format!(
+            "shell-action request exceeds the {} byte limit",
+            MAX_SHELL_ACTION_REQUEST_BYTES
+        )));
+    }
+    let content = String::from_utf8(content).map_err(|error| {
+        QuickActionError::invalid(format!("shell-action request must be UTF-8 JSON: {error}"))
+    })?;
 
     let value = serde_json::from_str::<serde_json::Value>(&content).map_err(|error| {
         QuickActionError::invalid(format!("invalid shell-action request JSON: {error}"))
@@ -1116,17 +963,6 @@ mod tests {
         panic!("timed out while waiting for job to complete");
     }
 
-    fn empty_coordinator() -> QuickActionLaunchCoordinator {
-        QuickActionLaunchCoordinator {
-            inner: Arc::new(Mutex::new(QuickActionLaunchState {
-                startup: QuickActionStartupState::NotRequested,
-                pending_creates: Vec::new(),
-                pending_generation: 0,
-                flush_scheduled: false,
-            })),
-        }
-    }
-
     #[test]
     fn parse_without_quick_action_is_not_requested() {
         assert_eq!(
@@ -1270,7 +1106,10 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
-        assert!(!request_path.exists(), "consumed request file should be removed");
+        assert!(
+            !request_path.exists(),
+            "consumed request file should be removed"
+        );
     }
 
     #[test]
@@ -1287,7 +1126,10 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
-        assert!(!request_path.exists(), "consumed request file should be removed");
+        assert!(
+            !request_path.exists(),
+            "consumed request file should be removed"
+        );
     }
 
     #[test]
@@ -1303,28 +1145,40 @@ mod tests {
         let error = invalid(&["--shell-action-request", &request_path_text]);
 
         assert_eq!(error.message, "unsupported shell-action request version: 2");
-        assert!(!request_path.exists(), "rejected request file should be removed");
+        assert!(
+            !request_path.exists(),
+            "rejected request file should be removed"
+        );
     }
 
     #[test]
-    fn startup_coordinator_coalesces_create_launches_by_action() {
-        let coordinator = empty_coordinator();
-        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
-            QuickActionRequestDto {
+    fn malformed_shell_action_request_is_removed_after_reading() {
+        let request_path = unique_temp_file("malformed-shell-action-request");
+        std::fs::write(&request_path, [0xff, 0xfe, 0xfd])
+            .expect("malformed shell-action request fixture should write");
+
+        let request_path_text = request_path.to_string_lossy().to_string();
+        let error = invalid(&["--shell-action-request", &request_path_text]);
+
+        assert!(error.message.contains("must be UTF-8 JSON"));
+        assert!(
+            !request_path.exists(),
+            "malformed request file should be removed"
+        );
+    }
+
+    #[test]
+    fn startup_coordinator_returns_one_atomic_shell_request_without_waiting() {
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
                 kind: QuickActionKindDto::CompressZip,
-                paths: vec!["C:/tmp/one".to_string()],
-            },
-        ));
-        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
-            QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressZip,
-                paths: vec!["C:/tmp/two".to_string(), "C:/tmp/one".to_string()],
-            },
-        ));
+                paths: vec!["C:/tmp/one".to_string(), "C:/tmp/two".to_string()],
+            }),
+        );
 
         let request = match coordinator.startup_state() {
             QuickActionStartupState::Requested(request) => request,
-            other => panic!("expected coalesced create request, got {other:?}"),
+            other => panic!("expected atomic create request, got {other:?}"),
         };
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
@@ -1333,22 +1187,6 @@ mod tests {
             coordinator.startup_state(),
             QuickActionStartupState::NotRequested
         );
-    }
-
-    #[test]
-    fn direct_create_startup_stays_pending_for_multi_select_coalescing() {
-        let registry = JobRegistry::new();
-        let request = QuickActionRequestDto {
-            kind: QuickActionKindDto::CompressZip,
-            paths: vec!["C:/tmp/folder1".to_string()],
-        };
-
-        let startup = prestart_independent_direct_quick_action(
-            QuickActionStartupState::Requested(request.clone()),
-            &registry,
-        );
-
-        assert_eq!(startup, QuickActionStartupState::Requested(request));
     }
 
     #[test]
@@ -1362,20 +1200,15 @@ mod tests {
         fs::write(folder2.join("two.txt"), b"two").expect("second source should be written");
         let registry = JobRegistry::new();
 
-        let startup = prestart_independent_direct_quick_action(
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
             QuickActionStartupState::Requested(QuickActionRequestDto {
                 kind: QuickActionKindDto::CompressZip,
-                paths: vec![folder1.to_string_lossy().to_string()],
+                paths: vec![
+                    folder1.to_string_lossy().to_string(),
+                    folder2.to_string_lossy().to_string(),
+                ],
             }),
-            &registry,
         );
-        let coordinator = QuickActionLaunchCoordinator::from_startup_state(startup);
-        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
-            QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressZip,
-                paths: vec![folder2.to_string_lossy().to_string()],
-            },
-        ));
 
         let response = startup_state_to_dto(coordinator.startup_state(), &registry);
 
@@ -1386,41 +1219,6 @@ mod tests {
         assert!(!workspace.join("folder2.zip").exists());
 
         let _ = fs::remove_dir_all(workspace);
-    }
-
-    #[test]
-    fn startup_coordinator_returns_mixed_create_launches_without_dropping_later_actions() {
-        let coordinator = empty_coordinator();
-        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
-            QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressZip,
-                paths: vec!["C:/tmp/one".to_string()],
-            },
-        ));
-        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
-            QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressTzap,
-                paths: vec!["C:/tmp/two".to_string()],
-            },
-        ));
-
-        let first = match coordinator.startup_state() {
-            QuickActionStartupState::Requested(request) => request,
-            other => panic!("expected first create request, got {other:?}"),
-        };
-        let second = match coordinator.startup_state() {
-            QuickActionStartupState::Requested(request) => request,
-            other => panic!("expected second create request, got {other:?}"),
-        };
-
-        assert_eq!(first.kind, QuickActionKindDto::CompressZip);
-        assert_eq!(first.paths, ["C:/tmp/one"]);
-        assert_eq!(second.kind, QuickActionKindDto::CompressTzap);
-        assert_eq!(second.paths, ["C:/tmp/two"]);
-        assert_eq!(
-            coordinator.startup_state(),
-            QuickActionStartupState::NotRequested
-        );
     }
 
     #[test]
@@ -1436,7 +1234,10 @@ mod tests {
         let error = invalid(&["--quick-action-request", &request_path_text]);
 
         assert!(error.message.contains("unsupported archive"));
-        assert!(!request_path.exists(), "rejected request file should be removed");
+        assert!(
+            !request_path.exists(),
+            "rejected request file should be removed"
+        );
     }
 
     #[test]

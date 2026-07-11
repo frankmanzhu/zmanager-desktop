@@ -182,6 +182,17 @@ if (-not (Test-Path $tauriCli)) {
 
 Assert-ReleaseExecutableIsNotRunning
 
+$shellExtensionBuild = Join-Path $PSScriptRoot "build-windows-shell-extension.ps1"
+& powershell -ExecutionPolicy Bypass -File $shellExtensionBuild -Architecture $Architecture
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+$shellIntegrationTest = Join-Path $PSScriptRoot "test-windows-shell-integration.ps1"
+& powershell -ExecutionPolicy Bypass -File $shellIntegrationTest
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
 if ($npmCommand) {
     $runCommand = "& '$resolvedNodePath' '$tauriCli' build"
 } else {

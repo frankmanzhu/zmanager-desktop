@@ -1,0 +1,38 @@
+$ErrorActionPreference = "Stop"
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$extensionSource = Join-Path $repoRoot "native\windows-shell-extension\src\lib.rs"
+$installerHook = Join-Path $repoRoot "packaging\windows\nsis-context-menu.nsh"
+$quickActionSource = Join-Path $repoRoot "src-tauri\src\quick_action.rs"
+$extensionArtifact = Join-Path $repoRoot "target\windows-shell-extension\zmanager-shell-extension.dll"
+
+$rust = Get-Content -Raw $extensionSource
+$nsis = Get-Content -Raw $installerHook
+$quickAction = Get-Content -Raw $quickActionSource
+
+$rustClassIds = [regex]::Matches($rust, 'GUID::from_u128\(0x([0-9a-fA-F_]+)\)') |
+    ForEach-Object { $_.Groups[1].Value.Replace('_', '').ToLowerInvariant() } |
+    Sort-Object -Unique
+$nsisClassIds = [regex]::Matches($nsis, '!define ZM_[A-Z_]+_CLSID "\{([0-9A-Fa-f-]+)\}"') |
+    ForEach-Object { $_.Groups[1].Value.Replace('-', '').ToLowerInvariant() } |
+    Sort-Object -Unique
+
+if ($rustClassIds.Count -ne 8) {
+    throw "Expected 8 COM class IDs in the shell extension, found $($rustClassIds.Count)."
+}
+if (Compare-Object $rustClassIds $nsisClassIds) {
+    throw "Shell extension and NSIS COM class IDs have drifted."
+}
+if ($quickAction.Contains('QUICK_ACTION_BURST_DEBOUNCE') -or $quickAction.Contains('pending_creates')) {
+    throw "Timing-based quick-action coalescing must not return."
+}
+if (-not $nsis.Contains('ZM_WRITE_COM_SUBCOMMAND_VERB "${ZM_CREATE_FILE_SUBCOMMANDS_KEY}"')) {
+    throw "Selected create verbs are not registered through IExplorerCommand."
+}
+if (-not $nsis.Contains('ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}"')) {
+    throw "Folder-background verbs must retain their single-target command registration."
+}
+if (-not (Test-Path $extensionArtifact)) {
+    throw "Windows shell extension artifact is missing: $extensionArtifact"
+}
+
+Write-Host "Windows shell integration contract is consistent."
