@@ -7,41 +7,39 @@ import {
 } from "../archiveTable";
 import type { Translator } from "../i18n/translator";
 
-export type ContextMenuAction =
-  | "add-source-files"
-  | "add-source-folder"
-  | "clear-sources"
-  | "compress-open-folder"
-  | "deselect-by-type"
-  | "exclude-compress-path"
-  | "extract"
-  | "extract-all"
-  | "extract-folder"
-  | "extract-here"
-  | "include-compress-path"
-  | "info"
-  | "move-column-left"
-  | "move-column-right"
-  | "narrow-column"
-  | "open-archive"
-  | "open-entry"
-  | "open-folder"
-  | "open-inside"
-  | "open-outside"
-  | "open-recent-archive"
-  | "paste-archive-path"
-  | "preview"
-  | "remove-source"
-  | "reset-column-width"
-  | "reset-columns"
-  | "reveal-source"
-  | "select-by-type"
-  | "sort-ascending"
-  | "sort-descending"
-  | "test"
-  | "toggle-column"
-  | "view-entry"
-  | "widen-column";
+export const CONTEXT_MENU_ACTIONS = [
+  "add-source-files",
+  "add-source-folder",
+  "clear-sources",
+  "compress-open-folder",
+  "deselect-by-type",
+  "exclude-compress-path",
+  "extract",
+  "extract-here",
+  "include-compress-path",
+  "info",
+  "move-column-left",
+  "move-column-right",
+  "narrow-column",
+  "open-archive",
+  "open-entry",
+  "open-folder",
+  "open-outside",
+  "open-recent-archive",
+  "paste-archive-path",
+  "remove-source",
+  "reset-column-width",
+  "reset-columns",
+  "reveal-source",
+  "select-by-type",
+  "sort-ascending",
+  "sort-descending",
+  "test",
+  "toggle-column",
+  "widen-column",
+] as const;
+
+export type ContextMenuAction = typeof CONTEXT_MENU_ACTIONS[number];
 
 export type ContextMenuActionPayload = Readonly<{
   action: ContextMenuAction;
@@ -173,7 +171,7 @@ export function buildArchiveFolderContextMenuItems(input: ArchiveFolderContextMe
     return [
       actionItem(input.translator.t("extract.selectedAction"), entryPayload("extract", input.entryPath)),
       actionItem(input.translator.t("command.extractHere"), entryPayload("extract-here", input.entryPath)),
-      actionItem(input.translator.t("test.selectedAction"), entryPayload("test", input.entryPath), {
+      actionItem(input.translator.t("command.test"), entryPayload("test", input.entryPath), {
         disabled: !input.hasArchive,
       }),
       actionItem(input.translator.t("command.properties"), entryPayload("info", input.entryPath)),
@@ -187,10 +185,6 @@ export function buildArchiveFolderContextMenuItems(input: ArchiveFolderContextMe
       entryPath: input.entryPath,
     }),
   ];
-
-  if (input.entryPath) {
-    items.push(actionItem(input.translator.t("command.openInside"), entryPayload("open-inside", input.entryPath)));
-  }
 
   items.push(
     actionItem(input.translator.t("command.extractWithEllipsis"), entryPayload("extract", input.entryPath)),
@@ -358,12 +352,9 @@ function singleArchiveEntryContextMenuItems(
   payload: (action: ContextMenuAction) => ContextMenuActionPayload,
 ): ContextMenuItem[] {
   const items: ContextMenuItem[] = [
-    actionItem(input.translator.t("command.openFolder"), payload("open-entry")),
+    actionItem(input.translator.t(input.canOpenInside ? "command.openFolder" : "command.view"), payload("open-entry")),
   ];
 
-  if (input.canOpenInside) {
-    items.push(actionItem(input.translator.t("command.openInside"), payload("open-inside")));
-  }
   if (input.canOpenOutside) {
     items.push(actionItem(input.translator.t("command.openOutside"), payload("open-outside")));
   }
@@ -371,7 +362,7 @@ function singleArchiveEntryContextMenuItems(
   items.push(
     actionItem(input.translator.t("command.extractWithEllipsis"), payload("extract")),
     actionItem(input.translator.t("command.extractHere"), payload("extract-here")),
-    actionItem(input.translator.t("test.selectedAction"), payload("test"), {
+    actionItem(input.translator.t("command.test"), payload("test"), {
       disabled: !input.hasArchive,
     }),
     actionItem(input.translator.t("command.properties"), payload("info")),
@@ -387,7 +378,7 @@ function multiArchiveEntryContextMenuItems(
   return [
     actionItem(input.translator.t("extract.selectedAction"), payload("extract")),
     actionItem(input.translator.t("command.extractHere"), payload("extract-here")),
-    actionItem(input.translator.t("test.selectedAction"), payload("test"), {
+    actionItem(input.translator.t("command.test"), payload("test"), {
       disabled: !input.hasArchive,
     }),
     actionItem(input.translator.t("command.properties"), payload("info")),

@@ -56,9 +56,7 @@ export type CommandId =
   | "unsorted"
   | "flatView"
   | "twoPanels"
-  | "archiveToolbar"
   | "standardToolbar"
-  | "largeButtons"
   | "showButtonText"
   | "openRoot"
   | "upOneLevel"
@@ -153,9 +151,7 @@ export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   unsorted: { id: "unsorted", label: "Unsorted", shortcut: "Ctrl+F7", unsupported: true },
   flatView: { id: "flatView", label: "Flat View", labelKey: "command.flatView" },
   twoPanels: { id: "twoPanels", label: "2 Panels", shortcut: "F9", unsupported: true },
-  archiveToolbar: { id: "archiveToolbar", label: "Archive Toolbar", labelKey: "command.archiveToolbar" },
   standardToolbar: { id: "standardToolbar", label: "Standard Toolbar" },
-  largeButtons: { id: "largeButtons", label: "Large Buttons", labelKey: "command.largeButtons" },
   showButtonText: { id: "showButtonText", label: "Show Buttons Text", labelKey: "command.showButtonText" },
   openRoot: { id: "openRoot", label: "Open Root Folder", shortcut: "\\" },
   upOneLevel: { id: "upOneLevel", label: "Up One Level", labelKey: "commands.upOneLevel", shortcut: "Backspace" },
@@ -216,8 +212,6 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
         label: "Toolbars",
         labelKey: "commandMenu.toolbars",
         items: [
-          { kind: "command", id: "archiveToolbar" },
-          { kind: "command", id: "largeButtons" },
           { kind: "command", id: "showButtonText" },
         ],
       },
@@ -343,10 +337,10 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
     }
   };
 
-  enable(["open", "add", "options", "helpContents", "about", "jobs", "archiveToolbar", "standardToolbar", "largeButtons", "showButtonText", "exit"]);
+  enable(["open", "add", "options", "helpContents", "about", "jobs", "standardToolbar", "showButtonText", "exit"]);
   enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
   enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
-  enable(["view", "openOutside"], hasOneSelection && canListEntries, hasOneSelection ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
+  enable(["view", "openOutside"], hasOneSelection && canListEntries && !canOpenInside, hasOneSelection && !canOpenInside ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
   enable(["openInside"], canOpenInside && canListEntries, hasOneSelection ? SINGLE_FOLDER_REQUIRED_MESSAGE : SINGLE_FILE_REQUIRED_MESSAGE);
   enable(["selectAll"], canListEntries && context.visibleSelectableCount > 0, canListEntries ? NO_ENTRIES_MESSAGE : archiveReason);
   enable(["deselectAll"], hasSelection, NO_SELECTION_MESSAGE);

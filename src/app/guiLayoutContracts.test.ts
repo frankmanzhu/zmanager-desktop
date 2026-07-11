@@ -536,7 +536,8 @@ describe("GUI layout contracts", () => {
 
   it("renders the classic menu, command strip, and durable status surface visibly", () => {
     expect(appShellSource).toContain('<AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>');
-    expect(appFrameSource).toContain('className={workspaceClassName(snapshot)}');
+    expect(appFrameSource).toContain('className="workspace"');
+    expect(appFrameSource).not.toContain("workspaceClassName");
     expect(menuBarSource).toContain('className="app-menu"');
     expect(commandToolbarSource).toContain('className="command-strip"');
     expect(commandToolbarSource).toContain("data-command-group={group.id}");
@@ -592,10 +593,12 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain("Icons in context menu");
   });
 
-  it("keeps dialogs on shared native task and property primitives", () => {
-    expect(dialogRootSource).toContain('className="dialog task-dialog"');
+  it("keeps dialogs on bounded, scroll-safe desktop primitives", () => {
+    expect(dialogRootSource).toContain('grid max-h-[calc(100vh-48px)] w-[min(720px,calc(100vw-48px))]');
     expect(dialogRootSource).toContain('className="dialog property-dialog"');
-    expect(preferencesDialogSource).toContain('className="dialog property-dialog dialog-wide"');
+    expect(preferencesDialogSource).toContain('h-[min(780px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))]');
+    expect(preferencesDialogSource).toContain('grid-cols-[220px_minmax(0,1fr)]');
+    expect(preferencesDialogSource).toContain('min-h-0 overflow-y-auto');
     expect(dialogRootSource).toContain('id="extract-start"');
     expect(dialogRootSource).toContain('id="extract-cancel"');
     expect(mainSource).not.toContain('from "./ui/modalController"');
@@ -606,7 +609,6 @@ describe("GUI layout contracts", () => {
     expect(dialogRootSource).toContain("function focusTargetForClosedDialog");
     expect(dialogRootSource).toContain('document.querySelector<HTMLElement>("#extract-all")');
     expect(mainSource).not.toContain("browsePasswordInput");
-    expect(styles).toContain(".task-dialog");
     expect(styles).toContain(".property-dialog");
     expect(styles).toContain(".dialog-section");
     expect(styles).toContain(".property-dialog-body");
@@ -745,7 +747,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain("target instanceof HTMLInputElement");
     expect(dialogRootSource).toContain('onClick={() => actions.handleDialogIntent({ type: "closeCurrent" })}');
     expect(mainSource).toContain('directory: true,\n    multiple: false,');
-    expect(dialogRootSource).toContain('className="advanced-options extract-password-options"');
+    expect(dialogRootSource).toContain('group/password overflow-hidden rounded-xl');
     expect(mainSource).not.toContain("browsePasswordInput");
     expect(extractStartControllerSource).not.toContain("readInput");
     expect(extractStartControllerSource).toContain("startExtract(mode: ExtractMode, input: ExtractStartInput)");
@@ -754,11 +756,9 @@ describe("GUI layout contracts", () => {
     expect(extractStartControllerSource).toContain("options.requestPasswordInDialog(retry);");
     expect(mainSource).not.toContain('id="extract-restore-security"');
     expect(styles).toContain("#extract-start.primary-action");
-    expect(styles).toContain(".task-dialog .dialog-section .form-grid > label");
-    expect(styles).toContain(".task-dialog .dialog-section .form-grid > .checkbox-row");
-    expect(styles).toContain("details.advanced-options:not([open]) > :not(summary)");
-    expect(styles).toContain(".extract-password-options:not([open])");
-    expect(styles).toContain(".task-dialog .dialog-body");
+    expect(dialogRootSource).toContain('group overflow-hidden rounded-2xl');
+    expect(dialogRootSource).toContain('min-h-0 space-y-4 overflow-y-auto');
+    expect(dialogRootSource).toContain('grid-rows-[auto_minmax(0,1fr)_auto]');
   });
 
   it("keeps the three-pane workspace splitters visible and keyboard reachable", () => {
@@ -878,7 +878,7 @@ describe("GUI layout contracts", () => {
     expect(archivePathBarSource).toContain('type: "setExtractDestination"');
     expect(archivePathBarSource).toContain('type: "browseExtractDestination"');
     expect(archiveDetailsPaneSource).toContain("<ExtractOptions />");
-    expect(archiveDetailsPaneSource).toContain('className="advanced-options"');
+    expect(archiveDetailsPaneSource).toContain('group overflow-hidden rounded-2xl');
     expect(archiveDetailsPaneSource).toContain('id="extract-password"');
     expect(workspacePathBarSource).toContain("readOnly");
     expect(workspacePathBarSource).toContain("hidden={crumbsHidden}");
@@ -887,6 +887,8 @@ describe("GUI layout contracts", () => {
     expect(workspacePathBarSource).toContain('aria-keyshortcuts="Enter Space"');
     expect(mainSource).toContain('open: { primary: mode === "extract" && !hasArchive },');
     expect(mainSource).toContain('refresh: { secondary: true },');
+    expect(mainSource).toContain('if (entryPath && !archiveSelectedPathSet().has(entryPath))');
+    expect(mainSource).toContain('path: entryPath,');
     expect(commandToolbarSource).toContain('primary ? "is-primary-command" : ""');
     expect(commandToolbarSource).toContain('secondary ? "is-secondary-command" : ""');
     expect(workspacePathBarSource).toContain("disabled={search.disabled}");

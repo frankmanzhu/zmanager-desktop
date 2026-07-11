@@ -71,8 +71,6 @@ export type CommandRouterEffects = {
   exit: () => void | Promise<void>;
   detailsView: () => void | Promise<void>;
   sort: (key: RoutedSortKey) => void | Promise<void>;
-  toggleArchiveToolbar: () => void | Promise<void>;
-  toggleLargeButtons: () => void | Promise<void>;
   toggleToolbarLabels: () => void | Promise<void>;
   options: () => void | Promise<void>;
   about: () => void | Promise<void>;
@@ -175,9 +173,6 @@ export function selectContextCommand(action?: ContextMenuAction | string, option
         : null;
     case "open-outside":
       return { commandId: "openOutside" };
-    case "preview":
-    case "view-entry":
-      return { commandId: "view" };
     case "select-by-type":
       return { commandId: "selectByType" };
     case "deselect-by-type":
@@ -192,8 +187,6 @@ export function selectContextCommand(action?: ContextMenuAction | string, option
           extractDestination: "here",
         },
       };
-    case "extract-all":
-      return { commandId: "extract", payload: { extractMode: "archive" } };
     case "test":
       return { commandId: "test" };
     case "info":
@@ -306,12 +299,6 @@ export function createCommandRouter(options: CommandRouterOptions): CommandRoute
           return executed(commandId);
         case "sortSize":
           void effects.sort("size");
-          return executed(commandId);
-        case "archiveToolbar":
-          void effects.toggleArchiveToolbar();
-          return executed(commandId);
-        case "largeButtons":
-          void effects.toggleLargeButtons();
           return executed(commandId);
         case "showButtonText":
           void effects.toggleToolbarLabels();

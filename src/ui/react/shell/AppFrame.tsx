@@ -29,7 +29,7 @@ export function AppFrame({ children, runtimeBridgeReady = true }: AppFrameProps)
 
   return (
     <main
-      className={workspaceClassName(snapshot)}
+      className="workspace"
       data-job-drawer={snapshot.shell.jobDrawerOpen ? "open" : "closed"}
       data-mode={runtimeBridgeReady ? snapshot.shell.activeMode : undefined}
       data-drop-state={snapshot.shell.dropOverlay.mode}
@@ -80,11 +80,4 @@ function WindowResizeHandles() {
       ))}
     </>
   );
-}
-
-function workspaceClassName(snapshot: ZManagerReactSnapshot): string {
-  return [
-    "workspace",
-    snapshot.preferences.toolbarVisible ? "" : "toolbar-hidden",
-  ].filter(Boolean).join(" ");
 }

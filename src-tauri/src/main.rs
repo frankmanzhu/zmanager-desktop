@@ -38,10 +38,12 @@ fn main() {
                 );
             },
         ))
-        .setup(move |_app| {
-            #[cfg(target_os = "linux")]
-            if let Some(window) = _app.get_webview_window("main") {
+        .setup(move |app| {
+            if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "linux")]
                 let _ = window.set_decorations(false);
+                #[cfg(not(target_os = "linux"))]
+                let _ = window;
             }
             Ok(())
         })

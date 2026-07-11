@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { COMMAND_DEFINITIONS, type CommandId, type CommandStateMap } from "../classicCommands";
+import { CLASSIC_MENU_GROUPS, COMMAND_DEFINITIONS, type CommandId, type CommandStateMap, type MenuItem } from "../classicCommands";
 import {
   createCommandRouter,
   selectContextCommand,
@@ -45,8 +45,6 @@ function recordingEffects(log: string[]): CommandRouterEffects {
     exit: () => record("exit"),
     detailsView: () => record("detailsView"),
     sort: (key) => record(`sort:${key}`),
-    toggleArchiveToolbar: () => record("toggleArchiveToolbar"),
-    toggleLargeButtons: () => record("toggleLargeButtons"),
     toggleToolbarLabels: () => record("toggleToolbarLabels"),
     options: () => record("options"),
     about: () => record("about"),
@@ -59,6 +57,19 @@ function recordingEffects(log: string[]): CommandRouterEffects {
 }
 
 describe("command router", () => {
+  it("executes every command exposed by the application menu", () => {
+    const router = createCommandRouter({
+      getCommandState: () => enabledState(),
+      effects: recordingEffects([]),
+    });
+    const visibleCommands = CLASSIC_MENU_GROUPS.flatMap((group) => menuCommandIds(group.items));
+
+    expect(visibleCommands.length).toBeGreaterThan(0);
+    for (const commandId of visibleCommands) {
+      expect(router.run(commandId).status, commandId).toBe("executed");
+    }
+  });
+
   it("routes representative menu and toolbar commands to injected effects", () => {
     const log: string[] = [];
     const router = createCommandRouter({
@@ -152,6 +163,12 @@ describe("command router", () => {
   });
 });
 
+function menuCommandIds(items: readonly MenuItem[]): CommandId[] {
+  return items.flatMap((item) => item.kind === "command"
+    ? [item.id]
+    : item.kind === "submenu" ? menuCommandIds(item.items) : []);
+}
+
 describe("keyboard command selector", () => {
   it("maps global shortcuts to command ids", () => {
     expect(selectKeyboardCommand({ key: "o", ctrlKey: true })).toEqual({ commandId: "open" });
@@ -216,8 +233,6 @@ describe("context command selector", () => {
       payload: { openSource: "path", archivePath: "C:/archives/app.zip" },
     });
     expect(selectContextCommand("open-outside")).toEqual({ commandId: "openOutside" });
-    expect(selectContextCommand("preview")).toEqual({ commandId: "view" });
-    expect(selectContextCommand("view-entry")).toEqual({ commandId: "view" });
     expect(selectContextCommand("select-by-type")).toEqual({ commandId: "selectByType" });
     expect(selectContextCommand("deselect-by-type")).toEqual({ commandId: "deselectByType" });
     expect(selectContextCommand("extract")).toEqual({
@@ -227,10 +242,6 @@ describe("context command selector", () => {
     expect(selectContextCommand("extract-here", { extractMode: "selection" })).toEqual({
       commandId: "extract",
       payload: { extractMode: "selection", extractDestination: "here" },
-    });
-    expect(selectContextCommand("extract-all")).toEqual({
-      commandId: "extract",
-      payload: { extractMode: "archive" },
     });
     expect(selectContextCommand("test")).toEqual({ commandId: "test" });
     expect(selectContextCommand("info", { entryPath: "docs/readme.txt" })).toEqual({

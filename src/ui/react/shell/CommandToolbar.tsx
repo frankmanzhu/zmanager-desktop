@@ -37,7 +37,6 @@ export function CommandToolbar() {
   const className = [
     "command-toolbar",
     "mode-toolbar",
-    snapshot.preferences.largeToolbarButtons ? "large" : "",
     snapshot.preferences.showToolbarLabels ? "show-labels" : "",
   ].filter(Boolean).join(" ");
 

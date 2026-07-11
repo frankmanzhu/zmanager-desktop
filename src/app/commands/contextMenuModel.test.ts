@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  resetColumnSettings,
-} from "../archiveTable";
+import { resetColumnSettings } from "../archiveTable";
 import { createTranslator } from "../i18n/translator";
 import {
   buildArchiveEntryContextMenuItems,
   buildArchiveFolderContextMenuItems,
   buildArchiveHeaderContextMenuItems,
+  buildAddSourcesContextMenuItems,
   buildCompressRowContextMenuItems,
   buildSourceContextMenuItems,
   buildStartupContextMenuItems,
+  CONTEXT_MENU_ACTIONS,
   type ContextMenuActionItem,
   type ContextMenuCheckboxItem,
   type ContextMenuItem,
@@ -19,6 +19,24 @@ import {
 const translator = createTranslator("en");
 
 describe("context menu model", () => {
+  it("emits every declared context action from at least one visible menu", () => {
+    const menus: ContextMenuItem[][] = [
+      buildStartupContextMenuItems({ translator, canPastePath: true, recentArchiveHistory: ["C:/archives/demo.zip"] }),
+      buildAddSourcesContextMenuItems(translator),
+      buildArchiveFolderContextMenuItems({ translator, folderPath: "docs", entryPath: "docs", selectedCount: 1, hasArchive: true }),
+      buildArchiveEntryContextMenuItems({ translator, entryPath: "docs/readme.txt", canOpenInside: false, canOpenOutside: true, selectedCount: 1, selectedEntryCount: 1, hasArchive: true }),
+      buildArchiveHeaderContextMenuItems({ translator, tableColumnSettings: resetColumnSettings(), selectedColumnId: "size" }),
+      buildCompressRowContextMenuItems({ translator, rowPath: "src/app", folderPath: "src", sourcePath: "C:/work/source", contextRowCount: 1, removableSourceCount: 1, canInclude: true, canExclude: true, hasSources: true }),
+      buildSourceContextMenuItems({ translator, sourcePath: "C:/work/source" }),
+    ];
+    const emittedActions = new Set(menus.flatMap((items) => [
+      ...actionItems(items),
+      ...checkboxItems(items),
+    ].map((item) => item.payload.action)));
+
+    expect([...emittedActions].sort()).toEqual([...CONTEXT_MENU_ACTIONS].sort());
+  });
+
   it("builds startup empty-menu typed actions for open, paste, and recent archives", () => {
     const items = buildStartupContextMenuItems({
       translator,
@@ -59,7 +77,6 @@ describe("context menu model", () => {
 
     expect(actionItems(folderItems).map((item) => item.payload)).toEqual([
       { action: "open-folder", folderPath: "docs", entryPath: "docs" },
-      { action: "open-inside", entryPath: "docs" },
       { action: "extract", entryPath: "docs" },
       { action: "extract-here", entryPath: "docs" },
       { action: "test", entryPath: "docs" },
@@ -75,7 +92,30 @@ describe("context menu model", () => {
       { action: "select-by-type", entryPath: "docs/readme.txt" },
       { action: "deselect-by-type", entryPath: "docs/readme.txt" },
     ]);
+    expect(actionItems(entryItems)[0]?.label).toBe("View");
     expect(actionItems(entryItems).find((item) => item.payload.action === "test")?.disabled).toBe(true);
+  });
+
+  it("does not advertise duplicate folder actions or selection-only archive testing", () => {
+    const folderItems = actionItems(buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "docs",
+      entryPath: "docs",
+      selectedCount: 1,
+      hasArchive: true,
+    }));
+    const selectedItems = actionItems(buildArchiveEntryContextMenuItems({
+      translator,
+      entryPath: "docs/readme.txt",
+      canOpenInside: false,
+      canOpenOutside: false,
+      selectedCount: 2,
+      selectedEntryCount: 2,
+      hasArchive: true,
+    }));
+
+    expect(folderItems.filter((item) => item.payload.action === "open-folder")).toHaveLength(1);
+    expect(selectedItems.find((item) => item.payload.action === "test")?.label).toBe("Test");
   });
 
   it("builds archive header sort, movement, visibility, width, and reset actions", () => {

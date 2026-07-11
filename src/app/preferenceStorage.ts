@@ -25,8 +25,6 @@ export type PreferenceStorageKey =
   | "fullRowSelect"
   | "singleClickOpen"
   | "alternativeSelectionMode"
-  | "toolbarVisible"
-  | "largeToolbarButtons"
   | "showToolbarLabels"
   | "flatViewDefault"
   | "tableVisibleColumns"
@@ -56,8 +54,6 @@ export const PREFERENCE_KEYS = {
   fullRowSelect: "zmanager.fullRowSelect",
   singleClickOpen: "zmanager.singleClickOpen",
   alternativeSelectionMode: "zmanager.alternativeSelectionMode",
-  toolbarVisible: "zmanager.toolbarVisible",
-  largeToolbarButtons: "zmanager.largeToolbarButtons",
   showToolbarLabels: "zmanager.showToolbarLabels",
   flatViewDefault: "zmanager.flatViewDefault",
   tableVisibleColumns: "zmanager.tableVisibleColumns",

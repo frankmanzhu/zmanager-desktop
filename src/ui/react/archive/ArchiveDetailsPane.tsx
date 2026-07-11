@@ -1,4 +1,4 @@
-import { Archive, Copy, File, Folder, Plus, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Archive, ChevronDown, Copy, File, Folder, Plus, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
@@ -16,8 +16,8 @@ export function ArchiveDetailsPane() {
   const i18n = translatorForSnapshot(snapshot);
 
   return (
-    <aside id="details-pane" className="details-pane !min-h-0 !overflow-y-auto [@media(max-height:560px)]:[&_details.advanced-options]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
-      <div className="pane-header [@media(max-height:560px)]:!hidden">
+    <aside id="details-pane" className="details-pane !min-h-0 !overflow-y-auto !bg-slate-50/70 dark:!bg-slate-950/70 [@media(max-height:560px)]:[&_details.advanced-options]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
+      <div className="pane-header !hidden [@media(max-height:560px)]:!hidden">
         <h2 id="details-pane-title">{i18n.t("compress.options")}</h2>
       </div>
       <div className="extract-side-pane-content">
@@ -99,22 +99,23 @@ function ExtractOptions() {
 
 
   return (
-    <section className="extract-options-panel" aria-labelledby="extract-options-title">
-      <div className="compress-options-intro">
-        <h3 id="extract-options-title">{i18n.t("extract.options.title")}</h3>
-        <p>{options.usesGlobalDefaults ? i18n.t("extract.usingGlobalDefaults") : i18n.t("extract.overriddenDefaults")}</p>
+    <section className="extract-options-panel !space-y-3 !border-0 !bg-transparent !p-3 !shadow-none" aria-labelledby="extract-options-title">
+      <div className="flex items-start gap-3 border-b border-slate-200 px-1 pb-4 pt-1 dark:border-slate-800">
+        <div className="mt-0.5 rounded-lg bg-blue-600 p-2 text-white shadow-sm"><SlidersHorizontal className="size-4" /></div>
+        <div className="min-w-0"><h3 id="extract-options-title" className="text-sm font-semibold tracking-tight">{i18n.t("extract.options.title")}</h3>
+        <p className="mt-1 text-[11px] leading-4 text-slate-500 dark:text-slate-400">{options.usesGlobalDefaults ? i18n.t("extract.usingGlobalDefaults") : i18n.t("extract.overriddenDefaults")}</p></div>
       </div>
-      <div className="form-grid extract-options-grid [@media(max-height:560px)]:!grid-cols-2">
-        <label>
-          <span>{i18n.t("extract.pathMode")}</span>
+      <div className="form-grid extract-options-grid !gap-3 [@media(max-height:560px)]:!grid-cols-2">
+        <label className="!grid-cols-1 !items-stretch !gap-1.5">
+          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{i18n.t("extract.pathMode")}</span>
           <select id="extract-path-mode" value={options.pathMode} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { pathMode: event.currentTarget.value as typeof options.pathMode } })}>
             <option value="full">{i18n.t("extract.pathMode.full")}</option>
             <option value="current">{i18n.t("extract.pathMode.current")}</option>
             <option value="none">{i18n.t("extract.pathMode.none")}</option>
           </select>
         </label>
-        <label>
-          <span>{i18n.t("extract.overwritePolicy")}</span>
+        <label className="!grid-cols-1 !items-stretch !gap-1.5">
+          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{i18n.t("extract.overwritePolicy")}</span>
           <select id="extract-overwrite" value={options.overwrite} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { overwrite: event.currentTarget.value as typeof options.overwrite } })}>
             <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
             <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
@@ -122,20 +123,20 @@ function ExtractOptions() {
             <option value="replace">{i18n.t("extract.overwrite.replace")}</option>
           </select>
         </label>
-        <label className="checkbox-row">
+        <label className="checkbox-row min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
           <input id="extract-deduplicate-root" type="checkbox" checked={options.deduplicateRoot} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { deduplicateRoot: event.currentTarget.checked } })} />
           <span>{i18n.t("extract.deduplicateRoot")}</span>
         </label>
       </div>
-      <button className="link-action [@media(max-height:560px)]:!hidden" type="button" onClick={() => {
+      <button className="link-action !ml-0 !inline-flex !rounded-lg !px-2 !py-1.5 text-[11px] hover:!bg-slate-100 dark:hover:!bg-slate-800 [@media(max-height:560px)]:!hidden" type="button" onClick={() => {
         actions.handleArchiveIntent({ type: "resetExtractDefaults" });
         passwordState.reset();
       }}>
         {i18n.t("extract.resetGlobalDefaults")}
       </button>
-      <details className="advanced-options" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
-        <summary>{i18n.t("extract.advancedOptions")}</summary>
-        <div className="form-grid form-grid-compact extract-advanced-grid">
+      <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/80" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3.5 py-3 text-xs font-semibold transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden"><span>{i18n.t("extract.advancedOptions")}</span><ChevronDown className="size-4 text-slate-400 transition-transform group-open:rotate-180" /></summary>
+        <div className="form-grid form-grid-compact extract-advanced-grid !gap-3 border-t border-slate-200 p-3.5 dark:border-slate-800 [&>label]:!grid-cols-1 [&>label]:!items-stretch [&>label]:!gap-1.5 [&>label>span]:text-[11px] [&>label>span]:font-semibold">
           <label>
             <span>{i18n.t("extract.stripComponents")}</span>
             <input id="extract-strip-components" type="number" min="0" value={options.stripComponents} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { stripComponents: Math.max(0, Number.parseInt(event.currentTarget.value, 10) || 0) } })} />

@@ -1268,10 +1268,6 @@ function retryJobOutputActions(context: JobRetryContext): JobOutputAction[] {
   return [];
 }
 
-function normalizeFolderPath(path: string): string {
-  return normalizeEntryPath(path);
-}
-
 function getBaseName(path: string): string {
   return getPathBasename(path, path);
 }
@@ -1742,12 +1738,6 @@ const commandRouter = createCommandRouter({
     exit: closeAppWindow,
     detailsView: () => setOperationalMessage("status.detailsViewActive"),
     sort: (key) => applySortCommand(key),
-    toggleArchiveToolbar: () => {
-      savePreferencePatch({ toolbarVisible: !appPreferences.toolbarVisible });
-    },
-    toggleLargeButtons: () => {
-      savePreferencePatch({ largeToolbarButtons: !appPreferences.largeToolbarButtons });
-    },
     toggleToolbarLabels: () => {
       savePreferencePatch({ showToolbarLabels: !appPreferences.showToolbarLabels });
     },
@@ -1798,7 +1788,6 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
       states: currentCommandStateMap(),
       pressed: {
         flatView: archive.view.flatView,
-        largeButtons: appPreferences.largeToolbarButtons,
         showButtonText: appPreferences.showToolbarLabels,
       },
       primaryCommandIds: commandIdsWithClass(commandClassState, "primary"),
@@ -2799,29 +2788,6 @@ function resetTableColumnWidth(columnId: ArchiveTableColumnId) {
   setTableColumnWidth(columnId, column.width, true);
 }
 
-function entryIsUnderFolder(entryPath: string, folderPath: string): boolean {
-  const normalizedEntry = normalizeEntryPath(entryPath);
-  const normalizedFolder = normalizeFolderPath(folderPath).replace(/\/+$/, "");
-  if (!normalizedFolder) {
-    return true;
-  }
-  return normalizedEntry === normalizedFolder || normalizedEntry.startsWith(`${normalizedFolder}/`);
-}
-
-function selectFolderEntries(folderPath: string) {
-  const descendantEntries = archiveEntries()
-    .filter((entry) => entry.kind !== "directory" && entryIsUnderFolder(entry.path, folderPath))
-    .map((entry) => entry.path);
-  const folderEntry = getEntryByPath(folderPath);
-  applyArchiveTableSelection(replaceHierarchicalTableSelection({
-    paths: descendantEntries.length > 0
-      ? descendantEntries
-      : folderEntry ? [folderEntry.path] : [],
-    focusedPath: archiveFocusedPath(),
-    anchorPath: archiveSelectionAnchorPath(),
-  }));
-}
-
 function showStartupContextMenu(x: number, y: number) {
   contextMenuRuntime.show(x, y, buildStartupContextMenuItems({
     translator: displayContext.translator,
@@ -2831,6 +2797,12 @@ function showStartupContextMenu(x: number, y: number) {
 }
 
 function showFolderContextMenu(folderPath: string, x: number, y: number, entryPath = "") {
+  if (entryPath && !archiveSelectedPathSet().has(entryPath)) {
+    applyArchiveTableSelection(ensureHierarchicalTablePathSelected({
+      ...currentArchiveTableSelectionState(),
+      path: entryPath,
+    }));
+  }
   contextMenuRuntime.show(x, y, buildArchiveFolderContextMenuItems({
     translator: displayContext.translator,
     folderPath,
@@ -2948,11 +2920,6 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
     navigateToFolder(folderPath);
     return;
   }
-  if (action === "extract-folder" && folderPath !== undefined) {
-    selectFolderEntries(folderPath);
-    openExtractDialog("selection");
-    return;
-  }
   if (action === "open-entry") {
     const selectedPath = entryPath;
     if (!selectedPath) {
@@ -2968,20 +2935,6 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
         anchorPath: selectedPath,
       }));
       runRoutedCommand("view");
-    }
-    return;
-  }
-  if (action === "open-inside") {
-    if (entryPath) {
-      const entry = getEntryByPath(entryPath);
-      if (!entry) {
-        return;
-      }
-      if (entry.kind !== "directory") {
-        setOperationalMessage("command.singleFolderRequired");
-        return;
-      }
-      navigateToFolder(entryPath);
     }
     return;
   }

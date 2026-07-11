@@ -259,15 +259,6 @@ p {
   color: var(--text);
 }
 
-.workspace.toolbar-hidden {
-  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
-  grid-template-areas:
-    "menu"
-    "path"
-    "body"
-    "status";
-}
-
 .workspace[data-mode="compress"] {
   grid-template-rows: var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
@@ -276,19 +267,6 @@ p {
     "path"
     "body"
     "status";
-}
-
-.workspace[data-mode="compress"].toolbar-hidden {
-  grid-template-rows: var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
-  grid-template-areas:
-    "menu"
-    "path"
-    "body"
-    "status";
-}
-
-.workspace.toolbar-hidden .command-toolbar {
-  display: none;
 }
 
 .workspace[data-quick-action-mode="job-only"] {
@@ -621,11 +599,6 @@ p {
 .mode-button[aria-selected="true"]:hover:not(:disabled) {
   border-color: var(--selected-border);
   background: var(--native-selection-bg-hover);
-}
-
-.command-toolbar.large .tool-button {
-  min-height: 32px;
-  padding: 5px 9px;
 }
 
 .command-toolbar.show-labels .tool-label {
@@ -3718,32 +3691,12 @@ body.linux-window-chrome .workspace {
     "status";
 }
 
-body.linux-window-chrome .workspace.toolbar-hidden {
-  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
-  grid-template-areas:
-    "title"
-    "menu"
-    "path"
-    "body"
-    "status";
-}
-
 body.linux-window-chrome .workspace[data-mode="compress"] {
   grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "title"
     "menu"
     "toolbar"
-    "path"
-    "body"
-    "status";
-}
-
-body.linux-window-chrome .workspace[data-mode="compress"].toolbar-hidden {
-  grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
-  grid-template-areas:
-    "title"
-    "menu"
     "path"
     "body"
     "status";

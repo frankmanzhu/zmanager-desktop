@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes } from "react";
+import { Archive, FolderOpen, Monitor, ShieldCheck, Sparkles, X } from "lucide-react";
 
 import {
   createFormatSupportsPassword,
@@ -15,6 +16,28 @@ import { translatorForSnapshot } from "../shell/shellHelpers";
 
 type PreferencePage = "folders" | "archive" | "extraction" | "interface" | "safety";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
+
+const PAGE_ICONS: Record<PreferencePage, typeof FolderOpen> = {
+  folders: FolderOpen,
+  archive: Archive,
+  extraction: Sparkles,
+  interface: Monitor,
+  safety: ShieldCheck,
+};
+
+const PREFERENCE_PAGE_CLASS = [
+  "space-y-5",
+  "[&>h3]:text-xl [&>h3]:font-semibold [&>h3]:tracking-tight",
+  "[&>.section-description]:-mt-3 [&>.section-description]:max-w-2xl [&>.section-description]:text-sm [&>.section-description]:leading-6 [&>.section-description]:text-slate-500 dark:[&>.section-description]:text-slate-400",
+  "[&_.setting-grid]:grid [&_.setting-grid]:gap-3 lg:[&_.setting-grid]:grid-cols-2",
+  "[&_.setting-row]:!grid [&_.setting-row]:!grid-cols-1 [&_.setting-row]:!items-start [&_.setting-row]:!gap-2 [&_.setting-row]:rounded-xl [&_.setting-row]:border [&_.setting-row]:border-slate-200 [&_.setting-row]:bg-white [&_.setting-row]:p-4 [&_.setting-row]:shadow-sm dark:[&_.setting-row]:border-slate-700 dark:[&_.setting-row]:bg-slate-900/70",
+  "[&_.setting-row>label]:text-sm [&_.setting-row>label]:font-semibold",
+  "[&_.setting-control]:!min-w-0 [&_.setting-control]:space-y-2 [&_.setting-control_select]:w-full",
+  "[&_.setting-description]:text-xs [&_.setting-description]:leading-5 [&_.setting-description]:text-slate-500 dark:[&_.setting-description]:text-slate-400",
+  "[&_.toggle-line]:flex [&_.toggle-line]:min-h-11 [&_.toggle-line]:items-center [&_.toggle-line]:gap-3 [&_.toggle-line]:rounded-xl [&_.toggle-line]:border [&_.toggle-line]:border-slate-200 [&_.toggle-line]:bg-white [&_.toggle-line]:px-4 [&_.toggle-line]:py-3 [&_.toggle-line]:text-sm [&_.toggle-line]:shadow-sm dark:[&_.toggle-line]:border-slate-700 dark:[&_.toggle-line]:bg-slate-900/70",
+].join(" ");
+
+const IDENTITY_FIELD_CLASS = "grid gap-1.5 text-[11px] font-semibold leading-4 text-slate-600 dark:text-slate-300 [&>input]:h-9 [&>input]:w-full [&>input]:text-xs [&>input]:font-normal";
 
 const PAGES: readonly Readonly<{ id: PreferencePage; labelKey: Parameters<ReturnType<typeof translatorForSnapshot>["t"]>[0] }>[] = [
   { id: "folders", labelKey: "preferences.folders.title" },
@@ -47,47 +70,48 @@ export function PreferencesDialog() {
   const customOutputMissing = customOutputSelected && !draft.customOutputFolderPath.trim();
 
   return (
-    <div className="dialog-backdrop" onKeyDown={(event) => {
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/40 p-6 backdrop-blur-[2px]" onKeyDown={(event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         actions.handleDialogIntent({ type: "preferencesCancel" });
       }
     }}>
-      <section className="dialog property-dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="preferences-title" tabIndex={-1}>
-        <div className="dialog-header">
+      <section className="grid h-[min(780px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50" role="dialog" aria-modal="true" aria-labelledby="preferences-title" tabIndex={-1}>
+        <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-7 py-5 dark:border-slate-800">
           <div>
-            <h2 id="preferences-title">{i18n.t("preferences.title")}</h2>
-            <p>{i18n.t("preferences.description")}</p>
+            <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400"><Sparkles className="size-3.5" />ZManager</div>
+            <h2 id="preferences-title" className="text-2xl font-semibold tracking-tight">{i18n.t("preferences.title")}</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{i18n.t("preferences.description")}</p>
           </div>
           <Button
             id="preferences-dialog-close"
             variant="dialog"
             size="unset"
-            className="icon-button"
+            className="!size-9 !rounded-lg !border-0 !bg-transparent !p-0 hover:!bg-slate-100 dark:hover:!bg-slate-800"
             type="button"
             aria-label={i18n.t("preferences.close.aria")}
             onClick={() => actions.handleDialogIntent({ type: "preferencesCancel" })}
           >
-            {i18n.t("common.close")}
+            <X className="size-4" />
           </Button>
-        </div>
-        <div className="dialog-body property-dialog-body preferences-property-body">
-          <div className="property-sheet">
-            <nav className="property-nav" aria-label="Preference categories">
+        </header>
+        <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] max-md:grid-cols-1">
+            <nav className="flex flex-col gap-1 border-r border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/45 max-md:flex-row max-md:overflow-x-auto max-md:border-b max-md:border-r-0" aria-label="Preference categories">
               {PAGES.map((page) => (
-                <button
+                <PreferenceNavigationButton
+                  icon={PAGE_ICONS[page.id]}
                   type="button"
-                  className="property-nav-item"
                   data-pref-page-target={page.id}
                   aria-selected={activePage === page.id}
                   onClick={() => setActivePage(page.id)}
                   key={page.id}
                 >
                   {i18n.t(page.labelKey)}
-                </button>
+                </PreferenceNavigationButton>
               ))}
             </nav>
-            <div className="options-pages">
+            <div className="min-h-0 overflow-y-auto bg-slate-50/35 px-7 py-6 dark:bg-slate-950">
+              <div className="mx-auto max-w-3xl">
               <FoldersPage
                 draft={draft}
                 active={activePage === "folders"}
@@ -104,19 +128,26 @@ export function PreferencesDialog() {
               <ExtractionPage draft={draft} active={activePage === "extraction"} />
               <InterfacePage draft={draft} active={activePage === "interface"} />
               <SafetyPage draft={draft} active={activePage === "safety"} selectedCreateFormat={selectedCreateFormat} />
-            </div>
-          </div>
-          <p id="preferences-status" className={customOutputMissing ? "status status-warning" : "status status-idle"}>
+              <p id="preferences-status" className={`mt-6 rounded-xl border px-4 py-3 text-xs ${customOutputMissing ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400"}`}>
             {customOutputMissing ? i18n.t("preferences.validation.customOutputRequired") : i18n.t("preferences.status.localOnly")}
-          </p>
+              </p>
+              </div>
+            </div>
         </div>
-        <div className="dialog-actions">
-          <Button id="preferences-save" type="button" variant="dialogPrimary" size="unset" disabled={customOutputMissing} onClick={() => actions.handleDialogIntent({ type: "preferencesSave" })}>{i18n.t("common.save")}</Button>
+        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-7 py-4 dark:border-slate-800 dark:bg-slate-950">
           <Button id="preferences-cancel" type="button" variant="dialog" size="unset" onClick={() => actions.handleDialogIntent({ type: "preferencesCancel" })}>{i18n.t("common.cancel")}</Button>
-        </div>
+          <Button id="preferences-save" type="button" variant="dialogPrimary" size="unset" disabled={customOutputMissing} onClick={() => actions.handleDialogIntent({ type: "preferencesSave" })}>{i18n.t("common.save")}</Button>
+        </footer>
       </section>
     </div>
   );
+}
+
+function PreferenceNavigationButton({ icon: Icon, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: typeof FolderOpen }) {
+  return <button {...props} className="flex min-w-max items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-950 aria-selected:bg-white aria-selected:text-blue-700 aria-selected:shadow-sm dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white dark:aria-selected:bg-slate-800 dark:aria-selected:text-blue-300">
+    <Icon className="size-4 shrink-0" aria-hidden="true" />
+    <span>{children}</span>
+  </button>;
 }
 
 function FoldersPage({
@@ -141,7 +172,7 @@ function FoldersPage({
     : middleTruncatePath(draft.customOutputFolderPath);
 
   return (
-    <section className="options-page property-section" data-pref-page="folders" hidden={!active}>
+    <section className={PREFERENCE_PAGE_CLASS} data-pref-page="folders" hidden={!active}>
       <h3>{i18n.t("preferences.folders.title")}</h3>
       <p className="section-description">{i18n.t("preferences.folders.description")}</p>
       <div className="setting-row">
@@ -222,7 +253,7 @@ function ArchiveDefaultsPage({
     : draft.volumeSizePresets;
 
   return (
-    <section className="options-page property-section" data-pref-page="archive" hidden={!active}>
+    <section className={PREFERENCE_PAGE_CLASS} data-pref-page="archive" hidden={!active}>
       <h3>{i18n.t("preferences.archiveDefaults.title")}</h3>
       <p className="section-description">{i18n.t("preferences.archiveDefaults.description")}</p>
       <div className="setting-grid">
@@ -299,14 +330,14 @@ function ArchiveDefaultsPage({
         <h4 className="text-xs font-semibold">{i18n.t("preferences.archiveDefaults.signingIdentity")}</h4>
         <p className="mt-1 text-xs opacity-65">{i18n.t("preferences.archiveDefaults.signingIdentityHelp")}</p>
         <div className="mt-3 grid grid-cols-2 rounded-lg bg-black/[0.06] p-1 dark:bg-white/[0.06]">
-          <button type="button" className={`rounded-md px-2 py-1.5 text-xs ${defaults.tzapSigningMode !== "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "identity" })}>{i18n.t("create.tzapIdentityFile")}</button>
-          <button type="button" className={`rounded-md px-2 py-1.5 text-xs ${defaults.tzapSigningMode === "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "advanced" })}>{i18n.t("create.tzapAdvancedIdentity")}</button>
+          <button type="button" className={`rounded-md px-2 py-1.5 !text-xs ${defaults.tzapSigningMode !== "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "identity" })}>{i18n.t("create.tzapIdentityFile")}</button>
+          <button type="button" className={`rounded-md px-2 py-1.5 !text-xs ${defaults.tzapSigningMode === "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "advanced" })}>{i18n.t("create.tzapAdvancedIdentity")}</button>
         </div>
-        {defaults.tzapSigningMode !== "advanced" ? <div className="mt-3 grid gap-2">
+        {defaults.tzapSigningMode !== "advanced" ? <div className="mt-3 grid gap-3">
           <PreferenceSigningFile label={i18n.t("create.tzapIdentityFile")} value={defaults.tzapSigningIdentityPath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "identity" })} />
-          <input aria-label={i18n.t("create.tzapIdentityName")} value={identityName} onChange={(event) => setIdentityName(event.currentTarget.value)} />
-          <input aria-label={i18n.t("create.tzapIdentityPassword")} type="password" value={identityPassword} onChange={(event) => setIdentityPassword(event.currentTarget.value)} />
-          <button type="button" className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300" onClick={() => actions.handleDialogIntent({ type: "preferencesGenerateTzapIdentity", commonName: identityName, password: identityPassword })}>{i18n.t("create.tzapCreateIdentity")}</button>
+          <label className={IDENTITY_FIELD_CLASS}><span>{i18n.t("create.tzapIdentityName")}</span><input aria-label={i18n.t("create.tzapIdentityName")} value={identityName} onChange={(event) => setIdentityName(event.currentTarget.value)} /></label>
+          <label className={IDENTITY_FIELD_CLASS}><span>{i18n.t("create.tzapIdentityPassword")}</span><input aria-label={i18n.t("create.tzapIdentityPassword")} type="password" value={identityPassword} onChange={(event) => setIdentityPassword(event.currentTarget.value)} /></label>
+          <button type="button" className="min-h-9 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 !text-[11px] !font-semibold text-blue-700 dark:text-blue-300" onClick={() => actions.handleDialogIntent({ type: "preferencesGenerateTzapIdentity", commonName: identityName, password: identityPassword })}>{i18n.t("create.tzapCreateIdentity")}</button>
         </div> : <div className="mt-3 grid gap-2">
           <PreferenceSigningFile label={i18n.t("create.tzapSigningCertificate")} value={defaults.tzapSigningCertificatePath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "certificate" })} />
           <PreferenceSigningFile label={i18n.t("create.tzapSigningPrivateKey")} value={defaults.tzapSigningPrivateKeyPath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "privateKey" })} />
@@ -353,8 +384,8 @@ function VolumeSizePresetEditor({ draft }: Readonly<{ draft: AppPreferences }>) 
 
 function PreferenceSigningFile({ label, value, onChoose }: Readonly<{ label: string; value: string; onChoose(): void }>) {
   const display = value.split(/[;\\/]/).filter(Boolean).at(-1) ?? "Not configured";
-  return <div className="grid grid-cols-[8rem_1fr_auto] items-center gap-2 rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-xs dark:border-white/10 dark:bg-black/10">
-    <span className="font-medium">{label}</span><span className="truncate opacity-65" title={value}>{display}</span><button type="button" className="rounded-md px-2 py-1 hover:bg-black/5 dark:hover:bg-white/5" onClick={onChoose}>{value ? "Change" : "Choose"}</button>
+  return <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-black/10 bg-white/60 px-3 py-2.5 dark:border-white/10 dark:bg-black/10">
+    <div className="min-w-0"><span className="block text-[11px] font-semibold leading-4">{label}</span><span className="mt-0.5 block truncate text-[11px] text-slate-500 dark:text-slate-400" title={value}>{display}</span></div><button type="button" className="min-h-8 rounded-md px-2 py-1 !text-[11px] !font-medium hover:bg-black/5 dark:hover:bg-white/5" onClick={onChoose}>{value ? "Change" : "Choose"}</button>
   </div>;
 }
 
@@ -363,7 +394,7 @@ function ExtractionPage({ draft, active }: Readonly<{ draft: AppPreferences; act
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   return (
-    <section className="options-page property-section" data-pref-page="extraction" hidden={!active}>
+    <section className={PREFERENCE_PAGE_CLASS} data-pref-page="extraction" hidden={!active}>
       <h3>{i18n.t("preferences.extraction.title")}</h3>
       <p className="section-description">{i18n.t("preferences.extraction.description")}</p>
       <div className="setting-row">
@@ -416,7 +447,7 @@ function InterfacePage({ draft, active }: Readonly<{ draft: AppPreferences; acti
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   return (
-    <section className="options-page property-section" data-pref-page="interface" hidden={!active}>
+    <section className={PREFERENCE_PAGE_CLASS} data-pref-page="interface" hidden={!active}>
       <h3>{i18n.t("preferences.interface.title")}</h3>
       <p className="section-description">{i18n.t("preferences.interface.description")}</p>
       <div className="toggle-grid settings-toggle-grid">
@@ -426,8 +457,6 @@ function InterfacePage({ draft, active }: Readonly<{ draft: AppPreferences; acti
         <PreferenceCheckbox id="pref-show-grid" label={i18n.t("preferences.interface.showGrid")} checked={draft.showGridLines} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { showGridLines: checked } })} />
         <PreferenceCheckbox id="pref-single-click" label={i18n.t("preferences.interface.singleClick")} checked={draft.singleClickOpen} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { singleClickOpen: checked } })} />
         <PreferenceCheckbox id="pref-alternative-selection" label={i18n.t("preferences.interface.alternativeSelection")} checked={draft.alternativeSelectionMode} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { alternativeSelectionMode: checked } })} />
-        <PreferenceCheckbox id="pref-toolbar-visible" label={i18n.t("preferences.interface.toolbarVisible")} checked={draft.toolbarVisible} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { toolbarVisible: checked } })} />
-        <PreferenceCheckbox id="pref-large-toolbar" label={i18n.t("preferences.interface.largeToolbar")} checked={draft.largeToolbarButtons} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { largeToolbarButtons: checked } })} />
         <PreferenceCheckbox id="pref-toolbar-labels" label={i18n.t("preferences.interface.toolbarLabels")} checked={draft.showToolbarLabels} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { showToolbarLabels: checked } })} />
         <PreferenceCheckbox id="pref-flat-view" label={i18n.t("preferences.interface.flatView")} checked={draft.flatViewDefault} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { flatViewDefault: checked } })} />
       </div>
@@ -461,7 +490,7 @@ function SafetyPage({
   const supportsPassword = createFormatSupportsPassword(selectedCreateFormat);
 
   return (
-    <section className="options-page property-section" data-pref-page="safety" hidden={!active}>
+    <section className={PREFERENCE_PAGE_CLASS} data-pref-page="safety" hidden={!active}>
       <h3>{i18n.t("preferences.safety.title")}</h3>
       <p className="section-description">{i18n.t("preferences.safety.description")}</p>
       <div className="toggle-grid settings-toggle-grid">

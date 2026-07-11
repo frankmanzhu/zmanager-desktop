@@ -74,8 +74,6 @@ export type AppPreferences = {
   fullRowSelect: boolean;
   singleClickOpen: boolean;
   alternativeSelectionMode: boolean;
-  toolbarVisible: boolean;
-  largeToolbarButtons: boolean;
   showToolbarLabels: boolean;
   flatViewDefault: boolean;
   tableVisibleColumnIds: ArchiveTableColumnId[];
@@ -164,8 +162,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   fullRowSelect: true,
   singleClickOpen: false,
   alternativeSelectionMode: false,
-  toolbarVisible: true,
-  largeToolbarButtons: false,
   showToolbarLabels: true,
   flatViewDefault: false,
   tableVisibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
@@ -461,14 +457,6 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       storage.getItem(PREFERENCE_KEYS.alternativeSelectionMode),
       DEFAULT_APP_PREFERENCES.alternativeSelectionMode,
     ),
-    toolbarVisible: storedBool(
-      storage.getItem(PREFERENCE_KEYS.toolbarVisible),
-      DEFAULT_APP_PREFERENCES.toolbarVisible,
-    ),
-    largeToolbarButtons: storedBool(
-      storage.getItem(PREFERENCE_KEYS.largeToolbarButtons),
-      DEFAULT_APP_PREFERENCES.largeToolbarButtons,
-    ),
     showToolbarLabels: storedBool(
       storage.getItem(PREFERENCE_KEYS.showToolbarLabels),
       DEFAULT_APP_PREFERENCES.showToolbarLabels,
@@ -513,8 +501,6 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.fullRowSelect, String(preferences.fullRowSelect));
   storage.setItem(PREFERENCE_KEYS.singleClickOpen, String(preferences.singleClickOpen));
   storage.setItem(PREFERENCE_KEYS.alternativeSelectionMode, String(preferences.alternativeSelectionMode));
-  storage.setItem(PREFERENCE_KEYS.toolbarVisible, String(preferences.toolbarVisible));
-  storage.setItem(PREFERENCE_KEYS.largeToolbarButtons, String(preferences.largeToolbarButtons));
   storage.setItem(PREFERENCE_KEYS.showToolbarLabels, String(preferences.showToolbarLabels));
   storage.setItem(PREFERENCE_KEYS.flatViewDefault, String(preferences.flatViewDefault));
   const tableSettings = normalizeColumnSettings({

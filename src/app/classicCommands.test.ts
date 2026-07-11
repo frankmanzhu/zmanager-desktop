@@ -65,8 +65,6 @@ describe("classic command definitions", () => {
       "sortDate",
       "sortSize",
       "flatView",
-      "archiveToolbar",
-      "largeButtons",
       "showButtonText",
     ]);
   });
@@ -289,7 +287,7 @@ describe("command state selector", () => {
     expect(state.options.enabled).toBe(true);
     expect(state.properties.enabled).toBe(true);
     expect(state.info.enabled).toBe(true);
-    expect(state.view.enabled).toBe(true);
+    expect(state.view.enabled).toBe(false);
     expect(state.openInside.enabled).toBe(true);
   });
 

@@ -366,7 +366,6 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       }),
       pressed: {
         flatView: archive.view.flatView,
-        largeButtons: DEFAULT_APP_PREFERENCES.largeToolbarButtons,
         showButtonText: DEFAULT_APP_PREFERENCES.showToolbarLabels,
       },
       primaryCommandIds: ["open"],
