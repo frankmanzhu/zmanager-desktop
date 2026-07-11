@@ -6336,6 +6336,7 @@ dependencies = [
  "windows-core 0.61.2",
  "windows-sys 0.61.2",
  "zmanager-core",
+ "zmanager-shell-contract",
 ]
 
 [[package]]
@@ -6356,6 +6357,14 @@ dependencies = [
  "cmake",
  "libc",
  "pkg-config",
+]
+
+[[package]]
+name = "zmanager-shell-contract"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

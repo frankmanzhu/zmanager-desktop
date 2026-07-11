@@ -24,6 +24,7 @@ use crate::{
 const QUICK_ACTION_ARG: &str = "--quick-action";
 const QUICK_ACTION_ARG_ALIAS: &str = "--action";
 const QUICK_ACTION_REQUEST_ARG: &str = "--quick-action-request";
+const SHELL_ACTION_REQUEST_ARG: &str = "--shell-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
 const QUICK_ACTION_EVENT: &str = "zmanager-quick-action";
@@ -727,7 +728,10 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             continue;
         }
 
-        if let Some(value) = arg.strip_prefix("--quick-action-request=") {
+        if let Some(value) = arg
+            .strip_prefix("--shell-action-request=")
+            .or_else(|| arg.strip_prefix("--quick-action-request="))
+        {
             requested = true;
             request_file_path = Some(value.to_string());
             pending_path_values = false;
@@ -745,7 +749,7 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             continue;
         }
 
-        if arg == QUICK_ACTION_REQUEST_ARG {
+        if arg == SHELL_ACTION_REQUEST_ARG || arg == QUICK_ACTION_REQUEST_ARG {
             requested = true;
             pending_request_file_value = true;
             pending_path_values = false;
@@ -795,7 +799,7 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
 
     if pending_request_file_value {
         return ParseOutcome::Requested(Err(QuickActionError::invalid(
-            "--quick-action-request requires a file path",
+            "--shell-action-request requires a file path",
         )));
     }
 
@@ -821,7 +825,7 @@ fn read_quick_action_request_file(
     let trimmed_path = request_file_path.trim();
     if trimmed_path.is_empty() {
         return Err(QuickActionError::invalid(
-            "--quick-action-request requires a file path",
+            "--shell-action-request requires a file path",
         ));
     }
     if trimmed_path.contains("://") {
@@ -833,8 +837,19 @@ fn read_quick_action_request_file(
     let content = fs::read_to_string(trimmed_path).map_err(|error| {
         QuickActionError::invalid(format!("unable to read quick-action request: {error}"))
     })?;
-    let request = serde_json::from_str::<QuickActionRequestDto>(&content).map_err(|error| {
-        QuickActionError::invalid(format!("invalid quick-action request JSON: {error}"))
+    let _ = fs::remove_file(trimmed_path);
+
+    let value = serde_json::from_str::<serde_json::Value>(&content).map_err(|error| {
+        QuickActionError::invalid(format!("invalid shell-action request JSON: {error}"))
+    })?;
+    if value.get("version").is_some() || value.get("action").is_some() {
+        let request = zmanager_shell_contract::ShellActionRequest::from_json(&content)
+            .map_err(|error| QuickActionError::invalid(error.to_string()))?;
+        return validate_request(request.action.into(), request.paths);
+    }
+
+    let request = serde_json::from_value::<QuickActionRequestDto>(value).map_err(|error| {
+        QuickActionError::invalid(format!("invalid legacy quick-action request JSON: {error}"))
     })?;
     validate_request(request.kind, request.paths)
 }
@@ -1255,7 +1270,40 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
-        let _ = std::fs::remove_file(request_path);
+        assert!(!request_path.exists(), "consumed request file should be removed");
+    }
+
+    #[test]
+    fn parse_accepts_versioned_shell_action_request_file() {
+        let request_path = unique_temp_file("shell-action-request");
+        std::fs::write(
+            &request_path,
+            r#"{"version":1,"action":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#,
+        )
+        .expect("shell-action request fixture should write");
+
+        let request_path_text = request_path.to_string_lossy().to_string();
+        let request = requested(&["--shell-action-request", &request_path_text]);
+
+        assert_eq!(request.kind, QuickActionKindDto::CompressZip);
+        assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
+        assert!(!request_path.exists(), "consumed request file should be removed");
+    }
+
+    #[test]
+    fn versioned_shell_action_request_rejects_unknown_versions() {
+        let request_path = unique_temp_file("future-shell-action-request");
+        std::fs::write(
+            &request_path,
+            r#"{"version":2,"action":"compressZip","paths":["C:/tmp/source"]}"#,
+        )
+        .expect("future shell-action request fixture should write");
+
+        let request_path_text = request_path.to_string_lossy().to_string();
+        let error = invalid(&["--shell-action-request", &request_path_text]);
+
+        assert_eq!(error.message, "unsupported shell-action request version: 2");
+        assert!(!request_path.exists(), "rejected request file should be removed");
     }
 
     #[test]
@@ -1388,7 +1436,7 @@ mod tests {
         let error = invalid(&["--quick-action-request", &request_path_text]);
 
         assert!(error.message.contains("unsupported archive"));
-        let _ = std::fs::remove_file(request_path);
+        assert!(!request_path.exists(), "rejected request file should be removed");
     }
 
     #[test]

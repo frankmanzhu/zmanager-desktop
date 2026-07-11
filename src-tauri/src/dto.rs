@@ -96,6 +96,25 @@ pub enum QuickActionKindDto {
     ExtractToFolder,
 }
 
+impl From<zmanager_shell_contract::ShellActionKind> for QuickActionKindDto {
+    fn from(action: zmanager_shell_contract::ShellActionKind) -> Self {
+        use zmanager_shell_contract::ShellActionKind;
+
+        match action {
+            ShellActionKind::Open => Self::Open,
+            ShellActionKind::Compress => Self::Compress,
+            ShellActionKind::Extract => Self::Extract,
+            ShellActionKind::CompressZip => Self::CompressZip,
+            ShellActionKind::CompressTzap => Self::CompressTzap,
+            ShellActionKind::CompressSevenZ => Self::CompressSevenZ,
+            ShellActionKind::CompressTarZst => Self::CompressTarZst,
+            ShellActionKind::CompressCleanSource => Self::CompressCleanSource,
+            ShellActionKind::ExtractHere => Self::ExtractHere,
+            ShellActionKind::ExtractToFolder => Self::ExtractToFolder,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct QuickActionRequestDto {
