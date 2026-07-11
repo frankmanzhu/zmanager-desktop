@@ -163,8 +163,11 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     showCreateWorkspace() {
       calls.shownCreateWorkspace += 1;
     },
-    setCreateSources(sources) {
-      return workspace.setSources(sources).snapshot;
+    readCreateSnapshot() {
+      return workspace.getSnapshot();
+    },
+    addCreateSources(sources) {
+      return workspace.addSources(sources).snapshot;
     },
     applyCreateDefaultsForFormat(format) {
       const defaults = createDefaultsForFormat(preferences, format);
@@ -311,6 +314,37 @@ describe("quick action controller", () => {
     expect(harness.calls.publishedSnapshots).toBeGreaterThanOrEqual(4);
     expect(harness.calls.messages.map((call) => call.key)).toContain("quickCreate.planning");
     expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.review", params: undefined });
+  });
+
+  it("adds later shell sources to the active create draft without replacing its options", async () => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      defaultArchiveFormat: "zip",
+    });
+
+    await harness.controller.handleQuickActionRequest({
+      kind: "compress",
+      paths: ["C:/work/folder1"],
+    });
+    harness.workspace.setOptions({
+      destinationPath: "C:/work/combined.zip",
+      compressionLevel: 1,
+    });
+
+    await harness.controller.handleQuickActionRequest({
+      kind: "compress",
+      paths: ["C:/work/folder2"],
+    });
+
+    expect(harness.workspace.getSnapshot().sources).toEqual([
+      "C:/work/folder1",
+      "C:/work/folder2",
+    ]);
+    expect(harness.workspace.getSnapshot().options).toMatchObject({
+      destinationPath: "C:/work/combined.zip",
+      compressionLevel: 1,
+    });
   });
 
   it("opens extract review for one supported archive after loading it", async () => {

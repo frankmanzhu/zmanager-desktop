@@ -141,7 +141,9 @@ impl QuickActionLaunchCoordinator {
         registry: JobRegistry,
     ) {
         match QuickActionStartupState::from_process_or_user_args(args) {
-            QuickActionStartupState::Requested(request) if is_create_quick_action(request.kind) => {
+            QuickActionStartupState::Requested(request)
+                if is_coalesced_create_quick_action(request.kind) =>
+            {
                 self.add_pending_create(request);
                 self.schedule_flush(app, registry);
             }
@@ -154,7 +156,9 @@ impl QuickActionLaunchCoordinator {
     fn ingest_startup_state(&self, state: QuickActionStartupState) {
         let mut inner = self.inner.lock().expect("quick-action lock poisoned");
         match state {
-            QuickActionStartupState::Requested(request) if is_create_quick_action(request.kind) => {
+            QuickActionStartupState::Requested(request)
+                if is_coalesced_create_quick_action(request.kind) =>
+            {
                 add_pending_create_locked(&mut inner, request);
             }
             other => {
@@ -239,12 +243,15 @@ pub fn startup_state_to_dto(
     }
 }
 
-pub fn prestart_direct_quick_action(
+pub fn prestart_independent_direct_quick_action(
     state: QuickActionStartupState,
     registry: &JobRegistry,
 ) -> QuickActionStartupState {
     match state {
-        QuickActionStartupState::Requested(request) if is_direct_job_quick_action(request.kind) => {
+        QuickActionStartupState::Requested(request)
+            if is_direct_job_quick_action(request.kind)
+                && !is_coalesced_create_quick_action(request.kind) =>
+        {
             match start_direct_quick_action_jobs(&request, registry) {
                 Ok(jobs) => QuickActionStartupState::StartedJobs(jobs),
                 Err(error) => QuickActionStartupState::Invalid(QuickActionError::from(error)),
@@ -340,11 +347,10 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
         .is_some_and(|current_exe_name| current_exe_name == file_name)
 }
 
-fn is_create_quick_action(kind: QuickActionKindDto) -> bool {
+fn is_coalesced_create_quick_action(kind: QuickActionKindDto) -> bool {
     matches!(
         kind,
-        QuickActionKindDto::Compress
-            | QuickActionKindDto::CompressZip
+        QuickActionKindDto::CompressZip
             | QuickActionKindDto::CompressTzap
             | QuickActionKindDto::CompressSevenZ
             | QuickActionKindDto::CompressTarZst
@@ -1282,6 +1288,59 @@ mod tests {
     }
 
     #[test]
+    fn direct_create_startup_stays_pending_for_multi_select_coalescing() {
+        let registry = JobRegistry::new();
+        let request = QuickActionRequestDto {
+            kind: QuickActionKindDto::CompressZip,
+            paths: vec!["C:/tmp/folder1".to_string()],
+        };
+
+        let startup = prestart_independent_direct_quick_action(
+            QuickActionStartupState::Requested(request.clone()),
+            &registry,
+        );
+
+        assert_eq!(startup, QuickActionStartupState::Requested(request));
+    }
+
+    #[test]
+    fn cold_start_multi_select_creates_one_zip_job_for_all_sources() {
+        let workspace = create_temp_workspace("cold-start-multi-select");
+        let folder1 = workspace.join("folder1");
+        let folder2 = workspace.join("folder2");
+        fs::create_dir_all(&folder1).expect("first source folder should be created");
+        fs::create_dir_all(&folder2).expect("second source folder should be created");
+        fs::write(folder1.join("one.txt"), b"one").expect("first source should be written");
+        fs::write(folder2.join("two.txt"), b"two").expect("second source should be written");
+        let registry = JobRegistry::new();
+
+        let startup = prestart_independent_direct_quick_action(
+            QuickActionStartupState::Requested(QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec![folder1.to_string_lossy().to_string()],
+            }),
+            &registry,
+        );
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(startup);
+        coordinator.ingest_startup_state(QuickActionStartupState::Requested(
+            QuickActionRequestDto {
+                kind: QuickActionKindDto::CompressZip,
+                paths: vec![folder2.to_string_lossy().to_string()],
+            },
+        ));
+
+        let response = startup_state_to_dto(coordinator.startup_state(), &registry);
+
+        assert_eq!(response.quick_action_jobs.len(), 1);
+        let terminal = wait_for_job_terminal(&registry, &response.quick_action_jobs[0].job_id);
+        assert_eq!(terminal.status, JobStatusDto::Completed);
+        assert!(workspace.join("folder1.zip").exists());
+        assert!(!workspace.join("folder2.zip").exists());
+
+        let _ = fs::remove_dir_all(workspace);
+    }
+
+    #[test]
     fn startup_coordinator_returns_mixed_create_launches_without_dropping_later_actions() {
         let coordinator = empty_coordinator();
         coordinator.ingest_startup_state(QuickActionStartupState::Requested(
@@ -1472,14 +1531,13 @@ mod tests {
         fs::write(&source, b"quick action tzap").expect("source should be written");
         let registry = JobRegistry::new();
 
-        let prestarted = prestart_direct_quick_action(
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
             QuickActionStartupState::Requested(QuickActionRequestDto {
                 kind: QuickActionKindDto::CompressTzap,
                 paths: vec![source.to_string_lossy().to_string()],
             }),
-            &registry,
         );
-        let response = startup_state_to_dto(prestarted, &registry);
+        let response = startup_state_to_dto(coordinator.startup_state(), &registry);
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());

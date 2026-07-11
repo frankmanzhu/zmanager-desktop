@@ -834,7 +834,8 @@ const quickActionController = createQuickActionController({
   extractProgressContext: (request) => extractJobProgressContext(request),
   extractOutputActions: extractJobOutputActions,
   showCreateWorkspace,
-  setCreateSources: (sources) => createWorkspace.setSources(sources).snapshot,
+  readCreateSnapshot: () => createWorkspace.getSnapshot(),
+  addCreateSources: (sources) => createWorkspace.addSources(sources).snapshot,
   applyCreateDefaultsForFormat,
   setCreateOptions: (patch) => createWorkspace.setOptions(patch).snapshot,
   setCreateDestinationPath: (path) => createWorkspace.setDestinationPath(path).snapshot,
@@ -3353,7 +3354,10 @@ function openExtractHereDialog(mode: ExtractMode) {
 }
 
 function showCreateWorkspace() {
-  applyCreatePreferenceDefaults();
+  const snapshot = createWorkspace.getSnapshot();
+  if (!snapshot.hasSources) {
+    applyCreatePreferenceDefaults();
+  }
   const { createDestinationHistory } = pathHistoryStore.getSnapshot();
   if (!createWorkspace.getSnapshot().options.destinationPath.trim() && createDestinationHistory[0]) {
     publishCreateWorkspaceSnapshot(createWorkspace.setDestinationPathIfBlank(createDestinationHistory[0]).snapshot);

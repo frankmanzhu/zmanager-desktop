@@ -64,7 +64,8 @@ export type QuickActionControllerOptions = Readonly<{
   extractProgressContext(request: StartExtractRequest): FocusedJobProgressContext;
   extractOutputActions(request: StartExtractRequest): JobOutputAction[];
   showCreateWorkspace(): void;
-  setCreateSources(sources: readonly string[]): CreateWorkspaceSnapshot;
+  readCreateSnapshot(): CreateWorkspaceSnapshot;
+  addCreateSources(sources: readonly string[]): CreateWorkspaceSnapshot;
   applyCreateDefaultsForFormat(format: CreateArchiveFormat): void;
   setCreateOptions(patch: CreateWorkspaceOptionPatch): CreateWorkspaceSnapshot;
   setCreateDestinationPath(path: string): CreateWorkspaceSnapshot;
@@ -185,17 +186,20 @@ export function createQuickActionController(
       return;
     }
 
+    const previousSnapshot = options.readCreateSnapshot();
     options.showCreateWorkspace();
-    const sourceSnapshot = options.publishCreateSnapshot(options.setCreateSources(sources));
-    options.applyCreateDefaultsForFormat(format);
-    options.publishCreateSnapshot();
-    options.publishCreateSnapshot(options.setCreateOptions({ cleanSource }));
-    options.publishCreateSnapshot(options.setCreateDestinationPath(quickCreateDestination(
-      [...sourceSnapshot.sources],
-      format,
-      options.preferences(),
-      options.pathHelpers,
-    )));
+    const sourceSnapshot = options.publishCreateSnapshot(options.addCreateSources(sources));
+    if (!previousSnapshot.hasSources) {
+      options.applyCreateDefaultsForFormat(format);
+      options.publishCreateSnapshot();
+      options.publishCreateSnapshot(options.setCreateOptions({ cleanSource }));
+      options.publishCreateSnapshot(options.setCreateDestinationPath(quickCreateDestination(
+        [...sourceSnapshot.sources],
+        format,
+        options.preferences(),
+        options.pathHelpers,
+      )));
+    }
     options.cancelQueuedPlanRun();
 
     options.setOperationalMessage("quickCreate.planning");

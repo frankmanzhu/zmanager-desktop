@@ -87,8 +87,11 @@ The app validates every quick action again before starting work:
 Static Explorer registry verbs do not receive Explorer's full selected-item data
 object. They also cannot produce dynamic labels such as `Add to docs.zip`.
 
-Create quick actions may arrive as separate launches; the app coalesces pending
-create launches by action where possible. The structured
+Create quick actions may arrive as separate launches. `Add to archive...`
+forwards each launch immediately and appends its paths to the singleton Main
+Window's active Create Workspace. Fixed-format create actions coalesce pending
+launches by action before starting one job, so a multi-selection produces one
+archive containing all selected sources. The structured
 `--quick-action-request` JSON contract remains available for a future
 ExplorerCommand or COM handler that receives the full selection in one process.
 
