@@ -15,10 +15,7 @@ use windows_sys::Win32::{
     },
     Storage::FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL},
     UI::{
-        Shell::{
-            SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_SYSICONINDEX, SHGFI_USEFILEATTRIBUTES,
-            SHGetFileInfoW,
-        },
+        Shell::{SHFILEINFOW, SHGFI_ICON, SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW},
         WindowsAndMessaging::{DI_NORMAL, DestroyIcon, DrawIconEx, HICON},
     },
 };
@@ -91,12 +88,11 @@ impl NativePlatform for WindowsPlatform {
     }
 
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
-        let generic_file_icon_index = system_file_icon_index("file", false);
         entries
             .iter()
             .map(|entry| SystemFileIconDto {
                 key: entry.key.clone(),
-                data_url: system_file_icon_data_url(entry, generic_file_icon_index),
+                data_url: system_file_icon_data_url(entry),
             })
             .collect()
     }
@@ -116,10 +112,7 @@ impl NativePlatform for WindowsPlatform {
     }
 }
 
-fn system_file_icon_data_url(
-    entry: &SystemFileIconRequestEntry,
-    generic_file_icon_index: Option<i32>,
-) -> Option<String> {
+fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {
     let lookup_path = if entry.is_directory {
         "folder"
     } else {
@@ -130,11 +123,6 @@ fn system_file_icon_data_url(
     } else {
         lookup_path
     };
-
-    let icon_index = system_file_icon_index(lookup_path, entry.is_directory)?;
-    if !should_use_system_file_icon(entry.is_directory, icon_index, generic_file_icon_index) {
-        return None;
-    }
 
     let wide_path = wide_null(lookup_path);
     let attributes = if entry.is_directory {
@@ -149,7 +137,7 @@ fn system_file_icon_data_url(
             attributes,
             &mut file_info,
             size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES,
+            SHGFI_ICON | SHGFI_USEFILEATTRIBUTES,
         )
     };
 
@@ -164,50 +152,86 @@ fn system_file_icon_data_url(
     data_url
 }
 
-fn system_file_icon_index(path: &str, is_directory: bool) -> Option<i32> {
-    let wide_path = wide_null(path);
-    let attributes = if is_directory {
-        FILE_ATTRIBUTE_DIRECTORY
-    } else {
-        FILE_ATTRIBUTE_NORMAL
-    };
-    let mut file_info = SHFILEINFOW::default();
-    let result = unsafe {
-        SHGetFileInfoW(
-            wide_path.as_ptr(),
-            attributes,
-            &mut file_info,
-            size_of::<SHFILEINFOW>() as u32,
-            SHGFI_SYSICONINDEX | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES,
-        )
-    };
-
-    (result != 0).then_some(file_info.iIcon)
-}
-
-fn should_use_system_file_icon(
-    is_directory: bool,
-    icon_index: i32,
-    generic_file_icon_index: Option<i32>,
-) -> bool {
-    is_directory || generic_file_icon_index != Some(icon_index)
-}
-
 #[cfg(test)]
 mod system_file_icon_tests {
-    use super::should_use_system_file_icon;
+    use std::io::Cursor;
+
+    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+
+    use super::{reconstruct_rgba_from_composites, system_file_icon_data_url};
+    use crate::dto::SystemFileIconRequestEntry;
 
     #[test]
-    fn suppresses_the_generic_file_icon_but_keeps_associated_and_directory_icons() {
-        assert!(!should_use_system_file_icon(false, 7, Some(7)));
-        assert!(should_use_system_file_icon(false, 12, Some(7)));
-        assert!(should_use_system_file_icon(true, 7, Some(7)));
-        assert!(should_use_system_file_icon(false, 7, None));
+    fn returns_the_windows_shell_icon_for_an_unknown_extension() {
+        let icon = system_file_icon_data_url(&SystemFileIconRequestEntry {
+            key: "file:.zmanager-unknown".to_string(),
+            path: ".zmanager-unknown".to_string(),
+            is_directory: false,
+        });
+
+        let data_url = icon.expect("Windows should return its generic shell icon");
+        let encoded = data_url
+            .strip_prefix("data:image/png;base64,")
+            .expect("system icon should be a PNG data URL");
+        let png_bytes = BASE64_STANDARD
+            .decode(encoded)
+            .expect("decode system icon PNG");
+        let decoder = png::Decoder::new(Cursor::new(png_bytes));
+        let reader = decoder.read_info().expect("read system icon PNG");
+
+        assert_eq!((reader.info().width, reader.info().height), (32, 32));
+    }
+
+    #[test]
+    fn reconstructs_transparent_opaque_and_partially_transparent_pixels() {
+        let black = [
+            0, 0, 0, 255, // transparent
+            0, 0, 0, 255, // opaque black
+            30, 20, 10, 255, // opaque RGB(10, 20, 30)
+            0, 0, 128, 255, // 50% red
+        ];
+        let white = [
+            255, 255, 255, 255, 0, 0, 0, 255, 30, 20, 10, 255, 127, 127, 255, 255,
+        ];
+
+        assert_eq!(
+            reconstruct_rgba_from_composites(&black, &white),
+            Some(vec![
+                0, 0, 0, 0, 0, 0, 0, 255, 10, 20, 30, 255, 255, 0, 0, 128,
+            ])
+        );
+    }
+
+    #[test]
+    fn preserves_opaque_black_right_and_bottom_edges() {
+        // A 2x2 icon with a transparent top-left pixel and an opaque black
+        // right/bottom border exercises the strokes that previously vanished.
+        let black = [0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255];
+        let white = [255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255];
+
+        assert_eq!(
+            reconstruct_rgba_from_composites(&black, &white),
+            Some(vec![0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255,])
+        );
+    }
+
+    #[test]
+    fn rejects_mismatched_or_incomplete_composite_buffers() {
+        assert_eq!(reconstruct_rgba_from_composites(&[0; 4], &[0; 8]), None);
+        assert_eq!(reconstruct_rgba_from_composites(&[0; 3], &[0; 3]), None);
     }
 }
 
 unsafe fn hicon_to_png_data_url(icon: HICON) -> Option<String> {
-    const ICON_SIZE: i32 = 16;
+    const ICON_SIZE: i32 = 32;
+
+    let black_composite = unsafe { draw_hicon_bgra(icon, ICON_SIZE, [0, 0, 0]) }?;
+    let white_composite = unsafe { draw_hicon_bgra(icon, ICON_SIZE, [255, 255, 255]) }?;
+    let rgba = reconstruct_rgba_from_composites(&black_composite, &white_composite)?;
+    encode_rgba_png_data_url(&rgba, ICON_SIZE as u32, ICON_SIZE as u32)
+}
+
+unsafe fn draw_hicon_bgra(icon: HICON, icon_size: i32, background_bgr: [u8; 3]) -> Option<Vec<u8>> {
     const BYTES_PER_PIXEL: usize = 4;
 
     let screen_dc = unsafe { GetDC(null_mut()) };
@@ -226,12 +250,12 @@ unsafe fn hicon_to_png_data_url(icon: HICON) -> Option<String> {
     let mut bitmap_info = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: ICON_SIZE,
-            biHeight: -ICON_SIZE,
+            biWidth: icon_size,
+            biHeight: -icon_size,
             biPlanes: 1,
             biBitCount: 32,
             biCompression: BI_RGB,
-            biSizeImage: (ICON_SIZE * ICON_SIZE * BYTES_PER_PIXEL as i32) as u32,
+            biSizeImage: (icon_size * icon_size * BYTES_PER_PIXEL as i32) as u32,
             ..BITMAPINFOHEADER::default()
         },
         ..BITMAPINFO::default()
@@ -257,31 +281,32 @@ unsafe fn hicon_to_png_data_url(icon: HICON) -> Option<String> {
     }
 
     let previous_object = unsafe { SelectObject(memory_dc, bitmap as HGDIOBJ) };
+    let pixel_count = icon_size as usize * icon_size as usize;
+    let bgra = unsafe { slice::from_raw_parts_mut(bits as *mut u8, pixel_count * BYTES_PER_PIXEL) };
+    for pixel in bgra.chunks_exact_mut(BYTES_PER_PIXEL) {
+        pixel.copy_from_slice(&[
+            background_bgr[0],
+            background_bgr[1],
+            background_bgr[2],
+            u8::MAX,
+        ]);
+    }
+
     let drawn = unsafe {
         DrawIconEx(
             memory_dc,
             0,
             0,
             icon,
-            ICON_SIZE,
-            ICON_SIZE,
+            icon_size,
+            icon_size,
             0,
             null_mut::<HBRUSH__>() as HBRUSH,
             DI_NORMAL,
         )
     } != 0;
 
-    let data_url = if drawn {
-        let bgra = unsafe {
-            slice::from_raw_parts(
-                bits as *const u8,
-                ICON_SIZE as usize * ICON_SIZE as usize * BYTES_PER_PIXEL,
-            )
-        };
-        encode_bgra_png_data_url(bgra, ICON_SIZE as u32, ICON_SIZE as u32)
-    } else {
-        None
-    };
+    let rendered = drawn.then(|| bgra.to_vec());
 
     if !previous_object.is_null() {
         unsafe {
@@ -294,25 +319,40 @@ unsafe fn hicon_to_png_data_url(icon: HICON) -> Option<String> {
         ReleaseDC(null_mut(), screen_dc);
     }
 
-    data_url
+    rendered
 }
 
-fn encode_bgra_png_data_url(bgra: &[u8], width: u32, height: u32) -> Option<String> {
-    let mut rgba = Vec::with_capacity(bgra.len());
-    let mut has_alpha = false;
-
-    for pixel in bgra.chunks_exact(4) {
-        let alpha = pixel[3];
-        has_alpha |= alpha != 0;
-        rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], alpha]);
+fn reconstruct_rgba_from_composites(black: &[u8], white: &[u8]) -> Option<Vec<u8>> {
+    if black.len() != white.len() || !black.len().is_multiple_of(4) {
+        return None;
     }
 
-    if !has_alpha {
-        for pixel in rgba.chunks_exact_mut(4) {
-            if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
-                pixel[3] = u8::MAX;
-            }
+    let mut rgba = Vec::with_capacity(black.len());
+    for (black_pixel, white_pixel) in black.chunks_exact(4).zip(white.chunks_exact(4)) {
+        let transparency = (0..3)
+            .map(|channel| white_pixel[channel].saturating_sub(black_pixel[channel]) as u16)
+            .sum::<u16>()
+            .div_ceil(3) as u8;
+        let alpha = u8::MAX - transparency;
+
+        for channel in [2, 1, 0] {
+            let color = if alpha == 0 {
+                0
+            } else {
+                ((black_pixel[channel] as u32 * u8::MAX as u32 + alpha as u32 / 2) / alpha as u32)
+                    .min(u8::MAX as u32) as u8
+            };
+            rgba.push(color);
         }
+        rgba.push(alpha);
+    }
+
+    Some(rgba)
+}
+
+fn encode_rgba_png_data_url(rgba: &[u8], width: u32, height: u32) -> Option<String> {
+    if rgba.len() != width as usize * height as usize * 4 {
+        return None;
     }
 
     let mut png_bytes = Vec::new();
@@ -321,7 +361,7 @@ fn encode_bgra_png_data_url(bgra: &[u8], width: u32, height: u32) -> Option<Stri
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header().ok()?;
-        writer.write_image_data(&rgba).ok()?;
+        writer.write_image_data(rgba).ok()?;
     }
 
     Some(format!(

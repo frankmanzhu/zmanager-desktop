@@ -838,6 +838,7 @@ describe("GUI layout contracts", () => {
     expect(styles).toContain(".detail-icon-native-image");
     expect(styles).toContain("max-height: 100%;");
     expect(styles).toContain("overflow: hidden;");
+    expect(styles).toMatch(/\.row-icon-native-image\s*\{\s*width:\s*17px;\s*height:\s*17px;/);
     expect(styles).not.toMatch(/\.row-icon-image,\s*\n\.tree-icon-image,\s*\n\.detail-icon-image\s*\{\s*\n\s*width:\s*100%;/);
   });
 

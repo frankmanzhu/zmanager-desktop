@@ -2021,6 +2021,11 @@ tbody tr.is-selected {
   user-select: none;
 }
 
+.row-icon-native-image {
+  width: 17px;
+  height: 17px;
+}
+
 .row-icon-folder,
 .row-icon-parent,
 .tree-icon-folder,
