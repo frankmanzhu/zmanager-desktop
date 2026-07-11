@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Settings,
   Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,6 +65,8 @@ export function commandButtonId(commandId: CommandId): string {
       return "info-toolbar";
     case "open":
       return "open-archive";
+    case "closeArchive":
+      return "close-archive";
     case "options":
       return "preferences-toolbar";
     case "jobs":
@@ -90,6 +93,8 @@ export function commandIcon(commandId: CommandId): LucideIcon {
       return Plus;
     case "open":
       return FolderOpen;
+    case "closeArchive":
+      return X;
     case "extract":
     case "copyTo":
       return Download;

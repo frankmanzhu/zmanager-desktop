@@ -5055,8 +5055,6 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881bb2873eb526aacf6f8670e163d561598529e650c22f0f6a072130ce9371b4"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -6276,7 +6274,6 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.6#5aeda95d31ce22e12eb0f587920733190727588b"
 dependencies = [
  "libc",
 ]
@@ -6284,7 +6281,6 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.6#5aeda95d31ce22e12eb0f587920733190727588b"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6342,7 +6338,6 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.6#5aeda95d31ce22e12eb0f587920733190727588b"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6370,7 +6365,6 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.6#5aeda95d31ce22e12eb0f587920733190727588b"
 dependencies = [
  "cc",
  "zeroize",

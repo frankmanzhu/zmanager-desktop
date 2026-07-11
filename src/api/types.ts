@@ -314,6 +314,8 @@ export type JobEventDto = {
     | "started"
     | "entryStarted"
     | "bytesProcessed"
+    | "phaseStarted"
+    | "phaseBytesProcessed"
     | "entryFinished"
     | "paused"
     | "resumed"
@@ -322,6 +324,7 @@ export type JobEventDto = {
     | "failed"
     | "cancelled";
   jobKind?: JobKind;
+  phase?: JobPhase;
   code?: string;
   hint?: string | null;
   severity?: "info" | "warning" | "error";
@@ -334,6 +337,13 @@ export type JobEventDto = {
   totalEntries?: number;
   message?: string;
 };
+
+export type JobPhase =
+  | "planningPayload"
+  | "planningMetadata"
+  | "emittingPayload"
+  | "emittingMetadata"
+  | "committingOutput";
 
 export type JobTerminalSummaryDto = {
   writtenEntries: number;

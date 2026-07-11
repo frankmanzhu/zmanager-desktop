@@ -81,6 +81,7 @@ describe("classic command definitions", () => {
     expect(CLASSIC_TOOLBAR_ORDER.map((id) => COMMAND_DEFINITIONS[id].label)).toEqual([
       "Add",
       "Open...",
+      "Close Archive",
       "Extract",
       "Test",
       "View",
@@ -111,6 +112,7 @@ describe("classic command definitions", () => {
     ]);
     expect(toolbarGroupsForWorkspaceMode("extract").flatMap((group) => group.items)).toEqual([
       "open",
+      "closeArchive",
       "extract",
       "test",
       "view",
@@ -247,6 +249,8 @@ describe("command state selector", () => {
     expect(state.info.enabled).toBe(true);
     expect(state.open.enabled).toBe(false);
     expect(state.open.reason).toBe(JOB_RUNNING_MESSAGE);
+    expect(state.closeArchive.enabled).toBe(false);
+    expect(state.closeArchive.reason).toBe(JOB_RUNNING_MESSAGE);
     expect(state.add.enabled).toBe(false);
     expect(state.extract.enabled).toBe(false);
     expect(state.test.enabled).toBe(false);

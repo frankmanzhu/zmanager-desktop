@@ -52,6 +52,7 @@ export type CommandExecutionResult = {
 
 export type CommandRouterEffects = {
   openArchive: (source: RoutedOpenSource, archivePath?: string) => void | Promise<void>;
+  closeArchive: () => void | Promise<void>;
   addSources: (anchor?: RoutedMenuAnchor) => void | Promise<void>;
   selectAll: () => void | Promise<void>;
   deselectAll: () => void | Promise<void>;
@@ -232,6 +233,9 @@ export function createCommandRouter(options: CommandRouterOptions): CommandRoute
       switch (commandId) {
         case "open":
           void effects.openArchive(payload.openSource ?? "dialog", payload.archivePath);
+          return executed(commandId);
+        case "closeArchive":
+          void effects.closeArchive();
           return executed(commandId);
         case "add":
           void effects.addSources(payload.addSourcesMenuAnchor);

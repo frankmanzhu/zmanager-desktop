@@ -31,7 +31,12 @@ export function ArchiveTree() {
   }));
 
   return (
-    <aside id="navigation-pane" className="navigation-pane" aria-label={i18n.t("workspace.archiveNavigation.aria")}>
+    <aside
+      id="navigation-pane"
+      className="navigation-pane"
+      aria-label={i18n.t("workspace.archiveNavigation.aria")}
+      onContextMenu={(event) => event.preventDefault()}
+    >
       <div className="pane-header">
         <h2>{i18n.t("pane.folders")}</h2>
       </div>

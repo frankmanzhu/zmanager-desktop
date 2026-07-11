@@ -1689,6 +1689,7 @@ const commandRouter = createCommandRouter({
       }
       void onOpenArchive();
     },
+    closeArchive: closeCurrentArchive,
     addSources: (anchor) => {
       if (anchor) {
         showAddSourcesMenuAt(anchor.x, anchor.y);
@@ -3648,6 +3649,17 @@ function applyCleanupOnAppClose(): void {
 
 function bindWindowLifecycleHandlers(): void {
   bindPreviewCleanupOnAppClose(applyCleanupOnAppClose);
+}
+
+function closeCurrentArchive(): void {
+  clearTrackedPreviewState();
+  contextMenuRuntime.hide();
+  archiveWorkspace.reset();
+  extractWorkspace.applyDefaults({
+    ...extractionDefaultsForArchive(""),
+    destinationPath: "",
+  });
+  publishArchiveSnapshot();
 }
 
 async function onRefreshArchive() {

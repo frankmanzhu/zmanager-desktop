@@ -378,6 +378,7 @@ pub(crate) fn start_create_internal(
             JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: Some(kind),
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -816,6 +817,7 @@ pub(crate) fn start_extract_internal(
             JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: Some(kind),
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -952,6 +954,7 @@ fn complete_job_if_needed(
         JobEventDto {
             event_type: JobEventKindDto::Completed,
             job_kind: Some(kind),
+            phase: None,
             code: None,
             hint: None,
             severity: None,
@@ -1108,6 +1111,7 @@ fn start_test_archive_internal(
             JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: Some(JobKindDto::TestArchive),
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -1172,6 +1176,7 @@ fn start_test_archive_internal(
                     JobEventDto {
                         event_type: JobEventKindDto::Completed,
                         job_kind: Some(JobKindDto::TestArchive),
+                        phase: None,
                         code: None,
                         hint: None,
                         severity: None,
@@ -1211,6 +1216,7 @@ fn run_selected_extract_job(
     sink.emit_direct(JobEventDto {
         event_type: JobEventKindDto::Started,
         job_kind: Some(kind),
+        phase: None,
         code: None,
         hint: None,
         severity: None,
@@ -1242,6 +1248,7 @@ fn run_selected_extract_job(
         sink.emit_direct(JobEventDto {
             event_type: JobEventKindDto::EntryStarted,
             job_kind: Some(kind),
+            phase: None,
             code: None,
             hint: None,
             severity: None,
@@ -1272,6 +1279,7 @@ fn run_selected_extract_job(
         sink.emit_direct(JobEventDto {
             event_type: JobEventKindDto::EntryFinished,
             job_kind: Some(kind),
+            phase: None,
             code: None,
             hint: None,
             severity: None,
@@ -1311,6 +1319,7 @@ fn run_selected_extract_job(
     sink.emit_direct(JobEventDto {
         event_type: JobEventKindDto::Completed,
         job_kind: Some(kind),
+        phase: None,
         code: None,
         hint: None,
         severity: None,
@@ -1343,6 +1352,7 @@ fn cancel_selected_extract_job(
     sink.emit_direct(JobEventDto {
         event_type: JobEventKindDto::Cancelled,
         job_kind: Some(kind),
+        phase: None,
         code: Some(constants::COMMAND_ERROR_CANCELLED),
         hint: None,
         severity: None,
@@ -2600,6 +2610,7 @@ mod tests {
             JobEventDto {
                 event_type: JobEventKindDto::Cancelled,
                 job_kind: Some(JobKindDto::ZipExtract),
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,

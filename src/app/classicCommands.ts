@@ -12,6 +12,7 @@ export const JOB_RUNNING_MESSAGE = "Finish the current job before starting anoth
 
 export type CommandId =
   | "open"
+  | "closeArchive"
   | "openInside"
   | "openOutside"
   | "view"
@@ -107,6 +108,7 @@ export type CommandBarGroup = {
 
 export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
   open: { id: "open", label: "Open...", labelKey: "command.open", shortcut: "Ctrl+O", tooltip: "Open archive (Ctrl+O)" },
+  closeArchive: { id: "closeArchive", label: "Close Archive", labelKey: "command.closeArchive", tooltip: "Close the current archive" },
   openInside: { id: "openInside", label: "Open in Archive", labelKey: "command.openInside", shortcut: "Ctrl+PageDown" },
   openOutside: { id: "openOutside", label: "Open Outside", labelKey: "command.openOutside", shortcut: "Shift+Enter" },
   view: { id: "view", label: "View", labelKey: "command.view", shortcut: "F3", tooltip: "View (F3)" },
@@ -235,7 +237,7 @@ export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
 
 export const CLASSIC_TOOLBAR_GROUPS: CommandBarGroup[] = [
   { id: "compress", label: "Compress", items: ["add"] },
-  { id: "extract", label: "Extract", items: ["open", "extract", "test"] },
+  { id: "extract", label: "Extract", items: ["open", "closeArchive", "extract", "test"] },
   { id: "table", label: "Table actions", items: ["view", "copy", "info", "refresh", "selectAll", "flatView"] },
   { id: "jobs", label: "Jobs", items: ["jobs"] },
   { id: "settings", label: "Settings", items: ["options", "deleteTempFiles"] },
@@ -338,7 +340,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   };
 
   enable(["open", "add", "options", "helpContents", "about", "jobs", "standardToolbar", "showButtonText", "exit"]);
-  enable(["extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
+  enable(["closeArchive", "extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
   enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
   enable(["view", "openOutside"], hasOneSelection && canListEntries && !canOpenInside, hasOneSelection && !canOpenInside ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
   enable(["openInside"], canOpenInside && canListEntries, hasOneSelection ? SINGLE_FOLDER_REQUIRED_MESSAGE : SINGLE_FILE_REQUIRED_MESSAGE);
@@ -355,7 +357,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   enable(mutationIds, mutationsEnabled && hasSelection, context.jobRunning ? JOB_RUNNING_MESSAGE : NO_SELECTION_MESSAGE);
 
   if (context.jobRunning) {
-    enable(["open", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
+    enable(["open", "closeArchive", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
   }
 
   for (const id of Object.keys(COMMAND_DEFINITIONS) as CommandId[]) {

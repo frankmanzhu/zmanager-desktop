@@ -7,10 +7,12 @@ use std::{
 
 use crate::job_dto::{
     CancelJobResponseDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
-    JobRecordSnapshot, JobStatusDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
+    JobPhaseDto, JobRecordSnapshot, JobStatusDto, JobTerminalSummaryDto, PollJobEventsResponseDto,
     StartJobResponseDto,
 };
-use zmanager_core::{jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind};
+use zmanager_core::{
+    jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind, jobs::JobPhase,
+};
 
 const MAX_EVENTS_TO_KEEP: usize = 256;
 
@@ -186,6 +188,7 @@ impl JobRegistry {
                         JobEventDto {
                             event_type: JobEventKindDto::Cancelled,
                             job_kind: Some(kind),
+                            phase: None,
                             code: None,
                             hint: None,
                             severity: None,
@@ -232,6 +235,7 @@ impl JobRegistry {
                     JobEventDto {
                         event_type: JobEventKindDto::Paused,
                         job_kind: Some(kind),
+                        phase: None,
                         code: None,
                         hint: None,
                         severity: None,
@@ -271,6 +275,7 @@ impl JobRegistry {
                     JobEventDto {
                         event_type: JobEventKindDto::Resumed,
                         job_kind: Some(kind),
+                        phase: None,
                         code: None,
                         hint: None,
                         severity: None,
@@ -336,6 +341,7 @@ impl JobRegistry {
             } => JobEventDto {
                 event_type: JobEventKindDto::Started,
                 job_kind: mapped_kind.map(JobKindDto::from),
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -351,6 +357,7 @@ impl JobRegistry {
             JobEvent::EntryStarted { path, bytes } => JobEventDto {
                 event_type: JobEventKindDto::EntryStarted,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -370,6 +377,7 @@ impl JobRegistry {
             } => JobEventDto {
                 event_type: JobEventKindDto::BytesProcessed,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -382,9 +390,48 @@ impl JobRegistry {
                 total_entries: None,
                 message: None,
             },
+            JobEvent::PhaseStarted { phase, total_bytes } => JobEventDto {
+                event_type: JobEventKindDto::PhaseStarted,
+                job_kind: None,
+                phase: Some(JobPhaseDto::from(*phase)),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: None,
+                bytes: None,
+                total_bytes: *total_bytes,
+                total_bytes_processed: Some(0),
+                entries: None,
+                total_entries: None,
+                message: None,
+            },
+            JobEvent::PhaseBytesProcessed {
+                phase,
+                path,
+                bytes,
+                total_bytes_processed,
+                total_bytes,
+            } => JobEventDto {
+                event_type: JobEventKindDto::PhaseBytesProcessed,
+                job_kind: None,
+                phase: Some(JobPhaseDto::from(*phase)),
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: path.clone(),
+                bytes: Some(*bytes),
+                total_bytes: *total_bytes,
+                total_bytes_processed: Some(*total_bytes_processed),
+                entries: None,
+                total_entries: None,
+                message: None,
+            },
             JobEvent::EntryFinished { path, bytes } => JobEventDto {
                 event_type: JobEventKindDto::EntryFinished,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -400,6 +447,7 @@ impl JobRegistry {
             JobEvent::Warning { message } => JobEventDto {
                 event_type: JobEventKindDto::Warning,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -415,6 +463,7 @@ impl JobRegistry {
             JobEvent::Completed { entries, bytes } => JobEventDto {
                 event_type: JobEventKindDto::Completed,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -430,6 +479,7 @@ impl JobRegistry {
             JobEvent::Failed { message } => JobEventDto {
                 event_type: JobEventKindDto::Failed,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -445,6 +495,7 @@ impl JobRegistry {
             JobEvent::Cancelled { message } => JobEventDto {
                 event_type: JobEventKindDto::Cancelled,
                 job_kind: None,
+                phase: None,
                 code: None,
                 hint: None,
                 severity: None,
@@ -949,6 +1000,18 @@ impl From<JobKind> for JobKindDto {
             JobKind::AppleArchiveExtract => JobKindDto::AppleArchiveExtract,
             JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
             JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,
+        }
+    }
+}
+
+impl From<JobPhase> for JobPhaseDto {
+    fn from(phase: JobPhase) -> Self {
+        match phase {
+            JobPhase::PlanningPayload => JobPhaseDto::PlanningPayload,
+            JobPhase::PlanningMetadata => JobPhaseDto::PlanningMetadata,
+            JobPhase::EmittingPayload => JobPhaseDto::EmittingPayload,
+            JobPhase::EmittingMetadata => JobPhaseDto::EmittingMetadata,
+            JobPhase::CommittingOutput => JobPhaseDto::CommittingOutput,
         }
     }
 }

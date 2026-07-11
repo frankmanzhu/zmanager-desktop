@@ -44,6 +44,8 @@ pub enum JobEventKindDto {
     Started,
     EntryStarted,
     BytesProcessed,
+    PhaseStarted,
+    PhaseBytesProcessed,
     EntryFinished,
     Paused,
     Resumed,
@@ -53,11 +55,22 @@ pub enum JobEventKindDto {
     Cancelled,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JobPhaseDto {
+    PlanningPayload,
+    PlanningMetadata,
+    EmittingPayload,
+    EmittingMetadata,
+    CommittingOutput,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobEventDto {
     pub event_type: JobEventKindDto,
     pub job_kind: Option<JobKindDto>,
+    pub phase: Option<JobPhaseDto>,
     pub code: Option<&'static str>,
     pub hint: Option<String>,
     pub severity: Option<ErrorSeverityDto>,
@@ -76,6 +89,7 @@ impl JobEventDto {
         Self {
             event_type: JobEventKindDto::Failed,
             job_kind: Some(job_kind),
+            phase: None,
             code: Some(error.code),
             hint: error.hint,
             severity: Some(error.severity),
@@ -97,6 +111,7 @@ impl JobEventDto {
         Self {
             event_type,
             job_kind: None,
+            phase: None,
             code: None,
             hint: None,
             severity: None,

@@ -257,6 +257,48 @@ describe("job state helpers", () => {
     expect(completedProgress.progressPercent).toBe(100);
   });
 
+  it("keeps tzap progress below completion across writer phases", () => {
+    const planningComplete: JobState = {
+      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      events: [
+        { eventType: "started", totalBytes: 1000 },
+        { eventType: "phaseStarted", phase: "planningPayload", totalBytes: 1000 },
+        {
+          eventType: "phaseBytesProcessed",
+          phase: "planningPayload",
+          totalBytes: 1000,
+          totalBytesProcessed: 1000,
+        },
+      ],
+    };
+    const emittingHalf: JobState = {
+      snapshot: planningComplete.snapshot,
+      events: [
+        ...planningComplete.events,
+        { eventType: "phaseStarted", phase: "planningMetadata" },
+        { eventType: "phaseStarted", phase: "emittingPayload", totalBytes: 1000 },
+        {
+          eventType: "phaseBytesProcessed",
+          phase: "emittingPayload",
+          totalBytes: 1000,
+          totalBytesProcessed: 500,
+        },
+      ],
+    };
+    const committing: JobState = {
+      snapshot: planningComplete.snapshot,
+      events: [
+        ...emittingHalf.events,
+        { eventType: "phaseStarted", phase: "emittingMetadata" },
+        { eventType: "phaseStarted", phase: "committingOutput" },
+      ],
+    };
+
+    expect(deriveJobProgress(planningComplete).progressPercent).toBe(40);
+    expect(deriveJobProgress(emittingHalf).progressPercent).toBe(68);
+    expect(deriveJobProgress(committing).progressPercent).toBe(99);
+  });
+
   it("derives create compression ratio from terminal output bytes", () => {
     const state: JobState = {
       snapshot: pollResponse({

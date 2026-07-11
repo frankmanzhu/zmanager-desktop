@@ -194,6 +194,34 @@ test("native file icons keep clear visual spacing from file names", async ({ pag
   expect(spacing).toBeGreaterThanOrEqual(8);
 });
 
+test("folder panes suppress the WebView context menu", async ({ page }) => {
+  const compressContextMenuNotCancelled = await page.locator("#navigation-pane").evaluate((element) =>
+    element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  expect(compressContextMenuNotCancelled).toBe(false);
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  const extractContextMenuNotCancelled = await page.locator("#navigation-pane").evaluate((element) =>
+    element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  expect(extractContextMenuNotCancelled).toBe(false);
+});
+
+test("Close Archive resets Extract to its empty state", async ({ page }) => {
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+
+  await expect(page.locator("#close-archive")).toBeEnabled();
+  await expect(page.locator("#archive-empty-state")).toBeHidden();
+
+  await page.locator("#close-archive").click();
+
+  await expect(page.locator("#archive-empty-state")).toBeVisible();
+  await expect(page.locator("#extract-destination")).toBeDisabled();
+  await expect(page.locator("#extract-destination")).toHaveValue("");
+  await expect(page.locator("#close-archive")).toBeDisabled();
+});
+
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar")).toBeVisible();
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #create-destination")).toBeVisible();

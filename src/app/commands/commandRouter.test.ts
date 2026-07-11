@@ -26,6 +26,7 @@ function recordingEffects(log: string[]): CommandRouterEffects {
 
   return {
     openArchive: (source, archivePath) => record(`openArchive:${source}:${archivePath ?? ""}`),
+    closeArchive: () => record("closeArchive"),
     addSources: (anchor) => record(`addSources:${anchor ? `${anchor.x},${anchor.y}` : ""}`),
     selectAll: () => record("selectAll"),
     deselectAll: () => record("deselectAll"),
@@ -78,12 +79,13 @@ describe("command router", () => {
     });
 
     expect(router.run("open")).toEqual({ commandId: "open", status: "executed" });
+    expect(router.run("closeArchive")).toEqual({ commandId: "closeArchive", status: "executed" });
     expect(router.run("add")).toEqual({ commandId: "add", status: "executed" });
     expect(router.run("selectAll")).toEqual({ commandId: "selectAll", status: "executed" });
     expect(router.run("refresh")).toEqual({ commandId: "refresh", status: "executed" });
     expect(router.run("about")).toEqual({ commandId: "about", status: "executed" });
 
-    expect(log).toEqual(["openArchive:dialog:", "addSources:", "selectAll", "refresh", "about"]);
+    expect(log).toEqual(["openArchive:dialog:", "closeArchive", "addSources:", "selectAll", "refresh", "about"]);
   });
 
   it("passes payload for commands whose behavior depends on the surface context", () => {

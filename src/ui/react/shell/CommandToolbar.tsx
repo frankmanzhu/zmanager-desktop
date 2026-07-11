@@ -66,6 +66,7 @@ function ExtractToolbarGroups({ groups }: Readonly<{ groups: readonly CommandBar
       <div className="toolbar-group" role="group" aria-label="Extract" data-command-group="extract">
         <span className="toolbar-group-label">Extract</span>
         <ToolbarButton commandId="open" />
+        <ToolbarButton commandId="closeArchive" />
         <ToolbarActionButton
           id="extract-all"
           label={i18n.t("extract.allAction")}

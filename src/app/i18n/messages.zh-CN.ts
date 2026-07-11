@@ -51,6 +51,7 @@ export const zhCnMessages = {
   "commands.upOneLevel": "向上一级",
   "commands.upOneLevel.tooltip": "向上一级 (Backspace)",
   "command.open": "打开...",
+  "command.closeArchive": "关闭归档",
   "command.openInside": "在归档中打开",
   "command.openOutside": "外部打开",
   "command.view": "查看",

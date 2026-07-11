@@ -57,6 +57,7 @@ export const enMessages = {
   "commands.upOneLevel": "Up One Level",
   "commands.upOneLevel.tooltip": "Up One Level (Backspace)",
   "command.open": "Open...",
+  "command.closeArchive": "Close Archive",
   "command.openInside": "Open in Archive",
   "command.openOutside": "Open Outside",
   "command.view": "View",

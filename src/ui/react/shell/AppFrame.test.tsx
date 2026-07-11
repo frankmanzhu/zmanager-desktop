@@ -66,6 +66,8 @@ describe("React AppFrame shell", () => {
 
     expect(html).toContain('id="open-archive"');
     expect(html).toContain("Open archive");
+    expect(html).toContain('id="close-archive"');
+    expect(html).toContain("Close Archive");
     expect(html).toContain('data-command-group="extract"');
     expect(html).toContain('id="extract-all"');
     expect(html).toContain('id="extract-selected"');

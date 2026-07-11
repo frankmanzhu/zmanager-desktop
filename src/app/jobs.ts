@@ -3,6 +3,7 @@ import { calculateCompressionRatio, parseDateValue } from "./formatting";
 import type {
   JobEventDto,
   JobKind,
+  JobPhase,
   JobStatus,
   JobState,
   PollJobEventsResponseDto,
@@ -184,7 +185,16 @@ export type JobProgressSnapshot = {
   currentFile: string;
   progressPercent: number | null;
   latestStatusMessage: string;
+  phase: JobPhase | null;
 };
+
+const TZAP_CREATE_PHASE_RANGES: Readonly<Record<JobPhase, Readonly<{ start: number; end: number }>>> = Object.freeze({
+  planningPayload: Object.freeze({ start: 0, end: 40 }),
+  planningMetadata: Object.freeze({ start: 40, end: 42 }),
+  emittingPayload: Object.freeze({ start: 42, end: 94 }),
+  emittingMetadata: Object.freeze({ start: 94, end: 99 }),
+  committingOutput: Object.freeze({ start: 99, end: 99 }),
+});
 
 export function deriveJobProgress(
   state: JobState,
@@ -202,6 +212,9 @@ export function deriveJobProgress(
   let warningCount = 0;
   let currentFile = "";
   let latestStatusMessage = String(state.snapshot.status);
+  let phase: JobPhase | null = null;
+  let phaseProcessedBytes = 0;
+  let phaseTotalBytes: number | null = null;
 
   for (const event of state.events) {
     if (event.path) {
@@ -210,9 +223,22 @@ export function deriveJobProgress(
     if (typeof event.totalBytes === "number") {
       totalBytes = Math.max(totalBytes ?? 0, event.totalBytes);
     }
-    if (typeof event.totalBytesProcessed === "number") {
+    if (event.eventType === "phaseStarted" && event.phase) {
+      phase = event.phase;
+      phaseProcessedBytes = 0;
+      phaseTotalBytes = typeof event.totalBytes === "number" ? event.totalBytes : null;
+    } else if (event.eventType === "phaseBytesProcessed" && event.phase) {
+      phase = event.phase;
+      phaseProcessedBytes = typeof event.totalBytesProcessed === "number"
+        ? event.totalBytesProcessed
+        : phaseProcessedBytes + (event.bytes ?? 0);
+      if (typeof event.totalBytes === "number") {
+        phaseTotalBytes = event.totalBytes;
+      }
+    }
+    if (event.eventType === "bytesProcessed" && typeof event.totalBytesProcessed === "number") {
       processedBytes = Math.max(processedBytes, event.totalBytesProcessed);
-    } else if (typeof event.bytes === "number") {
+    } else if (event.eventType !== "phaseBytesProcessed" && typeof event.bytes === "number") {
       processedBytes += event.bytes;
     }
     if (typeof event.totalEntries === "number") {
@@ -229,7 +255,7 @@ export function deriveJobProgress(
     if (event.eventType === "failed") {
       errorCount += 1;
     }
-    latestStatusMessage = event.message ?? event.eventType;
+    latestStatusMessage = event.message ?? event.phase ?? event.eventType;
   }
 
   const terminalSummary = state.snapshot.terminalSummary;
@@ -255,21 +281,28 @@ export function deriveJobProgress(
     : null;
   const remainingBytes = totalBytes !== null ? Math.max(0, totalBytes - processedBytes) : null;
   const remainingFiles = totalFiles !== null ? Math.max(0, totalFiles - processedFiles) : null;
-  const remainingMs = remainingBytes !== null && speedBytesPerSecond && speedBytesPerSecond > 0
+  const byteRemainingMs = remainingBytes !== null && speedBytesPerSecond && speedBytesPerSecond > 0
     ? (remainingBytes / speedBytesPerSecond) * 1000
     : remainingFiles !== null && filesPerSecond && filesPerSecond > 0
       ? (remainingFiles / filesPerSecond) * 1000
       : null;
-  const measuredProgressPercent = totalBytes !== null && totalBytes > 0
+  const byteProgressPercent = totalBytes !== null && totalBytes > 0
     ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
     : totalFiles !== null && totalFiles > 0
       ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
     : null;
+  const phaseProgressPercent = state.snapshot.kind === "tzapCreate" && phase
+    ? progressPercentForTzapPhase(phase, phaseProcessedBytes, phaseTotalBytes)
+    : null;
+  const measuredProgressPercent = phaseProgressPercent ?? byteProgressPercent;
   const progressPercent = state.snapshot.status === "completed"
     ? 100
     : isTerminalJobStatus(state.snapshot.status)
       ? measuredProgressPercent ?? 0
       : measuredProgressPercent;
+  const remainingMs = phaseProgressPercent !== null && progressPercent !== null && progressPercent > 0
+    ? elapsedMs * ((100 - progressPercent) / progressPercent)
+    : byteRemainingMs;
   const compressionRatio = isCreateJob
     ? calculateCompressionRatio(totalBytes, compressedBytes)
     : null;
@@ -292,5 +325,18 @@ export function deriveJobProgress(
     currentFile,
     progressPercent,
     latestStatusMessage,
+    phase,
   };
+}
+
+function progressPercentForTzapPhase(
+  phase: JobPhase,
+  processedBytes: number,
+  totalBytes: number | null,
+): number {
+  const range = TZAP_CREATE_PHASE_RANGES[phase];
+  const fraction = totalBytes !== null && totalBytes > 0
+    ? Math.max(0, Math.min(1, processedBytes / totalBytes))
+    : 0;
+  return range.start + ((range.end - range.start) * fraction);
 }
