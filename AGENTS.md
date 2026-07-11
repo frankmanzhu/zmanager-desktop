@@ -1,5 +1,19 @@
 # Repository Guidelines
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `frankmanzhu/zmanager-desktop`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical workflow labels defined for this repository. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository with `CONTEXT.md` at the root and architectural decisions under `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Project Structure & Module Organization
 
 ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. Keep it separate from the macOS SwiftUI app; do not reimplement archive behavior in TypeScript.
