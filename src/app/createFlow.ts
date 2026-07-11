@@ -32,6 +32,9 @@ const CREATE_PASSWORD_FORMATS = new Set<CreateArchiveFormat>(["zip", "tzap", "se
 export const TZAP_RECOVERY_PERCENTAGE_DEFAULT = 5;
 export const TZAP_RECOVERY_PERCENTAGE_MIN = 0;
 export const TZAP_RECOVERY_PERCENTAGE_MAX = 100;
+export const TZAP_VOLUME_LOSS_TOLERANCE_MIN = 0;
+export const TZAP_VOLUME_LOSS_TOLERANCE_MAX = 16;
+export const TZAP_SPLIT_DEFAULT_VOLUME_LOSS_TOLERANCE = 1;
 
 export type CreateArchiveUnavailableReason =
   | "needsSources"
@@ -135,6 +138,16 @@ export function normalizeTzapRecoveryPercentage(value?: number): number | undefi
   return Math.min(
     TZAP_RECOVERY_PERCENTAGE_MAX,
     Math.max(TZAP_RECOVERY_PERCENTAGE_MIN, Math.floor(value)),
+  );
+}
+
+export function normalizeTzapVolumeLossTolerance(value?: number): number | undefined {
+  if (value === undefined || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.min(
+    TZAP_VOLUME_LOSS_TOLERANCE_MAX,
+    Math.max(TZAP_VOLUME_LOSS_TOLERANCE_MIN, Math.floor(value)),
   );
 }
 
@@ -491,7 +504,9 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
       ? {
           tzapRecoveryPercentage:
             normalizeTzapRecoveryPercentage(input.tzapRecoveryPercentage) ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT,
-          tzapVolumeLossTolerance: Math.max(0, Math.min(255, Math.floor(input.tzapVolumeLossTolerance ?? 0))),
+          tzapVolumeLossTolerance: volumeSize === undefined
+            ? 0
+            : normalizeTzapVolumeLossTolerance(input.tzapVolumeLossTolerance) ?? 0,
           ...(input.tzapCertificates ? { tzapCertificates: input.tzapCertificates } : {}),
         }
       : {}),

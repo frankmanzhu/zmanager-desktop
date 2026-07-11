@@ -1,9 +1,10 @@
-import { File, Folder } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { File, Folder, KeyRound, Plus, ShieldCheck, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
 import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
+import { formatVolumeSize } from "../../../app/volumeSizePresets";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "./CreatePasswordContext";
@@ -599,6 +600,9 @@ function CreateOptions() {
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
   const capabilities = createFormatCapabilities(options.format);
+  const volumeSizeChoices = options.volumeSize !== null && !snapshot.preferences.volumeSizePresets.includes(options.volumeSize)
+    ? [options.volumeSize, ...snapshot.preferences.volumeSizePresets]
+    : snapshot.preferences.volumeSizePresets;
   const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
   const panelOpen = manualPanelOpen ?? true;
 
@@ -622,10 +626,10 @@ function CreateOptions() {
         <div className="form-grid create-options-grid">
           <label><span className="[@media(max-height:560px)]:!hidden">{i18n.t("create.archiveFormat")}</span><select id="create-format" value={options.format} onChange={(event) => actions.handleCreateIntent({ type: "changeFormat", format: event.currentTarget.value as typeof options.format })}><option value="zip">ZIP</option><option value="tarZst">TZST</option><option value="tzap">TZAP</option><option value="sevenZ">7Z</option></select></label>
           <label><span className="[@media(max-height:560px)]:!hidden">{i18n.t("create.compressionLevel")}</span><select id="create-compression-level" value={options.compressionLevel ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { compressionLevel: event.currentTarget.value } })}><option value="">{i18n.t("preferences.archiveDefaults.backendDefault")}</option><option value="0">0</option><option value="5">5</option><option value="9">9</option></select></label>
-          <label className="[@media(max-height:560px)]:!hidden" hidden={!capabilities.splitVolumes}><span>{i18n.t("create.splitVolumes")}</span><input id="create-volume" type="text" value={options.volumeSize ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { volumeSize: event.currentTarget.value } })} /></label>
+          <label className="[@media(max-height:560px)]:!hidden" hidden={!capabilities.splitVolumes}><span>{i18n.t("create.splitSize")}</span><select id="create-volume" value={options.volumeSize ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { volumeSize: event.currentTarget.value } })}><option value="">{i18n.t("create.noSplit")}</option>{volumeSizeChoices.map((bytes) => <option value={bytes} key={bytes}>{formatVolumeSize(bytes)}</option>)}</select></label>
           <label hidden={!capabilities.zipCompression}><span>{i18n.t("create.zipCompression")}</span><select id="create-zip-compression" value={options.zipCompression} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { zipCompression: event.currentTarget.value as "store" | "deflate" } })}><option value="deflate">Deflate</option><option value="store">{i18n.t("common.store")}</option></select></label>
           <label id="create-tzap-recovery-field" hidden={!options.tzapRecovery.visible}><span>{i18n.t("create.tzapRecovery")}</span><input id="create-tzap-recovery" type="number" value={options.tzapRecoveryPercentage} disabled={options.tzapRecovery.disabled} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapRecoveryPercentage: event.currentTarget.value } })} /></label>
-          <label hidden={!capabilities.tzapVolumeLossTolerance}><span>{i18n.t("create.tzapVolumeLossTolerance")}</span><input id="create-tzap-volume-tolerance" type="number" min="0" max="255" value={options.tzapVolumeLossTolerance} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapVolumeLossTolerance: event.currentTarget.value } })} /></label>
+          <label hidden={!capabilities.tzapVolumeLossTolerance}><span>{i18n.t("create.tzapVolumeLossTolerance")}</span><input id="create-tzap-volume-tolerance" type="number" min="0" max="16" disabled={options.volumeSize === null} value={options.tzapVolumeLossTolerance} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapVolumeLossTolerance: event.currentTarget.value } })} /></label>
           <div className="col-span-full grid grid-cols-2 gap-2 [@media(max-height:560px)]:!hidden">
           <label className="checkbox-row"><input id="create-clean-source" type="checkbox" checked={options.cleanSource} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { cleanSource: event.currentTarget.checked } })} /><span>{i18n.t("create.cleanSource")}</span></label>
           <label className="checkbox-row"><input id="create-preserve-metadata" type="checkbox" checked={options.preserveMetadata} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { preserveMetadata: event.currentTarget.checked } })} /><span>{i18n.t("create.preserveMetadata")}</span></label>
@@ -646,14 +650,19 @@ function CreateOptions() {
           </details>
         ) : null}
         {options.format === "tzap" ? (
-          <details className="mt-3 rounded-lg border border-black/10 bg-black/[0.025] p-3 [@media(max-height:560px)]:!hidden dark:border-white/10 dark:bg-white/[0.035]">
+          <details className="mt-3 rounded-xl border border-black/10 bg-black/[0.025] p-3 [@media(max-height:560px)]:!hidden dark:border-white/10 dark:bg-white/[0.035]">
             <summary className="cursor-pointer text-xs font-semibold">{i18n.t("create.tzapCertificates")}</summary>
             <p className="mt-2 text-xs opacity-70">{i18n.t("create.tzapCertificatesHelp")}</p>
             <div className="mt-3 grid gap-3">
-              <label><span>{i18n.t("create.tzapRecipientCertificates")}</span><input id="create-tzap-recipient-certificates" type="text" placeholder={i18n.t("create.certificatePathsPlaceholder")} value={options.tzapRecipientCertificatePaths} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapRecipientCertificatePaths: event.currentTarget.value } })} /></label>
-              <label><span>{i18n.t("create.tzapSigningCertificate")}</span><input id="create-tzap-signing-certificate" type="text" value={options.tzapSigningCertificatePath} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningCertificatePath: event.currentTarget.value } })} /></label>
-              <label><span>{i18n.t("create.tzapSigningPrivateKey")}</span><input id="create-tzap-signing-private-key" type="text" value={options.tzapSigningPrivateKeyPath} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningPrivateKeyPath: event.currentTarget.value } })} /></label>
-              <label><span>{i18n.t("create.tzapSigningChain")}</span><input id="create-tzap-signing-chain" type="text" placeholder={i18n.t("create.certificatePathsPlaceholder")} value={options.tzapSigningChainPaths} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningChainPaths: event.currentTarget.value } })} /></label>
+              <CertificatePicker title={i18n.t("create.tzapRecipientCertificates")} value={options.tzapRecipientCertificatePaths} icon={<ShieldCheck className="size-4" />} onChoose={() => actions.handleCreateIntent({ type: "chooseTzapCertificate", target: "recipients" })} onClear={() => actions.handleCreateIntent({ type: "setOptions", patch: { tzapRecipientCertificatePaths: "" } })} />
+              <div className="rounded-lg border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-black/10">
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold"><KeyRound className="size-4" />{i18n.t("create.tzapSigningIdentity")}</div>
+                <div className="grid gap-2">
+                  <CertificatePicker compact title={i18n.t("create.tzapSigningCertificate")} value={options.tzapSigningCertificatePath} onChoose={() => actions.handleCreateIntent({ type: "chooseTzapCertificate", target: "signer" })} onClear={() => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningCertificatePath: "" } })} />
+                  <CertificatePicker compact title={i18n.t("create.tzapSigningPrivateKey")} value={options.tzapSigningPrivateKeyPath} onChoose={() => actions.handleCreateIntent({ type: "chooseTzapCertificate", target: "privateKey" })} onClear={() => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningPrivateKeyPath: "" } })} />
+                  <CertificatePicker compact title={i18n.t("create.tzapSigningChain")} value={options.tzapSigningChainPaths} onChoose={() => actions.handleCreateIntent({ type: "chooseTzapCertificate", target: "chain" })} onClear={() => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningChainPaths: "" } })} />
+                </div>
+              </div>
             </div>
           </details>
         ) : null}
@@ -671,6 +680,17 @@ function CreateOptions() {
     </aside>
   );
 }
+
+function CertificatePicker({ title, value, icon, compact = false, onChoose, onClear }: { title: string; value: string; icon?: ReactNode; compact?: boolean; onChoose(): void; onClear(): void }) {
+  const paths = value.split(";").map((path) => path.trim()).filter(Boolean);
+  return <div className={compact ? "grid grid-cols-[8rem_1fr_auto] items-center gap-2" : "rounded-lg border border-black/10 bg-white/60 p-3 dark:border-white/10 dark:bg-black/10"}>
+    <div className="flex items-center gap-2 text-xs font-medium">{icon}{title}</div>
+    <div className={compact ? "min-w-0" : "mt-2 flex min-h-7 flex-wrap gap-1"}>{paths.length ? paths.map((path) => <span key={path} title={path} className="max-w-full truncate rounded-md bg-blue-500/10 px-2 py-1 text-[10px] text-blue-700 dark:text-blue-300">{getPathBasename(path)}</span>) : <span className="text-[10px] opacity-55">{i18nFallbackNone()}</span>}</div>
+    <div className={compact ? "flex" : "mt-2 flex justify-end"}><button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] hover:bg-black/5 dark:hover:bg-white/5" onClick={onChoose}><Plus className="size-3" />Choose</button>{paths.length ? <button type="button" aria-label={`Clear ${title}`} className="rounded-md p-1 hover:bg-black/5 dark:hover:bg-white/5" onClick={onClear}><X className="size-3" /></button> : null}</div>
+  </div>;
+}
+
+function i18nFallbackNone() { return "Not configured"; }
 
 function includeAllState(snapshot: ReturnType<typeof useZManagerSnapshot>) {
   const rows = snapshot.create.view.rows.filter((row) => row.rowType !== "parent");

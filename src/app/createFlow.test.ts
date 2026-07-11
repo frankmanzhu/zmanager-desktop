@@ -14,6 +14,7 @@ import {
   isCreatePlanRevisionCurrent,
   normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
+  normalizeTzapVolumeLossTolerance,
   sourcePathForCreatePlanRow,
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
@@ -228,6 +229,35 @@ describe("create flow helpers", () => {
 
     expect(tzapRequest.tzapRecoveryPercentage).toBe(12);
     expect(zipRequest).not.toHaveProperty("tzapRecoveryPercentage");
+  });
+
+  it("keeps TZAP split size and volume-loss count independent", () => {
+    expect(normalizeTzapVolumeLossTolerance(-1)).toBe(0);
+    expect(normalizeTzapVolumeLossTolerance(17)).toBe(16);
+
+    const split = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      volumeSize: 10 * 1024 * 1024,
+      tzapVolumeLossTolerance: 17,
+    });
+    const single = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapVolumeLossTolerance: 4,
+    });
+
+    expect(split.volumeSize).toBe(10 * 1024 * 1024);
+    expect(split.tzapVolumeLossTolerance).toBe(16);
+    expect(single.tzapVolumeLossTolerance).toBe(0);
   });
 
   it("treats zero volume size as no split request", () => {

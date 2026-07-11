@@ -29,6 +29,8 @@ import type {
   TestArchiveRequest,
   ValidateDirectoryRequest,
   ValidateDirectoryResponse,
+  VerifyTzapCertificateRequest,
+  VerifyTzapCertificateResponse,
 } from "./types";
 
 export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
@@ -81,6 +83,12 @@ export async function runStartExtract(request: StartExtractRequest): Promise<Sta
   return invoke<StartJobResponseDto>("start_extract", {
     request,
   });
+}
+
+export async function verifyTzapCertificate(
+  request: VerifyTzapCertificateRequest,
+): Promise<VerifyTzapCertificateResponse> {
+  return invoke<VerifyTzapCertificateResponse>("verify_tzap_certificate", { request });
 }
 
 export async function runPreviewEntry(request: PreviewEntryRequest): Promise<PreviewEntryResponse> {

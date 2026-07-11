@@ -52,4 +52,29 @@ describe("extract workspace", () => {
     expect(extractModeForSelection(0)).toBe("archive");
     expect(extractModeForSelection(2)).toBe("selection");
   });
+
+  it("tracks TZAP trust configuration and verification outcomes without secrets", () => {
+    const workspace = createExtractWorkspace(defaults);
+    workspace.setTzapVerificationOptions({
+      validateTrust: true,
+      trustedCaCertificatePaths: [" C:/certs/root.pem ", "C:/certs/root.pem"],
+      trustedSystemRoots: true,
+    });
+    expect(workspace.beginTzapVerification().tzapVerification).toMatchObject({
+      state: "checking",
+      trustedCaCertificatePaths: ["C:/certs/root.pem"],
+    });
+    expect(workspace.acceptTzapVerification({
+      outcome: "trusted",
+      subject: "CN=Signer",
+      issuer: "CN=Root",
+      serialNumberHex: "01",
+      certificateSha256: "ab",
+      signedAtUnixSeconds: 1,
+      trustAnchorSubject: "CN=Root",
+      verifiedChainSubjects: ["CN=Signer", "CN=Root"],
+      diagnostics: [],
+    }).tzapVerification).toMatchObject({ state: "trusted", result: { subject: "CN=Signer" } });
+    expect(JSON.stringify(workspace.getSnapshot())).not.toContain("privateKey");
+  });
 });

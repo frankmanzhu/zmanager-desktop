@@ -1,6 +1,7 @@
 import {
   createFormatSupportsPassword,
   normalizeTzapRecoveryPercentage,
+  normalizeTzapVolumeLossTolerance,
   TZAP_RECOVERY_PERCENTAGE_DEFAULT,
   type CreateArchiveFormat,
 } from "./createFlow";
@@ -23,6 +24,7 @@ import {
   type LocalePreference,
 } from "./i18n/locale";
 import type { ExtractOverwritePolicy, ExtractPathMode } from "./extractFlow";
+import { DEFAULT_VOLUME_SIZE_PRESETS, normalizeVolumeSizePresets } from "./volumeSizePresets";
 
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
 export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extractToFolder";
@@ -51,6 +53,7 @@ export type AppPreferences = {
   defaultArchiveFormat: CreateArchiveFormat;
   defaultCleanSourceEnabled: boolean;
   createFormatDefaults: CreateFormatDefaultsMap;
+  volumeSizePresets: number[];
   defaultOutputLocation: DefaultOutputLocation;
   customOutputFolderPath: string;
   customExtractFolderPath: string;
@@ -135,6 +138,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       sevenZEncryptFileNames: true,
     },
   },
+  volumeSizePresets: [...DEFAULT_VOLUME_SIZE_PRESETS],
   defaultOutputLocation: "sourceFolder",
   customOutputFolderPath: "",
   customExtractFolderPath: "",
@@ -220,6 +224,23 @@ function storedTzapRecoveryPercentage(value: unknown, fallback: number | null): 
   return normalizeTzapRecoveryPercentage(value) ?? fallback;
 }
 
+function storedTzapVolumeLossTolerance(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return normalizeTzapVolumeLossTolerance(value) ?? fallback;
+}
+
+function storedTzapVolumeLossToleranceForSplit(
+  volumeSize: unknown,
+  value: unknown,
+  fallback: number,
+): number {
+  return storedPositiveNumber(volumeSize, null) === null
+    ? 0
+    : storedTzapVolumeLossTolerance(value, fallback);
+}
+
 function storedObjectBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
@@ -265,7 +286,7 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
               createFormatSupportsPassword(format) &&
               storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
             ...(format === "zip" ? { zipCompression: raw?.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
-            ...(format === "tzap" ? { tzapVolumeLossTolerance: storedNumber(raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) ?? 0 } : {}),
+            ...(format === "tzap" ? { tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(raw?.volumeSize, raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) } : {}),
             ...(format === "sevenZ" ? {
               sevenZSolid: storedObjectBool(raw?.sevenZSolid, fallback.sevenZSolid ?? true),
               sevenZThreads: storedPositiveNumber(raw?.sevenZThreads, fallback.sevenZThreads ?? null),
@@ -283,6 +304,22 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
 
 function cleanPath(value: string | null): string {
   return value?.trim() ?? "";
+}
+
+function loadVolumeSizePresets(value: string | null): number[] {
+  if (!value) {
+    return [...DEFAULT_VOLUME_SIZE_PRESETS];
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [...DEFAULT_VOLUME_SIZE_PRESETS];
+    }
+    const normalized = normalizeVolumeSizePresets(parsed);
+    return normalized.length ? normalized : [...DEFAULT_VOLUME_SIZE_PRESETS];
+  } catch {
+    return [...DEFAULT_VOLUME_SIZE_PRESETS];
+  }
 }
 
 function loadVisibleColumnIds(value: string | null): ArchiveTableColumnId[] {
@@ -375,6 +412,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       storage.getItem(PREFERENCE_KEYS.defaultExtractDeduplicateRoot),
       DEFAULT_APP_PREFERENCES.defaultExtractDeduplicateRoot,
     ),
+    volumeSizePresets: loadVolumeSizePresets(storage.getItem(PREFERENCE_KEYS.volumeSizePresets)),
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
       ? previewCleanupPolicy
       : DEFAULT_APP_PREFERENCES.previewCleanupPolicy,
@@ -440,6 +478,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.locale, preferences.locale);
   storage.setItem(PREFERENCE_KEYS.defaultCleanSourceEnabled, String(preferences.defaultCleanSourceEnabled));
   storage.setItem(PREFERENCE_KEYS.createFormatDefaults, JSON.stringify(preferences.createFormatDefaults));
+  storage.setItem(PREFERENCE_KEYS.volumeSizePresets, JSON.stringify(preferences.volumeSizePresets));
   storage.setItem(PREFERENCE_KEYS.defaultOutputLocation, preferences.defaultOutputLocation);
   storage.setItem(PREFERENCE_KEYS.defaultExtractionBehavior, preferences.defaultExtractionBehavior);
   storage.setItem(PREFERENCE_KEYS.defaultExtractPathMode, preferences.defaultExtractPathMode);
@@ -493,6 +532,10 @@ export function preferencesWithPatch(
     createFormatDefaults: normalizeCreateFormatDefaults(
       patch.createFormatDefaults ?? preferences.createFormatDefaults,
     ),
+    volumeSizePresets: (() => {
+      const normalized = normalizeVolumeSizePresets(patch.volumeSizePresets ?? preferences.volumeSizePresets);
+      return normalized.length ? normalized : [...DEFAULT_VOLUME_SIZE_PRESETS];
+    })(),
     customOutputFolderPath:
       patch.customOutputFolderPath !== undefined
         ? patch.customOutputFolderPath.trim()
@@ -531,7 +574,7 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           replaceExisting: Boolean(value.replaceExisting),
           promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),
           ...(format === "zip" ? { zipCompression: value.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
-          ...(format === "tzap" ? { tzapVolumeLossTolerance: storedNumber(value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) ?? 0 } : {}),
+          ...(format === "tzap" ? { tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(value.volumeSize, value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) } : {}),
           ...(format === "sevenZ" ? {
             sevenZSolid: storedObjectBool(value.sevenZSolid, fallback.sevenZSolid ?? true),
             sevenZThreads: storedPositiveNumber(value.sevenZThreads, fallback.sevenZThreads ?? null),

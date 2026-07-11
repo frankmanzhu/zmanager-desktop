@@ -9,6 +9,7 @@ export type PreferenceStorageKey =
   | "defaultArchiveFormat"
   | "defaultCleanSourceEnabled"
   | "createFormatDefaults"
+  | "volumeSizePresets"
   | "defaultOutputLocation"
   | "customOutputFolderPath"
   | "customExtractFolderPath"
@@ -39,6 +40,7 @@ export const PREFERENCE_KEYS = {
   defaultArchiveFormat: "zmanager.defaultArchiveFormat",
   defaultCleanSourceEnabled: "zmanager.defaultCleanSourceEnabled",
   createFormatDefaults: "zmanager.createFormatDefaults",
+  volumeSizePresets: "zmanager.volumeSizePresets",
   defaultOutputLocation: "zmanager.defaultOutputLocation",
   customOutputFolderPath: "zmanager.customOutputFolderPath",
   customExtractFolderPath: "zmanager.customExtractFolderPath",

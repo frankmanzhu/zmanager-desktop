@@ -53,6 +53,7 @@ use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, Sev
 use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
 use zmanager_core::tzap_backend::{
     TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509SigningOptions,
+    TzapX509TrustOptions, inspect_tzap_x509_public_no_key_signer, verify_tzap_x509_public_no_key,
 };
 use zmanager_core::zip_backend::{ZipBackendError, ZipCreateOptions, ZipCreateReport};
 
@@ -395,7 +396,11 @@ pub(crate) fn start_create_internal(
     let compression_level = request.compression_level;
     let volume_size = request.volume_size.filter(|value| *value > 0);
     let tzap_recovery_percentage = request.tzap_recovery_percentage.unwrap_or(5).min(100);
-    let tzap_volume_loss_tolerance = request.tzap_volume_loss_tolerance.unwrap_or(0);
+    let tzap_volume_loss_tolerance = if volume_size.is_some() {
+        request.tzap_volume_loss_tolerance.unwrap_or(0).min(16)
+    } else {
+        0
+    };
     let zip_compression = request.zip_compression;
     let seven_z_solid = request.seven_z_solid.unwrap_or(true);
     let seven_z_threads = request.seven_z_threads.filter(|value| *value > 0);
@@ -583,6 +588,71 @@ pub fn start_extract(
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_extract_internal(request, &registry)
+}
+
+#[tauri::command]
+pub fn verify_tzap_certificate(
+    request: crate::dto::VerifyTzapCertificateRequest,
+) -> Result<crate::dto::VerifyTzapCertificateResponse, CommandErrorDto> {
+    let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
+    if !zmanager_core::tzap_backend::is_tzap_archive_path(Path::new(&archive_path)) {
+        return Err(CommandErrorDto::invalid_request(
+            "certificate verification is available only for TZAP archives",
+        ));
+    }
+
+    if request.validate_trust {
+        let trust = TzapX509TrustOptions {
+            trusted_ca_certificates: request
+                .trusted_ca_certificate_paths
+                .iter()
+                .map(PathBuf::from)
+                .collect(),
+            trusted_system_roots: request.trusted_system_roots,
+            include_official_tzap_root: request.include_official_tzap_root,
+        };
+        if !trust.has_trust_source() {
+            return Err(CommandErrorDto::invalid_request(
+                "trust validation requires the official TZAP root, a custom CA, or system roots",
+            ));
+        }
+        let report =
+            verify_tzap_x509_public_no_key(&archive_path, &trust).map_err(map_tzap_error)?;
+        return Ok(crate::dto::VerifyTzapCertificateResponse {
+            outcome: "trusted",
+            subject: report.subject,
+            issuer: report.issuer,
+            serial_number_hex: report.serial_number_hex,
+            certificate_sha256: hex_bytes(&report.certificate_sha256),
+            signed_at_unix_seconds: report.signed_at_unix_seconds,
+            trust_anchor_subject: report.trust_anchor_subject,
+            verified_chain_subjects: report.verified_chain_subjects,
+            diagnostics: report.diagnostics,
+        });
+    }
+
+    let inspection =
+        inspect_tzap_x509_public_no_key_signer(&archive_path).map_err(map_tzap_error)?;
+    Ok(crate::dto::VerifyTzapCertificateResponse {
+        outcome: "signatureValid",
+        subject: inspection.subject,
+        issuer: inspection.issuer,
+        serial_number_hex: inspection.serial_number_hex,
+        certificate_sha256: hex_bytes(&inspection.certificate_sha256),
+        signed_at_unix_seconds: inspection.signed_at_unix_seconds,
+        trust_anchor_subject: None,
+        verified_chain_subjects: Vec::new(),
+        diagnostics: inspection.diagnostics,
+    })
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(output, "{byte:02x}");
+    }
+    output
 }
 
 pub(crate) fn start_extract_internal(

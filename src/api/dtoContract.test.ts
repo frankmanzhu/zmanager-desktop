@@ -12,6 +12,7 @@ const REQUEST_DTO_TYPES = [
   "PlanCreateRequest",
   "StartCreateRequest",
   "StartExtractRequest",
+  "VerifyTzapCertificateRequest",
   "PreviewEntryRequest",
   "NativeFileDragRequest",
   "TestArchiveRequest",

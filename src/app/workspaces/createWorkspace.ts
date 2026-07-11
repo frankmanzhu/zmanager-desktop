@@ -20,7 +20,9 @@ import {
   isCreatePlanPathIncluded,
   normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
+  normalizeTzapVolumeLossTolerance,
   suggestedCreateArchiveName,
+  TZAP_SPLIT_DEFAULT_VOLUME_LOSS_TOLERANCE,
   TZAP_RECOVERY_PERCENTAGE_DEFAULT,
   withCreateArchiveExtension,
   type CreateArchiveFormat,
@@ -762,7 +764,7 @@ export function createCreateWorkspace(): CreateWorkspace {
           ? { tzapRecoveryPercentage: normalizeTzapRecoveryOption(patch.tzapRecoveryPercentage) }
           : {}),
         ...(patch.tzapVolumeLossTolerance !== undefined
-          ? { tzapVolumeLossTolerance: normalizeOptionalNonNegativeInteger(patch.tzapVolumeLossTolerance) ?? 0 }
+          ? { tzapVolumeLossTolerance: normalizeTzapVolumeLossTolerance(normalizeOptionalNumber(patch.tzapVolumeLossTolerance)) ?? 0 }
           : {}),
         ...(patch.zipCompression !== undefined ? { zipCompression: patch.zipCompression } : {}),
         ...(patch.sevenZSolid !== undefined ? { sevenZSolid: patch.sevenZSolid } : {}),
@@ -780,6 +782,16 @@ export function createCreateWorkspace(): CreateWorkspace {
         ...(patch.tzapSigningPrivateKeyPath !== undefined ? { tzapSigningPrivateKeyPath: patch.tzapSigningPrivateKeyPath } : {}),
         ...(patch.tzapSigningChainPaths !== undefined ? { tzapSigningChainPaths: patch.tzapSigningChainPaths } : {}),
       };
+      if (state.options.format === "tzap" && patch.volumeSize !== undefined) {
+        if (nextOptions.volumeSize === null) {
+          nextOptions.tzapVolumeLossTolerance = 0;
+        } else if (state.options.volumeSize === null && patch.tzapVolumeLossTolerance === undefined) {
+          nextOptions.tzapVolumeLossTolerance = TZAP_SPLIT_DEFAULT_VOLUME_LOSS_TOLERANCE;
+        }
+      }
+      if (state.options.format === "tzap" && nextOptions.volumeSize === null) {
+        nextOptions.tzapVolumeLossTolerance = 0;
+      }
       const optionsChanged = !sameOptions(state.options, nextOptions);
       const planWillRefresh = state.planState === "error" && state.currentPlan !== null;
       if (!optionsChanged && !planWillRefresh) {
@@ -1285,7 +1297,9 @@ function applyDefaultsToOptions(
     tzapRecoveryPercentage: format === "tzap"
       ? normalizeTzapRecoveryOption(defaults.tzapRecoveryPercentage)
       : TZAP_RECOVERY_PERCENTAGE_DEFAULT,
-    tzapVolumeLossTolerance: format === "tzap" ? defaults.tzapVolumeLossTolerance ?? 0 : 0,
+    tzapVolumeLossTolerance: format === "tzap" && defaults.volumeSize
+      ? normalizeTzapVolumeLossTolerance(defaults.tzapVolumeLossTolerance) ?? TZAP_SPLIT_DEFAULT_VOLUME_LOSS_TOLERANCE
+      : 0,
     zipCompression: format === "zip" ? defaults.zipCompression ?? "deflate" : "deflate",
     sevenZSolid: format === "sevenZ" ? defaults.sevenZSolid ?? true : true,
     sevenZThreads: format === "sevenZ" ? defaults.sevenZThreads ?? null : null,

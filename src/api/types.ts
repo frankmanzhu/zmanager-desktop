@@ -226,6 +226,26 @@ export type TestArchiveRequest = {
   password?: string;
 };
 
+export type VerifyTzapCertificateRequest = {
+  archivePath: string;
+  validateTrust: boolean;
+  trustedCaCertificatePaths: string[];
+  trustedSystemRoots: boolean;
+  includeOfficialTzapRoot: boolean;
+};
+
+export type VerifyTzapCertificateResponse = {
+  outcome: "signatureValid" | "trusted";
+  subject: string;
+  issuer: string;
+  serialNumberHex: string;
+  certificateSha256: string;
+  signedAtUnixSeconds: number;
+  trustAnchorSubject?: string | null;
+  verifiedChainSubjects: string[];
+  diagnostics: string[];
+};
+
 export type PollJobEventsRequest = {
   jobId: string;
 };

@@ -1,4 +1,16 @@
 import type { ExtractMode, ExtractOverwritePolicy, ExtractPathMode, ExtractStartInput } from "../extractFlow";
+import type { VerifyTzapCertificateResponse } from "../../api/types";
+
+export type TzapVerificationState = "idle" | "checking" | "signatureValid" | "trusted" | "error";
+export type TzapVerificationSnapshot = Readonly<{
+  validateTrust: boolean;
+  trustedCaCertificatePaths: readonly string[];
+  trustedSystemRoots: boolean;
+  includeOfficialTzapRoot: boolean;
+  state: TzapVerificationState;
+  result: VerifyTzapCertificateResponse | null;
+  error: string;
+}>;
 
 export type ExtractWorkspaceOptionPatch = Partial<Pick<
   ExtractWorkspaceSnapshot,
@@ -21,6 +33,7 @@ export type ExtractWorkspaceSnapshot = Readonly<{
   deduplicateRoot: boolean;
   usesGlobalDefaults: boolean;
   passwordPromptOpen: boolean;
+  tzapVerification: TzapVerificationSnapshot;
 }>;
 
 export type ExtractWorkspace = Readonly<{
@@ -28,6 +41,10 @@ export type ExtractWorkspace = Readonly<{
   applyDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorkspaceSnapshot;
   setOptions(patch: ExtractWorkspaceOptionPatch): ExtractWorkspaceSnapshot;
   resetToDefaults(): ExtractWorkspaceSnapshot;
+  setTzapVerificationOptions(patch: Partial<Pick<TzapVerificationSnapshot, "validateTrust" | "trustedCaCertificatePaths" | "trustedSystemRoots" | "includeOfficialTzapRoot">>): ExtractWorkspaceSnapshot;
+  beginTzapVerification(): ExtractWorkspaceSnapshot;
+  acceptTzapVerification(result: VerifyTzapCertificateResponse): ExtractWorkspaceSnapshot;
+  rejectTzapVerification(error: string): ExtractWorkspaceSnapshot;
   buildStartInput(password?: string): ExtractStartInput;
 }>;
 
@@ -69,6 +86,38 @@ export function createExtractWorkspace(initialDefaults: ExtractWorkspaceDefaults
       return cloneSnapshot(state);
     },
 
+    setTzapVerificationOptions(patch) {
+      state = {
+        ...state,
+        tzapVerification: freezeVerification({
+          ...state.tzapVerification,
+          ...patch,
+          trustedCaCertificatePaths: patch.trustedCaCertificatePaths
+            ? uniquePaths(patch.trustedCaCertificatePaths)
+            : state.tzapVerification.trustedCaCertificatePaths,
+          state: "idle",
+          result: null,
+          error: "",
+        }),
+      };
+      return cloneSnapshot(state);
+    },
+
+    beginTzapVerification() {
+      state = { ...state, tzapVerification: freezeVerification({ ...state.tzapVerification, state: "checking", result: null, error: "" }) };
+      return cloneSnapshot(state);
+    },
+
+    acceptTzapVerification(result) {
+      state = { ...state, tzapVerification: freezeVerification({ ...state.tzapVerification, state: result.outcome, result: { ...result }, error: "" }) };
+      return cloneSnapshot(state);
+    },
+
+    rejectTzapVerification(error) {
+      state = { ...state, tzapVerification: freezeVerification({ ...state.tzapVerification, state: "error", result: null, error }) };
+      return cloneSnapshot(state);
+    },
+
     buildStartInput(password = "") {
       return {
         destinationBasePath: state.destinationPath,
@@ -93,6 +142,15 @@ function snapshotFromDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorksp
     ...defaults,
     usesGlobalDefaults: true,
     passwordPromptOpen: false,
+    tzapVerification: freezeVerification({
+      validateTrust: false,
+      trustedCaCertificatePaths: [],
+      trustedSystemRoots: false,
+      includeOfficialTzapRoot: true,
+      state: "idle",
+      result: null,
+      error: "",
+    }),
   };
 }
 
@@ -138,5 +196,17 @@ function normalizeStripComponents(value: number): number {
 }
 
 function cloneSnapshot(snapshot: ExtractWorkspaceSnapshot): ExtractWorkspaceSnapshot {
-  return { ...snapshot };
+  return { ...snapshot, tzapVerification: freezeVerification(snapshot.tzapVerification) };
+}
+
+function freezeVerification(value: TzapVerificationSnapshot): TzapVerificationSnapshot {
+  return Object.freeze({
+    ...value,
+    trustedCaCertificatePaths: Object.freeze([...value.trustedCaCertificatePaths]),
+    result: value.result ? Object.freeze({ ...value.result }) : null,
+  });
+}
+
+function uniquePaths(paths: readonly string[]): string[] {
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
 }

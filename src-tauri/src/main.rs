@@ -79,6 +79,7 @@ fn main() {
             commands::plan_create,
             commands::start_create,
             commands::start_extract,
+            commands::verify_tzap_certificate,
             commands::preview_entry,
             commands::start_native_file_drag,
             commands::cleanup_preview_roots,

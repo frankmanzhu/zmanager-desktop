@@ -327,6 +327,34 @@ pub struct TestArchiveRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VerifyTzapCertificateRequest {
+    pub archive_path: String,
+    #[serde(default)]
+    pub validate_trust: bool,
+    #[serde(default)]
+    pub trusted_ca_certificate_paths: Vec<String>,
+    #[serde(default)]
+    pub trusted_system_roots: bool,
+    #[serde(default)]
+    pub include_official_tzap_root: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyTzapCertificateResponse {
+    pub outcome: &'static str,
+    pub subject: String,
+    pub issuer: String,
+    pub serial_number_hex: String,
+    pub certificate_sha256: String,
+    pub signed_at_unix_seconds: i64,
+    pub trust_anchor_subject: Option<String>,
+    pub verified_chain_subjects: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TzapCertificateOptionsDto {
     #[serde(default)]
     pub recipient_certificate_paths: Vec<String>,

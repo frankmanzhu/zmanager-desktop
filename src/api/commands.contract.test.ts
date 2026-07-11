@@ -78,6 +78,23 @@ const COMMAND_WRAPPERS = [
     }),
   },
   {
+    command: "verify_tzap_certificate",
+    request: {
+      archivePath: "C:/archives/demo.tzap",
+      validateTrust: true,
+      trustedCaCertificatePaths: ["C:/certs/root.pem"],
+      trustedSystemRoots: false,
+      includeOfficialTzapRoot: true,
+    },
+    call: () => api.verifyTzapCertificate({
+      archivePath: "C:/archives/demo.tzap",
+      validateTrust: true,
+      trustedCaCertificatePaths: ["C:/certs/root.pem"],
+      trustedSystemRoots: false,
+      includeOfficialTzapRoot: true,
+    }),
+  },
+  {
     command: "preview_entry",
     request: {
       archivePath: "C:/archives/demo.zip",

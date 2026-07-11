@@ -1,4 +1,4 @@
-import { Archive, Copy, File, Folder } from "lucide-react";
+import { Archive, Copy, File, Folder, Plus, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
@@ -22,6 +22,7 @@ export function ArchiveDetailsPane() {
       </div>
       <div className="extract-side-pane-content">
         <ExtractOptions />
+        <TzapVerification />
         <section className="extract-details-section [@media(max-height:560px)]:!hidden" aria-labelledby="extract-details-title">
           <h2 id="extract-details-title">{i18n.t("pane.details")}</h2>
           <div id="details-content" className="details-content">
@@ -30,6 +31,55 @@ export function ArchiveDetailsPane() {
         </section>
       </div>
     </aside>
+  );
+}
+
+function TzapVerification() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const verification = snapshot.extract.tzapVerification;
+  const isTzap = snapshot.archive.currentArchivePath.toLowerCase().includes(".tzap");
+  if (!isTzap) {
+    return null;
+  }
+
+  const busy = verification.state === "checking";
+  const successful = verification.state === "trusted" || verification.state === "signatureValid";
+  return (
+    <section className="rounded-xl border border-black/10 bg-white/70 p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.035]" aria-labelledby="tzap-verification-title">
+      <div className="flex items-start gap-2">
+        <span className={`mt-0.5 rounded-lg p-1.5 ${successful ? "bg-emerald-500/10 text-emerald-700" : verification.state === "error" ? "bg-red-500/10 text-red-700" : "bg-blue-500/10 text-blue-700"}`} aria-hidden="true">
+          {verification.state === "error" ? <ShieldAlert className="size-4" /> : <ShieldCheck className="size-4" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 id="tzap-verification-title" className="text-xs font-semibold">{i18n.t("extract.tzapVerification.title")}</h3>
+          <p className="mt-0.5 text-[11px] opacity-70">{i18n.t("extract.tzapVerification.description")}</p>
+        </div>
+      </div>
+
+      <label className="mt-3 grid gap-1 text-[11px] font-medium">
+        <span>{i18n.t("extract.tzapVerification.mode")}</span>
+        <select value={verification.validateTrust ? "trust" : "signature"} disabled={busy} onChange={(event) => actions.handleArchiveIntent({ type: "setTzapVerificationOptions", patch: { validateTrust: event.currentTarget.value === "trust" } })}>
+          <option value="signature">{i18n.t("extract.tzapVerification.signatureOnly")}</option>
+          <option value="trust">{i18n.t("extract.tzapVerification.validateTrust")}</option>
+        </select>
+      </label>
+
+      {verification.validateTrust ? (
+        <div className="mt-3 grid gap-2 rounded-lg bg-black/[0.025] p-2 dark:bg-white/[0.035]">
+          <label className="flex items-center gap-2 text-[11px]"><input type="checkbox" checked={verification.includeOfficialTzapRoot} disabled={busy} onChange={(event) => actions.handleArchiveIntent({ type: "setTzapVerificationOptions", patch: { includeOfficialTzapRoot: event.currentTarget.checked } })} /><span>{i18n.t("extract.tzapVerification.officialRoot")}</span></label>
+          <label className="flex items-center gap-2 text-[11px]"><input type="checkbox" checked={verification.trustedSystemRoots} disabled={busy} onChange={(event) => actions.handleArchiveIntent({ type: "setTzapVerificationOptions", patch: { trustedSystemRoots: event.currentTarget.checked } })} /><span>{i18n.t("extract.tzapVerification.systemRoots")}</span></label>
+          <div className="flex items-center justify-between gap-2"><span className="text-[11px] font-medium">{i18n.t("extract.tzapVerification.customCAs")}</span><button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] hover:bg-black/5 dark:hover:bg-white/5" disabled={busy} onClick={() => actions.handleArchiveIntent({ type: "chooseTzapTrustedCAs" })}><Plus className="size-3" />{i18n.t("common.add")}</button></div>
+          {verification.trustedCaCertificatePaths.map((path) => <div className="flex min-w-0 items-center gap-1 rounded-md border border-black/10 bg-white/70 px-2 py-1 dark:border-white/10 dark:bg-black/10" key={path}><span className="min-w-0 flex-1 truncate text-[10px]" title={path}>{path.split(/[\\/]/).at(-1)}</span><button type="button" className="rounded p-0.5 hover:bg-black/5" aria-label={i18n.t("common.remove")} onClick={() => actions.handleArchiveIntent({ type: "removeTzapTrustedCA", path })}><X className="size-3" /></button></div>)}
+        </div>
+      ) : null}
+
+      <button type="button" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50" disabled={busy || (verification.validateTrust && !verification.includeOfficialTzapRoot && !verification.trustedSystemRoots && verification.trustedCaCertificatePaths.length === 0)} onClick={() => actions.handleArchiveIntent({ type: "verifyTzapCertificate" })}>{busy ? i18n.t("extract.tzapVerification.checking") : verification.validateTrust ? i18n.t("extract.tzapVerification.validate") : i18n.t("extract.tzapVerification.inspect")}</button>
+
+      {verification.result ? <div className="mt-3 grid gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-2 text-[10px]"><strong className="text-emerald-700">{verification.state === "trusted" ? i18n.t("extract.tzapVerification.trusted") : i18n.t("extract.tzapVerification.signatureValid")}</strong><span className="truncate" title={verification.result.subject}>{verification.result.subject}</span><span className="truncate opacity-70" title={verification.result.issuer}>{verification.result.issuer}</span><code className="truncate opacity-70" title={verification.result.certificateSha256}>{verification.result.certificateSha256}</code></div> : null}
+      {verification.error ? <p className="mt-2 text-[10px] text-red-700" role="alert">{verification.error}</p> : null}
+    </section>
   );
 }
 

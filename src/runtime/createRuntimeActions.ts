@@ -14,6 +14,7 @@ export type CreateRuntimeActionEffects = Readonly<{
   browseDestination(): void | Promise<void>;
   changeFormat(format: Extract<ZManagerCreateIntent, { type: "changeFormat" }>["format"]): void;
   setOptions(patch: Extract<ZManagerCreateIntent, { type: "setOptions" }>["patch"]): void;
+  chooseTzapCertificate(target: Extract<ZManagerCreateIntent, { type: "chooseTzapCertificate" }>["target"]): void | Promise<void>;
   navigateToFolder(folderPath: string): void;
   setSearchQuery(query: string): void;
   clearSearch(): void;
@@ -62,6 +63,9 @@ export function createCreateRuntimeActions(
           break;
         case "setOptions":
           effects.setOptions(intent.patch);
+          break;
+        case "chooseTzapCertificate":
+          void effects.chooseTzapCertificate(intent.target);
           break;
         case "navigateToFolder":
           effects.navigateToFolder(intent.folderPath);

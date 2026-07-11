@@ -236,6 +236,7 @@ import {
   runStartExtract,
   runTestArchive,
   validateDirectory,
+  verifyTzapCertificate as verifyTzapCertificateCommand,
 } from "../api/commands";
 import type {
   ArchiveEntryDto,
@@ -418,6 +419,17 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
     extractWorkspace.resetToDefaults();
     publishReactSnapshot();
   },
+  setTzapVerificationOptions: (patch) => {
+    extractWorkspace.setTzapVerificationOptions(patch);
+    publishReactSnapshot();
+  },
+  chooseTzapTrustedCAs: chooseTzapTrustedCAs,
+  removeTzapTrustedCA: (path) => {
+    const current = extractWorkspace.getSnapshot().tzapVerification.trustedCaCertificatePaths;
+    extractWorkspace.setTzapVerificationOptions({ trustedCaCertificatePaths: current.filter((item) => item !== path) });
+    publishReactSnapshot();
+  },
+  verifyTzapCertificate: verifyCurrentTzapCertificate,
   runExtract: (mode, password) => startExtract(mode, extractWorkspace.buildStartInput(password)),
   showEmptyContextMenu: showStartupContextMenu,
   showColumnContextMenu: (columnId, x, y) => showTableHeaderContextMenu(x, y, columnId),
@@ -446,6 +458,7 @@ const createRuntimeActions = createCreateRuntimeActions({
     publishCreateWorkspaceSnapshot(createWorkspace.setOptions(patch).snapshot);
     queuePlanRun();
   },
+  chooseTzapCertificate: chooseCreateTzapCertificate,
   navigateToFolder: (folderPath) => {
     const navigation = createWorkspace.navigateToFolder(folderPath);
     if (navigation.changed) {
@@ -3182,6 +3195,13 @@ function updateReactCreateDefaultsDraft(
     ...createDefaultsForFormat(draft, format),
     ...patch,
   };
+  if (format === "tzap" && patch.volumeSize !== undefined) {
+    if (patch.volumeSize === null) {
+      nextDefaultsForFormat.tzapVolumeLossTolerance = 0;
+    } else if (!createDefaultsForFormat(draft, format).volumeSize && patch.tzapVolumeLossTolerance === undefined) {
+      nextDefaultsForFormat.tzapVolumeLossTolerance = 1;
+    }
+  }
   preferencesDialogDraft = preferencesWithPatch(draft, {
     createFormatDefaults: {
       ...draft.createFormatDefaults,
@@ -3642,6 +3662,63 @@ async function onSelectWorkspaceExtractDestination() {
   }
 
   extractWorkspace.setOptions({ destinationPath: selected });
+  publishReactSnapshot();
+}
+
+async function chooseTzapTrustedCAs() {
+  const selected = await openNativeDialog({
+    title: "Choose trusted CA certificates",
+    directory: false,
+    multiple: true,
+    filters: [{ name: "Certificates", extensions: ["pem", "cer", "crt", "der"] }],
+  });
+  if (!selected) {
+    return;
+  }
+  const paths = Array.isArray(selected) ? selected : [selected];
+  const current = extractWorkspace.getSnapshot().tzapVerification.trustedCaCertificatePaths;
+  extractWorkspace.setTzapVerificationOptions({ trustedCaCertificatePaths: [...current, ...paths] });
+  publishReactSnapshot();
+}
+
+async function chooseCreateTzapCertificate(target: "recipients" | "signer" | "privateKey" | "chain") {
+  const multiple = target === "recipients" || target === "chain";
+  const selected = await openNativeDialog({
+    title: target === "privateKey" ? "Choose signing private key" : "Choose certificate files",
+    directory: false,
+    multiple,
+    filters: [{ name: target === "privateKey" ? "Private keys" : "Certificates", extensions: target === "privateKey" ? ["pem", "key"] : ["pem", "cer", "crt", "der"] }],
+  });
+  if (!selected) return;
+  const value = (Array.isArray(selected) ? selected : [selected]).join(";");
+  const patch = target === "recipients" ? { tzapRecipientCertificatePaths: value }
+    : target === "signer" ? { tzapSigningCertificatePath: value }
+    : target === "privateKey" ? { tzapSigningPrivateKeyPath: value }
+    : { tzapSigningChainPaths: value };
+  publishCreateWorkspaceSnapshot(createWorkspace.setOptions(patch).snapshot);
+  queuePlanRun();
+}
+
+async function verifyCurrentTzapCertificate() {
+  const archivePath = archiveCurrentPath();
+  if (!archivePath.toLowerCase().includes(".tzap")) {
+    return;
+  }
+  const verification = extractWorkspace.getSnapshot().tzapVerification;
+  extractWorkspace.beginTzapVerification();
+  publishReactSnapshot();
+  try {
+    const result = await verifyTzapCertificateCommand({
+      archivePath,
+      validateTrust: verification.validateTrust,
+      trustedCaCertificatePaths: [...verification.trustedCaCertificatePaths],
+      trustedSystemRoots: verification.trustedSystemRoots,
+      includeOfficialTzapRoot: verification.includeOfficialTzapRoot,
+    });
+    extractWorkspace.acceptTzapVerification(result);
+  } catch (error) {
+    extractWorkspace.rejectTzapVerification(asCommandError(error)?.message ?? unknownErrorMessage(error, "Certificate verification failed."));
+  }
   publishReactSnapshot();
 }
 

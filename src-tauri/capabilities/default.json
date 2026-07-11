@@ -13,6 +13,7 @@
     "allow-plan-create",
     "allow-start-create",
     "allow-start-extract",
+    "allow-verify-tzap-certificate",
     "allow-start-native-file-drag",
     "allow-preview-entry",
     "allow-cleanup-preview-roots",

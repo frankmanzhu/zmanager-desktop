@@ -1292,6 +1292,13 @@ describe("create workspace option and readiness state", () => {
       compressionLevel: null,
       volumeSize: 4096,
       tzapRecoveryPercentage: 5,
+      tzapVolumeLossTolerance: 1,
+    });
+
+    expect(workspace.setOptions({ tzapVolumeLossTolerance: "17" }).snapshot.options.tzapVolumeLossTolerance).toBe(16);
+    expect(workspace.setOptions({ volumeSize: null }).snapshot.options).toMatchObject({
+      volumeSize: null,
+      tzapVolumeLossTolerance: 0,
     });
   });
 

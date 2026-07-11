@@ -8,6 +8,7 @@ import {
 } from "../../../app/createFlow";
 import { createDefaultsForFormat, type AppPreferences, type FormatCreateDefaults } from "../../../app/preferences";
 import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
+import { formatVolumeSize, formatVolumeSizePresetList, parseVolumeSizePresetList } from "../../../app/volumeSizePresets";
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -214,6 +215,9 @@ function ArchiveDefaultsPage({
   const defaults = createDefaultsForFormat(draft, selectedCreateFormat);
   const supportsTzapRecovery = selectedCreateFormat === "tzap";
   const capabilities = createFormatCapabilities(selectedCreateFormat);
+  const volumeSizeChoices = defaults.volumeSize !== null && !draft.volumeSizePresets.includes(defaults.volumeSize)
+    ? [defaults.volumeSize, ...draft.volumeSizePresets]
+    : draft.volumeSizePresets;
 
   return (
     <section className="options-page property-section" data-pref-page="archive" hidden={!active}>
@@ -264,9 +268,9 @@ function ArchiveDefaultsPage({
           </div>
         </div>
         <div className="setting-row" hidden={!capabilities.splitVolumes}>
-          <label htmlFor="pref-create-volume">{i18n.t("preferences.archiveDefaults.splitVolumes")}</label>
+          <label htmlFor="pref-create-volume">{i18n.t("create.splitSize")}</label>
           <div className="setting-control">
-            <input id="pref-create-volume" type="number" min="0" placeholder={i18n.t("preferences.archiveDefaults.noSplit")} value={defaults.volumeSize ?? ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { volumeSize: optionalPositiveNumber(event.currentTarget.value) })} />
+            <select id="pref-create-volume" value={defaults.volumeSize ?? ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { volumeSize: optionalPositiveNumber(event.currentTarget.value) })}><option value="">{i18n.t("create.noSplit")}</option>{volumeSizeChoices.map((bytes) => <option value={bytes} key={bytes}>{formatVolumeSize(bytes)}</option>)}</select>
           </div>
         </div>
         <div id="pref-create-tzap-recovery-field" className="setting-row" hidden={!supportsTzapRecovery}>
@@ -281,13 +285,14 @@ function ArchiveDefaultsPage({
         </div>
         <div className="setting-row" hidden={!capabilities.tzapVolumeLossTolerance}>
           <label htmlFor="pref-create-tzap-volume-tolerance">{i18n.t("create.tzapVolumeLossTolerance")}</label>
-          <div className="setting-control"><input id="pref-create-tzap-volume-tolerance" type="number" min="0" max="255" value={defaults.tzapVolumeLossTolerance ?? 0} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { tzapVolumeLossTolerance: optionalNumber(event.currentTarget.value) ?? 0 })} /></div>
+          <div className="setting-control"><input id="pref-create-tzap-volume-tolerance" type="number" min="0" max="16" disabled={!defaults.volumeSize} value={defaults.volumeSize ? defaults.tzapVolumeLossTolerance ?? 1 : 0} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { tzapVolumeLossTolerance: optionalNumber(event.currentTarget.value) ?? 0 })} /></div>
         </div>
         <div className="setting-row" hidden={!capabilities.sevenZAdvanced}>
           <label htmlFor="pref-create-7z-threads">{i18n.t("create.sevenZThreads")}</label>
           <div className="setting-control"><input id="pref-create-7z-threads" type="number" min="1" max="256" placeholder={i18n.t("preferences.archiveDefaults.backendDefault")} value={defaults.sevenZThreads ?? ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZThreads: optionalPositiveNumber(event.currentTarget.value) })} /></div>
         </div>
       </div>
+      <VolumeSizePresetEditor draft={draft} />
       <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
         <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
         <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
@@ -295,6 +300,33 @@ function ArchiveDefaultsPage({
         {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-encrypt-names" label={i18n.t("create.sevenZEncryptFileNames")} checked={defaults.sevenZEncryptFileNames ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZEncryptFileNames: checked })} /> : null}
       </div>
     </section>
+  );
+}
+
+function VolumeSizePresetEditor({ draft }: Readonly<{ draft: AppPreferences }>) {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const canonical = formatVolumeSizePresetList(draft.volumeSizePresets);
+  const [value, setValue] = useState(canonical);
+  const parsed = parseVolumeSizePresetList(value);
+
+  useEffect(() => setValue(canonical), [canonical]);
+
+  const commit = () => {
+    if (parsed) {
+      actions.handleDialogIntent({ type: "preferencesPatch", patch: { volumeSizePresets: parsed } });
+    } else {
+      setValue(canonical);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+      <label className="mb-2 block text-xs font-semibold" htmlFor="pref-volume-size-presets">{i18n.t("preferences.archiveDefaults.volumeChoices")}</label>
+      <input id="pref-volume-size-presets" className="w-full" type="text" value={value} aria-invalid={parsed === null} onChange={(event) => setValue(event.currentTarget.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }} />
+      <p className="mt-2 text-xs opacity-70">{i18n.t("preferences.archiveDefaults.volumeChoicesHelp")}</p>
+    </div>
   );
 }
 

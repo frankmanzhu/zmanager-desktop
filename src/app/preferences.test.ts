@@ -130,6 +130,7 @@ describe("preferences helpers", () => {
           sevenZEncryptFileNames: true,
         },
       },
+      volumeSizePresets: DEFAULT_APP_PREFERENCES.volumeSizePresets,
       defaultOutputLocation: "customFolder",
       customOutputFolderPath: "C:/Archives",
       customExtractFolderPath: "",
@@ -255,6 +256,7 @@ describe("preferences helpers", () => {
           promptForPassword: true,
         },
       }),
+      "zmanager.volumeSizePresets": JSON.stringify(DEFAULT_APP_PREFERENCES.volumeSizePresets),
       "zmanager.defaultOutputLocation": "sourceFolder",
       "zmanager.defaultExtractionBehavior": "extractHere",
       "zmanager.defaultExtractPathMode": "full",
@@ -347,12 +349,14 @@ describe("preferences helpers", () => {
           ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
           volumeSize: 0,
           tzapRecoveryPercentage: 250,
+          tzapVolumeLossTolerance: 99,
         },
       },
     });
 
     expect(createDefaultsForFormat(preferences, "tzap").volumeSize).toBeNull();
     expect(createDefaultsForFormat(preferences, "tzap").tzapRecoveryPercentage).toBe(100);
+    expect(createDefaultsForFormat(preferences, "tzap").tzapVolumeLossTolerance).toBe(0);
   });
 
   it("declares locale storage through the tracked preference key map", () => {

@@ -1,7 +1,7 @@
 import type { ArchiveTableColumnId } from "../app/archiveTable";
 import type { ZManagerArchiveIntent } from "../ui/react/appRuntime";
 import type { ExtractMode } from "../app/extractFlow";
-import type { ExtractWorkspaceOptionPatch } from "../app/workspaces/extractWorkspace";
+import type { ExtractWorkspaceOptionPatch, TzapVerificationSnapshot } from "../app/workspaces/extractWorkspace";
 
 export type ArchiveRuntimeActions = Readonly<{
   handleIntent(intent: ZManagerArchiveIntent): void;
@@ -30,6 +30,10 @@ export type ArchiveRuntimeActionEffects = Readonly<{
   browseExtractDestination(): void | Promise<void>;
   setExtractOptions(patch: ExtractWorkspaceOptionPatch): void;
   resetExtractDefaults(): void;
+  setTzapVerificationOptions(patch: Partial<Pick<TzapVerificationSnapshot, "validateTrust" | "trustedSystemRoots" | "includeOfficialTzapRoot">>): void;
+  chooseTzapTrustedCAs(): void | Promise<void>;
+  removeTzapTrustedCA(path: string): void;
+  verifyTzapCertificate(): void | Promise<void>;
   runExtract(mode: ExtractMode, password: string): void | Promise<void>;
   showEmptyContextMenu(x: number, y: number): void;
   showColumnContextMenu(columnId: ArchiveTableColumnId, x: number, y: number): void;
@@ -130,6 +134,18 @@ export function createArchiveRuntimeActions(
           break;
         case "resetExtractDefaults":
           effects.resetExtractDefaults();
+          break;
+        case "setTzapVerificationOptions":
+          effects.setTzapVerificationOptions(intent.patch);
+          break;
+        case "chooseTzapTrustedCAs":
+          void effects.chooseTzapTrustedCAs();
+          break;
+        case "removeTzapTrustedCA":
+          effects.removeTzapTrustedCA(intent.path);
+          break;
+        case "verifyTzapCertificate":
+          void effects.verifyTzapCertificate();
           break;
         case "runExtract":
           void effects.runExtract(intent.mode, intent.password);

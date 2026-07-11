@@ -115,6 +115,10 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "browseExtractDestination" }>
   | Readonly<{ type: "setExtractOptions"; patch: ExtractWorkspaceOptionPatch }>
   | Readonly<{ type: "resetExtractDefaults" }>
+  | Readonly<{ type: "setTzapVerificationOptions"; patch: Partial<Pick<ExtractWorkspaceSnapshot["tzapVerification"], "validateTrust" | "trustedSystemRoots" | "includeOfficialTzapRoot">> }>
+  | Readonly<{ type: "chooseTzapTrustedCAs" }>
+  | Readonly<{ type: "removeTzapTrustedCA"; path: string }>
+  | Readonly<{ type: "verifyTzapCertificate" }>
   | Readonly<{ type: "runExtract"; mode: ExtractMode; password: string }>
   | Readonly<{ type: "showEmptyContextMenu"; x: number; y: number }>
   | Readonly<{ type: "showColumnContextMenu"; columnId: ArchiveTableColumnId; x: number; y: number }>
@@ -131,6 +135,7 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "browseDestination" }>
   | Readonly<{ type: "changeFormat"; format: CreateWorkspaceSnapshot["options"]["format"] }>
   | Readonly<{ type: "setOptions"; patch: CreateWorkspaceOptionPatch }>
+  | Readonly<{ type: "chooseTzapCertificate"; target: "recipients" | "signer" | "privateKey" | "chain" }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>

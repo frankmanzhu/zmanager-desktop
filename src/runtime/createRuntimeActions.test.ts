@@ -66,6 +66,7 @@ function createEffects(
     browseDestination: vi.fn(),
     changeFormat: vi.fn(),
     setOptions: vi.fn(),
+    chooseTzapCertificate: vi.fn(),
     navigateToFolder: vi.fn(),
     setSearchQuery: vi.fn(),
     clearSearch: vi.fn(),
