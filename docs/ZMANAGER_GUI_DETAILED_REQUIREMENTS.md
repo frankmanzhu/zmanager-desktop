@@ -765,6 +765,9 @@ Progress behavior:
 
 - Progress bar uses determinate mode when total is known.
 - Progress bar uses indeterminate mode when total is unknown.
+- TZAP create uses the phase-aware ranges and event semantics in
+  `docs/JOB_PROGRESS_CONTRACT.md`; completing a source-byte pass must never show
+  100% while metadata or output commit remains.
 - Cancel changes state immediately to cancelling/cancel requested.
 - Completed jobs show a terminal summary before dismissal.
 - Failed jobs show error message, hint, and retry when safe.

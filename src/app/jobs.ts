@@ -185,13 +185,20 @@ export type JobProgressSnapshot = {
   currentFile: string;
   progressPercent: number | null;
   latestStatusMessage: string;
-  phase: JobPhase | null;
+  phase?: JobPhase | null;
 };
 
 const TZAP_CREATE_PHASE_RANGES: Readonly<Record<JobPhase, Readonly<{ start: number; end: number }>>> = Object.freeze({
   planningPayload: Object.freeze({ start: 0, end: 40 }),
   planningMetadata: Object.freeze({ start: 40, end: 42 }),
   emittingPayload: Object.freeze({ start: 42, end: 94 }),
+  emittingMetadata: Object.freeze({ start: 94, end: 99 }),
+  committingOutput: Object.freeze({ start: 99, end: 99 }),
+});
+const TZAP_SINGLE_PASS_PHASE_RANGES: Readonly<Record<JobPhase, Readonly<{ start: number; end: number }>>> = Object.freeze({
+  planningPayload: Object.freeze({ start: 0, end: 0 }),
+  planningMetadata: Object.freeze({ start: 0, end: 0 }),
+  emittingPayload: Object.freeze({ start: 0, end: 94 }),
   emittingMetadata: Object.freeze({ start: 94, end: 99 }),
   committingOutput: Object.freeze({ start: 99, end: 99 }),
 });
@@ -215,6 +222,7 @@ export function deriveJobProgress(
   let phase: JobPhase | null = null;
   let phaseProcessedBytes = 0;
   let phaseTotalBytes: number | null = null;
+  let sawPlanningPhase = false;
 
   for (const event of state.events) {
     if (event.path) {
@@ -225,6 +233,8 @@ export function deriveJobProgress(
     }
     if (event.eventType === "phaseStarted" && event.phase) {
       phase = event.phase;
+      sawPlanningPhase ||= phase === "planningPayload" || phase === "planningMetadata";
+      currentFile = "";
       phaseProcessedBytes = 0;
       phaseTotalBytes = typeof event.totalBytes === "number" ? event.totalBytes : null;
     } else if (event.eventType === "phaseBytesProcessed" && event.phase) {
@@ -292,7 +302,7 @@ export function deriveJobProgress(
       ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
     : null;
   const phaseProgressPercent = state.snapshot.kind === "tzapCreate" && phase
-    ? progressPercentForTzapPhase(phase, phaseProcessedBytes, phaseTotalBytes)
+    ? progressPercentForTzapPhase(phase, phaseProcessedBytes, phaseTotalBytes, sawPlanningPhase)
     : null;
   const measuredProgressPercent = phaseProgressPercent ?? byteProgressPercent;
   const progressPercent = state.snapshot.status === "completed"
@@ -333,8 +343,9 @@ function progressPercentForTzapPhase(
   phase: JobPhase,
   processedBytes: number,
   totalBytes: number | null,
+  hasPlanningPhase: boolean,
 ): number {
-  const range = TZAP_CREATE_PHASE_RANGES[phase];
+  const range = (hasPlanningPhase ? TZAP_CREATE_PHASE_RANGES : TZAP_SINGLE_PASS_PHASE_RANGES)[phase];
   const fraction = totalBytes !== null && totalBytes > 0
     ? Math.max(0, Math.min(1, processedBytes / totalBytes))
     : 0;

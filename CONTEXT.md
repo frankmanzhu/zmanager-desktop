@@ -67,6 +67,11 @@ A long-running create, extract, preview, or test operation registered by the
 Rust job layer. Jobs expose normalized progress and terminal events and support
 cancellation where the core operation permits it.
 
+TZAP create jobs also expose phase-native progress for planning payload,
+planning metadata, emitting payload, emitting metadata, and committing output.
+Repeated source-byte totals belong to different phases and must not be merged
+as unique file bytes; only a terminal completed event represents 100%.
+
 ### Preview
 
 A temporary extraction of one archive entry for viewing. The desktop layer

@@ -302,21 +302,17 @@ function aggregateFocusedQuickActionProgress(
   const compressedBytes = progressSnapshots.every((progress) => progress.compressedBytes !== null)
     ? progressSnapshots.reduce((total, progress) => total + (progress.compressedBytes ?? 0), 0)
     : null;
-  const remainingMs = totalBytes !== null && processedBytes > 0 && elapsedMs > 0
-    ? Math.max(0, ((totalBytes - processedBytes) / (processedBytes / elapsedMs)))
-    : totalFiles !== null && processedFiles > 0 && elapsedMs > 0
-      ? Math.max(0, ((totalFiles - processedFiles) / (processedFiles / elapsedMs)))
-      : null;
+  const remainingMs = progressSnapshots.every((progress) => progress.remainingMs !== null)
+    ? Math.max(...progressSnapshots.map((progress) => progress.remainingMs ?? 0), 0)
+    : null;
   const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
     ? processedBytes / (elapsedMs / 1000)
     : null;
-  const progressPercent = totalBytes !== null && totalBytes > 0
-    ? Math.max(0, Math.min(100, (processedBytes / totalBytes) * 100))
-    : totalFiles !== null && totalFiles > 0
-      ? Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100))
-      : allTerminal && allCompleted
-        ? 100
-        : null;
+  const progressPercent = allTerminal && allCompleted
+    ? 100
+    : progressSnapshots.every((progress) => progress.progressPercent !== null)
+      ? weightedProgressPercent(progressSnapshots)
+      : null;
   const latestProgress = progressSnapshots.at(-1);
 
   return {
@@ -335,6 +331,20 @@ function aggregateFocusedQuickActionProgress(
     progressPercent,
     currentFile: latestProgress?.currentFile || latestProgress?.latestStatusMessage || "",
   };
+}
+
+function weightedProgressPercent(progressSnapshots: readonly JobProgressSnapshot[]): number {
+  const totalWeight = progressSnapshots.reduce(
+    (total, progress) => total + (progress.totalBytes && progress.totalBytes > 0 ? progress.totalBytes : 1),
+    0,
+  );
+  if (totalWeight <= 0) {
+    return 0;
+  }
+  return progressSnapshots.reduce((total, progress) => {
+    const weight = progress.totalBytes && progress.totalBytes > 0 ? progress.totalBytes : 1;
+    return total + ((progress.progressPercent ?? 0) * weight);
+  }, 0) / totalWeight;
 }
 
 export function createJobsWorkspace(): JobsWorkspace {

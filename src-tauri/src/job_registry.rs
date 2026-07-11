@@ -639,6 +639,12 @@ fn push_recorded_event(record: &mut JobRecord, event: JobEventDto) {
                 .events
                 .retain(|existing| existing.event_type != JobEventKindDto::BytesProcessed);
         }
+        JobEventKindDto::PhaseBytesProcessed => {
+            record.events.retain(|existing| {
+                existing.event_type != JobEventKindDto::PhaseBytesProcessed
+                    || existing.phase != event.phase
+            });
+        }
         _ => {}
     }
 
@@ -828,6 +834,47 @@ mod tests {
             token.is_cancelled(),
             "cancel request should set the job cancellation token"
         );
+    }
+
+    #[test]
+    fn tzap_phase_progress_maps_and_coalesces_per_phase() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::TzapCreate);
+
+        registry.emit_job_event(
+            &response.job_id,
+            JobEvent::PhaseStarted {
+                phase: JobPhase::PlanningPayload,
+                total_bytes: Some(100),
+            },
+        );
+        for processed in [25, 75] {
+            registry.emit_job_event(
+                &response.job_id,
+                JobEvent::PhaseBytesProcessed {
+                    phase: JobPhase::PlanningPayload,
+                    path: Some("payload.bin".to_string()),
+                    bytes: processed,
+                    total_bytes_processed: processed,
+                    total_bytes: Some(100),
+                },
+            );
+        }
+
+        let snapshot = registry
+            .snapshot(&response.job_id)
+            .expect("job should exist after create");
+        assert_eq!(snapshot.events.len(), 2);
+        assert_eq!(snapshot.events[0].phase, Some(JobPhaseDto::PlanningPayload));
+        assert!(matches!(
+            snapshot.events[0].event_type,
+            JobEventKindDto::PhaseStarted
+        ));
+        assert_eq!(snapshot.events[1].total_bytes_processed, Some(75));
+        assert!(matches!(
+            snapshot.events[1].event_type,
+            JobEventKindDto::PhaseBytesProcessed
+        ));
     }
 
     #[test]

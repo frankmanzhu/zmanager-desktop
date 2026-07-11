@@ -299,6 +299,24 @@ describe("job state helpers", () => {
     expect(deriveJobProgress(committing).progressPercent).toBe(99);
   });
 
+  it("starts single-pass tzap emission progress at zero", () => {
+    const state: JobState = {
+      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      events: [
+        { eventType: "started", totalBytes: 1000 },
+        { eventType: "phaseStarted", phase: "emittingPayload", totalBytes: 1000 },
+        {
+          eventType: "phaseBytesProcessed",
+          phase: "emittingPayload",
+          totalBytes: 1000,
+          totalBytesProcessed: 500,
+        },
+      ],
+    };
+
+    expect(deriveJobProgress(state).progressPercent).toBe(47);
+  });
+
   it("derives create compression ratio from terminal output bytes", () => {
     const state: JobState = {
       snapshot: pollResponse({

@@ -56,7 +56,7 @@ export function DisposableTaskView({
     <section className="grid flex-1 content-start gap-5 px-5 py-5">
       <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
         <div className="mb-3 flex items-center justify-between gap-3"><TaskState state={state} /><span className="text-xs tabular-nums opacity-60">{formatClock(progress.elapsedMs)}</span></div>
-        <p className="mb-3 min-h-5 truncate text-sm font-medium" title={progress.currentFile}>{progress.currentFile || statusText(state)}</p>
+        <p className="mb-3 min-h-5 truncate text-sm font-medium" title={progress.currentFile}>{progress.currentFile || taskPhaseLabel(progress.phase) || statusText(state)}</p>
         <progress className="h-2 w-full overflow-hidden rounded-full" aria-label="Task progress" value={progress.progressPercent ?? undefined} max="100" />
         <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
           <Metric label="Files" value={progress.totalFiles === null ? String(progress.processedFiles) : `${progress.processedFiles} / ${progress.totalFiles}`} />
@@ -111,6 +111,18 @@ function isCreateKind(kind: DisposableTaskJobSnapshot["kind"]): boolean {
 
 function taskKindLabel(kind: DisposableTaskJobSnapshot["kind"]): string {
   return kind.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (value) => value.toUpperCase());
+}
+
+function taskPhaseLabel(phase: ReturnType<typeof deriveJobProgress>["phase"]): string {
+  switch (phase) {
+    case "planningPayload": return "Planning archive…";
+    case "planningMetadata": return "Planning archive metadata…";
+    case "emittingPayload": return "Writing archive payload…";
+    case "emittingMetadata": return "Writing recovery metadata…";
+    case "committingOutput": return "Finalizing archive…";
+    case null:
+    case undefined: return "";
+  }
 }
 
 function formatClock(milliseconds: number | null): string {
