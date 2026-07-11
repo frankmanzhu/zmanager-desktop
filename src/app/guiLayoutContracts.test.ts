@@ -604,7 +604,7 @@ describe("GUI layout contracts", () => {
     expect(dialogRootSource).toContain("function dialogReturnFocusElement");
     expect(dialogRootSource).toContain('element.closest("[hidden], .context-menu")');
     expect(dialogRootSource).toContain("function focusTargetForClosedDialog");
-    expect(dialogRootSource).toContain('document.querySelector<HTMLElement>("#extract-toolbar")');
+    expect(dialogRootSource).toContain('document.querySelector<HTMLElement>("#extract-all")');
     expect(mainSource).not.toContain("browsePasswordInput");
     expect(styles).toContain(".task-dialog");
     expect(styles).toContain(".property-dialog");

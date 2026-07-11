@@ -1382,7 +1382,7 @@ function createOutputFolderDefaultPath(destinationPath: string): string {
 
 function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefaults {
   const parent = nativeParentPath(archivePath);
-  const configuredBase = defaultCreateDirectory(appPreferences) ?? parent;
+  const configuredBase = appPreferences.customExtractFolderPath.trim() || defaultCreateDirectory(appPreferences) || parent;
   const suffix = getKnownArchiveSuffix(archivePath);
   const archiveName = getPathBasename(archivePath, APP_TITLE);
   const folderName = suffix && archiveName.toLowerCase().endsWith(suffix.toLowerCase())
@@ -1875,6 +1875,9 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "preferencesChooseOutput":
       void onSelectReactPreferenceOutputFolder();
+      break;
+    case "preferencesChooseExtractOutput":
+      void onSelectReactPreferenceExtractFolder();
       break;
     case "preferencesSave":
       void saveReactPreferencesDraft();
@@ -3246,6 +3249,18 @@ async function onSelectReactPreferenceOutputFolder() {
   updateReactPreferencesDraft({
     customOutputFolderPath: selected,
   });
+}
+
+async function onSelectReactPreferenceExtractFolder() {
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseDefaultOutput"),
+    directory: true,
+    multiple: false,
+  });
+  if (!selected || Array.isArray(selected)) {
+    return;
+  }
+  updateReactPreferencesDraft({ customExtractFolderPath: selected });
 }
 
 async function saveReactPreferencesDraft() {

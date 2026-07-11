@@ -103,7 +103,7 @@ function focusTargetForClosedDialog(dialog: ZManagerDialogSnapshot, archiveFocus
   }
 
   if (dialog.kind === "extract") {
-    return archiveRowElement(archiveFocusedPath) ?? document.querySelector<HTMLElement>("#extract-toolbar");
+    return archiveRowElement(archiveFocusedPath) ?? document.querySelector<HTMLElement>("#extract-all");
   }
 
   return null;

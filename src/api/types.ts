@@ -167,7 +167,21 @@ export type StartCreateRequest = {
   compressionLevel?: number;
   volumeSize?: number;
   tzapRecoveryPercentage?: number;
+  tzapVolumeLossTolerance?: number;
+  zipCompression?: "store" | "deflate";
+  sevenZSolid?: boolean;
+  sevenZThreads?: number;
+  sevenZChunkSize?: number;
+  sevenZEncryptFileNames?: boolean;
+  tzapCertificates?: TzapCertificateOptions;
   preserveMetadata: boolean;
+};
+
+export type TzapCertificateOptions = {
+  recipientCertificatePaths?: string[];
+  signingCertificatePath?: string;
+  signingPrivateKeyPath?: string;
+  signingChainPaths?: string[];
 };
 
 export type StartExtractRequest = {

@@ -7,6 +7,7 @@ import {
   TZAP_RECOVERY_PERCENTAGE_MIN,
 } from "../../../app/createFlow";
 import { createDefaultsForFormat, type AppPreferences, type FormatCreateDefaults } from "../../../app/preferences";
+import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -184,6 +185,14 @@ function FoldersPage({
           </p>
         </div>
       </div>
+      <div className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+        <label className="mb-2 block text-xs font-semibold" htmlFor="pref-custom-extract-output">{i18n.t("preferences.folders.extractFolder")}</label>
+        <div className="flex gap-2">
+          <input id="pref-custom-extract-output" className="min-w-0 flex-1" type="text" placeholder={i18n.t("preferences.folders.extractPlaceholder")} value={draft.customExtractFolderPath} onChange={(event) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { customExtractFolderPath: event.currentTarget.value } })} />
+          <Button id="pref-choose-extract-output" type="button" variant="dialog" size="unset" onClick={() => actions.handleDialogIntent({ type: "preferencesChooseExtractOutput" })}>{i18n.t("common.browse")}</Button>
+        </div>
+        <p className="mt-2 text-xs opacity-70">{i18n.t("preferences.folders.extractHelp")}</p>
+      </div>
     </section>
   );
 }
@@ -204,6 +213,7 @@ function ArchiveDefaultsPage({
   const i18n = translatorForSnapshot(snapshot);
   const defaults = createDefaultsForFormat(draft, selectedCreateFormat);
   const supportsTzapRecovery = selectedCreateFormat === "tzap";
+  const capabilities = createFormatCapabilities(selectedCreateFormat);
 
   return (
     <section className="options-page property-section" data-pref-page="archive" hidden={!active}>
@@ -236,7 +246,7 @@ function ArchiveDefaultsPage({
             <FormatSelect id="pref-create-format" value={selectedCreateFormat} onChange={setSelectedCreateFormat} />
           </div>
         </div>
-        <div className="setting-row">
+        <div className="setting-row" hidden={!capabilities.compressionLevel}>
           <label htmlFor="pref-create-compression-level">{i18n.t("preferences.archiveDefaults.compressionLevel")}</label>
           <div className="setting-control">
             <select
@@ -253,7 +263,7 @@ function ArchiveDefaultsPage({
             </select>
           </div>
         </div>
-        <div className="setting-row">
+        <div className="setting-row" hidden={!capabilities.splitVolumes}>
           <label htmlFor="pref-create-volume">{i18n.t("preferences.archiveDefaults.splitVolumes")}</label>
           <div className="setting-control">
             <input id="pref-create-volume" type="number" min="0" placeholder={i18n.t("preferences.archiveDefaults.noSplit")} value={defaults.volumeSize ?? ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { volumeSize: optionalPositiveNumber(event.currentTarget.value) })} />
@@ -265,6 +275,24 @@ function ArchiveDefaultsPage({
             <input id="pref-create-tzap-recovery" type="number" min={TZAP_RECOVERY_PERCENTAGE_MIN} max={TZAP_RECOVERY_PERCENTAGE_MAX} disabled={!supportsTzapRecovery} value={supportsTzapRecovery ? defaults.tzapRecoveryPercentage ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT : ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { tzapRecoveryPercentage: optionalNumber(event.currentTarget.value) })} />
           </div>
         </div>
+        <div className="setting-row" hidden={!capabilities.zipCompression}>
+          <label htmlFor="pref-create-zip-compression">{i18n.t("create.zipCompression")}</label>
+          <div className="setting-control"><select id="pref-create-zip-compression" value={defaults.zipCompression ?? "deflate"} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { zipCompression: event.currentTarget.value as "store" | "deflate" })}><option value="deflate">Deflate</option><option value="store">{i18n.t("common.store")}</option></select></div>
+        </div>
+        <div className="setting-row" hidden={!capabilities.tzapVolumeLossTolerance}>
+          <label htmlFor="pref-create-tzap-volume-tolerance">{i18n.t("create.tzapVolumeLossTolerance")}</label>
+          <div className="setting-control"><input id="pref-create-tzap-volume-tolerance" type="number" min="0" max="255" value={defaults.tzapVolumeLossTolerance ?? 0} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { tzapVolumeLossTolerance: optionalNumber(event.currentTarget.value) ?? 0 })} /></div>
+        </div>
+        <div className="setting-row" hidden={!capabilities.sevenZAdvanced}>
+          <label htmlFor="pref-create-7z-threads">{i18n.t("create.sevenZThreads")}</label>
+          <div className="setting-control"><input id="pref-create-7z-threads" type="number" min="1" max="256" placeholder={i18n.t("preferences.archiveDefaults.backendDefault")} value={defaults.sevenZThreads ?? ""} onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZThreads: optionalPositiveNumber(event.currentTarget.value) })} /></div>
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+        <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
+        <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
+        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-solid" label={i18n.t("create.sevenZSolid")} checked={defaults.sevenZSolid ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZSolid: checked })} /> : null}
+        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-encrypt-names" label={i18n.t("create.sevenZEncryptFileNames")} checked={defaults.sevenZEncryptFileNames ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZEncryptFileNames: checked })} /> : null}
       </div>
     </section>
   );

@@ -137,6 +137,15 @@ export function createQuickActionController(
         password,
         compressionLevel: defaults.compressionLevel ?? undefined,
         volumeSize: defaults.volumeSize ?? undefined,
+        respectGitignore: defaults.respectGitignore,
+        followSymlinks: defaults.followSymlinks,
+        tzapRecoveryPercentage: defaults.tzapRecoveryPercentage,
+        tzapVolumeLossTolerance: defaults.tzapVolumeLossTolerance,
+        zipCompression: defaults.zipCompression,
+        sevenZSolid: defaults.sevenZSolid,
+        sevenZThreads: defaults.sevenZThreads,
+        sevenZChunkSize: defaults.sevenZChunkSize,
+        sevenZEncryptFileNames: defaults.sevenZEncryptFileNames,
       });
       if (!requestResult.ok) {
         options.setOperationalMessage(

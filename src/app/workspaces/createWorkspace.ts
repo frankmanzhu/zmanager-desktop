@@ -118,11 +118,22 @@ export type CreateWorkspaceOptionsSnapshot = Readonly<{
   format: CreateArchiveFormat;
   cleanSource: boolean;
   respectGitignore: boolean;
+  followSymlinks: boolean;
   replaceExisting: boolean;
   preserveMetadata: boolean;
   compressionLevel: number | null;
   volumeSize: number | null;
   tzapRecoveryPercentage: number;
+  tzapVolumeLossTolerance: number;
+  zipCompression: "store" | "deflate";
+  sevenZSolid: boolean;
+  sevenZThreads: number | null;
+  sevenZChunkSize: number | null;
+  sevenZEncryptFileNames: boolean;
+  tzapRecipientCertificatePaths: string;
+  tzapSigningCertificatePath: string;
+  tzapSigningPrivateKeyPath: string;
+  tzapSigningChainPaths: string;
   submissionInFlight: boolean;
   password: CreateWorkspacePasswordOptionSnapshot;
   tzapRecovery: CreateWorkspaceTzapRecoveryOptionSnapshot;
@@ -166,11 +177,22 @@ export type CreateWorkspaceOptionPatch = Readonly<{
   destinationPath?: string;
   cleanSource?: boolean;
   respectGitignore?: boolean;
+  followSymlinks?: boolean;
   replaceExisting?: boolean;
   preserveMetadata?: boolean;
   compressionLevel?: number | string | null;
   volumeSize?: number | string | null;
   tzapRecoveryPercentage?: number | string | null;
+  tzapVolumeLossTolerance?: number | string | null;
+  zipCompression?: "store" | "deflate";
+  sevenZSolid?: boolean;
+  sevenZThreads?: number | string | null;
+  sevenZChunkSize?: number | string | null;
+  sevenZEncryptFileNames?: boolean;
+  tzapRecipientCertificatePaths?: string;
+  tzapSigningCertificatePath?: string;
+  tzapSigningPrivateKeyPath?: string;
+  tzapSigningChainPaths?: string;
 }>;
 
 export type CreateWorkspacePlanQueueResult = Readonly<{
@@ -227,6 +249,15 @@ export type QuickCreateStartRequestInput = Readonly<{
   password?: string;
   compressionLevel?: number | null;
   volumeSize?: number | null;
+  respectGitignore?: boolean;
+  followSymlinks?: boolean;
+  tzapRecoveryPercentage?: number | null;
+  tzapVolumeLossTolerance?: number;
+  zipCompression?: "store" | "deflate";
+  sevenZSolid?: boolean;
+  sevenZThreads?: number | null;
+  sevenZChunkSize?: number | null;
+  sevenZEncryptFileNames?: boolean;
 }>;
 
 export type QuickCreateStartRequestResult =
@@ -361,11 +392,22 @@ type MutableCreateWorkspaceOptions = {
   format: CreateArchiveFormat;
   cleanSource: boolean;
   respectGitignore: boolean;
+  followSymlinks: boolean;
   replaceExisting: boolean;
   preserveMetadata: boolean;
   compressionLevel: number | null;
   volumeSize: number | null;
   tzapRecoveryPercentage: number;
+  tzapVolumeLossTolerance: number;
+  zipCompression: "store" | "deflate";
+  sevenZSolid: boolean;
+  sevenZThreads: number | null;
+  sevenZChunkSize: number | null;
+  sevenZEncryptFileNames: boolean;
+  tzapRecipientCertificatePaths: string;
+  tzapSigningCertificatePath: string;
+  tzapSigningPrivateKeyPath: string;
+  tzapSigningChainPaths: string;
   submissionInFlight: boolean;
 };
 
@@ -375,11 +417,22 @@ const DEFAULT_CREATE_OPTIONS: MutableCreateWorkspaceOptions = {
   format: "tarZst",
   cleanSource: true,
   respectGitignore: false,
+  followSymlinks: false,
   replaceExisting: false,
   preserveMetadata: true,
   compressionLevel: null,
   volumeSize: null,
   tzapRecoveryPercentage: TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+  tzapVolumeLossTolerance: 0,
+  zipCompression: "deflate",
+  sevenZSolid: true,
+  sevenZThreads: null,
+  sevenZChunkSize: 16 * 1024 * 1024,
+  sevenZEncryptFileNames: true,
+  tzapRecipientCertificatePaths: "",
+  tzapSigningCertificatePath: "",
+  tzapSigningPrivateKeyPath: "",
+  tzapSigningChainPaths: "",
   submissionInFlight: false,
 };
 
@@ -415,6 +468,15 @@ export function buildQuickCreateStartRequest(
       password: input.password?.trim() || undefined,
       compressionLevel: input.compressionLevel ?? undefined,
       volumeSize: input.volumeSize ?? undefined,
+      respectGitignore: input.respectGitignore,
+      followSymlinks: input.followSymlinks,
+      tzapRecoveryPercentage: input.tzapRecoveryPercentage ?? undefined,
+      tzapVolumeLossTolerance: input.tzapVolumeLossTolerance,
+      zipCompression: input.zipCompression,
+      sevenZSolid: input.sevenZSolid,
+      sevenZThreads: input.sevenZThreads ?? undefined,
+      sevenZChunkSize: input.sevenZChunkSize ?? undefined,
+      sevenZEncryptFileNames: input.sevenZEncryptFileNames,
     }),
   });
 }
@@ -687,6 +749,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         ...(patch.destinationPath !== undefined ? { destinationPath: patch.destinationPath } : {}),
         ...(patch.cleanSource !== undefined ? { cleanSource: patch.cleanSource } : {}),
         ...(patch.respectGitignore !== undefined ? { respectGitignore: patch.respectGitignore } : {}),
+        ...(patch.followSymlinks !== undefined ? { followSymlinks: patch.followSymlinks } : {}),
         ...(patch.replaceExisting !== undefined ? { replaceExisting: patch.replaceExisting } : {}),
         ...(patch.preserveMetadata !== undefined ? { preserveMetadata: patch.preserveMetadata } : {}),
         ...(patch.compressionLevel !== undefined
@@ -698,6 +761,24 @@ export function createCreateWorkspace(): CreateWorkspace {
         ...(patch.tzapRecoveryPercentage !== undefined
           ? { tzapRecoveryPercentage: normalizeTzapRecoveryOption(patch.tzapRecoveryPercentage) }
           : {}),
+        ...(patch.tzapVolumeLossTolerance !== undefined
+          ? { tzapVolumeLossTolerance: normalizeOptionalNonNegativeInteger(patch.tzapVolumeLossTolerance) ?? 0 }
+          : {}),
+        ...(patch.zipCompression !== undefined ? { zipCompression: patch.zipCompression } : {}),
+        ...(patch.sevenZSolid !== undefined ? { sevenZSolid: patch.sevenZSolid } : {}),
+        ...(patch.sevenZThreads !== undefined
+          ? { sevenZThreads: normalizeOptionalNonNegativeInteger(patch.sevenZThreads) }
+          : {}),
+        ...(patch.sevenZChunkSize !== undefined
+          ? { sevenZChunkSize: normalizeCreateVolumeSize(normalizeOptionalNumber(patch.sevenZChunkSize)) ?? null }
+          : {}),
+        ...(patch.sevenZEncryptFileNames !== undefined
+          ? { sevenZEncryptFileNames: patch.sevenZEncryptFileNames }
+          : {}),
+        ...(patch.tzapRecipientCertificatePaths !== undefined ? { tzapRecipientCertificatePaths: patch.tzapRecipientCertificatePaths } : {}),
+        ...(patch.tzapSigningCertificatePath !== undefined ? { tzapSigningCertificatePath: patch.tzapSigningCertificatePath } : {}),
+        ...(patch.tzapSigningPrivateKeyPath !== undefined ? { tzapSigningPrivateKeyPath: patch.tzapSigningPrivateKeyPath } : {}),
+        ...(patch.tzapSigningChainPaths !== undefined ? { tzapSigningChainPaths: patch.tzapSigningChainPaths } : {}),
       };
       const optionsChanged = !sameOptions(state.options, nextOptions);
       const planWillRefresh = state.planState === "error" && state.currentPlan !== null;
@@ -1195,6 +1276,8 @@ function applyDefaultsToOptions(
     ...options,
     format,
     cleanSource: defaults.cleanSource,
+    respectGitignore: Boolean(defaults.respectGitignore),
+    followSymlinks: Boolean(defaults.followSymlinks),
     replaceExisting: defaults.replaceExisting,
     preserveMetadata: defaults.preserveMetadata,
     compressionLevel: normalizeOptionalNonNegativeInteger(defaults.compressionLevel),
@@ -1202,6 +1285,16 @@ function applyDefaultsToOptions(
     tzapRecoveryPercentage: format === "tzap"
       ? normalizeTzapRecoveryOption(defaults.tzapRecoveryPercentage)
       : TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+    tzapVolumeLossTolerance: format === "tzap" ? defaults.tzapVolumeLossTolerance ?? 0 : 0,
+    zipCompression: format === "zip" ? defaults.zipCompression ?? "deflate" : "deflate",
+    sevenZSolid: format === "sevenZ" ? defaults.sevenZSolid ?? true : true,
+    sevenZThreads: format === "sevenZ" ? defaults.sevenZThreads ?? null : null,
+    sevenZChunkSize: format === "sevenZ" ? defaults.sevenZChunkSize ?? 16 * 1024 * 1024 : null,
+    sevenZEncryptFileNames: format === "sevenZ" ? defaults.sevenZEncryptFileNames ?? true : true,
+    tzapRecipientCertificatePaths: "",
+    tzapSigningCertificatePath: "",
+    tzapSigningPrivateKeyPath: "",
+    tzapSigningChainPaths: "",
   };
 }
 
@@ -1212,7 +1305,7 @@ function planOptionsFromState(state: MutableCreateWorkspaceState): CreateWorkspa
     excludeNames: [],
     excludeArchivePaths: [],
     includeArchivePaths: [],
-    followSymlinks: false,
+    followSymlinks: state.options.followSymlinks,
   };
 }
 
@@ -1227,7 +1320,7 @@ function buildStartCreateRequestFromState(
     cleanSource: state.options.cleanSource,
     excludeArchivePaths: sortedExcludedArchivePaths(state.excludedArchivePaths),
     respectGitignore: state.options.respectGitignore,
-    followSymlinks: false,
+    followSymlinks: state.options.followSymlinks,
     replaceExisting: state.options.replaceExisting,
     destinationCollisionStrategy: input.destinationCollisionStrategy,
     preserveMetadata: state.options.preserveMetadata,
@@ -1237,7 +1330,42 @@ function buildStartCreateRequestFromState(
     tzapRecoveryPercentage: state.options.format === "tzap"
       ? state.options.tzapRecoveryPercentage
       : undefined,
+    tzapVolumeLossTolerance: state.options.format === "tzap"
+      ? state.options.tzapVolumeLossTolerance
+      : undefined,
+    zipCompression: state.options.format === "zip" ? state.options.zipCompression : undefined,
+    sevenZSolid: state.options.format === "sevenZ" ? state.options.sevenZSolid : undefined,
+    sevenZThreads: state.options.format === "sevenZ" ? state.options.sevenZThreads ?? undefined : undefined,
+    sevenZChunkSize: state.options.format === "sevenZ" ? state.options.sevenZChunkSize ?? undefined : undefined,
+    sevenZEncryptFileNames: state.options.format === "sevenZ"
+      ? state.options.sevenZEncryptFileNames
+      : undefined,
+    tzapCertificates: state.options.format === "tzap"
+      ? tzapCertificateRequestFromState(state.options)
+      : undefined,
   });
+}
+
+function tzapCertificateRequestFromState(
+  options: MutableCreateWorkspaceOptions,
+): StartCreateRequest["tzapCertificates"] | undefined {
+  const recipientCertificatePaths = splitCertificatePaths(options.tzapRecipientCertificatePaths);
+  const signingChainPaths = splitCertificatePaths(options.tzapSigningChainPaths);
+  const signingCertificatePath = options.tzapSigningCertificatePath.trim();
+  const signingPrivateKeyPath = options.tzapSigningPrivateKeyPath.trim();
+  if (!recipientCertificatePaths.length && !signingCertificatePath && !signingPrivateKeyPath && !signingChainPaths.length) {
+    return undefined;
+  }
+  return {
+    ...(recipientCertificatePaths.length ? { recipientCertificatePaths } : {}),
+    ...(signingCertificatePath ? { signingCertificatePath } : {}),
+    ...(signingPrivateKeyPath ? { signingPrivateKeyPath } : {}),
+    ...(signingChainPaths.length ? { signingChainPaths } : {}),
+  };
+}
+
+function splitCertificatePaths(value: string): string[] {
+  return value.split(/[;\r\n]+/).map((path) => path.trim()).filter(Boolean);
 }
 
 function suggestedDestinationPathFromState(
@@ -1334,11 +1462,22 @@ function sameOptions(left: MutableCreateWorkspaceOptions, right: MutableCreateWo
     left.format === right.format &&
     left.cleanSource === right.cleanSource &&
     left.respectGitignore === right.respectGitignore &&
+    left.followSymlinks === right.followSymlinks &&
     left.replaceExisting === right.replaceExisting &&
     left.preserveMetadata === right.preserveMetadata &&
     left.compressionLevel === right.compressionLevel &&
     left.volumeSize === right.volumeSize &&
     left.tzapRecoveryPercentage === right.tzapRecoveryPercentage &&
+    left.tzapVolumeLossTolerance === right.tzapVolumeLossTolerance &&
+    left.zipCompression === right.zipCompression &&
+    left.sevenZSolid === right.sevenZSolid &&
+    left.sevenZThreads === right.sevenZThreads &&
+    left.sevenZChunkSize === right.sevenZChunkSize &&
+    left.sevenZEncryptFileNames === right.sevenZEncryptFileNames &&
+    left.tzapRecipientCertificatePaths === right.tzapRecipientCertificatePaths &&
+    left.tzapSigningCertificatePath === right.tzapSigningCertificatePath &&
+    left.tzapSigningPrivateKeyPath === right.tzapSigningPrivateKeyPath &&
+    left.tzapSigningChainPaths === right.tzapSigningChainPaths &&
     left.submissionInFlight === right.submissionInFlight
   );
 }
@@ -2031,6 +2170,7 @@ function createOptionsSnapshot(
     format: state.options.format,
     cleanSource: state.options.cleanSource,
     respectGitignore: state.options.respectGitignore,
+    followSymlinks: state.options.followSymlinks,
     replaceExisting: state.options.replaceExisting,
     preserveMetadata: state.options.preserveMetadata,
     compressionLevel: state.options.compressionLevel,
@@ -2038,6 +2178,16 @@ function createOptionsSnapshot(
     tzapRecoveryPercentage: supportsTzapRecovery
       ? state.options.tzapRecoveryPercentage
       : TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+    tzapVolumeLossTolerance: state.options.tzapVolumeLossTolerance,
+    zipCompression: state.options.zipCompression,
+    sevenZSolid: state.options.sevenZSolid,
+    sevenZThreads: state.options.sevenZThreads,
+    sevenZChunkSize: state.options.sevenZChunkSize,
+    sevenZEncryptFileNames: state.options.sevenZEncryptFileNames,
+    tzapRecipientCertificatePaths: state.options.tzapRecipientCertificatePaths,
+    tzapSigningCertificatePath: state.options.tzapSigningCertificatePath,
+    tzapSigningPrivateKeyPath: state.options.tzapSigningPrivateKeyPath,
+    tzapSigningChainPaths: state.options.tzapSigningChainPaths,
     submissionInFlight: state.options.submissionInFlight,
     password: Object.freeze({
       supportsPassword,

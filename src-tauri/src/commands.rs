@@ -51,7 +51,9 @@ use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy}
 use zmanager_core::secrets::SecretString;
 use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, SevenZError};
 use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
-use zmanager_core::tzap_backend::{TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource};
+use zmanager_core::tzap_backend::{
+    TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509SigningOptions,
+};
 use zmanager_core::zip_backend::{ZipBackendError, ZipCreateOptions, ZipCreateReport};
 
 #[tauri::command]
@@ -393,6 +395,33 @@ pub(crate) fn start_create_internal(
     let compression_level = request.compression_level;
     let volume_size = request.volume_size.filter(|value| *value > 0);
     let tzap_recovery_percentage = request.tzap_recovery_percentage.unwrap_or(5).min(100);
+    let tzap_volume_loss_tolerance = request.tzap_volume_loss_tolerance.unwrap_or(0);
+    let zip_compression = request.zip_compression;
+    let seven_z_solid = request.seven_z_solid.unwrap_or(true);
+    let seven_z_threads = request.seven_z_threads.filter(|value| *value > 0);
+    let seven_z_chunk_size = request.seven_z_chunk_size.filter(|value| *value > 0);
+    let seven_z_encrypt_file_names = request.seven_z_encrypt_file_names.unwrap_or(true);
+    let tzap_certificates = request.tzap_certificates;
+    if let Some(certificates) = tzap_certificates.as_ref() {
+        let has_signing_certificate = certificates
+            .signing_certificate_path
+            .as_deref()
+            .is_some_and(|path| !path.trim().is_empty());
+        let has_signing_key = certificates
+            .signing_private_key_path
+            .as_deref()
+            .is_some_and(|path| !path.trim().is_empty());
+        if has_signing_certificate != has_signing_key {
+            return Err(CommandErrorDto::invalid_request(
+                "TZAP signing requires both a certificate and a matching private key",
+            ));
+        }
+        if !certificates.recipient_certificate_paths.is_empty() && password.is_some() {
+            return Err(CommandErrorDto::invalid_request(
+                "TZAP recipient-certificate encryption cannot be combined with a password",
+            ));
+        }
+    }
     let format = request.format;
 
     let request_sources = sources;
@@ -405,7 +434,12 @@ pub(crate) fn start_create_internal(
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match format {
             crate::dto::ArchiveFormatDto::Zip => {
                 let create_options = ZipCreateOptions {
-                    compression: zmanager_core::zip_backend::ZipCompression::default(),
+                    compression: match zip_compression {
+                        Some(crate::dto::ZipCompressionDto::Store) => {
+                            zmanager_core::zip_backend::ZipCompression::Store
+                        }
+                        _ => zmanager_core::zip_backend::ZipCompression::Deflate,
+                    },
                     level: compression_level.map(i64::from),
                     preserve_metadata,
                     replace_existing,
@@ -445,10 +479,40 @@ pub(crate) fn start_create_internal(
                 .map_err(map_tar_zst_error)
             }
             crate::dto::ArchiveFormatDto::Tzap => {
-                let key_source = password
-                    .as_deref()
-                    .map(SecretString::from)
-                    .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
+                let recipient_certificates = tzap_certificates
+                    .as_ref()
+                    .map(|options| {
+                        options
+                            .recipient_certificate_paths
+                            .iter()
+                            .map(PathBuf::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let key_source = if recipient_certificates.is_empty() {
+                    password
+                        .as_deref()
+                        .map(SecretString::from)
+                        .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
+                } else {
+                    TzapKeySource::RecipientCertificates(recipient_certificates)
+                };
+                let x509_signing = tzap_certificates.as_ref().and_then(|options| {
+                    let certificate = options.signing_certificate_path.as_deref()?.trim();
+                    let private_key = options.signing_private_key_path.as_deref()?.trim();
+                    if certificate.is_empty() || private_key.is_empty() {
+                        return None;
+                    }
+                    Some(TzapX509SigningOptions::CertificateAndKey {
+                        signing_certificate: PathBuf::from(certificate),
+                        signing_private_key: PathBuf::from(private_key),
+                        signing_chain: options
+                            .signing_chain_paths
+                            .iter()
+                            .map(PathBuf::from)
+                            .collect(),
+                    })
+                });
                 let create_options = TzapCreateOptions {
                     key_source,
                     level: compression_level
@@ -458,8 +522,8 @@ pub(crate) fn start_create_internal(
                     replace_existing,
                     volume_size,
                     recovery_percentage: tzap_recovery_percentage,
-                    volume_loss_tolerance: 0,
-                    x509_signing: None,
+                    volume_loss_tolerance: tzap_volume_loss_tolerance,
+                    x509_signing,
                 };
                 run_tzap_create_job_from_sources_with_plan_options(
                     &request_sources,
@@ -474,14 +538,15 @@ pub(crate) fn start_create_internal(
             }
             crate::dto::ArchiveFormatDto::SevenZ => {
                 let create_options = SevenZCreateOptions {
-                    solid: true,
+                    solid: seven_z_solid,
                     level: compression_level,
                     preserve_metadata,
                     password: password.as_deref().map(SecretString::from),
-                    encrypt_file_names: true,
+                    encrypt_file_names: seven_z_encrypt_file_names,
                     replace_existing,
                     volume_size,
-                    ..SevenZCreateOptions::default()
+                    threads: seven_z_threads,
+                    chunk_size: seven_z_chunk_size,
                 };
                 run_7z_create_job_from_sources_with_plan_options(
                     &request_sources,
@@ -2791,6 +2856,13 @@ mod tests {
                 compression_level: None,
                 volume_size: None,
                 tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2890,6 +2962,13 @@ mod tests {
                 compression_level: None,
                 volume_size: None,
                 tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -3036,6 +3115,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -3091,6 +3177,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -3139,6 +3232,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry)
@@ -3206,6 +3306,13 @@ mod tests {
             compression_level: None,
             volume_size: Some(0),
             tzap_recovery_percentage: Some(0),
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
 
@@ -3215,6 +3322,54 @@ mod tests {
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
         assert!(destination.is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_tzap_create_rejects_incomplete_signing_identity() {
+        let workspace = create_temp_workspace("start-create-tzap-incomplete-signing");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("one.txt"), b"one").expect("fixture should write");
+
+        let result = start_create_internal(
+            StartCreateRequest {
+                sources: vec![sources.to_string_lossy().to_string()],
+                destination_path: destination.to_string_lossy().to_string(),
+                format: crate::dto::ArchiveFormatDto::Tzap,
+                clean_source: false,
+                exclude_names: None,
+                exclude_archive_paths: None,
+                include_archive_paths: None,
+                respect_gitignore: false,
+                follow_symlinks: false,
+                replace_existing: false,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+                password: None,
+                compression_level: None,
+                volume_size: None,
+                tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: Some(crate::dto::TzapCertificateOptionsDto {
+                    recipient_certificate_paths: Vec::new(),
+                    signing_certificate_path: Some("C:/certs/signer.pem".to_owned()),
+                    signing_private_key_path: None,
+                    signing_chain_paths: Vec::new(),
+                }),
+                preserve_metadata: false,
+            },
+            &crate::job_registry::JobRegistry::new(),
+        );
+
+        let error = result.expect_err("incomplete signing identity must be rejected");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("certificate") && error.message.contains("private key"));
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -3246,6 +3401,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3322,6 +3484,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3386,6 +3555,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3455,6 +3631,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job =
@@ -3537,6 +3720,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
 
@@ -3570,6 +3760,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
 
@@ -3653,6 +3850,13 @@ mod tests {
             compression_level: None,
             volume_size: None,
             tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: false,
         };
         let create_job =

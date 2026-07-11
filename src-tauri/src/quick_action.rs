@@ -424,6 +424,13 @@ fn start_direct_create_job(
             } else {
                 None
             },
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
             preserve_metadata: true,
         },
         registry,

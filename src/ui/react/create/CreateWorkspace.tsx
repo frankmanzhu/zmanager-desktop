@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/createFlow";
+import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "./CreatePasswordContext";
@@ -597,12 +598,13 @@ function CreateOptions() {
   } = useCreatePasswordState();
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
+  const capabilities = createFormatCapabilities(options.format);
   const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
   const panelOpen = manualPanelOpen ?? true;
 
   return (
-    <aside id="details-pane" className="details-pane" aria-label={i18n.t("workspace.details.aria")}>
-      <div className="pane-header"><h2 id="details-pane-title">{i18n.t("compress.options")}</h2></div>
+    <aside id="details-pane" className="details-pane !min-h-0 !overflow-y-auto pb-4 [@media(max-height:560px)]:[&_summary.compress-options-summary]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
+      <div className="pane-header !hidden"><h2 id="details-pane-title">{i18n.t("compress.options")}</h2></div>
       <div id="details-content" className="details-content" hidden />
       <details
         id="compress-options-panel"
@@ -618,15 +620,43 @@ function CreateOptions() {
           ) : <p>{i18n.t("create.plan.empty")}</p>}
         </div>
         <div className="form-grid create-options-grid">
-          <label><span>{i18n.t("create.archiveFormat")}</span><select id="create-format" value={options.format} onChange={(event) => actions.handleCreateIntent({ type: "changeFormat", format: event.currentTarget.value as typeof options.format })}><option value="zip">ZIP</option><option value="tarZst">TZST</option><option value="tzap">TZAP</option><option value="sevenZ">7Z</option></select></label>
-          <label><span>{i18n.t("create.compressionLevel")}</span><select id="create-compression-level" value={options.compressionLevel ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { compressionLevel: event.currentTarget.value } })}><option value="">{i18n.t("preferences.archiveDefaults.backendDefault")}</option><option value="0">0</option><option value="5">5</option><option value="9">9</option></select></label>
-          <label><span>{i18n.t("create.splitVolumes")}</span><input id="create-volume" type="text" value={options.volumeSize ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { volumeSize: event.currentTarget.value } })} /></label>
+          <label><span className="[@media(max-height:560px)]:!hidden">{i18n.t("create.archiveFormat")}</span><select id="create-format" value={options.format} onChange={(event) => actions.handleCreateIntent({ type: "changeFormat", format: event.currentTarget.value as typeof options.format })}><option value="zip">ZIP</option><option value="tarZst">TZST</option><option value="tzap">TZAP</option><option value="sevenZ">7Z</option></select></label>
+          <label><span className="[@media(max-height:560px)]:!hidden">{i18n.t("create.compressionLevel")}</span><select id="create-compression-level" value={options.compressionLevel ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { compressionLevel: event.currentTarget.value } })}><option value="">{i18n.t("preferences.archiveDefaults.backendDefault")}</option><option value="0">0</option><option value="5">5</option><option value="9">9</option></select></label>
+          <label className="[@media(max-height:560px)]:!hidden" hidden={!capabilities.splitVolumes}><span>{i18n.t("create.splitVolumes")}</span><input id="create-volume" type="text" value={options.volumeSize ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { volumeSize: event.currentTarget.value } })} /></label>
+          <label hidden={!capabilities.zipCompression}><span>{i18n.t("create.zipCompression")}</span><select id="create-zip-compression" value={options.zipCompression} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { zipCompression: event.currentTarget.value as "store" | "deflate" } })}><option value="deflate">Deflate</option><option value="store">{i18n.t("common.store")}</option></select></label>
           <label id="create-tzap-recovery-field" hidden={!options.tzapRecovery.visible}><span>{i18n.t("create.tzapRecovery")}</span><input id="create-tzap-recovery" type="number" value={options.tzapRecoveryPercentage} disabled={options.tzapRecovery.disabled} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapRecoveryPercentage: event.currentTarget.value } })} /></label>
+          <label hidden={!capabilities.tzapVolumeLossTolerance}><span>{i18n.t("create.tzapVolumeLossTolerance")}</span><input id="create-tzap-volume-tolerance" type="number" min="0" max="255" value={options.tzapVolumeLossTolerance} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapVolumeLossTolerance: event.currentTarget.value } })} /></label>
+          <div className="col-span-full grid grid-cols-2 gap-2 [@media(max-height:560px)]:!hidden">
           <label className="checkbox-row"><input id="create-clean-source" type="checkbox" checked={options.cleanSource} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { cleanSource: event.currentTarget.checked } })} /><span>{i18n.t("create.cleanSource")}</span></label>
           <label className="checkbox-row"><input id="create-preserve-metadata" type="checkbox" checked={options.preserveMetadata} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { preserveMetadata: event.currentTarget.checked } })} /><span>{i18n.t("create.preserveMetadata")}</span></label>
           <label className="checkbox-row"><input id="create-replace-existing" type="checkbox" checked={options.replaceExisting} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { replaceExisting: event.currentTarget.checked } })} /><span>{i18n.t("create.replaceExisting")}</span></label>
           <label className="checkbox-row"><input id="create-respect-gitignore" type="checkbox" checked={options.respectGitignore} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { respectGitignore: event.currentTarget.checked } })} /><span>{i18n.t("create.respectGitignore")}</span></label>
+          <label className="checkbox-row"><input id="create-follow-symlinks" type="checkbox" checked={options.followSymlinks} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { followSymlinks: event.currentTarget.checked } })} /><span>{i18n.t("create.followSymlinks")}</span></label>
+          </div>
         </div>
+        {capabilities.sevenZAdvanced ? (
+          <details className="mt-3 rounded-lg border border-black/10 bg-black/[0.025] p-3 [@media(max-height:560px)]:!hidden dark:border-white/10 dark:bg-white/[0.035]">
+            <summary className="cursor-pointer text-xs font-semibold">{i18n.t("create.sevenZAdvanced")}</summary>
+            <div className="mt-3 grid gap-3">
+              <label><span>{i18n.t("create.sevenZThreads")}</span><input id="create-7z-threads" type="number" min="1" max="256" value={options.sevenZThreads ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { sevenZThreads: event.currentTarget.value } })} /></label>
+              <label><span>{i18n.t("create.sevenZChunkSize")}</span><input id="create-7z-chunk-size" type="number" min="1" value={options.sevenZChunkSize ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { sevenZChunkSize: event.currentTarget.value } })} /></label>
+              <label className="flex items-center gap-2"><input id="create-7z-solid" type="checkbox" checked={options.sevenZSolid} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { sevenZSolid: event.currentTarget.checked } })} /><span>{i18n.t("create.sevenZSolid")}</span></label>
+              <label className="flex items-center gap-2"><input id="create-7z-encrypt-names" type="checkbox" checked={options.sevenZEncryptFileNames} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { sevenZEncryptFileNames: event.currentTarget.checked } })} /><span>{i18n.t("create.sevenZEncryptFileNames")}</span></label>
+            </div>
+          </details>
+        ) : null}
+        {options.format === "tzap" ? (
+          <details className="mt-3 rounded-lg border border-black/10 bg-black/[0.025] p-3 [@media(max-height:560px)]:!hidden dark:border-white/10 dark:bg-white/[0.035]">
+            <summary className="cursor-pointer text-xs font-semibold">{i18n.t("create.tzapCertificates")}</summary>
+            <p className="mt-2 text-xs opacity-70">{i18n.t("create.tzapCertificatesHelp")}</p>
+            <div className="mt-3 grid gap-3">
+              <label><span>{i18n.t("create.tzapRecipientCertificates")}</span><input id="create-tzap-recipient-certificates" type="text" placeholder={i18n.t("create.certificatePathsPlaceholder")} value={options.tzapRecipientCertificatePaths} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapRecipientCertificatePaths: event.currentTarget.value } })} /></label>
+              <label><span>{i18n.t("create.tzapSigningCertificate")}</span><input id="create-tzap-signing-certificate" type="text" value={options.tzapSigningCertificatePath} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningCertificatePath: event.currentTarget.value } })} /></label>
+              <label><span>{i18n.t("create.tzapSigningPrivateKey")}</span><input id="create-tzap-signing-private-key" type="text" value={options.tzapSigningPrivateKeyPath} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningPrivateKeyPath: event.currentTarget.value } })} /></label>
+              <label><span>{i18n.t("create.tzapSigningChain")}</span><input id="create-tzap-signing-chain" type="text" placeholder={i18n.t("create.certificatePathsPlaceholder")} value={options.tzapSigningChainPaths} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { tzapSigningChainPaths: event.currentTarget.value } })} /></label>
+            </div>
+          </details>
+        ) : null}
         {options.password.visible ? (
           <details className="advanced-options">
             <summary>{i18n.t("extract.advancedOptions")}</summary>

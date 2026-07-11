@@ -197,6 +197,7 @@ export type ZManagerDialogIntent =
       patch: Partial<FormatCreateDefaults>;
     }>
   | Readonly<{ type: "preferencesChooseOutput" }>
+  | Readonly<{ type: "preferencesChooseExtractOutput" }>
   | Readonly<{ type: "preferencesSave" }>
   | Readonly<{ type: "preferencesCancel" }>
   | Readonly<{ type: "closeCurrent" }>;

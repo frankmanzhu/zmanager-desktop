@@ -16,13 +16,13 @@ export function ArchiveDetailsPane() {
   const i18n = translatorForSnapshot(snapshot);
 
   return (
-    <aside id="details-pane" className="details-pane" aria-label={i18n.t("workspace.details.aria")}>
-      <div className="pane-header">
+    <aside id="details-pane" className="details-pane !min-h-0 !overflow-y-auto [@media(max-height:560px)]:[&_details.advanced-options]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
+      <div className="pane-header [@media(max-height:560px)]:!hidden">
         <h2 id="details-pane-title">{i18n.t("compress.options")}</h2>
       </div>
       <div className="extract-side-pane-content">
         <ExtractOptions />
-        <section className="extract-details-section" aria-labelledby="extract-details-title">
+        <section className="extract-details-section [@media(max-height:560px)]:!hidden" aria-labelledby="extract-details-title">
           <h2 id="extract-details-title">{i18n.t("pane.details")}</h2>
           <div id="details-content" className="details-content">
             <DetailsContent model={snapshot.archive.view.details} />
@@ -47,13 +47,14 @@ function ExtractOptions() {
     }
   }, [options.passwordPromptOpen]);
 
+
   return (
     <section className="extract-options-panel" aria-labelledby="extract-options-title">
       <div className="compress-options-intro">
         <h3 id="extract-options-title">{i18n.t("extract.options.title")}</h3>
         <p>{options.usesGlobalDefaults ? i18n.t("extract.usingGlobalDefaults") : i18n.t("extract.overriddenDefaults")}</p>
       </div>
-      <div className="form-grid extract-options-grid">
+      <div className="form-grid extract-options-grid [@media(max-height:560px)]:!grid-cols-2">
         <label>
           <span>{i18n.t("extract.pathMode")}</span>
           <select id="extract-path-mode" value={options.pathMode} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { pathMode: event.currentTarget.value as typeof options.pathMode } })}>
@@ -76,7 +77,7 @@ function ExtractOptions() {
           <span>{i18n.t("extract.deduplicateRoot")}</span>
         </label>
       </div>
-      <button className="link-action" type="button" onClick={() => {
+      <button className="link-action [@media(max-height:560px)]:!hidden" type="button" onClick={() => {
         actions.handleArchiveIntent({ type: "resetExtractDefaults" });
         passwordState.reset();
       }}>

@@ -29,9 +29,17 @@ export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extrac
 export type PreviewCleanupPolicy = "beforeNextPreview" | "whenAppCloses";
 export type FormatCreateDefaults = {
   cleanSource: boolean;
+  respectGitignore?: boolean;
+  followSymlinks?: boolean;
   compressionLevel: number | null;
   volumeSize: number | null;
   tzapRecoveryPercentage: number | null;
+  tzapVolumeLossTolerance?: number;
+  zipCompression?: "store" | "deflate";
+  sevenZSolid?: boolean;
+  sevenZThreads?: number | null;
+  sevenZChunkSize?: number | null;
+  sevenZEncryptFileNames?: boolean;
   preserveMetadata: boolean;
   replaceExisting: boolean;
   promptForPassword: boolean;
@@ -45,6 +53,7 @@ export type AppPreferences = {
   createFormatDefaults: CreateFormatDefaultsMap;
   defaultOutputLocation: DefaultOutputLocation;
   customOutputFolderPath: string;
+  customExtractFolderPath: string;
   defaultExtractionBehavior: DefaultExtractionBehavior;
   defaultExtractPathMode: ExtractPathMode;
   defaultExtractOverwrite: ExtractOverwritePolicy;
@@ -77,15 +86,20 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   createFormatDefaults: {
     zip: {
       cleanSource: true,
+      respectGitignore: false,
+      followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
       tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
+      zipCompression: "deflate",
     },
     tarZst: {
       cleanSource: true,
+      respectGitignore: false,
+      followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
       tzapRecoveryPercentage: null,
@@ -95,25 +109,35 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
     },
     tzap: {
       cleanSource: true,
+      respectGitignore: false,
+      followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
       tzapRecoveryPercentage: TZAP_RECOVERY_PERCENTAGE_DEFAULT,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
+      tzapVolumeLossTolerance: 0,
     },
     sevenZ: {
       cleanSource: true,
+      respectGitignore: false,
+      followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
       tzapRecoveryPercentage: null,
       preserveMetadata: true,
       replaceExisting: false,
       promptForPassword: false,
+      sevenZSolid: true,
+      sevenZThreads: null,
+      sevenZChunkSize: 16 * 1024 * 1024,
+      sevenZEncryptFileNames: true,
     },
   },
   defaultOutputLocation: "sourceFolder",
   customOutputFolderPath: "",
+  customExtractFolderPath: "",
   defaultExtractionBehavior: "askEveryTime",
   defaultExtractPathMode: "full",
   defaultExtractOverwrite: "ask",
@@ -228,6 +252,8 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
           format,
           {
             cleanSource: storedObjectBool(raw?.cleanSource, fallback.cleanSource),
+            respectGitignore: storedObjectBool(raw?.respectGitignore, fallback.respectGitignore ?? false),
+            followSymlinks: storedObjectBool(raw?.followSymlinks, fallback.followSymlinks ?? false),
             compressionLevel: storedNumber(raw?.compressionLevel, fallback.compressionLevel),
             volumeSize: storedPositiveNumber(raw?.volumeSize, fallback.volumeSize),
             tzapRecoveryPercentage: format === "tzap"
@@ -238,6 +264,14 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
             promptForPassword:
               createFormatSupportsPassword(format) &&
               storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
+            ...(format === "zip" ? { zipCompression: raw?.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
+            ...(format === "tzap" ? { tzapVolumeLossTolerance: storedNumber(raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) ?? 0 } : {}),
+            ...(format === "sevenZ" ? {
+              sevenZSolid: storedObjectBool(raw?.sevenZSolid, fallback.sevenZSolid ?? true),
+              sevenZThreads: storedPositiveNumber(raw?.sevenZThreads, fallback.sevenZThreads ?? null),
+              sevenZChunkSize: storedPositiveNumber(raw?.sevenZChunkSize, fallback.sevenZChunkSize ?? null),
+              sevenZEncryptFileNames: storedObjectBool(raw?.sevenZEncryptFileNames, fallback.sevenZEncryptFileNames ?? true),
+            } : {}),
           },
         ];
       }),
@@ -321,6 +355,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       ? defaultOutputLocation
       : DEFAULT_APP_PREFERENCES.defaultOutputLocation,
     customOutputFolderPath: cleanPath(storage.getItem(PREFERENCE_KEYS.customOutputFolderPath)),
+    customExtractFolderPath: cleanPath(storage.getItem(PREFERENCE_KEYS.customExtractFolderPath)),
     defaultExtractionBehavior: isOneOf(EXTRACTION_BEHAVIORS, defaultExtractionBehavior)
       ? defaultExtractionBehavior
       : DEFAULT_APP_PREFERENCES.defaultExtractionBehavior,
@@ -439,6 +474,12 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   } else {
     storage.removeItem(PREFERENCE_KEYS.customOutputFolderPath);
   }
+  const customExtractFolderPath = preferences.customExtractFolderPath.trim();
+  if (customExtractFolderPath) {
+    storage.setItem(PREFERENCE_KEYS.customExtractFolderPath, customExtractFolderPath);
+  } else {
+    storage.removeItem(PREFERENCE_KEYS.customExtractFolderPath);
+  }
 }
 
 export function preferencesWithPatch(
@@ -456,6 +497,10 @@ export function preferencesWithPatch(
       patch.customOutputFolderPath !== undefined
         ? patch.customOutputFolderPath.trim()
         : preferences.customOutputFolderPath,
+    customExtractFolderPath:
+      patch.customExtractFolderPath !== undefined
+        ? patch.customExtractFolderPath.trim()
+        : preferences.customExtractFolderPath,
   };
 }
 
@@ -475,6 +520,8 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
         format,
         {
           cleanSource: Boolean(value.cleanSource),
+          respectGitignore: Boolean(value.respectGitignore),
+          followSymlinks: Boolean(value.followSymlinks),
           compressionLevel: storedNumber(value.compressionLevel, fallback.compressionLevel),
           volumeSize: storedPositiveNumber(value.volumeSize, fallback.volumeSize),
           tzapRecoveryPercentage: format === "tzap"
@@ -483,6 +530,14 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           preserveMetadata: Boolean(value.preserveMetadata),
           replaceExisting: Boolean(value.replaceExisting),
           promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),
+          ...(format === "zip" ? { zipCompression: value.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
+          ...(format === "tzap" ? { tzapVolumeLossTolerance: storedNumber(value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) ?? 0 } : {}),
+          ...(format === "sevenZ" ? {
+            sevenZSolid: storedObjectBool(value.sevenZSolid, fallback.sevenZSolid ?? true),
+            sevenZThreads: storedPositiveNumber(value.sevenZThreads, fallback.sevenZThreads ?? null),
+            sevenZChunkSize: storedPositiveNumber(value.sevenZChunkSize, fallback.sevenZChunkSize ?? null),
+            sevenZEncryptFileNames: storedObjectBool(value.sevenZEncryptFileNames, fallback.sevenZEncryptFileNames ?? true),
+          } : {}),
         },
       ];
     }),

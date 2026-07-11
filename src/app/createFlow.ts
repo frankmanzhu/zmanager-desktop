@@ -456,6 +456,13 @@ export type BuildStartCreateRequestInput = {
   compressionLevel?: number;
   volumeSize?: number;
   tzapRecoveryPercentage?: number;
+  tzapVolumeLossTolerance?: number;
+  zipCompression?: "store" | "deflate";
+  sevenZSolid?: boolean;
+  sevenZThreads?: number;
+  sevenZChunkSize?: number;
+  sevenZEncryptFileNames?: boolean;
+  tzapCertificates?: StartCreateRequest["tzapCertificates"];
 };
 
 export function buildStartCreateRequest(input: BuildStartCreateRequestInput): StartCreateRequest {
@@ -478,11 +485,22 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     preserveMetadata: input.preserveMetadata,
     ...(input.password && createFormatSupportsPassword(input.format) ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),
-    ...(volumeSize !== undefined ? { volumeSize } : {}),
+    ...(volumeSize !== undefined && input.format !== "tarZst" ? { volumeSize } : {}),
+    ...(input.format === "zip" ? { zipCompression: input.zipCompression ?? "deflate" } : {}),
     ...(input.format === "tzap"
       ? {
           tzapRecoveryPercentage:
             normalizeTzapRecoveryPercentage(input.tzapRecoveryPercentage) ?? TZAP_RECOVERY_PERCENTAGE_DEFAULT,
+          tzapVolumeLossTolerance: Math.max(0, Math.min(255, Math.floor(input.tzapVolumeLossTolerance ?? 0))),
+          ...(input.tzapCertificates ? { tzapCertificates: input.tzapCertificates } : {}),
+        }
+      : {}),
+    ...(input.format === "sevenZ"
+      ? {
+          sevenZSolid: input.sevenZSolid ?? true,
+          ...(input.sevenZThreads ? { sevenZThreads: Math.floor(input.sevenZThreads) } : {}),
+          ...(input.sevenZChunkSize ? { sevenZChunkSize: Math.floor(input.sevenZChunkSize) } : {}),
+          sevenZEncryptFileNames: input.sevenZEncryptFileNames ?? true,
         }
       : {}),
   };

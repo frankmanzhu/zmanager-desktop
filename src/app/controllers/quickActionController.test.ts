@@ -254,6 +254,9 @@ describe("quick action controller", () => {
       preserveMetadata: true,
       password: "new-secret",
       compressionLevel: 5,
+      respectGitignore: false,
+      followSymlinks: false,
+      zipCompression: "deflate",
     } satisfies StartCreateRequest);
     expect(harness.calls.createDestinations).toEqual(["C:/work/report.txt.zip"]);
     expect(harness.calls.jobs).toHaveLength(1);

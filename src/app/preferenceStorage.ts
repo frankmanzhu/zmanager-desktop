@@ -11,6 +11,7 @@ export type PreferenceStorageKey =
   | "createFormatDefaults"
   | "defaultOutputLocation"
   | "customOutputFolderPath"
+  | "customExtractFolderPath"
   | "defaultExtractionBehavior"
   | "defaultExtractPathMode"
   | "defaultExtractOverwrite"
@@ -40,6 +41,7 @@ export const PREFERENCE_KEYS = {
   createFormatDefaults: "zmanager.createFormatDefaults",
   defaultOutputLocation: "zmanager.defaultOutputLocation",
   customOutputFolderPath: "zmanager.customOutputFolderPath",
+  customExtractFolderPath: "zmanager.customExtractFolderPath",
   defaultExtractionBehavior: "zmanager.defaultExtractionBehavior",
   defaultExtractPathMode: "zmanager.defaultExtractPathMode",
   defaultExtractOverwrite: "zmanager.defaultExtractOverwrite",

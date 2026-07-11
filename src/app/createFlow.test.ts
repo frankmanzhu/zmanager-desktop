@@ -145,6 +145,7 @@ describe("create flow helpers", () => {
       cleanSource: false,
       replaceExisting: true,
       preserveMetadata: false,
+      zipCompression: "deflate",
       password: "",
       compressionLevel: undefined,
       volumeSize: undefined,
@@ -157,6 +158,7 @@ describe("create flow helpers", () => {
       cleanSource: false,
       replaceExisting: true,
       preserveMetadata: false,
+      zipCompression: "deflate",
     });
   });
 

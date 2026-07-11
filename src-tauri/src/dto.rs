@@ -240,6 +240,20 @@ pub struct StartCreateRequest {
     pub volume_size: Option<u64>,
     pub tzap_recovery_percentage: Option<u8>,
     #[serde(default)]
+    pub tzap_volume_loss_tolerance: Option<u8>,
+    #[serde(default)]
+    pub zip_compression: Option<ZipCompressionDto>,
+    #[serde(default)]
+    pub seven_z_solid: Option<bool>,
+    #[serde(default)]
+    pub seven_z_threads: Option<u32>,
+    #[serde(default)]
+    pub seven_z_chunk_size: Option<u64>,
+    #[serde(default)]
+    pub seven_z_encrypt_file_names: Option<bool>,
+    #[serde(default)]
+    pub tzap_certificates: Option<TzapCertificateOptionsDto>,
+    #[serde(default)]
     pub preserve_metadata: bool,
 }
 
@@ -309,6 +323,24 @@ pub struct TestArchiveRequest {
     pub archive_path: String,
     pub entry_paths: Option<Vec<String>>,
     pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TzapCertificateOptionsDto {
+    #[serde(default)]
+    pub recipient_certificate_paths: Vec<String>,
+    pub signing_certificate_path: Option<String>,
+    pub signing_private_key_path: Option<String>,
+    #[serde(default)]
+    pub signing_chain_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ZipCompressionDto {
+    Store,
+    Deflate,
 }
 
 #[derive(Debug, Deserialize)]

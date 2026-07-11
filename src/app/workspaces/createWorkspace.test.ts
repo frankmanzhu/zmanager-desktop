@@ -161,11 +161,22 @@ describe("create workspace source state", () => {
         format: "tarZst",
         cleanSource: true,
         respectGitignore: false,
+        followSymlinks: false,
         replaceExisting: false,
         preserveMetadata: true,
         compressionLevel: null,
         volumeSize: null,
         tzapRecoveryPercentage: 5,
+        tzapVolumeLossTolerance: 0,
+        zipCompression: "deflate",
+        sevenZSolid: true,
+        sevenZThreads: null,
+        sevenZChunkSize: 16 * 1024 * 1024,
+        sevenZEncryptFileNames: true,
+        tzapRecipientCertificatePaths: "",
+        tzapSigningCertificatePath: "",
+        tzapSigningPrivateKeyPath: "",
+        tzapSigningChainPaths: "",
         submissionInFlight: false,
         password: {
           supportsPassword: false,
@@ -1093,6 +1104,7 @@ describe("create workspace option and readiness state", () => {
       compressionLevel: 3,
       volumeSize: 2048,
       tzapRecoveryPercentage: 12,
+      tzapVolumeLossTolerance: 0,
       preserveMetadata: false,
       replaceExisting: true,
       promptForPassword: true,
@@ -1110,6 +1122,8 @@ describe("create workspace option and readiness state", () => {
       preserveMetadata: false,
       compressionLevel: 3,
       volumeSize: 2048,
+      sevenZSolid: true,
+      sevenZEncryptFileNames: true,
       tzapRecoveryPercentage: 12,
       password: {
         supportsPassword: true,
@@ -1352,11 +1366,15 @@ describe("create workspace start request", () => {
       compressionLevel: 7,
       volumeSize: 4096,
       tzapRecoveryPercentage: 12,
+      tzapVolumeLossTolerance: 0,
       preserveMetadata: false,
       replaceExisting: true,
     }));
     workspace.setOptions({
       respectGitignore: true,
+      tzapSigningCertificatePath: " C:/certs/signer.pem ",
+      tzapSigningPrivateKeyPath: "C:/certs/signer-key.pem",
+      tzapSigningChainPaths: "C:/certs/intermediate-1.pem; C:/certs/intermediate-2.pem",
     });
     workspace.setDestinationPath("C:/out/project");
     workspace.setPathIncluded("project/src/unused.ts", false);
@@ -1386,6 +1404,12 @@ describe("create workspace start request", () => {
       compressionLevel: 7,
       volumeSize: 4096,
       tzapRecoveryPercentage: 12,
+      tzapVolumeLossTolerance: 0,
+      tzapCertificates: {
+        signingCertificatePath: "C:/certs/signer.pem",
+        signingPrivateKeyPath: "C:/certs/signer-key.pem",
+        signingChainPaths: ["C:/certs/intermediate-1.pem", "C:/certs/intermediate-2.pem"],
+      },
     });
     expect(result.snapshot.options.destinationPath).toBe("C:/out/project.tzap");
   });
@@ -1535,6 +1559,8 @@ describe("create workspace start request", () => {
       password: " secret ",
       compressionLevel: 9,
       volumeSize: 2048,
+      sevenZSolid: true,
+      sevenZEncryptFileNames: true,
     });
 
     expect(result.ok).toBe(true);
@@ -1552,6 +1578,8 @@ describe("create workspace start request", () => {
       password: "secret",
       compressionLevel: 9,
       volumeSize: 2048,
+      sevenZSolid: true,
+      sevenZEncryptFileNames: true,
     });
 
     expect(buildQuickCreateStartRequest({
