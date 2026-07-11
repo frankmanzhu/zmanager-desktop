@@ -173,24 +173,25 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__zmanagerDev));
 });
 
-test("selected archive rows keep file icons and names aligned", async ({ page }) => {
+test("native file icons keep clear visual spacing from file names", async ({ page }) => {
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);
 
-  const selectedRow = page.locator('tr[data-entry-path="documents"]');
-  const unselectedRow = page.locator('tr[data-entry-path="images"]');
-  await selectedRow.click();
-  await expect(selectedRow).toHaveAttribute("aria-selected", "true");
+  await page.locator('tr[data-entry-path="documents"]').dblclick();
+  const fileRow = page.locator('tr[data-entry-path="documents/notes.txt"]');
+  await expect(fileRow).toBeVisible();
 
-  const positions = await Promise.all([
-    selectedRow.locator(".row-icon").evaluate((element) => element.getBoundingClientRect().left),
-    unselectedRow.locator(".row-icon").evaluate((element) => element.getBoundingClientRect().left),
-    selectedRow.locator(".row-name").evaluate((element) => element.getBoundingClientRect().left),
-    unselectedRow.locator(".row-name").evaluate((element) => element.getBoundingClientRect().left),
-  ]);
+  const spacing = await fileRow.evaluate((element) => {
+    const icon = element.querySelector<HTMLElement>(".row-icon")?.getBoundingClientRect();
+    const name = element.querySelector<HTMLElement>(".row-name")?.getBoundingClientRect();
+    if (!icon || !name) {
+      throw new Error("Native file icon and name must both render.");
+    }
+    return name.left - icon.right;
+  });
 
-  expect(positions[0]).toBeCloseTo(positions[1], 1);
-  expect(positions[2]).toBeCloseTo(positions[3], 1);
+  await fileRow.screenshot({ path: `${auditDir}/37-native-file-icon-spacing.png` });
+  expect(spacing).toBeGreaterThanOrEqual(8);
 });
 
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
