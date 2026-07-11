@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-generate-tzap-identity"
+description = "Enables the generate_tzap_identity command."
+commands.allow = ["generate_tzap_identity"]
+
+[[permission]]
+identifier = "deny-generate-tzap-identity"
+description = "Denies the generate_tzap_identity command."
+commands.deny = ["generate_tzap_identity"]

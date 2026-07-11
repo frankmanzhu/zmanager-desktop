@@ -113,6 +113,11 @@ describe("preferences helpers", () => {
           replaceExisting: false,
           promptForPassword: false,
           tzapVolumeLossTolerance: 0,
+          tzapSigningMode: "identity",
+          tzapSigningIdentityPath: "",
+          tzapSigningCertificatePath: "",
+          tzapSigningPrivateKeyPath: "",
+          tzapSigningChainPaths: "",
         },
         sevenZ: {
           cleanSource: false,

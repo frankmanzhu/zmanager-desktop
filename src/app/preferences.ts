@@ -37,6 +37,11 @@ export type FormatCreateDefaults = {
   volumeSize: number | null;
   tzapRecoveryPercentage: number | null;
   tzapVolumeLossTolerance?: number;
+  tzapSigningMode?: "identity" | "advanced";
+  tzapSigningIdentityPath?: string;
+  tzapSigningCertificatePath?: string;
+  tzapSigningPrivateKeyPath?: string;
+  tzapSigningChainPaths?: string;
   zipCompression?: "store" | "deflate";
   sevenZSolid?: boolean;
   sevenZThreads?: number | null;
@@ -121,6 +126,11 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       replaceExisting: false,
       promptForPassword: false,
       tzapVolumeLossTolerance: 0,
+      tzapSigningMode: "identity",
+      tzapSigningIdentityPath: "",
+      tzapSigningCertificatePath: "",
+      tzapSigningPrivateKeyPath: "",
+      tzapSigningChainPaths: "",
     },
     sevenZ: {
       cleanSource: true,
@@ -286,7 +296,14 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
               createFormatSupportsPassword(format) &&
               storedObjectBool(raw?.promptForPassword, fallback.promptForPassword),
             ...(format === "zip" ? { zipCompression: raw?.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
-            ...(format === "tzap" ? { tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(raw?.volumeSize, raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) } : {}),
+            ...(format === "tzap" ? {
+              tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(raw?.volumeSize, raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0),
+              tzapSigningMode: raw?.tzapSigningMode === "advanced" ? "advanced" as const : "identity" as const,
+              tzapSigningIdentityPath: storedString(raw?.tzapSigningIdentityPath, ""),
+              tzapSigningCertificatePath: storedString(raw?.tzapSigningCertificatePath, ""),
+              tzapSigningPrivateKeyPath: storedString(raw?.tzapSigningPrivateKeyPath, ""),
+              tzapSigningChainPaths: storedString(raw?.tzapSigningChainPaths, ""),
+            } : {}),
             ...(format === "sevenZ" ? {
               sevenZSolid: storedObjectBool(raw?.sevenZSolid, fallback.sevenZSolid ?? true),
               sevenZThreads: storedPositiveNumber(raw?.sevenZThreads, fallback.sevenZThreads ?? null),
@@ -304,6 +321,10 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
 
 function cleanPath(value: string | null): string {
   return value?.trim() ?? "";
+}
+
+function storedString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
 }
 
 function loadVolumeSizePresets(value: string | null): number[] {
@@ -574,7 +595,14 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           replaceExisting: Boolean(value.replaceExisting),
           promptForPassword: createFormatSupportsPassword(format) && Boolean(value.promptForPassword),
           ...(format === "zip" ? { zipCompression: value.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
-          ...(format === "tzap" ? { tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(value.volumeSize, value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0) } : {}),
+          ...(format === "tzap" ? {
+            tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(value.volumeSize, value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0),
+            tzapSigningMode: value.tzapSigningMode === "advanced" ? "advanced" as const : "identity" as const,
+            tzapSigningIdentityPath: value.tzapSigningIdentityPath?.trim() ?? "",
+            tzapSigningCertificatePath: value.tzapSigningCertificatePath?.trim() ?? "",
+            tzapSigningPrivateKeyPath: value.tzapSigningPrivateKeyPath?.trim() ?? "",
+            tzapSigningChainPaths: value.tzapSigningChainPaths?.trim() ?? "",
+          } : {}),
           ...(format === "sevenZ" ? {
             sevenZSolid: storedObjectBool(value.sevenZSolid, fallback.sevenZSolid ?? true),
             sevenZThreads: storedPositiveNumber(value.sevenZThreads, fallback.sevenZThreads ?? null),

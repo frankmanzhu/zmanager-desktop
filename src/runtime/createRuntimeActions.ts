@@ -28,7 +28,8 @@ export type CreateRuntimeActionEffects = Readonly<{
   focusRow(path: string): void;
   removeSelectedSources(fallbackSourcePath?: string): void;
   showCompressRowContextMenu(path: string, sourcePath: string | undefined, x: number, y: number): void;
-  runCreate(password: string, passwordConfirm: string): void | Promise<void>;
+  runCreate(password: string, passwordConfirm: string, signingIdentityPassword: string): void | Promise<void>;
+  generateTzapIdentity(commonName: string, password: string): void | Promise<void>;
 }>;
 
 export function createCreateRuntimeActions(
@@ -107,7 +108,10 @@ export function createCreateRuntimeActions(
           effects.showCompressRowContextMenu(intent.path, intent.sourcePath, intent.x, intent.y);
           break;
         case "runCreate":
-          void effects.runCreate(intent.password, intent.passwordConfirm);
+          void effects.runCreate(intent.password, intent.passwordConfirm, intent.signingIdentityPassword);
+          break;
+        case "generateTzapIdentity":
+          void effects.generateTzapIdentity(intent.commonName, intent.password);
           break;
       }
     },

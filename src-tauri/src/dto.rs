@@ -358,10 +358,30 @@ pub struct VerifyTzapCertificateResponse {
 pub struct TzapCertificateOptionsDto {
     #[serde(default)]
     pub recipient_certificate_paths: Vec<String>,
+    pub signing_identity_path: Option<String>,
+    pub signing_identity_password: Option<String>,
     pub signing_certificate_path: Option<String>,
     pub signing_private_key_path: Option<String>,
     #[serde(default)]
     pub signing_chain_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateTzapIdentityRequest {
+    pub identity_path: String,
+    pub certificate_path: String,
+    pub common_name: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateTzapIdentityResponse {
+    pub identity_path: String,
+    pub certificate_path: String,
+    pub subject: String,
+    pub certificate_sha256: String,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]

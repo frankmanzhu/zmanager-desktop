@@ -217,6 +217,7 @@ function CreateArchiveToolbarButton() {
           type: "runCreate",
           password: canSubmitPassword ? createPassword.password : "",
           passwordConfirm: canSubmitPassword ? createPassword.passwordConfirm : "",
+          signingIdentityPassword: createPassword.signingIdentityPassword,
         });
         createPassword.reset();
       }}

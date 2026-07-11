@@ -95,6 +95,11 @@ const COMMAND_WRAPPERS = [
     }),
   },
   {
+    command: "generate_tzap_identity",
+    request: { identityPath: "C:/certs/signer.p12", certificatePath: "C:/certs/signer.crt", commonName: "Signer" },
+    call: () => api.generateTzapIdentity({ identityPath: "C:/certs/signer.p12", certificatePath: "C:/certs/signer.crt", commonName: "Signer" }),
+  },
+  {
     command: "preview_entry",
     request: {
       archivePath: "C:/archives/demo.zip",

@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "disposable-task-window",
+  "description": "Allow disposable task windows to receive job updates and control only their archive job.",
+  "windows": ["task-*"],
+  "platforms": ["windows", "linux"],
+  "permissions": [
+    "allow-cancel-job",
+    "allow-pause-job",
+    "allow-resume-job",
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-minimize"
+  ]
+}

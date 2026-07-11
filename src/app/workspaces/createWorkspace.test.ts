@@ -23,6 +23,20 @@ function createPlan(overrides: Partial<CreatePlanResponse> = {}): CreatePlanResp
   };
 }
 
+function createPlanForPaths(paths: readonly string[]): CreatePlanResponse {
+  const planEntries: CreatePlanResponse["planEntries"] = paths.map((path) => ({
+    path,
+    kind: path.includes(".") ? "file" : "directory",
+    sourcePath: `C:/work/${path}`,
+    ...(path.includes(".") ? { size: 12 } : {}),
+  }));
+  return createPlan({
+    includedCount: planEntries.length,
+    entries: [...paths],
+    planEntries,
+  });
+}
+
 function createNestedPlan(overrides: Partial<CreatePlanResponse> = {}): CreatePlanResponse {
   const planEntries: CreatePlanResponse["planEntries"] = [
     {
@@ -174,6 +188,8 @@ describe("create workspace source state", () => {
         sevenZChunkSize: 16 * 1024 * 1024,
         sevenZEncryptFileNames: true,
         tzapRecipientCertificatePaths: "",
+        tzapSigningMode: "identity",
+        tzapSigningIdentityPath: "",
         tzapSigningCertificatePath: "",
         tzapSigningPrivateKeyPath: "",
         tzapSigningChainPaths: "",
@@ -408,6 +424,87 @@ describe("create workspace plan lifecycle", () => {
     });
     expect(second.revision).toBe(2);
     expect(second.snapshot.plan.revision).toBe(2);
+  });
+
+  it("keeps the last accepted tree and path state visible while a replacement plan is loading", () => {
+    const workspace = createCreateWorkspace();
+    workspace.addSources(["C:/work/project"]);
+    const initial = workspace.beginPlan();
+    expect(initial.ready).toBe(true);
+    if (!initial.ready) {
+      return;
+    }
+    workspace.acceptPlanResult(initial.revision, createPlanForPaths([
+      "project",
+      "project/src",
+      "project/src/index.ts",
+    ]));
+    workspace.navigateToFolder("project/src");
+    workspace.updateSelection({
+      selectedPaths: new Set(["project/src/index.ts"]),
+      focusedPath: "project/src/index.ts",
+      anchorPath: "project/src/index.ts",
+    });
+
+    const queued = workspace.queuePlan();
+
+    expect(queued.snapshot.plan).toMatchObject({
+      state: "loading",
+      hasPlan: true,
+      status: { messageKey: "create.plan.planning" },
+    });
+    expect(queued.snapshot.plan.current?.entries).toEqual([
+      "project",
+      "project/src",
+      "project/src/index.ts",
+    ]);
+    expect(queued.snapshot.view.currentFolder).toBe("project/src");
+    expect(queued.snapshot.selection).toMatchObject({
+      selectedPaths: ["project/src/index.ts"],
+      focusedPath: "project/src/index.ts",
+    });
+  });
+
+  it("atomically replaces a retained tree only when the current refresh result is accepted", () => {
+    const workspace = createCreateWorkspace();
+    workspace.addSources(["C:/work/project"]);
+    const initial = workspace.beginPlan();
+    expect(initial.ready).toBe(true);
+    if (!initial.ready) {
+      return;
+    }
+    workspace.acceptPlanResult(initial.revision, createPlanForPaths(["project", "project/old.ts"]));
+    const refresh = workspace.queuePlan();
+
+    const stale = workspace.acceptPlanResult(refresh.revision - 1, createPlanForPaths(["project", "project/stale.ts"]));
+    expect(stale.accepted).toBe(false);
+    expect(stale.snapshot.plan.current?.entries).toEqual(["project", "project/old.ts"]);
+
+    const accepted = workspace.acceptPlanResult(refresh.revision, createPlanForPaths(["project", "project/new.ts"]));
+    expect(accepted.accepted).toBe(true);
+    expect(accepted.snapshot.plan).toMatchObject({ state: "ready", hasPlan: true, status: null });
+    expect(accepted.snapshot.plan.current?.entries).toEqual(["project", "project/new.ts"]);
+  });
+
+  it("keeps the last accepted tree when a background refresh fails", () => {
+    const workspace = createCreateWorkspace();
+    workspace.addSources(["C:/work/project"]);
+    const initial = workspace.beginPlan();
+    expect(initial.ready).toBe(true);
+    if (!initial.ready) {
+      return;
+    }
+    workspace.acceptPlanResult(initial.revision, createPlanForPaths(["project", "project/keep.ts"]));
+    const refresh = workspace.queuePlan();
+
+    const failed = workspace.acceptPlanError(refresh.revision, { fallbackText: "refresh failed" });
+
+    expect(failed.snapshot.plan).toMatchObject({
+      state: "error",
+      hasPlan: true,
+      status: { fallbackText: "refresh failed" },
+    });
+    expect(failed.snapshot.plan.current?.entries).toEqual(["project", "project/keep.ts"]);
   });
 
   it("builds serializable plan requests from sources and option input", () => {
@@ -768,7 +865,7 @@ describe("create workspace plan navigation", () => {
     });
   });
 
-  it("resets navigation when sources change or the plan becomes unavailable", () => {
+  it("resets navigation when sources change but retains it when a refresh fails", () => {
     const workspace = readyWorkspace();
 
     workspace.navigateToFolder("project/src");
@@ -794,10 +891,14 @@ describe("create workspace plan navigation", () => {
     const failed = restored.acceptPlanError(started.revision, { fallbackText: "plan failed" });
 
     expect(failed.snapshot.view).toMatchObject({
-      currentFolder: "",
-      expandedTreeFolders: [""],
-      rows: [],
+      currentFolder: "project/src",
+      expandedTreeFolders: ["", "project", "project/src"],
     });
+    expect(failed.snapshot.view.rows.map((row) => row.path)).toEqual([
+      "project",
+      "project/src/app.ts",
+      "project/src/unused.ts",
+    ]);
   });
 
   it("preserves or resets the current folder across accepted plan results", () => {
@@ -1379,6 +1480,7 @@ describe("create workspace start request", () => {
     }));
     workspace.setOptions({
       respectGitignore: true,
+      tzapSigningMode: "advanced",
       tzapSigningCertificatePath: " C:/certs/signer.pem ",
       tzapSigningPrivateKeyPath: "C:/certs/signer-key.pem",
       tzapSigningChainPaths: "C:/certs/intermediate-1.pem; C:/certs/intermediate-2.pem",

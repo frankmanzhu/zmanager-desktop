@@ -47,9 +47,9 @@ describe("create runtime actions", () => {
     const effects = createEffects();
     const actions = createCreateRuntimeActions(effects);
 
-    actions.handleIntent({ type: "runCreate", password: "one", passwordConfirm: "two" });
+    actions.handleIntent({ type: "runCreate", password: "one", passwordConfirm: "two", signingIdentityPassword: "identity" });
 
-    expect(effects.runCreate).toHaveBeenCalledWith("one", "two");
+    expect(effects.runCreate).toHaveBeenCalledWith("one", "two", "identity");
   });
 });
 
@@ -81,6 +81,7 @@ function createEffects(
     removeSelectedSources: vi.fn(),
     showCompressRowContextMenu: vi.fn(),
     runCreate: vi.fn(),
+    generateTzapIdentity: vi.fn(),
     ...overrides,
   };
 }

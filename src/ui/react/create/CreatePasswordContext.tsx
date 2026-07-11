@@ -4,9 +4,11 @@ export type CreatePasswordState = Readonly<{
   password: string;
   passwordConfirm: string;
   showPassword: boolean;
+  signingIdentityPassword: string;
   setPassword(value: string): void;
   setPasswordConfirm(value: string): void;
   setShowPassword(value: boolean): void;
+  setSigningIdentityPassword(value: string): void;
   reset(): void;
 }>;
 
@@ -16,9 +18,11 @@ const FALLBACK_CREATE_PASSWORD_STATE: CreatePasswordState = Object.freeze({
   password: "",
   passwordConfirm: "",
   showPassword: false,
+  signingIdentityPassword: "",
   setPassword: noop,
   setPasswordConfirm: noop,
   setShowPassword: noop,
+  setSigningIdentityPassword: noop,
   reset: noop,
 });
 
@@ -28,20 +32,24 @@ export function CreatePasswordProvider({ children }: Readonly<{ children?: React
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [signingIdentityPassword, setSigningIdentityPassword] = useState("");
   const reset = useCallback(() => {
     setPassword("");
     setPasswordConfirm("");
     setShowPassword(false);
+    setSigningIdentityPassword("");
   }, []);
   const value = useMemo<CreatePasswordState>(() => ({
     password,
     passwordConfirm,
     showPassword,
+    signingIdentityPassword,
     setPassword,
     setPasswordConfirm,
     setShowPassword,
+    setSigningIdentityPassword,
     reset,
-  }), [password, passwordConfirm, reset, showPassword]);
+  }), [password, passwordConfirm, reset, showPassword, signingIdentityPassword]);
 
   return (
     <CreatePasswordContext.Provider value={value}>

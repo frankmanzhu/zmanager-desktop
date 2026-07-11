@@ -135,7 +135,7 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "browseDestination" }>
   | Readonly<{ type: "changeFormat"; format: CreateWorkspaceSnapshot["options"]["format"] }>
   | Readonly<{ type: "setOptions"; patch: CreateWorkspaceOptionPatch }>
-  | Readonly<{ type: "chooseTzapCertificate"; target: "recipients" | "signer" | "privateKey" | "chain" }>
+  | Readonly<{ type: "chooseTzapCertificate"; target: "recipients" | "identity" | "signer" | "privateKey" | "chain" }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
@@ -149,7 +149,8 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "focusRow"; path: string }>
   | Readonly<{ type: "removeSelectedSources"; fallbackSourcePath?: string }>
   | Readonly<{ type: "showCompressRowContextMenu"; path: string; sourcePath?: string; x: number; y: number }>
-  | Readonly<{ type: "runCreate"; password: string; passwordConfirm: string }>;
+  | Readonly<{ type: "runCreate"; password: string; passwordConfirm: string; signingIdentityPassword: string }>
+  | Readonly<{ type: "generateTzapIdentity"; commonName: string; password: string }>;
 
 export type ZManagerJobsIntent =
   | Readonly<{ type: "openDrawer" }>
@@ -203,6 +204,8 @@ export type ZManagerDialogIntent =
     }>
   | Readonly<{ type: "preferencesChooseOutput" }>
   | Readonly<{ type: "preferencesChooseExtractOutput" }>
+  | Readonly<{ type: "preferencesChooseTzapSigningFile"; target: "identity" | "certificate" | "privateKey" | "chain" }>
+  | Readonly<{ type: "preferencesGenerateTzapIdentity"; commonName: string; password: string }>
   | Readonly<{ type: "preferencesSave" }>
   | Readonly<{ type: "preferencesCancel" }>
   | Readonly<{ type: "closeCurrent" }>;

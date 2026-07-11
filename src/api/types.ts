@@ -179,9 +179,25 @@ export type StartCreateRequest = {
 
 export type TzapCertificateOptions = {
   recipientCertificatePaths?: string[];
+  signingIdentityPath?: string;
+  signingIdentityPassword?: string;
   signingCertificatePath?: string;
   signingPrivateKeyPath?: string;
   signingChainPaths?: string[];
+};
+
+export type GenerateTzapIdentityRequest = {
+  identityPath: string;
+  certificatePath: string;
+  commonName: string;
+  password?: string;
+};
+
+export type GenerateTzapIdentityResponse = {
+  identityPath: string;
+  certificatePath: string;
+  subject: string;
+  certificateSha256: string;
 };
 
 export type StartExtractRequest = {

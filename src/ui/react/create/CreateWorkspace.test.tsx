@@ -55,11 +55,22 @@ describe("React create workspace", () => {
     const html = renderCreateWorkspace(createSnapshot("sevenZ"));
 
     expect(html).toContain('value="sevenZ" selected');
-    expect(html).toContain('class="advanced-options"');
+    expect(html).toContain('id="create-advanced-options"');
+    expect(html).not.toMatch(/<details[^>]*id="create-advanced-options"[^>]*open=/);
     expect(html).toContain('id="create-password"');
     expect(html).toContain('id="create-password-confirm"');
     expect(html).toContain('id="create-show-password"');
+    expect(html.indexOf('id="create-clean-source"')).toBeLessThan(html.indexOf('id="create-advanced-options"'));
+    expect(html.indexOf('id="create-respect-gitignore"')).toBeLessThan(html.indexOf('id="create-password"'));
     expect(html).not.toContain("correct horse");
+  });
+
+  it("keeps TZAP certificates last inside the collapsed advanced options", () => {
+    const html = renderCreateWorkspace(createSnapshot("tzap"));
+
+    expect(html.indexOf('id="create-password"')).toBeLessThan(html.indexOf('id="create-volume"'));
+    expect(html.indexOf('id="create-volume"')).toBeLessThan(html.indexOf('id="create-tzap-recovery"'));
+    expect(html.indexOf('id="create-tzap-recovery"')).toBeLessThan(html.indexOf('id="create-tzap-certificates-title"'));
   });
 
   it("renders create row selection and focus from the runtime snapshot", () => {
@@ -72,6 +83,14 @@ describe("React create workspace", () => {
     expect(html).toMatch(/class="is-selected is-focused-row"[^>]*data-compress-path="quarterly-report\.pdf"/);
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain('aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"');
+  });
+
+  it("keeps the accepted tree visible with a subtle status while filters refresh", () => {
+    const html = renderCreateWorkspace(createSnapshot("tzap", undefined, undefined, true));
+
+    expect(html).toContain('role="status" aria-live="polite"');
+    expect(html).toContain("Updating filters...");
+    expect(html).toContain('data-compress-path="photos-folder"');
   });
 });
 
@@ -87,13 +106,14 @@ function renderCreateWorkspace(snapshot: ZManagerReactSnapshot): string {
 }
 
 function createSnapshot(
-  format: "tarZst" | "sevenZ" = "tarZst",
+  format: "tarZst" | "sevenZ" | "tzap" = "tarZst",
   createSelection?: Readonly<{
     selectedPaths: readonly string[];
     focusedPath: string;
     anchorPath: string;
   }>,
-  destinationPath = format === "sevenZ" ? "C:/work/bundle.7z" : "C:/work/bundle.tzst",
+  destinationPath = format === "sevenZ" ? "C:/work/bundle.7z" : format === "tzap" ? "C:/work/bundle.tzap" : "C:/work/bundle.tzst",
+  refreshing = false,
 ): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const workspace = createCreateWorkspace();
@@ -104,6 +124,8 @@ function createSnapshot(
   ]);
   if (format === "sevenZ") {
     workspace.changeFormat("sevenZ", DEFAULT_APP_PREFERENCES.createFormatDefaults.sevenZ);
+  } else if (format === "tzap") {
+    workspace.changeFormat("tzap", DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap);
   }
   workspace.setDestinationPath(destinationPath);
   const started = workspace.beginPlan();
@@ -118,6 +140,9 @@ function createSnapshot(
       focusedPath: createSelection.focusedPath,
       anchorPath: createSelection.anchorPath,
     });
+  }
+  if (refreshing) {
+    workspace.queuePlan();
   }
 
   return createZManagerReactSnapshot({

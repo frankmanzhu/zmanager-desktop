@@ -7,6 +7,8 @@ import type {
   CommandErrorDto,
   CreatePlanResponse,
   DismissJobRequest,
+  GenerateTzapIdentityRequest,
+  GenerateTzapIdentityResponse,
   HealthcheckResponse,
   JobControlResponseDto,
   ListArchiveRequest,
@@ -89,6 +91,10 @@ export async function verifyTzapCertificate(
   request: VerifyTzapCertificateRequest,
 ): Promise<VerifyTzapCertificateResponse> {
   return invoke<VerifyTzapCertificateResponse>("verify_tzap_certificate", { request });
+}
+
+export async function generateTzapIdentity(request: GenerateTzapIdentityRequest): Promise<GenerateTzapIdentityResponse> {
+  return invoke<GenerateTzapIdentityResponse>("generate_tzap_identity", { request });
 }
 
 export async function runPreviewEntry(request: PreviewEntryRequest): Promise<PreviewEntryResponse> {

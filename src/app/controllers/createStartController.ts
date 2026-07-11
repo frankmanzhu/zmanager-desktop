@@ -9,6 +9,7 @@ export type CreateStartOptions = Readonly<{
   passwordInput: Readonly<{
     password: string;
     passwordConfirm: string;
+    signingIdentityPassword?: string;
   }>;
 }>;
 
@@ -46,6 +47,7 @@ export function createCreateStartController(
     const requestResult = options.workspace.buildStartCreateRequest({
       password: createOptions.passwordInput.password,
       passwordConfirm: createOptions.passwordInput.passwordConfirm,
+      signingIdentityPassword: createOptions.passwordInput.signingIdentityPassword,
       destinationCollisionStrategy: createOptions.destinationCollisionStrategy,
     });
     options.publishSnapshot(requestResult.snapshot);

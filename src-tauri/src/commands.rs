@@ -5,6 +5,14 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use openssl::asn1::{Asn1Integer, Asn1Time};
+use openssl::bn::{BigNum, MsbOption};
+use openssl::hash::MessageDigest;
+use openssl::nid::Nid;
+use openssl::pkcs12::Pkcs12;
+use openssl::pkey::PKey;
+use openssl::rsa::Rsa;
+use openssl::x509::{X509, X509NameBuilder};
 use tauri::State;
 
 use crate::{
@@ -503,6 +511,22 @@ pub(crate) fn start_create_internal(
                     TzapKeySource::RecipientCertificates(recipient_certificates)
                 };
                 let x509_signing = tzap_certificates.as_ref().and_then(|options| {
+                    if let Some(identity) = options
+                        .signing_identity_path
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|path| !path.is_empty())
+                    {
+                        return Some(TzapX509SigningOptions::Pkcs12 {
+                            identity: PathBuf::from(identity),
+                            password: SecretString::from(
+                                options
+                                    .signing_identity_password
+                                    .clone()
+                                    .unwrap_or_default(),
+                            ),
+                        });
+                    }
                     let certificate = options.signing_certificate_path.as_deref()?.trim();
                     let private_key = options.signing_private_key_path.as_deref()?.trim();
                     if certificate.is_empty() || private_key.is_empty() {
@@ -588,6 +612,102 @@ pub fn start_extract(
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_extract_internal(request, &registry)
+}
+
+#[tauri::command]
+pub fn generate_tzap_identity(
+    request: crate::dto::GenerateTzapIdentityRequest,
+) -> Result<crate::dto::GenerateTzapIdentityResponse, CommandErrorDto> {
+    let identity_path = PathBuf::from(ensure_non_empty_path(
+        request.identity_path,
+        "identityPath",
+    )?);
+    let certificate_path = PathBuf::from(ensure_non_empty_path(
+        request.certificate_path,
+        "certificatePath",
+    )?);
+    let common_name = request.common_name.trim();
+    if common_name.is_empty() {
+        return Err(CommandErrorDto::invalid_request(
+            "commonName must not be blank",
+        ));
+    }
+    let key = PKey::from_rsa(Rsa::generate(3072).map_err(map_identity_error)?)
+        .map_err(map_identity_error)?;
+    let mut name = X509NameBuilder::new().map_err(map_identity_error)?;
+    name.append_entry_by_nid(Nid::COMMONNAME, common_name)
+        .map_err(map_identity_error)?;
+    let name = name.build();
+    let mut serial = BigNum::new().map_err(map_identity_error)?;
+    serial
+        .rand(128, MsbOption::MAYBE_ZERO, false)
+        .map_err(map_identity_error)?;
+    let serial = Asn1Integer::from_bn(&serial).map_err(map_identity_error)?;
+    let mut certificate = X509::builder().map_err(map_identity_error)?;
+    certificate.set_version(2).map_err(map_identity_error)?;
+    certificate
+        .set_serial_number(&serial)
+        .map_err(map_identity_error)?;
+    certificate
+        .set_subject_name(&name)
+        .map_err(map_identity_error)?;
+    certificate
+        .set_issuer_name(&name)
+        .map_err(map_identity_error)?;
+    certificate.set_pubkey(&key).map_err(map_identity_error)?;
+    certificate
+        .set_not_before(
+            Asn1Time::days_from_now(0)
+                .map_err(map_identity_error)?
+                .as_ref(),
+        )
+        .map_err(map_identity_error)?;
+    certificate
+        .set_not_after(
+            Asn1Time::days_from_now(3650)
+                .map_err(map_identity_error)?
+                .as_ref(),
+        )
+        .map_err(map_identity_error)?;
+    certificate
+        .sign(&key, MessageDigest::sha256())
+        .map_err(map_identity_error)?;
+    let certificate = certificate.build();
+    let password = request.password.unwrap_or_default();
+    let mut identity = Pkcs12::builder();
+    identity.name(common_name);
+    identity.pkey(&key);
+    identity.cert(&certificate);
+    let identity = identity.build2(&password).map_err(map_identity_error)?;
+    std::fs::write(
+        &identity_path,
+        identity.to_der().map_err(map_identity_error)?,
+    )
+    .map_err(|error| map_io_error(identity_path.to_string_lossy().into_owned(), error))?;
+    std::fs::write(
+        &certificate_path,
+        certificate.to_pem().map_err(map_identity_error)?,
+    )
+    .map_err(|error| map_io_error(certificate_path.to_string_lossy().into_owned(), error))?;
+    let fingerprint = certificate
+        .digest(MessageDigest::sha256())
+        .map_err(map_identity_error)?;
+    Ok(crate::dto::GenerateTzapIdentityResponse {
+        identity_path: identity_path.to_string_lossy().into_owned(),
+        certificate_path: certificate_path.to_string_lossy().into_owned(),
+        subject: format!("CN={common_name}"),
+        certificate_sha256: hex_bytes(fingerprint.as_ref()),
+    })
+}
+
+fn map_identity_error(error: openssl::error::ErrorStack) -> CommandErrorDto {
+    CommandErrorDto::new(
+        "certificate_error",
+        format!("Unable to create signing identity: {error}"),
+        None::<String>,
+        ErrorSeverityDto::Error,
+        false,
+    )
 }
 
 #[tauri::command]
@@ -2876,6 +2996,34 @@ mod tests {
         base
     }
 
+    #[test]
+    fn generate_tzap_identity_writes_parseable_pkcs12_and_public_certificate() {
+        let workspace = create_temp_workspace("generate-tzap-identity");
+        let identity_path = workspace.join("signer.p12");
+        let certificate_path = workspace.join("signer.crt");
+        let response = generate_tzap_identity(crate::dto::GenerateTzapIdentityRequest {
+            identity_path: identity_path.to_string_lossy().into_owned(),
+            certificate_path: certificate_path.to_string_lossy().into_owned(),
+            common_name: "Desktop Test Signer".to_owned(),
+            password: Some("identity-secret".to_owned()),
+        })
+        .expect("identity generation should succeed");
+
+        let identity = Pkcs12::from_der(&fs::read(&identity_path).expect("identity should exist"))
+            .expect("identity should be valid PKCS#12");
+        let parsed = identity
+            .parse2("identity-secret")
+            .expect("identity password should work");
+        assert!(parsed.cert.is_some());
+        assert!(parsed.pkey.is_some());
+        assert!(
+            X509::from_pem(&fs::read(&certificate_path).expect("certificate should exist")).is_ok()
+        );
+        assert_eq!(response.subject, "CN=Desktop Test Signer");
+        assert!(!response.certificate_sha256.is_empty());
+        let _ = fs::remove_dir_all(workspace);
+    }
+
     fn wait_for_job_terminal(
         registry: &crate::job_registry::JobRegistry,
         job_id: &str,
@@ -3428,6 +3576,8 @@ mod tests {
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: Some(crate::dto::TzapCertificateOptionsDto {
                     recipient_certificate_paths: Vec::new(),
+                    signing_identity_path: None,
+                    signing_identity_password: None,
                     signing_certificate_path: Some("C:/certs/signer.pem".to_owned()),
                     signing_private_key_path: None,
                     signing_chain_paths: Vec::new(),

@@ -213,6 +213,8 @@ function ArchiveDefaultsPage({
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const defaults = createDefaultsForFormat(draft, selectedCreateFormat);
+  const [identityName, setIdentityName] = useState("TZAP Signing Identity");
+  const [identityPassword, setIdentityPassword] = useState("");
   const supportsTzapRecovery = selectedCreateFormat === "tzap";
   const capabilities = createFormatCapabilities(selectedCreateFormat);
   const volumeSizeChoices = defaults.volumeSize !== null && !draft.volumeSizePresets.includes(defaults.volumeSize)
@@ -293,7 +295,26 @@ function ArchiveDefaultsPage({
         </div>
       </div>
       <VolumeSizePresetEditor draft={draft} />
-      <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+      {selectedCreateFormat === "tzap" ? <section className="mt-4 rounded-xl border border-black/10 bg-black/[0.025] p-4 dark:border-white/10 dark:bg-white/[0.035]">
+        <h4 className="text-xs font-semibold">{i18n.t("preferences.archiveDefaults.signingIdentity")}</h4>
+        <p className="mt-1 text-xs opacity-65">{i18n.t("preferences.archiveDefaults.signingIdentityHelp")}</p>
+        <div className="mt-3 grid grid-cols-2 rounded-lg bg-black/[0.06] p-1 dark:bg-white/[0.06]">
+          <button type="button" className={`rounded-md px-2 py-1.5 text-xs ${defaults.tzapSigningMode !== "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "identity" })}>{i18n.t("create.tzapIdentityFile")}</button>
+          <button type="button" className={`rounded-md px-2 py-1.5 text-xs ${defaults.tzapSigningMode === "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`} onClick={() => patchCreateDefaults(actions, "tzap", { tzapSigningMode: "advanced" })}>{i18n.t("create.tzapAdvancedIdentity")}</button>
+        </div>
+        {defaults.tzapSigningMode !== "advanced" ? <div className="mt-3 grid gap-2">
+          <PreferenceSigningFile label={i18n.t("create.tzapIdentityFile")} value={defaults.tzapSigningIdentityPath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "identity" })} />
+          <input aria-label={i18n.t("create.tzapIdentityName")} value={identityName} onChange={(event) => setIdentityName(event.currentTarget.value)} />
+          <input aria-label={i18n.t("create.tzapIdentityPassword")} type="password" value={identityPassword} onChange={(event) => setIdentityPassword(event.currentTarget.value)} />
+          <button type="button" className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300" onClick={() => actions.handleDialogIntent({ type: "preferencesGenerateTzapIdentity", commonName: identityName, password: identityPassword })}>{i18n.t("create.tzapCreateIdentity")}</button>
+        </div> : <div className="mt-3 grid gap-2">
+          <PreferenceSigningFile label={i18n.t("create.tzapSigningCertificate")} value={defaults.tzapSigningCertificatePath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "certificate" })} />
+          <PreferenceSigningFile label={i18n.t("create.tzapSigningPrivateKey")} value={defaults.tzapSigningPrivateKeyPath ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "privateKey" })} />
+          <PreferenceSigningFile label={i18n.t("create.tzapSigningChain")} value={defaults.tzapSigningChainPaths ?? ""} onChoose={() => actions.handleDialogIntent({ type: "preferencesChooseTzapSigningFile", target: "chain" })} />
+          <p className="text-xs opacity-65">{i18n.t("create.tzapIntermediateHelp")}</p>
+        </div>}
+      </section> : null}
+      <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
         <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
         <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
         {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-solid" label={i18n.t("create.sevenZSolid")} checked={defaults.sevenZSolid ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZSolid: checked })} /> : null}
@@ -322,12 +343,19 @@ function VolumeSizePresetEditor({ draft }: Readonly<{ draft: AppPreferences }>) 
   };
 
   return (
-    <div className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+    <div className="mt-4 rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
       <label className="mb-2 block text-xs font-semibold" htmlFor="pref-volume-size-presets">{i18n.t("preferences.archiveDefaults.volumeChoices")}</label>
       <input id="pref-volume-size-presets" className="w-full" type="text" value={value} aria-invalid={parsed === null} onChange={(event) => setValue(event.currentTarget.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }} />
       <p className="mt-2 text-xs opacity-70">{i18n.t("preferences.archiveDefaults.volumeChoicesHelp")}</p>
     </div>
   );
+}
+
+function PreferenceSigningFile({ label, value, onChoose }: Readonly<{ label: string; value: string; onChoose(): void }>) {
+  const display = value.split(/[;\\/]/).filter(Boolean).at(-1) ?? "Not configured";
+  return <div className="grid grid-cols-[8rem_1fr_auto] items-center gap-2 rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-xs dark:border-white/10 dark:bg-black/10">
+    <span className="font-medium">{label}</span><span className="truncate opacity-65" title={value}>{display}</span><button type="button" className="rounded-md px-2 py-1 hover:bg-black/5 dark:hover:bg-white/5" onClick={onChoose}>{value ? "Change" : "Choose"}</button>
+  </div>;
 }
 
 function ExtractionPage({ draft, active }: Readonly<{ draft: AppPreferences; active: boolean }>) {

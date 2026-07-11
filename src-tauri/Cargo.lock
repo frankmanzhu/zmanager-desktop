@@ -6323,6 +6323,7 @@ dependencies = [
  "gio",
  "glib",
  "gtk",
+ "openssl",
  "png 0.18.1",
  "serde",
  "serde_json",

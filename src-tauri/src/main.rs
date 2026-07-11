@@ -10,20 +10,10 @@ mod job_registry;
 mod platform;
 mod quick_action;
 
-use tauri::{LogicalSize, Manager, Size};
-
-const QUICK_ACTION_WINDOW_WIDTH: f64 = 620.0;
-const QUICK_ACTION_WINDOW_HEIGHT: f64 = 420.0;
-const QUICK_ACTION_WINDOW_MIN_WIDTH: f64 = 540.0;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT: f64 = 360.0;
+use tauri::Manager;
 
 fn main() {
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
-    let startup_job_only_window = matches!(
-        &startup_window_state,
-        quick_action::QuickActionStartupState::Requested(request)
-            if quick_action::is_direct_job_quick_action(request.kind)
-    );
     let job_registry = job_registry::JobRegistry::new();
     let startup_state =
         quick_action::prestart_direct_quick_action(startup_window_state, &job_registry);
@@ -48,24 +38,10 @@ fn main() {
                 );
             },
         ))
-        .setup(move |app| {
-            if let Some(window) = app.get_webview_window("main") {
-                #[cfg(target_os = "linux")]
+        .setup(move |_app| {
+            #[cfg(target_os = "linux")]
+            if let Some(window) = _app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
-
-                if startup_job_only_window {
-                    let quick_action_min_size = Size::Logical(LogicalSize {
-                        width: QUICK_ACTION_WINDOW_MIN_WIDTH,
-                        height: QUICK_ACTION_WINDOW_MIN_HEIGHT,
-                    });
-                    let quick_action_size = Size::Logical(LogicalSize {
-                        width: QUICK_ACTION_WINDOW_WIDTH,
-                        height: QUICK_ACTION_WINDOW_HEIGHT,
-                    });
-                    let _ = window.set_min_size(Some(quick_action_min_size));
-                    let _ = window.set_size(quick_action_size);
-                    let _ = window.center();
-                }
             }
             Ok(())
         })
@@ -80,6 +56,7 @@ fn main() {
             commands::start_create,
             commands::start_extract,
             commands::verify_tzap_certificate,
+            commands::generate_tzap_identity,
             commands::preview_entry,
             commands::start_native_file_drag,
             commands::cleanup_preview_roots,

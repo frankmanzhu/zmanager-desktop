@@ -159,6 +159,7 @@ import {
 import {
   type JobRetryContext,
 } from "../app/jobs";
+import { createDisposableTaskLifecycle } from "../app/shell/disposableTaskLifecycle";
 import {
   createJobsWorkspace,
   type FocusedJobAutoCloseAction,
@@ -226,6 +227,7 @@ import {
   fetchProjectContract,
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
+  generateTzapIdentity as generateTzapIdentityCommand,
   listArchive as listArchiveCommand,
   pollJobEvents as pollJobEventsCommand,
   pauseJob as pauseJobCommand,
@@ -247,6 +249,7 @@ import type {
   HealthcheckResponse,
   JobState,
   ListArchiveRequest,
+  PollJobEventsResponseDto,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -259,6 +262,7 @@ import {
   isDesktopRuntime,
   openNativeDialog as openRuntimeDialog,
 } from "../desktop/runtime";
+import { chooseTzapIdentityDestination } from "../desktop/tzapIdentityDialog";
 import {
   bindDesktopFileDrop,
   type DesktopFileDropEvent,
@@ -289,6 +293,7 @@ import {
   createWindowController,
   type AppWindowResizeDirection,
 } from "../desktop/windowController";
+import { createDisposableTaskWindowManager } from "../desktop/disposableTaskWindowManager";
 import {
   createBrowserDocumentAdapter,
 } from "./browserDocumentAdapter";
@@ -359,6 +364,15 @@ let dropUnlisten: (() => void) | null = null;
 
 const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
+const disposableTaskLifecycle = createDisposableTaskLifecycle();
+const disposableTaskWindows = createDisposableTaskWindowManager({
+  onReady: (jobId) => {
+    void publishDisposableTaskJob(jobId);
+  },
+  onAllClosed: () => {
+    maybeCloseQuickActionOnlyCoordinator();
+  },
+});
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
 let reactDialogSnapshot: ZManagerDialogSnapshot = { kind: "none" };
@@ -459,6 +473,7 @@ const createRuntimeActions = createCreateRuntimeActions({
     queuePlanRun();
   },
   chooseTzapCertificate: chooseCreateTzapCertificate,
+  generateTzapIdentity: generateCreateTzapIdentity,
   navigateToFolder: (folderPath) => {
     const navigation = createWorkspace.navigateToFolder(folderPath);
     if (navigation.changed) {
@@ -534,10 +549,11 @@ const createRuntimeActions = createCreateRuntimeActions({
     }
     publishReactSnapshot();
   },
-  runCreate: (password, passwordConfirm) => runCreate({
+  runCreate: (password, passwordConfirm, signingIdentityPassword) => runCreate({
     passwordInput: {
       password,
       passwordConfirm,
+      signingIdentityPassword,
     },
   }),
 });
@@ -742,7 +758,14 @@ const appWindowEffects = {
       return;
     }
 
-    void appWindowController.closeCurrentWindow().catch(() => {
+    const closeOrHide = disposableTaskWindows.hasOpenWindows() || jobsWorkspace.hasActiveJob()
+      ? appWindowController.hideCurrentWindow()
+      : appWindowController.closeCurrentWindow();
+    if (disposableTaskWindows.hasOpenWindows() || jobsWorkspace.hasActiveJob()) {
+      disposableTaskLifecycle.observeMainWindowHiddenForTasks();
+      shellWorkspace.setQuickActionWindowShown(false);
+    }
+    void closeOrHide.catch(() => {
       setOperationalMessage("quick.completed.closeWindow");
     });
   },
@@ -968,6 +991,7 @@ function renderNormalWorkspaceOnce() {
 }
 
 async function revealNormalAppWindow() {
+  disposableTaskLifecycle.observeNormalLaunch();
   renderNormalWorkspaceOnce();
   if (!isDesktopRuntime() || shellWorkspace.getSnapshot().quickActionWindow.shown) {
     return;
@@ -1061,8 +1085,8 @@ async function closeFocusedJobProgress() {
 }
 
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
-  if (shellWorkspace.selectQuickActionStartupRevealTarget(state) === "jobOnly") {
-    await revealQuickActionJobWindow();
+  if (state.quickActionJobs?.length) {
+    disposableTaskLifecycle.observeQuickActionLaunch();
     return;
   }
 
@@ -1892,6 +1916,12 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
     case "preferencesChooseExtractOutput":
       void onSelectReactPreferenceExtractFolder();
       break;
+    case "preferencesChooseTzapSigningFile":
+      void choosePreferenceTzapSigningFile(intent.target);
+      break;
+    case "preferencesGenerateTzapIdentity":
+      void generatePreferenceTzapIdentity(intent.commonName, intent.password);
+      break;
     case "preferencesSave":
       void saveReactPreferencesDraft();
       break;
@@ -2152,6 +2182,35 @@ function renderJobs() {
   renderQuickProgress();
   syncProgressClock(snapshot.progressClock);
   publishReactSnapshot();
+  for (const jobId of disposableTaskWindows.getOpenJobIds()) {
+    void publishDisposableTaskJob(jobId);
+  }
+  maybeCloseQuickActionOnlyCoordinator();
+}
+
+async function publishDisposableTaskJob(jobId: string): Promise<void> {
+  const state = jobsWorkspace.getJob(jobId);
+  if (!state) {
+    return;
+  }
+  const snapshot: PollJobEventsResponseDto = {
+    ...state.snapshot,
+    events: [...state.events],
+    terminalSummary: state.snapshot.terminalSummary ?? null,
+  };
+  await disposableTaskWindows.publish(jobId, snapshot);
+}
+
+function maybeCloseQuickActionOnlyCoordinator(): void {
+  if (!disposableTaskLifecycle.shouldCloseCoordinator({
+    desktopRuntime: isDesktopRuntime(),
+    hasOpenTaskWindows: disposableTaskWindows.hasOpenWindows(),
+    hasActiveJobs: jobsWorkspace.hasActiveJob(),
+    mainWindowShown: shellWorkspace.getSnapshot().quickActionWindow.shown,
+  })) {
+    return;
+  }
+  void appWindowController.closeCurrentWindow();
 }
 
 function queuePlanRun() {
@@ -3400,18 +3459,25 @@ function addJobState(
     outputActions?: JobOutputAction[];
   } = {},
 ) {
-  if (options.focusProgress) {
+  const useDisposableWindow = Boolean(options.focusProgress && isDesktopRuntime());
+  if (options.focusProgress && !useDisposableWindow) {
     void revealQuickActionJobWindow(options.autoCloseAction ?? "returnToWorkspace");
   }
   jobsWorkspace.addJob(response, {
     retryContext: options.retryContext,
     outputActions: options.outputActions,
   });
-  trackQuickActionJob(response.jobId, options.progressContext);
+  if (useDisposableWindow) {
+    void disposableTaskWindows.open(response).then(() => publishDisposableTaskJob(response.jobId));
+  } else {
+    trackQuickActionJob(response.jobId, options.progressContext);
+  }
 
   schedulePolling();
   renderJobs();
-  openJobDrawer();
+  if (!useDisposableWindow) {
+    openJobDrawer();
+  }
 }
 
 async function openQuickActionArchive(paths: string[]) {
@@ -3461,9 +3527,8 @@ async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
     return;
   }
 
-  await revealQuickActionJobWindow();
   for (const response of responses) {
-    addJobState(response);
+    addJobState(response, { focusProgress: true, autoCloseAction: "closeWindow" });
   }
   setOperationalMessage("jobs.quickActionStarted");
 }
@@ -3681,22 +3746,78 @@ async function chooseTzapTrustedCAs() {
   publishReactSnapshot();
 }
 
-async function chooseCreateTzapCertificate(target: "recipients" | "signer" | "privateKey" | "chain") {
+async function chooseCreateTzapCertificate(target: "recipients" | "identity" | "signer" | "privateKey" | "chain") {
   const multiple = target === "recipients" || target === "chain";
   const selected = await openNativeDialog({
     title: target === "privateKey" ? "Choose signing private key" : "Choose certificate files",
     directory: false,
     multiple,
-    filters: [{ name: target === "privateKey" ? "Private keys" : "Certificates", extensions: target === "privateKey" ? ["pem", "key"] : ["pem", "cer", "crt", "der"] }],
+    filters: [{ name: target === "privateKey" ? "Private keys" : target === "identity" ? "PKCS#12 identity" : "Certificates", extensions: target === "privateKey" ? ["pem", "key"] : target === "identity" ? ["p12", "pfx"] : ["pem", "cer", "crt", "der"] }],
   });
   if (!selected) return;
   const value = (Array.isArray(selected) ? selected : [selected]).join(";");
   const patch = target === "recipients" ? { tzapRecipientCertificatePaths: value }
+    : target === "identity" ? { tzapSigningIdentityPath: value, tzapSigningMode: "identity" as const }
     : target === "signer" ? { tzapSigningCertificatePath: value }
     : target === "privateKey" ? { tzapSigningPrivateKeyPath: value }
     : { tzapSigningChainPaths: value };
   publishCreateWorkspaceSnapshot(createWorkspace.setOptions(patch).snapshot);
   queuePlanRun();
+}
+
+async function generateCreateTzapIdentity(commonName: string, password: string) {
+  const identityPath = await chooseTzapIdentityDestination(
+    `${commonName.trim() || "TZAP Signing Identity"}.p12`,
+    setOperationalStatus,
+    { unavailableInBrowser: message("nativeDialog.unavailableInBrowser"), failed: message("nativeDialog.failed") },
+  );
+  if (!identityPath) return;
+  const certificatePath = identityPath.replace(/\.(p12|pfx)$/i, "") + ".crt";
+  try {
+    const result = await generateTzapIdentityCommand({ identityPath, certificatePath, commonName, password });
+    publishCreateWorkspaceSnapshot(createWorkspace.setOptions({
+      tzapSigningMode: "identity",
+      tzapSigningIdentityPath: result.identityPath,
+    }).snapshot);
+    setOperationalStatus(`Signing identity created. Public certificate: ${result.certificatePath}`);
+  } catch (error) {
+    setOperationalStatus(asCommandError(error)?.message ?? unknownErrorMessage(error, "Unable to create signing identity."));
+  }
+}
+
+async function choosePreferenceTzapSigningFile(target: "identity" | "certificate" | "privateKey" | "chain") {
+  const multiple = target === "chain";
+  const selected = await openNativeDialog({
+    title: target === "identity" ? "Choose default signing identity" : "Choose default signing file",
+    multiple,
+    filters: [{
+      name: target === "identity" ? "PKCS#12 identity" : target === "privateKey" ? "Private keys" : "Certificates",
+      extensions: target === "identity" ? ["p12", "pfx"] : target === "privateKey" ? ["pem", "key"] : ["pem", "cer", "crt", "der"],
+    }],
+  });
+  if (!selected) return;
+  const value = (Array.isArray(selected) ? selected : [selected]).join(";");
+  updateReactCreateDefaultsDraft("tzap", target === "identity" ? { tzapSigningIdentityPath: value, tzapSigningMode: "identity" }
+    : target === "certificate" ? { tzapSigningCertificatePath: value, tzapSigningMode: "advanced" }
+    : target === "privateKey" ? { tzapSigningPrivateKeyPath: value, tzapSigningMode: "advanced" }
+    : { tzapSigningChainPaths: value, tzapSigningMode: "advanced" });
+}
+
+async function generatePreferenceTzapIdentity(commonName: string, password: string) {
+  const identityPath = await chooseTzapIdentityDestination(
+    `${commonName.trim() || "TZAP Signing Identity"}.p12`,
+    setOperationalStatus,
+    { unavailableInBrowser: message("nativeDialog.unavailableInBrowser"), failed: message("nativeDialog.failed") },
+  );
+  if (!identityPath) return;
+  const certificatePath = identityPath.replace(/\.(p12|pfx)$/i, "") + ".crt";
+  try {
+    const result = await generateTzapIdentityCommand({ identityPath, certificatePath, commonName, password });
+    updateReactCreateDefaultsDraft("tzap", { tzapSigningMode: "identity", tzapSigningIdentityPath: result.identityPath });
+    setOperationalStatus(`Default signing identity created. Public certificate: ${result.certificatePath}`);
+  } catch (error) {
+    setOperationalStatus(asCommandError(error)?.message ?? unknownErrorMessage(error, "Unable to create signing identity."));
+  }
 }
 
 async function verifyCurrentTzapCertificate() {
@@ -3781,6 +3902,7 @@ async function runCreate(
     passwordInput: {
       password: string;
       passwordConfirm: string;
+      signingIdentityPassword?: string;
     };
   },
 ) {
