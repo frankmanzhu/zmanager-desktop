@@ -860,7 +860,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).toContain("showCompressRowContextMenuForPath");
     expect(styles).toContain(".table-shell.has-start-empty #archive-empty-state");
     expect(styles).toContain(".table-shell.has-start-empty #entry-table tbody .empty");
-    expect(styles).toContain('tbody tr[aria-selected="true"] .row-primary::before');
+    expect(styles).not.toContain('tbody tr[aria-selected="true"] .row-primary::before');
   });
 
   it("keeps screen-reader-only text fully clipped out of visual rows", () => {

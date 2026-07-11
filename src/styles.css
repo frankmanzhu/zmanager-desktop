@@ -1926,17 +1926,6 @@ tbody tr.is-selected {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-tbody tr[aria-selected="true"] .row-primary::before,
-tbody tr.is-selected .row-primary::before {
-  content: "";
-  flex: 0 0 auto;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px var(--native-layer-bg);
-}
-
 #entry-table td:first-child,
 #entry-table th:first-child {
   width: 28px;

@@ -173,6 +173,26 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__zmanagerDev));
 });
 
+test("selected archive rows keep file icons and names aligned", async ({ page }) => {
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+
+  const selectedRow = page.locator('tr[data-entry-path="documents"]');
+  const unselectedRow = page.locator('tr[data-entry-path="images"]');
+  await selectedRow.click();
+  await expect(selectedRow).toHaveAttribute("aria-selected", "true");
+
+  const positions = await Promise.all([
+    selectedRow.locator(".row-icon").evaluate((element) => element.getBoundingClientRect().left),
+    unselectedRow.locator(".row-icon").evaluate((element) => element.getBoundingClientRect().left),
+    selectedRow.locator(".row-name").evaluate((element) => element.getBoundingClientRect().left),
+    unselectedRow.locator(".row-name").evaluate((element) => element.getBoundingClientRect().left),
+  ]);
+
+  expect(positions[0]).toBeCloseTo(positions[1], 1);
+  expect(positions[2]).toBeCloseTo(positions[3], 1);
+});
+
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar")).toBeVisible();
   await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #create-destination")).toBeVisible();
