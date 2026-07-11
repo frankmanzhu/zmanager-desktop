@@ -6,6 +6,7 @@ import { sourcePathForCreatePlanRow, type CreatePlanRow } from "../../../app/cre
 import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
+import { nativeIconDataUrlForPath } from "../systemFileIcons";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "./CreatePasswordContext";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -434,6 +435,9 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
   const sourcePath = sourcePathForCreatePlanRow(row, snapshot.create.plan.current?.planEntries ?? [], snapshot.create.sources);
   const inclusion = row.rowType === "parent" ? "included" : inclusionStateForPath(snapshot, row.path);
   const isFolder = row.rowType !== "entry" || row.entry.kind === "directory";
+  const nativeIconDataUrl = sourcePath
+    ? nativeIconDataUrlForPath(snapshot, sourcePath, isFolder)
+    : null;
   const data = row.rowType === "entry" ? row.entry : undefined;
   const path = row.path;
   const selectable = row.rowType !== "parent";
@@ -552,7 +556,7 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
           />
         )}
       </td>
-      <td className="name-cell"><span className="row-primary"><span className={`row-icon row-icon-${isFolder ? "folder" : "file"}`} aria-hidden="true">{isFolder ? <Folder className="row-icon-svg" /> : <File className="row-icon-svg" />}</span><span className="row-name">{row.name}</span>{selectable ? <span className={`source-stage-badge ${inclusion === "excluded" ? "is-excluded" : ""}`}>{compressInclusionText(inclusion, snapshot)}</span> : null}</span></td>
+      <td className="name-cell"><span className="row-primary"><span className={`row-icon row-icon-${isFolder ? "folder" : "file"}`} aria-hidden="true">{nativeIconDataUrl ? <img className="row-icon-native-image" src={nativeIconDataUrl} alt="" /> : isFolder ? <Folder className="row-icon-svg" /> : <File className="row-icon-svg" />}</span><span className="row-name">{row.name}</span>{selectable ? <span className={`source-stage-badge ${inclusion === "excluded" ? "is-excluded" : ""}`}>{compressInclusionText(inclusion, snapshot)}</span> : null}</span></td>
       <td>{data?.size === undefined ? "" : formatBytes(data.size, { locale: snapshot.display.resolvedLocale })}</td>
       <td>{data?.modified ?? ""}</td>
       <td>{isFolder ? i18n.t("entryKind.directory") : i18n.t("entryKind.file")}</td>

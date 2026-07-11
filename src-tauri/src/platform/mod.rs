@@ -1,11 +1,17 @@
 #[cfg(target_os = "windows")]
 mod windows;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
 mod linux;
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+compile_error!("ZManager Desktop requires a NativePlatform adapter for this operating system");
 
 use std::io::Write;
 use std::sync::Arc;
+use tauri::{Builder, Wry};
+
+use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 pub struct PlatformProfile {
     pub platform: &'static str,
@@ -55,42 +61,77 @@ impl NativeFileDragError {
     }
 }
 
-#[cfg(target_os = "windows")]
-pub use windows::register_platform_services;
-
-#[cfg(not(target_os = "windows"))]
-pub use linux::register_platform_services;
-
-#[cfg(target_os = "windows")]
-pub use windows::system_file_icons;
-
-#[cfg(not(target_os = "windows"))]
-pub use linux::system_file_icons;
-
-#[cfg(target_os = "windows")]
-pub use windows::start_native_file_drag;
-
-#[cfg(not(target_os = "windows"))]
-pub use linux::start_native_file_drag;
-
-#[cfg(target_os = "windows")]
-pub fn integration_profile() -> PlatformProfile {
-    PlatformProfile {
-        platform: windows::PLATFORM_NAME,
-        explorer_integration_enabled: windows::is_explorer_integration_enabled(),
-        desktop_actions_enabled: windows::is_desktop_actions_enabled(),
-        associated_extensions: windows::associated_extensions(),
-        shell_actions: windows::shell_actions(),
-    }
+/// Complete native capability interface for a supported Desktop Shell platform.
+///
+/// Adding another operating system requires an adapter that implements every
+/// method here before it can become the active platform.
+pub(crate) trait NativePlatform {
+    fn register_services(builder: Builder<Wry>) -> Builder<Wry>;
+    fn integration_profile() -> PlatformProfile;
+    fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto>;
+    fn start_native_file_drag(
+        items: &[NativeFileDragItem],
+        stream_provider: NativeFileDragStreamProvider,
+    ) -> Result<NativeFileDragOutcome, NativeFileDragError>;
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "windows")]
+type ActivePlatform = windows::WindowsPlatform;
+
+#[cfg(target_os = "linux")]
+type ActivePlatform = linux::LinuxPlatform;
+
+pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
+    ActivePlatform::register_services(builder)
+}
+
 pub fn integration_profile() -> PlatformProfile {
-    PlatformProfile {
-        platform: linux::PLATFORM_NAME,
-        explorer_integration_enabled: linux::is_explorer_integration_enabled(),
-        desktop_actions_enabled: linux::is_desktop_actions_enabled(),
-        associated_extensions: linux::associated_extensions(),
-        shell_actions: linux::shell_actions(),
+    ActivePlatform::integration_profile()
+}
+
+pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
+    ActivePlatform::system_file_icons(entries)
+}
+
+pub fn start_native_file_drag(
+    items: &[NativeFileDragItem],
+    stream_provider: NativeFileDragStreamProvider,
+) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+    ActivePlatform::start_native_file_drag(items, stream_provider)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_platform_satisfies_the_complete_native_interface() {
+        fn assert_native_platform<T: NativePlatform>() {}
+
+        assert_native_platform::<ActivePlatform>();
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_profile_preserves_its_integration_capabilities() {
+        let profile = integration_profile();
+
+        assert_eq!(profile.platform, "windows");
+        assert!(profile.explorer_integration_enabled);
+        assert!(!profile.desktop_actions_enabled);
+        assert!(!profile.associated_extensions.is_empty());
+        assert!(!profile.shell_actions.is_empty());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_profile_preserves_its_integration_capabilities() {
+        let profile = integration_profile();
+
+        assert_eq!(profile.platform, "linux");
+        assert!(!profile.explorer_integration_enabled);
+        assert!(profile.desktop_actions_enabled);
+        assert!(!profile.associated_extensions.is_empty());
+        assert!(!profile.shell_actions.is_empty());
     }
 }

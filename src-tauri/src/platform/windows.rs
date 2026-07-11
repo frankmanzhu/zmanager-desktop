@@ -16,7 +16,8 @@ use windows_sys::Win32::{
     Storage::FileSystem::{FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL},
     UI::{
         Shell::{
-            SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW,
+            SHFILEINFOW, SHGFI_ICON, SHGFI_SMALLICON, SHGFI_SYSICONINDEX, SHGFI_USEFILEATTRIBUTES,
+            SHGetFileInfoW,
         },
         WindowsAndMessaging::{DI_NORMAL, DestroyIcon, DrawIconEx, HICON},
     },
@@ -24,7 +25,7 @@ use windows_sys::Win32::{
 
 use super::{
     NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
-    ShellActionProfile,
+    NativePlatform, PlatformProfile, ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -67,42 +68,58 @@ pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
     },
 ];
 
-pub fn is_explorer_integration_enabled() -> bool {
-    EXPLORER_ACTIONS_ENABLED
-}
+pub struct WindowsPlatform;
 
-pub fn associated_extensions() -> Vec<String> {
-    crate::archive_file_types::associated_extensions()
-}
+impl NativePlatform for WindowsPlatform {
+    fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
+        if EXPLORER_ACTIONS_ENABLED {
+            let _ = crate::archive_file_types::associated_extensions();
+        }
 
-pub fn shell_actions() -> &'static [ShellActionProfile] {
-    EXPLORER_SHELL_ACTIONS
-}
-
-pub fn is_desktop_actions_enabled() -> bool {
-    // Windows integration profile currently reserves explorer actions only.
-    false
-}
-
-pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
-    if is_explorer_integration_enabled() {
-        let _ = associated_extensions();
+        builder
     }
 
-    builder
+    fn integration_profile() -> PlatformProfile {
+        PlatformProfile {
+            platform: PLATFORM_NAME,
+            explorer_integration_enabled: EXPLORER_ACTIONS_ENABLED,
+            // Windows integration profile currently reserves explorer actions only.
+            desktop_actions_enabled: false,
+            associated_extensions: crate::archive_file_types::associated_extensions(),
+            shell_actions: EXPLORER_SHELL_ACTIONS,
+        }
+    }
+
+    fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
+        let generic_file_icon_index = system_file_icon_index("file", false);
+        entries
+            .iter()
+            .map(|entry| SystemFileIconDto {
+                key: entry.key.clone(),
+                data_url: system_file_icon_data_url(entry, generic_file_icon_index),
+            })
+            .collect()
+    }
+
+    fn start_native_file_drag(
+        items: &[NativeFileDragItem],
+        stream_provider: NativeFileDragStreamProvider,
+    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+        if items.is_empty() {
+            return Err(NativeFileDragError::new(
+                "No archive files are available to drag.",
+                None::<String>,
+            ));
+        }
+
+        windows_file_drag::start_drag(items, stream_provider)
+    }
 }
 
-pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
-    entries
-        .iter()
-        .map(|entry| SystemFileIconDto {
-            key: entry.key.clone(),
-            data_url: system_file_icon_data_url(entry),
-        })
-        .collect()
-}
-
-fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {
+fn system_file_icon_data_url(
+    entry: &SystemFileIconRequestEntry,
+    generic_file_icon_index: Option<i32>,
+) -> Option<String> {
     let lookup_path = if entry.is_directory {
         "folder"
     } else {
@@ -113,6 +130,11 @@ fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<Strin
     } else {
         lookup_path
     };
+
+    let icon_index = system_file_icon_index(lookup_path, entry.is_directory)?;
+    if !should_use_system_file_icon(entry.is_directory, icon_index, generic_file_icon_index) {
+        return None;
+    }
 
     let wide_path = wide_null(lookup_path);
     let attributes = if entry.is_directory {
@@ -140,6 +162,48 @@ fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<Strin
         DestroyIcon(file_info.hIcon);
     }
     data_url
+}
+
+fn system_file_icon_index(path: &str, is_directory: bool) -> Option<i32> {
+    let wide_path = wide_null(path);
+    let attributes = if is_directory {
+        FILE_ATTRIBUTE_DIRECTORY
+    } else {
+        FILE_ATTRIBUTE_NORMAL
+    };
+    let mut file_info = SHFILEINFOW::default();
+    let result = unsafe {
+        SHGetFileInfoW(
+            wide_path.as_ptr(),
+            attributes,
+            &mut file_info,
+            size_of::<SHFILEINFOW>() as u32,
+            SHGFI_SYSICONINDEX | SHGFI_SMALLICON | SHGFI_USEFILEATTRIBUTES,
+        )
+    };
+
+    (result != 0).then_some(file_info.iIcon)
+}
+
+fn should_use_system_file_icon(
+    is_directory: bool,
+    icon_index: i32,
+    generic_file_icon_index: Option<i32>,
+) -> bool {
+    is_directory || generic_file_icon_index != Some(icon_index)
+}
+
+#[cfg(test)]
+mod system_file_icon_tests {
+    use super::should_use_system_file_icon;
+
+    #[test]
+    fn suppresses_the_generic_file_icon_but_keeps_associated_and_directory_icons() {
+        assert!(!should_use_system_file_icon(false, 7, Some(7)));
+        assert!(should_use_system_file_icon(false, 12, Some(7)));
+        assert!(should_use_system_file_icon(true, 7, Some(7)));
+        assert!(should_use_system_file_icon(false, 7, None));
+    }
 }
 
 unsafe fn hicon_to_png_data_url(icon: HICON) -> Option<String> {
@@ -268,20 +332,6 @@ fn encode_bgra_png_data_url(bgra: &[u8], width: u32, height: u32) -> Option<Stri
 
 fn wide_null(value: &str) -> Vec<u16> {
     OsStr::new(value).encode_wide().chain(Some(0)).collect()
-}
-
-pub fn start_native_file_drag(
-    items: &[NativeFileDragItem],
-    stream_provider: NativeFileDragStreamProvider,
-) -> Result<NativeFileDragOutcome, NativeFileDragError> {
-    if items.is_empty() {
-        return Err(NativeFileDragError::new(
-            "No archive files are available to drag.",
-            None::<String>,
-        ));
-    }
-
-    windows_file_drag::start_drag(items, stream_provider)
 }
 
 type HBRUSH__ = core::ffi::c_void;

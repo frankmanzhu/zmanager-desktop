@@ -92,6 +92,37 @@ describe("React create workspace", () => {
     expect(html).toContain("Updating filters...");
     expect(html).toContain('data-compress-path="photos-folder"');
   });
+
+  it("uses cached system icons for compress rows when real file icons are enabled", () => {
+    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, undefined, false, {
+      showRealFileIcons: true,
+      systemIcons: {
+        directory: "data:image/png;base64,folder-icon",
+        "file:.zip": "data:image/png;base64,zip-icon",
+        "file:.pdf": "data:image/png;base64,pdf-icon",
+      },
+    }));
+
+    expect(html).toContain('src="data:image/png;base64,folder-icon"');
+    expect(html).toContain('src="data:image/png;base64,zip-icon"');
+    expect(html).toContain('src="data:image/png;base64,pdf-icon"');
+    expect(html.match(/class="row-icon-native-image"/g)).toHaveLength(3);
+  });
+
+  it("keeps compress rows on SVG icons when real file icons are disabled", () => {
+    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, undefined, false, {
+      showRealFileIcons: false,
+      systemIcons: {
+        directory: "data:image/png;base64,folder-icon",
+        "file:.zip": "data:image/png;base64,zip-icon",
+        "file:.pdf": "data:image/png;base64,pdf-icon",
+      },
+    }));
+
+    expect(html).not.toContain('class="row-icon-native-image"');
+    expect(html).toContain('class="lucide lucide-folder row-icon-svg"');
+    expect(html).toContain('class="lucide lucide-file row-icon-svg"');
+  });
 });
 
 function renderCreateWorkspace(snapshot: ZManagerReactSnapshot): string {
@@ -114,6 +145,13 @@ function createSnapshot(
   }>,
   destinationPath = format === "sevenZ" ? "C:/work/bundle.7z" : format === "tzap" ? "C:/work/bundle.tzap" : "C:/work/bundle.tzst",
   refreshing = false,
+  iconOptions: Readonly<{
+    showRealFileIcons: boolean;
+    systemIcons: Readonly<Record<string, string | null>>;
+  }> = {
+    showRealFileIcons: false,
+    systemIcons: {},
+  },
 ): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const workspace = createCreateWorkspace();
@@ -154,7 +192,11 @@ function createSnapshot(
     create: workspace.getSnapshot(),
     jobs: initial.jobs,
     quickActionProgress: initial.quickActionProgress,
-    preferences: initial.preferences,
+    systemIcons: iconOptions.systemIcons,
+    preferences: {
+      ...initial.preferences,
+      showRealFileIcons: iconOptions.showRealFileIcons,
+    },
     preferencesDraft: initial.preferencesDraft,
     pathHistory: initial.pathHistory,
     display: initial.display,

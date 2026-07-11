@@ -14,7 +14,7 @@ use tauri::{Builder, Wry};
 
 use super::{
     NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
-    ShellActionProfile,
+    NativePlatform, PlatformProfile, ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -60,41 +60,54 @@ pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
     },
 ];
 
-pub fn is_desktop_actions_enabled() -> bool {
-    DESKTOP_ACTIONS_ENABLED
-}
+pub struct LinuxPlatform;
 
-pub fn associated_extensions() -> Vec<String> {
-    crate::archive_file_types::associated_extensions()
-}
+impl NativePlatform for LinuxPlatform {
+    fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
+        if DESKTOP_ACTIONS_ENABLED {
+            let _ = crate::archive_file_types::associated_extensions();
+        }
 
-pub fn shell_actions() -> &'static [ShellActionProfile] {
-    DESKTOP_SHELL_ACTIONS
-}
-
-pub fn is_explorer_integration_enabled() -> bool {
-    false
-}
-
-pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
-    if is_desktop_actions_enabled() {
-        let _ = associated_extensions();
+        builder
     }
 
-    builder
-}
+    fn integration_profile() -> PlatformProfile {
+        PlatformProfile {
+            platform: PLATFORM_NAME,
+            explorer_integration_enabled: false,
+            desktop_actions_enabled: DESKTOP_ACTIONS_ENABLED,
+            associated_extensions: crate::archive_file_types::associated_extensions(),
+            shell_actions: DESKTOP_SHELL_ACTIONS,
+        }
+    }
 
-pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
-    entries
-        .iter()
-        .map(|entry| SystemFileIconDto {
-            key: entry.key.clone(),
-            // Linux file managers/theme icons are resolved by the shell. Touch the
-            // request fields so DTO drift is caught even though we do not return
-            // per-file icon bitmaps on this platform.
-            data_url: linux_system_file_icon_data_url(entry),
-        })
-        .collect()
+    fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
+        entries
+            .iter()
+            .map(|entry| SystemFileIconDto {
+                key: entry.key.clone(),
+                // Linux file managers/theme icons are resolved by the shell. Touch the
+                // request fields so DTO drift is caught even though we do not return
+                // per-file icon bitmaps on this platform.
+                data_url: linux_system_file_icon_data_url(entry),
+            })
+            .collect()
+    }
+
+    fn start_native_file_drag(
+        items: &[NativeFileDragItem],
+        stream_provider: NativeFileDragStreamProvider,
+    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+        if items.is_empty() {
+            return Err(NativeFileDragError::new(
+                "No archive files are available to drag.",
+                None::<String>,
+            ));
+        }
+
+        let staged_drag = LinuxStagedDrag::create(items, stream_provider)?;
+        linux_file_drag::start_drag(staged_drag)
+    }
 }
 
 fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {
@@ -105,21 +118,6 @@ fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option
     };
 
     None
-}
-
-pub fn start_native_file_drag(
-    items: &[NativeFileDragItem],
-    stream_provider: NativeFileDragStreamProvider,
-) -> Result<NativeFileDragOutcome, NativeFileDragError> {
-    if items.is_empty() {
-        return Err(NativeFileDragError::new(
-            "No archive files are available to drag.",
-            None::<String>,
-        ));
-    }
-
-    let staged_drag = LinuxStagedDrag::create(items, stream_provider)?;
-    linux_file_drag::start_drag(staged_drag)
 }
 
 struct LinuxStagedDrag {

@@ -71,6 +71,13 @@ Persisted, non-secret preferences used to prepopulate archive-creation and
 extraction options. Passwords and archive-specific secrets are never global
 defaults. A workflow may override a default without mutating the stored value.
 
+### Native Platform
+
+The operating-system adapter that supplies the complete native capability set
+required by the Desktop Shell. Every supported platform implements the shared
+Rust `NativePlatform` interface; callers use platform-neutral wrapper functions
+and never select or invoke Windows- or Linux-specific implementations directly.
+
 ## Ownership boundaries
 
 ### `src/app`
@@ -123,7 +130,9 @@ guards. Do not reimplement these behaviors in TypeScript.
 - Storage-backed preferences and path histories use typed normalization modules;
   do not add ad hoc `localStorage` ownership.
 - Platform behavior stays behind desktop adapters, Rust platform modules, or
-  packaging code. Windows and Linux remain one product.
+  packaging code. Windows and Linux remain one product. Every supported Rust
+  platform must provide a complete `NativePlatform` adapter; unsupported targets
+  must fail compilation instead of inheriting another operating system's code.
 - Rust and TypeScript command contracts require generated bindings or explicit
   contract coverage when changed.
 - A regression fix requires failing-before/passing-after coverage when feasible.

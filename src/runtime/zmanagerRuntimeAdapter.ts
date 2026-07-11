@@ -1321,11 +1321,12 @@ function systemIconDataUrlForRequest(request: SystemFileIconRequestEntry | null)
 }
 
 function collectSystemIconRequests(): SystemFileIconRequestEntry[] {
-  const snapshot = archiveSnapshot();
-  if (!snapshot.currentArchivePath || !appPreferences.showRealFileIcons) {
+  if (!appPreferences.showRealFileIcons) {
     return [];
   }
 
+  const archive = archiveSnapshot();
+  const create = createWorkspace.getSnapshot();
   const requests = new Map<string, SystemFileIconRequestEntry>();
   const add = (request: SystemFileIconRequestEntry | null) => {
     if (request && !systemIconDataUrls.has(request.key)) {
@@ -1333,10 +1334,20 @@ function collectSystemIconRequests(): SystemFileIconRequestEntry[] {
     }
   };
 
-  add(systemIconRequestForPath(snapshot.currentArchivePath, false));
-  add(systemIconRequestForPath("folder", true));
-  for (const entry of snapshot.entries) {
-    add(systemIconRequestForEntry(entry));
+  if (archive.currentArchivePath) {
+    add(systemIconRequestForPath(archive.currentArchivePath, false));
+    add(systemIconRequestForPath("folder", true));
+    for (const entry of archive.entries) {
+      add(systemIconRequestForEntry(entry));
+    }
+  }
+
+  const createEntries = create.plan.current?.planEntries ?? [];
+  if (createEntries.length) {
+    add(systemIconRequestForPath("folder", true));
+    for (const entry of createEntries) {
+      add(systemIconRequestForPath(entry.sourcePath, entry.kind === "directory"));
+    }
   }
 
   return [...requests.values()];
@@ -1384,6 +1395,7 @@ function createPlanStatusText(status: CreateWorkspacePlanStatus | null): string 
 function publishCreateWorkspaceSnapshot(
   snapshot: CreateWorkspaceSnapshot = createWorkspace.getSnapshot(),
 ): CreateWorkspaceSnapshot {
+  queueSystemIconRefresh();
   publishReactSnapshot();
   return snapshot;
 }
