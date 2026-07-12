@@ -8,6 +8,8 @@ playwright-report/
 .DS_Store
 .idea/
 .vscode/
+.vs/
+.codex-qa/
 *.log
 *.tmp
 .vite.pid
