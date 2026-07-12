@@ -372,6 +372,7 @@ impl JobRegistry {
             },
             JobEvent::BytesProcessed {
                 path,
+                recent_paths,
                 bytes,
                 total_bytes_processed,
             } => JobEventDto {
@@ -382,7 +383,7 @@ impl JobRegistry {
                 hint: None,
                 severity: None,
                 retryable: None,
-                path: path.clone(),
+                path: recent_paths.last().cloned().or_else(|| path.clone()),
                 bytes: Some(*bytes),
                 total_bytes: None,
                 total_bytes_processed: Some(*total_bytes_processed),
@@ -409,6 +410,7 @@ impl JobRegistry {
             JobEvent::PhaseBytesProcessed {
                 phase,
                 path,
+                recent_paths,
                 bytes,
                 total_bytes_processed,
                 total_bytes,
@@ -420,7 +422,7 @@ impl JobRegistry {
                 hint: None,
                 severity: None,
                 retryable: None,
-                path: path.clone(),
+                path: recent_paths.last().cloned().or_else(|| path.clone()),
                 bytes: Some(*bytes),
                 total_bytes: *total_bytes,
                 total_bytes_processed: Some(*total_bytes_processed),
@@ -769,6 +771,7 @@ mod tests {
             &response.job_id,
             zmanager_core::jobs::JobEvent::BytesProcessed {
                 path: Some("docs/one.txt".to_string()),
+                recent_paths: vec!["docs/one.txt".to_string()],
                 bytes: 10,
                 total_bytes_processed: 10,
             },
@@ -783,7 +786,8 @@ mod tests {
         registry.emit_job_event(
             &response.job_id,
             zmanager_core::jobs::JobEvent::BytesProcessed {
-                path: Some("docs/two.txt".to_string()),
+                path: Some("docs/one.txt".to_string()),
+                recent_paths: vec!["docs/one.txt".to_string(), "docs/two.txt".to_string()],
                 bytes: 20,
                 total_bytes_processed: 30,
             },
@@ -854,6 +858,7 @@ mod tests {
                 JobEvent::PhaseBytesProcessed {
                     phase: JobPhase::PlanningPayload,
                     path: Some("payload.bin".to_string()),
+                    recent_paths: vec!["payload.bin".to_string()],
                     bytes: processed,
                     total_bytes_processed: processed,
                     total_bytes: Some(100),
