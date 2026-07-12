@@ -18,7 +18,8 @@ interpret progress correctly.
 ## Goals
 
 - Give every consumer one authoritative definition of archive progress.
-- Keep event production synchronous, deterministic, bounded, and runtime-neutral.
+- Keep event production synchronous, bounded, and runtime-neutral; keep state
+  projection deterministic for a given ordered event sequence.
 - Aggregate high-frequency backend activity before it crosses the core seam.
 - Preserve enough recent activity to keep filenames responsive for batches of
   small files.
@@ -58,8 +59,11 @@ lifecycle, or presentation.
 
 ### Semantic events
 
-`JobEvent` remains the event interface emitted by archive jobs through
-`JobEventSink`. It must express language-neutral facts.
+`JobEvent` remains the producer interface emitted by archive jobs through
+`JobEventSink`. It must express language-neutral facts. The reusable
+`JobProgressState` projection below is the normative consumer interface; CLI,
+FFI, and Desktop must not each depend on backend callback shapes or reconstruct
+entry counts from incidental event frequency.
 
 Required lifecycle events:
 
@@ -69,30 +73,61 @@ Required lifecycle events:
 - `Failed`
 - `Cancelled`
 
-Required activity events:
+Required activity facts:
 
-- `EntryStarted`
-- `BytesProcessed`
-- `EntryFinished`
-- `PhaseStarted`
-- `PhaseBytesProcessed`
+- Whole-Job cumulative logical bytes and completed entries.
+- Phase start and phase-local cumulative bytes when a backend has phases.
+- The latest active archive path and bounded recent activity.
+- Incremental bytes and entries represented by the aggregate for diagnostics.
 
-`BytesProcessed` and `PhaseBytesProcessed` must contain cumulative counters.
-Consumers must never need to reconstruct correctness by summing callback-sized
-deltas that may have been aggregated.
+The exact enum migration may retain or enrich `EntryStarted`, `BytesProcessed`,
+`EntryFinished`, `PhaseStarted`, and `PhaseBytesProcessed`, or replace the hot
+variants with explicit aggregate variants. Regardless of layout, emitted
+aggregate activity must contain cumulative counters. Consumers must never need
+to reconstruct correctness by summing callback-sized deltas that may have been
+aggregated.
+
+Per-entry callbacks are inputs to producer aggregation. They must not bypass it
+and produce one public sink event per tiny or zero-byte entry. Legacy
+`EntryStarted` and `EntryFinished` events may exist during migration, but
+consumer correctness must not depend on receiving every one of them.
 
 Each aggregate activity event must expose:
 
 - The cumulative processed byte count in its applicable scope.
+- The cumulative completed-entry count for the whole Job.
 - The latest active archive path when one exists.
 - A bounded, ordered collection of recently active paths.
-- The incremental bytes represented by that aggregate for diagnostics.
+- The incremental bytes and entries represented by that aggregate for
+  diagnostics.
 
-The surrounding `Started` or `PhaseStarted` context supplies an authoritative
-known total when one exists. An aggregate may repeat that total for convenience,
-but consumers must not require redundant totals on every event.
+`Started` supplies authoritative whole-Job byte and entry totals when they
+exist; `PhaseStarted` supplies the authoritative phase-local byte total. An
+aggregate may repeat those totals for convenience, but consumers must not
+require redundant totals on every event.
 
 The newest item in `recent_paths` is the newest activity in the aggregate.
+Deduplication uses the exact language-neutral archive-path string supplied by
+the producer: seeing a duplicate removes its older occurrence and appends it as
+newest. Aggregation does not canonicalize, localize, or perform filesystem I/O.
+Both the number of paths and their total UTF-8 byte storage must be capped by
+named constants. If a display copy is truncated on a UTF-8 boundary, the event
+must say that it was truncated; operation paths used for archive work are never
+modified by this display limit.
+
+### Lifecycle grammar
+
+One core execution emits exactly one `Started`, followed by zero or more
+activity or warning events, followed by exactly one of `Completed`, `Failed`,
+or `Cancelled`. No event is valid after the terminal event. The projection must
+handle invalid sequences defensively without replacing an existing terminal
+outcome, and debug/test builds should make producer violations visible.
+
+Cancellation request and cancellation outcome are distinct. Requesting the
+token is not a terminal event. If the operation observes cancellation before
+success is linearized, it flushes pending progress and terminates with
+`Cancelled`; if success was already linearized, a later request cannot rewrite
+`Completed`. A core execution must never emit both outcomes.
 
 ### Job phases
 
@@ -152,6 +187,8 @@ paused, dismissible, retry-prompted, or closing.
 - A new phase resets phase-local facts without resetting whole-job facts.
 - Generic logical byte progress is not advanced by TZAP planning passes.
 - `Completed` is the only successful completion outcome.
+- The first accepted terminal outcome is immutable and later events cannot
+  change counters, paths, phases, or outcome.
 - Running progress never implies successful completion solely because a byte
   counter reached its known total.
 - Pending progress is visible before its terminal event.
@@ -164,9 +201,11 @@ volume and identical cumulative semantics.
 
 The current policy is:
 
-- Emit the first non-zero activity immediately.
+- Emit the first non-zero activity immediately for the whole-Job scope and for
+  each new phase scope.
 - Afterwards emit when one second has elapsed or pending progress reaches
-  `max(4 MiB, 1% of the known job or phase total)`.
+  `max(4 MiB, ceil(1% of the known job or phase total))`, or when 128 completed
+  entries are pending.
 - Use 4 MiB when the total is unknown.
 - Retain at most ten distinct recent paths, ordered oldest to newest.
 - Flush pending progress at phase changes and before terminal lifecycle events.
@@ -174,6 +213,13 @@ The current policy is:
 These thresholds must be named constants, documented, and covered by tests.
 They are producer sampling policy, not transport retry timing. Consumers must
 not add another aggregation timer to compensate for or reinterpret this policy.
+The percentage calculation must use overflow-safe integer arithmetic.
+
+The one-second rule is callback-driven: elapsed time is checked when activity
+arrives; core does not start a timer thread merely to publish progress. A quiet
+backend may therefore publish its pending aggregate at its next activity or
+lifecycle transition. Aggregation uses a monotonic clock behind an internal
+test seam so threshold tests do not sleep and remain deterministic.
 
 ## Backend adapter responsibilities
 
@@ -191,12 +237,16 @@ Backends must not calculate Desktop percentages or emit localized status text.
 
 ## Performance requirements
 
-- `JobEventSink::emit` must receive already-aggregated progress for hot byte paths.
+- `JobEventSink::emit` must receive already-aggregated progress for all hot
+  byte and entry paths.
 - `JobProgressState::apply` must have bounded work per event.
 - Memory used for recent activity must be bounded by named constants.
 - No core progress operation may perform IPC, filesystem polling, UI work, or
   wait for a subscriber.
-- A missing or slow consumer must not slow archive creation or extraction.
+- Core never waits for transport acknowledgement or subscriber delivery.
+  Because `JobEventSink::emit` is synchronous, its interface requires adapters
+  to return promptly and do only bounded in-process work; core cannot guarantee
+  progress against an arbitrary sink implementation that blocks.
 
 ## Error and security requirements
 
@@ -224,10 +274,14 @@ Core tests must prove:
 - Byte and time thresholds flush aggregates correctly.
 - Recent paths are ordered, deduplicated as specified, and capped.
 - Progress is flushed at phase and terminal transitions.
+- Tiny and zero-byte entry batches do not emit one sink event per entry, while
+  cumulative completed-entry counts remain exact.
 - All create and extract backends produce monotonic cumulative facts.
 - Multi-pass TZAP progress does not double-count logical bytes.
 - Single-pass TZAP emits only phases that actually occur.
-- Cancellation produces no later successful completion.
+- Cancellation/completion races produce exactly one terminal outcome according
+  to the lifecycle linearization rule.
+- Invalid or post-terminal event sequences cannot replace the first outcome.
 - The pure projection produces identical results for CLI, FFI, and Desktop
   adapter fixtures.
 - Property tests or equivalent loops cannot make counters decrease or overflow.
