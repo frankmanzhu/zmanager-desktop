@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type {
+  DesktopJobSnapshotDto,
   JobEventDto,
   JobState,
   LegacyJobSnapshotDto,
@@ -47,6 +48,64 @@ const extractRetryContext: JobRetryContext = {
 };
 
 describe("jobs workspace", () => {
+  it("restores secret-free retry recipes and output actions from retained snapshots", () => {
+    const failedWorkspace = createJobsWorkspace();
+    failedWorkspace.acceptRetainedSnapshot({
+      revision: "7",
+      jobId: "failed-job",
+      kind: "zipExtract",
+      status: "failed",
+      createdAt: startedAt,
+      updatedAt: startedAt,
+      canPause: false,
+      canResume: false,
+      canCancel: false,
+      canDismiss: true,
+      progressFacts: { processedBytes: 0, processedEntries: 0, recentPaths: [], phaseProcessedBytes: 0, warningCount: 0, activeElapsedMillis: 0, phaseElapsedMillis: 0 },
+      latestFailure: { eventType: "failed", code: "password_required", retryable: true },
+      boundedNotices: [],
+      availableActions: [],
+      outputArtifacts: [],
+      retryDescriptor: {
+        retryKind: "extractArchive",
+        actionId: "retry-with-password",
+        archivePath: "C:/archives/source.zip",
+        destinationPath: "C:/out/source",
+        overwrite: "ask",
+        destinationCollisionStrategy: "refuse",
+        entryPaths: ["one.txt"],
+        stripComponents: 0,
+      },
+    } satisfies DesktopJobSnapshotDto);
+    expect(failedWorkspace.getPasswordRetryDetails("failed-job")?.context).toEqual({
+      ...extractRetryContext,
+      destinationCollisionStrategy: "refuse",
+      entryPaths: ["one.txt"],
+    });
+    expect(JSON.stringify(failedWorkspace.getRetryContext("failed-job"))).not.toContain("password");
+
+    const completedWorkspace = createJobsWorkspace();
+    completedWorkspace.acceptRetainedSnapshot({
+      revision: "8",
+      jobId: "completed-job",
+      kind: "zipExtract",
+      status: "completed",
+      createdAt: startedAt,
+      updatedAt: startedAt,
+      canPause: false,
+      canResume: false,
+      canCancel: false,
+      canDismiss: true,
+      progressFacts: { processedBytes: 1, processedEntries: 1, recentPaths: [], phaseProcessedBytes: 0, warningCount: 0, activeElapsedMillis: 1, phaseElapsedMillis: 0 },
+      boundedNotices: [],
+      availableActions: [{ actionId: "open-output", kind: "open", artifactId: "output" }],
+      outputArtifacts: [{ artifactId: "output", kind: "directory", path: "C:/out/source" }],
+    } satisfies DesktopJobSnapshotDto);
+    expect(completedWorkspace.getReadyOutputActions("completed-job")).toEqual([
+      { kind: "open", path: "C:/out/source" },
+    ]);
+  });
+
   it("adds jobs with retry and output metadata without exposing password state", () => {
     const workspace = createJobsWorkspace();
     const outputActions: JobOutputAction[] = [{ kind: "open", path: "C:/out/source" }];

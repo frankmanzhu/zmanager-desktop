@@ -1,6 +1,6 @@
 # ZManager Core Job Progress Architecture Specification
 
-- Status: Proposed
+- Status: Implemented
 - Scope: `zmanager-core`, including archive backend adapters and reusable CLI/FFI consumers
 - Companion: [`ZMANAGER_DESKTOP_JOB_PROGRESS_ARCHITECTURE_SPEC.md`](ZMANAGER_DESKTOP_JOB_PROGRESS_ARCHITECTURE_SPEC.md)
 

@@ -16,6 +16,7 @@ type QuickActionStubOptions = {
   rejectWindowCommands?: string[];
   completeOnPoll?: boolean;
   startupStateDelayMs?: number;
+  catalogJobs?: { jobId: string; kind: string; status: string; createdAt: string }[];
 };
 
 declare global {
@@ -39,6 +40,21 @@ const notRequestedState: QuickActionStartupState = {
 };
 
 const epochSecondsAgo = (seconds: number) => String(Math.floor(Date.now() / 1000) - seconds);
+
+test("restored main window discovers terminal jobs through the retained catalog without polling", async ({ page }) => {
+  await installQuickActionTauriStub(page, [notRequestedState], {
+    catalogJobs: [{
+      jobId: "job-from-task-window",
+      kind: "zipExtract",
+      status: "completed",
+      createdAt: epochSecondsAgo(10),
+    }],
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect.poll(async () => (await ipcCalls(page)).filter((call) => call.cmd === "subscribe_job").length).toBe(1);
+  const calls = await ipcCalls(page);
+  expect(calls.some((call) => call.cmd === "subscribe_job_catalog")).toBe(true);
+});
 
 test("fixed create context actions open a directly subscribed disposable task window", async ({ page }) => {
   await installQuickActionTauriStub(page, [
@@ -291,6 +307,12 @@ async function installQuickActionTauriStub(
     let startupDelayConsumed = false;
     let subscriptionCount = 0;
     const jobChannels = new Map<string, { callbackId: number; subscriptionId: string; revision: number }>();
+    const catalogJobs = payload.options.catalogJobs ?? [];
+    for (const job of catalogJobs) {
+      jobStatuses.set(job.jobId, job.status);
+      jobKinds.set(job.jobId, job.kind);
+      jobCreatedAts.set(job.jobId, job.createdAt);
+    }
 
     const channelCallbackId = (value: unknown): number => {
       if (typeof value === "number") return value;
@@ -300,16 +322,21 @@ async function installQuickActionTauriStub(
     const deliverJob = (jobId: string, requestedStatus?: string) => {
       const channel = jobChannels.get(jobId); if (!channel) return;
       const previous = jobStatuses.get(jobId) ?? "queued";
-      const status = requestedStatus ?? (previous === "paused" || previous === "cancelled" ? previous : "running");
+      const status = requestedStatus ?? (["paused", "completed", "failed", "cancelled"].includes(previous) ? previous : "running");
       jobStatuses.set(jobId, status); channel.revision += 1;
       const terminal = status === "completed" || status === "failed" || status === "cancelled";
       const createdAt = jobCreatedAts.get(jobId) ?? String(Math.floor(Date.now() / 1000));
       const payload = { revision: String(channel.revision), jobId, kind: jobKinds.get(jobId) ?? "tzapCreate", status, createdAt, updatedAt: createdAt,
         canPause: status === "running", canResume: status === "paused", canCancel: status === "running" || status === "paused", canDismiss: terminal,
         progressFacts: { processedBytes: terminal ? 128 : 32, totalBytes: 128, processedEntries: terminal ? 4 : 2, totalEntries: 4, currentPath: "fixture.bin", recentPaths: ["fixture.bin"], activePhase: "emittingPayload", phaseProcessedBytes: terminal ? 128 : 32, phaseTotalBytes: 128, warningCount: 0, activeElapsedMillis: 1000, phaseElapsedMillis: 1000 },
-        latestFailure: null, boundedNotices: [], availableActions: terminal ? ["openOutput"] : [], outputArtifacts: [], retryDescriptor: null,
+        latestFailure: null, boundedNotices: [],
+        availableActions: terminal ? [{ actionId: "open-output", kind: "open", artifactId: "output" }] : [],
+        outputArtifacts: terminal ? [{ artifactId: "output", kind: "directory", path: "/tmp/output" }] : [], retryDescriptor: null,
         terminalSummary: status === "completed" ? { writtenEntries: 1, writtenBytes: 32, warnings: [] } : null };
-      queueMicrotask(() => window.__TAURI_INTERNALS__?.runCallback(channel.callbackId, { subscriptionId: channel.subscriptionId, revision: payload.revision, payload }));
+      queueMicrotask(() => window.__TAURI_INTERNALS__?.runCallback(channel.callbackId, {
+        index: channel.revision - 1,
+        message: { subscriptionId: channel.subscriptionId, revision: payload.revision, payload },
+      }));
     };
 
     Object.defineProperty(window, "isTauri", {
@@ -388,7 +415,26 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "subscribe_job_catalog") {
-        return `catalog-${++subscriptionCount}`;
+        const subscriptionId = `catalog-${++subscriptionCount}`;
+        const callbackId = channelCallbackId(args.onSnapshot);
+        const jobs = catalogJobs.map((job) => ({
+          jobId: job.jobId,
+          revision: "1",
+          kind: job.kind,
+          status: job.status,
+          terminal: ["completed", "failed", "cancelled"].includes(job.status),
+        }));
+        if (payload.options.catalogJobs) {
+          window.setTimeout(() => window.__TAURI_INTERNALS__?.runCallback(callbackId, {
+            index: 0,
+            message: {
+              subscriptionId,
+              revision: "1",
+              payload: { catalogRevision: "1", jobs },
+            },
+          }), 0);
+        }
+        return subscriptionId;
       }
       if (cmd === "subscribe_job") {
         const request = args.request as { jobId: string }; const subscriptionId = `job-${++subscriptionCount}`;

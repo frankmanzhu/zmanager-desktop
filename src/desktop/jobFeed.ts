@@ -20,32 +20,83 @@ function newer(incoming: string, current: string | null): boolean {
 }
 
 export function createTauriJobFeed(): JobFeed {
+  async function subscribeWithReconnect<TEnvelope extends { subscriptionId: string; revision: string }>(
+    subscribe: (channel: Channel<TEnvelope>) => Promise<string>,
+    acceptEnvelope: (envelope: TEnvelope) => void,
+  ): Promise<JobFeedSubscription> {
+    let disposed = false;
+    let reconnecting: Promise<void> | null = null;
+    let activeSubscriptionId: string | null = null;
+    let connectionGeneration = 0;
+
+    const connect = async (): Promise<void> => {
+      const generation = ++connectionGeneration;
+      const channel = new Channel<TEnvelope>();
+      channel.onmessage = (envelope) => {
+        if (disposed || generation !== connectionGeneration) return;
+        activeSubscriptionId = envelope.subscriptionId;
+        acceptEnvelope(envelope);
+        void ackSubscription({ subscriptionId: envelope.subscriptionId, revision: envelope.revision })
+          .catch(() => reconnect())
+          .catch(() => undefined);
+      };
+      const subscriptionId = await subscribe(channel);
+      if (disposed || generation !== connectionGeneration) {
+        await unsubscribeJob({ subscriptionId }).catch(() => undefined);
+        return;
+      }
+      activeSubscriptionId = subscriptionId;
+    };
+
+    const reconnect = (): Promise<void> => {
+      if (disposed) return Promise.resolve();
+      if (reconnecting) return reconnecting;
+      reconnecting = (async () => {
+        const previous = activeSubscriptionId;
+        activeSubscriptionId = null;
+        connectionGeneration += 1;
+        if (previous) await unsubscribeJob({ subscriptionId: previous }).catch(() => undefined);
+        await connect();
+      })().finally(() => { reconnecting = null; });
+      return reconnecting;
+    };
+
+    await connect();
+    return {
+      async unsubscribe() {
+        disposed = true;
+        await reconnecting?.catch(() => undefined);
+        const subscriptionId = activeSubscriptionId;
+        activeSubscriptionId = null;
+        if (subscriptionId) await unsubscribeJob({ subscriptionId }).catch(() => undefined);
+      },
+    };
+  }
+
   return {
     async subscribeJob(jobId, accept) {
-      const channel = new Channel<JobSnapshotEnvelopeDto>();
       let highest: string | null = null;
-      channel.onmessage = (envelope) => {
+      return subscribeWithReconnect(
+        (channel) => subscribeJob({ jobId }, channel),
+        (envelope: JobSnapshotEnvelopeDto) => {
         if (newer(envelope.revision, highest)) {
           highest = envelope.revision;
           accept(envelope.payload);
         }
-        void ackSubscription({ subscriptionId: envelope.subscriptionId, revision: envelope.revision });
-      };
-      const subscriptionId = await subscribeJob({ jobId }, channel);
-      return { unsubscribe: () => unsubscribeJob({ subscriptionId }) };
+        },
+      );
     },
     async subscribeCatalog(accept) {
-      const channel = new Channel<JobCatalogEnvelopeDto>();
       let highest: string | null = null;
-      channel.onmessage = (envelope) => {
+      return subscribeWithReconnect(
+        (channel) => subscribeJobCatalog(channel),
+        (envelope: JobCatalogEnvelopeDto) => {
         if (newer(envelope.revision, highest)) {
           highest = envelope.revision;
           accept(envelope.payload);
         }
-        void ackSubscription({ subscriptionId: envelope.subscriptionId, revision: envelope.revision });
-      };
-      const subscriptionId = await subscribeJobCatalog(channel);
-      return { unsubscribe: () => unsubscribeJob({ subscriptionId }) };
+        },
+      );
     },
   };
 }

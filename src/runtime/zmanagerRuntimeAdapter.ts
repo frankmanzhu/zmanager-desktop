@@ -274,6 +274,7 @@ import {
   createAppTimers,
 } from "../desktop/timers";
 import { createTauriJobFeed, type JobFeedSubscription } from "../desktop/jobFeed";
+import { createJobSubscriptionSet } from "../desktop/jobSubscriptionSet";
 import {
   bindPreviewCleanupOnAppClose,
   cleanupPreviewRoots,
@@ -620,28 +621,27 @@ const createStartController = createCreateStartController({
   toCommandError: asCommandError,
 });
 const jobFeed = createTauriJobFeed();
-const jobSubscriptions = new Map<string, JobFeedSubscription>();
-let catalogSubscription: JobFeedSubscription | null = null;
-
-async function subscribeToRetainedJob(jobId: string): Promise<void> {
-  if (jobSubscriptions.has(jobId)) return;
-  const subscription = await jobFeed.subscribeJob(jobId, (snapshot) => {
+const jobSubscriptions = createJobSubscriptionSet(
+  jobFeed,
+  (jobId, snapshot) => {
     jobsWorkspace.acceptRetainedSnapshot(snapshot);
     void maybePromptForJobPasswordRetry(jobId);
     renderJobs();
     maybeCloseCompletedQuickActionWindow();
-  });
-  jobSubscriptions.set(jobId, subscription);
+  },
+  (jobId) => jobsWorkspace.removeJob(jobId),
+);
+let catalogSubscription: JobFeedSubscription | null = null;
+
+async function subscribeToRetainedJob(jobId: string): Promise<void> {
+  return jobSubscriptions.ensure(jobId);
 }
 
 async function subscribeToJobCatalog(): Promise<void> {
   if (catalogSubscription) return;
   catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
     const retained = new Set(catalog.jobs.map((job) => job.jobId));
-    for (const job of catalog.jobs) void subscribeToRetainedJob(job.jobId);
-    for (const [jobId, subscription] of jobSubscriptions) {
-      if (!retained.has(jobId)) { void subscription.unsubscribe(); jobSubscriptions.delete(jobId); jobsWorkspace.removeJob(jobId); }
-    }
+    jobSubscriptions.reconcile(retained);
     renderJobs();
   });
 }

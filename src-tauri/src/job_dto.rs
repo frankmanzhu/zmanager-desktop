@@ -1,6 +1,60 @@
 use serde::{Deserialize, Serialize};
 
+use crate::dto::{DestinationCollisionStrategyDto, OverwritePolicyDto};
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JobArtifactKindDto {
+    Archive,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobOutputArtifactDto {
+    pub artifact_id: String,
+    pub kind: JobArtifactKindDto,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JobActionKindDto {
+    Open,
+    Reveal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobAvailableActionDto {
+    pub action_id: String,
+    pub kind: JobActionKindDto,
+    pub artifact_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(
+    tag = "retryKind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum JobRetryDescriptorDto {
+    ExtractArchive {
+        action_id: String,
+        archive_path: String,
+        destination_path: String,
+        overwrite: OverwritePolicyDto,
+        destination_collision_strategy: DestinationCollisionStrategyDto,
+        entry_paths: Vec<String>,
+        strip_components: usize,
+    },
+    TestArchive {
+        action_id: String,
+        archive_path: String,
+        entry_paths: Vec<String>,
+    },
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,9 +153,9 @@ pub struct DesktopJobSnapshotDto {
     pub progress_facts: JobProgressFactsDto,
     pub latest_failure: Option<JobEventDto>,
     pub bounded_notices: Vec<JobEventDto>,
-    pub available_actions: Vec<String>,
-    pub output_artifacts: Vec<String>,
-    pub retry_descriptor: Option<String>,
+    pub available_actions: Vec<JobAvailableActionDto>,
+    pub output_artifacts: Vec<JobOutputArtifactDto>,
+    pub retry_descriptor: Option<JobRetryDescriptorDto>,
     pub terminal_summary: Option<JobTerminalSummaryDto>,
 }
 

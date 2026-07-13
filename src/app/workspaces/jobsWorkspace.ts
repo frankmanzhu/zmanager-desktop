@@ -207,7 +207,11 @@ function cloneJobState(state: JobState): JobState {
       ...state.retainedSnapshot,
       progressFacts: { ...state.retainedSnapshot.progressFacts, recentPaths: [...state.retainedSnapshot.progressFacts.recentPaths] },
       boundedNotices: state.retainedSnapshot.boundedNotices.map(cloneJobEvent),
-      availableActions: [...state.retainedSnapshot.availableActions], outputArtifacts: [...state.retainedSnapshot.outputArtifacts],
+      availableActions: state.retainedSnapshot.availableActions.map((action) => ({ ...action })),
+      outputArtifacts: state.retainedSnapshot.outputArtifacts.map((artifact) => ({ ...artifact })),
+      retryDescriptor: state.retainedSnapshot.retryDescriptor
+        ? { ...state.retainedSnapshot.retryDescriptor, entryPaths: [...state.retainedSnapshot.retryDescriptor.entryPaths] }
+        : state.retainedSnapshot.retryDescriptor,
     } : undefined,
   };
 }
@@ -228,6 +232,35 @@ function cloneRetryContext(context: JobRetryContext): JobRetryContext {
 
 function cloneOutputAction(action: JobOutputAction): JobOutputAction {
   return { ...action };
+}
+
+function retainedRetryContext(snapshot: DesktopJobSnapshotDto): JobRetryContext | undefined {
+  const descriptor = snapshot.retryDescriptor;
+  if (!descriptor) return undefined;
+  if (descriptor.retryKind === "testArchive") {
+    return {
+      retryKind: descriptor.retryKind,
+      archivePath: descriptor.archivePath,
+      ...(descriptor.entryPaths.length ? { entryPaths: [...descriptor.entryPaths] } : {}),
+    };
+  }
+  return {
+    retryKind: descriptor.retryKind,
+    archivePath: descriptor.archivePath,
+    destinationPath: descriptor.destinationPath,
+    overwrite: descriptor.overwrite,
+    destinationCollisionStrategy: descriptor.destinationCollisionStrategy,
+    ...(descriptor.entryPaths.length ? { entryPaths: [...descriptor.entryPaths] } : {}),
+    stripComponents: descriptor.stripComponents,
+  };
+}
+
+function retainedOutputActions(snapshot: DesktopJobSnapshotDto): JobOutputAction[] {
+  const artifacts = new Map(snapshot.outputArtifacts.map((artifact) => [artifact.artifactId, artifact]));
+  return snapshot.availableActions.flatMap((action) => {
+    const artifact = artifacts.get(action.artifactId);
+    return artifact?.path ? [{ kind: action.kind, path: artifact.path }] : [];
+  });
 }
 
 function cloneFocusedProgressContext(
@@ -545,6 +578,10 @@ export function createJobsWorkspace(): JobsWorkspace {
         retainedSnapshot: snapshot,
       };
       jobs.set(snapshot.jobId, state);
+      const retryContext = retainedRetryContext(snapshot);
+      if (retryContext) retryContexts.set(snapshot.jobId, retryContext);
+      else retryContexts.delete(snapshot.jobId);
+      setOutputActions(snapshot.jobId, retainedOutputActions(snapshot));
       return cloneJobState(state);
     },
 

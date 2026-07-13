@@ -324,11 +324,41 @@ export type DesktopJobSnapshotDto = {
   progressFacts: JobProgressFactsDto;
   latestFailure?: JobEventDto | null;
   boundedNotices: JobEventDto[];
-  availableActions: string[];
-  outputArtifacts: string[];
-  retryDescriptor?: string | null;
+  availableActions: JobAvailableActionDto[];
+  outputArtifacts: JobOutputArtifactDto[];
+  retryDescriptor?: JobRetryDescriptorDto | null;
   terminalSummary?: JobTerminalSummaryDto | null;
 };
+
+export type JobOutputArtifactDto = {
+  artifactId: string;
+  kind: "archive" | "directory";
+  path: string;
+};
+
+export type JobAvailableActionDto = {
+  actionId: string;
+  kind: "open" | "reveal";
+  artifactId: string;
+};
+
+export type JobRetryDescriptorDto =
+  | {
+      retryKind: "extractArchive";
+      actionId: string;
+      archivePath: string;
+      destinationPath: string;
+      overwrite: StartExtractRequest["overwrite"];
+      destinationCollisionStrategy: NonNullable<StartExtractRequest["destinationCollisionStrategy"]>;
+      entryPaths: string[];
+      stripComponents: number;
+    }
+  | {
+      retryKind: "testArchive";
+      actionId: string;
+      archivePath: string;
+      entryPaths: string[];
+    };
 
 export type JobSnapshotEnvelopeDto = { subscriptionId: string; revision: string; payload: DesktopJobSnapshotDto };
 export type JobCatalogDescriptorDto = { jobId: string; revision: string; kind: JobKind; status: JobStatus; terminal: boolean };

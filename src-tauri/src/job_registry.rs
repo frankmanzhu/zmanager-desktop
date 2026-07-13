@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, VecDeque},
     fs,
     path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
     sync::{Arc, Condvar, Mutex},
     time::{Duration, Instant},
 };
@@ -10,22 +11,24 @@ use tokio::sync::{mpsc, watch};
 #[cfg(test)]
 use crate::job_dto::TestJobEventsSnapshot;
 use crate::job_dto::{
-    CancelJobResponseDto, DesktopJobSnapshotDto, JobCatalogDescriptorDto, JobCatalogSnapshotDto,
-    JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobPhaseDto,
-    JobProgressFactsDto, JobRecordSnapshot, JobStatusDto, JobTerminalSummaryDto,
-    StartJobResponseDto,
+    CancelJobResponseDto, DesktopJobSnapshotDto, JobAvailableActionDto, JobCatalogDescriptorDto,
+    JobCatalogSnapshotDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
+    JobOutputArtifactDto, JobPhaseDto, JobProgressFactsDto, JobRecordSnapshot,
+    JobRetryDescriptorDto, JobStatusDto, JobTerminalSummaryDto, StartJobResponseDto,
 };
 use zmanager_core::{
     jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind, jobs::JobPhase,
     jobs::JobProgressState,
 };
 
+#[cfg(test)]
 const MAX_EVENTS_TO_KEEP: usize = 256;
 pub const MAX_RETAINED_TERMINAL_JOBS: usize = 100;
 pub const MAX_ADMITTED_JOBS: usize = 256;
 pub const MAX_SUBSCRIBERS_PER_JOB: usize = 16;
 pub const MAX_PROCESS_SUBSCRIBERS: usize = 512;
 const MAX_NOTICES_TO_KEEP: usize = 32;
+static NEXT_TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 struct JobRecord {
@@ -46,7 +49,11 @@ struct JobRecord {
     progress: JobProgressFactsDto,
     notices: VecDeque<JobEventDto>,
     latest_failure: Option<JobEventDto>,
+    available_actions: Vec<JobAvailableActionDto>,
+    output_artifacts: Vec<JobOutputArtifactDto>,
+    retry_descriptor: Option<JobRetryDescriptorDto>,
     terminal_sequence: Option<u64>,
+    publication_closed: bool,
     started_at: Instant,
     paused_at: Option<Instant>,
     paused_duration: Duration,
@@ -116,6 +123,7 @@ impl PauseControl {
 struct RegistryState {
     next_job_id: u64,
     catalog_revision: u64,
+    catalog_publication_closed: bool,
     jobs: HashMap<String, JobRecord>,
     preview_roots: VecDeque<PathBuf>,
     catalog_sender: watch::Sender<Arc<JobCatalogSnapshotDto>>,
@@ -128,13 +136,79 @@ struct SubscriptionRecord {
     owner: String,
     job_id: Option<String>,
     commands: mpsc::Sender<SubscriptionCommand>,
-    in_flight: Arc<Mutex<Option<u64>>>,
+    flow: Arc<Mutex<SubscriptionFlowState>>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct SubscriptionFlowState {
+    pub(crate) in_flight: Option<u64>,
+    pub(crate) ack_queued: bool,
 }
 
 #[derive(Debug)]
-pub enum SubscriptionCommand {
+pub(crate) enum SubscriptionCommand {
     Ack(u64),
     Stop,
+}
+
+pub(crate) async fn forward_latest_values<T, FRevision, FSend>(
+    mut snapshots: watch::Receiver<Arc<T>>,
+    mut commands: mpsc::Receiver<SubscriptionCommand>,
+    flow: Arc<Mutex<SubscriptionFlowState>>,
+    revision_of: FRevision,
+    mut send: FSend,
+) where
+    T: Send + Sync + 'static,
+    FRevision: Fn(&T) -> Option<u64>,
+    FSend: FnMut(Arc<T>) -> Result<(), ()>,
+{
+    let mut current = snapshots.borrow_and_update().clone();
+    let Some(mut in_flight) = revision_of(&current) else {
+        return;
+    };
+    {
+        let mut state = flow.lock().unwrap_or_else(|error| error.into_inner());
+        state.in_flight = Some(in_flight);
+        state.ack_queued = false;
+    }
+    if send(current.clone()).is_err() {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            command = commands.recv() => match command {
+                Some(SubscriptionCommand::Stop) | None => break,
+                Some(SubscriptionCommand::Ack(revision)) if revision == in_flight => {
+                    flow.lock().unwrap_or_else(|error| error.into_inner()).ack_queued = false;
+                    let Some(newest) = revision_of(&current) else { break };
+                    if newest > revision {
+                        in_flight = newest;
+                        flow.lock().unwrap_or_else(|error| error.into_inner()).in_flight = Some(in_flight);
+                        if send(current.clone()).is_err() { break }
+                    } else {
+                        flow.lock().unwrap_or_else(|error| error.into_inner()).in_flight = None;
+                    }
+                }
+                Some(SubscriptionCommand::Ack(_)) => {}
+            },
+            changed = snapshots.changed() => {
+                if changed.is_err() { break }
+                current = snapshots.borrow_and_update().clone();
+                let should_send = flow
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .in_flight
+                    .is_none();
+                if should_send {
+                    let Some(revision) = revision_of(&current) else { break };
+                    in_flight = revision;
+                    flow.lock().unwrap_or_else(|error| error.into_inner()).in_flight = Some(in_flight);
+                    if send(current.clone()).is_err() { break }
+                }
+            }
+        }
+    }
 }
 
 impl RegistryState {
@@ -146,6 +220,7 @@ impl RegistryState {
         Self {
             next_job_id: 0,
             catalog_revision: 0,
+            catalog_publication_closed: false,
             jobs: HashMap::new(),
             preview_roots: VecDeque::new(),
             catalog_sender,
@@ -173,6 +248,7 @@ impl JobRegistry {
         operation(&mut state)
     }
 
+    #[cfg(test)]
     pub fn create_job(&self, kind: JobKindDto) -> (StartJobResponseDto, CancellationToken) {
         self.try_create_job(kind)
             .expect("job registry capacity exceeded")
@@ -233,7 +309,11 @@ impl JobRegistry {
                     progress,
                     notices: VecDeque::new(),
                     latest_failure: None,
+                    available_actions: Vec::new(),
+                    output_artifacts: Vec::new(),
+                    retry_descriptor: None,
                     terminal_sequence: None,
+                    publication_closed: false,
                     started_at: Instant::now(),
                     paused_at: None,
                     paused_duration: Duration::ZERO,
@@ -244,7 +324,10 @@ impl JobRegistry {
                     core_progress: JobProgressState::default(),
                 },
             );
-            publish_catalog(state);
+            if let Err(error) = publish_catalog(state) {
+                state.jobs.remove(&job_id);
+                return Err(error);
+            }
 
             Ok((
                 StartJobResponseDto {
@@ -268,7 +351,7 @@ impl JobRegistry {
             cancel_job_subscriptions(state, job_id);
             let removed = state.jobs.remove(job_id).map(|record| record.kind);
             if removed.is_some() {
-                publish_catalog(state);
+                let _ = publish_catalog(state);
             }
             removed
         })
@@ -287,6 +370,7 @@ impl JobRegistry {
         })
     }
 
+    #[cfg(test)]
     pub fn current_job_snapshot(&self, job_id: &str) -> Option<Arc<DesktopJobSnapshotDto>> {
         self.with_lock(|state| {
             state
@@ -296,6 +380,28 @@ impl JobRegistry {
         })
     }
 
+    pub fn configure_recovery_facts(
+        &self,
+        job_id: &str,
+        retry_descriptor: Option<JobRetryDescriptorDto>,
+        output_artifacts: Vec<JobOutputArtifactDto>,
+        available_actions: Vec<JobAvailableActionDto>,
+    ) -> Result<(), &'static str> {
+        self.with_lock(|state| {
+            let record = state.jobs.get_mut(job_id).ok_or("job_not_found")?;
+            if record.status.is_terminal() || record.publication_closed {
+                return Err("job_immutable");
+            }
+            record.retry_descriptor = retry_descriptor;
+            record.output_artifacts = output_artifacts;
+            record.available_actions = available_actions;
+            publish_record(record)?;
+            publish_catalog(state)?;
+            Ok(())
+        })
+    }
+
+    #[cfg(test)]
     pub fn subscribe_job_snapshot(
         &self,
         job_id: &str,
@@ -308,6 +414,7 @@ impl JobRegistry {
         })
     }
 
+    #[cfg(test)]
     pub fn subscribe_catalog_snapshot(&self) -> watch::Receiver<Arc<JobCatalogSnapshotDto>> {
         self.with_lock(|state| state.catalog_sender.subscribe())
     }
@@ -321,7 +428,7 @@ impl JobRegistry {
             String,
             watch::Receiver<Arc<DesktopJobSnapshotDto>>,
             mpsc::Receiver<SubscriptionCommand>,
-            Arc<Mutex<Option<u64>>>,
+            Arc<Mutex<SubscriptionFlowState>>,
         ),
         &'static str,
     > {
@@ -353,17 +460,17 @@ impl JobRegistry {
                 .ok_or("subscription_id_exhausted")?;
             let id = format!("subscription-{}", state.next_subscription_id);
             let (commands, receiver_commands) = mpsc::channel(4);
-            let in_flight = Arc::new(Mutex::new(None));
+            let flow = Arc::new(Mutex::new(SubscriptionFlowState::default()));
             state.subscriptions.insert(
                 id.clone(),
                 SubscriptionRecord {
                     owner: owner.to_owned(),
                     job_id: Some(job_id.to_owned()),
                     commands,
-                    in_flight: in_flight.clone(),
+                    flow: flow.clone(),
                 },
             );
-            Ok((id, receiver, receiver_commands, in_flight))
+            Ok((id, receiver, receiver_commands, flow))
         })
     }
 
@@ -375,7 +482,7 @@ impl JobRegistry {
             String,
             watch::Receiver<Arc<JobCatalogSnapshotDto>>,
             mpsc::Receiver<SubscriptionCommand>,
-            Arc<Mutex<Option<u64>>>,
+            Arc<Mutex<SubscriptionFlowState>>,
         ),
         &'static str,
     > {
@@ -392,21 +499,21 @@ impl JobRegistry {
                 .ok_or("subscription_id_exhausted")?;
             let id = format!("subscription-{}", state.next_subscription_id);
             let (commands, receiver_commands) = mpsc::channel(4);
-            let in_flight = Arc::new(Mutex::new(None));
+            let flow = Arc::new(Mutex::new(SubscriptionFlowState::default()));
             state.subscriptions.insert(
                 id.clone(),
                 SubscriptionRecord {
                     owner: owner.to_owned(),
                     job_id: None,
                     commands,
-                    in_flight: in_flight.clone(),
+                    flow: flow.clone(),
                 },
             );
             Ok((
                 id,
                 state.catalog_sender.subscribe(),
                 receiver_commands,
-                in_flight,
+                flow,
             ))
         })
     }
@@ -425,20 +532,26 @@ impl JobRegistry {
             if subscription.owner != owner {
                 return Err("subscription_forbidden");
             }
-            let sent = *subscription
-                .in_flight
+            let mut flow = subscription
+                .flow
                 .lock()
                 .unwrap_or_else(|error| error.into_inner());
-            if sent.is_some_and(|sent| revision > sent) {
-                return Err("ack_revision_newer_than_in_flight");
+            match flow.in_flight {
+                Some(sent) if revision > sent => return Err("ack_revision_newer_than_in_flight"),
+                Some(sent) if revision < sent => return Ok(()),
+                None => return Ok(()),
+                Some(_) if flow.ack_queued => return Ok(()),
+                Some(_) => flow.ack_queued = true,
             }
-            if sent.is_none() {
-                return Ok(());
-            }
-            subscription
+            if subscription
                 .commands
                 .try_send(SubscriptionCommand::Ack(revision))
-                .map_err(|_| "subscription_busy")
+                .is_err()
+            {
+                flow.ack_queued = false;
+                return Err("subscription_busy");
+            }
+            Ok(())
         })
     }
 
@@ -484,11 +597,21 @@ impl JobRegistry {
     pub fn request_cancel(&self, job_id: &str) -> Option<CancelJobResponseDto> {
         self.with_lock(|state| {
             let record = state.jobs.get_mut(job_id)?;
+            if record.status.is_terminal() {
+                return Some(CancelJobResponseDto {
+                    job_id: job_id.to_string(),
+                    status: record.status,
+                    revision: record.revision.to_string(),
+                });
+            }
+            if record.publication_closed {
+                return None;
+            }
 
             if let Some(token) = record.cancellation_token.as_ref() {
                 token.cancel();
                 record.pause_control.resume();
-                if !record.status.is_terminal() {
+                {
                     record.status = JobStatusDto::Cancelling;
                     let kind = record.kind;
                     let processed_entries = record.processed_entries;
@@ -513,13 +636,13 @@ impl JobRegistry {
                         },
                     );
                 }
-                publish_record(record);
+                publish_record(record).ok()?;
                 let response = Some(CancelJobResponseDto {
                     job_id: job_id.to_string(),
                     status: record.status,
                     revision: record.revision.to_string(),
                 });
-                publish_catalog(state);
+                publish_catalog(state).ok()?;
                 response
             } else {
                 None
@@ -530,7 +653,7 @@ impl JobRegistry {
     pub fn request_pause(&self, job_id: &str) -> Option<JobControlResponseDto> {
         self.with_lock(|state| {
             let record = state.jobs.get_mut(job_id)?;
-            if record.status.is_terminal() {
+            if record.status.is_terminal() || record.publication_closed {
                 return Some(JobControlResponseDto {
                     job_id: job_id.to_string(),
                     status: record.status,
@@ -538,7 +661,14 @@ impl JobRegistry {
                 });
             }
 
-            if record.status != JobStatusDto::Paused {
+            if !matches!(record.status, JobStatusDto::Queued | JobStatusDto::Running) {
+                return Some(JobControlResponseDto {
+                    job_id: job_id.to_string(),
+                    status: record.status,
+                    revision: record.revision.to_string(),
+                });
+            }
+            {
                 record.paused_from_status = Some(record.status);
                 record.status = JobStatusDto::Paused;
                 record.pause_control.pause();
@@ -566,13 +696,13 @@ impl JobRegistry {
                 );
             }
 
-            publish_record(record);
+            publish_record(record).ok()?;
             let response = Some(JobControlResponseDto {
                 job_id: job_id.to_string(),
                 status: record.status,
                 revision: record.revision.to_string(),
             });
-            publish_catalog(state);
+            publish_catalog(state).ok()?;
             response
         })
     }
@@ -580,7 +710,14 @@ impl JobRegistry {
     pub fn request_resume(&self, job_id: &str) -> Option<JobControlResponseDto> {
         self.with_lock(|state| {
             let record = state.jobs.get_mut(job_id)?;
-            if record.status == JobStatusDto::Paused {
+            if record.status != JobStatusDto::Paused || record.publication_closed {
+                return Some(JobControlResponseDto {
+                    job_id: job_id.to_string(),
+                    status: record.status,
+                    revision: record.revision.to_string(),
+                });
+            }
+            {
                 record.pause_control.resume();
                 record.status = record
                     .paused_from_status
@@ -610,13 +747,13 @@ impl JobRegistry {
                 );
             }
 
-            publish_record(record);
+            publish_record(record).ok()?;
             let response = Some(JobControlResponseDto {
                 job_id: job_id.to_string(),
                 status: record.status,
                 revision: record.revision.to_string(),
             });
-            publish_catalog(state);
+            publish_catalog(state).ok()?;
             response
         })
     }
@@ -843,6 +980,9 @@ impl JobRegistry {
             let Some(record) = state.jobs.get_mut(job_id) else {
                 return;
             };
+            if record.status.is_terminal() || record.publication_closed {
+                return;
+            }
             record.core_progress.apply(&event);
             sync_core_progress(record);
 
@@ -866,10 +1006,11 @@ impl JobRegistry {
                 record.kind = dto_kind;
             }
 
-            if matches!(event, JobEvent::Completed { .. }) {
+            if matches!(event, JobEvent::Completed { .. } | JobEvent::Failed { .. }) {
                 apply_event_to_progress(record, &event_dto);
-                publish_record(record);
-                publish_catalog(state);
+                if publish_record(record).is_ok() {
+                    let _ = publish_catalog(state);
+                }
                 return;
             }
 
@@ -897,10 +1038,15 @@ impl JobRegistry {
             sync_core_progress(record);
             record_test_event(record, event_dto);
             if record.status.is_terminal() && record.terminal_sequence.is_none() {
-                record.terminal_sequence = Some(record.revision);
+                let Ok(sequence) = allocate_terminal_sequence() else {
+                    record.publication_closed = true;
+                    return;
+                };
+                record.terminal_sequence = Some(sequence);
             }
-            publish_record(record);
-            publish_catalog(state);
+            if publish_record(record).is_ok() {
+                let _ = publish_catalog(state);
+            }
         });
     }
 
@@ -909,6 +1055,9 @@ impl JobRegistry {
             let Some(record) = state.jobs.get_mut(job_id) else {
                 return;
             };
+            if record.status.is_terminal() || record.publication_closed {
+                return;
+            }
 
             let mut event = event;
             if matches!(event.event_type, JobEventKindDto::EntryFinished) {
@@ -956,21 +1105,59 @@ impl JobRegistry {
             apply_event_to_progress(record, &event);
             record_test_event(record, event);
             if record.status.is_terminal() && record.terminal_sequence.is_none() {
-                record.terminal_sequence = Some(record.revision);
+                let Ok(sequence) = allocate_terminal_sequence() else {
+                    record.publication_closed = true;
+                    return;
+                };
+                record.terminal_sequence = Some(sequence);
             }
-            publish_record(record);
-            publish_catalog(state);
+            if publish_record(record).is_ok() {
+                let _ = publish_catalog(state);
+            }
         });
     }
 
-    pub fn set_terminal_summary(&self, job_id: &str, summary: JobTerminalSummaryDto) {
+    pub fn commit_completed(
+        &self,
+        job_id: &str,
+        kind: JobKindDto,
+        summary: JobTerminalSummaryDto,
+    ) -> Result<(), &'static str> {
         self.with_lock(|state| {
-            if let Some(record) = state.jobs.get_mut(job_id) {
-                record.terminal_summary = Some(summary);
-                publish_record(record);
-                publish_catalog(state);
+            let record = state.jobs.get_mut(job_id).ok_or("job_not_found")?;
+            if record.status.is_terminal() {
+                return Ok(());
             }
-        });
+            if record.publication_closed {
+                return Err("revision_exhausted");
+            }
+            let event = JobEventDto {
+                event_type: JobEventKindDto::Completed,
+                job_kind: Some(kind),
+                phase: None,
+                code: None,
+                hint: None,
+                severity: None,
+                retryable: None,
+                path: None,
+                bytes: Some(summary.written_bytes),
+                total_bytes: None,
+                total_bytes_processed: Some(summary.written_bytes),
+                entries: Some(summary.written_entries),
+                total_entries: Some(summary.written_entries),
+                message: None,
+            };
+            record.terminal_summary = Some(summary);
+            record.status = JobStatusDto::Completed;
+            record.processed_entries = record.processed_entries.max(event.entries.unwrap_or(0));
+            record.total_entries = event.total_entries;
+            apply_event_to_progress(record, &event);
+            record_test_event(record, event);
+            record.terminal_sequence = Some(allocate_terminal_sequence()?);
+            publish_record(record)?;
+            publish_catalog(state)?;
+            Ok(())
+        })
     }
 
     pub fn replace_preview_root(&self, path: PathBuf) {
@@ -1094,7 +1281,10 @@ fn sync_core_progress(record: &mut JobRecord) {
     record.progress.warning_count = core.warning_count;
 }
 
-fn publish_record(record: &mut JobRecord) {
+fn publish_record(record: &mut JobRecord) -> Result<(), &'static str> {
+    if record.publication_closed {
+        return Err("revision_exhausted");
+    }
     let now = Instant::now();
     if record.status == JobStatusDto::Paused {
         record.paused_at.get_or_insert(now);
@@ -1106,15 +1296,31 @@ fn publish_record(record: &mut JobRecord) {
     if record.status.is_terminal() {
         record.finished_at.get_or_insert(now);
     }
-    record.revision = next_revision(record.revision).expect("job revision exhausted");
+    record.revision = match next_revision(record.revision) {
+        Ok(revision) => revision,
+        Err(error) => {
+            record.publication_closed = true;
+            return Err(error);
+        }
+    };
     record.updated_at = now_timestamp();
     let _ = record
         .snapshot_sender
         .send_replace(Arc::new(snapshot_dto(record)));
+    Ok(())
 }
 
 fn next_revision(current: u64) -> Result<u64, &'static str> {
     current.checked_add(1).ok_or("revision_exhausted")
+}
+
+fn allocate_terminal_sequence() -> Result<u64, &'static str> {
+    NEXT_TERMINAL_SEQUENCE
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            current.checked_add(1)
+        })
+        .map(|previous| previous + 1)
+        .map_err(|_| "terminal_sequence_exhausted")
 }
 
 fn snapshot_dto(record: &JobRecord) -> DesktopJobSnapshotDto {
@@ -1162,26 +1368,36 @@ fn snapshot_dto(record: &JobRecord) -> DesktopJobSnapshotDto {
         latest_failure: record.latest_failure.clone(),
         bounded_notices: record.notices.iter().cloned().collect(),
         available_actions: if record.status == JobStatusDto::Completed {
-            vec!["openOutput".into(), "showInFolder".into()]
+            record.available_actions.clone()
         } else {
             Vec::new()
         },
-        output_artifacts: Vec::new(),
+        output_artifacts: if record.status == JobStatusDto::Completed {
+            record.output_artifacts.clone()
+        } else {
+            Vec::new()
+        },
         retry_descriptor: record.latest_failure.as_ref().and_then(|failure| {
             failure
                 .retryable
                 .filter(|value| *value)
-                .map(|_| "retry".into())
+                .and(record.retry_descriptor.clone())
         }),
         terminal_summary: record.terminal_summary.clone(),
     }
 }
 
-fn publish_catalog(state: &mut RegistryState) {
-    state.catalog_revision = state
-        .catalog_revision
-        .checked_add(1)
-        .expect("catalog revision exhausted");
+fn publish_catalog(state: &mut RegistryState) -> Result<(), &'static str> {
+    if state.catalog_publication_closed {
+        return Err("catalog_revision_exhausted");
+    }
+    state.catalog_revision = match state.catalog_revision.checked_add(1) {
+        Some(revision) => revision,
+        None => {
+            state.catalog_publication_closed = true;
+            return Err("catalog_revision_exhausted");
+        }
+    };
     let mut jobs = state
         .jobs
         .values()
@@ -1200,6 +1416,7 @@ fn publish_catalog(state: &mut RegistryState) {
             catalog_revision: state.catalog_revision.to_string(),
             jobs,
         }));
+    Ok(())
 }
 
 fn evict_oldest_terminal_jobs(state: &mut RegistryState) {
@@ -1356,6 +1573,7 @@ mod tests {
             zmanager_core::jobs::JobEvent::BytesProcessed {
                 path: Some("docs/one.txt".to_string()),
                 recent_paths: vec!["docs/one.txt".to_string()],
+                recent_path_identities: vec![[1; 32]],
                 bytes: 10,
                 total_bytes_processed: 10,
                 entries: 0,
@@ -1375,6 +1593,7 @@ mod tests {
             zmanager_core::jobs::JobEvent::BytesProcessed {
                 path: Some("docs/one.txt".to_string()),
                 recent_paths: vec!["docs/one.txt".to_string(), "docs/two.txt".to_string()],
+                recent_path_identities: vec![[1; 32], [2; 32]],
                 bytes: 20,
                 total_bytes_processed: 30,
                 entries: 0,
@@ -1449,6 +1668,7 @@ mod tests {
                     phase: JobPhase::PlanningPayload,
                     path: Some("payload.bin".to_string()),
                     recent_paths: vec!["payload.bin".to_string()],
+                    recent_path_identities: vec![[1; 32]],
                     bytes: processed,
                     total_bytes_processed: processed,
                     total_bytes: Some(100),
@@ -1610,11 +1830,11 @@ mod tests {
     fn acknowledgement_is_owner_scoped_and_rejects_unsent_revisions() {
         let registry = JobRegistry::new();
         let (response, _) = registry.create_job(JobKindDto::ZipCreate);
-        let (id, snapshots, _commands, in_flight) = registry
+        let (id, snapshots, mut commands, flow) = registry
             .register_job_subscription("main", &response.job_id)
             .unwrap();
         let revision = snapshots.borrow().revision.parse::<u64>().unwrap();
-        *in_flight.lock().unwrap() = Some(revision);
+        flow.lock().unwrap().in_flight = Some(revision);
         assert_eq!(
             registry.acknowledge_subscription("task-1", &id, revision),
             Err("subscription_forbidden")
@@ -1628,11 +1848,108 @@ mod tests {
                 .acknowledge_subscription("main", &id, revision)
                 .is_ok()
         );
+        assert!(
+            registry
+                .acknowledge_subscription("main", &id, revision)
+                .is_ok(),
+            "duplicate acknowledgement is idempotent"
+        );
+        assert!(
+            matches!(commands.try_recv(), Ok(SubscriptionCommand::Ack(value)) if value == revision)
+        );
+        assert!(
+            commands.try_recv().is_err(),
+            "duplicate acknowledgement is not queued twice"
+        );
+    }
+
+    #[tokio::test]
+    async fn latest_value_forwarder_keeps_one_message_in_flight_and_conflates_gaps() {
+        #[derive(Debug)]
+        struct Value(u64);
+        let (publisher, receiver) = watch::channel(Arc::new(Value(1)));
+        let (commands, command_receiver) = mpsc::channel(4);
+        let flow = Arc::new(Mutex::new(SubscriptionFlowState::default()));
+        let (sent, mut received) = mpsc::unbounded_channel();
+        let task = tokio::spawn(forward_latest_values(
+            receiver,
+            command_receiver,
+            flow.clone(),
+            |value| Some(value.0),
+            move |value| sent.send(value.0).map_err(|_| ()),
+        ));
+        assert_eq!(received.recv().await, Some(1));
+        publisher.send_replace(Arc::new(Value(2)));
+        publisher.send_replace(Arc::new(Value(3)));
+        tokio::task::yield_now().await;
+        assert!(
+            received.try_recv().is_err(),
+            "no second message before acknowledgement"
+        );
+        commands.send(SubscriptionCommand::Ack(1)).await.unwrap();
+        assert_eq!(received.recv().await, Some(3));
+        commands.send(SubscriptionCommand::Stop).await.unwrap();
+        task.await.unwrap();
+        assert_eq!(flow.lock().unwrap().in_flight, Some(3));
+    }
+
+    #[tokio::test]
+    async fn latest_value_forwarder_stops_only_the_failed_channel() {
+        #[derive(Debug)]
+        struct Value(u64);
+        let (_publisher, receiver) = watch::channel(Arc::new(Value(1)));
+        let (_commands, command_receiver) = mpsc::channel(1);
+        let flow = Arc::new(Mutex::new(SubscriptionFlowState::default()));
+        forward_latest_values(
+            receiver,
+            command_receiver,
+            flow,
+            |value| Some(value.0),
+            |_| Err(()),
+        )
+        .await;
+    }
+
+    #[test]
+    fn explicit_unsubscribe_and_window_cleanup_share_idempotent_removal() {
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+        let (id, _snapshots, _commands, _flow) = registry
+            .register_job_subscription("main", &job.job_id)
+            .unwrap();
+        registry.unsubscribe("main", &id).unwrap();
+        registry.cleanup_owner_subscriptions("main");
+        registry.cleanup_subscription(&id);
+        registry.with_lock(|state| assert!(state.subscriptions.is_empty()));
+    }
+
+    #[test]
+    fn long_running_snapshot_state_remains_bounded() {
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipExtract);
+        for index in 0..10_000 {
+            let mut warning = JobEventDto::new(JobEventKindDto::Warning);
+            warning.path = Some(format!("entry-{index}"));
+            registry.emit_direct_event(&job.job_id, warning);
+        }
+        let snapshot = registry.current_job_snapshot(&job.job_id).unwrap();
+        assert!(snapshot.bounded_notices.len() <= MAX_NOTICES_TO_KEEP);
+        assert!(snapshot.progress_facts.recent_paths.len() <= 10);
     }
 
     #[test]
     fn revision_exhaustion_fails_closed() {
         assert_eq!(next_revision(u64::MAX), Err("revision_exhausted"));
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+        let before = registry.current_job_snapshot(&job.job_id).unwrap();
+        registry.with_lock(|state| state.jobs.get_mut(&job.job_id).unwrap().revision = u64::MAX);
+        registry.emit_direct_event(&job.job_id, JobEventDto::new(JobEventKindDto::Warning));
+        let after = registry.current_job_snapshot(&job.job_id).unwrap();
+        assert_eq!(after.revision, before.revision);
+        registry.with_lock(|state| {
+            assert!(state.jobs.get(&job.job_id).unwrap().publication_closed);
+        });
     }
 
     #[test]
@@ -1661,6 +1978,137 @@ mod tests {
             active.try_create_job(JobKindDto::ZipCreate),
             Err("job_capacity")
         ));
+    }
+
+    #[test]
+    fn terminal_records_reject_all_late_mutations() {
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+        registry
+            .commit_completed(
+                &job.job_id,
+                JobKindDto::ZipCreate,
+                JobTerminalSummaryDto {
+                    written_entries: 1,
+                    skipped_entries: None,
+                    written_bytes: 2,
+                    warnings: Vec::new(),
+                },
+            )
+            .unwrap();
+        let terminal = registry.current_job_snapshot(&job.job_id).unwrap();
+        let mut failure = JobEventDto::new(JobEventKindDto::Failed);
+        failure.message = Some("late failure".into());
+        registry.emit_direct_event(&job.job_id, failure);
+        registry.emit_job_event(
+            &job.job_id,
+            zmanager_core::jobs::JobEvent::Warning {
+                message: "late warning".into(),
+            },
+        );
+        assert_eq!(
+            registry.current_job_snapshot(&job.job_id).unwrap().revision,
+            terminal.revision
+        );
+        assert_eq!(
+            registry.current_job_snapshot(&job.job_id).unwrap().status,
+            JobStatusDto::Completed
+        );
+    }
+
+    #[test]
+    fn successful_terminal_publication_atomically_contains_summary_and_actions() {
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+        registry
+            .configure_recovery_facts(
+                &job.job_id,
+                None,
+                vec![JobOutputArtifactDto {
+                    artifact_id: "output".into(),
+                    kind: crate::job_dto::JobArtifactKindDto::Archive,
+                    path: "/tmp/archive.zip".into(),
+                }],
+                vec![JobAvailableActionDto {
+                    action_id: "reveal-output".into(),
+                    kind: crate::job_dto::JobActionKindDto::Reveal,
+                    artifact_id: "output".into(),
+                }],
+            )
+            .unwrap();
+        let mut snapshots = registry.subscribe_job_snapshot(&job.job_id).unwrap();
+        let _ = snapshots.borrow_and_update();
+        registry
+            .commit_completed(
+                &job.job_id,
+                JobKindDto::ZipCreate,
+                JobTerminalSummaryDto {
+                    written_entries: 1,
+                    skipped_entries: None,
+                    written_bytes: 10,
+                    warnings: Vec::new(),
+                },
+            )
+            .unwrap();
+        assert!(snapshots.has_changed().unwrap());
+        let terminal = snapshots.borrow_and_update().clone();
+        assert_eq!(terminal.status, JobStatusDto::Completed);
+        assert!(terminal.terminal_summary.is_some());
+        assert_eq!(terminal.output_artifacts.len(), 1);
+        assert_eq!(terminal.available_actions.len(), 1);
+        assert!(!snapshots.has_changed().unwrap());
+    }
+
+    #[test]
+    fn retained_retry_descriptor_is_typed_camel_case_and_secret_free() {
+        let registry = JobRegistry::new();
+        let (job, _) = registry.create_job(JobKindDto::ZipExtract);
+        registry
+            .configure_recovery_facts(
+                &job.job_id,
+                Some(JobRetryDescriptorDto::ExtractArchive {
+                    action_id: "retry-with-password".into(),
+                    archive_path: "/tmp/source.zip".into(),
+                    destination_path: "/tmp/output".into(),
+                    overwrite: crate::dto::OverwritePolicyDto::Ask,
+                    destination_collision_strategy:
+                        crate::dto::DestinationCollisionStrategyDto::Refuse,
+                    entry_paths: vec!["file.txt".into()],
+                    strip_components: 0,
+                }),
+                Vec::new(),
+                Vec::new(),
+            )
+            .unwrap();
+        let mut failure = JobEventDto::new(JobEventKindDto::Failed);
+        failure.code = Some("password_required");
+        failure.retryable = Some(true);
+        registry.emit_direct_event(&job.job_id, failure);
+        let value =
+            serde_json::to_value(&*registry.current_job_snapshot(&job.job_id).unwrap()).unwrap();
+        assert_eq!(value["retryDescriptor"]["retryKind"], "extractArchive");
+        assert_eq!(value["retryDescriptor"]["actionId"], "retry-with-password");
+        assert_eq!(value["retryDescriptor"]["archivePath"], "/tmp/source.zip");
+        assert!(!value.to_string().contains("password\":"));
+    }
+
+    #[test]
+    fn retention_uses_process_terminal_order_not_per_job_revision() {
+        let registry = JobRegistry::new();
+        let (oldest, _) = registry.create_job(JobKindDto::ZipCreate);
+        for _ in 0..20 {
+            registry.emit_direct_event(&oldest.job_id, JobEventDto::new(JobEventKindDto::Warning));
+        }
+        registry.emit_direct_event(&oldest.job_id, JobEventDto::new(JobEventKindDto::Completed));
+        let (newer, _) = registry.create_job(JobKindDto::ZipCreate);
+        registry.emit_direct_event(&newer.job_id, JobEventDto::new(JobEventKindDto::Completed));
+        for _ in 2..MAX_RETAINED_TERMINAL_JOBS {
+            let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+            registry.emit_direct_event(&job.job_id, JobEventDto::new(JobEventKindDto::Completed));
+        }
+        let _ = registry.create_job(JobKindDto::ZipCreate);
+        assert!(registry.current_job_snapshot(&oldest.job_id).is_none());
+        assert!(registry.current_job_snapshot(&newer.job_id).is_some());
     }
 
     #[test]

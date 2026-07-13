@@ -31,10 +31,11 @@ use crate::{
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
-        JobCatalogEnvelopeDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
-        JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
+        JobActionKindDto, JobArtifactKindDto, JobAvailableActionDto, JobCatalogEnvelopeDto,
+        JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobOutputArtifactDto,
+        JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
     },
-    job_registry::{JobEventCollector, JobRegistry, SubscriptionCommand},
+    job_registry::{JobEventCollector, JobRegistry, forward_latest_values},
     quick_action::QuickActionLaunchCoordinator,
 };
 use zmanager_core::apple_archive_backend::AppleArchiveError;
@@ -374,7 +375,50 @@ pub(crate) fn start_create_internal(
         crate::dto::ArchiveFormatDto::SevenZ => JobKindDto::SevenZCreate,
     };
 
+    let password = request
+        .password
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    if let Some(certificates) = request.tzap_certificates.as_ref() {
+        let has_signing_certificate = certificates
+            .signing_certificate_path
+            .as_deref()
+            .is_some_and(|path| !path.trim().is_empty());
+        let has_signing_key = certificates
+            .signing_private_key_path
+            .as_deref()
+            .is_some_and(|path| !path.trim().is_empty());
+        if has_signing_certificate != has_signing_key {
+            return Err(CommandErrorDto::invalid_request(
+                "TZAP signing requires both a certificate and a matching private key",
+            ));
+        }
+        if !certificates.recipient_certificate_paths.is_empty() && password.is_some() {
+            return Err(CommandErrorDto::invalid_request(
+                "TZAP recipient-certificate encryption cannot be combined with a password",
+            ));
+        }
+    }
+
     let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
+    registry
+        .configure_recovery_facts(
+            &response.job_id,
+            None,
+            vec![JobOutputArtifactDto {
+                artifact_id: "output".into(),
+                kind: JobArtifactKindDto::Archive,
+                path: destination_path.clone(),
+            }],
+            vec![JobAvailableActionDto {
+                action_id: "reveal-output".into(),
+                kind: JobActionKindDto::Reveal,
+                artifact_id: "output".into(),
+            }],
+        )
+        .map_err(subscription_error)?;
     if let Some((total_entries, total_bytes)) = create_progress_estimate {
         registry.emit_direct_event(
             &response.job_id,
@@ -399,10 +443,6 @@ pub(crate) fn start_create_internal(
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
-    let password = request
-        .password
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
     let replace_existing = request.replace_existing;
     let preserve_metadata = request.preserve_metadata;
     let compression_level = request.compression_level;
@@ -419,26 +459,6 @@ pub(crate) fn start_create_internal(
     let seven_z_chunk_size = request.seven_z_chunk_size.filter(|value| *value > 0);
     let seven_z_encrypt_file_names = request.seven_z_encrypt_file_names.unwrap_or(true);
     let tzap_certificates = request.tzap_certificates;
-    if let Some(certificates) = tzap_certificates.as_ref() {
-        let has_signing_certificate = certificates
-            .signing_certificate_path
-            .as_deref()
-            .is_some_and(|path| !path.trim().is_empty());
-        let has_signing_key = certificates
-            .signing_private_key_path
-            .as_deref()
-            .is_some_and(|path| !path.trim().is_empty());
-        if has_signing_certificate != has_signing_key {
-            return Err(CommandErrorDto::invalid_request(
-                "TZAP signing requires both a certificate and a matching private key",
-            ));
-        }
-        if !certificates.recipient_certificate_paths.is_empty() && password.is_some() {
-            return Err(CommandErrorDto::invalid_request(
-                "TZAP recipient-certificate encryption cannot be combined with a password",
-            ));
-        }
-    }
     let format = request.format;
 
     let request_sources = sources;
@@ -814,6 +834,30 @@ pub(crate) fn start_extract_internal(
     };
 
     let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
+    registry
+        .configure_recovery_facts(
+            &response.job_id,
+            Some(JobRetryDescriptorDto::ExtractArchive {
+                action_id: "retry-with-password".into(),
+                archive_path: archive_path.clone(),
+                destination_path: destination_path.clone(),
+                overwrite: request.overwrite,
+                destination_collision_strategy: request.destination_collision_strategy,
+                entry_paths: entry_paths.clone(),
+                strip_components: request.strip_components,
+            }),
+            vec![JobOutputArtifactDto {
+                artifact_id: "output".into(),
+                kind: JobArtifactKindDto::Directory,
+                path: destination_path.clone(),
+            }],
+            vec![JobAvailableActionDto {
+                action_id: "open-output".into(),
+                kind: JobActionKindDto::Open,
+                artifact_id: "output".into(),
+            }],
+        )
+        .map_err(subscription_error)?;
     if let Some((total_entries, total_bytes)) = extract_progress_estimate {
         registry.emit_direct_event(
             &response.job_id,
@@ -941,36 +985,7 @@ fn complete_job_if_needed(
     kind: JobKindDto,
     summary: JobTerminalSummaryDto,
 ) {
-    let written_entries = summary.written_entries;
-    let written_bytes = summary.written_bytes;
-    registry.set_terminal_summary(job_id, summary);
-
-    if registry
-        .snapshot(job_id)
-        .is_some_and(|snapshot| snapshot.status.is_terminal())
-    {
-        return;
-    }
-
-    registry.emit_direct_event(
-        job_id,
-        JobEventDto {
-            event_type: JobEventKindDto::Completed,
-            job_kind: Some(kind),
-            phase: None,
-            code: None,
-            hint: None,
-            severity: None,
-            retryable: None,
-            path: None,
-            bytes: Some(written_bytes),
-            total_bytes: None,
-            total_bytes_processed: Some(written_bytes),
-            entries: Some(written_entries),
-            total_entries: Some(written_entries),
-            message: None,
-        },
-    );
+    let _ = registry.commit_completed(job_id, kind, summary);
 }
 
 fn archive_extract_progress_estimate(
@@ -1096,11 +1111,24 @@ fn start_test_archive_internal(
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
+    let retry_entry_paths = entry_paths.clone();
     let selected_entry_keys = Arc::new(entry_paths.into_iter().collect::<HashSet<_>>());
     let family = detect_archive_family(&archive_path);
 
     let (response, _token) = registry
         .try_create_job(JobKindDto::TestArchive)
+        .map_err(subscription_error)?;
+    registry
+        .configure_recovery_facts(
+            &response.job_id,
+            Some(JobRetryDescriptorDto::TestArchive {
+                action_id: "retry-with-password".into(),
+                archive_path: archive_path.clone(),
+                entry_paths: retry_entry_paths,
+            }),
+            Vec::new(),
+            Vec::new(),
+        )
         .map_err(subscription_error)?;
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
@@ -1173,28 +1201,8 @@ fn start_test_archive_internal(
 
         match result {
             Ok(summary) => {
-                let written_entries = summary.written_entries;
-                let written_bytes = summary.written_bytes;
-                registry_for_thread.set_terminal_summary(&job_id, summary);
-                registry_for_thread.emit_direct_event(
-                    &job_id,
-                    JobEventDto {
-                        event_type: JobEventKindDto::Completed,
-                        job_kind: Some(JobKindDto::TestArchive),
-                        phase: None,
-                        code: None,
-                        hint: None,
-                        severity: None,
-                        retryable: None,
-                        path: None,
-                        bytes: Some(written_bytes),
-                        total_bytes: None,
-                        total_bytes_processed: None,
-                        entries: Some(written_entries),
-                        total_entries: Some(written_entries),
-                        message: None,
-                    },
-                );
+                let _ =
+                    registry_for_thread.commit_completed(&job_id, JobKindDto::TestArchive, summary);
             }
             Err(error) => {
                 registry_for_thread.emit_direct_event(
@@ -1321,23 +1329,6 @@ fn run_selected_extract_job(
         ));
     }
 
-    sink.emit_direct(JobEventDto {
-        event_type: JobEventKindDto::Completed,
-        job_kind: Some(kind),
-        phase: None,
-        code: None,
-        hint: None,
-        severity: None,
-        retryable: None,
-        path: None,
-        bytes: Some(written_bytes),
-        total_bytes: None,
-        total_bytes_processed: Some(written_bytes),
-        entries: Some(written_entries),
-        total_entries: Some(entry_paths.len()),
-        message: None,
-    });
-
     Ok(JobTerminalSummaryDto {
         written_entries,
         skipped_entries: None,
@@ -1391,54 +1382,28 @@ pub fn subscribe_job(
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
     let owner = window.label().to_string();
-    let (subscription_id, mut snapshots, mut commands, shared_in_flight) = registry
+    let (subscription_id, snapshots, commands, shared_flow) = registry
         .register_job_subscription(&owner, job_id)
         .map_err(subscription_error)?;
     let registry = registry.inner().clone();
     let task_subscription_id = subscription_id.clone();
     tauri::async_runtime::spawn(async move {
-        let mut current = snapshots.borrow_and_update().clone();
-        let mut in_flight = current.revision.parse::<u64>().ok();
-        *shared_in_flight
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = in_flight;
-        if on_snapshot
-            .send(JobSnapshotEnvelopeDto {
-                subscription_id: task_subscription_id.clone(),
-                revision: current.revision.clone(),
-                payload: (*current).clone(),
-            })
-            .is_err()
-        {
-            registry.cleanup_subscription(&task_subscription_id);
-            return;
-        }
-        loop {
-            tokio::select! {
-                command = commands.recv() => match command {
-                    Some(SubscriptionCommand::Stop) | None => break,
-                    Some(SubscriptionCommand::Ack(revision)) if Some(revision) == in_flight => {
-                        let newest = current.revision.parse::<u64>().unwrap_or_default();
-                        if newest > revision {
-                            in_flight = Some(newest);
-                            *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
-                            if on_snapshot.send(JobSnapshotEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.revision.clone(), payload: (*current).clone() }).is_err() { break; }
-                        } else { in_flight = None; *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = None; }
-                    }
-                    Some(SubscriptionCommand::Ack(_)) => {}
-                },
-                changed = snapshots.changed() => {
-                    if changed.is_err() { break; }
-                    current = snapshots.borrow_and_update().clone();
-                    if in_flight.is_none() {
-                        let revision = current.revision.parse::<u64>().unwrap_or_default();
-                        in_flight = Some(revision);
-                        *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
-                        if on_snapshot.send(JobSnapshotEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.revision.clone(), payload: (*current).clone() }).is_err() { break; }
-                    }
-                }
-            }
-        }
+        forward_latest_values(
+            snapshots,
+            commands,
+            shared_flow,
+            |snapshot| snapshot.revision.parse::<u64>().ok(),
+            |current| {
+                on_snapshot
+                    .send(JobSnapshotEnvelopeDto {
+                        subscription_id: task_subscription_id.clone(),
+                        revision: current.revision.clone(),
+                        payload: (*current).clone(),
+                    })
+                    .map_err(|_| ())
+            },
+        )
+        .await;
         registry.cleanup_subscription(&task_subscription_id);
     });
     Ok(subscription_id)
@@ -1451,54 +1416,28 @@ pub fn subscribe_job_catalog(
     registry: State<'_, JobRegistry>,
 ) -> Result<String, CommandErrorDto> {
     let owner = window.label().to_string();
-    let (subscription_id, mut snapshots, mut commands, shared_in_flight) = registry
+    let (subscription_id, snapshots, commands, shared_flow) = registry
         .register_catalog_subscription(&owner)
         .map_err(subscription_error)?;
     let registry = registry.inner().clone();
     let task_subscription_id = subscription_id.clone();
     tauri::async_runtime::spawn(async move {
-        let mut current = snapshots.borrow_and_update().clone();
-        let mut in_flight = current.catalog_revision.parse::<u64>().ok();
-        *shared_in_flight
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = in_flight;
-        if on_snapshot
-            .send(JobCatalogEnvelopeDto {
-                subscription_id: task_subscription_id.clone(),
-                revision: current.catalog_revision.clone(),
-                payload: (*current).clone(),
-            })
-            .is_err()
-        {
-            registry.cleanup_subscription(&task_subscription_id);
-            return;
-        }
-        loop {
-            tokio::select! {
-                command = commands.recv() => match command {
-                    Some(SubscriptionCommand::Stop) | None => break,
-                    Some(SubscriptionCommand::Ack(revision)) if Some(revision) == in_flight => {
-                        let newest = current.catalog_revision.parse::<u64>().unwrap_or_default();
-                        if newest > revision {
-                            in_flight = Some(newest);
-                            *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
-                            if on_snapshot.send(JobCatalogEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.catalog_revision.clone(), payload: (*current).clone() }).is_err() { break; }
-                        } else { in_flight = None; *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = None; }
-                    }
-                    Some(SubscriptionCommand::Ack(_)) => {}
-                },
-                changed = snapshots.changed() => {
-                    if changed.is_err() { break; }
-                    current = snapshots.borrow_and_update().clone();
-                    if in_flight.is_none() {
-                        let revision = current.catalog_revision.parse::<u64>().unwrap_or_default();
-                        in_flight = Some(revision);
-                        *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
-                        if on_snapshot.send(JobCatalogEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.catalog_revision.clone(), payload: (*current).clone() }).is_err() { break; }
-                    }
-                }
-            }
-        }
+        forward_latest_values(
+            snapshots,
+            commands,
+            shared_flow,
+            |snapshot| snapshot.catalog_revision.parse::<u64>().ok(),
+            |current| {
+                on_snapshot
+                    .send(JobCatalogEnvelopeDto {
+                        subscription_id: task_subscription_id.clone(),
+                        revision: current.catalog_revision.clone(),
+                        payload: (*current).clone(),
+                    })
+                    .map_err(|_| ())
+            },
+        )
+        .await;
         registry.cleanup_subscription(&task_subscription_id);
     });
     Ok(subscription_id)

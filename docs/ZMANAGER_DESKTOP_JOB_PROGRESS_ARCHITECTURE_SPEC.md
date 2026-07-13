@@ -1,6 +1,6 @@
 # ZManager Desktop Job Feed Architecture Specification
 
-- Status: Proposed
+- Status: Implemented
 - Scope: ZManager Desktop Rust command layer, Job Registry, desktop adapters,
   application workspaces, Main Window, and Disposable Task Windows
 - Companion: [`ZMANAGER_CORE_JOB_PROGRESS_ARCHITECTURE_SPEC.md`](ZMANAGER_CORE_JOB_PROGRESS_ARCHITECTURE_SPEC.md)

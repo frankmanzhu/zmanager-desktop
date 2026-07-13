@@ -222,7 +222,7 @@ pub enum ArchiveFormatDto {
     SevenZ,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum DestinationCollisionStrategyDto {
     Refuse,
@@ -453,7 +453,7 @@ pub struct DismissJobRequest {
     pub job_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum OverwritePolicyDto {
     Refuse,
