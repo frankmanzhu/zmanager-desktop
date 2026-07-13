@@ -41,6 +41,8 @@ describe("React create workspace", () => {
     expect(html).toContain('id="compress-options-panel"');
     expect(html).toMatch(/<details[^>]*id="compress-options-panel"[^>]*open=""/);
     expect(html).toContain('id="create-format"');
+    expect(html).toMatch(/id="create-compression-level"[\s\S]*value="0">Store<[\s\S]*value="1">Fastest<[\s\S]*value="3">Fast<[\s\S]*value="9">Maximum<[\s\S]*value="22">Ultra</);
+    expect(html).not.toContain('<option value="5">5</option>');
   });
 
   it("labels the compress workspace from the destination archive name", () => {

@@ -13,6 +13,7 @@ import { formatVolumeSize, formatVolumeSizePresetList, parseVolumeSizePresetList
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
 
 type PreferencePage = "folders" | "archive" | "extraction" | "interface" | "safety";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
@@ -287,18 +288,12 @@ function ArchiveDefaultsPage({
         <div className="setting-row" hidden={!capabilities.compressionLevel}>
           <label htmlFor="pref-create-compression-level">{i18n.t("preferences.archiveDefaults.compressionLevel")}</label>
           <div className="setting-control">
-            <select
+            <CompressionLevelSelect
               id="pref-create-compression-level"
-              value={defaults.compressionLevel ?? ""}
+              value={defaults.compressionLevel}
+              i18n={i18n}
               onChange={(event) => patchCreateDefaults(actions, selectedCreateFormat, { compressionLevel: optionalNumber(event.currentTarget.value) })}
-            >
-              <option value="">{i18n.t("preferences.archiveDefaults.backendDefault")}</option>
-              <option value="0">{i18n.t("common.store")}</option>
-              <option value="1">{i18n.t("common.fastest")}</option>
-              <option value="3">{i18n.t("common.fast")}</option>
-              <option value="9">{i18n.t("common.maximum")}</option>
-              <option value="22">{i18n.t("common.ultra")}</option>
-            </select>
+            />
           </div>
         </div>
         <div className="setting-row" hidden={!capabilities.splitVolumes}>

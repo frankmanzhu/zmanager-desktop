@@ -9,6 +9,7 @@ import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { nativeIconDataUrlForPath } from "../systemFileIcons";
 import type { ZManagerReactActions, ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "./CreatePasswordContext";
+import { CompressionLevelSelect } from "./CompressionLevelSelect";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { WorkspaceBrowserShell } from "../workspace/WorkspaceBrowserShell";
 import { WorkspacePathBar } from "../workspace/WorkspacePathBar";
@@ -649,7 +650,7 @@ function CreateOptions() {
         </div>
         <div className="form-grid create-options-grid !gap-3">
           <label className="!grid-cols-1 !items-stretch !gap-1.5"><span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 [@media(max-height:560px)]:!hidden">{i18n.t("create.archiveFormat")}</span><select className="w-full" id="create-format" value={options.format} onChange={(event) => actions.handleCreateIntent({ type: "changeFormat", format: event.currentTarget.value as typeof options.format })}><option value="zip">ZIP</option><option value="tarZst">TZST</option><option value="tzap">TZAP</option><option value="sevenZ">7Z</option></select></label>
-          <label className="!grid-cols-1 !items-stretch !gap-1.5"><span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 [@media(max-height:560px)]:!hidden">{i18n.t("create.compressionLevel")}</span><select className="w-full" id="create-compression-level" value={options.compressionLevel ?? ""} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { compressionLevel: event.currentTarget.value } })}><option value="">{i18n.t("preferences.archiveDefaults.backendDefault")}</option><option value="0">0</option><option value="5">5</option><option value="9">9</option></select></label>
+          <label className="!grid-cols-1 !items-stretch !gap-1.5"><span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 [@media(max-height:560px)]:!hidden">{i18n.t("create.compressionLevel")}</span><CompressionLevelSelect id="create-compression-level" className="w-full" value={options.compressionLevel} i18n={i18n} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { compressionLevel: event.currentTarget.value } })} /></label>
           <div className="col-span-full grid gap-1.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
             <label className="checkbox-row min-h-9 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"><input id="create-clean-source" type="checkbox" checked={options.cleanSource} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { cleanSource: event.currentTarget.checked } })} /><span>{i18n.t("create.cleanSource")}</span></label>
             <label className="checkbox-row min-h-9 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"><input id="create-respect-gitignore" type="checkbox" checked={options.respectGitignore} onChange={(event) => actions.handleCreateIntent({ type: "setOptions", patch: { respectGitignore: event.currentTarget.checked } })} /><span>{i18n.t("create.respectGitignore")}</span></label>
