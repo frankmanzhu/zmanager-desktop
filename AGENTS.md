@@ -18,7 +18,7 @@ This is a single-context repository with `CONTEXT.md` at the root and architectu
 
 ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. Keep it separate from the macOS SwiftUI app; do not reimplement archive behavior in TypeScript.
 
-- `src/`: Vite/TypeScript frontend. `src/app` owns workflow state, pure behavior, and effect interfaces; `src/api` owns command DTOs and invoke wrappers; `src/ui` owns rendering and DOM event adapters; `src/desktop` owns concrete runtime/path/window/native integration.
+- `src/`: Vite/TypeScript frontend. `src/app` owns workflow state, pure behavior, and effect interfaces; `src/api` owns command DTOs and invoke wrappers; `src/ui` owns React rendering and UI event adapters; `src/desktop` owns concrete runtime/path/window/native integration.
 - `src/app/shell/`: target home for app-wide shell state such as active workspace mode, status, drop decisions, quick-action startup state, preview cleanup metadata, and path-history snapshots.
 - `src/app/workspaces/`: target home for deep workflow modules such as Archive Workspace, Create Workspace, and Jobs Workspace.
 - `src/app/commands/`: target home for command routing that unifies toolbar, menu, shortcut, context-menu, details-pane, tree, and row-action execution.
@@ -51,6 +51,16 @@ Use explicit TypeScript module names such as `extractFlow.ts` and `archiveTable.
 
 Rust code should keep app-facing mapping in Tauri commands and leave archive behavior in `zmanager-core`. Do not add macOS SwiftUI, Finder Sync, Quick Look, signing, notarization, or `.app` packaging code.
 
+## Frontend UI Technology Rule
+
+All new frontend UI and all modifications to existing frontend UI must use React, shadcn/ui components, and Tailwind CSS 4 utilities.
+
+- Build rendering and interaction surfaces as React components. Do not add or extend vanilla DOM rendering, imperative HTML construction, `innerHTML`, manual element creation, or standalone DOM event wiring for product UI.
+- Prefer existing shadcn/ui components under `src/ui/components/ui`. When a required primitive is missing, add the standard shadcn/ui-style component backed by its normal Radix dependency, then reuse it rather than creating a one-off control.
+- Style new and modified UI with Tailwind CSS 4 utility classes. Do not add raw CSS rules, CSS modules, inline style objects, or new legacy class-based styling for product UI.
+- Existing vanilla DOM and raw CSS are legacy migration surfaces, not patterns to copy. Changes touching them must move the affected UI toward React, shadcn/ui, and Tailwind CSS 4 rather than expanding the legacy implementation.
+- TypeScript remains the implementation language for React components, application state, controllers, adapters, DTOs, and tests. This rule prohibits vanilla TypeScript DOM UI, not typed non-UI application logic.
+
 ## Frontend Architecture Goals
 
 Treat `src/main.ts` as the composition root, not the application architecture. It may query stable DOM roots, instantiate adapters/controllers/workspaces, bind top-level startup, and connect render functions to snapshots. Do not add new durable workflow state, table row derivation, command execution switches, selection/focus logic, job lifecycle state, password retry state, preview cleanup state, drop decision state, path-history normalization, preference patching, locale/display refresh, or desktop request construction to `main.ts`.
@@ -60,7 +70,7 @@ Prefer deep modules with small interfaces over shallow helper extraction. The cu
 Keep ownership clear:
 
 - `src/app`: workflow state, state transitions, request readiness, pure derivations, and interfaces for injected effects. App modules may depend on DTO types but should not call Tauri directly.
-- `src/ui`: HTML rendering and DOM event decoding. UI modules emit typed intents and render snapshots; they should not duplicate workflow decisions.
+- `src/ui`: React rendering and UI event decoding. UI modules emit typed intents and render snapshots; they should not duplicate workflow decisions. New and modified UI must follow the React, shadcn/ui, and Tailwind CSS 4 rule above.
 - `src/api`: serializable DTOs and Tauri invoke wrappers only.
 - `src/desktop`: concrete runtime adapters for native dialogs, file manager actions, Tauri events, window control, native drag-out, file drop, preview cleanup, clipboard, timers, and platform path helpers.
 

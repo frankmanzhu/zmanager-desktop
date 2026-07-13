@@ -11,6 +11,7 @@ import { createDefaultsForFormat, type AppPreferences, type FormatCreateDefaults
 import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize, formatVolumeSizePresetList, parseVolumeSizePresetList } from "../../../app/volumeSizePresets";
 import { Button } from "../../components/ui/button";
+import { HelpTooltip } from "../../components/ui/tooltip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
@@ -342,14 +343,14 @@ function ArchiveDefaultsPage({
         </div>}
       </section> : null}
       <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
-        <PreferenceCheckbox id="pref-create-clean-source" label={i18n.t("create.cleanSource")} checked={defaults.cleanSource} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { cleanSource: checked })} />
-        <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
-        <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
-        <PreferenceCheckbox id="pref-create-preserve-metadata" label={i18n.t("create.preserveMetadata")} checked={defaults.preserveMetadata} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { preserveMetadata: checked })} />
-        <PreferenceCheckbox id="pref-create-replace-existing" label={i18n.t("create.replaceExisting")} checked={defaults.replaceExisting} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { replaceExisting: checked })} />
-        <PreferenceCheckbox id="pref-create-prompt-password" label={i18n.t("create.promptForPassword")} checked={supportsPassword && defaults.promptForPassword} disabled={!supportsPassword} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { promptForPassword: checked })} />
-        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-solid" label={i18n.t("create.sevenZSolid")} checked={defaults.sevenZSolid ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZSolid: checked })} /> : null}
-        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-encrypt-names" label={i18n.t("create.sevenZEncryptFileNames")} checked={defaults.sevenZEncryptFileNames ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZEncryptFileNames: checked })} /> : null}
+        <PreferenceCheckbox id="pref-create-clean-source" label={i18n.t("create.cleanSource")} tooltip={i18n.t("create.cleanSource.tooltip")} checked={defaults.cleanSource} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { cleanSource: checked })} />
+        <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} tooltip={i18n.t("create.respectGitignore.tooltip")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
+        <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} tooltip={i18n.t("create.followSymlinks.tooltip")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
+        <PreferenceCheckbox id="pref-create-preserve-metadata" label={i18n.t("create.preserveMetadata")} tooltip={i18n.t(`create.preserveMetadata.${selectedCreateFormat}.tooltip`)} checked={defaults.preserveMetadata} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { preserveMetadata: checked })} />
+        <PreferenceCheckbox id="pref-create-replace-existing" label={i18n.t("create.replaceExisting")} tooltip={i18n.t("create.replaceExisting.tooltip")} checked={defaults.replaceExisting} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { replaceExisting: checked })} />
+        <PreferenceCheckbox id="pref-create-prompt-password" label={i18n.t("create.promptForPassword")} tooltip={i18n.t("create.promptForPassword.tooltip")} checked={supportsPassword && defaults.promptForPassword} disabled={!supportsPassword} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { promptForPassword: checked })} />
+        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-solid" label={i18n.t("create.sevenZSolid")} tooltip={i18n.t("create.sevenZSolid.tooltip")} checked={defaults.sevenZSolid ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZSolid: checked })} /> : null}
+        {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-encrypt-names" label={i18n.t("create.sevenZEncryptFileNames")} tooltip={i18n.t("create.sevenZEncryptFileNames.tooltip")} checked={defaults.sevenZEncryptFileNames ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZEncryptFileNames: checked })} /> : null}
       </div>
       <p className="setting-description mt-2"><span className="quick-action-badge">{i18n.t("preferences.quickActions.badge")}</span> <span>{i18n.t("preferences.safety.quickDescription")}</span></p>
     </section>
@@ -506,21 +507,22 @@ function SafetyPage({
 function PreferenceCheckbox({
   id,
   label,
+  tooltip,
   checked,
   disabled = false,
   onChange,
 }: Readonly<{
   id: string;
   label: string;
+  tooltip?: string;
   checked: boolean;
   disabled?: boolean;
   onChange(checked: boolean): void;
 }>) {
-  return (
-    <label className="toggle-line">
+  const checkbox = <label className="toggle-line">
       <input id={id} type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.currentTarget.checked)} /> <span>{label}</span>
-    </label>
-  );
+    </label>;
+  return tooltip ? <HelpTooltip content={tooltip}>{checkbox}</HelpTooltip> : checkbox;
 }
 
 function FormatSelect({

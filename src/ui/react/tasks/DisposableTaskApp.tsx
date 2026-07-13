@@ -9,6 +9,7 @@ import {
 } from "../../../app/workspaces/disposableTask";
 import { formatBytes } from "../../../app/formatting";
 import { Button } from "../../components/ui/button";
+import { HelpTooltip } from "../../components/ui/tooltip";
 
 export function DisposableTaskView({
   state,
@@ -37,7 +38,7 @@ export function DisposableTaskView({
   const subtitle = taskKindLabel(state.job.kind);
   const failedEvent = state.job.latestFailure;
 
-  return <main className="flex min-h-screen flex-col bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
+  return <main className="flex min-h-screen min-w-0 max-w-full flex-col overflow-hidden bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
     <header className="flex items-start justify-between border-b border-black/10 px-5 py-4 dark:border-white/10">
       <div className="flex min-w-0 items-center gap-3">
         <div className="rounded-xl bg-blue-600 p-2.5 text-white shadow-sm">{create ? <Archive className="size-5" /> : <FileArchive className="size-5" />}</div>
@@ -46,10 +47,12 @@ export function DisposableTaskView({
       <Button type="button" variant="ghost" size="icon" aria-label="Close task" onClick={onClose}><X className="size-4" /></Button>
     </header>
 
-    <section className="grid flex-1 content-start gap-5 px-5 py-5">
-      <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+    <section className="grid min-w-0 flex-1 content-start gap-5 overflow-hidden px-5 py-5">
+      <div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
         <div className="mb-3 flex items-center justify-between gap-3"><TaskState state={state} /><span className="text-xs tabular-nums opacity-60">{formatClock(progress.elapsedMs)}</span></div>
-        <p className="mb-3 min-h-5 truncate text-sm font-medium" title={progress.currentFile}>{progress.currentFile || taskPhaseLabel(progress.phase) || statusText(state)}</p>
+        {progress.currentFile
+          ? <HelpTooltip content={progress.currentFile}><p className="mb-3 min-h-5 max-w-full truncate text-sm font-medium">{compactProgressPath(progress.currentFile)}</p></HelpTooltip>
+          : <p className="mb-3 min-h-5 max-w-full truncate text-sm font-medium">{taskPhaseLabel(progress.phase) || statusText(state)}</p>}
         <progress className="h-2 w-full overflow-hidden rounded-full" aria-label="Task progress" value={progress.progressPercent ?? undefined} max="100" />
         <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
           <Metric label="Files" value={progress.totalFiles === null ? String(progress.processedFiles) : `${progress.processedFiles} / ${progress.totalFiles}`} />
@@ -127,4 +130,16 @@ function formatClock(milliseconds: number | null): string {
   return hours > 0
     ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`
     : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function compactProgressPath(path: string | null, maxCharacters = 64): string {
+  if (!path || path.length <= maxCharacters) return path ?? "";
+
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  const tail = parts.slice(-2).join("/");
+  if (tail.length <= maxCharacters - 2) return `…/${tail}`;
+
+  const fileName = parts.at(-1) ?? path;
+  if (fileName.length <= maxCharacters - 2) return `…/${fileName}`;
+  return `…${fileName.slice(-(maxCharacters - 1))}`;
 }
