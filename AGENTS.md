@@ -109,6 +109,11 @@ Use the repository's configured SSH remote for Git pushes. A missing `gh` CLI lo
 does not block committing or pushing when SSH authentication is available; require
 `gh` authentication only for GitHub API operations such as creating a pull request.
 
+Do not create or leave feature branches without explicit user permission. If a
+feature branch is used with permission, merge it into `main` and delete the local
+and remote branch after verification unless the user explicitly requests that it
+remain available.
+
 ## Security & Architecture Rules
 
 Passwords must never be logged, persisted in frontend storage, passed through command-line arguments, or included in diagnostics. Extraction safety must remain core-owned; do not bypass path normalization, collision handling, overwrite policy, symlink/hardlink checks, or zip-bomb guards. Keep command contracts small: plan, list, extract, create, test, cancel, and poll events.
