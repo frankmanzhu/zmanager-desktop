@@ -9,6 +9,7 @@ created_node_modules=0
 cleanup() {
   rm -rf "$test_root"
   rm -f src-tauri/target/release/bundle/deb/ZManager_test_amd64.deb
+  rm -f /tmp/zmanager-desktop-rpm/ZManager_test_x86_64.rpm
   if ((created_node_modules)); then
     rm -rf node_modules
   fi
@@ -72,6 +73,10 @@ if [[ "$*" == "run tauri -- build --bundles deb" ]]; then
   mkdir -p src-tauri/target/release/bundle/deb
   printf 'test deb\n' >src-tauri/target/release/bundle/deb/ZManager_test_amd64.deb
 fi
+if [[ "$*" == *"run tauri -- build --bundles rpm"* ]]; then
+  mkdir -p "${CARGO_TARGET_DIR:?}/release/bundle/rpm"
+  printf 'test rpm\n' >"$CARGO_TARGET_DIR/release/bundle/rpm/ZManager_test_x86_64.rpm"
+fi
 EOF
 
 write_stub rustc <<'EOF'
@@ -130,6 +135,25 @@ if ! grep -q 'apt-get install -y .*pkg-config' "$log_file"; then
   exit 1
 fi
 
+ubuntu_install_line="$(grep '^apt-get install -y ' "$log_file")"
+ubuntu_libarchive_packages=(
+  libacl1-dev
+  libbz2-dev
+  libexpat1-dev
+  liblz4-dev
+  liblzma-dev
+  libssl-dev
+  libxml2-dev
+  libzstd-dev
+  zlib1g-dev
+)
+for package_name in "${ubuntu_libarchive_packages[@]}"; do
+  if [[ " $ubuntu_install_line " != *" $package_name "* ]]; then
+    echo "Expected --install-deps to install Ubuntu libarchive dependency $package_name." >&2
+    exit 1
+  fi
+done
+
 if ! grep -q 'npm install' "$log_file"; then
   echo "Expected incomplete node_modules to be repaired with npm install." >&2
   exit 1
@@ -137,6 +161,62 @@ fi
 
 if [[ ! -f "$stage_dir/ZManager_test_amd64.deb" ]]; then
   echo "Expected the test .deb to be staged under the configured stage directory." >&2
+  exit 1
+fi
+
+: >"$log_file"
+
+write_stub dnf <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'dnf %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
+exit 0
+EOF
+
+write_stub rpm <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'rpm %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
+if [[ "${1:-}" == "-q" ]]; then
+  exit 1
+fi
+exit 0
+EOF
+
+write_stub rpmbuild <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "rpmbuild test stub"
+EOF
+
+fedora_target_dir="$test_root/fedora-target"
+PATH="$bin_dir:$PATH" \
+HOME="$test_root/home" \
+CARGO_TARGET_DIR="$fedora_target_dir" \
+ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
+  bash scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --allow-non-baseline --no-install
+
+fedora_install_line="$(grep '^dnf install -y ' "$log_file")"
+fedora_libarchive_packages=(
+  bzip2-devel
+  expat-devel
+  libacl-devel
+  libzstd-devel
+  libxml2-devel
+  lz4-devel
+  openssl-devel
+  xz-devel
+  zlib-devel
+)
+for package_name in "${fedora_libarchive_packages[@]}"; do
+  if [[ " $fedora_install_line " != *" $package_name "* ]]; then
+    echo "Expected --install-deps to install Fedora libarchive dependency $package_name." >&2
+    exit 1
+  fi
+done
+
+if [[ ! -f /tmp/zmanager-desktop-rpm/ZManager_test_x86_64.rpm ]]; then
+  echo "Expected the test .rpm to be staged under the RPM stage directory." >&2
   exit 1
 fi
 

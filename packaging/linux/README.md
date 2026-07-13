@@ -79,13 +79,14 @@ native archive/link dependencies:
 
 ```sh
 sudo apt-get update
-sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf pkg-config
+sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev liblzma-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev libzstd-dev patchelf pkg-config zlib1g-dev
 ```
 
 These packages provide `cmake` for the bundled libarchive build and required
 `pkg-config` entries such as `gtk+-3.0`, `libsoup-3.0`, and `webkit2gtk-4.1`.
-They also provide native link libraries such as `acl`, `bz2`, `expat`, `lz4`,
-and `xml2`. If they are missing, Cargo fails before packaging, often in
+They also provide every native library enabled by the bundled libarchive build:
+`acl`, `bz2`, `expat`, `lz4`, `lzma`, `zstd`, `zlib`, `xml2`, and OpenSSL. If
+they are missing, Cargo fails before packaging, often in
 `zmanager-libarchive-sys`, `soup3-sys`, WebKit build scripts, or the final Rust
 link step. A missing libsoup package looks like:
 
@@ -111,7 +112,7 @@ Fresh Fedora builders must install Tauri's native GTK/WebKit dependencies,
 RPM build tooling, and native archive/link dependencies:
 
 ```sh
-sudo dnf install ca-certificates cmake curl file gcc gcc-c++ make pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libsoup3-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel bzip2-devel expat-devel libacl-devel lz4-devel libxml2-devel rpm-build patchelf nodejs nautilus-python
+sudo dnf install ca-certificates cmake curl file gcc gcc-c++ make pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libsoup3-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel bzip2-devel expat-devel libacl-devel lz4-devel xz-devel libzstd-devel zlib-devel libxml2-devel rpm-build patchelf nodejs nautilus-python
 ```
 
 You can also run `scripts/build-linux-fedora-rpm.sh --install-deps`. The script

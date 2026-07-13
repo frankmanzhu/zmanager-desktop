@@ -22,7 +22,7 @@ Release baseline:
 
 Ubuntu prerequisites:
   sudo apt-get update
-  sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf pkg-config
+  sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev liblzma-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev libzstd-dev patchelf pkg-config zlib1g-dev
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
   sudo apt-get install nodejs
@@ -109,14 +109,17 @@ ubuntu_packages=(
   libexpat1-dev
   libgtk-3-dev
   liblz4-dev
+  liblzma-dev
   libxml2-dev
   libsoup-3.0-dev
   librsvg2-dev
   libssl-dev
   libwebkit2gtk-4.1-dev
   libxdo-dev
+  libzstd-dev
   patchelf
   pkg-config
+  zlib1g-dev
 )
 
 source_cargo_env() {
