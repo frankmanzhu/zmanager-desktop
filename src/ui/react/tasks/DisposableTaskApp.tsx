@@ -1,7 +1,7 @@
 import { Archive, CircleCheck, CircleX, FileArchive, LoaderCircle, Pause, Play, X } from "lucide-react";
 import { useMemo } from "react";
 
-import { deriveJobProgress } from "../../../app/jobs";
+import { deriveRetainedJobProgress } from "../../../app/jobs";
 import {
   isLiveDisposableTask,
   type DisposableTaskJobSnapshot,
@@ -31,18 +31,11 @@ export function DisposableTaskView({
   onPause(): void;
   onResume(): void;
 }>) {
-  const progress = useMemo(() => deriveJobProgress({
-    snapshot: {
-      ...state.job,
-      events: [...state.job.events],
-      terminalSummary: state.job.terminalSummary,
-    },
-    events: [...state.job.events],
-  }, nowMs), [nowMs, state.job]);
+  const progress = useMemo(() => deriveRetainedJobProgress(state.job), [nowMs, state.job]);
   const create = isCreateKind(state.job.kind);
   const title = create ? "Compressing with ZManager" : "Extracting with ZManager";
   const subtitle = taskKindLabel(state.job.kind);
-  const failedEvent = [...state.job.events].reverse().find((event) => event.eventType === "failed");
+  const failedEvent = state.job.latestFailure;
 
   return <main className="flex min-h-screen flex-col bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
     <header className="flex items-start justify-between border-b border-black/10 px-5 py-4 dark:border-white/10">
@@ -113,7 +106,7 @@ function taskKindLabel(kind: DisposableTaskJobSnapshot["kind"]): string {
   return kind.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (value) => value.toUpperCase());
 }
 
-function taskPhaseLabel(phase: ReturnType<typeof deriveJobProgress>["phase"]): string {
+function taskPhaseLabel(phase: ReturnType<typeof deriveRetainedJobProgress>["phase"]): string {
   switch (phase) {
     case "planningPayload": return "Planning archive…";
     case "planningMetadata": return "Planning archive metadata…";

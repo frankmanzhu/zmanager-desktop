@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createDisposableTask, reduceDisposableTask } from "./disposableTask";
-import type { PollJobEventsResponseDto, StartJobResponseDto } from "../../api/types";
+import type { DesktopJobSnapshotDto, StartJobResponseDto } from "../../api/types";
 
 const started: StartJobResponseDto = {
   jobId: "job-1",
@@ -10,12 +10,15 @@ const started: StartJobResponseDto = {
   createdAt: "2026-07-11T00:00:00Z",
 };
 
-function update(status: PollJobEventsResponseDto["status"]): PollJobEventsResponseDto {
+let revision = 0;
+function update(status: DesktopJobSnapshotDto["status"]): DesktopJobSnapshotDto {
+  revision += 1;
   return {
     ...started,
-    status,
+    status, revision: String(revision), updatedAt: started.createdAt, canPause: status === "running", canResume: status === "paused", canCancel: status === "running" || status === "paused",
     canDismiss: status === "completed" || status === "failed" || status === "cancelled",
-    events: status === "running" ? [{ eventType: "entryStarted", path: "project/readme.md" }] : [],
+    progressFacts: { processedBytes: 0, processedEntries: 0, currentPath: status === "running" ? "project/readme.md" : null, recentPaths: status === "running" ? ["project/readme.md"] : [], phaseProcessedBytes: 0, warningCount: 0, activeElapsedMillis: 0, phaseElapsedMillis: 0 },
+    boundedNotices: [], availableActions: [], outputArtifacts: [],
   };
 }
 

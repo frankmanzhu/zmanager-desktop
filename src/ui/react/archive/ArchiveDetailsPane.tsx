@@ -16,11 +16,11 @@ export function ArchiveDetailsPane() {
   const i18n = translatorForSnapshot(snapshot);
 
   return (
-    <aside id="details-pane" className="details-pane !min-h-0 !overflow-y-auto !bg-slate-50/70 dark:!bg-slate-950/70 [@media(max-height:560px)]:[&_details.advanced-options]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
+    <aside id="details-pane" className="details-pane min-w-0 !min-h-0 !overflow-y-auto !overflow-x-hidden !bg-slate-50/70 dark:!bg-slate-950/70 [@media(max-height:560px)]:[&_details.advanced-options]:!hidden" aria-label={i18n.t("workspace.details.aria")}>
       <div className="pane-header !hidden [@media(max-height:560px)]:!hidden">
         <h2 id="details-pane-title">{i18n.t("compress.options")}</h2>
       </div>
-      <div className="extract-side-pane-content">
+      <div className="extract-side-pane-content min-w-0 overflow-x-hidden">
         <ExtractOptions />
         <TzapVerification />
         <section className="extract-details-section [@media(max-height:560px)]:!hidden" aria-labelledby="extract-details-title">
@@ -99,7 +99,7 @@ function ExtractOptions() {
 
 
   return (
-    <section className="extract-options-panel !space-y-3 !border-0 !bg-transparent !p-3 !shadow-none" aria-labelledby="extract-options-title">
+    <section className="extract-options-panel min-w-0 !space-y-3 !border-0 !bg-transparent !p-3 !shadow-none" aria-labelledby="extract-options-title">
       <div className="flex items-start gap-3 border-b border-slate-200 px-1 pb-4 pt-1 dark:border-slate-800">
         <div className="mt-0.5 rounded-lg bg-blue-600 p-2 text-white shadow-sm"><SlidersHorizontal className="size-4" /></div>
         <div className="min-w-0"><h3 id="extract-options-title" className="text-sm font-semibold tracking-tight">{i18n.t("extract.options.title")}</h3>
@@ -108,7 +108,7 @@ function ExtractOptions() {
       <div className="form-grid extract-options-grid !gap-3 [@media(max-height:560px)]:!grid-cols-2">
         <label className="!grid-cols-1 !items-stretch !gap-1.5">
           <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{i18n.t("extract.pathMode")}</span>
-          <select id="extract-path-mode" value={options.pathMode} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { pathMode: event.currentTarget.value as typeof options.pathMode } })}>
+          <select className="min-w-0 w-full" id="extract-path-mode" value={options.pathMode} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { pathMode: event.currentTarget.value as typeof options.pathMode } })}>
             <option value="full">{i18n.t("extract.pathMode.full")}</option>
             <option value="current">{i18n.t("extract.pathMode.current")}</option>
             <option value="none">{i18n.t("extract.pathMode.none")}</option>
@@ -116,7 +116,7 @@ function ExtractOptions() {
         </label>
         <label className="!grid-cols-1 !items-stretch !gap-1.5">
           <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{i18n.t("extract.overwritePolicy")}</span>
-          <select id="extract-overwrite" value={options.overwrite} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { overwrite: event.currentTarget.value as typeof options.overwrite } })}>
+          <select className="min-w-0 w-full" id="extract-overwrite" value={options.overwrite} onChange={(event) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { overwrite: event.currentTarget.value as typeof options.overwrite } })}>
             <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
             <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
             <option value="rename">{i18n.t("extract.overwrite.rename")}</option>

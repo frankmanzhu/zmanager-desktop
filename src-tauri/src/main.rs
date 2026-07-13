@@ -45,6 +45,13 @@ fn main() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                window
+                    .state::<job_registry::JobRegistry>()
+                    .cleanup_owner_subscriptions(window.label());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::healthcheck,
             commands::project_contract,
@@ -61,7 +68,10 @@ fn main() {
             commands::start_native_file_drag,
             commands::cleanup_preview_roots,
             commands::test_archive,
-            commands::poll_job_events,
+            commands::subscribe_job,
+            commands::subscribe_job_catalog,
+            commands::ack_subscription,
+            commands::unsubscribe_job,
             commands::cancel_job,
             commands::pause_job,
             commands::resume_job,

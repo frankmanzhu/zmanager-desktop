@@ -1,9 +1,8 @@
 import type {
-  JobEventDto,
+  DesktopJobSnapshotDto,
   JobKind,
   JobStatus,
   JobTerminalSummaryDto,
-  PollJobEventsResponseDto,
   StartJobResponseDto,
 } from "../../api/types";
 
@@ -17,15 +16,7 @@ export type DisposableTaskPhase =
   | "cancelled"
   | "closing";
 
-export type DisposableTaskJobSnapshot = Readonly<{
-  jobId: string;
-  kind: JobKind;
-  status: JobStatus;
-  createdAt: string;
-  canDismiss: boolean;
-  events: readonly JobEventDto[];
-  terminalSummary: JobTerminalSummaryDto | null;
-}>;
+export type DisposableTaskJobSnapshot = Readonly<DesktopJobSnapshotDto>;
 
 export type DisposableTaskState = Readonly<{
   phase: DisposableTaskPhase;
@@ -34,7 +25,7 @@ export type DisposableTaskState = Readonly<{
 }>;
 
 export type DisposableTaskEvent =
-  | Readonly<{ type: "jobUpdated"; snapshot: PollJobEventsResponseDto }>
+  | Readonly<{ type: "jobUpdated"; snapshot: DesktopJobSnapshotDto }>
   | Readonly<{ type: "closeRequested" }>
   | Readonly<{ type: "keepOpen" }>
   | Readonly<{ type: "continueInBackground" }>
@@ -55,8 +46,9 @@ export function createDisposableTask(response: StartJobResponseDto): DisposableT
     closePromptOpen: false,
     job: {
       ...response,
-      canDismiss: false,
-      events: [],
+      revision: "0", updatedAt: response.createdAt, canPause: true, canResume: false, canCancel: true, canDismiss: false,
+      progressFacts: { processedBytes: 0, processedEntries: 0, recentPaths: [], phaseProcessedBytes: 0, warningCount: 0, activeElapsedMillis: 0, phaseElapsedMillis: 0 },
+      boundedNotices: [], availableActions: [], outputArtifacts: [],
       terminalSummary: null,
     },
   });
@@ -68,7 +60,7 @@ export function reduceDisposableTask(
 ): DisposableTaskState {
   switch (event.type) {
     case "jobUpdated": {
-      if (event.snapshot.jobId !== state.job.jobId || TERMINAL_PHASES.has(state.phase)) {
+      if (event.snapshot.jobId !== state.job.jobId || TERMINAL_PHASES.has(state.phase) || BigInt(event.snapshot.revision) <= BigInt(state.job.revision)) {
         return state;
       }
       return freezeState({
@@ -76,7 +68,8 @@ export function reduceDisposableTask(
         closePromptOpen: false,
         job: {
           ...event.snapshot,
-          events: [...event.snapshot.events],
+          progressFacts: { ...event.snapshot.progressFacts, recentPaths: [...event.snapshot.progressFacts.recentPaths] },
+          boundedNotices: [...event.snapshot.boundedNotices],
           terminalSummary: event.snapshot.terminalSummary ?? null,
         },
       });
@@ -120,6 +113,8 @@ function phaseForStatus(status: JobStatus): DisposableTaskPhase {
       return "running";
     case "paused":
       return "paused";
+    case "cancelling":
+      return "cancelling";
     case "completed":
       return "succeeded";
     case "failed":
@@ -136,7 +131,8 @@ function freezeState(state: {
 }): DisposableTaskState {
   const job = Object.freeze({
     ...state.job,
-    events: Object.freeze([...state.job.events]),
+    progressFacts: Object.freeze({ ...state.job.progressFacts, recentPaths: Object.freeze([...state.job.progressFacts.recentPaths]) as unknown as string[] }),
+    boundedNotices: Object.freeze([...state.job.boundedNotices]) as unknown as typeof state.job.boundedNotices,
     terminalSummary: state.job.terminalSummary
       ? Object.freeze({
           ...state.job.terminalSummary,

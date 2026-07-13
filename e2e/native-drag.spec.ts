@@ -501,6 +501,14 @@ async function installTauriStub(page: Page, options?: { platform?: "windows" | "
         return undefined;
       }
 
+      if (cmd === "subscribe_job_catalog") {
+        return "catalog-1";
+      }
+
+      if (cmd === "ack_subscription" || cmd === "unsubscribe_job") {
+        return undefined;
+      }
+
       if (cmd === "plugin:window|inner_size") {
         return { width: 1280, height: 800 };
       }

@@ -5,11 +5,10 @@ import {
   createInitialJobState,
   deriveJobProgress,
   getLatestPasswordFailureEvent,
-  mergePolledJobState,
-  selectJobPollingDecision,
+  replaceLegacyJobStateFixture,
   selectQuickActionJobCompletionDecision,
 } from "./jobs";
-import type { JobState, PollJobEventsResponseDto, StartJobResponseDto } from "../api/types";
+import type { JobState, LegacyJobSnapshotDto, StartJobResponseDto } from "../api/types";
 
 const startedAt = "2026-06-11T00:00:00Z";
 
@@ -23,7 +22,7 @@ function startJobResponse(overrides: Partial<StartJobResponseDto> = {}): StartJo
   };
 }
 
-function pollResponse(overrides: Partial<PollJobEventsResponseDto> = {}): PollJobEventsResponseDto {
+function legacySnapshot(overrides: Partial<LegacyJobSnapshotDto> = {}): LegacyJobSnapshotDto {
   return {
     jobId: "job-1",
     kind: "zipExtract",
@@ -52,10 +51,10 @@ describe("job state helpers", () => {
     });
   });
 
-  it("appends drained poll events and preserves terminal summaries", () => {
+  it("replaces legacy fixture events and preserves terminal summaries", () => {
     const previous: JobState = {
       snapshot: {
-        ...pollResponse({
+        ...legacySnapshot({
           status: "completed",
           canDismiss: true,
           terminalSummary: {
@@ -69,9 +68,9 @@ describe("job state helpers", () => {
       events: [{ eventType: "completed", jobKind: "zipExtract" }],
     };
 
-    const merged = mergePolledJobState(
+    const merged = replaceLegacyJobStateFixture(
       previous,
-      pollResponse({
+      legacySnapshot({
         status: "completed",
         canDismiss: true,
         events: [{ eventType: "warning", message: "late warning" }],
@@ -80,12 +79,12 @@ describe("job state helpers", () => {
     );
 
     expect(merged.snapshot.terminalSummary?.writtenEntries).toBe(2);
-    expect(merged.events.map((event) => event.eventType)).toEqual(["completed", "warning"]);
+    expect(merged.events.map((event) => event.eventType)).toEqual(["warning"]);
   });
 
   it("detects latest password failure and requires retry context", () => {
     const state: JobState = {
-      snapshot: pollResponse({ status: "failed" }),
+      snapshot: legacySnapshot({ status: "failed" }),
       events: [
         { eventType: "failed", code: "io_error" },
         { eventType: "failed", code: "password_required" },
@@ -97,29 +96,10 @@ describe("job state helpers", () => {
     expect(canRetryJobWithPassword(true, state)).toBe(true);
   });
 
-  it("selects job polling decisions for in-flight, stopped, and pollable jobs", () => {
-    const pollableState = createInitialJobState(startJobResponse({ jobId: "job-pollable" }));
-    const dismissibleState: JobState = {
-      snapshot: pollResponse({
-        jobId: "job-done",
-        status: "completed",
-        canDismiss: true,
-      }),
-      events: [{ eventType: "completed", jobKind: "zipExtract" }],
-    };
-
-    expect(selectJobPollingDecision([pollableState], true)).toEqual({ action: "requestAgain" });
-    expect(selectJobPollingDecision([dismissibleState], false)).toEqual({ action: "stop" });
-    expect(selectJobPollingDecision([pollableState, dismissibleState], false)).toEqual({
-      action: "poll",
-      jobIds: ["job-pollable"],
-    });
-  });
-
   it("waits, requests attention, or completes focused quick-action jobs", () => {
     const running = createInitialJobState(startJobResponse({ jobId: "job-running" }));
     const completed: JobState = {
-      snapshot: pollResponse({
+      snapshot: legacySnapshot({
         jobId: "job-completed",
         status: "completed",
         canDismiss: true,
@@ -127,7 +107,7 @@ describe("job state helpers", () => {
       events: [{ eventType: "completed", jobKind: "zipExtract" }],
     };
     const failed: JobState = {
-      snapshot: pollResponse({
+      snapshot: legacySnapshot({
         jobId: "job-failed",
         status: "failed",
         canDismiss: true,
@@ -163,7 +143,7 @@ describe("job state helpers", () => {
 
   it("derives progress fields from job lifecycle events", () => {
     const state: JobState = {
-      snapshot: pollResponse({ status: "running" }),
+      snapshot: legacySnapshot({ status: "running" }),
       events: [
         { eventType: "started", totalBytes: 100 },
         { eventType: "entryStarted", path: "docs/readme.txt" },
@@ -187,7 +167,7 @@ describe("job state helpers", () => {
 
   it("derives elapsed time from epoch-second timestamps", () => {
     const state: JobState = {
-      snapshot: pollResponse({ createdAt: String(Date.parse(startedAt) / 1000) }),
+      snapshot: legacySnapshot({ createdAt: String(Date.parse(startedAt) / 1000) }),
       events: [{ eventType: "started" }],
     };
 
@@ -198,7 +178,7 @@ describe("job state helpers", () => {
 
   it("derives file totals and ETA from entry counts when bytes are unavailable", () => {
     const state: JobState = {
-      snapshot: pollResponse({ status: "running" }),
+      snapshot: legacySnapshot({ status: "running" }),
       events: [
         { eventType: "started", entries: 0, totalEntries: 4 },
         { eventType: "entryFinished", path: "one.txt", entries: 1, totalEntries: 4 },
@@ -216,7 +196,7 @@ describe("job state helpers", () => {
 
   it("derives tzap create file progress and final archive-byte ratio", () => {
     const runningState: JobState = {
-      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      snapshot: legacySnapshot({ kind: "tzapCreate", status: "running" }),
       events: [
         { eventType: "started", totalBytes: 1000, entries: 0, totalEntries: 2 },
         { eventType: "bytesProcessed", totalBytesProcessed: 500, totalBytes: 1000 },
@@ -232,7 +212,7 @@ describe("job state helpers", () => {
     expect(runningProgress.compressionRatio).toBeNull();
 
     const completedState: JobState = {
-      snapshot: pollResponse({
+      snapshot: legacySnapshot({
         kind: "tzapCreate",
         status: "completed",
         canDismiss: true,
@@ -259,7 +239,7 @@ describe("job state helpers", () => {
 
   it("keeps tzap progress below completion across writer phases", () => {
     const planningComplete: JobState = {
-      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      snapshot: legacySnapshot({ kind: "tzapCreate", status: "running" }),
       events: [
         { eventType: "started", totalBytes: 1000 },
         { eventType: "phaseStarted", phase: "planningPayload", totalBytes: 1000 },
@@ -301,7 +281,7 @@ describe("job state helpers", () => {
 
   it("starts single-pass tzap emission progress at zero", () => {
     const state: JobState = {
-      snapshot: pollResponse({ kind: "tzapCreate", status: "running" }),
+      snapshot: legacySnapshot({ kind: "tzapCreate", status: "running" }),
       events: [
         { eventType: "started", totalBytes: 1000 },
         { eventType: "phaseStarted", phase: "emittingPayload", totalBytes: 1000 },
@@ -319,7 +299,7 @@ describe("job state helpers", () => {
 
   it("derives create compression ratio from terminal output bytes", () => {
     const state: JobState = {
-      snapshot: pollResponse({
+      snapshot: legacySnapshot({
         kind: "zipCreate",
         status: "completed",
         canDismiss: true,
@@ -347,7 +327,7 @@ describe("job state helpers", () => {
 
   it("makes completed jobs determinate even when total bytes are unknown", () => {
     const state: JobState = {
-      snapshot: pollResponse({
+      snapshot: legacySnapshot({
         status: "completed",
         canDismiss: true,
         terminalSummary: {
@@ -368,11 +348,11 @@ describe("job state helpers", () => {
 
   it("stops failed and cancelled jobs at a determinate progress value", () => {
     const failed: JobState = {
-      snapshot: pollResponse({ status: "failed", canDismiss: true }),
+      snapshot: legacySnapshot({ status: "failed", canDismiss: true }),
       events: [{ eventType: "failed", message: "Cannot write archive." }],
     };
     const cancelled: JobState = {
-      snapshot: pollResponse({ status: "cancelled", canDismiss: true }),
+      snapshot: legacySnapshot({ status: "cancelled", canDismiss: true }),
       events: [{ eventType: "cancelled", message: "Cancelled." }],
     };
 

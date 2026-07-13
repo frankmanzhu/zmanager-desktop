@@ -1,18 +1,8 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
-import type { PollJobEventsResponseDto } from "../api/types";
 
 export async function announceDisposableTaskReady(): Promise<void> {
   await getCurrentWebviewWindow().emit("zmanager-task-ready");
-}
-
-export async function listenDisposableTaskUpdates(
-  listener: (snapshot: PollJobEventsResponseDto) => void,
-): Promise<() => void> {
-  return getCurrentWebviewWindow().listen<PollJobEventsResponseDto>(
-    "zmanager-task-job-update",
-    (event) => listener(event.payload),
-  );
 }
 
 export async function listenDisposableTaskCloseRequested(

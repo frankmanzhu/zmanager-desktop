@@ -1,6 +1,6 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
-import type { PollJobEventsResponseDto, StartJobResponseDto } from "../api/types";
+import type { StartJobResponseDto } from "../api/types";
 
 type WindowEvent = Readonly<{ payload: unknown }>;
 
@@ -20,7 +20,6 @@ export type DisposableTaskWindowManagerOptions = Readonly<{
 
 export type DisposableTaskWindowManager = Readonly<{
   open(job: StartJobResponseDto): Promise<boolean>;
-  publish(jobId: string, snapshot: PollJobEventsResponseDto): Promise<void>;
   getOpenJobIds(): readonly string[];
   hasOpenWindows(): boolean;
 }>;
@@ -70,13 +69,6 @@ export function createDisposableTaskWindowManager(
         }
       });
       return true;
-    },
-
-    async publish(jobId, snapshot) {
-      const taskWindow = windows.get(jobId);
-      if (taskWindow) {
-        await taskWindow.emit("zmanager-task-job-update", snapshot);
-      }
     },
 
     getOpenJobIds() {

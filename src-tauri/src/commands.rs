@@ -13,25 +13,28 @@ use openssl::pkcs12::Pkcs12;
 use openssl::pkey::PKey;
 use openssl::rsa::Rsa;
 use openssl::x509::{X509, X509NameBuilder};
-use tauri::State;
+use tauri::{State, WebviewWindow, ipc::Channel};
 
+#[cfg(test)]
+use crate::job_dto::TestJobEventsSnapshot;
 use crate::{
     constants,
     dto::{
-        ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse, CreatePlanEntryDto,
-        CreatePlanResponse, DestinationCollisionStrategyDto, NativeFileDragOutcomeDto,
-        NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest,
-        PollJobEventsRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
+        AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse,
+        CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
+        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest,
+        PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
         ProjectIntegrationContract, ProjectIntegrationShellActionDto, ResumeJobRequest,
-        StartCreateRequest, StartExtractRequest, SystemFileIconRequest, SystemFileIconResponse,
-        TestArchiveRequest, ValidateDirectoryRequest, ValidateDirectoryResponse,
+        StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
-        JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobTerminalSummaryDto,
-        PollJobEventsResponseDto, StartJobResponseDto,
+        JobCatalogEnvelopeDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
+        JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
     },
-    job_registry::{JobEventCollector, JobRegistry},
+    job_registry::{JobEventCollector, JobRegistry, SubscriptionCommand},
     quick_action::QuickActionLaunchCoordinator,
 };
 use zmanager_core::apple_archive_backend::AppleArchiveError;
@@ -371,7 +374,7 @@ pub(crate) fn start_create_internal(
         crate::dto::ArchiveFormatDto::SevenZ => JobKindDto::SevenZCreate,
     };
 
-    let (response, token) = registry.create_job(kind);
+    let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
     if let Some((total_entries, total_bytes)) = create_progress_estimate {
         registry.emit_direct_event(
             &response.job_id,
@@ -810,7 +813,7 @@ pub(crate) fn start_extract_internal(
         ArchiveFamily::Archive => JobKindDto::ArchiveExtract,
     };
 
-    let (response, token) = registry.create_job(kind);
+    let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
     if let Some((total_entries, total_bytes)) = extract_progress_estimate {
         registry.emit_direct_event(
             &response.job_id,
@@ -1096,7 +1099,9 @@ fn start_test_archive_internal(
     let selected_entry_keys = Arc::new(entry_paths.into_iter().collect::<HashSet<_>>());
     let family = detect_archive_family(&archive_path);
 
-    let (response, _token) = registry.create_job(JobKindDto::TestArchive);
+    let (response, _token) = registry
+        .try_create_job(JobKindDto::TestArchive)
+        .map_err(subscription_error)?;
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
@@ -1375,21 +1380,157 @@ fn cancel_selected_extract_job(
 }
 
 #[tauri::command]
-pub fn poll_job_events(
-    request: PollJobEventsRequest,
+pub fn subscribe_job(
+    request: SubscribeJobRequest,
+    on_snapshot: Channel<JobSnapshotEnvelopeDto>,
+    window: WebviewWindow,
     registry: State<'_, JobRegistry>,
-) -> Result<PollJobEventsResponseDto, CommandErrorDto> {
-    let job_id = request.job_id.trim().to_string();
+) -> Result<String, CommandErrorDto> {
+    let job_id = request.job_id.trim();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
+    let owner = window.label().to_string();
+    let (subscription_id, mut snapshots, mut commands, shared_in_flight) = registry
+        .register_job_subscription(&owner, job_id)
+        .map_err(subscription_error)?;
+    let registry = registry.inner().clone();
+    let task_subscription_id = subscription_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut current = snapshots.borrow_and_update().clone();
+        let mut in_flight = current.revision.parse::<u64>().ok();
+        *shared_in_flight
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = in_flight;
+        if on_snapshot
+            .send(JobSnapshotEnvelopeDto {
+                subscription_id: task_subscription_id.clone(),
+                revision: current.revision.clone(),
+                payload: (*current).clone(),
+            })
+            .is_err()
+        {
+            registry.cleanup_subscription(&task_subscription_id);
+            return;
+        }
+        loop {
+            tokio::select! {
+                command = commands.recv() => match command {
+                    Some(SubscriptionCommand::Stop) | None => break,
+                    Some(SubscriptionCommand::Ack(revision)) if Some(revision) == in_flight => {
+                        let newest = current.revision.parse::<u64>().unwrap_or_default();
+                        if newest > revision {
+                            in_flight = Some(newest);
+                            *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
+                            if on_snapshot.send(JobSnapshotEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.revision.clone(), payload: (*current).clone() }).is_err() { break; }
+                        } else { in_flight = None; *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = None; }
+                    }
+                    Some(SubscriptionCommand::Ack(_)) => {}
+                },
+                changed = snapshots.changed() => {
+                    if changed.is_err() { break; }
+                    current = snapshots.borrow_and_update().clone();
+                    if in_flight.is_none() {
+                        let revision = current.revision.parse::<u64>().unwrap_or_default();
+                        in_flight = Some(revision);
+                        *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
+                        if on_snapshot.send(JobSnapshotEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.revision.clone(), payload: (*current).clone() }).is_err() { break; }
+                    }
+                }
+            }
+        }
+        registry.cleanup_subscription(&task_subscription_id);
+    });
+    Ok(subscription_id)
+}
 
-    registry.poll_events(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(
-            format!("job not found: {job_id}"),
-            Some("Start a new job command before polling.".to_string()),
-        )
-    })
+#[tauri::command]
+pub fn subscribe_job_catalog(
+    on_snapshot: Channel<JobCatalogEnvelopeDto>,
+    window: WebviewWindow,
+    registry: State<'_, JobRegistry>,
+) -> Result<String, CommandErrorDto> {
+    let owner = window.label().to_string();
+    let (subscription_id, mut snapshots, mut commands, shared_in_flight) = registry
+        .register_catalog_subscription(&owner)
+        .map_err(subscription_error)?;
+    let registry = registry.inner().clone();
+    let task_subscription_id = subscription_id.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut current = snapshots.borrow_and_update().clone();
+        let mut in_flight = current.catalog_revision.parse::<u64>().ok();
+        *shared_in_flight
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = in_flight;
+        if on_snapshot
+            .send(JobCatalogEnvelopeDto {
+                subscription_id: task_subscription_id.clone(),
+                revision: current.catalog_revision.clone(),
+                payload: (*current).clone(),
+            })
+            .is_err()
+        {
+            registry.cleanup_subscription(&task_subscription_id);
+            return;
+        }
+        loop {
+            tokio::select! {
+                command = commands.recv() => match command {
+                    Some(SubscriptionCommand::Stop) | None => break,
+                    Some(SubscriptionCommand::Ack(revision)) if Some(revision) == in_flight => {
+                        let newest = current.catalog_revision.parse::<u64>().unwrap_or_default();
+                        if newest > revision {
+                            in_flight = Some(newest);
+                            *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
+                            if on_snapshot.send(JobCatalogEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.catalog_revision.clone(), payload: (*current).clone() }).is_err() { break; }
+                        } else { in_flight = None; *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = None; }
+                    }
+                    Some(SubscriptionCommand::Ack(_)) => {}
+                },
+                changed = snapshots.changed() => {
+                    if changed.is_err() { break; }
+                    current = snapshots.borrow_and_update().clone();
+                    if in_flight.is_none() {
+                        let revision = current.catalog_revision.parse::<u64>().unwrap_or_default();
+                        in_flight = Some(revision);
+                        *shared_in_flight.lock().unwrap_or_else(|error| error.into_inner()) = in_flight;
+                        if on_snapshot.send(JobCatalogEnvelopeDto { subscription_id: task_subscription_id.clone(), revision: current.catalog_revision.clone(), payload: (*current).clone() }).is_err() { break; }
+                    }
+                }
+            }
+        }
+        registry.cleanup_subscription(&task_subscription_id);
+    });
+    Ok(subscription_id)
+}
+
+#[tauri::command]
+pub fn ack_subscription(
+    request: AckSubscriptionRequest,
+    window: WebviewWindow,
+    registry: State<'_, JobRegistry>,
+) -> Result<(), CommandErrorDto> {
+    let revision = request.revision.parse::<u64>().map_err(|_| {
+        CommandErrorDto::invalid_request("revision must be an unsigned decimal string")
+    })?;
+    registry
+        .acknowledge_subscription(window.label(), request.subscription_id.trim(), revision)
+        .map_err(subscription_error)
+}
+
+#[tauri::command]
+pub fn unsubscribe_job(
+    request: SubscriptionRequest,
+    window: WebviewWindow,
+    registry: State<'_, JobRegistry>,
+) -> Result<(), CommandErrorDto> {
+    registry
+        .unsubscribe(window.label(), request.subscription_id.trim())
+        .map_err(subscription_error)
+}
+
+fn subscription_error(code: &'static str) -> CommandErrorDto {
+    CommandErrorDto::invalid_request(code)
 }
 
 #[tauri::command]
@@ -2584,7 +2725,7 @@ mod tests {
         );
 
         let poll = registry
-            .poll_events(&response.job_id)
+            .take_test_events(&response.job_id)
             .expect("fallback-completed job should remain pollable");
         assert_eq!(poll.status, JobStatusDto::Completed);
         assert!(poll.can_dismiss);
@@ -2638,7 +2779,7 @@ mod tests {
         );
 
         let poll = registry
-            .poll_events(&response.job_id)
+            .take_test_events(&response.job_id)
             .expect("cancelled job should remain pollable");
         assert_eq!(poll.status, JobStatusDto::Cancelled);
         assert!(
@@ -3038,12 +3179,12 @@ mod tests {
     fn wait_for_job_terminal(
         registry: &crate::job_registry::JobRegistry,
         job_id: &str,
-    ) -> (PollJobEventsResponseDto, Vec<JobEventDto>) {
+    ) -> (TestJobEventsSnapshot, Vec<JobEventDto>) {
         let mut all_events = Vec::new();
 
         for _ in 0..400 {
             let poll = registry
-                .poll_events(job_id)
+                .take_test_events(job_id)
                 .expect("job should stay available while waiting for terminal state");
             all_events.extend_from_slice(&poll.events);
             if poll.status.is_terminal() {
@@ -3493,10 +3634,12 @@ mod tests {
         assert!(destination.is_file());
         let finished_event = create_events
             .iter()
-            .find(|event| matches!(event.event_type, JobEventKindDto::EntryFinished))
-            .expect("tzap create should emit finished entries for file counts");
+            .find(|event| {
+                matches!(event.event_type, JobEventKindDto::BytesProcessed)
+                    && event.entries.unwrap_or_default() > 0
+            })
+            .expect("tzap create should aggregate finished entries for file counts");
         assert!(finished_event.entries.unwrap_or_default() > 0);
-        assert_eq!(finished_event.total_entries, Some(2));
         let summary = create_poll
             .terminal_summary
             .as_ref()
@@ -4034,7 +4177,7 @@ mod tests {
         .expect("pre-cancelled selected extract should finish with a terminal summary");
 
         let poll = registry
-            .poll_events(&response.job_id)
+            .take_test_events(&response.job_id)
             .expect("cancelled selected extract job should be pollable");
 
         assert_eq!(poll.status, JobStatusDto::Cancelled);

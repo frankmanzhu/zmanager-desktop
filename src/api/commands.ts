@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, type Channel } from "@tauri-apps/api/core";
 
 import type {
   ArchiveListingDto,
@@ -11,12 +11,12 @@ import type {
   GenerateTzapIdentityResponse,
   HealthcheckResponse,
   JobControlResponseDto,
+  JobCatalogEnvelopeDto,
+  JobSnapshotEnvelopeDto,
   ListArchiveRequest,
   NativeFileDragRequest,
   NativeFileDragResponse,
   PauseJobRequest,
-  PollJobEventsRequest,
-  PollJobEventsResponseDto,
   PlanCreateRequest,
   PreviewEntryRequest,
   PreviewEntryResponse,
@@ -121,12 +121,17 @@ export async function runTestArchive(request: TestArchiveRequest): Promise<Start
   });
 }
 
-export async function pollJobEvents(
-  request: PollJobEventsRequest,
-): Promise<PollJobEventsResponseDto> {
-  return invoke<PollJobEventsResponseDto>("poll_job_events", {
-    request,
-  });
+export function subscribeJob(request: { jobId: string }, onSnapshot: Channel<JobSnapshotEnvelopeDto>): Promise<string> {
+  return invoke<string>("subscribe_job", { request, onSnapshot });
+}
+export function subscribeJobCatalog(onSnapshot: Channel<JobCatalogEnvelopeDto>): Promise<string> {
+  return invoke<string>("subscribe_job_catalog", { onSnapshot });
+}
+export function ackSubscription(request: { subscriptionId: string; revision: string }): Promise<void> {
+  return invoke<void>("ack_subscription", { request });
+}
+export function unsubscribeJob(request: { subscriptionId: string }): Promise<void> {
+  return invoke<void>("unsubscribe_job", { request });
 }
 
 export async function cancelJob(request: CancelJobRequest): Promise<CancelJobResponseDto> {

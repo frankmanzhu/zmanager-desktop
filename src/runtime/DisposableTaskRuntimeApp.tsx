@@ -11,9 +11,9 @@ import {
   announceDisposableTaskReady,
   closeDisposableTaskWindow,
   listenDisposableTaskCloseRequested,
-  listenDisposableTaskUpdates,
   minimizeDisposableTaskWindow,
 } from "../desktop/disposableTaskWindow";
+import { createTauriJobFeed } from "../desktop/jobFeed";
 import { DisposableTaskView } from "../ui/react/tasks/DisposableTaskApp";
 
 const AUTO_CLOSE_SUCCESS_MS = 850;
@@ -32,22 +32,22 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
 
   useEffect(() => {
     let disposed = false;
-    let unlistenUpdates: (() => void) | null = null;
+    let unsubscribeUpdates: (() => Promise<void>) | null = null;
     let unlistenClose: (() => void) | null = null;
     void Promise.all([
-      listenDisposableTaskUpdates((snapshot) => {
+      createTauriJobFeed().subscribeJob(state.job.jobId, (snapshot) => {
         if (!disposed) dispatch({ type: "jobUpdated", snapshot });
-      }).then((unlisten) => { unlistenUpdates = unlisten; }),
+      }).then((subscription) => { unsubscribeUpdates = subscription.unsubscribe; }),
       listenDisposableTaskCloseRequested(() => dispatch({ type: "closeRequested" }))
         .then((unlisten) => { unlistenClose = unlisten; }),
       announceDisposableTaskReady(),
     ]);
     return () => {
       disposed = true;
-      unlistenUpdates?.();
+      void unsubscribeUpdates?.();
       unlistenClose?.();
     };
-  }, []);
+  }, [state.job.jobId]);
 
   useEffect(() => {
     if (!isLiveDisposableTask(state)) return;

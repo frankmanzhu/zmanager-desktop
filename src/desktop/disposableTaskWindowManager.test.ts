@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createDisposableTaskWindowManager, type DisposableTaskWindowHandle } from "./disposableTaskWindowManager";
-import type { PollJobEventsResponseDto, StartJobResponseDto } from "../api/types";
+import type { LegacyJobSnapshotDto, StartJobResponseDto } from "../api/types";
 
 function job(jobId = "job-1"): StartJobResponseDto {
   return { jobId, kind: "zipCreate", status: "queued", createdAt: "2026-07-11T00:00:00Z" };
 }
 
-function update(jobId = "job-1"): PollJobEventsResponseDto {
+function update(jobId = "job-1"): LegacyJobSnapshotDto {
   return { ...job(jobId), status: "running", canDismiss: false, events: [] };
 }
 
@@ -49,19 +49,13 @@ describe("disposable task window manager", () => {
     expect(test.handles.get("task-job-1")?.setFocus).toHaveBeenCalledTimes(1);
   });
 
-  it("publishes updates and reports readiness and final window cleanup", async () => {
+  it("reports readiness and final window cleanup", async () => {
     const test = harness();
     await test.manager.open(job());
     const listeners = test.callbacks.get("task-job-1");
 
     listeners?.get("zmanager-task-ready")?.();
     expect(test.onReady).toHaveBeenCalledWith("job-1");
-
-    await test.manager.publish("job-1", update());
-    expect(test.handles.get("task-job-1")?.emit).toHaveBeenCalledWith(
-      "zmanager-task-job-update",
-      update(),
-    );
 
     listeners?.get("tauri://destroyed")?.();
     expect(test.manager.getOpenJobIds()).toEqual([]);

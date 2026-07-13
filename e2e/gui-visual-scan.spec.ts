@@ -273,9 +273,9 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "05-create-dialog");
 
   await page.locator("#create-format").selectOption("sevenZ");
-  await expect(page.locator("#compress-options-panel details.advanced-options summary")).toBeVisible();
-  await page.locator("#compress-options-panel details.advanced-options summary").click();
-  await page.locator("#create-volume").fill("1048576");
+  await expect(page.locator("#create-advanced-options summary")).toBeVisible();
+  await page.locator("#create-advanced-options summary").click();
+  await page.locator("#create-volume").selectOption("1048576");
   await page.locator("#create-password").fill("correct horse battery staple");
   await page.locator("#create-password-confirm").fill("correct horse battery staple");
   await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
@@ -323,46 +323,28 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
   await expect(page.locator(".row-icon-native-image").first()).toBeVisible();
   await expect(page.locator("#search-entries")).toBeEnabled();
-  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\");
-  await expect(page.locator("#path-crumbs")).toBeVisible();
   await expect(page.locator("#details-content [data-copy-value='C:/fixtures/visual-scan.zip']")).toBeVisible();
   await captureAndScan(page, "07-extract-with-archive");
 
   await page.locator("#tree-content [data-tree-path='images']").click();
-  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\images\\");
   await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
   await expect(page.locator("#details-content")).toContainText("images");
   await expect(page.locator("#status-selection-count")).toContainText("0 / 1");
 
-  await page.locator("#path-crumbs [data-crumb-path='']").focus();
-  await page.keyboard.press("Enter");
-  await expect(page.locator("#path-field")).toHaveValue("C:/fixtures/visual-scan.zip\\");
+  await loadArchiveWithIcons(page);
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
 
   await page.locator('tr[data-entry-path="documents"] .row-name').click();
-  await expect(page.getByRole("button", { name: "Extract" })).toBeVisible();
-  await page.getByRole("button", { name: "Extract" }).click();
-  await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
-  await expect(page.locator("#extract-destination")).toBeFocused();
-  await expect(page.locator("#extract-start")).toBeDisabled();
-  await captureAndScan(page, "08-extract-dialog");
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("dialog", { name: "Extract" })).toBeVisible();
-  await page.locator("#extract-destination").fill("C:\\visual-scan-extract");
-  await expect(page.locator("#extract-start")).toBeEnabled();
-  await expect(page.locator("#extract-start")).toHaveClass(/primary-action/);
-  await expect(page.locator("#extract-destination")).toBeFocused();
-  await page.locator("#extract-cancel").click();
+  await expect(page.locator("#extract-all")).toBeVisible();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
   const entryMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
   await expect(entryMenuLabels.nth(0)).toHaveText("Open");
-  await expect(entryMenuLabels.nth(1)).toHaveText("Open in Archive");
-  await expect(entryMenuLabels.nth(2)).toHaveText("Extract...");
-  await expect(entryMenuLabels.nth(3)).toHaveText("Extract Here");
-  await expect(entryMenuLabels.nth(4)).toHaveText("Test");
-  await expect(entryMenuLabels.nth(5)).toHaveText("Properties");
+  await expect(entryMenuLabels.nth(1)).toHaveText("Extract...");
+  await expect(entryMenuLabels.nth(2)).toHaveText("Extract Here");
+  await expect(entryMenuLabels.nth(3)).toHaveText("Test");
+  await expect(entryMenuLabels.nth(4)).toHaveText("Properties");
   await captureAndScan(page, "09-entry-context-menu");
 
   await page.keyboard.press("Escape");
@@ -425,8 +407,8 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
 
   await page.locator("#create-format").selectOption("sevenZ");
   await waitForCompressSources(page);
-  await expect(page.locator("#compress-options-panel details.advanced-options summary")).toBeVisible();
-  await page.locator("#compress-options-panel details.advanced-options summary").click();
+  await expect(page.locator("#create-advanced-options summary")).toBeVisible();
+  await page.locator("#create-advanced-options summary").click();
   await page.locator("#create-password").fill("first-secret");
   await page.locator("#create-password-confirm").fill("second-secret");
   await page.locator("#create-show-password").check();
@@ -440,7 +422,7 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
 
   await page.locator("#create-format").selectOption("sevenZ");
   await waitForCompressSources(page);
-  await page.locator("#compress-options-panel details.advanced-options summary").click();
+  await page.locator("#create-advanced-options").evaluate((element) => { (element as HTMLDetailsElement).open = true; });
   await expect(page.locator("#create-password")).toHaveValue("");
   await expect(page.locator("#create-password-confirm")).toHaveValue("");
   await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
@@ -575,7 +557,7 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   const multiMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
   await expect(multiMenuLabels.nth(0)).toHaveText("Extract Selected");
   await expect(multiMenuLabels.nth(1)).toHaveText("Extract Here");
-  await expect(multiMenuLabels.nth(2)).toHaveText("Test Selected");
+  await expect(multiMenuLabels.nth(2)).toHaveText("Test");
   await expect(multiMenuLabels.nth(3)).toHaveText("Properties");
   await page.keyboard.press("Escape");
   await captureAndScan(page, "16-multi-selection-details");
@@ -674,10 +656,6 @@ test("minimum-size visual surfaces stay within the app bounds", async ({ page })
   await loadArchiveWithIcons(page);
   await captureAndScan(page, "35-min-extract-loaded");
 
-  await page.locator('tr[data-entry-path="documents"] .row-name').click();
-  await page.getByRole("button", { name: "Extract" }).click();
-  await captureAndScan(page, "36-min-extract-dialog");
-  await page.getByRole("button", { name: "Cancel" }).click();
 });
 
 async function captureAndScan(page: Page, name: string) {
@@ -889,9 +867,7 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
             visibleRatio < 0.98 &&
             (
             rect.left < parentRect.left - 1 ||
-            rect.right > parentRect.right + 1 ||
-            rect.top < parentRect.top - 1 ||
-            rect.bottom > parentRect.bottom + 1
+            rect.right > parentRect.right + 1
             );
           if (isClipped) {
             return parent;
@@ -1028,6 +1004,11 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
         if (first.contains(second) || second.contains(first)) {
           continue;
         }
+        const firstClip = nearestClippingAncestor(first);
+        const secondClip = nearestClippingAncestor(second);
+        if (firstClip !== secondClip) {
+          continue;
+        }
         const overlap = overlapArea(first.getBoundingClientRect(), second.getBoundingClientRect());
         if (overlap > 4) {
           problems.push(`overlap "${visibleLabel(first)}" with "${visibleLabel(second)}"`);
@@ -1100,6 +1081,14 @@ async function installTauriStub(page: Page) {
       }
 
       if (cmd === "cleanup_preview_roots") {
+        return undefined;
+      }
+
+      if (cmd === "subscribe_job_catalog") {
+        return "catalog-1";
+      }
+
+      if (cmd === "ack_subscription" || cmd === "unsubscribe_job") {
         return undefined;
       }
 

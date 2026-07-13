@@ -64,10 +64,8 @@ export type JobControlControllerOptions = Readonly<{
   message(key: MessageKey, params?: MessageParams): string;
   setOperationalMessage(key: MessageKey, params?: MessageParams): void;
   setOperationalStatus(message: string): void;
-  pollJobs(): Promise<void>;
   renderJobs(): void;
   renderQuickProgress(): void;
-  stopPolling(): void;
   canEvaluateQuickActionCompletion(): boolean;
   isQuickActionWindowBackgrounded(): boolean;
   revealQuickActionJobWindow(): Promise<void>;
@@ -122,7 +120,6 @@ export function createJobControlController(
         }),
       );
       options.setOperationalMessage(shouldResume ? "jobs.continued" : "jobs.paused");
-      await options.pollJobs();
     } catch (error) {
       const commandError = options.toCommandError(error);
       options.setOperationalStatus(commandError?.message ?? options.message("jobs.updateFailed"));
@@ -138,7 +135,6 @@ export function createJobControlController(
 
     try {
       await Promise.all(jobIds.map((jobId) => options.cancelJob({ jobId })));
-      await options.pollJobs();
       options.setOperationalMessage("jobs.cancelled");
       await closeFocusedQuickActionProgress();
     } catch (error) {
@@ -235,7 +231,6 @@ export function createJobControlController(
   async function onCancelJob(jobId: string): Promise<void> {
     try {
       await options.cancelJob({ jobId });
-      await options.pollJobs();
     } catch (error) {
       const commandError = options.toCommandError(error);
       if (commandError) {
@@ -247,7 +242,6 @@ export function createJobControlController(
   async function onPauseJob(jobId: string): Promise<void> {
     try {
       await options.pauseJob({ jobId });
-      await options.pollJobs();
     } catch (error) {
       const commandError = options.toCommandError(error);
       options.setOperationalStatus(commandError?.message ?? options.message("jobs.updateFailed"));
@@ -257,7 +251,6 @@ export function createJobControlController(
   async function onResumeJob(jobId: string): Promise<void> {
     try {
       await options.resumeJob({ jobId });
-      await options.pollJobs();
     } catch (error) {
       const commandError = options.toCommandError(error);
       options.setOperationalStatus(commandError?.message ?? options.message("jobs.updateFailed"));
@@ -287,9 +280,6 @@ export function createJobControlController(
       await options.dismissJob({ jobId });
       options.workspace.removeJob(jobId);
       options.renderJobs();
-      if (!options.workspace.hasJobs()) {
-        options.stopPolling();
-      }
     } catch (error) {
       const commandError = options.toCommandError(error);
       if (commandError) {

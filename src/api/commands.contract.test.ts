@@ -133,11 +133,10 @@ const COMMAND_WRAPPERS = [
     request: { archivePath: "C:/archives/demo.zip" },
     call: () => api.runTestArchive({ archivePath: "C:/archives/demo.zip" }),
   },
-  {
-    command: "poll_job_events",
-    request: { jobId: "job-1" },
-    call: () => api.pollJobEvents({ jobId: "job-1" }),
-  },
+  { command: "subscribe_job", args: { request: { jobId: "job-1" }, onSnapshot: null }, call: () => api.subscribeJob({ jobId: "job-1" }, null as never) },
+  { command: "subscribe_job_catalog", args: { onSnapshot: null }, call: () => api.subscribeJobCatalog(null as never) },
+  { command: "ack_subscription", request: { subscriptionId: "subscription-1", revision: "1" }, call: () => api.ackSubscription({ subscriptionId: "subscription-1", revision: "1" }) },
+  { command: "unsubscribe_job", request: { subscriptionId: "subscription-1" }, call: () => api.unsubscribeJob({ subscriptionId: "subscription-1" }) },
   {
     command: "cancel_job",
     request: { jobId: "job-1" },
@@ -176,7 +175,9 @@ describe("Tauri command contracts", () => {
 
       await wrapper.call();
 
-      if ("request" in wrapper) {
+      if ("args" in wrapper) {
+        expect(invokeMock).toHaveBeenCalledWith(wrapper.command, wrapper.args);
+      } else if ("request" in wrapper) {
         expect(invokeMock).toHaveBeenCalledWith(wrapper.command, { request: wrapper.request });
       } else {
         expect(invokeMock).toHaveBeenCalledWith(wrapper.command);

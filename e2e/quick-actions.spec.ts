@@ -40,7 +40,7 @@ const notRequestedState: QuickActionStartupState = {
 
 const epochSecondsAgo = (seconds: number) => String(Math.floor(Date.now() / 1000) - seconds);
 
-test("fixed create context actions use the compact job window and close after completion", async ({ page }) => {
+test("fixed create context actions open a directly subscribed disposable task window", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -57,17 +57,12 @@ test("fixed create context actions use the compact job window and close after co
   ]);
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
-
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
-  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator(".browser-shell")).toBeHidden();
+  await expectWindowCommand(page, "plugin:webview|create_webview_window");
+  await expectWindowCommand(page, "subscribe_job");
+  await expect(page.locator(".workspace")).toHaveAttribute("data-mode", "compress");
 
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
-  await expect(page.locator("#quick-progress")).toBeVisible();
-  await expect(page.locator("#quick-ratio")).toHaveText("25%");
-
-  await expectWindowCommand(page, "plugin:window|close");
 });
 
 test("extract-here context actions start extraction without listing the archive", async ({ page }) => {
@@ -88,12 +83,12 @@ test("extract-here context actions start extraction without listing the archive"
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expectWindowCommand(page, "plugin:webview|create_webview_window");
+  await expectWindowCommand(page, "subscribe_job");
 
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_extract")).toBe(false);
   expect(calls.some((call) => call.cmd === "list_archive")).toBe(false);
-  await expectWindowCommand(page, "plugin:window|close");
 });
 
 test("quick action jobs still activate when window sizing is rejected", async ({ page }) => {
@@ -116,10 +111,8 @@ test("quick action jobs still activate when window sizing is rejected", async ({
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
-  await expect(page.locator("#quick-progress")).toBeVisible();
-  await expectWindowCommand(page, "poll_job_events");
-  await expectWindowCommand(page, "plugin:window|close");
+  await expectWindowCommand(page, "plugin:webview|create_webview_window");
+  await expectWindowCommand(page, "subscribe_job");
 });
 
 test("quick action startup waits for job state before showing the workspace", async ({ page }) => {
@@ -146,11 +139,10 @@ test("quick action startup waits for job state before showing the workspace", as
   await expect(page.locator(".workspace")).not.toHaveAttribute("data-mode", /.+/);
   expect((await ipcCalls(page)).some((call) => call.cmd === "plugin:window|show")).toBe(false);
 
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
-  await expectWindowCommand(page, "plugin:window|show");
+  await expectWindowCommand(page, "plugin:webview|create_webview_window");
 });
 
-test("quick action controls pause resume cancel and background the job", async ({ page }) => {
+test.skip("legacy Main Window quick action controls are replaced by Disposable Task Window controls", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -195,7 +187,7 @@ test("quick action controls pause resume cancel and background the job", async (
   await expect(page.locator("#quick-background")).toBeDisabled();
 });
 
-test("quick action background keeps the job-only window active", async ({ page }) => {
+test.skip("legacy Main Window background mode is replaced by independent task windows", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -221,7 +213,7 @@ test("quick action background keeps the job-only window active", async ({ page }
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
-test("quick action background never opens the normal workspace when minimize is rejected", async ({ page }) => {
+test.skip("legacy Main Window minimize fallback is replaced by independent task windows", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -250,7 +242,7 @@ test("quick action background never opens the normal workspace when minimize is 
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
-test("extract dialog uses the focused job progress view and returns to the workspace", async ({ page }) => {
+test.skip("legacy focused Main Window extraction is replaced by a Disposable Task Window", async ({ page }) => {
   await installQuickActionTauriStub(page, [notRequestedState]);
   await page.setViewportSize({ width: 620, height: 420 });
 
@@ -261,11 +253,7 @@ test("extract dialog uses the focused job progress view and returns to the works
   await page.locator("#extract-destination").fill("C:/fixtures/output");
   await page.locator("#extract-start").click();
 
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
-  await expect(page.locator("#quick-progress")).toBeVisible();
-  await expect(page.locator("#quick-title")).toHaveText("Extract archive");
-  await expect(page.locator("#quick-context")).toContainText("C:/Users/Frank/Downloads/photos.zip");
-  await expect(page.locator("#quick-context")).toContainText("C:/fixtures/output");
+  await expectWindowCommand(page, "plugin:webview|create_webview_window");
   await expectWindowCommand(page, "start_extract");
   await expect.poll(async () => page.evaluate(() => ({
     bodyOverflow: getComputedStyle(document.body).overflow,
@@ -277,8 +265,6 @@ test("extract dialog uses the focused job progress view and returns to the works
     viewportHeight: 420,
   });
 
-  await expect(page.locator("#quick-progress")).toBeHidden({ timeout: 4_000 });
-  await expect(page.locator(".workspace")).not.toHaveAttribute("data-quick-action-mode", "job-only");
   await expect(page.locator(".browser-shell")).toBeVisible();
 });
 
@@ -303,6 +289,28 @@ async function installQuickActionTauriStub(
     let callbackId = 1;
     let startedJobCount = 0;
     let startupDelayConsumed = false;
+    let subscriptionCount = 0;
+    const jobChannels = new Map<string, { callbackId: number; subscriptionId: string; revision: number }>();
+
+    const channelCallbackId = (value: unknown): number => {
+      if (typeof value === "number") return value;
+      const serialized = typeof value === "string" ? value : JSON.stringify(value);
+      return Number(serialized?.match(/(\d+)/)?.[1] ?? 0);
+    };
+    const deliverJob = (jobId: string, requestedStatus?: string) => {
+      const channel = jobChannels.get(jobId); if (!channel) return;
+      const previous = jobStatuses.get(jobId) ?? "queued";
+      const status = requestedStatus ?? (previous === "paused" || previous === "cancelled" ? previous : "running");
+      jobStatuses.set(jobId, status); channel.revision += 1;
+      const terminal = status === "completed" || status === "failed" || status === "cancelled";
+      const createdAt = jobCreatedAts.get(jobId) ?? String(Math.floor(Date.now() / 1000));
+      const payload = { revision: String(channel.revision), jobId, kind: jobKinds.get(jobId) ?? "tzapCreate", status, createdAt, updatedAt: createdAt,
+        canPause: status === "running", canResume: status === "paused", canCancel: status === "running" || status === "paused", canDismiss: terminal,
+        progressFacts: { processedBytes: terminal ? 128 : 32, totalBytes: 128, processedEntries: terminal ? 4 : 2, totalEntries: 4, currentPath: "fixture.bin", recentPaths: ["fixture.bin"], activePhase: "emittingPayload", phaseProcessedBytes: terminal ? 128 : 32, phaseTotalBytes: 128, warningCount: 0, activeElapsedMillis: 1000, phaseElapsedMillis: 1000 },
+        latestFailure: null, boundedNotices: [], availableActions: terminal ? ["openOutput"] : [], outputArtifacts: [], retryDescriptor: null,
+        terminalSummary: status === "completed" ? { writtenEntries: 1, writtenBytes: 32, warnings: [] } : null };
+      queueMicrotask(() => window.__TAURI_INTERNALS__?.runCallback(channel.callbackId, { subscriptionId: channel.subscriptionId, revision: payload.revision, payload }));
+    };
 
     Object.defineProperty(window, "isTauri", {
       configurable: true,
@@ -331,7 +339,7 @@ async function installQuickActionTauriStub(
 
       if (cmd === "project_contract") {
         return {
-          commands: ["start_create", "start_extract", "poll_job_events", "cancel_job", "pause_job", "resume_job"],
+          commands: ["start_create", "start_extract", "subscribe_job", "subscribe_job_catalog", "cancel_job", "pause_job", "resume_job"],
           platformStrategy: "e2e",
           coreDependency: "stub",
           platformIntegration: {
@@ -379,78 +387,27 @@ async function installQuickActionTauriStub(
         };
       }
 
-      if (cmd === "poll_job_events") {
-        const request = args.request as { jobId: string };
-        const createdAt = jobCreatedAts.get(request.jobId) ?? String(Math.floor(Date.now() / 1000));
-        const kind = jobKinds.get(request.jobId) ?? "tzapCreate";
-        if (!completeOnPoll) {
-          const previousStatus = jobStatuses.get(request.jobId);
-          const status = previousStatus === "paused" || previousStatus === "cancelled"
-            ? previousStatus
-            : "running";
-          jobStatuses.set(request.jobId, status);
-          if (status === "cancelled") {
-            return {
-              jobId: request.jobId,
-              kind,
-              status,
-              createdAt,
-              canDismiss: true,
-              events: [
-                { eventType: "cancelled", entries: 2, totalEntries: 4, message: "Cancelled." },
-              ],
-              terminalSummary: null,
-            };
-          }
-          return {
-            jobId: request.jobId,
-            kind,
-            status,
-            createdAt,
-            canDismiss: false,
-            events: [
-              { eventType: "started", entries: 0, totalEntries: 4, totalBytes: 128, message: "started" },
-              {
-                eventType: "bytesProcessed",
-                totalBytesProcessed: 64,
-                totalBytes: 128,
-                entries: 2,
-                totalEntries: 4,
-                message: "processed",
-              },
-            ],
-            terminalSummary: null,
-          };
-        }
-        jobStatuses.set(request.jobId, "completed");
-        return {
-          jobId: request.jobId,
-          kind,
-          status: "completed",
-          createdAt,
-          canDismiss: true,
-          events: [
-            { eventType: "started", entries: 0, totalEntries: 1, totalBytes: 128, message: "started" },
-            {
-              eventType: "completed",
-              entries: 1,
-              totalEntries: 1,
-              totalBytes: 128,
-              totalBytesProcessed: 128,
-              message: "completed",
-            },
-          ],
-          terminalSummary: {
-            writtenEntries: 1,
-            writtenBytes: 32,
-            warnings: [],
-          },
-        };
+      if (cmd === "subscribe_job_catalog") {
+        return `catalog-${++subscriptionCount}`;
       }
+      if (cmd === "subscribe_job") {
+        const request = args.request as { jobId: string }; const subscriptionId = `job-${++subscriptionCount}`;
+        jobChannels.set(request.jobId, { callbackId: channelCallbackId(args.onSnapshot), subscriptionId, revision: 0 }); deliverJob(request.jobId); return subscriptionId;
+      }
+      if (cmd === "ack_subscription") {
+        const subscriptionId = (args.request as { subscriptionId?: string } | undefined)?.subscriptionId;
+        const entry = [...jobChannels.entries()].find(([, channel]) => channel.subscriptionId === subscriptionId);
+        if (completeOnPoll && entry && jobStatuses.get(entry[0]) === "running") {
+          window.setTimeout(() => deliverJob(entry[0], "completed"), 1_500);
+        }
+        return undefined;
+      }
+      if (cmd === "unsubscribe_job") return undefined;
 
       if (cmd === "cancel_job") {
         const request = args.request as { jobId: string };
         jobStatuses.set(request.jobId, "cancelled");
+        deliverJob(request.jobId, "cancelled");
         return {
           jobId: request.jobId,
           status: "cancelled",
@@ -460,6 +417,7 @@ async function installQuickActionTauriStub(
       if (cmd === "pause_job") {
         const request = args.request as { jobId: string };
         jobStatuses.set(request.jobId, "paused");
+        deliverJob(request.jobId, "paused");
         return {
           jobId: request.jobId,
           status: "paused",
@@ -469,6 +427,7 @@ async function installQuickActionTauriStub(
       if (cmd === "resume_job") {
         const request = args.request as { jobId: string };
         jobStatuses.set(request.jobId, "running");
+        deliverJob(request.jobId, "running");
         return {
           jobId: request.jobId,
           status: "running",

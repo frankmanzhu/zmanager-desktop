@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ack-subscription"
+description = "Enables the ack_subscription command without any pre-configured scope."
+commands.allow = ["ack_subscription"]
+
+[[permission]]
+identifier = "deny-ack-subscription"
+description = "Denies the ack_subscription command without any pre-configured scope."
+commands.deny = ["ack_subscription"]

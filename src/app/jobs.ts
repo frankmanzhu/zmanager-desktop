@@ -2,11 +2,12 @@ import { COMMAND_INVALID_PASSWORD, COMMAND_PASSWORD_REQUIRED } from "./constants
 import { calculateCompressionRatio, parseDateValue } from "./formatting";
 import type {
   JobEventDto,
+  DesktopJobSnapshotDto,
   JobKind,
   JobPhase,
   JobStatus,
   JobState,
-  PollJobEventsResponseDto,
+  LegacyJobSnapshotDto,
   StartExtractRequest,
   StartJobResponseDto,
 } from "../api/types";
@@ -25,18 +26,6 @@ export type JobRetryContext =
       retryKind: "testArchive";
       archivePath: string;
       entryPaths?: string[];
-    };
-
-export type JobPollingDecision =
-  | {
-      action: "requestAgain";
-    }
-  | {
-      action: "stop";
-    }
-  | {
-      action: "poll";
-      jobIds: string[];
     };
 
 export type QuickActionJobCompletionDecision =
@@ -79,6 +68,7 @@ export function isCreateJobKind(kind: JobKind): boolean {
 }
 
 export function getLatestPasswordFailureEvent(state: JobState): JobEventDto | null {
+  if (state.retainedSnapshot?.latestFailure && isPasswordErrorCode(state.retainedSnapshot.latestFailure.code)) return state.retainedSnapshot.latestFailure;
   for (let index = state.events.length - 1; index >= 0; index -= 1) {
     const event = state.events[index];
     if (event.eventType === "failed" && isPasswordErrorCode(event.code)) {
@@ -108,32 +98,17 @@ export function createInitialJobState(response: StartJobResponseDto): JobState {
   };
 }
 
-export function mergePolledJobState(
+export function replaceLegacyJobStateFixture(
   previous: JobState | undefined,
-  snapshot: PollJobEventsResponseDto,
+  snapshot: LegacyJobSnapshotDto,
 ): JobState {
   return {
     snapshot: {
       ...snapshot,
       terminalSummary: snapshot.terminalSummary ?? previous?.snapshot.terminalSummary ?? null,
     },
-    events: [...(previous?.events ?? []), ...snapshot.events],
+    events: [...snapshot.events],
   };
-}
-
-export function selectJobPollingDecision(
-  jobs: Iterable<JobState>,
-  pollInFlight: boolean,
-): JobPollingDecision {
-  if (pollInFlight) {
-    return { action: "requestAgain" };
-  }
-
-  const jobIds = Array.from(jobs)
-    .filter((state) => !state.snapshot.canDismiss)
-    .map((state) => state.snapshot.jobId);
-
-  return jobIds.length ? { action: "poll", jobIds } : { action: "stop" };
 }
 
 export function selectQuickActionJobCompletionDecision(
@@ -188,6 +163,30 @@ export type JobProgressSnapshot = {
   phase?: JobPhase | null;
 };
 
+export function deriveRetainedJobProgress(snapshot: DesktopJobSnapshotDto): JobProgressSnapshot {
+  const facts = snapshot.progressFacts;
+  const processedBytes = facts.processedBytes;
+  const totalBytes = facts.totalBytes ?? null;
+  const elapsedMs = facts.activeElapsedMillis;
+  const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0 ? processedBytes / (elapsedMs / 1000) : null;
+  const percent = totalBytes !== null && totalBytes > 0 ? Math.max(0, Math.min(100, processedBytes / totalBytes * 100)) : null;
+  const phasePercent = snapshot.kind === "tzapCreate" && facts.activePhase
+    ? progressPercentForTzapPhase(facts.activePhase, facts.phaseProcessedBytes, facts.phaseTotalBytes ?? null, facts.activePhase.startsWith("planning"))
+    : null;
+  const progressPercent = snapshot.status === "completed" ? 100 : (phasePercent ?? percent);
+  return {
+    id: snapshot.jobId, kind: snapshot.kind, status: snapshot.status, elapsedMs,
+    remainingMs: progressPercent && progressPercent > 0 ? elapsedMs * ((100 - progressPercent) / progressPercent) : null,
+    processedFiles: facts.processedEntries, totalFiles: facts.totalEntries ?? null,
+    errorCount: snapshot.latestFailure ? 1 : 0, warningCount: facts.warningCount,
+    totalBytes, processedBytes, compressedBytes: snapshot.terminalSummary?.writtenBytes ?? null,
+    speedBytesPerSecond, compressionRatio: isCreateJobKind(snapshot.kind) ? calculateCompressionRatio(totalBytes, snapshot.terminalSummary?.writtenBytes ?? null) : null,
+    currentFile: facts.recentPaths.at(-1) ?? facts.currentPath ?? "", progressPercent,
+    latestStatusMessage: snapshot.latestFailure?.message ?? facts.activePhase ?? snapshot.status,
+    phase: facts.activePhase ?? null,
+  };
+}
+
 const TZAP_CREATE_PHASE_RANGES: Readonly<Record<JobPhase, Readonly<{ start: number; end: number }>>> = Object.freeze({
   planningPayload: Object.freeze({ start: 0, end: 40 }),
   planningMetadata: Object.freeze({ start: 40, end: 42 }),
@@ -207,6 +206,7 @@ export function deriveJobProgress(
   state: JobState,
   nowMs = Date.now(),
 ): JobProgressSnapshot {
+  if (state.retainedSnapshot) return deriveRetainedJobProgress(state.retainedSnapshot);
   const createdAtMs = parseDateValue(state.snapshot.createdAt)?.getTime();
   const elapsedMs = typeof createdAtMs === "number" ? Math.max(0, nowMs - createdAtMs) : 0;
   const isCreateJob = isCreateJobKind(state.snapshot.kind);

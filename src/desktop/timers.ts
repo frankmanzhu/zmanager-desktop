@@ -8,7 +8,6 @@ export interface TimerClock {
 }
 
 export interface AppTimerOptions {
-  jobPollIntervalMs: number;
   quickActionAutoCloseDelayMs: number;
   createPlanDebounceMs: number;
   progressClockIntervalMs?: number;
@@ -19,8 +18,6 @@ export interface JobTimerAdapter {
   hasQuickActionAutoClosePending(): boolean;
   clearQuickActionAutoClose(): void;
   scheduleQuickActionAutoClose(callback: () => void): void;
-  startPolling(callback: () => void): void;
-  stopPolling(): void;
   startProgressClock(callback: () => void): void;
   stopProgressClock(): void;
 }
@@ -91,7 +88,6 @@ function createOneShotTimer(clock: TimerClock): OneShotTimerAdapter {
 export function createAppTimers(options: AppTimerOptions): AppTimers {
   const clock = options.clock ?? browserTimerClock();
   const progressClockIntervalMs = options.progressClockIntervalMs ?? 1000;
-  let pollTimer: TimerHandle | null = null;
   let progressClockTimer: TimerHandle | null = null;
   let quickActionAutoCloseTimer: TimerHandle | null = null;
 
@@ -113,21 +109,6 @@ export function createAppTimers(options: AppTimerOptions): AppTimers {
           quickActionAutoCloseTimer = null;
           callback();
         }, options.quickActionAutoCloseDelayMs);
-      },
-      startPolling(callback: () => void): void {
-        if (pollTimer !== null) {
-          return;
-        }
-
-        pollTimer = clock.setInterval(callback, options.jobPollIntervalMs);
-      },
-      stopPolling(): void {
-        if (pollTimer === null) {
-          return;
-        }
-
-        clock.clearInterval(pollTimer);
-        pollTimer = null;
       },
       startProgressClock(callback: () => void): void {
         if (progressClockTimer !== null) {

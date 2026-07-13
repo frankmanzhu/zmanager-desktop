@@ -63,7 +63,6 @@ function createTimersWithFakeClock(fakeClock = createFakeClock()) {
   return {
     fakeClock,
     timers: createAppTimers({
-      jobPollIntervalMs: 800,
       quickActionAutoCloseDelayMs: 650,
       createPlanDebounceMs: 350,
       clock: fakeClock.clock,
@@ -72,30 +71,6 @@ function createTimersWithFakeClock(fakeClock = createFakeClock()) {
 }
 
 describe("desktop timer adapter", () => {
-  it("starts polling as a singleton interval and allows restart after stop", () => {
-    const { fakeClock, timers } = createTimersWithFakeClock();
-    const firstCallback = vi.fn();
-    const duplicateCallback = vi.fn();
-
-    timers.jobs.startPolling(firstCallback);
-    timers.jobs.startPolling(duplicateCallback);
-
-    expect(fakeClock.activeIntervals()).toHaveLength(1);
-    expect(fakeClock.activeIntervals()[0][1].delayMs).toBe(800);
-
-    fakeClock.activeIntervals()[0][1].callback();
-    expect(firstCallback).toHaveBeenCalledTimes(1);
-    expect(duplicateCallback).not.toHaveBeenCalled();
-
-    timers.jobs.stopPolling();
-    expect(fakeClock.activeIntervals()).toHaveLength(0);
-
-    timers.jobs.startPolling(duplicateCallback);
-    expect(fakeClock.activeIntervals()).toHaveLength(1);
-    fakeClock.activeIntervals()[0][1].callback();
-    expect(duplicateCallback).toHaveBeenCalledTimes(1);
-  });
-
   it("starts the progress clock as a singleton 1000ms interval", () => {
     const { fakeClock, timers } = createTimersWithFakeClock();
     const firstCallback = vi.fn();

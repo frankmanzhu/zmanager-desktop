@@ -4788,7 +4788,19 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "socket2",
+ "tokio-macros",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
 ]
 
 [[package]]
@@ -6273,7 +6285,7 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=36ac993063385556e6e091df3f7c74866160fb5d#36ac993063385556e6e091df3f7c74866160fb5d"
+source = "git+https://github.com/tzap-org/zmanager?rev=89f99a47827b5ab99f4a9353c4f929452b54afb6#89f99a47827b5ab99f4a9353c4f929452b54afb6"
 dependencies = [
  "libc",
 ]
@@ -6281,7 +6293,7 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=36ac993063385556e6e091df3f7c74866160fb5d#36ac993063385556e6e091df3f7c74866160fb5d"
+source = "git+https://github.com/tzap-org/zmanager?rev=89f99a47827b5ab99f4a9353c4f929452b54afb6#89f99a47827b5ab99f4a9353c4f929452b54afb6"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6329,6 +6341,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tokio",
  "windows",
  "windows-core 0.61.2",
  "windows-sys 0.61.2",
@@ -6339,7 +6352,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=36ac993063385556e6e091df3f7c74866160fb5d#36ac993063385556e6e091df3f7c74866160fb5d"
+source = "git+https://github.com/tzap-org/zmanager?rev=89f99a47827b5ab99f4a9353c4f929452b54afb6#89f99a47827b5ab99f4a9353c4f929452b54afb6"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6367,7 +6380,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=36ac993063385556e6e091df3f7c74866160fb5d#36ac993063385556e6e091df3f7c74866160fb5d"
+source = "git+https://github.com/tzap-org/zmanager?rev=89f99a47827b5ab99f4a9353c4f929452b54afb6#89f99a47827b5ab99f4a9353c4f929452b54afb6"
 dependencies = [
  "cc",
  "zeroize",

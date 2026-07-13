@@ -262,10 +262,6 @@ export type VerifyTzapCertificateResponse = {
   diagnostics: string[];
 };
 
-export type PollJobEventsRequest = {
-  jobId: string;
-};
-
 export type CancelJobRequest = {
   jobId: string;
 };
@@ -289,7 +285,7 @@ export type StartJobResponseDto = {
   createdAt: string;
 };
 
-export type PollJobEventsResponseDto = {
+export type LegacyJobSnapshotDto = {
   jobId: string;
   kind: JobKind;
   status: JobStatus;
@@ -299,14 +295,56 @@ export type PollJobEventsResponseDto = {
   terminalSummary?: JobTerminalSummaryDto | null;
 };
 
+export type JobProgressFactsDto = {
+  processedBytes: number;
+  totalBytes?: number | null;
+  processedEntries: number;
+  totalEntries?: number | null;
+  currentPath?: string | null;
+  recentPaths: string[];
+  activePhase?: JobPhase | null;
+  phaseProcessedBytes: number;
+  phaseTotalBytes?: number | null;
+  warningCount: number;
+  activeElapsedMillis: number;
+  phaseElapsedMillis: number;
+};
+
+export type DesktopJobSnapshotDto = {
+  revision: string;
+  jobId: string;
+  kind: JobKind;
+  status: JobStatus;
+  createdAt: string;
+  updatedAt: string;
+  canPause: boolean;
+  canResume: boolean;
+  canCancel: boolean;
+  canDismiss: boolean;
+  progressFacts: JobProgressFactsDto;
+  latestFailure?: JobEventDto | null;
+  boundedNotices: JobEventDto[];
+  availableActions: string[];
+  outputArtifacts: string[];
+  retryDescriptor?: string | null;
+  terminalSummary?: JobTerminalSummaryDto | null;
+};
+
+export type JobSnapshotEnvelopeDto = { subscriptionId: string; revision: string; payload: DesktopJobSnapshotDto };
+export type JobCatalogDescriptorDto = { jobId: string; revision: string; kind: JobKind; status: JobStatus; terminal: boolean };
+export type JobCatalogSnapshotDto = { catalogRevision: string; jobs: JobCatalogDescriptorDto[] };
+export type JobCatalogEnvelopeDto = { subscriptionId: string; revision: string; payload: JobCatalogSnapshotDto };
+
 export type CancelJobResponseDto = {
   jobId: string;
   status: JobStatus;
+  revision: string;
 };
 
 export type JobControlResponseDto = {
   jobId: string;
   status: JobStatus;
+  revision: string;
 };
 
 export type JobEventDto = {
@@ -374,6 +412,7 @@ export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";
 
 export type JobState = {
-  snapshot: PollJobEventsResponseDto;
+  snapshot: LegacyJobSnapshotDto;
   events: JobEventDto[];
+  retainedSnapshot?: DesktopJobSnapshotDto;
 };

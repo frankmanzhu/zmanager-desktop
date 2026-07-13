@@ -1,8 +1,9 @@
 import type {
   JobEventDto,
+  DesktopJobSnapshotDto,
   JobState,
   JobStatus,
-  PollJobEventsResponseDto,
+  LegacyJobSnapshotDto,
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
@@ -15,11 +16,9 @@ import {
   isCreateJobKind,
   isLiveJobStatus,
   isTerminalJobStatus,
-  mergePolledJobState,
+  replaceLegacyJobStateFixture,
   selectQuickActionJobCompletionDecision,
-  selectJobPollingDecision,
   type JobProgressSnapshot,
-  type JobPollingDecision,
   type JobRetryContext,
   type QuickActionJobCompletionDecision,
 } from "../jobs";
@@ -74,10 +73,6 @@ export type JobOutputActionResolution =
   | {
       action: "unavailable";
     };
-
-export type JobPollingFinish = {
-  shouldPollAgain: boolean;
-};
 
 export type QuickActionCompletionOptions = {
   canEvaluate: boolean;
@@ -164,13 +159,12 @@ export type JobsWorkspace = {
   getPasswordRetryDetails(jobId: string): JobPasswordRetryDetails | null;
   markPasswordRetryPromptedIfEligible(jobId: string): boolean;
   addJob(response: StartJobResponseDto, options?: AddJobStateOptions): JobState;
-  mergePolledSnapshot(snapshot: PollJobEventsResponseDto): JobState;
+  replaceLegacySnapshotFixture(snapshot: LegacyJobSnapshotDto): JobState;
+  acceptRetainedSnapshot(snapshot: DesktopJobSnapshotDto): JobState;
   markJobFailed(jobId: string, event: JobEventDto): JobState | null;
   updateJobStatus(jobId: string, status: JobStatus): JobState | null;
   removeJob(jobId: string): boolean;
   clear(): void;
-  beginPolling(): JobPollingDecision;
-  finishPolling(): JobPollingFinish;
   setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction): void;
   getFocusedJobAutoCloseAction(): FocusedJobAutoCloseAction;
   trackFocusedQuickActionJob(jobId: string, context?: FocusedJobProgressContext): void;
@@ -209,6 +203,12 @@ function cloneJobState(state: JobState): JobState {
         : state.snapshot.terminalSummary ?? null,
     },
     events: state.events.map(cloneJobEvent),
+    retainedSnapshot: state.retainedSnapshot ? {
+      ...state.retainedSnapshot,
+      progressFacts: { ...state.retainedSnapshot.progressFacts, recentPaths: [...state.retainedSnapshot.progressFacts.recentPaths] },
+      boundedNotices: state.retainedSnapshot.boundedNotices.map(cloneJobEvent),
+      availableActions: [...state.retainedSnapshot.availableActions], outputArtifacts: [...state.retainedSnapshot.outputArtifacts],
+    } : undefined,
   };
 }
 
@@ -354,8 +354,6 @@ export function createJobsWorkspace(): JobsWorkspace {
   const promptedPasswordRetryJobs = new Set<string>();
   const focusedQuickActionJobIds = new Set<string>();
   const focusedJobProgressContexts = new Map<string, FocusedJobProgressContext>();
-  let pollInFlight = false;
-  let pollAgainRequested = false;
   let focusedJobAutoCloseAction: FocusedJobAutoCloseAction = "closeWindow";
 
   function clearJobMetadata(jobId: string) {
@@ -385,8 +383,6 @@ export function createJobsWorkspace(): JobsWorkspace {
     promptedPasswordRetryJobs.clear();
     focusedQuickActionJobIds.clear();
     focusedJobProgressContexts.clear();
-    pollInFlight = false;
-    pollAgainRequested = false;
     focusedJobAutoCloseAction = "closeWindow";
   }
 
@@ -531,11 +527,25 @@ export function createJobsWorkspace(): JobsWorkspace {
       return cloneJobState(state);
     },
 
-    mergePolledSnapshot(snapshot) {
-      const state = mergePolledJobState(jobs.get(snapshot.jobId), snapshot);
+    replaceLegacySnapshotFixture(snapshot) {
+      const state = replaceLegacyJobStateFixture(jobs.get(snapshot.jobId), snapshot);
       const stored = cloneJobState(state);
       jobs.set(snapshot.jobId, stored);
       return cloneJobState(stored);
+    },
+
+    acceptRetainedSnapshot(snapshot) {
+      const previous = jobs.get(snapshot.jobId)?.retainedSnapshot;
+      if (previous && BigInt(snapshot.revision) <= BigInt(previous.revision)) return cloneJobState(jobs.get(snapshot.jobId)!);
+      const notices = snapshot.latestFailure ? [...snapshot.boundedNotices, snapshot.latestFailure] : [...snapshot.boundedNotices];
+      const state: JobState = {
+        snapshot: { jobId: snapshot.jobId, kind: snapshot.kind, status: snapshot.status, createdAt: snapshot.createdAt,
+          canDismiss: snapshot.canDismiss, events: notices, terminalSummary: snapshot.terminalSummary ?? null },
+        events: notices,
+        retainedSnapshot: snapshot,
+      };
+      jobs.set(snapshot.jobId, state);
+      return cloneJobState(state);
     },
 
     markJobFailed(jobId, event) {
@@ -583,26 +593,6 @@ export function createJobsWorkspace(): JobsWorkspace {
 
     clear() {
       clear();
-    },
-
-    beginPolling() {
-      if (pollInFlight) {
-        pollAgainRequested = true;
-        return { action: "requestAgain" };
-      }
-
-      const decision = selectJobPollingDecision(jobs.values(), false);
-      if (decision.action === "poll") {
-        pollInFlight = true;
-      }
-      return decision;
-    },
-
-    finishPolling() {
-      pollInFlight = false;
-      const shouldPollAgain = pollAgainRequested;
-      pollAgainRequested = false;
-      return { shouldPollAgain };
     },
 
     setFocusedJobAutoCloseAction(action) {

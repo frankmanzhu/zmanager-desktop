@@ -102,6 +102,8 @@ function jobStatusMessageKey(status: SnapshotJobStatus) {
       return "jobs.status.running";
     case "paused":
       return "jobs.status.paused";
+    case "cancelling":
+      return "jobs.status.running";
     case "completed":
       return "jobs.status.completed";
     case "failed":

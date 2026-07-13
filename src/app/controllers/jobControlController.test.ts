@@ -4,7 +4,7 @@ import type {
   CommandErrorDto,
   JobEventDto,
   JobStatus,
-  PollJobEventsResponseDto,
+  LegacyJobSnapshotDto,
   StartJobResponseDto,
 } from "../../api/types";
 import type { JobRetryContext } from "../jobs";
@@ -23,7 +23,7 @@ function startJobResponse(overrides: Partial<StartJobResponseDto> = {}): StartJo
   };
 }
 
-function pollResponse(overrides: Partial<PollJobEventsResponseDto> = {}): PollJobEventsResponseDto {
+function legacySnapshot(overrides: Partial<LegacyJobSnapshotDto> = {}): LegacyJobSnapshotDto {
   return {
     jobId: "job-1",
     kind: "zipExtract",
@@ -71,22 +71,20 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
     closeFocusedJobProgress: 0,
     messages: [] as string[],
     outputActions: [] as JobOutputAction[],
-    pollJobs: 0,
     renderJobs: 0,
     renderQuickProgress: 0,
     revealQuickActionJobWindow: 0,
     scheduledAutoClose: 0,
     statuses: [] as string[],
-    stopPolling: 0,
   };
   let autoClosePending = false;
   let autoCloseCallback: (() => void) | null = null;
   let backgrounded = false;
   let canEvaluateCompletion = true;
   let promptPassword: string | null = "secret";
-  const cancelJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "cancelled" as JobStatus }));
-  const pauseJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "paused" as JobStatus }));
-  const resumeJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "running" as JobStatus }));
+  const cancelJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "cancelled" as JobStatus, revision: "1" }));
+  const pauseJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "paused" as JobStatus, revision: "1" }));
+  const resumeJob = vi.fn(async ({ jobId }: { jobId: string }) => ({ jobId, status: "running" as JobStatus, revision: "1" }));
   const dismissJob = vi.fn(async () => {});
   const runTestArchive = vi.fn(async () => startJobResponse({ jobId: "retry-test" }));
   const runStartExtract = vi.fn(async () => startJobResponse({ jobId: "retry-extract" }));
@@ -137,17 +135,11 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
     setOperationalStatus(message) {
       calls.statuses.push(message);
     },
-    async pollJobs() {
-      calls.pollJobs += 1;
-    },
     renderJobs() {
       calls.renderJobs += 1;
     },
     renderQuickProgress() {
       calls.renderQuickProgress += 1;
-    },
-    stopPolling() {
-      calls.stopPolling += 1;
     },
     canEvaluateQuickActionCompletion() {
       return canEvaluateCompletion;
@@ -177,7 +169,7 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
 
   function markJobFailedForRetry(jobId: string, context: JobRetryContext, failure = passwordFailure()) {
     workspace.addJob(startJobResponse({ jobId }), { retryContext: context });
-    workspace.mergePolledSnapshot(pollResponse({
+    workspace.replaceLegacySnapshotFixture(legacySnapshot({
       jobId,
       status: "failed",
       canDismiss: true,
@@ -215,7 +207,7 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
 }
 
 describe("job control controller", () => {
-  it("pauses focused quick-action jobs and updates statuses before polling", async () => {
+  it("pauses focused quick-action jobs and updates optimistic statuses", async () => {
     const harness = createHarness();
     harness.addTrackedJob("job-1", "running");
     harness.addTrackedJob("job-2", "queued");
@@ -227,7 +219,6 @@ describe("job control controller", () => {
     expect(harness.workspace.getJob("job-1")?.snapshot.status).toBe("paused");
     expect(harness.workspace.getJob("job-2")?.snapshot.status).toBe("paused");
     expect(harness.calls.messages).toEqual(["jobs.paused"]);
-    expect(harness.calls.pollJobs).toBe(1);
   });
 
   it("resumes all controllable focused quick-action jobs when any tracked job is paused", async () => {
@@ -265,7 +256,6 @@ describe("job control controller", () => {
 
     expect(harness.cancelJob).toHaveBeenCalledWith({ jobId: "job-1" });
     expect(harness.cancelJob).toHaveBeenCalledWith({ jobId: "job-2" });
-    expect(harness.calls.pollJobs).toBe(1);
     expect(harness.calls.messages).toEqual(["jobs.cancelled"]);
     expect(harness.calls.closeFocusedJobProgress).toBe(1);
     expect(harness.calls.closeAppWindow).toBe(0);
@@ -468,7 +458,6 @@ describe("job control controller", () => {
     expect(harness.cancelJob).toHaveBeenCalledWith({ jobId: "job-1" });
     expect(harness.pauseJob).toHaveBeenCalledWith({ jobId: "job-2" });
     expect(harness.resumeJob).toHaveBeenCalledWith({ jobId: "job-3" });
-    expect(harness.calls.pollJobs).toBe(3);
   });
 
   it("reports row pause and resume failures with the update fallback", async () => {
@@ -487,7 +476,7 @@ describe("job control controller", () => {
     expect(harness.calls.statuses).toEqual(["message:jobs.updateFailed", "Resume denied."]);
   });
 
-  it("dismisses jobs, renders, and stops polling when the last job is removed", async () => {
+  it("dismisses jobs and renders when the last job is removed", async () => {
     const harness = createHarness();
     harness.workspace.addJob(startJobResponse({ jobId: "job-1" }));
 
@@ -496,7 +485,6 @@ describe("job control controller", () => {
     expect(harness.dismissJob).toHaveBeenCalledWith({ jobId: "job-1" });
     expect(harness.workspace.hasJob("job-1")).toBe(false);
     expect(harness.calls.renderJobs).toBe(1);
-    expect(harness.calls.stopPolling).toBe(1);
   });
 
   it("runs ready output actions and reports unavailable or failed output actions", async () => {

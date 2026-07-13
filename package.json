@@ -12,6 +12,7 @@
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",
     "ast:lint": "ast-grep scan",
+    "test:architecture": "bash scripts/check-job-feed-architecture.sh && npm run ast:lint",
     "tauri": "tauri"
   },
   "dependencies": {

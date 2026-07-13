@@ -2,7 +2,6 @@ import {
   APP_TITLE,
   COMMAND_INVALID_PASSWORD,
   COMMAND_PASSWORD_REQUIRED,
-  JOB_POLL_INTERVAL_MS,
 } from "../app/constants";
 import {
   COMMAND_DEFINITIONS,
@@ -60,9 +59,6 @@ import {
 import {
   createJobControlController,
 } from "../app/controllers/jobControlController";
-import {
-  createJobPollingController,
-} from "../app/controllers/jobPollingController";
 import {
   createQuickActionController,
 } from "../app/controllers/quickActionController";
@@ -229,7 +225,6 @@ import {
   fetchSystemFileIcons,
   generateTzapIdentity as generateTzapIdentityCommand,
   listArchive as listArchiveCommand,
-  pollJobEvents as pollJobEventsCommand,
   pauseJob as pauseJobCommand,
   runPlanCreate,
   runPreviewEntry,
@@ -249,7 +244,6 @@ import type {
   HealthcheckResponse,
   JobState,
   ListArchiveRequest,
-  PollJobEventsResponseDto,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -279,6 +273,7 @@ import {
 import {
   createAppTimers,
 } from "../desktop/timers";
+import { createTauriJobFeed, type JobFeedSubscription } from "../desktop/jobFeed";
 import {
   bindPreviewCleanupOnAppClose,
   cleanupPreviewRoots,
@@ -366,9 +361,7 @@ const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 const disposableTaskLifecycle = createDisposableTaskLifecycle();
 const disposableTaskWindows = createDisposableTaskWindowManager({
-  onReady: (jobId) => {
-    void publishDisposableTaskJob(jobId);
-  },
+  onReady: () => {},
   onAllClosed: () => {
     maybeCloseQuickActionOnlyCoordinator();
   },
@@ -559,7 +552,6 @@ const createRuntimeActions = createCreateRuntimeActions({
 });
 
 const appTimers = createAppTimers({
-  jobPollIntervalMs: JOB_POLL_INTERVAL_MS,
   quickActionAutoCloseDelayMs: QUICK_ACTION_AUTO_CLOSE_DELAY_MS,
   createPlanDebounceMs: 350,
 });
@@ -627,17 +619,32 @@ const createStartController = createCreateStartController({
   },
   toCommandError: asCommandError,
 });
-const jobPollingController = createJobPollingController({
-  workspace: jobsWorkspace,
-  timers: jobTimers,
-  pollJobEvents: (jobId) => pollJobEventsCommand({ jobId }),
-  maybePromptForJobPasswordRetry,
-  toCommandError: asCommandError,
-  readProgressFailedMessage: () => message("jobs.readProgressFailed"),
-  setOperationalStatus,
-  renderJobs,
-  maybeCloseCompletedQuickActionWindow,
-});
+const jobFeed = createTauriJobFeed();
+const jobSubscriptions = new Map<string, JobFeedSubscription>();
+let catalogSubscription: JobFeedSubscription | null = null;
+
+async function subscribeToRetainedJob(jobId: string): Promise<void> {
+  if (jobSubscriptions.has(jobId)) return;
+  const subscription = await jobFeed.subscribeJob(jobId, (snapshot) => {
+    jobsWorkspace.acceptRetainedSnapshot(snapshot);
+    void maybePromptForJobPasswordRetry(jobId);
+    renderJobs();
+    maybeCloseCompletedQuickActionWindow();
+  });
+  jobSubscriptions.set(jobId, subscription);
+}
+
+async function subscribeToJobCatalog(): Promise<void> {
+  if (catalogSubscription) return;
+  catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
+    const retained = new Set(catalog.jobs.map((job) => job.jobId));
+    for (const job of catalog.jobs) void subscribeToRetainedJob(job.jobId);
+    for (const [jobId, subscription] of jobSubscriptions) {
+      if (!retained.has(jobId)) { void subscription.unsubscribe(); jobSubscriptions.delete(jobId); jobsWorkspace.removeJob(jobId); }
+    }
+    renderJobs();
+  });
+}
 const archiveLoadController = createArchiveLoadController({
   workspace: archiveWorkspace,
   enterExtractWorkspace: () => setWorkspaceMode("extract"),
@@ -900,10 +907,8 @@ const jobControlController = createJobControlController({
   message,
   setOperationalMessage,
   setOperationalStatus,
-  pollJobs: () => pollJobs(),
   renderJobs,
   renderQuickProgress,
-  stopPolling: () => stopPolling(),
   canEvaluateQuickActionCompletion: () => isDesktopRuntime() && isQuickActionJobMode(),
   isQuickActionWindowBackgrounded: () => shellWorkspace.isQuickActionWindowBackgrounded(),
   revealQuickActionJobWindow: () => revealQuickActionJobWindow(),
@@ -1213,6 +1218,8 @@ function jobStatusMessageKey(status: JobState["snapshot"]["status"]): MessageKey
       return "jobs.status.running";
     case "paused":
       return "jobs.status.paused";
+    case "cancelling":
+      return "jobs.status.running";
     case "completed":
       return "jobs.status.completed";
     case "failed":
@@ -1834,7 +1841,6 @@ function handleReactJobsIntent(intent: ZManagerJobsIntent) {
       closeJobDrawer();
       break;
     case "poll":
-      void pollJobs();
       break;
     case "cancel":
       void onCancelJob(intent.jobId);
@@ -2185,23 +2191,7 @@ function renderJobs() {
   renderQuickProgress();
   syncProgressClock(snapshot.progressClock);
   publishReactSnapshot();
-  for (const jobId of disposableTaskWindows.getOpenJobIds()) {
-    void publishDisposableTaskJob(jobId);
-  }
   maybeCloseQuickActionOnlyCoordinator();
-}
-
-async function publishDisposableTaskJob(jobId: string): Promise<void> {
-  const state = jobsWorkspace.getJob(jobId);
-  if (!state) {
-    return;
-  }
-  const snapshot: PollJobEventsResponseDto = {
-    ...state.snapshot,
-    events: [...state.events],
-    terminalSummary: state.snapshot.terminalSummary ?? null,
-  };
-  await disposableTaskWindows.publish(jobId, snapshot);
 }
 
 function maybeCloseQuickActionOnlyCoordinator(): void {
@@ -2376,13 +2366,11 @@ function isCreateSubmissionInFlight(): boolean {
 
 function openJobDrawer() {
   if (isQuickActionJobMode()) {
-    void pollJobs();
     return;
   }
 
   shellWorkspace.setJobDrawerOpen(true);
   publishReactSnapshot();
-  void pollJobs();
 }
 
 function closeJobDrawer() {
@@ -3438,12 +3426,12 @@ function addJobState(
     outputActions: options.outputActions,
   });
   if (useDisposableWindow) {
-    void disposableTaskWindows.open(response).then(() => publishDisposableTaskJob(response.jobId));
+    void disposableTaskWindows.open(response);
   } else {
     trackQuickActionJob(response.jobId, options.progressContext);
   }
 
-  schedulePolling();
+  void subscribeToRetainedJob(response.jobId);
   renderJobs();
   if (!useDisposableWindow) {
     openJobDrawer();
@@ -3516,6 +3504,7 @@ async function bindQuickActionLaunchEvents() {
 }
 
 async function initializeDesktopRuntime() {
+  await subscribeToJobCatalog();
   await startupController.initializeDesktopRuntime();
 }
 
@@ -3531,28 +3520,16 @@ async function maybePromptForJobPasswordRetry(jobId: string) {
   await jobControlController.maybePromptForJobPasswordRetry(jobId);
 }
 
-async function pollJobs() {
-  await jobPollingController.pollJobs();
-}
-
-function schedulePolling() {
-  jobPollingController.schedulePolling();
-}
-
 function scheduleProgressClock() {
-  jobPollingController.scheduleProgressClock();
+  jobTimers.startProgressClock(renderJobs);
 }
 
 function stopProgressClock() {
-  jobPollingController.stopProgressClock();
+  jobTimers.stopProgressClock();
 }
 
 function syncProgressClock(snapshot: ProgressClockSnapshot = jobsWorkspace.getProgressClockSnapshot()) {
-  jobPollingController.syncProgressClock(snapshot);
-}
-
-function stopPolling() {
-  jobPollingController.stopPolling();
+  if (snapshot.shouldRun) scheduleProgressClock(); else stopProgressClock();
 }
 
 async function onOpenArchive() {

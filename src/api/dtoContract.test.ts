@@ -16,7 +16,6 @@ const REQUEST_DTO_TYPES = [
   "PreviewEntryRequest",
   "NativeFileDragRequest",
   "TestArchiveRequest",
-  "PollJobEventsRequest",
   "CancelJobRequest",
   "PauseJobRequest",
   "ResumeJobRequest",

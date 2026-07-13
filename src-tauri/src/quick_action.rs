@@ -905,7 +905,7 @@ fn base_name_without_tzap_volume_suffix(name: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::job_dto::{JobStatusDto, PollJobEventsResponseDto};
+    use crate::job_dto::{JobStatusDto, TestJobEventsSnapshot};
     use crate::job_registry::JobRegistry;
     use std::fs;
     use std::path::PathBuf;
@@ -949,10 +949,10 @@ mod tests {
         base
     }
 
-    fn wait_for_job_terminal(registry: &JobRegistry, job_id: &str) -> PollJobEventsResponseDto {
+    fn wait_for_job_terminal(registry: &JobRegistry, job_id: &str) -> TestJobEventsSnapshot {
         for _ in 0..400 {
             let poll = registry
-                .poll_events(job_id)
+                .take_test_events(job_id)
                 .expect("job should stay available while waiting for terminal state");
             if poll.status.is_terminal() {
                 return poll;

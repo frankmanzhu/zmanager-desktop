@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-subscribe-job"
+description = "Enables the subscribe_job command without any pre-configured scope."
+commands.allow = ["subscribe_job"]
+
+[[permission]]
+identifier = "deny-subscribe-job"
+description = "Denies the subscribe_job command without any pre-configured scope."
+commands.deny = ["subscribe_job"]

@@ -412,8 +412,21 @@ pub enum ZipCompressionDto {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PollJobEventsRequest {
+pub struct SubscribeJobRequest {
     pub job_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionRequest {
+    pub subscription_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AckSubscriptionRequest {
+    pub subscription_id: String,
+    pub revision: String,
 }
 
 #[derive(Debug, Deserialize)]
