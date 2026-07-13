@@ -8,6 +8,7 @@ pub enum JobStatusDto {
     Queued,
     Running,
     Paused,
+    Cancelling,
     Completed,
     Failed,
     Cancelled,

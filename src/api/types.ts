@@ -368,7 +368,7 @@ export type JobKind =
   | "rawStreamExtract"
   | "testArchive";
 
-export type JobStatus = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export type JobStatus = "queued" | "running" | "paused" | "cancelling" | "completed" | "failed" | "cancelled";
 
 export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";
