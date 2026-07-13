@@ -6285,7 +6285,7 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=7bda12df8bbdc860268723555a3383fe3efc4bb7#7bda12df8bbdc860268723555a3383fe3efc4bb7"
+source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "libc",
 ]
@@ -6293,7 +6293,7 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=7bda12df8bbdc860268723555a3383fe3efc4bb7#7bda12df8bbdc860268723555a3383fe3efc4bb7"
+source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6352,7 +6352,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=7bda12df8bbdc860268723555a3383fe3efc4bb7#7bda12df8bbdc860268723555a3383fe3efc4bb7"
+source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6380,7 +6380,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=7bda12df8bbdc860268723555a3383fe3efc4bb7#7bda12df8bbdc860268723555a3383fe3efc4bb7"
+source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "cc",
  "zeroize",
