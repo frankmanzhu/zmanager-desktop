@@ -273,6 +273,43 @@ describe("quick action controller", () => {
     expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.started", params: undefined });
   });
 
+  it.each([
+    { format: "zip", kind: "compressZip" },
+    { format: "tarZst", kind: "compressTarZst" },
+    { format: "tzap", kind: "compressTzap" },
+    { format: "sevenZ", kind: "compressSevenZ" },
+  ] as const)("applies all persisted $format flags to its fixed-format quick action", async ({ format, kind }) => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      createFormatDefaults: {
+        ...DEFAULT_APP_PREFERENCES.createFormatDefaults,
+        [format]: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults[format],
+          cleanSource: false,
+          respectGitignore: true,
+          followSymlinks: true,
+          replaceExisting: true,
+          preserveMetadata: false,
+        },
+      },
+    });
+
+    await harness.controller.handleQuickActionRequest({
+      kind,
+      paths: ["C:/work/source"],
+    });
+
+    expect(harness.runStartCreate).toHaveBeenCalledWith(expect.objectContaining({
+      format,
+      cleanSource: false,
+      respectGitignore: true,
+      followSymlinks: true,
+      replaceExisting: true,
+      preserveMetadata: false,
+    } satisfies Partial<StartCreateRequest>));
+  });
+
   it("cancels quick create when a password prompt is dismissed", async () => {
     const harness = createHarness({
       promptForNewArchivePassword: () => null,

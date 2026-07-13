@@ -28,11 +28,9 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
             move |app, argv, _cwd| {
-                let registry = app.state::<job_registry::JobRegistry>().inner().clone();
                 single_instance_coordinator.ingest_secondary_process_args(
                     argv.into_iter().map(std::ffi::OsString::from).collect(),
                     app.clone(),
-                    registry,
                 );
             },
         ))

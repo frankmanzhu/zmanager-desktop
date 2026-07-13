@@ -27,6 +27,21 @@ describe("React preferences dialog", () => {
     expect(html).toContain('id="preferences-save"');
   });
 
+  it("keeps every shared create flag with the selected archive-format defaults", () => {
+    const html = renderPreferences(preferencesSnapshot({ defaultArchiveFormat: "tzap" }));
+    const archivePage = html.slice(
+      html.indexOf('data-pref-page="archive"'),
+      html.indexOf('data-pref-page="extraction"'),
+    );
+
+    expect(archivePage).toContain('id="pref-create-clean-source"');
+    expect(archivePage).toContain('id="pref-create-respect-gitignore"');
+    expect(archivePage).toContain('id="pref-create-follow-symlinks"');
+    expect(archivePage).toContain('id="pref-create-preserve-metadata"');
+    expect(archivePage).toContain('id="pref-create-replace-existing"');
+    expect(archivePage).toContain('id="pref-create-prompt-password"');
+  });
+
   it("disables save and validates when custom output is selected without a path", () => {
     const html = renderPreferences(preferencesSnapshot({
       defaultOutputLocation: "customFolder",

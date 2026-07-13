@@ -127,7 +127,7 @@ export function PreferencesDialog() {
               />
               <ExtractionPage draft={draft} active={activePage === "extraction"} />
               <InterfacePage draft={draft} active={activePage === "interface"} />
-              <SafetyPage draft={draft} active={activePage === "safety"} selectedCreateFormat={selectedCreateFormat} />
+              <SafetyPage draft={draft} active={activePage === "safety"} />
               <p id="preferences-status" className={`mt-6 rounded-xl border px-4 py-3 text-xs ${customOutputMissing ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400"}`}>
             {customOutputMissing ? i18n.t("preferences.validation.customOutputRequired") : i18n.t("preferences.status.localOnly")}
               </p>
@@ -247,6 +247,7 @@ function ArchiveDefaultsPage({
   const [identityName, setIdentityName] = useState("TZAP Signing Identity");
   const [identityPassword, setIdentityPassword] = useState("");
   const supportsTzapRecovery = selectedCreateFormat === "tzap";
+  const supportsPassword = createFormatSupportsPassword(selectedCreateFormat);
   const capabilities = createFormatCapabilities(selectedCreateFormat);
   const volumeSizeChoices = defaults.volumeSize !== null && !draft.volumeSizePresets.includes(defaults.volumeSize)
     ? [defaults.volumeSize, ...draft.volumeSizePresets]
@@ -346,11 +347,16 @@ function ArchiveDefaultsPage({
         </div>}
       </section> : null}
       <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+        <PreferenceCheckbox id="pref-create-clean-source" label={i18n.t("create.cleanSource")} checked={defaults.cleanSource} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { cleanSource: checked })} />
         <PreferenceCheckbox id="pref-create-respect-gitignore" label={i18n.t("create.respectGitignore")} checked={Boolean(defaults.respectGitignore)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { respectGitignore: checked })} />
         <PreferenceCheckbox id="pref-create-follow-symlinks" label={i18n.t("create.followSymlinks")} checked={Boolean(defaults.followSymlinks)} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { followSymlinks: checked })} />
+        <PreferenceCheckbox id="pref-create-preserve-metadata" label={i18n.t("create.preserveMetadata")} checked={defaults.preserveMetadata} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { preserveMetadata: checked })} />
+        <PreferenceCheckbox id="pref-create-replace-existing" label={i18n.t("create.replaceExisting")} checked={defaults.replaceExisting} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { replaceExisting: checked })} />
+        <PreferenceCheckbox id="pref-create-prompt-password" label={i18n.t("create.promptForPassword")} checked={supportsPassword && defaults.promptForPassword} disabled={!supportsPassword} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { promptForPassword: checked })} />
         {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-solid" label={i18n.t("create.sevenZSolid")} checked={defaults.sevenZSolid ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZSolid: checked })} /> : null}
         {capabilities.sevenZAdvanced ? <PreferenceCheckbox id="pref-create-7z-encrypt-names" label={i18n.t("create.sevenZEncryptFileNames")} checked={defaults.sevenZEncryptFileNames ?? true} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { sevenZEncryptFileNames: checked })} /> : null}
       </div>
+      <p className="setting-description mt-2"><span className="quick-action-badge">{i18n.t("preferences.quickActions.badge")}</span> <span>{i18n.t("preferences.safety.quickDescription")}</span></p>
     </section>
   );
 }
@@ -477,29 +483,18 @@ function InterfacePage({ draft, active }: Readonly<{ draft: AppPreferences; acti
 function SafetyPage({
   draft,
   active,
-  selectedCreateFormat,
 }: Readonly<{
   draft: AppPreferences;
   active: boolean;
-  selectedCreateFormat: CreateFormat;
 }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const defaults = createDefaultsForFormat(draft, selectedCreateFormat);
-  const supportsPassword = createFormatSupportsPassword(selectedCreateFormat);
 
   return (
     <section className={PREFERENCE_PAGE_CLASS} data-pref-page="safety" hidden={!active}>
       <h3>{i18n.t("preferences.safety.title")}</h3>
       <p className="section-description">{i18n.t("preferences.safety.description")}</p>
-      <div className="toggle-grid settings-toggle-grid">
-        <PreferenceCheckbox id="pref-create-clean-source" label={i18n.t("create.cleanSource")} checked={defaults.cleanSource} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { cleanSource: checked })} />
-        <PreferenceCheckbox id="pref-create-preserve-metadata" label={i18n.t("create.preserveMetadata")} checked={defaults.preserveMetadata} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { preserveMetadata: checked })} />
-        <PreferenceCheckbox id="pref-create-replace-existing" label={i18n.t("create.replaceExisting")} checked={defaults.replaceExisting} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { replaceExisting: checked })} />
-        <PreferenceCheckbox id="pref-create-prompt-password" label={i18n.t("create.promptForPassword")} checked={supportsPassword && defaults.promptForPassword} disabled={!supportsPassword} onChange={(checked) => patchCreateDefaults(actions, selectedCreateFormat, { promptForPassword: checked })} />
-      </div>
-      <p className="setting-description"><span className="quick-action-badge">{i18n.t("preferences.quickActions.badge")}</span> <span>{i18n.t("preferences.safety.quickDescription")}</span></p>
       <div className="setting-row">
         <label htmlFor="pref-preview-cleanup">{i18n.t("preferences.archiveDefaults.previewCleanup")}</label>
         <div className="setting-control">

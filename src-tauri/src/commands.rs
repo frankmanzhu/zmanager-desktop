@@ -151,17 +151,15 @@ pub fn validate_directory(request: ValidateDirectoryRequest) -> ValidateDirector
 #[tauri::command]
 pub fn quick_action_startup_state(
     state: State<'_, QuickActionLaunchCoordinator>,
-    registry: State<'_, JobRegistry>,
 ) -> crate::dto::QuickActionStartupStateDto {
-    crate::quick_action::startup_state_to_dto(state.startup_state(), &registry)
+    state.startup_state().to_dto()
 }
 
 #[cfg(test)]
 fn quick_action_startup_state_internal(
     state: &crate::quick_action::QuickActionStartupState,
-    registry: &JobRegistry,
 ) -> crate::dto::QuickActionStartupStateDto {
-    crate::quick_action::startup_state_to_dto(state.clone(), registry)
+    state.to_dto()
 }
 
 #[tauri::command]
@@ -2938,8 +2936,7 @@ mod tests {
                 .map(OsString::from),
         );
 
-        let registry = JobRegistry::new();
-        let response = quick_action_startup_state_internal(&state, &registry);
+        let response = quick_action_startup_state_internal(&state);
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
@@ -2964,8 +2961,7 @@ mod tests {
             .map(OsString::from),
         );
 
-        let registry = JobRegistry::new();
-        let response = quick_action_startup_state_internal(&state, &registry);
+        let response = quick_action_startup_state_internal(&state);
 
         assert!(response.launched_for_quick_action);
         assert!(response.quick_action.is_none());

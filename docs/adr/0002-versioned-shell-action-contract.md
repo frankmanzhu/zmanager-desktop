@@ -41,8 +41,9 @@ plans, creates, opens, or extracts archives. Folder-background verbs remain
 single-path executable commands because the background itself is one target.
 
 The desktop does not debounce or coalesce separate process launches. Tauri's
-single-instance boundary decides which process owns execution before any direct
-job begins.
+single-instance boundary decides which process owns execution, then forwards
+the atomic intent to the frontend command seam so persisted per-format defaults
+are applied before any job begins.
 
 Legacy `--quick-action` arguments and unversioned `--quick-action-request` files
 remain accepted for compatibility, but new integrations use the versioned
@@ -69,7 +70,8 @@ contract.
   and routed normally.
 - Windows extension tests construct a real `IShellItemArray` with two folders
   and prove both paths survive in order.
-- A Rust create-job regression proves one two-folder request produces one ZIP
-  job and no second output archive.
+- A Rust regression proves one two-folder request remains one pending frontend
+  intent, and a frontend controller regression proves that intent produces one
+  create request with the selected format defaults.
 - Windows package builds must include the DLL and register/unregister every COM
   class through the NSIS hook.
