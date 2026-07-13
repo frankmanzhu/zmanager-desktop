@@ -105,6 +105,10 @@ For every bug fix, include the test that proves the fix whenever feasible. For e
 
 Recent history uses short imperative summaries, for example `Fix context menu`. Keep commits focused. Pull requests should include a description, test commands run, linked issue or requirement, and screenshots for UI changes.
 
+Use the repository's configured SSH remote for Git pushes. A missing `gh` CLI login
+does not block committing or pushing when SSH authentication is available; require
+`gh` authentication only for GitHub API operations such as creating a pull request.
+
 ## Security & Architecture Rules
 
 Passwords must never be logged, persisted in frontend storage, passed through command-line arguments, or included in diagnostics. Extraction safety must remain core-owned; do not bypass path normalization, collision handling, overwrite policy, symlink/hardlink checks, or zip-bomb guards. Keep command contracts small: plan, list, extract, create, test, cancel, and poll events.
