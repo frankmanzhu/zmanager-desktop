@@ -11,6 +11,8 @@ import { createDefaultsForFormat, type AppPreferences, type FormatCreateDefaults
 import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize, formatVolumeSizePresetList, parseVolumeSizePresetList } from "../../../app/volumeSizePresets";
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { HelpTooltip } from "../../components/ui/tooltip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -440,6 +442,37 @@ function ExtractionPage({ draft, active }: Readonly<{ draft: AppPreferences; act
         </div>
       </div>
       <PreferenceCheckbox id="pref-extract-deduplicate-root" label={i18n.t("extract.deduplicateRoot")} checked={draft.defaultExtractDeduplicateRoot} onChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultExtractDeduplicateRoot: checked } })} />
+      <div className="mt-4 grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4">
+        <div><h4 className="text-xs font-semibold">{i18n.t("preferences.extraction.tzapMetadata")}</h4><p className="mt-1 text-xs leading-5 opacity-70">{i18n.t("preferences.extraction.tzapMetadata.help")}</p></div>
+        <label className="grid gap-1.5 text-xs font-semibold">
+          <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+          <Select
+            value={draft.defaultTzapRestorePolicy}
+            onValueChange={(value) =>
+              actions.handleDialogIntent({
+                type: "preferencesPatch",
+                patch: {
+                  defaultTzapRestorePolicy: value as AppPreferences["defaultTzapRestorePolicy"],
+                  ...(value === "content" || value === "portable" ? { defaultTzapAllowDegraded: false } : {}),
+                },
+              })
+            }
+          >
+            <SelectTrigger id="pref-tzap-restore-policy"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="content">{i18n.t("extract.tzapRestorePolicy.content")}</SelectItem>
+              <SelectItem value="portable">{i18n.t("extract.tzapRestorePolicy.portable")}</SelectItem>
+              <SelectItem value="sameOs">{i18n.t("extract.tzapRestorePolicy.sameOs")}</SelectItem>
+              <SelectItem value="system">{i18n.t("extract.tzapRestorePolicy.system")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <span className="text-[11px] font-normal leading-4 opacity-70">{i18n.t(`extract.tzapRestorePolicy.${draft.defaultTzapRestorePolicy}.help`)}</span>
+        </label>
+        <label className="flex items-start gap-2 text-xs font-medium">
+          <Checkbox id="pref-tzap-allow-degraded" checked={draft.defaultTzapAllowDegraded} disabled={draft.defaultTzapRestorePolicy === "content" || draft.defaultTzapRestorePolicy === "portable"} onCheckedChange={(checked) => actions.handleDialogIntent({ type: "preferencesPatch", patch: { defaultTzapAllowDegraded: checked === true } })} />
+          <span className="grid gap-0.5"><span>{i18n.t("extract.tzapAllowDegraded")}</span><span className="font-normal leading-4 opacity-70">{i18n.t("extract.tzapAllowDegraded.help")}</span></span>
+        </label>
+      </div>
     </section>
   );
 }

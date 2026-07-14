@@ -291,6 +291,10 @@ pub struct StartExtractRequest {
     pub entry_paths: Option<Vec<String>>,
     #[serde(default)]
     pub strip_components: usize,
+    #[serde(default)]
+    pub tzap_restore_policy: TzapRestorePolicyDto,
+    #[serde(default)]
+    pub tzap_allow_degraded: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -462,6 +466,16 @@ pub enum OverwritePolicyDto {
     Replace,
     Rename,
     Ask,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TzapRestorePolicyDto {
+    Content,
+    #[default]
+    Portable,
+    SameOs,
+    System,
 }
 
 impl Default for OverwritePolicyDto {

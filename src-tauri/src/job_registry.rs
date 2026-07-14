@@ -2075,6 +2075,8 @@ mod tests {
                         crate::dto::DestinationCollisionStrategyDto::Refuse,
                     entry_paths: vec!["file.txt".into()],
                     strip_components: 0,
+                    tzap_restore_policy: crate::dto::TzapRestorePolicyDto::Portable,
+                    tzap_allow_degraded: false,
                 }),
                 Vec::new(),
                 Vec::new(),

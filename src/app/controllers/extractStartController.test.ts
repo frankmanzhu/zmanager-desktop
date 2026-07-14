@@ -80,6 +80,8 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     overwrite: "ask" as StartExtractRequest["overwrite"],
     stripComponents: "1",
     deduplicateRoot: false,
+    tzapRestorePolicy: "portable",
+    tzapAllowDegraded: false,
     password: undefined as string | undefined,
   };
   const startExtract = vi.fn(async () => startJobResponse());
@@ -163,6 +165,8 @@ describe("extract start controller", () => {
       destinationPath: "C:/out/demo",
       overwrite: "ask",
       stripComponents: 1,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     });
     expect(harness.calls.recordDestination).toEqual(["C:/out/demo"]);
     expect(harness.calls.closeDialog).toBe(1);
@@ -176,6 +180,8 @@ describe("extract start controller", () => {
           destinationPath: "C:/out/demo",
           overwrite: "ask",
           stripComponents: 1,
+          tzapRestorePolicy: "portable",
+          tzapAllowDegraded: false,
         },
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
@@ -195,6 +201,8 @@ describe("extract start controller", () => {
       overwrite: "ask",
       stripComponents: 1,
       entryPaths: ["docs/readme.txt"],
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     });
     expect(harness.calls.jobs[0]).toMatchObject({
       options: {

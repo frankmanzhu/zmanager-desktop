@@ -21,6 +21,8 @@ export type JobRetryContext =
       destinationCollisionStrategy?: StartExtractRequest["destinationCollisionStrategy"];
       entryPaths?: string[];
       stripComponents: number;
+      tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
+      tzapAllowDegraded?: boolean;
     }
   | {
       retryKind: "testArchive";

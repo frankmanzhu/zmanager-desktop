@@ -26,7 +26,7 @@ use crate::{
         PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
         ProjectIntegrationContract, ProjectIntegrationShellActionDto, ResumeJobRequest,
         StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto,
         ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
@@ -49,7 +49,7 @@ use zmanager_core::jobs::{
     run_rar_extract_job_with_password_and_policy,
     run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
     run_tzap_create_job_from_sources_with_plan_options,
-    run_tzap_extract_job_with_password_and_policy,
+    run_tzap_extract_job_with_password_and_policy_and_restore_options,
     run_zip_create_job_from_sources_with_plan_options,
     run_zip_extract_job_with_password_and_policy,
 };
@@ -67,6 +67,7 @@ use zmanager_core::tzap_backend::{
     TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509SigningOptions,
     TzapX509TrustOptions, inspect_tzap_x509_public_no_key_signer, verify_tzap_x509_public_no_key,
 };
+use zmanager_core::tzap_backend::{TzapRestoreOptions, TzapRestorePolicy};
 use zmanager_core::zip_backend::{ZipBackendError, ZipCreateOptions, ZipCreateReport};
 
 #[tauri::command]
@@ -845,6 +846,8 @@ pub(crate) fn start_extract_internal(
                 destination_collision_strategy: request.destination_collision_strategy,
                 entry_paths: entry_paths.clone(),
                 strip_components: request.strip_components,
+                tzap_restore_policy: request.tzap_restore_policy,
+                tzap_allow_degraded: request.tzap_allow_degraded,
             }),
             vec![JobOutputArtifactDto {
                 artifact_id: "output".into(),
@@ -883,6 +886,10 @@ pub(crate) fn start_extract_internal(
     let job_id = response.job_id.clone();
     let family_for_thread = family;
     let policy = extraction_policy(request.overwrite, request.strip_components);
+    let tzap_restore_options = TzapRestoreOptions {
+        policy: map_tzap_restore_policy(request.tzap_restore_policy),
+        allow_degraded: request.tzap_allow_degraded,
+    };
     let archive_path = archive_path;
     let destination_path = destination_path;
 
@@ -929,16 +936,19 @@ pub(crate) fn start_extract_internal(
                 )
                 .map(to_terminal_summary_for_extract)
                 .map_err(map_rar_error),
-                ArchiveFamily::Tzap => run_tzap_extract_job_with_password_and_policy(
-                    &archive_path,
-                    &destination_path,
-                    password.as_deref(),
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_tzap_error),
+                ArchiveFamily::Tzap => {
+                    run_tzap_extract_job_with_password_and_policy_and_restore_options(
+                        &archive_path,
+                        &destination_path,
+                        password.as_deref(),
+                        policy,
+                        tzap_restore_options,
+                        &token,
+                        &mut sink,
+                    )
+                    .map(to_terminal_summary_for_extract)
+                    .map_err(map_tzap_error)
+                }
                 ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
                     &archive_path,
                     &destination_path,
@@ -957,6 +967,7 @@ pub(crate) fn start_extract_internal(
                 &entry_paths,
                 password.as_deref(),
                 policy,
+                tzap_restore_options,
                 &token,
                 &mut sink,
                 kind,
@@ -1034,6 +1045,7 @@ pub fn preview_entry(
             password: request.password.as_deref(),
             overwrite: map_overwrite_policy(request.overwrite),
             strip_components: request.strip_components,
+            ..BrowserExtractOptions::default()
         },
     )
     .map_err(map_archive_browser_error)?;
@@ -1222,6 +1234,7 @@ fn run_selected_extract_job(
     entry_paths: &[String],
     password: Option<&str>,
     policy: ExtractionPolicy,
+    tzap_restore_options: TzapRestoreOptions,
     token: &CancellationToken,
     sink: &mut JobEventCollector,
     kind: JobKindDto,
@@ -1283,12 +1296,32 @@ fn run_selected_extract_job(
                 password,
                 overwrite: policy.overwrite,
                 strip_components: policy.strip_components,
+                tzap_restore_policy: tzap_restore_options.policy,
+                tzap_allow_degraded: tzap_restore_options.allow_degraded,
             },
         )
         .map_err(map_archive_browser_error)?;
 
         written_entries = written_entries.saturating_add(1);
         written_bytes = written_bytes.saturating_add(report.written_bytes);
+        for diagnostic in report.metadata_diagnostics {
+            sink.emit_direct(JobEventDto {
+                event_type: JobEventKindDto::Warning,
+                job_kind: Some(kind),
+                phase: None,
+                code: Some("metadata_degraded"),
+                hint: None,
+                severity: Some(ErrorSeverityDto::Warning),
+                retryable: Some(false),
+                path: Some(entry_path.clone()),
+                bytes: None,
+                total_bytes: None,
+                total_bytes_processed: Some(written_bytes),
+                entries: Some(written_entries),
+                total_entries: Some(entry_paths.len()),
+                message: Some(diagnostic),
+            });
+        }
         sink.emit_direct(JobEventDto {
             event_type: JobEventKindDto::EntryFinished,
             job_kind: Some(kind),
@@ -2279,6 +2312,15 @@ fn map_overwrite_policy(policy: crate::dto::OverwritePolicyDto) -> OverwritePoli
     }
 }
 
+fn map_tzap_restore_policy(policy: TzapRestorePolicyDto) -> TzapRestorePolicy {
+    match policy {
+        TzapRestorePolicyDto::Content => TzapRestorePolicy::Content,
+        TzapRestorePolicyDto::Portable => TzapRestorePolicy::Portable,
+        TzapRestorePolicyDto::SameOs => TzapRestorePolicy::SameOs,
+        TzapRestorePolicyDto::System => TzapRestorePolicy::System,
+    }
+}
+
 fn extraction_policy(
     overwrite: crate::dto::OverwritePolicyDto,
     strip_components: usize,
@@ -3219,6 +3261,8 @@ mod tests {
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
+                tzap_restore_policy: TzapRestorePolicyDto::Portable,
+                tzap_allow_degraded: false,
             },
             &registry,
         )
@@ -3313,6 +3357,8 @@ mod tests {
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
+                tzap_restore_policy: TzapRestorePolicyDto::Portable,
+                tzap_allow_degraded: false,
             },
             &registry,
         )
@@ -3340,6 +3386,8 @@ mod tests {
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
+                tzap_restore_policy: TzapRestorePolicyDto::Portable,
+                tzap_allow_degraded: false,
             },
             &registry,
         )
@@ -3374,6 +3422,8 @@ mod tests {
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
                 strip_components: 0,
+                tzap_restore_policy: TzapRestorePolicyDto::Portable,
+                tzap_allow_degraded: false,
             },
             &registry,
         )
@@ -3750,6 +3800,8 @@ mod tests {
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: None,
             strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -3833,6 +3885,8 @@ mod tests {
             destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
             entry_paths: None,
             strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a renamed-destination job");
@@ -3904,6 +3958,8 @@ mod tests {
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: None,
             strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -3980,6 +4036,8 @@ mod tests {
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: Some(vec!["sources/keep.txt".to_string()]),
             strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("selected extract command should start a job");
@@ -4123,6 +4181,7 @@ mod tests {
             &["sources/keep.txt".to_string()],
             None,
             extraction_policy(OverwritePolicyDto::Replace, 0),
+            TzapRestoreOptions::default(),
             &token,
             &mut sink,
             JobKindDto::ZipExtract,

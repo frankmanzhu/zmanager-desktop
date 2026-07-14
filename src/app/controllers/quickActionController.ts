@@ -271,6 +271,8 @@ export function createQuickActionController(
             overwrite: "rename",
             destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
             stripComponents: destinationPlan.stripComponents,
+            tzapRestorePolicy: options.preferences().defaultTzapRestorePolicy,
+            tzapAllowDegraded: options.preferences().defaultTzapAllowDegraded,
             ...(password ? { password } : {}),
           });
           const response = await options.runStartExtract(request);
@@ -283,6 +285,8 @@ export function createQuickActionController(
               overwrite: "rename",
               destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
               stripComponents: destinationPlan.stripComponents,
+              tzapRestorePolicy: request.tzapRestorePolicy,
+              tzapAllowDegraded: request.tzapAllowDegraded,
             },
             focusProgress: true,
             autoCloseAction: "closeWindow",

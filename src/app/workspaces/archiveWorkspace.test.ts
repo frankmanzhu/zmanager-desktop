@@ -757,6 +757,8 @@ describe("archive workspace load state", () => {
       destinationPath: "D:/out",
       overwrite: "rename",
       stripComponents: 2,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     }));
 
@@ -765,6 +767,8 @@ describe("archive workspace load state", () => {
       destinationPath: "D:/out",
       overwrite: "rename",
       stripComponents: 2,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     });
     expect("entryPaths" in request).toBe(false);

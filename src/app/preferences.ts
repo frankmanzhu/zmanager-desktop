@@ -23,7 +23,7 @@ import {
   isLocalePreference,
   type LocalePreference,
 } from "./i18n/locale";
-import type { ExtractOverwritePolicy, ExtractPathMode } from "./extractFlow";
+import type { ExtractOverwritePolicy, ExtractPathMode, TzapRestorePolicy } from "./extractFlow";
 import { DEFAULT_VOLUME_SIZE_PRESETS, normalizeVolumeSizePresets } from "./volumeSizePresets";
 
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
@@ -67,6 +67,8 @@ export type AppPreferences = {
   defaultExtractOverwrite: ExtractOverwritePolicy;
   defaultExtractStripComponents: number;
   defaultExtractDeduplicateRoot: boolean;
+  defaultTzapRestorePolicy: TzapRestorePolicy;
+  defaultTzapAllowDegraded: boolean;
   previewCleanupPolicy: PreviewCleanupPolicy;
   showParentFolderItem: boolean;
   showRealFileIcons: boolean;
@@ -155,6 +157,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultExtractOverwrite: "ask",
   defaultExtractStripComponents: 0,
   defaultExtractDeduplicateRoot: false,
+  defaultTzapRestorePolicy: "portable",
+  defaultTzapAllowDegraded: false,
   previewCleanupPolicy: "beforeNextPreview",
   showParentFolderItem: true,
   showRealFileIcons: true,
@@ -176,6 +180,7 @@ const OUTPUT_LOCATIONS = ["sourceFolder", "customFolder"] as const;
 const EXTRACTION_BEHAVIORS = ["askEveryTime", "extractHere", "extractToFolder"] as const;
 const EXTRACT_PATH_MODES = ["full", "current", "none"] as const;
 const EXTRACT_OVERWRITE_POLICIES = ["refuse", "ask", "rename", "replace"] as const;
+const TZAP_RESTORE_POLICIES = ["content", "portable", "sameOs", "system"] as const;
 const PREVIEW_CLEANUP_POLICIES = ["beforeNextPreview", "whenAppCloses"] as const;
 const TABLE_SORT_KEYS = [
   "name",
@@ -388,6 +393,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
   const defaultExtractPathMode = storage.getItem(PREFERENCE_KEYS.defaultExtractPathMode);
   const defaultExtractOverwrite = storage.getItem(PREFERENCE_KEYS.defaultExtractOverwrite);
   const defaultExtractStripComponents = storage.getItem(PREFERENCE_KEYS.defaultExtractStripComponents);
+  const defaultTzapRestorePolicy = storage.getItem(PREFERENCE_KEYS.defaultTzapRestorePolicy);
   const previewCleanupPolicy = storage.getItem(PREFERENCE_KEYS.previewCleanupPolicy);
   const tableSortKey = storage.getItem(PREFERENCE_KEYS.tableSortKey);
   const defaultCleanSourceEnabled = storedBool(
@@ -428,6 +434,13 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     defaultExtractDeduplicateRoot: storedBool(
       storage.getItem(PREFERENCE_KEYS.defaultExtractDeduplicateRoot),
       DEFAULT_APP_PREFERENCES.defaultExtractDeduplicateRoot,
+    ),
+    defaultTzapRestorePolicy: isOneOf(TZAP_RESTORE_POLICIES, defaultTzapRestorePolicy)
+      ? defaultTzapRestorePolicy
+      : DEFAULT_APP_PREFERENCES.defaultTzapRestorePolicy,
+    defaultTzapAllowDegraded: storedBool(
+      storage.getItem(PREFERENCE_KEYS.defaultTzapAllowDegraded),
+      DEFAULT_APP_PREFERENCES.defaultTzapAllowDegraded,
     ),
     volumeSizePresets: loadVolumeSizePresets(storage.getItem(PREFERENCE_KEYS.volumeSizePresets)),
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
@@ -494,6 +507,8 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.defaultExtractOverwrite, preferences.defaultExtractOverwrite);
   storage.setItem(PREFERENCE_KEYS.defaultExtractStripComponents, String(preferences.defaultExtractStripComponents));
   storage.setItem(PREFERENCE_KEYS.defaultExtractDeduplicateRoot, String(preferences.defaultExtractDeduplicateRoot));
+  storage.setItem(PREFERENCE_KEYS.defaultTzapRestorePolicy, preferences.defaultTzapRestorePolicy);
+  storage.setItem(PREFERENCE_KEYS.defaultTzapAllowDegraded, String(preferences.defaultTzapAllowDegraded));
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
   storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
   storage.setItem(PREFERENCE_KEYS.showRealFileIcons, String(preferences.showRealFileIcons));
@@ -551,6 +566,15 @@ export function preferencesWithPatch(
       patch.customExtractFolderPath !== undefined
         ? patch.customExtractFolderPath.trim()
         : preferences.customExtractFolderPath,
+    defaultTzapRestorePolicy: isOneOf(
+      TZAP_RESTORE_POLICIES,
+      patch.defaultTzapRestorePolicy ?? preferences.defaultTzapRestorePolicy,
+    )
+      ? (patch.defaultTzapRestorePolicy ?? preferences.defaultTzapRestorePolicy)
+      : DEFAULT_APP_PREFERENCES.defaultTzapRestorePolicy,
+    defaultTzapAllowDegraded: Boolean(
+      patch.defaultTzapAllowDegraded ?? preferences.defaultTzapAllowDegraded,
+    ),
   };
 }
 

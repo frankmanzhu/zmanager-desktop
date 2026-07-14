@@ -190,6 +190,8 @@ export function createJobControlController(
       destinationCollisionStrategy: context.destinationCollisionStrategy,
       entryPaths: context.entryPaths,
       stripComponents: context.stripComponents,
+      tzapRestorePolicy: context.tzapRestorePolicy ?? "portable",
+      tzapAllowDegraded: context.tzapAllowDegraded ?? false,
       password,
     }));
   }

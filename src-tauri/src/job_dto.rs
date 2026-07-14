@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::dto::{DestinationCollisionStrategyDto, OverwritePolicyDto};
+use crate::dto::{DestinationCollisionStrategyDto, OverwritePolicyDto, TzapRestorePolicyDto};
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -48,6 +48,8 @@ pub enum JobRetryDescriptorDto {
         destination_collision_strategy: DestinationCollisionStrategyDto,
         entry_paths: Vec<String>,
         strip_components: usize,
+        tzap_restore_policy: TzapRestorePolicyDto,
+        tzap_allow_degraded: bool,
     },
     TestArchive {
         action_id: String,

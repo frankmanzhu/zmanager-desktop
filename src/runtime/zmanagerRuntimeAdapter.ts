@@ -1451,6 +1451,8 @@ function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefa
     overwrite: appPreferences.defaultExtractOverwrite,
     stripComponents: appPreferences.defaultExtractStripComponents,
     deduplicateRoot: appPreferences.defaultExtractDeduplicateRoot,
+    tzapRestorePolicy: appPreferences.defaultTzapRestorePolicy,
+    tzapAllowDegraded: appPreferences.defaultTzapAllowDegraded,
   };
 }
 
@@ -2308,6 +2310,8 @@ function buildReactExtractDialogSnapshot(
     overwrite: form.overwrite,
     stripComponents: form.stripComponents,
     deduplicateRoot: form.deduplicateRoot,
+    tzapRestorePolicy: form.tzapRestorePolicy,
+    tzapAllowDegraded: form.tzapAllowDegraded,
     passwordPromptOpen: form.passwordPromptOpen,
   };
 }
@@ -2356,6 +2360,8 @@ function extractDialogFormFromIntent(
     overwrite: input.overwrite as ExtractOverwritePolicy,
     stripComponents: input.stripComponents,
     deduplicateRoot: input.deduplicateRoot,
+    tzapRestorePolicy: input.tzapRestorePolicy,
+    tzapAllowDegraded: input.tzapAllowDegraded,
     passwordPromptOpen: activeExtractDialogForm.passwordPromptOpen,
   });
 }
@@ -3320,6 +3326,8 @@ function openExtractDialog(mode: ExtractMode) {
       destination: extractDestinationHistory[0] ?? "",
       overwrite: activeExtractDialogForm.overwrite,
       stripComponents: activeExtractDialogForm.stripComponents,
+      tzapRestorePolicy: extractWorkspace.getSnapshot().tzapRestorePolicy,
+      tzapAllowDegraded: extractWorkspace.getSnapshot().tzapAllowDegraded,
     }),
     extractDialogMessageForMode(mode),
   );

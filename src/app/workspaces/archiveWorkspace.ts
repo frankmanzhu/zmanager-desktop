@@ -178,6 +178,8 @@ export type BuildArchiveWorkspaceExtractRequestInput = {
   overwrite: StartExtractRequest["overwrite"];
   destinationCollisionStrategy?: StartExtractRequest["destinationCollisionStrategy"];
   stripComponents: number;
+  tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
+  tzapAllowDegraded?: boolean;
   password?: string;
 };
 
@@ -587,6 +589,8 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
             : {}),
           ...(input.mode === "selection" ? { entryPaths } : {}),
           stripComponents: input.stripComponents,
+          tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
+          tzapAllowDegraded: input.tzapAllowDegraded ?? false,
           ...(input.password ? { password: input.password } : {}),
         }),
       };

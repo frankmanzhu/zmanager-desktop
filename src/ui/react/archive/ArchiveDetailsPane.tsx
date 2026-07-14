@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
 import { formatBytes, formatDate } from "../../../app/formatting";
 import type { ArchiveWorkspaceDetailsModel } from "../../../app/workspaces/archiveWorkspace";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { nativeIconDataUrlForArchivePath, nativeIconDataUrlForEntry, nativeIconDataUrlForFolder } from "./archiveNativeIcons";
@@ -90,6 +92,7 @@ function ExtractOptions() {
   const options = snapshot.extract;
   const passwordState = useExtractPasswordState();
   const [advancedOpen, setAdvancedOpen] = useState(options.passwordPromptOpen);
+  const isTzap = getKnownArchiveSuffix(snapshot.archive.currentArchivePath) === ".tzap";
 
   useEffect(() => {
     if (options.passwordPromptOpen) {
@@ -145,6 +148,38 @@ function ExtractOptions() {
             <span>{i18n.t("extract.password")}</span>
             <input id="extract-password" type={passwordState.showPassword ? "text" : "password"} value={passwordState.password} onChange={(event) => passwordState.setPassword(event.currentTarget.value)} />
           </label>
+          {isTzap ? (
+            <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
+              <label className="grid gap-1.5">
+                <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+                <Select
+                  value={options.tzapRestorePolicy}
+                  onValueChange={(value) =>
+                    actions.handleArchiveIntent({
+                      type: "setExtractOptions",
+                      patch: {
+                        tzapRestorePolicy: value as typeof options.tzapRestorePolicy,
+                        ...(value === "content" || value === "portable" ? { tzapAllowDegraded: false } : {}),
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger id="extract-tzap-restore-policy"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="content">{i18n.t("extract.tzapRestorePolicy.content")}</SelectItem>
+                    <SelectItem value="portable">{i18n.t("extract.tzapRestorePolicy.portable")}</SelectItem>
+                    <SelectItem value="sameOs">{i18n.t("extract.tzapRestorePolicy.sameOs")}</SelectItem>
+                    <SelectItem value="system">{i18n.t("extract.tzapRestorePolicy.system")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-[10px] font-normal leading-4 text-slate-500 dark:text-slate-400">{i18n.t(`extract.tzapRestorePolicy.${options.tzapRestorePolicy}.help`)}</span>
+              </label>
+              <label className="flex items-start gap-2 text-[11px] font-medium">
+                <Checkbox id="extract-tzap-allow-degraded" checked={options.tzapAllowDegraded} disabled={options.tzapRestorePolicy === "content" || options.tzapRestorePolicy === "portable"} onCheckedChange={(checked) => actions.handleArchiveIntent({ type: "setExtractOptions", patch: { tzapAllowDegraded: checked === true } })} />
+                <span className="grid gap-0.5"><span>{i18n.t("extract.tzapAllowDegraded")}</span><span className="font-normal leading-4 text-slate-500 dark:text-slate-400">{i18n.t("extract.tzapAllowDegraded.help")}</span></span>
+              </label>
+            </div>
+          ) : null}
           <label className="checkbox-row">
             <input id="extract-show-password" type="checkbox" checked={passwordState.showPassword} onChange={(event) => passwordState.setShowPassword(event.currentTarget.checked)} />
             <span>{i18n.t("extract.showPassword")}</span>

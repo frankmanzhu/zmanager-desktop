@@ -252,6 +252,8 @@ function retainedRetryContext(snapshot: DesktopJobSnapshotDto): JobRetryContext 
     destinationCollisionStrategy: descriptor.destinationCollisionStrategy,
     ...(descriptor.entryPaths.length ? { entryPaths: [...descriptor.entryPaths] } : {}),
     stripComponents: descriptor.stripComponents,
+    tzapRestorePolicy: descriptor.tzapRestorePolicy ?? "portable",
+    tzapAllowDegraded: descriptor.tzapAllowDegraded ?? false,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ExtractOverwritePolicy, ExtractPathMode, ExtractStartInput } from "./extractFlow";
+import type { ExtractOverwritePolicy, ExtractPathMode, ExtractStartInput, TzapRestorePolicy } from "./extractFlow";
 
 export type ExtractDialogFormSnapshot = Readonly<{
   destination: string;
@@ -8,6 +8,8 @@ export type ExtractDialogFormSnapshot = Readonly<{
   overwrite: ExtractOverwritePolicy;
   stripComponents: string;
   deduplicateRoot: boolean;
+  tzapRestorePolicy: TzapRestorePolicy;
+  tzapAllowDegraded: boolean;
   passwordPromptOpen: boolean;
 }>;
 
@@ -21,6 +23,8 @@ export const DEFAULT_EXTRACT_DIALOG_FORM: ExtractDialogFormSnapshot = Object.fre
   overwrite: "ask",
   stripComponents: "0",
   deduplicateRoot: false,
+  tzapRestorePolicy: "portable",
+  tzapAllowDegraded: false,
   passwordPromptOpen: false,
 });
 
@@ -35,6 +39,8 @@ export function createExtractDialogFormSnapshot(
     overwrite: normalizeExtractOverwrite(patch.overwrite),
     stripComponents: normalizeStripComponentsText(patch.stripComponents),
     deduplicateRoot: patch.deduplicateRoot ?? DEFAULT_EXTRACT_DIALOG_FORM.deduplicateRoot,
+    tzapRestorePolicy: normalizeTzapRestorePolicy(patch.tzapRestorePolicy),
+    tzapAllowDegraded: patch.tzapAllowDegraded ?? DEFAULT_EXTRACT_DIALOG_FORM.tzapAllowDegraded,
     passwordPromptOpen: patch.passwordPromptOpen ?? DEFAULT_EXTRACT_DIALOG_FORM.passwordPromptOpen,
   };
 }
@@ -61,6 +67,8 @@ export function extractStartInputFromDialogForm(
     overwrite: form.overwrite,
     stripComponents: form.stripComponents,
     deduplicateRoot: form.deduplicateRoot,
+    tzapRestorePolicy: form.tzapRestorePolicy,
+    tzapAllowDegraded: form.tzapAllowDegraded,
     ...(password.trim() ? { password: password.trim() } : {}),
   };
 }
@@ -78,6 +86,10 @@ function normalizeExtractOverwrite(value: ExtractOverwritePolicy | undefined): E
   }
 
   return "refuse";
+}
+
+function normalizeTzapRestorePolicy(value: TzapRestorePolicy | undefined): TzapRestorePolicy {
+  return value === "content" || value === "sameOs" || value === "system" ? value : "portable";
 }
 
 function normalizeStripComponentsText(value: string | undefined): string {

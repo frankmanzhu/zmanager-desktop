@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FolderOutput, SlidersHorizontal, X } from "lucide-react";
 
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerDialogSnapshot } from "../appRuntime";
 import { PreferencesDialog } from "../preferences/PreferencesDialog";
@@ -271,9 +273,12 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
   const [overwrite, setOverwrite] = useState(dialog.overwrite);
   const [stripComponents, setStripComponents] = useState(dialog.stripComponents);
   const [deduplicateRoot, setDeduplicateRoot] = useState(dialog.deduplicateRoot);
+  const [tzapRestorePolicy, setTzapRestorePolicy] = useState(dialog.tzapRestorePolicy);
+  const [tzapAllowDegraded, setTzapAllowDegraded] = useState(dialog.tzapAllowDegraded);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const canExtract = destination.trim().length > 0;
+  const isTzap = snapshot.archive.currentArchivePath.toLowerCase().includes(".tzap");
 
   useEffect(() => {
     setDestination(dialog.destination);
@@ -283,6 +288,8 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
     setOverwrite(dialog.overwrite);
     setStripComponents(dialog.stripComponents);
     setDeduplicateRoot(dialog.deduplicateRoot);
+    setTzapRestorePolicy(dialog.tzapRestorePolicy);
+    setTzapAllowDegraded(dialog.tzapAllowDegraded);
   }, [
     dialog.destination,
     dialog.useSubfolder,
@@ -291,6 +298,8 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
     dialog.overwrite,
     dialog.stripComponents,
     dialog.deduplicateRoot,
+    dialog.tzapRestorePolicy,
+    dialog.tzapAllowDegraded,
   ]);
 
   useEffect(() => {
@@ -310,6 +319,8 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
     overwrite,
     stripComponents,
     deduplicateRoot,
+    tzapRestorePolicy,
+    tzapAllowDegraded,
   };
 
   return (
@@ -447,6 +458,35 @@ function ExtractDialog({ dialog }: Readonly<{ dialog: Extract<ZManagerDialogSnap
                 />
                 <span>{i18n.t("extract.deduplicateRoot")}</span>
               </label>
+              {isTzap ? (
+                <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
+                  <label className="grid gap-1.5">
+                    <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+                    <Select
+                      value={tzapRestorePolicy}
+                      onValueChange={(value) => {
+                        setTzapRestorePolicy(value as typeof tzapRestorePolicy);
+                        if (value === "content" || value === "portable") {
+                          setTzapAllowDegraded(false);
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="browse-tzap-restore-policy"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="content">{i18n.t("extract.tzapRestorePolicy.content")}</SelectItem>
+                        <SelectItem value="portable">{i18n.t("extract.tzapRestorePolicy.portable")}</SelectItem>
+                        <SelectItem value="sameOs">{i18n.t("extract.tzapRestorePolicy.sameOs")}</SelectItem>
+                        <SelectItem value="system">{i18n.t("extract.tzapRestorePolicy.system")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-[11px] font-normal leading-4 text-slate-500 dark:text-slate-400">{i18n.t(`extract.tzapRestorePolicy.${tzapRestorePolicy}.help`)}</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs font-medium">
+                    <Checkbox checked={tzapAllowDegraded} disabled={tzapRestorePolicy === "content" || tzapRestorePolicy === "portable"} onCheckedChange={(checked) => setTzapAllowDegraded(checked === true)} />
+                    <span className="grid gap-0.5"><span>{i18n.t("extract.tzapAllowDegraded")}</span><span className="font-normal leading-4 text-slate-500 dark:text-slate-400">{i18n.t("extract.tzapAllowDegraded.help")}</span></span>
+                  </label>
+                </div>
+              ) : null}
             </div>
             <details className="group/password overflow-hidden rounded-xl border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-950/40" open={dialog.passwordPromptOpen}>
               <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-semibold [&::-webkit-details-marker]:hidden">{i18n.t("extract.password")}<ChevronDown className="size-4 text-slate-400 transition-transform group-open/password:rotate-180" /></summary>

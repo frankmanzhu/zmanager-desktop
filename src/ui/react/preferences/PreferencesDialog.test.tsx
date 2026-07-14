@@ -24,6 +24,8 @@ describe("React preferences dialog", () => {
     expect(html).toContain('id="pref-output-location"');
     expect(html).toContain('id="pref-default-format"');
     expect(html).toContain('id="pref-language"');
+    expect(html).toContain('id="pref-tzap-restore-policy"');
+    expect(html).toContain('id="pref-tzap-allow-degraded"');
     expect(html).toContain('id="preferences-save"');
   });
 

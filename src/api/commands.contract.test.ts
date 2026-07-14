@@ -69,12 +69,16 @@ const COMMAND_WRAPPERS = [
       destinationPath: "C:/output",
       overwrite: "refuse",
       stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     },
     call: () => api.runStartExtract({
       archivePath: "C:/archives/demo.zip",
       destinationPath: "C:/output",
       overwrite: "refuse",
       stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     }),
   },
   {

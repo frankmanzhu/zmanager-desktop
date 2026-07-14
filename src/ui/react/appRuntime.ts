@@ -11,7 +11,7 @@ import type {
 } from "../../app/commands/contextMenuModel";
 import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
-import type { ExtractMode, ExtractOverwritePolicy } from "../../app/extractFlow";
+import type { ExtractMode, ExtractOverwritePolicy, TzapRestorePolicy } from "../../app/extractFlow";
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
 import { DEFAULT_APP_PREFERENCES, preferencesWithPatch, type AppPreferencePatch, type AppPreferences, type FormatCreateDefaults } from "../../app/preferences";
 import { createPathHistoryStore, type PathHistorySnapshot } from "../../app/pathHistory";
@@ -179,6 +179,8 @@ export type ZManagerDialogIntent =
       overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
+      tzapRestorePolicy: TzapRestorePolicy;
+      tzapAllowDegraded: boolean;
       password: string;
     }>
   | Readonly<{
@@ -190,6 +192,8 @@ export type ZManagerDialogIntent =
       overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
+      tzapRestorePolicy: TzapRestorePolicy;
+      tzapAllowDegraded: boolean;
     }>
   | Readonly<{ type: "preferences" }>
   | Readonly<{ type: "about" }>

@@ -4,6 +4,7 @@ import { normalizeArchivePath } from "./archiveTree";
 export type ExtractMode = "archive" | "selection";
 export type ExtractPathMode = "full" | "current" | "none";
 export type ExtractOverwritePolicy = StartExtractRequest["overwrite"];
+export type TzapRestorePolicy = StartExtractRequest["tzapRestorePolicy"];
 
 export type ExtractStartInput = Readonly<{
   destinationBasePath: string;
@@ -13,6 +14,8 @@ export type ExtractStartInput = Readonly<{
   overwrite: ExtractOverwritePolicy;
   stripComponents: string | number;
   deduplicateRoot: boolean;
+  tzapRestorePolicy?: TzapRestorePolicy;
+  tzapAllowDegraded?: boolean;
   password?: string;
 }>;
 
@@ -23,6 +26,8 @@ export type ResolvedExtractStartInput = Readonly<{
   stripComponents: number;
   password?: string;
   entryReferences: readonly string[];
+  tzapRestorePolicy: TzapRestorePolicy;
+  tzapAllowDegraded: boolean;
 }>;
 
 export type ResolveExtractStartInputContext = Readonly<{
@@ -40,6 +45,8 @@ export type BuildStartExtractRequestInput = {
   stripComponents: number;
   password?: string;
   entryPaths?: string[];
+  tzapRestorePolicy?: TzapRestorePolicy;
+  tzapAllowDegraded?: boolean;
 };
 
 export function buildStartExtractRequest(input: BuildStartExtractRequestInput): StartExtractRequest {
@@ -52,6 +59,8 @@ export function buildStartExtractRequest(input: BuildStartExtractRequestInput): 
       : {}),
     ...(input.entryPaths ? { entryPaths: [...input.entryPaths] } : {}),
     stripComponents: input.stripComponents,
+    tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
+    tzapAllowDegraded: input.tzapAllowDegraded ?? false,
     ...(input.password ? { password: input.password } : {}),
   };
 }
@@ -76,6 +85,8 @@ export function resolveExtractStartInput(
     }),
     ...(input.password?.trim() ? { password: input.password.trim() } : {}),
     entryReferences,
+    tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
+    tzapAllowDegraded: input.tzapAllowDegraded ?? false,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ExtractMode, ExtractOverwritePolicy, ExtractPathMode, ExtractStartInput } from "../extractFlow";
+import type { ExtractMode, ExtractOverwritePolicy, ExtractPathMode, ExtractStartInput, TzapRestorePolicy } from "../extractFlow";
 import type { VerifyTzapCertificateResponse } from "../../api/types";
 
 export type TzapVerificationState = "idle" | "checking" | "signatureValid" | "trusted" | "error";
@@ -14,7 +14,7 @@ export type TzapVerificationSnapshot = Readonly<{
 
 export type ExtractWorkspaceOptionPatch = Partial<Pick<
   ExtractWorkspaceSnapshot,
-  "destinationPath" | "pathMode" | "overwrite" | "stripComponents" | "deduplicateRoot" | "passwordPromptOpen"
+  "destinationPath" | "pathMode" | "overwrite" | "stripComponents" | "deduplicateRoot" | "tzapRestorePolicy" | "tzapAllowDegraded" | "passwordPromptOpen"
 >>;
 
 export type ExtractWorkspaceDefaults = Readonly<{
@@ -23,6 +23,8 @@ export type ExtractWorkspaceDefaults = Readonly<{
   overwrite: ExtractOverwritePolicy;
   stripComponents: number;
   deduplicateRoot: boolean;
+  tzapRestorePolicy?: TzapRestorePolicy;
+  tzapAllowDegraded?: boolean;
 }>;
 
 export type ExtractWorkspaceSnapshot = Readonly<{
@@ -31,6 +33,8 @@ export type ExtractWorkspaceSnapshot = Readonly<{
   overwrite: ExtractOverwritePolicy;
   stripComponents: number;
   deduplicateRoot: boolean;
+  tzapRestorePolicy: TzapRestorePolicy;
+  tzapAllowDegraded: boolean;
   usesGlobalDefaults: boolean;
   passwordPromptOpen: boolean;
   tzapVerification: TzapVerificationSnapshot;
@@ -54,6 +58,8 @@ const FALLBACK_DEFAULTS: ExtractWorkspaceDefaults = Object.freeze({
   overwrite: "ask",
   stripComponents: 0,
   deduplicateRoot: false,
+  tzapRestorePolicy: "portable",
+  tzapAllowDegraded: false,
 });
 
 export function createExtractWorkspace(initialDefaults: ExtractWorkspaceDefaults = FALLBACK_DEFAULTS): ExtractWorkspace {
@@ -127,6 +133,8 @@ export function createExtractWorkspace(initialDefaults: ExtractWorkspaceDefaults
         overwrite: state.overwrite,
         stripComponents: String(state.stripComponents),
         deduplicateRoot: state.deduplicateRoot,
+        tzapRestorePolicy: state.tzapRestorePolicy,
+        tzapAllowDegraded: state.tzapAllowDegraded,
         ...(password.trim() ? { password: password.trim() } : {}),
       };
     },
@@ -139,7 +147,13 @@ export function extractModeForSelection(selectedCount: number): ExtractMode {
 
 function snapshotFromDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorkspaceSnapshot {
   return {
-    ...defaults,
+    destinationPath: defaults.destinationPath,
+    pathMode: defaults.pathMode,
+    overwrite: defaults.overwrite,
+    stripComponents: defaults.stripComponents,
+    deduplicateRoot: defaults.deduplicateRoot,
+    tzapRestorePolicy: defaults.tzapRestorePolicy ?? "portable",
+    tzapAllowDegraded: defaults.tzapAllowDegraded ?? false,
     usesGlobalDefaults: true,
     passwordPromptOpen: false,
     tzapVerification: freezeVerification({
@@ -161,6 +175,8 @@ function normalizeDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorkspace
     overwrite: normalizeOverwrite(defaults.overwrite),
     stripComponents: normalizeStripComponents(defaults.stripComponents),
     deduplicateRoot: Boolean(defaults.deduplicateRoot),
+    tzapRestorePolicy: normalizeTzapRestorePolicy(defaults.tzapRestorePolicy),
+    tzapAllowDegraded: Boolean(defaults.tzapAllowDegraded),
   };
 }
 
@@ -176,6 +192,8 @@ function normalizedPatch(
       ? {}
       : { stripComponents: normalizeStripComponents(patch.stripComponents) }),
     ...(patch.deduplicateRoot === undefined ? {} : { deduplicateRoot: Boolean(patch.deduplicateRoot) }),
+    ...(patch.tzapRestorePolicy === undefined ? {} : { tzapRestorePolicy: normalizeTzapRestorePolicy(patch.tzapRestorePolicy) }),
+    ...(patch.tzapAllowDegraded === undefined ? {} : { tzapAllowDegraded: Boolean(patch.tzapAllowDegraded) }),
     ...(patch.passwordPromptOpen === undefined
       ? {}
       : { passwordPromptOpen: Boolean(patch.passwordPromptOpen) }),
@@ -189,6 +207,10 @@ function normalizePathMode(value: ExtractPathMode): ExtractPathMode {
 
 function normalizeOverwrite(value: ExtractOverwritePolicy): ExtractOverwritePolicy {
   return value === "refuse" || value === "replace" || value === "rename" ? value : "ask";
+}
+
+function normalizeTzapRestorePolicy(value?: TzapRestorePolicy): TzapRestorePolicy {
+  return value === "content" || value === "sameOs" || value === "system" ? value : "portable";
 }
 
 function normalizeStripComponents(value: number): number {

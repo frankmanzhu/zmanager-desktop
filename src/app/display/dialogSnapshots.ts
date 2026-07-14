@@ -13,6 +13,7 @@ import {
 import type {
   ExtractMode,
   ExtractOverwritePolicy,
+  TzapRestorePolicy,
 } from "../extractFlow";
 import {
   getPathBasename,
@@ -64,6 +65,8 @@ export type ZManagerDialogSnapshot =
       overwrite: ExtractOverwritePolicy;
       stripComponents: string;
       deduplicateRoot: boolean;
+      tzapRestorePolicy: TzapRestorePolicy;
+      tzapAllowDegraded: boolean;
       passwordPromptOpen: boolean;
     }>
   | Readonly<{

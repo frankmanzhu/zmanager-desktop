@@ -18,6 +18,8 @@ export type PreferenceStorageKey =
   | "defaultExtractOverwrite"
   | "defaultExtractStripComponents"
   | "defaultExtractDeduplicateRoot"
+  | "defaultTzapRestorePolicy"
+  | "defaultTzapAllowDegraded"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
   | "showRealFileIcons"
@@ -47,6 +49,8 @@ export const PREFERENCE_KEYS = {
   defaultExtractOverwrite: "zmanager.defaultExtractOverwrite",
   defaultExtractStripComponents: "zmanager.defaultExtractStripComponents",
   defaultExtractDeduplicateRoot: "zmanager.defaultExtractDeduplicateRoot",
+  defaultTzapRestorePolicy: "zmanager.defaultTzapRestorePolicy",
+  defaultTzapAllowDegraded: "zmanager.defaultTzapAllowDegraded",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
   showRealFileIcons: "zmanager.showRealFileIcons",

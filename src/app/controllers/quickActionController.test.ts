@@ -424,6 +424,8 @@ describe("quick action controller", () => {
       overwrite: "rename",
       destinationCollisionStrategy: "rename",
       stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     } satisfies StartExtractRequest);
     expect(harness.runStartExtract).toHaveBeenNthCalledWith(2, {
       archivePath: "C:/archives/demo.zip",
@@ -431,6 +433,8 @@ describe("quick action controller", () => {
       overwrite: "rename",
       destinationCollisionStrategy: "rename",
       stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "retry-secret",
     } satisfies StartExtractRequest);
     expect(harness.calls.promptedRetryCodes).toEqual(["password_required"]);
@@ -444,6 +448,8 @@ describe("quick action controller", () => {
           overwrite: "rename",
           destinationCollisionStrategy: "rename",
           stripComponents: 0,
+          tzapRestorePolicy: "portable",
+          tzapAllowDegraded: false,
         },
         focusProgress: true,
         autoCloseAction: "closeWindow",

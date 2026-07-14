@@ -66,6 +66,8 @@ function retryContextForRequest(
     overwrite: input.overwrite,
     ...(mode === "selection" ? { entryPaths: request.entryPaths } : { entryPaths: undefined }),
     stripComponents: input.stripComponents,
+    tzapRestorePolicy: input.tzapRestorePolicy,
+    tzapAllowDegraded: input.tzapAllowDegraded,
   };
 }
 
@@ -104,6 +106,8 @@ export function createExtractStartController(
         destinationPath: resolvedInput.destination,
         overwrite: resolvedInput.overwrite,
         stripComponents: resolvedInput.stripComponents,
+        tzapRestorePolicy: resolvedInput.tzapRestorePolicy,
+        tzapAllowDegraded: resolvedInput.tzapAllowDegraded,
         password: resolvedInput.password,
       });
     if (!requestResult.ok) {

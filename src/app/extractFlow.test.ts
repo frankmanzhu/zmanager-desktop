@@ -20,6 +20,8 @@ describe("extract flow helpers", () => {
       destinationPath: "C:/tmp/out",
       overwrite: "replace",
       stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     });
   });
 
@@ -31,6 +33,8 @@ describe("extract flow helpers", () => {
       overwrite: "rename",
       entryPaths,
       stripComponents: 1,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     });
 
@@ -42,6 +46,8 @@ describe("extract flow helpers", () => {
       overwrite: "rename",
       entryPaths: ["source/hello.txt"],
       stripComponents: 1,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     });
   });
@@ -67,6 +73,8 @@ describe("extract flow helpers", () => {
       overwrite: "ask",
       stripComponents: "1",
       deduplicateRoot: false,
+      tzapRestorePolicy: "system",
+      tzapAllowDegraded: true,
       password: " secret ",
     }, {
       currentFolder: "docs/releases",
@@ -82,6 +90,8 @@ describe("extract flow helpers", () => {
       stripComponents: 2,
       password: "secret",
       entryReferences: ["root/docs/releases/readme.txt"],
+      tzapRestorePolicy: "system",
+      tzapAllowDegraded: true,
     });
   });
 

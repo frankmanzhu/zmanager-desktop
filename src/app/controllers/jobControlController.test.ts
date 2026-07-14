@@ -386,6 +386,8 @@ describe("job control controller", () => {
       destinationCollisionStrategy: "rename",
       entryPaths: ["docs/readme.txt"],
       stripComponents: 1,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     });
     expect(harness.calls.addJobs[0]).toMatchObject({

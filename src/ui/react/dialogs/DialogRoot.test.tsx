@@ -10,9 +10,14 @@ import {
 } from "../appRuntime";
 import { DialogRoot } from "./DialogRoot";
 
-function renderDialog(dialog: ZManagerDialogSnapshot): string {
+function renderDialog(dialog: ZManagerDialogSnapshot, currentArchivePath = ""): string {
+  const initial = createInitialZManagerReactSnapshot();
   const store = createZManagerAppStore({
-    ...createInitialZManagerReactSnapshot(),
+    ...initial,
+    archive: {
+      ...initial.archive,
+      currentArchivePath,
+    },
     dialog,
   });
 
@@ -41,6 +46,8 @@ describe("DialogRoot", () => {
       overwrite: "refuse",
       stripComponents: "0",
       deduplicateRoot: false,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       passwordPromptOpen: false,
     });
 
@@ -49,6 +56,31 @@ describe("DialogRoot", () => {
     expect(html).toContain('id="extract-start"');
     expect(html).not.toContain("passwordValue");
     expect(html).not.toContain("correct horse");
+  });
+
+  it("renders TZAP metadata policy controls for TZAP archives", () => {
+    const html = renderDialog({
+      kind: "extract",
+      mode: "archive",
+      title: "Extract",
+      message: "Choose a destination.",
+      startLabel: "Extract",
+      destination: "/tmp/out",
+      destinationHistory: [],
+      useSubfolder: false,
+      subfolder: "",
+      pathMode: "full",
+      overwrite: "refuse",
+      stripComponents: "0",
+      deduplicateRoot: false,
+      tzapRestorePolicy: "system",
+      tzapAllowDegraded: true,
+      passwordPromptOpen: false,
+    }, "/tmp/backup.tzap");
+
+    expect(html).toContain('id="browse-tzap-restore-policy"');
+    expect(html).toContain("numeric user/group ownership");
+    expect(html).toContain("Allow degraded metadata restore");
   });
 
   it("renders info rows and actions from a serializable model", () => {

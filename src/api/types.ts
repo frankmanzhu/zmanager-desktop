@@ -210,6 +210,8 @@ export type StartExtractRequest = {
   destinationCollisionStrategy?: "refuse" | "rename";
   entryPaths?: string[];
   stripComponents: number;
+  tzapRestorePolicy: "content" | "portable" | "sameOs" | "system";
+  tzapAllowDegraded: boolean;
 };
 
 export type PreviewEntryRequest = {
@@ -354,6 +356,8 @@ export type JobRetryDescriptorDto =
       destinationCollisionStrategy: NonNullable<StartExtractRequest["destinationCollisionStrategy"]>;
       entryPaths: string[];
       stripComponents: number;
+      tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
+      tzapAllowDegraded?: boolean;
     }
   | {
       retryKind: "testArchive";

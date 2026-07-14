@@ -44,6 +44,8 @@ describe("extract workspace", () => {
       overwrite: "ask",
       stripComponents: "2",
       deduplicateRoot: false,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
       password: "secret",
     });
   });
@@ -51,6 +53,17 @@ describe("extract workspace", () => {
   it("uses the current selection to choose the direct extraction mode", () => {
     expect(extractModeForSelection(0)).toBe("archive");
     expect(extractModeForSelection(2)).toBe("selection");
+  });
+
+  it("keeps explicit TZAP restore authorization in workspace request input", () => {
+    const workspace = createExtractWorkspace(defaults);
+    workspace.setOptions({ tzapRestorePolicy: "system", tzapAllowDegraded: true });
+
+    expect(workspace.buildStartInput()).toMatchObject({
+      tzapRestorePolicy: "system",
+      tzapAllowDegraded: true,
+    });
+    expect(workspace.getSnapshot().usesGlobalDefaults).toBe(false);
   });
 
   it("tracks TZAP trust configuration and verification outcomes without secrets", () => {

@@ -81,6 +81,8 @@ describe("jobs workspace", () => {
       ...extractRetryContext,
       destinationCollisionStrategy: "refuse",
       entryPaths: ["one.txt"],
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
     });
     expect(JSON.stringify(failedWorkspace.getRetryContext("failed-job"))).not.toContain("password");
 
