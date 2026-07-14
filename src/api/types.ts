@@ -98,6 +98,8 @@ export type ArchiveEntryDto = {
   size?: number;
   compressedSize?: number;
   modified?: string;
+  mode?: number;
+  metadataDiagnostics?: string[];
   created?: string;
   accessed?: string;
   attributes?: string;

@@ -170,6 +170,8 @@ export const enMessages = {
   "detail.size": "Size",
   "detail.packed": "Packed",
   "detail.modified": "Modified",
+  "detail.mode": "Mode",
+  "detail.metadataDiagnostics": "Metadata diagnostics",
   "detail.created": "Created",
   "detail.attributes": "Attributes",
   "detail.method": "Method",

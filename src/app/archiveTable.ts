@@ -17,6 +17,7 @@ export type ArchiveTableColumnId =
   | "size"
   | "compressedSize"
   | "modified"
+  | "mode"
   | "created"
   | "accessed"
   | "attributes"
@@ -73,6 +74,7 @@ export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
   { id: "size", label: "Size", labelKey: "table.size", width: 100, align: "right", defaultVisible: true },
   { id: "compressedSize", label: "Packed Size", labelKey: "table.packedSize", width: 110, align: "right", defaultVisible: true },
   { id: "modified", label: "Modified", labelKey: "table.modified", width: 150, align: "left", defaultVisible: true },
+  { id: "mode", label: "Mode", labelKey: "detail.mode", width: 82, align: "right", defaultVisible: false },
   { id: "created", label: "Created", labelKey: "table.created", width: 140, align: "left", defaultVisible: false },
   { id: "accessed", label: "Accessed", labelKey: "table.accessed", width: 140, align: "left", defaultVisible: false },
   { id: "attributes", label: "Attributes", labelKey: "table.attributes", width: 90, align: "left", defaultVisible: false },
@@ -254,6 +256,8 @@ export function formatArchiveTableValue(
       return formatBytes(entry.compressedSize, { emptyValue: EMPTY_VALUE, locale: i18n?.locale });
     case "modified":
       return formatDate(entry.modified, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
+    case "mode":
+      return typeof entry.mode === "number" ? entry.mode.toString(8).padStart(4, "0") : EMPTY_VALUE;
     case "created":
       return formatDate(entry.created, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "accessed":

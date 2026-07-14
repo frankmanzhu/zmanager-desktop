@@ -284,6 +284,8 @@ export function entryInfoDetailRows(
     { label: message(display, "detail.size"), value: formatOptionalBytes(entry.size, display) },
     { label: message(display, "detail.packed"), value: formatOptionalBytes(entry.compressedSize, display) },
     { label: message(display, "detail.modified"), value: display.format.date(entry.modified, { emptyValue: "" }) },
+    { label: message(display, "detail.mode"), value: typeof entry.mode === "number" ? entry.mode.toString(8).padStart(4, "0") : null },
+    { label: message(display, "detail.metadataDiagnostics"), value: entry.metadataDiagnostics?.join("\n") },
     {
       label: message(display, "detail.ratio"),
       value: display.format.ratio(entry.size, entry.compressedSize, { fractionDigits: 0 }),

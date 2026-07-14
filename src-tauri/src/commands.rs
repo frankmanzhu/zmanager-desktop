@@ -193,6 +193,8 @@ pub fn list_archive(
             size: entry.size,
             compressed_size: entry.compressed_size,
             modified: entry.modified,
+            mode: entry.mode,
+            metadata_diagnostics: entry.metadata_diagnostics,
         });
     }
 
@@ -2849,6 +2851,8 @@ mod tests {
             size: Some(1),
             compressed_size: None,
             modified: Some("1700000000".to_string()),
+            mode: Some(0o644),
+            metadata_diagnostics: Vec::new(),
         }
     }
 
@@ -3544,7 +3548,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
-            preserve_metadata: false,
+            preserve_metadata: true,
         };
         let create_job = start_create_internal(create_request, &registry)
             .expect("create command should start a job");
@@ -3585,6 +3589,20 @@ mod tests {
             fs::metadata(&destination).unwrap().len()
         );
         assert_ne!(summary.written_bytes, source_total_bytes);
+        let listing = list_archive(crate::dto::ListArchiveRequest {
+            archive_path: destination.to_string_lossy().to_string(),
+            password: None,
+        })
+        .expect("created TZAP archive should expose entry metadata");
+        assert_eq!(listing.entries.len(), 2);
+        assert!(listing.entries.iter().all(|entry| entry.mode.is_some()));
+        assert!(listing.entries.iter().all(|entry| entry.modified.is_some()));
+        assert!(
+            listing
+                .entries
+                .iter()
+                .all(|entry| entry.metadata_diagnostics.is_empty())
+        );
         let _ = fs::remove_dir_all(&workspace);
     }
 

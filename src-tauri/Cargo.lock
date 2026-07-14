@@ -5067,7 +5067,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.10"
-source = "git+https://github.com/tzap-org/tzap.git?rev=86742676829891eb13378b7e9617928025ef8ba2#86742676829891eb13378b7e9617928025ef8ba2"
+source = "git+https://github.com/tzap-org/tzap.git?rev=849232941a1565b005658b93502b8d83ee0cb004#849232941a1565b005658b93502b8d83ee0cb004"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -5092,7 +5092,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-keywrap"
 version = "0.1.10"
-source = "git+https://github.com/tzap-org/tzap.git?rev=86742676829891eb13378b7e9617928025ef8ba2#86742676829891eb13378b7e9617928025ef8ba2"
+source = "git+https://github.com/tzap-org/tzap.git?rev=849232941a1565b005658b93502b8d83ee0cb004#849232941a1565b005658b93502b8d83ee0cb004"
 dependencies = [
  "hpke",
  "openssl",
@@ -5105,7 +5105,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-signing"
 version = "0.1.10"
-source = "git+https://github.com/tzap-org/tzap.git?rev=86742676829891eb13378b7e9617928025ef8ba2#86742676829891eb13378b7e9617928025ef8ba2"
+source = "git+https://github.com/tzap-org/tzap.git?rev=849232941a1565b005658b93502b8d83ee0cb004#849232941a1565b005658b93502b8d83ee0cb004"
 dependencies = [
  "ed25519-dalek",
  "openssl",
@@ -6285,7 +6285,6 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "libc",
 ]
@@ -6293,7 +6292,6 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6352,7 +6350,6 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6380,7 +6377,6 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=b9f4c37a8f852a138d140c435ed7c58b09a0d0ac#b9f4c37a8f852a138d140c435ed7c58b09a0d0ac"
 dependencies = [
  "cc",
  "zeroize",

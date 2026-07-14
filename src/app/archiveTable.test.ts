@@ -64,6 +64,16 @@ describe("archive table columns and formatters", () => {
     expect(formatArchiveTableValue(entry, "modified")).not.toBe("");
   });
 
+  it("formats portable archive modes as four-digit octal", () => {
+    const entry = {
+      path: "docs/readme.txt",
+      kind: "file" as const,
+      mode: 0o640,
+    };
+
+    expect(formatArchiveTableValue(entry, "mode")).toBe("0640");
+  });
+
   it("localizes labels and kind display without changing sort order", () => {
     const zhCn = createTranslatorFromCatalog("zh-CN", zhCnMessages);
     const kindColumn = ARCHIVE_TABLE_COLUMNS.find((column) => column.id === "kind")!;

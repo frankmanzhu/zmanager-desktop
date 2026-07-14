@@ -497,6 +497,8 @@ export const zhCnMessages = {
   "detail.size": "大小",
   "detail.packed": "压缩后",
   "detail.modified": "修改时间",
+  "detail.mode": "权限模式",
+  "detail.metadataDiagnostics": "元数据诊断",
   "detail.created": "创建时间",
   "detail.attributes": "属性",
   "detail.method": "方法",

@@ -156,6 +156,8 @@ pub struct ArchiveEntryDto {
     pub size: Option<u64>,
     pub compressed_size: Option<u64>,
     pub modified: Option<String>,
+    pub mode: Option<u32>,
+    pub metadata_diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]

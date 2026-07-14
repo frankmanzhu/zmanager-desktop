@@ -160,6 +160,7 @@ describe("preferences helpers", () => {
         "size",
         "compressedSize",
         "modified",
+        "mode",
         "created",
         "accessed",
         "attributes",

@@ -2,7 +2,7 @@ import { Archive, ChevronDown, Copy, File, Folder, Plus, ShieldAlert, ShieldChec
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
-import { formatBytes } from "../../../app/formatting";
+import { formatBytes, formatDate } from "../../../app/formatting";
 import type { ArchiveWorkspaceDetailsModel } from "../../../app/workspaces/archiveWorkspace";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
@@ -233,6 +233,9 @@ function DetailsContent({ model }: Readonly<{ model: ArchiveWorkspaceDetailsMode
           ["Type", entryKindLabel(model.entry.kind, i18n)],
           ["Size", formatBytes(model.entry.size, { locale: snapshot.display.resolvedLocale, emptyValue: "" })],
           ["Packed size", formatBytes(model.entry.compressedSize, { locale: snapshot.display.resolvedLocale, emptyValue: "" })],
+          [i18n.t("detail.modified"), formatDate(model.entry.modified, { locale: snapshot.display.resolvedLocale, emptyValue: "" })],
+          [i18n.t("detail.mode"), formatArchiveMode(model.entry.mode)],
+          [i18n.t("detail.metadataDiagnostics"), model.entry.metadataDiagnostics?.join("\n")],
         ]}
         >
           {model.entry.kind !== "directory" ? (
@@ -372,6 +375,10 @@ function entryKindLabel(kind: ArchiveEntryKind, i18n: ReturnType<typeof translat
     case "file":
       return i18n.t("entryKind.file");
   }
+}
+
+function formatArchiveMode(mode?: number): string {
+  return typeof mode === "number" ? mode.toString(8).padStart(4, "0") : "";
 }
 
 function archiveFormatLabel(path: string): string | null {

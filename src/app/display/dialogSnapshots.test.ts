@@ -62,6 +62,8 @@ describe("dialog snapshots", () => {
       size: 200,
       compressedSize: 100,
       modified: "2026-07-08T04:05:06Z",
+      mode: 0o640,
+      metadataDiagnostics: ["portable-v1 mode Restore/Skipped: projected mode"],
     };
     const directory: ArchiveEntryDto = { path: "docs", kind: "directory" };
 
@@ -86,6 +88,8 @@ describe("dialog snapshots", () => {
     expect(fileSnapshot.actions.find((action) => action.label === "Copy Details")?.copyValue).toContain(
       "Ratio: 50%",
     );
+    expect(fileSnapshot.rows).toContainEqual({ label: "Mode", value: "0640", mode: undefined });
+    expect(fileSnapshot.rows.some((row) => row.label === "Metadata diagnostics")).toBe(true);
     expect(directorySnapshot.actions.some((action) => action.action === "preview")).toBe(false);
   });
 
