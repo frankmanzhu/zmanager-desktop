@@ -1,11 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashSet,
-    fs,
-    path::PathBuf,
     rc::Rc,
-    thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use gio::prelude::*;
@@ -13,8 +8,9 @@ use gtk::prelude::*;
 use tauri::{Builder, Wry};
 
 use super::{
-    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
-    NativePlatform, PlatformProfile, ShellActionProfile,
+    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
+    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
+    staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -74,11 +70,19 @@ impl NativePlatform for LinuxPlatform {
     fn integration_profile() -> PlatformProfile {
         PlatformProfile {
             platform: PLATFORM_NAME,
-            explorer_integration_enabled: false,
-            desktop_actions_enabled: DESKTOP_ACTIONS_ENABLED,
+            selected_item_actions_enabled: DESKTOP_ACTIONS_ENABLED,
+            background_actions_enabled: DESKTOP_ACTIONS_ENABLED,
+            file_associations_enabled: true,
+            window_decorations: false,
+            custom_window_chrome: true,
+            manual_window_resize: true,
             associated_extensions: crate::archive_file_types::associated_extensions(),
             shell_actions: DESKTOP_SHELL_ACTIONS,
         }
+    }
+
+    fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
+        window.set_decorations(Self::integration_profile().window_decorations)
     }
 
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
@@ -94,7 +98,23 @@ impl NativePlatform for LinuxPlatform {
             .collect()
     }
 
+    fn prepare_native_file_drag(
+        candidates: &[NativeFileDragCandidate],
+        strip_components: usize,
+    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+        prepare_posix_drag_items(
+            candidates,
+            strip_components,
+            PosixDragPathPolicy {
+                platform_label: "Linux",
+                collision_case_sensitive: true,
+                max_component_bytes: Some(255),
+            },
+        )
+    }
+
     fn start_native_file_drag(
+        _window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
     ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
@@ -105,7 +125,7 @@ impl NativePlatform for LinuxPlatform {
             ));
         }
 
-        let staged_drag = LinuxStagedDrag::create(items, stream_provider)?;
+        let staged_drag = StagedFileDrag::create("Linux", items, stream_provider)?;
         linux_file_drag::start_drag(staged_drag)
     }
 }
@@ -118,136 +138,6 @@ fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option
     };
 
     None
-}
-
-struct LinuxStagedDrag {
-    root: Option<PathBuf>,
-    drag_paths: Vec<PathBuf>,
-}
-
-impl LinuxStagedDrag {
-    fn create(
-        items: &[NativeFileDragItem],
-        stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<Self, NativeFileDragError> {
-        let root = unique_drag_root();
-        fs::create_dir_all(&root).map_err(|error| {
-            NativeFileDragError::new(
-                format!("Unable to prepare Linux drag-out folder: {error}"),
-                Some("Try extracting normally while the drag-out folder is checked."),
-            )
-        })?;
-
-        let mut drag_paths = Vec::new();
-        let mut drag_path_keys = HashSet::new();
-        for item in items {
-            let relative_path = linux_drag_relative_path(&item.display_path)?;
-            let output_path = root.join(relative_path);
-            record_linux_drag_path(&root, &output_path, &mut drag_path_keys, &mut drag_paths)?;
-            if let Some(parent) = output_path.parent() {
-                fs::create_dir_all(parent).map_err(|error| {
-                    NativeFileDragError::new(
-                        format!("Unable to create drag-out folder: {error}"),
-                        Some("Try extracting normally while the drag-out folder is checked."),
-                    )
-                })?;
-            }
-
-            let mut output = fs::File::create(&output_path).map_err(|error| {
-                NativeFileDragError::new(
-                    format!("Unable to stage drag-out file: {error}"),
-                    Some("Try extracting normally while the temporary folder is checked."),
-                )
-            })?;
-            stream_provider(&item.entry_path, &mut output)?;
-        }
-
-        Ok(Self {
-            root: Some(root),
-            drag_paths,
-        })
-    }
-
-    fn keep_for_file_manager_copy(mut self) {
-        let Some(root) = self.root.take() else {
-            return;
-        };
-
-        thread::spawn(move || {
-            thread::sleep(Duration::from_secs(600));
-            let _ = fs::remove_dir_all(root);
-        });
-    }
-}
-
-impl Drop for LinuxStagedDrag {
-    fn drop(&mut self) {
-        if let Some(root) = self.root.take() {
-            let _ = fs::remove_dir_all(root);
-        }
-    }
-}
-
-fn unique_drag_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-    std::env::temp_dir().join(format!("zmanager-drag-out-{}-{nonce}", std::process::id()))
-}
-
-fn linux_drag_relative_path(display_path: &str) -> Result<PathBuf, NativeFileDragError> {
-    let components = display_path
-        .split(['/', '\\'])
-        .filter(|component| !component.is_empty())
-        .collect::<Vec<_>>();
-
-    if components.is_empty() {
-        return Err(NativeFileDragError::new(
-            "Archive entry has no file name for drag-out.",
-            None::<String>,
-        ));
-    }
-
-    let mut relative_path = PathBuf::new();
-    for component in components {
-        if component == "." || component == ".." || component.contains('\0') {
-            return Err(NativeFileDragError::new(
-                format!("Archive entry has an unsafe drag-out path: {display_path}"),
-                None::<String>,
-            ));
-        }
-        relative_path.push(component);
-    }
-
-    Ok(relative_path)
-}
-
-fn record_linux_drag_path(
-    root: &PathBuf,
-    output_path: &PathBuf,
-    drag_path_keys: &mut HashSet<PathBuf>,
-    drag_paths: &mut Vec<PathBuf>,
-) -> Result<(), NativeFileDragError> {
-    let relative_path = output_path.strip_prefix(root).map_err(|error| {
-        NativeFileDragError::new(
-            format!("Unable to prepare Linux drag-out path: {error}"),
-            Some("Try extracting normally while native drag-out is being checked."),
-        )
-    })?;
-
-    let Some(top_component) = relative_path.components().next() else {
-        return Err(NativeFileDragError::new(
-            "Archive entry has no file name for drag-out.",
-            None::<String>,
-        ));
-    };
-    let drag_path = root.join(top_component.as_os_str());
-    if drag_path_keys.insert(drag_path.clone()) {
-        drag_paths.push(drag_path);
-    }
-
-    Ok(())
 }
 
 mod linux_file_drag {
@@ -267,7 +157,7 @@ mod linux_file_drag {
     }
 
     pub fn start_drag(
-        staged_drag: LinuxStagedDrag,
+        staged_drag: StagedFileDrag,
     ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
         if gtk::init().is_err() {
             return Err(NativeFileDragError::new(
@@ -277,7 +167,7 @@ mod linux_file_drag {
         }
 
         let uris = staged_drag
-            .drag_paths
+            .drag_paths()
             .iter()
             .map(|path| gio::File::for_path(path).uri().to_string())
             .collect::<Vec<_>>();
@@ -433,7 +323,7 @@ mod linux_file_drag {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::HashMap, fs, sync::Arc};
 
     use super::*;
 
@@ -460,7 +350,8 @@ mod tests {
             Ok(bytes.len() as u64)
         });
 
-        let staged = LinuxStagedDrag::create(
+        let staged = StagedFileDrag::create(
+            "Linux",
             &[
                 NativeFileDragItem {
                     entry_path: "docs/readme.txt".to_string(),
@@ -478,7 +369,7 @@ mod tests {
             provider,
         )
         .expect("stage drag files");
-        let root = staged.root.clone().expect("test staged root");
+        let root = staged.root().expect("test staged root").to_path_buf();
         let nested_file_path = root.join("docs/readme.txt");
         let root_file_path = root.join("root.txt");
 
@@ -491,7 +382,7 @@ mod tests {
             b"root payload"
         );
         assert_eq!(
-            staged.drag_paths,
+            staged.drag_paths(),
             vec![root.join("docs"), root.join("root.txt")]
         );
         drop(staged);
@@ -499,8 +390,55 @@ mod tests {
     }
 
     #[test]
-    fn linux_drag_relative_path_rejects_traversal() {
-        assert!(linux_drag_relative_path("../escape.txt").is_err());
-        assert!(linux_drag_relative_path("folder/../../escape.txt").is_err());
+    fn linux_drag_policy_rejects_traversal_but_allows_windows_specific_names() {
+        let items =
+            LinuxPlatform::prepare_native_file_drag(&[candidate("root/folder/report?.txt")], 1)
+                .expect("Linux should allow question marks in file names");
+        assert_eq!(items[0].display_path, "folder/report?.txt");
+
+        for (path, strip_components) in [
+            ("../escape.txt", 0),
+            ("folder/./file.txt", 0),
+            ("folder/file.txt", 2),
+            ("folder/\0file.txt", 0),
+        ] {
+            assert!(
+                LinuxPlatform::prepare_native_file_drag(&[candidate(path)], strip_components,)
+                    .is_err(),
+                "{path} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn linux_drag_policy_uses_case_sensitive_collisions() {
+        let case_distinct = LinuxPlatform::prepare_native_file_drag(
+            &[candidate("one/Foo.txt"), candidate("two/foo.txt")],
+            1,
+        )
+        .expect("case-distinct Linux paths should coexist");
+        assert_eq!(
+            case_distinct
+                .iter()
+                .map(|item| item.display_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Foo.txt", "foo.txt"]
+        );
+
+        assert!(
+            LinuxPlatform::prepare_native_file_drag(
+                &[candidate("one/file.txt"), candidate("two/file.txt")],
+                1,
+            )
+            .is_err()
+        );
+    }
+
+    fn candidate(path: &str) -> NativeFileDragCandidate {
+        NativeFileDragCandidate {
+            entry_path: path.to_string(),
+            size: Some(1),
+            modified_unix_seconds: None,
+        }
     }
 }

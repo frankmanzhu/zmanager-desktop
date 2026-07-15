@@ -25,27 +25,43 @@ describe("runtime startup", () => {
     ]);
   });
 
-  it("waits for desktop initialization before loading fixtures and bootstrap state", async () => {
+  it("loads the platform profile before desktop initialization can reveal the window", async () => {
     const calls: string[] = [];
+    let finishBootstrap: () => void = () => {
+      throw new Error("loadBootstrapState was not called");
+    };
     let finishInitialize: () => void = () => {
       throw new Error("initializeDesktopRuntime was not called");
     };
     const options = createOptions(calls, {
       isDesktopRuntime: () => true,
+      loadBootstrapState: vi.fn(() => new Promise<void>((resolve) => {
+        calls.push("loadBootstrapState");
+        finishBootstrap = () => resolve();
+      })),
       initializeDesktopRuntime: vi.fn(() => new Promise<void>((resolve) => {
+        calls.push("initializeDesktopRuntime");
         finishInitialize = () => resolve();
       })),
     });
 
     startZManagerRuntime(options);
-    expect(calls).not.toContain("loadBootstrapState");
+    expect(calls).toContain("loadBootstrapState");
+    expect(calls).not.toContain("initializeDesktopRuntime");
+
+    finishBootstrap?.();
+    await Promise.resolve();
+
+    expect(calls).toContain("initializeDesktopRuntime");
+    expect(calls).not.toContain("loadLocalDevFixtureFromUrl");
 
     finishInitialize?.();
     await Promise.resolve();
 
-    expect(calls.slice(-2)).toEqual([
-      "loadLocalDevFixtureFromUrl",
+    expect(calls.slice(-3)).toEqual([
       "loadBootstrapState",
+      "initializeDesktopRuntime",
+      "loadLocalDevFixtureFromUrl",
     ]);
     expect(options.renderNormalWorkspaceOnce).not.toHaveBeenCalled();
   });

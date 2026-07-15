@@ -1,14 +1,17 @@
 # ZManager Desktop context
 
-ZManager Desktop is the Windows and Linux desktop archive manager built on
-`zmanager-core`. This repository owns the desktop shell and application-facing
+ZManager Desktop is the cross-platform Tauri archive manager built on
+`zmanager-core`. Windows and Linux are the packaged product targets; macOS is a
+supported Desktop Shell runtime target while the separately maintained native
+SwiftUI app continues to own Finder extensions, Quick Look, signing, and macOS
+packaging. This repository owns the shared shell and application-facing
 integration. Archive semantics and extraction safety remain core-owned.
 
 ## Domain glossary
 
 ### Desktop Shell
 
-The complete Windows/Linux application: React user interface, application
+The complete cross-platform Tauri application: React user interface, application
 state machines, Tauri command integration, native window behavior, platform
 integration, and packaging.
 
@@ -89,7 +92,7 @@ defaults. A workflow may override a default without mutating the stored value.
 The operating-system adapter that supplies the complete native capability set
 required by the Desktop Shell. Every supported platform implements the shared
 Rust `NativePlatform` interface; callers use platform-neutral wrapper functions
-and never select or invoke Windows- or Linux-specific implementations directly.
+and never select or invoke operating-system-specific implementations directly.
 
 ## Ownership boundaries
 
@@ -117,7 +120,7 @@ Tauri events, file drops, drag-out, clipboard, timers, and preview cleanup.
 ### `src-tauri`
 
 Owns app-facing Rust commands, validation at the desktop boundary, DTO mapping,
-the job registry, and Windows/Linux platform modules. It delegates archive
+the job registry, and Windows/Linux/macOS platform modules. It delegates archive
 semantics to `zmanager-core`.
 
 ### `zmanager-core`
@@ -143,7 +146,7 @@ guards. Do not reimplement these behaviors in TypeScript.
 - Storage-backed preferences and path histories use typed normalization modules;
   do not add ad hoc `localStorage` ownership.
 - Platform behavior stays behind desktop adapters, Rust platform modules, or
-  packaging code. Windows and Linux remain one product. Every supported Rust
+  packaging code. The supported Tauri runtimes remain one product surface. Every supported Rust
   platform must provide a complete `NativePlatform` adapter; unsupported targets
   must fail compilation instead of inheriting another operating system's code.
 - Rust and TypeScript command contracts require generated bindings or explicit

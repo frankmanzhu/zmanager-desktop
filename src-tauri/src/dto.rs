@@ -24,8 +24,12 @@ pub struct ProjectIntegrationShellActionDto {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectIntegrationContract {
     pub platform: &'static str,
-    pub explorer_integration_enabled: bool,
-    pub desktop_actions_enabled: bool,
+    pub selected_item_actions_enabled: bool,
+    pub background_actions_enabled: bool,
+    pub file_associations_enabled: bool,
+    pub window_decorations: bool,
+    pub custom_window_chrome: bool,
+    pub manual_window_resize: bool,
     pub associated_extensions: Vec<String>,
     pub shell_actions: Vec<ProjectIntegrationShellActionDto>,
 }

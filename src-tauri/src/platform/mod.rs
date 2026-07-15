@@ -4,7 +4,16 @@ mod windows;
 #[cfg(target_os = "linux")]
 mod linux;
 
-#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod staged_file_drag;
+
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod windows_drag_path;
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 compile_error!("ZManager Desktop requires a NativePlatform adapter for this operating system");
 
 use std::io::Write;
@@ -15,8 +24,12 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 pub struct PlatformProfile {
     pub platform: &'static str,
-    pub explorer_integration_enabled: bool,
-    pub desktop_actions_enabled: bool,
+    pub selected_item_actions_enabled: bool,
+    pub background_actions_enabled: bool,
+    pub file_associations_enabled: bool,
+    pub window_decorations: bool,
+    pub custom_window_chrome: bool,
+    pub manual_window_resize: bool,
     pub associated_extensions: Vec<String>,
     pub shell_actions: &'static [ShellActionProfile],
 }
@@ -24,6 +37,13 @@ pub struct PlatformProfile {
 pub struct ShellActionProfile {
     pub label: &'static str,
     pub quick_action: &'static str,
+}
+
+#[derive(Clone, Debug)]
+pub struct NativeFileDragCandidate {
+    pub entry_path: String,
+    pub size: Option<u64>,
+    pub modified_unix_seconds: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -40,14 +60,23 @@ pub enum NativeFileDragOutcome {
     Dropped,
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     Cancelled,
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     NoDrop,
 }
 
 pub type NativeFileDragStreamProvider =
     Arc<dyn Fn(&str, &mut dyn Write) -> Result<u64, NativeFileDragError> + Send + Sync>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeFileDragErrorKind {
+    InvalidRequest,
+    UnsafeArchive,
+    OperationFailed,
+}
+
 #[derive(Debug)]
 pub struct NativeFileDragError {
+    pub kind: NativeFileDragErrorKind,
     pub message: String,
     pub hint: Option<String>,
 }
@@ -55,8 +84,25 @@ pub struct NativeFileDragError {
 impl NativeFileDragError {
     pub fn new(message: impl Into<String>, hint: Option<impl Into<String>>) -> Self {
         Self {
+            kind: NativeFileDragErrorKind::OperationFailed,
             message: message.into(),
             hint: hint.map(Into::into),
+        }
+    }
+
+    pub fn invalid_request(message: impl Into<String>) -> Self {
+        Self {
+            kind: NativeFileDragErrorKind::InvalidRequest,
+            message: message.into(),
+            hint: None,
+        }
+    }
+
+    pub fn unsafe_archive(message: impl Into<String>) -> Self {
+        Self {
+            kind: NativeFileDragErrorKind::UnsafeArchive,
+            message: message.into(),
+            hint: None,
         }
     }
 }
@@ -68,8 +114,14 @@ impl NativeFileDragError {
 pub(crate) trait NativePlatform {
     fn register_services(builder: Builder<Wry>) -> Builder<Wry>;
     fn integration_profile() -> PlatformProfile;
+    fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error>;
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto>;
+    fn prepare_native_file_drag(
+        candidates: &[NativeFileDragCandidate],
+        strip_components: usize,
+    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError>;
     fn start_native_file_drag(
+        window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
     ) -> Result<NativeFileDragOutcome, NativeFileDragError>;
@@ -81,6 +133,9 @@ type ActivePlatform = windows::WindowsPlatform;
 #[cfg(target_os = "linux")]
 type ActivePlatform = linux::LinuxPlatform;
 
+#[cfg(target_os = "macos")]
+type ActivePlatform = macos::MacOsPlatform;
+
 pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     ActivePlatform::register_services(builder)
 }
@@ -89,15 +144,27 @@ pub fn integration_profile() -> PlatformProfile {
     ActivePlatform::integration_profile()
 }
 
+pub fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
+    ActivePlatform::configure_main_window(window)
+}
+
 pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
     ActivePlatform::system_file_icons(entries)
 }
 
+pub fn prepare_native_file_drag(
+    candidates: &[NativeFileDragCandidate],
+    strip_components: usize,
+) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+    ActivePlatform::prepare_native_file_drag(candidates, strip_components)
+}
+
 pub fn start_native_file_drag(
+    window: &tauri::WebviewWindow<Wry>,
     items: &[NativeFileDragItem],
     stream_provider: NativeFileDragStreamProvider,
 ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
-    ActivePlatform::start_native_file_drag(items, stream_provider)
+    ActivePlatform::start_native_file_drag(window, items, stream_provider)
 }
 
 #[cfg(test)]
@@ -117,8 +184,12 @@ mod tests {
         let profile = integration_profile();
 
         assert_eq!(profile.platform, "windows");
-        assert!(profile.explorer_integration_enabled);
-        assert!(!profile.desktop_actions_enabled);
+        assert!(profile.selected_item_actions_enabled);
+        assert!(profile.background_actions_enabled);
+        assert!(profile.file_associations_enabled);
+        assert!(profile.window_decorations);
+        assert!(!profile.custom_window_chrome);
+        assert!(!profile.manual_window_resize);
         assert!(!profile.associated_extensions.is_empty());
         assert!(!profile.shell_actions.is_empty());
     }
@@ -129,9 +200,29 @@ mod tests {
         let profile = integration_profile();
 
         assert_eq!(profile.platform, "linux");
-        assert!(!profile.explorer_integration_enabled);
-        assert!(profile.desktop_actions_enabled);
+        assert!(profile.selected_item_actions_enabled);
+        assert!(profile.background_actions_enabled);
+        assert!(profile.file_associations_enabled);
+        assert!(!profile.window_decorations);
+        assert!(profile.custom_window_chrome);
+        assert!(profile.manual_window_resize);
         assert!(!profile.associated_extensions.is_empty());
         assert!(!profile.shell_actions.is_empty());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_profile_preserves_native_window_capabilities() {
+        let profile = integration_profile();
+
+        assert_eq!(profile.platform, "macos");
+        assert!(!profile.selected_item_actions_enabled);
+        assert!(!profile.background_actions_enabled);
+        assert!(profile.file_associations_enabled);
+        assert!(profile.window_decorations);
+        assert!(!profile.custom_window_chrome);
+        assert!(!profile.manual_window_resize);
+        assert!(!profile.associated_extensions.is_empty());
+        assert!(profile.shell_actions.is_empty());
     }
 }

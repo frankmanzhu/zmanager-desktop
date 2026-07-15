@@ -20,9 +20,10 @@ use windows_sys::Win32::{
     },
 };
 
+use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
-    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStreamProvider,
-    NativePlatform, PlatformProfile, ShellActionProfile,
+    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
+    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -79,12 +80,19 @@ impl NativePlatform for WindowsPlatform {
     fn integration_profile() -> PlatformProfile {
         PlatformProfile {
             platform: PLATFORM_NAME,
-            explorer_integration_enabled: EXPLORER_ACTIONS_ENABLED,
-            // Windows integration profile currently reserves explorer actions only.
-            desktop_actions_enabled: false,
+            selected_item_actions_enabled: EXPLORER_ACTIONS_ENABLED,
+            background_actions_enabled: EXPLORER_ACTIONS_ENABLED,
+            file_associations_enabled: true,
+            window_decorations: true,
+            custom_window_chrome: false,
+            manual_window_resize: false,
             associated_extensions: crate::archive_file_types::associated_extensions(),
             shell_actions: EXPLORER_SHELL_ACTIONS,
         }
+    }
+
+    fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
+        window.set_decorations(Self::integration_profile().window_decorations)
     }
 
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
@@ -97,7 +105,15 @@ impl NativePlatform for WindowsPlatform {
             .collect()
     }
 
+    fn prepare_native_file_drag(
+        candidates: &[NativeFileDragCandidate],
+        strip_components: usize,
+    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+        prepare_windows_drag_items(candidates, strip_components)
+    }
+
     fn start_native_file_drag(
+        _window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
     ) -> Result<NativeFileDragOutcome, NativeFileDragError> {

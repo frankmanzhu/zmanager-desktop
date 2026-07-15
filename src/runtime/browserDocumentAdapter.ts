@@ -20,15 +20,20 @@ import {
 
 export type BrowserDocumentAdapter = Readonly<{
   initializeLayout(): void;
+  applyPlatformProfile(profile: BrowserPlatformProfile | null): void;
   setQuickActionJobMode(active: boolean): void;
   applyDisplayMetadata(context: DisplayContextSnapshot): void;
-  usesLinuxWindowChrome(): boolean;
+  usesCustomWindowChrome(): boolean;
+  usesManualWindowResize(): boolean;
+}>;
+
+export type BrowserPlatformProfile = Readonly<{
+  customWindowChrome: boolean;
+  manualWindowResize: boolean;
 }>;
 
 export type CreateBrowserDocumentAdapterOptions = Readonly<{
   documentRef?: Document;
-  navigatorRef?: Pick<Navigator, "userAgent">;
-  isDesktopRuntime: () => boolean;
 }>;
 
 const layoutVariables = {
@@ -50,19 +55,21 @@ export function createBrowserDocumentAdapter(
   options: CreateBrowserDocumentAdapterOptions,
 ): BrowserDocumentAdapter {
   const documentRef = options.documentRef ?? document;
-  const navigatorRef = options.navigatorRef ?? navigator;
-  const useLinuxWindowChrome = options.isDesktopRuntime() && /\bLinux\b/i.test(navigatorRef.userAgent);
+  let useCustomWindowChrome = false;
+  let useManualWindowResize = false;
 
   return {
     initializeLayout() {
-      if (useLinuxWindowChrome) {
-        documentRef.body.classList.add("linux-window-chrome");
-      }
-
       for (const [name, value] of Object.entries(layoutVariables)) {
         documentRef.documentElement.style.setProperty(name, `${value}px`);
       }
       documentRef.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
+    },
+    applyPlatformProfile(profile) {
+      useCustomWindowChrome = profile?.customWindowChrome === true;
+      useManualWindowResize = profile?.manualWindowResize === true;
+      documentRef.body.classList.toggle("custom-window-chrome", useCustomWindowChrome);
+      documentRef.body.classList.toggle("manual-window-resize", useManualWindowResize);
     },
     setQuickActionJobMode(active) {
       documentRef.body.classList.toggle("quick-action-job-mode", active);
@@ -70,8 +77,11 @@ export function createBrowserDocumentAdapter(
     applyDisplayMetadata(context) {
       applyDisplayDocumentMetadata(documentRef.documentElement, context);
     },
-    usesLinuxWindowChrome() {
-      return useLinuxWindowChrome;
+    usesCustomWindowChrome() {
+      return useCustomWindowChrome;
+    },
+    usesManualWindowResize() {
+      return useManualWindowResize;
     },
   };
 }

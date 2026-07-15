@@ -326,9 +326,7 @@ type CommandSurfaceClassState = Partial<Record<CommandId, {
 }>>;
 const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
 
-const browserDocument = createBrowserDocumentAdapter({
-  isDesktopRuntime,
-});
+const browserDocument = createBrowserDocumentAdapter({});
 const passwordPromptAdapter = createBrowserPasswordPromptAdapter();
 browserDocument.initializeLayout();
 
@@ -875,6 +873,7 @@ const startupController = createStartupController({
   setBootstrapState: (state) => {
     latestHealthcheck = state.healthcheck;
     latestContract = state.contract;
+    browserDocument.applyPlatformProfile(state.contract?.platformIntegration ?? null);
   },
   onBootstrapStateChanged: publishBootstrapStateSnapshot,
 });
@@ -1978,7 +1977,7 @@ function handleReactDesktopIntent(intent: ZManagerDesktopIntent) {
       }
       break;
     case "beginWindowResize":
-      if (browserDocument.usesLinuxWindowChrome()) {
+      if (browserDocument.usesManualWindowResize()) {
         void appWindowController.beginResizeDrag(intent.direction as AppWindowResizeDirection);
       }
       break;

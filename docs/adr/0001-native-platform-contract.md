@@ -32,7 +32,7 @@ such as no system icon bitmap, but the operation itself must be implemented.
 - Missing adapter methods are compiler errors on that platform.
 - Callers remain independent of platform selection and native implementation
   details.
-- Windows and Linux behavior stays local to their respective adapter modules.
+- Windows, Linux, and macOS behavior stays local to their respective adapter modules.
 - Supporting another operating system requires an explicit module, adapter, and
   `ActivePlatform` selection; it can never silently use Linux behavior.
 - The contract is static and does not support runtime platform switching, which
@@ -44,4 +44,5 @@ such as no system icon bitmap, but the operation itself must be implemented.
   interface and retains its integration profile.
 - `cargo test` on every supported operating system compiles that operating
   system's adapter through `ActivePlatform`.
-- CI packaging builds exercise both Windows and Linux targets.
+- Host and VM builds compile each supported adapter; packaging remains explicit
+  for the platforms that this repository ships.

@@ -3,7 +3,7 @@
 ## Layering
 
 ```text
-Windows/Linux desktop shell
+Cross-platform Tauri desktop shell
   TypeScript UI, window state, dialogs, filtering, presentation
 
 Tauri command layer
@@ -62,6 +62,13 @@ Owns Explorer context menu registration, file associations, installer hooks, and
 
 Owns `.desktop` files, MIME registration, AppImage/Flatpak/deb/rpm packaging hooks, and XDG integration.
 
+### macOS Runtime Integration
+
+Owns macOS filename policy, staged native drag dispatch, native window behavior,
+and system-icon fallback through `NativePlatform`. The separate SwiftUI project
+continues to own Finder Sync, Quick Look, signing, notarization, and `.app`
+packaging.
+
 ## Data Flow
 
 ```text
@@ -89,7 +96,8 @@ Errors must not include passwords, raw command-line strings, or sensitive path d
 
 ## Platform Strategy
 
-Windows and Linux share the app workspace. Platform-specific behavior should be behind `cfg(target_os = "...")` Rust modules or packaging scripts.
+Windows, Linux, and macOS share the app workspace. In-process platform selection
+and behavior live behind `src-tauri::platform`; packaging scripts and external
+shell integrations remain explicit platform adapters at their own seams.
 
 Do not create separate products until a platform requirement cannot be cleanly isolated.
-

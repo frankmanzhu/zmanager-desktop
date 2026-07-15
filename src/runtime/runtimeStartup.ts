@@ -23,9 +23,10 @@ export function startZManagerRuntime(options: RuntimeStartupOptions): void {
   void options.bindFileDrop();
 
   if (options.isDesktopRuntime()) {
-    void options.initializeDesktopRuntime().finally(() => {
-      options.loadLocalDevFixtureFromUrl();
-      void options.loadBootstrapState();
+    void Promise.resolve(options.loadBootstrapState()).finally(() => {
+      void options.initializeDesktopRuntime().finally(() => {
+        options.loadLocalDevFixtureFromUrl();
+      });
     });
     return;
   }

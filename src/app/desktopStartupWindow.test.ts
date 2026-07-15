@@ -49,11 +49,12 @@ describe("desktop startup window", () => {
     expect(mainRs.slice(setupStart, invokeHandlerStart)).not.toContain(".show()");
   });
 
-  it("uses app-owned Linux chrome without changing Windows native decorations", () => {
+  it("uses platform-profile window decorations without operating-system conditionals", () => {
     const mainRs = readWorkspaceFile("src-tauri", "src", "main.rs");
 
-    expect(mainRs).toContain("#[cfg(target_os = \"linux\")]\n                let _ = window.set_decorations(false);");
-    expect(mainRs).not.toContain("#[cfg(target_os = \"windows\")]\n                let _ = window.set_decorations(false);");
+    expect(mainRs).toContain("platform::configure_main_window(&window)?");
+    expect(mainRs).not.toContain("window.set_decorations(");
+    expect(mainRs).not.toContain("#[cfg(target_os =");
   });
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
@@ -69,7 +70,7 @@ describe("desktop startup window", () => {
     expect(appRuntimeTs).toContain('Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>');
     expect(runtimeAdapterTs).toContain("void appWindowController.beginResizeDrag(intent.direction");
     expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
-    expect(styles).toContain("body.linux-window-chrome .window-resize-handle");
+    expect(styles).toContain("body.manual-window-resize .window-resize-handle");
   });
 
   it("centers normal startup when no saved geometry is available", () => {

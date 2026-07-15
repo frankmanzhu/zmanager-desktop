@@ -3,7 +3,7 @@
   "identifier": "disposable-task-window",
   "description": "Allow disposable task windows to receive job updates and control only their archive job.",
   "windows": ["task-*"],
-  "platforms": ["windows", "linux"],
+  "platforms": ["windows", "linux", "macOS"],
   "permissions": [
     "allow-cancel-job",
     "allow-pause-job",

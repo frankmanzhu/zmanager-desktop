@@ -36,10 +36,7 @@ fn main() {
         ))
         .setup(move |app| {
             if let Some(window) = app.get_webview_window("main") {
-                #[cfg(target_os = "linux")]
-                let _ = window.set_decorations(false);
-                #[cfg(not(target_os = "linux"))]
-                let _ = window;
+                platform::configure_main_window(&window)?;
             }
             Ok(())
         })

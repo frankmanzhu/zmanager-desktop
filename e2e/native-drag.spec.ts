@@ -68,8 +68,10 @@ const archiveFixture: ArchiveFixture = {
   ],
 };
 
-test.beforeEach(async ({ page }) => {
-  await loadExtractFixture(page);
+test.beforeEach(async ({ page }, testInfo) => {
+  if (!testInfo.titlePath.includes("linux native drag arming")) {
+    await loadExtractFixture(page);
+  }
 });
 
 test("synthetic folder rows can be selected from the table row", async ({ page }) => {
@@ -108,12 +110,12 @@ test("dragging a selected synthetic folder row starts native drag for the folder
   });
 });
 
-test("ctrl-click adds rows to the selection without starting native drag-out", async ({ page }) => {
+test("additive-click adds rows to the selection without starting native drag-out", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
   const rootRow = entryRow(page, "root.txt");
 
   await rootRow.locator(".row-name").click();
-  await folderRow.locator(".row-name").click({ modifiers: ["Control"] });
+  await folderRow.locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
 
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
@@ -184,7 +186,7 @@ test("dragging an unselected file row selects it when native drag-out starts", a
 
 test("dragging one selected row starts native drag-out for the selected set", async ({ page }) => {
   await entryRow(page, "root.txt").locator(".row-name").click();
-  await entryRow(page, "folder").locator(".row-name").click({ modifiers: ["Control"] });
+  await entryRow(page, "folder").locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
 
   await dragRowName(page, "root.txt");
 
@@ -379,12 +381,12 @@ test.describe("linux native drag arming", () => {
     await page.mouse.up();
   });
 
-  test("linux ctrl-click and shift-click select without preparing drag-out", async ({ page }) => {
+  test("linux additive-click and shift-click select without preparing drag-out", async ({ page }) => {
     const folderRow = entryRow(page, "folder");
     const rootRow = entryRow(page, "root.txt");
 
     await rootRow.locator(".row-name").click();
-    await folderRow.locator(".row-name").click({ modifiers: ["Control"] });
+    await folderRow.locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
 
     await expect(rootRow).toHaveAttribute("aria-selected", "true");
     await expect(folderRow).toHaveAttribute("aria-selected", "true");
@@ -409,6 +411,12 @@ async function loadExtractFixture(page: Page, options?: { platform?: "windows" |
   await installTauriStub(page, options);
   await page.goto("/");
   await page.waitForFunction(() => Boolean(window.__zmanagerDev));
+  await page.waitForFunction(() =>
+    window.__zmanagerE2E?.ipcCalls.some((call) => call.cmd === "project_contract"),
+  );
+  if (options?.platform === "linux") {
+    await expect(page.locator("body")).toHaveClass(/custom-window-chrome/);
+  }
   await page.getByRole("tab", { name: "Extract" }).click();
   await page.evaluate((fixture) => window.__zmanagerDev?.loadArchiveFixture(fixture), archiveFixture);
   await expect(entryRow(page, "folder")).toBeVisible();
@@ -451,8 +459,12 @@ async function installTauriStub(page: Page, options?: { platform?: "windows" | "
           coreDependency: "stub",
           platformIntegration: {
             platform,
-            explorerIntegrationEnabled: true,
-            desktopActionsEnabled: false,
+            selectedItemActionsEnabled: true,
+            backgroundActionsEnabled: true,
+            fileAssociationsEnabled: true,
+            windowDecorations: platform !== "linux",
+            customWindowChrome: platform === "linux",
+            manualWindowResize: platform === "linux",
             associatedExtensions: ["zip"],
             shellActions: [],
           },

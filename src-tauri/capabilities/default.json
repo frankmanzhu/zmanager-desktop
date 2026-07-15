@@ -3,7 +3,7 @@
   "identifier": "main-window",
   "description": "Allow the main ZManager window to run archive commands and use native file dialogs/openers.",
   "windows": ["main"],
-  "platforms": ["windows", "linux"],
+  "platforms": ["windows", "linux", "macOS"],
   "permissions": [
     "allow-healthcheck",
     "allow-project-contract",

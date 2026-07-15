@@ -13,8 +13,12 @@ export type ProjectContract = {
   coreDependency: string;
   platformIntegration: {
     platform: string;
-    explorerIntegrationEnabled: boolean;
-    desktopActionsEnabled: boolean;
+    selectedItemActionsEnabled: boolean;
+    backgroundActionsEnabled: boolean;
+    fileAssociationsEnabled: boolean;
+    windowDecorations: boolean;
+    customWindowChrome: boolean;
+    manualWindowResize: boolean;
     associatedExtensions: string[];
     shellActions: {
       label: string;

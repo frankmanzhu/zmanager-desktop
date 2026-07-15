@@ -3541,7 +3541,7 @@ progress {
   -webkit-user-select: none;
 }
 
-body.linux-window-chrome .window-titlebar {
+body.custom-window-chrome .window-titlebar {
   display: flex;
 }
 
@@ -3606,7 +3606,7 @@ body.linux-window-chrome .window-titlebar {
   z-index: 1000;
 }
 
-body.linux-window-chrome .window-resize-handle {
+body.manual-window-resize .window-resize-handle {
   display: block;
 }
 
@@ -3674,7 +3674,7 @@ body.linux-window-chrome .window-resize-handle {
   cursor: nwse-resize;
 }
 
-body.linux-window-chrome .workspace {
+body.custom-window-chrome .workspace {
   grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "title"
@@ -3685,7 +3685,7 @@ body.linux-window-chrome .workspace {
     "status";
 }
 
-body.linux-window-chrome .workspace[data-mode="compress"] {
+body.custom-window-chrome .workspace[data-mode="compress"] {
   grid-template-rows: var(--zmanager-titlebar-height) var(--zmanager-menu-height) var(--zmanager-toolbar-height) var(--zmanager-pathbar-height) minmax(0, 1fr) var(--zmanager-statusbar-height);
   grid-template-areas:
     "title"
@@ -3696,14 +3696,14 @@ body.linux-window-chrome .workspace[data-mode="compress"] {
     "status";
 }
 
-body.linux-window-chrome .workspace[data-quick-action-mode="job-only"] {
+body.custom-window-chrome .workspace[data-quick-action-mode="job-only"] {
   grid-template-rows: var(--zmanager-titlebar-height) minmax(0, 1fr);
   grid-template-areas:
     "title"
     "body";
 }
 
-body.linux-window-chrome .quick-progress {
+body.custom-window-chrome .quick-progress {
   height: auto;
 }
 

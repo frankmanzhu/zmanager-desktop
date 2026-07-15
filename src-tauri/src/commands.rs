@@ -93,8 +93,12 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         core_dependency: constants::CORE_DEPENDENCY,
         platform_integration: ProjectIntegrationContract {
             platform: integration.platform,
-            explorer_integration_enabled: integration.explorer_integration_enabled,
-            desktop_actions_enabled: integration.desktop_actions_enabled,
+            selected_item_actions_enabled: integration.selected_item_actions_enabled,
+            background_actions_enabled: integration.background_actions_enabled,
+            file_associations_enabled: integration.file_associations_enabled,
+            window_decorations: integration.window_decorations,
+            custom_window_chrome: integration.custom_window_chrome,
+            manual_window_resize: integration.manual_window_resize,
             associated_extensions: integration.associated_extensions,
             shell_actions: integration
                 .shell_actions
@@ -1061,6 +1065,7 @@ pub fn preview_entry(
 
 #[tauri::command]
 pub fn start_native_file_drag(
+    window: tauri::WebviewWindow,
     request: NativeFileDragRequest,
     _registry: State<'_, JobRegistry>,
 ) -> Result<NativeFileDragResponse, CommandErrorDto> {
@@ -1092,7 +1097,7 @@ pub fn start_native_file_drag(
             .map_err(native_file_drag_error_from_command)
         });
 
-    let outcome = crate::platform::start_native_file_drag(&drag_items, stream_provider)
+    let outcome = crate::platform::start_native_file_drag(&window, &drag_items, stream_provider)
         .map_err(map_native_file_drag_error)?;
 
     Ok(NativeFileDragResponse {
@@ -1889,13 +1894,21 @@ fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
 }
 
 fn map_native_file_drag_error(error: crate::platform::NativeFileDragError) -> CommandErrorDto {
-    CommandErrorDto::new(
-        constants::COMMAND_ERROR_OPERATION_FAILED,
-        error.message,
-        error.hint,
-        ErrorSeverityDto::Warning,
-        false,
-    )
+    match error.kind {
+        crate::platform::NativeFileDragErrorKind::InvalidRequest => {
+            CommandErrorDto::invalid_request(error.message)
+        }
+        crate::platform::NativeFileDragErrorKind::UnsafeArchive => {
+            CommandErrorDto::unsafe_archive(error.message)
+        }
+        crate::platform::NativeFileDragErrorKind::OperationFailed => CommandErrorDto::new(
+            constants::COMMAND_ERROR_OPERATION_FAILED,
+            error.message,
+            error.hint,
+            ErrorSeverityDto::Warning,
+            false,
+        ),
+    }
 }
 
 fn native_file_drag_error_from_command(
@@ -2006,20 +2019,10 @@ fn native_drag_items_from_listing(
         }
     }
 
-    let mut display_path_keys = HashSet::new();
-    let mut items = Vec::with_capacity(selected_entries.len());
+    let mut candidates = Vec::with_capacity(selected_entries.len());
     for entry in selected_entries {
-        let display_path = virtual_drag_display_path(&entry.path, strip_components)?;
-        let display_key = display_path.to_lowercase();
-        if !display_path_keys.insert(display_key) {
-            return Err(CommandErrorDto::invalid_request(format!(
-                "more than one selected entry would drag out as {display_path}"
-            )));
-        }
-
-        items.push(crate::platform::NativeFileDragItem {
+        candidates.push(crate::platform::NativeFileDragCandidate {
             entry_path: entry.path.clone(),
-            display_path,
             size: entry.size,
             modified_unix_seconds: entry
                 .modified
@@ -2028,7 +2031,8 @@ fn native_drag_items_from_listing(
         });
     }
 
-    Ok(items)
+    crate::platform::prepare_native_file_drag(&candidates, strip_components)
+        .map_err(map_native_file_drag_error)
 }
 
 fn push_native_drag_listing_entry<'a>(
@@ -2039,86 +2043,6 @@ fn push_native_drag_listing_entry<'a>(
     if selected_entry_keys.insert(archive_entry_key(&entry.path)) {
         selected_entries.push(entry);
     }
-}
-
-fn virtual_drag_display_path(
-    entry_path: &str,
-    strip_components: usize,
-) -> Result<String, CommandErrorDto> {
-    let components = entry_path
-        .split(|character| character == '/' || character == '\\')
-        .filter(|component| !component.is_empty())
-        .skip(strip_components)
-        .collect::<Vec<_>>();
-
-    if components.is_empty() {
-        return Err(CommandErrorDto::invalid_request(format!(
-            "entry path is empty after stripping components: {entry_path}"
-        )));
-    }
-
-    for component in &components {
-        validate_virtual_drag_component(component, entry_path)?;
-    }
-
-    let display_path = components.join("\\");
-    if display_path.encode_utf16().count() > WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16 {
-        return Err(CommandErrorDto::invalid_request(format!(
-            "entry path is too long for Windows virtual drag-out: {entry_path}"
-        )));
-    }
-
-    Ok(display_path)
-}
-
-const WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16: usize = 259;
-const WINDOWS_RESERVED_FILE_NAMES: &[&str] = &[
-    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
-
-fn validate_virtual_drag_component(
-    component: &str,
-    entry_path: &str,
-) -> Result<(), CommandErrorDto> {
-    if component == "." || component == ".." {
-        return Err(CommandErrorDto::unsafe_archive(format!(
-            "entry path contains unsafe traversal component: {entry_path}"
-        )));
-    }
-
-    if component.ends_with(' ') || component.ends_with('.') {
-        return Err(CommandErrorDto::unsafe_archive(format!(
-            "entry path contains a Windows-unsafe component: {entry_path}"
-        )));
-    }
-
-    if component.chars().any(is_windows_invalid_file_name_char) {
-        return Err(CommandErrorDto::unsafe_archive(format!(
-            "entry path contains a Windows-unsafe character: {entry_path}"
-        )));
-    }
-
-    let reserved_probe = component
-        .split_once('.')
-        .map_or(component, |(stem, _)| stem)
-        .to_ascii_uppercase();
-    if WINDOWS_RESERVED_FILE_NAMES
-        .iter()
-        .any(|reserved| reserved_probe == *reserved)
-    {
-        return Err(CommandErrorDto::unsafe_archive(format!(
-            "entry path contains a Windows-reserved file name: {entry_path}"
-        )));
-    }
-
-    Ok(())
-}
-
-fn is_windows_invalid_file_name_char(character: char) -> bool {
-    character == '\0'
-        || character.is_control()
-        || matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*')
 }
 
 fn archive_entry_key(path: &str) -> String {
@@ -2772,35 +2696,6 @@ mod tests {
     }
 
     #[test]
-    fn virtual_drag_display_path_uses_current_folder_depth() {
-        assert_eq!(
-            virtual_drag_display_path("docs/readme.txt", 1).unwrap(),
-            "readme.txt"
-        );
-        assert_eq!(
-            virtual_drag_display_path("docs/nested/readme.txt", 1).unwrap(),
-            "nested\\readme.txt"
-        );
-        assert!(virtual_drag_display_path("docs", 1).is_err());
-    }
-
-    #[test]
-    fn virtual_drag_display_path_rejects_windows_unsafe_names() {
-        for path in [
-            "../escape.txt",
-            "docs/CON.txt",
-            "docs/name:stream.txt",
-            "docs/trailing-dot.",
-            "docs/trailing-space ",
-        ] {
-            assert!(
-                virtual_drag_display_path(path, 0).is_err(),
-                "{path} should be rejected"
-            );
-        }
-    }
-
-    #[test]
     fn native_drag_items_expand_folders_to_regular_file_descendants() {
         let entries = vec![
             browser_entry(
@@ -2828,7 +2723,10 @@ mod tests {
                 .iter()
                 .map(|item| item.display_path.as_str())
                 .collect::<Vec<_>>(),
-            vec!["a.txt", "nested\\b.txt"]
+            vec![
+                "a.txt".to_string(),
+                format!("nested{}b.txt", std::path::MAIN_SEPARATOR)
+            ]
         );
     }
 
@@ -2856,26 +2754,29 @@ mod tests {
                 .iter()
                 .map(|item| item.display_path.as_str())
                 .collect::<Vec<_>>(),
-            vec!["folder\\alpha.txt", "folder\\beta.txt"]
+            vec![
+                format!("folder{}alpha.txt", std::path::MAIN_SEPARATOR),
+                format!("folder{}beta.txt", std::path::MAIN_SEPARATOR),
+            ]
         );
     }
 
     #[test]
-    fn native_drag_items_reject_duplicate_display_paths() {
+    fn native_drag_items_reject_duplicate_display_paths_after_stripping() {
         let entries = vec![
             browser_entry(
                 "one/readme.txt",
                 zmanager_core::archive_browser::BrowserEntryKind::File,
             ),
             browser_entry(
-                "two/README.txt",
+                "two/readme.txt",
                 zmanager_core::archive_browser::BrowserEntryKind::File,
             ),
         ];
 
         let error = native_drag_items_from_listing(
             &entries,
-            &["one/readme.txt".to_string(), "two/README.txt".to_string()],
+            &["one/readme.txt".to_string(), "two/readme.txt".to_string()],
             1,
         )
         .unwrap_err();

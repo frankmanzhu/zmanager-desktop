@@ -251,14 +251,20 @@ export function buildAboutDialogSnapshot(
             contract?.platformIntegration.platform ?? message(display, "about.diagnostics.unknown"),
           ],
           [
-            message(display, "about.diagnostics.explorerIntegration"),
-            contract?.platformIntegration.explorerIntegrationEnabled
+            message(display, "about.diagnostics.selectedItemActions"),
+            contract?.platformIntegration.selectedItemActionsEnabled
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
           [
-            message(display, "about.diagnostics.desktopActions"),
-            contract?.platformIntegration.desktopActionsEnabled
+            message(display, "about.diagnostics.backgroundActions"),
+            contract?.platformIntegration.backgroundActionsEnabled
+              ? message(display, "about.diagnostics.enabled")
+              : message(display, "about.diagnostics.disabled"),
+          ],
+          [
+            message(display, "about.diagnostics.fileAssociations"),
+            contract?.platformIntegration.fileAssociationsEnabled
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
