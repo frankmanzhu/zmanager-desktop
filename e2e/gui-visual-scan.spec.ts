@@ -549,7 +549,7 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator("th[data-column-id='created']")).toBeHidden();
 
   await page.locator('tr[data-entry-path="documents"] .row-name').click();
-  await page.locator('tr[data-entry-path="images"] .row-name').click({ modifiers: ["Control"] });
+  await page.locator('tr[data-entry-path="images"] .row-name').click({ modifiers: ["ControlOrMeta"] });
   await expect(page.locator('tr[data-entry-path="documents"]')).toHaveAttribute("aria-selected", "true");
   await expect(page.locator('tr[data-entry-path="images"]')).toHaveAttribute("aria-selected", "true");
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
