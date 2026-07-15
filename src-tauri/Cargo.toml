@@ -18,7 +18,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
-zmanager-core = { path = "../../zmanager/crates/zmanager-core" }
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", rev = "ade42602e350dadd666b52319642c206d9df52b6", package = "zmanager-core" }
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22.1"

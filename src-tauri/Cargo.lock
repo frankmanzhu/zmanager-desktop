@@ -5067,6 +5067,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "tzap-core"
 version = "0.1.10"
+source = "git+https://github.com/tzap-org/tzap.git?rev=ef4fb9a084d42a1406d47207b0641f7266458b2f#ef4fb9a084d42a1406d47207b0641f7266458b2f"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -5094,6 +5095,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-keywrap"
 version = "0.1.10"
+source = "git+https://github.com/tzap-org/tzap.git?rev=ef4fb9a084d42a1406d47207b0641f7266458b2f#ef4fb9a084d42a1406d47207b0641f7266458b2f"
 dependencies = [
  "hpke",
  "openssl",
@@ -5106,6 +5108,7 @@ dependencies = [
 [[package]]
 name = "tzap-plugin-signing"
 version = "0.1.10"
+source = "git+https://github.com/tzap-org/tzap.git?rev=ef4fb9a084d42a1406d47207b0641f7266458b2f#ef4fb9a084d42a1406d47207b0641f7266458b2f"
 dependencies = [
  "ed25519-dalek",
  "openssl",
@@ -6285,6 +6288,7 @@ checksum = "977347db8caa080403f6b6b7c1cda9479a8e869316f7e13a59b19076a40f94e3"
 [[package]]
 name = "zmanager-apple-archive"
 version = "1.0.6"
+source = "git+https://github.com/tzap-org/zmanager?rev=ade42602e350dadd666b52319642c206d9df52b6#ade42602e350dadd666b52319642c206d9df52b6"
 dependencies = [
  "libc",
 ]
@@ -6292,6 +6296,7 @@ dependencies = [
 [[package]]
 name = "zmanager-core"
 version = "1.0.6"
+source = "git+https://github.com/tzap-org/zmanager?rev=ade42602e350dadd666b52319642c206d9df52b6#ade42602e350dadd666b52319642c206d9df52b6"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6350,6 +6355,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive"
 version = "1.0.6"
+source = "git+https://github.com/tzap-org/zmanager?rev=ade42602e350dadd666b52319642c206d9df52b6#ade42602e350dadd666b52319642c206d9df52b6"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6377,6 +6383,7 @@ dependencies = [
 [[package]]
 name = "zmanager-unrar"
 version = "1.0.6"
+source = "git+https://github.com/tzap-org/zmanager?rev=ade42602e350dadd666b52319642c206d9df52b6#ade42602e350dadd666b52319642c206d9df52b6"
 dependencies = [
  "cc",
  "zeroize",
