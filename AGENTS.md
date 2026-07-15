@@ -16,7 +16,7 @@ This is a single-context repository with `CONTEXT.md` at the root and architectu
 
 ## Project Structure & Module Organization
 
-ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. Keep it separate from the macOS SwiftUI app; do not reimplement archive behavior in TypeScript.
+ZManager Desktop is the cross-platform Tauri shell for the Rust archive engine. Keep it separate from the macOS SwiftUI app; do not reimplement archive behavior in TypeScript.
 
 - `src/`: Vite/TypeScript frontend. `src/app` owns workflow state, pure behavior, and effect interfaces; `src/api` owns command DTOs and invoke wrappers; `src/ui` owns React rendering and UI event adapters; `src/desktop` owns concrete runtime/path/window/native integration.
 - `src/app/shell/`: target home for app-wide shell state such as active workspace mode, status, drop decisions, quick-action startup state, preview cleanup metadata, and path-history snapshots.
@@ -25,7 +25,7 @@ ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. K
 - `src/app/controllers/`: target home for async orchestration that uses injected API, desktop, dialog, storage, timer, clipboard, and window adapters. Controllers must not import Tauri directly.
 - `src/app/display/`: target home for display context such as resolved locale, translator, and formatting state. Workflow state and command DTOs stay language-neutral.
 - `src/app/pathHistory.ts`: target module for recent archive and destination history normalization before persistence.
-- `src-tauri/`: Rust Tauri commands, job registry, DTO mapping, and platform modules. Keep OS code in `platform/windows.rs` and `platform/linux.rs`.
+- `src-tauri/`: Rust Tauri commands, job registry, DTO mapping, and platform modules. Keep OS code in `platform/windows.rs`, `platform/linux.rs`, and `platform/macos.rs`.
 - `e2e/`: Playwright end-to-end and visual tests.
 - `scripts/`, `packaging/`, `docs/`: release tooling, installer assets, architecture notes, and audits.
 
@@ -41,6 +41,7 @@ ZManager Desktop is the Windows/Linux Tauri shell for the Rust archive engine. K
 - `cd src-tauri && cargo test`: run Rust tests.
 - `scripts/build-linux-ubuntu-deb.sh`: build Ubuntu/Debian `.deb`.
 - `scripts/build-linux-fedora-rpm.sh`: build Fedora `.rpm`.
+- `scripts/build-macos.sh`: build unnotarized macOS Tauri `.app` and `.dmg` artifacts without Developer ID signing.
 - `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1`: run the Windows ARM64 release gate.
 
 Use package scripts instead of direct `tsc`, `vite`, or Tauri CLI calls unless debugging requires it.
@@ -49,7 +50,7 @@ Use package scripts instead of direct `tsc`, `vite`, or Tauri CLI calls unless d
 
 Use explicit TypeScript module names such as `extractFlow.ts` and `archiveTable.ts`, with matching `*.test.ts` files. Prefer named constants and shared helpers over hard-coded text, limits, paths, or command names.
 
-Rust code should keep app-facing mapping in Tauri commands and leave archive behavior in `zmanager-core`. Do not add macOS SwiftUI, Finder Sync, Quick Look, signing, notarization, or `.app` packaging code.
+Rust code should keep app-facing mapping in Tauri commands and leave archive behavior in `zmanager-core`. Do not add macOS SwiftUI, Finder Sync, Quick Look, Developer ID signing, notarization, or packaging code for the separate native Swift application. This repository may build local unnotarized `.app` and `.dmg` artifacts for its own Tauri runtime.
 
 ## Frontend UI Technology Rule
 

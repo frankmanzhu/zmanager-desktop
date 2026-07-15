@@ -29,7 +29,7 @@
     "active": true,
     "targets": ["nsis", "appimage", "deb", "rpm"],
     "category": "Utility",
-    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
     "fileAssociations": [
       {
         "ext": ["zip", "zipx"],
@@ -95,7 +95,7 @@
         "mimeType": "application/x-zmanager-tzap"
       }
     ],
-    "shortDescription": "Safe archive manager for Windows and Linux",
+    "shortDescription": "Safe archive manager for Windows, Linux, and macOS",
     "longDescription": "ZManager is a safe archive manager backed by the ZManager Rust archive engine.",
     "windows": {
       "nsis": {

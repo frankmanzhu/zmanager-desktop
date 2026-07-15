@@ -43,8 +43,9 @@ associations rather than Explorer- or freedesktop-specific flags.
 - Linux accepts names that are valid on Linux but invalid on Windows.
 - Adding a supported target requires explicit drag, window, profile, and icon
   behavior before compilation succeeds.
-- macOS runtime support does not move Finder Sync, Quick Look, signing,
-  notarization, or `.app` packaging into this repository.
+- macOS runtime support may produce local unnotarized Tauri `.app` and `.dmg`
+  bundles, but does not move Finder Sync, Quick Look, signing, notarization, or
+  release packaging for the separate Swift application into this repository.
 - Staged Linux and macOS drops retain temporary content briefly after a
   successful drop so the destination file manager can finish copying it.
 

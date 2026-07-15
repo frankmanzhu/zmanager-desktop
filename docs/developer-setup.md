@@ -100,6 +100,23 @@ scripts/build-linux-fedora-rpm.sh
 - `--no-install`: stop before host install, leave artifacts staged.
 - Build output is staged to `/tmp/zmanager-desktop-rpm/`.
 
+## macOS application build
+
+```sh
+scripts/build-macos.sh
+```
+
+- Builds unnotarized `.app` and `.dmg` Tauri artifacts for the host architecture
+  without Developer ID signing.
+- `--bundle app|dmg|all` selects the artifact type; the default is `all`.
+- `--install-deps` installs missing CMake/Node dependencies with Homebrew and
+  installs or updates Rust through rustup.
+- `--skip-tests` enables packaging-only mode.
+- Build output is staged to `/tmp/zmanager-desktop-macos/`, or the directory in
+  `ZMANAGER_MACOS_STAGE_DIR`.
+- Signing, notarization, Finder Sync, Quick Look, and packaging for the separate
+  native Swift application remain outside this repository.
+
 ## Repository layout
 
 ```text

@@ -1,11 +1,12 @@
 # ZManager Desktop context
 
 ZManager Desktop is the cross-platform Tauri archive manager built on
-`zmanager-core`. Windows and Linux are the packaged product targets; macOS is a
-supported Desktop Shell runtime target while the separately maintained native
-SwiftUI app continues to own Finder extensions, Quick Look, signing, and macOS
-packaging. This repository owns the shared shell and application-facing
-integration. Archive semantics and extraction safety remain core-owned.
+`zmanager-core`. Windows and Linux are the signed/release packaging targets;
+macOS supports local unnotarized `.app` and `.dmg` bundles for the Tauri runtime.
+The separately maintained native SwiftUI app continues to own Finder extensions,
+Quick Look, signing, notarization, and its release packaging. This repository
+owns the shared shell and application-facing integration. Archive semantics and
+extraction safety remain core-owned.
 
 ## Domain glossary
 

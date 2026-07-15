@@ -65,9 +65,9 @@ Owns `.desktop` files, MIME registration, AppImage/Flatpak/deb/rpm packaging hoo
 ### macOS Runtime Integration
 
 Owns macOS filename policy, staged native drag dispatch, native window behavior,
-and system-icon fallback through `NativePlatform`. The separate SwiftUI project
-continues to own Finder Sync, Quick Look, signing, notarization, and `.app`
-packaging.
+system-icon fallback through `NativePlatform`, and local unnotarized Tauri `.app`
+and `.dmg` builds. The separate SwiftUI project continues to own Finder Sync,
+Quick Look, signing, notarization, and its release packaging.
 
 ## Data Flow
 

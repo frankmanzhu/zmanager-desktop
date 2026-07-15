@@ -100,7 +100,15 @@ impl StagedFileDrag {
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
     ) -> Result<Self, NativeFileDragError> {
-        let root = unique_drag_root();
+        Self::create_at_root(unique_drag_root(), platform_label, items, stream_provider)
+    }
+
+    fn create_at_root(
+        root: PathBuf,
+        platform_label: &str,
+        items: &[NativeFileDragItem],
+        stream_provider: NativeFileDragStreamProvider,
+    ) -> Result<Self, NativeFileDragError> {
         fs::create_dir_all(&root).map_err(|error| {
             NativeFileDragError::new(
                 format!("Unable to prepare {platform_label} drag-out folder: {error}"),
@@ -294,7 +302,7 @@ mod tests {
 
     #[test]
     fn staged_drag_cleans_up_when_streaming_fails() {
-        let before = drag_roots();
+        let root = unique_drag_root();
         let provider: NativeFileDragStreamProvider = Arc::new(|_, _| {
             Err(NativeFileDragError::new(
                 "intentional stream failure",
@@ -302,7 +310,8 @@ mod tests {
             ))
         });
 
-        let result = StagedFileDrag::create(
+        let result = StagedFileDrag::create_at_root(
+            root.clone(),
             "test",
             &[NativeFileDragItem {
                 entry_path: "failure.txt".to_string(),
@@ -314,21 +323,9 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert_eq!(drag_roots(), before);
-    }
-
-    fn drag_roots() -> Vec<PathBuf> {
-        let mut paths = fs::read_dir(std::env::temp_dir())
-            .expect("read temporary directory")
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with("zmanager-drag-out-"))
-            })
-            .collect::<Vec<_>>();
-        paths.sort();
-        paths
+        assert!(
+            !root.exists(),
+            "failed staging leaked its temporary drag root: {root:?}"
+        );
     }
 }
