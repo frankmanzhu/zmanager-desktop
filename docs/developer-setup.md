@@ -112,6 +112,10 @@ scripts/build-macos.sh
 - `--install-deps` installs missing CMake/Node dependencies with Homebrew and
   installs or updates Rust through rustup.
 - `--skip-tests` enables packaging-only mode.
+- The built application is installed into `/Applications` by default.
+- `--no-install` stages the artifacts without installing the application.
+- `--install-dir PATH` or `ZMANAGER_MACOS_INSTALL_DIR` selects another
+  application directory.
 - Build output is staged to `/tmp/zmanager-desktop-macos/`, or the directory in
   `ZMANAGER_MACOS_STAGE_DIR`.
 - Signing, notarization, Finder Sync, Quick Look, and packaging for the separate

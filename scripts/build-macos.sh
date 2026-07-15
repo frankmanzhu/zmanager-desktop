@@ -6,18 +6,21 @@ cd "$repo_root"
 
 install_deps=0
 skip_tests=0
+install_application=1
 bundle_kind="all"
+install_dir="${ZMANAGER_MACOS_INSTALL_DIR:-/Applications}"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-macos.sh [--install-deps] [--skip-tests] [--bundle app|dmg|all]
+Usage: scripts/build-macos.sh [--install-deps] [--skip-tests] [--no-install] [--install-dir PATH] [--bundle app|dmg|all]
 
 Builds macOS Tauri bundles without Developer ID signing or notarization and stages them under
 /tmp/zmanager-desktop-macos (override with ZMANAGER_MACOS_STAGE_DIR).
 
 By default the script builds the host architecture and produces both a .app
-bundle and a .dmg. Signing, notarization, Finder Sync, Quick Look, and packaging
-for the separate SwiftUI application remain outside this repository.
+bundle and a .dmg, then installs ZManager.app into /Applications. Signing,
+notarization, Finder Sync, Quick Look, and packaging for the separate SwiftUI
+application remain outside this repository.
 
 macOS prerequisites:
   xcode-select --install
@@ -28,6 +31,9 @@ Options:
   --install-deps  Install missing CMake/Node dependencies with Homebrew and
                   install or update Rust with rustup.
   --skip-tests    Skip frontend and Rust tests before bundling.
+  --no-install    Build and stage artifacts without installing the application.
+  --install-dir   Install into PATH instead of /Applications. This can also be
+                  set with ZMANAGER_MACOS_INSTALL_DIR.
   --bundle VALUE  Build app, dmg, or all bundles. Default: all.
   -h, --help      Show this help.
 EOF
@@ -40,6 +46,18 @@ while (($#)); do
       ;;
     --skip-tests)
       skip_tests=1
+      ;;
+    --no-install)
+      install_application=0
+      ;;
+    --install-dir)
+      if (($# < 2)); then
+        echo "--install-dir requires a destination directory." >&2
+        exit 2
+      fi
+      install_dir="$2"
+      install_application=1
+      shift
       ;;
     --bundle)
       if (($# < 2)); then
@@ -70,6 +88,11 @@ case "$bundle_kind" in
     exit 2
     ;;
 esac
+
+if [[ -z "$install_dir" ]]; then
+  echo "The macOS application install directory must not be empty." >&2
+  exit 2
+fi
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "macOS bundles must be built on macOS." >&2
@@ -203,7 +226,13 @@ case "$bundle_kind" in
     tauri_bundles="app"
     ;;
   dmg)
-    tauri_bundles="dmg"
+    if ((install_application)); then
+      # Keep the app bundle that the DMG builder normally treats as an
+      # intermediate so it can also be installed into Applications.
+      tauri_bundles="app,dmg"
+    else
+      tauri_bundles="dmg"
+    fi
     ;;
   all)
     tauri_bundles="app,dmg"
@@ -250,6 +279,74 @@ stage_dmg_bundles() {
   fi
 }
 
+install_app_bundle() {
+  local app_count=0 artifact destination temporary backup
+  local use_sudo=0
+
+  if [[ -d "$install_dir" ]]; then
+    if [[ ! -w "$install_dir" ]]; then
+      use_sudo=1
+    fi
+  else
+    local install_parent
+    install_parent="$(dirname "$install_dir")"
+    if [[ ! -d "$install_parent" || ! -w "$install_parent" ]]; then
+      use_sudo=1
+    fi
+  fi
+
+  if ((use_sudo)) && ! command -v sudo >/dev/null 2>&1; then
+    echo "Installing into $install_dir requires sudo access." >&2
+    exit 1
+  fi
+
+  run_install() {
+    if ((use_sudo)); then
+      sudo "$@"
+    else
+      "$@"
+    fi
+  }
+
+  run_install install -d -m 0755 "$install_dir"
+
+  while IFS= read -r artifact; do
+    app_count=$((app_count + 1))
+    if ((app_count > 1)); then
+      echo "More than one macOS application bundle was found under $bundle_root/macos." >&2
+      exit 1
+    fi
+
+    destination="$install_dir/$(basename "$artifact")"
+    temporary="$install_dir/.$(basename "$artifact").zmanager-install-$$"
+    backup="$install_dir/.$(basename "$artifact").zmanager-backup-$$"
+
+    run_install rm -rf "$temporary" "$backup"
+    run_install ditto "$artifact" "$temporary"
+
+    if [[ -e "$destination" ]]; then
+      run_install mv "$destination" "$backup"
+    fi
+    if run_install mv "$temporary" "$destination"; then
+      run_install rm -rf "$backup"
+    else
+      run_install rm -rf "$temporary"
+      if [[ -e "$backup" ]]; then
+        run_install mv "$backup" "$destination"
+      fi
+      echo "Unable to install the application at $destination." >&2
+      exit 1
+    fi
+
+    echo "Installed application: $destination"
+  done < <(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort)
+
+  if ((app_count == 0)); then
+    echo "Installation requested, but no .app was found under $bundle_root/macos." >&2
+    exit 1
+  fi
+}
+
 case "$bundle_kind" in
   app)
     stage_app_bundles
@@ -262,5 +359,11 @@ case "$bundle_kind" in
     stage_dmg_bundles
     ;;
 esac
+
+if ((install_application)); then
+  install_app_bundle
+else
+  echo "Skipping application install because --no-install was set."
+fi
 
 echo "Unnotarized macOS artifacts are ready under: $stage_dir"

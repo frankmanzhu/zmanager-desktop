@@ -41,7 +41,7 @@ ZManager Desktop is the cross-platform Tauri shell for the Rust archive engine. 
 - `cd src-tauri && cargo test`: run Rust tests.
 - `scripts/build-linux-ubuntu-deb.sh`: build Ubuntu/Debian `.deb`.
 - `scripts/build-linux-fedora-rpm.sh`: build Fedora `.rpm`.
-- `scripts/build-macos.sh`: build unnotarized macOS Tauri `.app` and `.dmg` artifacts without Developer ID signing.
+- `scripts/build-macos.sh`: build unnotarized macOS Tauri `.app` and `.dmg` artifacts without Developer ID signing and install the app into `/Applications` by default.
 - `powershell -ExecutionPolicy Bypass -File scripts/release-gate-windows-arm64.ps1`: run the Windows ARM64 release gate.
 
 Use package scripts instead of direct `tsc`, `vite`, or Tauri CLI calls unless debugging requires it.
