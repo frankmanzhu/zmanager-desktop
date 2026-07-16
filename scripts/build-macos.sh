@@ -18,9 +18,10 @@ Builds macOS Tauri bundles without Developer ID signing or notarization and stag
 /tmp/zmanager-desktop-macos (override with ZMANAGER_MACOS_STAGE_DIR).
 
 By default the script builds the host architecture and produces both a .app
-bundle and a .dmg, then installs ZManager.app into /Applications. Signing,
-notarization, Finder Sync, Quick Look, and packaging for the separate SwiftUI
-application remain outside this repository.
+bundle and a .dmg, then installs ZManager.app into /Applications. Local builds
+embed build-machine codec libraries, rewrite their load paths, and use ad-hoc
+inside-out signing. Protected release signing and notarization use the same
+bundle pipeline in the later release gate.
 
 macOS prerequisites:
   xcode-select --install
@@ -244,6 +245,10 @@ npm run tauri -- "${tauri_args[@]}"
 
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 bundle_root="$cargo_target_dir/release/bundle"
+
+while IFS= read -r application; do
+  scripts/prepare-macos-self-contained-app.sh "$application"
+done < <(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort)
 
 stage_dir="${ZMANAGER_MACOS_STAGE_DIR:-/tmp/zmanager-desktop-macos}"
 install -d -m 0755 "$stage_dir"

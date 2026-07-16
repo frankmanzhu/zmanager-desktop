@@ -2,14 +2,14 @@
 
 ## Product Requirements
 
-- Provide a Windows/Linux GUI over the existing ZManager Rust archive engine.
+- Provide one Windows, Linux, and macOS GUI over the existing ZManager Rust archive engine.
 - Preserve archive safety behavior from `zmanager-core`.
 - Support broad archive opening and extraction through the same format routing as the CLI.
 - Support creation of ZIP, TZST, TZAP, and 7z archives.
 - Support clean source archive planning and creation.
 - Support encrypted archive workflows without logging or persisting passwords.
 - Show job lifecycle, progress, diagnostics, warnings, cancellation, completion, and failure.
-- Keep Windows and Linux as one shared desktop product with isolated platform integration.
+- Keep all three platforms as one shared desktop product with isolated native integration.
 
 ## Functional Requirements
 
@@ -70,6 +70,15 @@
 - Support common XDG desktop behavior.
 - Treat file-manager extensions as optional follow-up because Linux file managers are fragmented.
 
+### macOS
+
+- Replace the last native Swift release in place under `com.frankmanzhu.zmanager`.
+- Build and embed the macOS Native Host and Finder, Quick Look, thumbnail, and Spotlight targets.
+- Deliver cold and warm lifecycle, URL, document, Services, and reopen events through the Native Launch Inbox.
+- Stream archive drag-out through asynchronous file promises and a Native Drag Session.
+- Preserve default openers, preferences, preview cleanup, account/sharing flows, and upgrade state.
+- Produce separate arm64 and x86_64 Developer ID signed, notarized, stapled artifacts.
+
 ## Nonfunctional Requirements
 
 - The app must remain responsive during long archive operations.
@@ -90,14 +99,14 @@
 - Keep temporary preview/extraction roots scoped and cleaned up.
 - Keep platform shell integrations narrow and auditable.
 
-## Acceptance Criteria For MVP
+## Acceptance Criteria
 
-- The app launches on Windows and Linux.
+- The app launches on Windows, Linux, and macOS.
 - The app displays a successful `zmanager-core` healthcheck.
 - A user can open and browse a ZIP archive.
 - A user can extract a ZIP archive to a selected destination.
 - A user can create a TZST archive from a folder.
 - A user can cancel a long-running job.
 - A password-required archive produces a password prompt instead of a silent failure.
-- Packaging produces at least one Windows installer and one Linux portable package.
-
+- Packaging produces verified Windows, Linux, macOS arm64, and macOS x86_64 artifacts.
+- A clean macOS upgrade leaves one canonical application and preserves supported non-secret state.

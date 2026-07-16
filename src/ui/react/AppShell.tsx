@@ -14,6 +14,7 @@ import { BrowserFileDropAdapter } from "./interaction/BrowserFileDropAdapter";
 import { ShellKeyboardShortcuts } from "./interaction/ShellKeyboardShortcuts";
 import { JobsDrawer, QuickActionProgress } from "./jobs/JobsSurfaces";
 import { AppFrame } from "./shell/AppFrame";
+import { AccountWorkspace } from "./account/AccountWorkspace";
 
 type RuntimeBridgeState = "loading" | "ready" | "failed";
 
@@ -78,6 +79,7 @@ export function AppShell() {
             <JobsDrawer />
             <ContextMenuRoot />
             <DialogRoot />
+            <AccountWorkspace />
             </AppFrame>
           </ExtractPasswordProvider>
         </CreatePasswordProvider>

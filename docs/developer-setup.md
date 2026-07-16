@@ -9,15 +9,16 @@ For each release, update [`ReadMe.txt`](../ReadMe.txt) with the notes that shoul
 
 ## Repository relationship
 
-This project is intentionally separate from the macOS app repository.
+This project replaces the former macOS app while retaining its repository as
+read-only migration evidence until cutover.
 
 ```text
 ZManager/
-  private macOS SwiftUI app repo
+  former macOS SwiftUI reference implementation
   cli/ -> public zmanager Rust CLI/core submodule
 
 zmanager-desktop/
-  Windows/Linux Tauri shell
+  Windows/Linux/macOS Tauri product and native macOS targets
   consumes zmanager-core from the public Rust repo
 ```
 
@@ -32,15 +33,15 @@ a Git dependency or a checked-out submodule of the public CLI/core repository.
 
 ## Product direction (engineering)
 
-- Keep one shared Windows/Linux GUI project.
-- Keep platform-specific integration in isolated Windows and Linux modules.
-- Do not move SwiftUI, Finder Sync, Quick Look, signing, or notarization work into this repo.
+- Keep one shared Windows/Linux/macOS GUI project.
+- Keep platform-specific integration in isolated native modules.
+- Keep application UI in React; use Swift/AppKit only for the macOS Native Host and Extension Suite.
 - Do not duplicate archive logic; keep core archive behavior in `zmanager-core`.
 - Keep the GUI as orchestration and presentation over the Rust job model.
 
 ## Stack
 
-- Tauri 2 for Windows and Linux shell.
+- Tauri 2 for the Windows, Linux, and macOS shell.
 - Vite and TypeScript for UI state and shared logic.
 - Rust Tauri commands for app-facing operations.
 - `zmanager-core` for planning, listing, testing, extraction, creation, safety, and job events.
@@ -106,8 +107,8 @@ scripts/build-linux-fedora-rpm.sh
 scripts/build-macos.sh
 ```
 
-- Builds unnotarized `.app` and `.dmg` Tauri artifacts for the host architecture
-  without Developer ID signing.
+- Builds the complete Release Bundle. Local builds may use ad-hoc signing;
+  protected release builds use Developer ID signing, notarization, and stapling.
 - `--bundle app|dmg|all` selects the artifact type; the default is `all`.
 - `--install-deps` installs missing CMake/Node dependencies with Homebrew and
   installs or updates Rust through rustup.
@@ -118,8 +119,8 @@ scripts/build-macos.sh
   application directory.
 - Build output is staged to `/tmp/zmanager-desktop-macos/`, or the directory in
   `ZMANAGER_MACOS_STAGE_DIR`.
-- Signing, notarization, Finder Sync, Quick Look, and packaging for the separate
-  native Swift application remain outside this repository.
+- `scripts/release-gate-macos.sh` verifies nested targets, linkage, identifiers,
+  versions, entitlements, architectures, signatures, notarization, and stapling.
 
 ## Repository layout
 

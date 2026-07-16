@@ -59,6 +59,12 @@ pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
 pub struct LinuxPlatform;
 
 impl NativePlatform for LinuxPlatform {
+    fn initialize_native_host(
+        _inbox: crate::native_launch_inbox::NativeLaunchInbox,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
         if DESKTOP_ACTIONS_ENABLED {
             let _ = crate::archive_file_types::associated_extensions();
@@ -128,6 +134,8 @@ impl NativePlatform for LinuxPlatform {
         let staged_drag = StagedFileDrag::create("Linux", items, stream_provider)?;
         linux_file_drag::start_drag(staged_drag)
     }
+
+    fn shutdown() {}
 }
 
 fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {

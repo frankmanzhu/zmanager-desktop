@@ -1,5 +1,8 @@
 # Handoff For Next Agent
 
+> Status: Superseded by `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and
+> ADR-0004. This scaffold handoff is historical evidence only.
+
 ## Current State
 
 This is a fresh scaffold for the Windows/Linux GUI shell. The existing ZManager CLI/core and macOS GUI are already done. This project should not absorb the macOS app.

@@ -1,0 +1,3 @@
+_zmanager_public_metadata_ffi_version
+_zmanager_public_metadata_string_free
+_zmanager_public_metadata_summary_json

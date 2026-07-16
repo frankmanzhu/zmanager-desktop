@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-07-11
+- Extended by: ADR-0006 (Finder App Group transport uses opaque tokens rather
+  than URL-encoded path payloads)
 
 ## Context
 

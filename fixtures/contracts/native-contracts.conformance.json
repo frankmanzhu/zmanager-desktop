@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "shellActionRequestVersion": 1,
+  "actionOrder": [
+    "open",
+    "compress",
+    "extract",
+    "compressZip",
+    "compressTzap",
+    "compressSevenZ",
+    "compressTarZst",
+    "compressCleanSource",
+    "extractHere",
+    "extractToFolder"
+  ],
+  "actions": [
+    {
+      "id": "open",
+      "order": 10,
+      "selectionShapes": [
+        "single-archive",
+        "multiple-archives"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compress",
+      "order": 20,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "extract",
+      "order": 30,
+      "selectionShapes": [
+        "single-archive",
+        "multiple-archives"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressZip",
+      "order": 40,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressTzap",
+      "order": 50,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressSevenZ",
+      "order": 60,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressTarZst",
+      "order": 70,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressCleanSource",
+      "order": 80,
+      "selectionShapes": [
+        "single-folder"
+      ],
+      "multiplicity": "exactly-one"
+    },
+    {
+      "id": "extractHere",
+      "order": 90,
+      "selectionShapes": [
+        "single-archive",
+        "multiple-archives"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "extractToFolder",
+      "order": 100,
+      "selectionShapes": [
+        "single-archive",
+        "multiple-archives"
+      ],
+      "multiplicity": "one-or-more"
+    }
+  ],
+  "archivePaths": [
+    {
+      "path": "sample.tar.gz",
+      "supported": true,
+      "suffix": ".tar.gz",
+      "baseName": "sample"
+    },
+    {
+      "path": "sample.7z.001",
+      "supported": true,
+      "suffix": ".7z.001",
+      "baseName": "sample"
+    },
+    {
+      "path": "sample.vol000.tzap",
+      "supported": true,
+      "suffix": ".vol000.tzap",
+      "baseName": "sample"
+    },
+    {
+      "path": "sample.txt",
+      "supported": false,
+      "suffix": null,
+      "baseName": "sample"
+    }
+  ],
+  "inboundEventKinds": [
+    "openPaths",
+    "shellActionRequest",
+    "hostedAuthCallback",
+    "reopenApplication"
+  ]
+}

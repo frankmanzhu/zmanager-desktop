@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-07-11
+- Extended by: ADR-0009 (first-class capabilities must report unavailable,
+  never return an unconditional observable fallback while enabled)
 
 ## Context
 

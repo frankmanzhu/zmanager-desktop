@@ -1,3 +1,5 @@
+import type { GeneratedShellActionKind } from "./generated/shellActions.generated";
+
 export type HealthcheckResponse = {
   engine: string;
   version: string;
@@ -56,17 +58,7 @@ export type ValidateDirectoryResponse = {
   accessible: boolean;
 };
 
-export type QuickActionKind =
-  | "open"
-  | "compress"
-  | "extract"
-  | "compressZip"
-  | "compressTzap"
-  | "compressSevenZ"
-  | "compressTarZst"
-  | "compressCleanSource"
-  | "extractHere"
-  | "extractToFolder";
+export type QuickActionKind = GeneratedShellActionKind;
 
 export type QuickActionRequestDto = {
   kind: QuickActionKind;
@@ -84,6 +76,45 @@ export type QuickActionStartupStateDto = {
   quickAction?: QuickActionRequestDto | null;
   quickActionJobs?: StartJobResponseDto[] | null;
   error?: QuickActionStartupErrorDto | null;
+};
+
+export type AccountCertificateDto = {
+  certificateId: string;
+  certificateSha256: string;
+  state: string;
+  assuranceLevel: string;
+  notAfterUnixSeconds: number;
+};
+
+export type AccountRecipientKeyDto = {
+  keyId: string;
+  algorithm: string;
+  publicKeyFingerprint: string;
+  createdAtUnixSeconds: number;
+  label?: string | null;
+};
+
+export type AccountContactDto = {
+  contactId: string;
+  displayName: string;
+  signingCertificateSha256: string;
+  recipientPublicKeyFingerprint: string;
+  verificationState: string;
+  missingStatusCaveat: boolean;
+};
+
+export type AccountSnapshotDto = {
+  authStatus: "signedOut" | "pending" | "callbackCompleted" | "cancelled" | "failed";
+  pendingState?: string | null;
+  certificates: AccountCertificateDto[];
+  recipientKeys: AccountRecipientKeyDto[];
+  contacts: AccountContactDto[];
+};
+
+export type AccountHostedAuthLaunchDto = {
+  launchUrl: string;
+  state: string;
+  expiresAtUnixSeconds: number;
 };
 
 export type CommandErrorDto = {

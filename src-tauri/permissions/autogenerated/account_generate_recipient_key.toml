@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-account-generate-recipient-key"
+description = "Enables the account_generate_recipient_key command without any pre-configured scope."
+commands.allow = ["account_generate_recipient_key"]
+
+[[permission]]
+identifier = "deny-account-generate-recipient-key"
+description = "Denies the account_generate_recipient_key command without any pre-configured scope."
+commands.deny = ["account_generate_recipient_key"]

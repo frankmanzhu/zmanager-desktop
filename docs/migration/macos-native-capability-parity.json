@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "ledger": "macos-native-capability-parity",
+  "identityDecision": "docs/migration/macos-identity-decision.json",
+  "allowedStatuses": ["planned", "in-progress", "verified", "not-applicable"],
+  "entries": [
+    {
+      "id": "native.platform-registration",
+      "capability": "Platform registration",
+      "owner": "macOS Native Host Runtime",
+      "disposition": "migrate-native",
+      "interfaceProof": "native/macos host lifecycle tests and Rust bridge contract tests",
+      "packageProof": "Release Bundle contains and links ZManagerMacOSHost",
+      "installedProof": "cold/warm launch, Services, reopen, and callback smoke matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.integration-profile",
+      "capability": "Integration profile",
+      "owner": "Native Platform Adapter",
+      "disposition": "reimplement-shared",
+      "interfaceProof": "Rust DTO tests distinguish source, package, and installed capability state",
+      "packageProof": "release gate derives packaged features from the inspected bundle",
+      "installedProof": "runtime status queries Finder, Quick Look, Spotlight, Services, associations, menus, and drag",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.system-file-icons",
+      "capability": "System file icons",
+      "owner": "macOS Native Host operation",
+      "disposition": "migrate-native",
+      "interfaceProof": "Swift NSWorkspace icon tests and Rust DTO contract tests",
+      "packageProof": "host operation is linked and exported in the app bundle",
+      "installedProof": "React rows render folder, file, known-suffix, and unknown-suffix icons",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.filename-path-policy",
+      "capability": "Native filename and path policy",
+      "owner": "Rust Native Platform Adapter",
+      "disposition": "existing",
+      "interfaceProof": "macOS Unicode, path length, invalid-name, collision, and target-volume tests",
+      "packageProof": "desktop Rust test suite runs for each macOS architecture",
+      "installedProof": "case-sensitive and case-insensitive volume fixture matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.drag-dispatch",
+      "capability": "Native archive drag dispatch",
+      "owner": "Native Drag Session Registry and Swift file-promise host",
+      "disposition": "migrate-native",
+      "interfaceProof": "registry lifecycle and NSFilePromiseProvider contract tests",
+      "packageProof": "release gate rejects eager-staging ownership and missing host symbols",
+      "installedProof": "Finder drag smoke covers success, cancel, collision, multi-item, and password flows",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.window-behavior",
+      "capability": "Native window behavior",
+      "owner": "Tauri window Adapter plus macOS Native Host",
+      "disposition": "reimplement-shared",
+      "interfaceProof": "window command and lifecycle tests",
+      "packageProof": "packaged launch confirms standard AppKit window ownership",
+      "installedProof": "activation, reopen, close, minimize, fullscreen, tabbing, and disposable-task-window matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.selected-item-actions",
+      "capability": "Selected-item shell actions",
+      "owner": "macOS Finder Sync extension",
+      "disposition": "migrate-native",
+      "interfaceProof": "generated Shell Action Request fixtures and Finder selection tests",
+      "packageProof": "signed Finder extension is nested in the Release Bundle",
+      "installedProof": "Finder single, multiple, archive, folder, and mixed-selection smoke matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.background-container-actions",
+      "capability": "Background and container actions",
+      "owner": "Finder Sync extension and macOS Services host",
+      "disposition": "migrate-native",
+      "interfaceProof": "Finder and Services emit the same generated Shell Action Request",
+      "packageProof": "Services and Finder declarations match generated identity metadata",
+      "installedProof": "Finder container and Services compression/extraction smoke matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.file-associations",
+      "capability": "File associations and URL ownership",
+      "owner": "Release Bundle metadata and Native Launch Inbox",
+      "disposition": "migrate-native",
+      "interfaceProof": "generated Info.plist tests and cold/warm OpenPaths routing tests",
+      "packageProof": "release gate checks document roles, UTTypes, URL scheme, and canonical identifier",
+      "installedProof": "Launch Services owner and Finder open matrix leaves one canonical product",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.dialogs",
+      "capability": "Native dialogs",
+      "owner": "Tauri dialog Adapter with bounded host operations for proved gaps",
+      "disposition": "existing",
+      "interfaceProof": "controller tests cover file, folder, destination, certificate, and identity requests",
+      "packageProof": "dialog plugin and any bounded host operations are present",
+      "installedProof": "manual native panel matrix on macOS",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.open-reveal",
+      "capability": "Open and reveal",
+      "owner": "Tauri opener Adapter or bounded NSWorkspace host operation",
+      "disposition": "existing",
+      "interfaceProof": "desktop Adapter tests cover invalid, missing, open, and reveal paths",
+      "packageProof": "selected implementation is packaged once",
+      "installedProof": "Finder reveal and default-application open smoke matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.file-drops",
+      "capability": "Input file drops",
+      "owner": "Tauri file-drop Adapter and shared Shell Workspace",
+      "disposition": "existing",
+      "interfaceProof": "frontend tests cover file URLs, multi-selection, mode decisions, and cancellation",
+      "packageProof": "Tauri window drop handling remains enabled",
+      "installedProof": "host E2E covers files, folders, archives, mixed drops, invalid paths, and cancel",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.application-menu",
+      "capability": "Native application menu",
+      "owner": "Tauri/AppKit menu presentation and shared Command Router",
+      "disposition": "reimplement-shared",
+      "interfaceProof": "menu events map to typed command-router intents",
+      "packageProof": "packaged app exposes standard Application, File, Edit, Window, and Help menus",
+      "installedProof": "keyboard and menu smoke matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.package-integration",
+      "capability": "Package integration",
+      "owner": "Release Bundle pipeline",
+      "disposition": "reimplement-shared",
+      "interfaceProof": "bundle-layout manifest and release-gate tests",
+      "packageProof": "app, host, Finder, Quick Look, thumbnail, Spotlight, metadata FFI, resources, and manifests are present",
+      "installedProof": "clean-machine package and registration inspection",
+      "status": "planned",
+      "notApplicableDecision": null
+    },
+    {
+      "id": "native.signing-release",
+      "capability": "Signing and release",
+      "owner": "macOS release workflow",
+      "disposition": "reimplement-shared",
+      "interfaceProof": "version, architecture, identifier, entitlement, linkage, and artifact contract tests",
+      "packageProof": "inside-out Developer ID signing, notarization, stapling, checksum, and Gatekeeper verification",
+      "installedProof": "signed arm64 and x86_64 clean-machine install/upgrade/rollback matrix",
+      "status": "planned",
+      "notApplicableDecision": null
+    }
+  ]
+}

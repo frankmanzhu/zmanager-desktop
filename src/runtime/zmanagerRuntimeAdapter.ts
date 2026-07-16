@@ -65,6 +65,10 @@ import {
 import {
   createStartupController,
 } from "../app/controllers/startupController";
+import { createAccountController } from "../app/controllers/accountController";
+import {
+  createNativeInboundController,
+} from "../app/controllers/nativeInboundController";
 import {
   ARCHIVE_TABLE_COLUMNS,
   moveColumn,
@@ -164,6 +168,7 @@ import {
   type JobOutputAction,
   type ProgressClockSnapshot,
 } from "../app/workspaces/jobsWorkspace";
+import { createAccountWorkspace } from "../app/workspaces/accountWorkspace";
 import {
   createDefaultsForFormat,
   defaultCreateDirectory,
@@ -201,6 +206,7 @@ import {
 } from "../app/display/dialogSnapshots";
 import {
   createZManagerReactSnapshot,
+  type ZManagerAccountIntent,
   displaySnapshotFromContext,
   type ZManagerContextMenuIntent,
   type ZManagerDesktopIntent,
@@ -217,15 +223,24 @@ import {
 } from "../app/quickActions";
 import {
   asCommandError,
+  applyAccountHostedCallback,
+  beginAccountHostedAuth,
+  acknowledgeNativeEvent,
   cancelJob as cancelJobCommand,
   dismissJob as dismissJobCommand,
   fetchHealthcheck,
+  fetchAccountSnapshot,
   fetchProjectContract,
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
   generateTzapIdentity as generateTzapIdentityCommand,
+  generateAccountRecipientKey,
   listArchive as listArchiveCommand,
+  nativeFrontendReady,
   pauseJob as pauseJobCommand,
+  forgetAccount,
+  removeAccountContact,
+  removeAccountRecipientKey,
   runPlanCreate,
   runPreviewEntry,
   resumeJob as resumeJobCommand,
@@ -252,6 +267,9 @@ import type {
   StartJobResponseDto,
   SystemFileIconRequestEntry,
 } from "../api/types";
+import type {
+  NativeInboundHostedAuthEvent,
+} from "../api/generated/nativeInboundEvents.generated";
 import {
   isDesktopRuntime,
   openNativeDialog as openRuntimeDialog,
@@ -279,9 +297,7 @@ import {
   bindPreviewCleanupOnAppClose,
   cleanupPreviewRoots,
 } from "../desktop/previewCleanup";
-import {
-  listenQuickActionLaunch,
-} from "../desktop/quickActionEvents";
+import { listenNativeInboundEvents } from "../desktop/nativeInboundEvents";
 import {
   startNativeFileDrag,
 } from "../desktop/nativeDrag";
@@ -341,6 +357,7 @@ const archiveWorkspace = createArchiveWorkspace({
 });
 const createWorkspace = createCreateWorkspace();
 const extractWorkspace = createExtractWorkspace();
+const accountWorkspace = createAccountWorkspace();
 let displayContext = createDisplayContext(appPreferences.locale);
 let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
@@ -858,7 +875,6 @@ const startupController = createStartupController({
   fetchHealthcheck,
   fetchProjectContract,
   fetchQuickActionStartupState,
-  listenQuickActionLaunch,
   isDesktopRuntime,
   revealWindowForStartupQuickAction,
   revealNormalWindow: revealNormalAppWindow,
@@ -876,6 +892,35 @@ const startupController = createStartupController({
     browserDocument.applyPlatformProfile(state.contract?.platformIntegration ?? null);
   },
   onBootstrapStateChanged: publishBootstrapStateSnapshot,
+});
+
+const nativeInboundController = createNativeInboundController({
+  isDesktopRuntime,
+  listen: listenNativeInboundEvents,
+  markFrontendReady: nativeFrontendReady,
+  acknowledge: acknowledgeNativeEvent,
+  handleQuickAction: handleQuickActionRequest,
+  handleShellActionToken,
+  handleHostedAuthCallback,
+  revealApplication: revealNormalAppWindow,
+  reportFailure: (error) => setOperationalStatus(unknownErrorMessage(
+    error,
+    message("desktopIntegration.initFailed"),
+  )),
+});
+
+const accountController = createAccountController({
+  workspace: accountWorkspace,
+  fetchSnapshot: fetchAccountSnapshot,
+  beginHostedAuth: beginAccountHostedAuth,
+  applyHostedCallback: applyAccountHostedCallback,
+  forget: forgetAccount,
+  generateRecipientKey: generateAccountRecipientKey,
+  removeRecipientKey: removeAccountRecipientKey,
+  removeContact: removeAccountContact,
+  openUrl: openDesktopPath,
+  publish: publishReactSnapshot,
+  errorMessage: (error) => unknownErrorMessage(error, "Account operation failed."),
 });
 
 const jobOutputEffects = {
@@ -1795,6 +1840,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
   const commandClassState = currentCommandClassState(archive.command.hasArchive);
 
   return createZManagerReactSnapshot({
+    account: accountWorkspace.getSnapshot(),
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
@@ -1870,6 +1916,19 @@ function handleReactJobsIntent(intent: ZManagerJobsIntent) {
     case "cancelFocusedQuickActionJobs":
       void cancelFocusedQuickActionJobs();
       break;
+  }
+}
+
+function handleReactAccountIntent(intent: ZManagerAccountIntent) {
+  switch (intent.type) {
+    case "open": void accountController.open(); break;
+    case "close": accountController.close(); break;
+    case "refresh": void accountController.open(); break;
+    case "beginHostedAuth": void accountController.beginHostedAuth(Boolean(intent.local)); break;
+    case "forget": void accountController.forget(); break;
+    case "generateRecipientKey": void accountController.generateRecipientKey(intent.label); break;
+    case "removeRecipientKey": void accountController.removeRecipientKey(intent.id); break;
+    case "removeContact": void accountController.removeContact(intent.id); break;
   }
 }
 
@@ -2033,6 +2092,7 @@ export function getZManagerRuntimeAdapter(): ZManagerReactRuntimeAdapter {
       handleArchiveIntent: archiveRuntimeActions.handleIntent,
       handleCreateIntent: createRuntimeActions.handleIntent,
       handleJobsIntent: handleReactJobsIntent,
+      handleAccountIntent: handleReactAccountIntent,
       handleDialogIntent: handleReactDialogIntent,
       handleDesktopIntent: handleReactDesktopIntent,
       handleContextMenuIntent: handleReactContextMenuIntent,
@@ -3506,13 +3566,20 @@ async function handleQuickActionStartupState(state: QuickActionStartupStateDto) 
   await startupController.handleQuickActionStartupState(state);
 }
 
-async function bindQuickActionLaunchEvents() {
-  await startupController.bindQuickActionLaunchEvents();
-}
-
 async function initializeDesktopRuntime() {
+  await nativeInboundController.initialize();
   await subscribeToJobCatalog();
   await startupController.initializeDesktopRuntime();
+}
+
+async function handleShellActionToken(_requestToken: string): Promise<void> {
+  throw new Error("macOS shell-action token routing is not initialized");
+}
+
+async function handleHostedAuthCallback(
+  payload: NativeInboundHostedAuthEvent["payload"],
+): Promise<void> {
+  await accountController.handleHostedCallback(payload);
 }
 
 async function startPasswordRetryJob(context: JobRetryContext, password: string) {

@@ -1,18 +1,20 @@
 {
   "name": "zmanager-desktop",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run generate:archive-types && tsc --noEmit && vite build",
-    "generate:archive-types": "node scripts/generate-archive-file-types.mjs",
+    "build": "npm run check:generated-contracts && tsc --noEmit && vite build",
+    "generate:archive-types": "npm run generate:contracts",
+    "generate:contracts": "node scripts/generate-native-contracts.mjs",
+    "check:generated-contracts": "node scripts/generate-native-contracts.mjs --check",
     "preview": "vite preview",
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",
     "ast:lint": "ast-grep scan",
-    "test:architecture": "bash scripts/check-job-feed-architecture.sh && bash scripts/check-native-platform-architecture.sh && npm run ast:lint",
+    "test:architecture": "bash scripts/check-job-feed-architecture.sh && bash scripts/check-native-platform-architecture.sh && node scripts/validate-macos-migration-ledgers.mjs && node --test scripts/check-product-version-consistency.test.mjs scripts/check-macos-full-target-architecture.test.mjs && node scripts/check-product-version-consistency.mjs && node scripts/check-macos-full-target-architecture.mjs && bash scripts/check-macos-core-revision-and-symbols.sh && npm run check:generated-contracts && npm run ast:lint",
     "tauri": "tauri"
   },
   "dependencies": {

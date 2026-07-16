@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zmanager.app/schemas/native-inbound-events-v1.json",
+  "title": "ZManager Native Inbound Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version","eventId","kind","timestampUnixMs","payload"],
+  "properties": {
+    "version": {"const": 1},
+    "eventId": {"type":"string","minLength":16,"maxLength":128,"pattern":"^[A-Za-z0-9_-]+$"},
+    "kind": {"enum":["openPaths","shellActionRequest","hostedAuthCallback","reopenApplication"]},
+    "timestampUnixMs": {"type":"integer","minimum":0},
+    "idempotencyKey": {"type":["string","null"],"maxLength":256},
+    "payload": {"oneOf":[
+      {"$ref":"#/$defs/openPaths"},
+      {"$ref":"#/$defs/shellActionRequest"},
+      {"$ref":"#/$defs/hostedAuthCallback"},
+      {"$ref":"#/$defs/reopenApplication"}
+    ]}
+  },
+  "$defs": {
+    "openPaths": {"type":"object","additionalProperties":false,"required":["paths"],"properties":{"paths":{"type":"array","minItems":1,"maxItems":1024,"items":{"type":"string","minLength":1,"maxLength":4096}}}},
+    "shellActionRequest": {"oneOf":[
+      {"type":"object","additionalProperties":false,"required":["requestToken"],"properties":{"requestToken":{"type":"string","minLength":22,"maxLength":128,"pattern":"^[A-Za-z0-9_-]+$"}}},
+      {
+        "type":"object",
+        "additionalProperties":false,
+        "required":["request"],
+        "properties":{
+          "request":{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["kind","paths"],
+            "properties":{
+              "kind":{"enum":["open","compressZip","compressSevenZ","compressTarZst","compressTzap","quickExtractReview","extractHere","extractToFolder","verify"]},
+              "paths":{"type":"array","minItems":1,"maxItems":1024,"items":{"type":"string","minLength":1,"maxLength":4096}}
+            }
+          }
+        }
+      }
+    ]},
+    "hostedAuthCallback": {"type":"object","additionalProperties":false,"required":["state","result"],"properties":{"state":{"type":"string","minLength":16,"maxLength":256,"pattern":"^[A-Za-z0-9_-]+$"},"result":{"enum":["completed","cancelled","failed"]},"errorCode":{"type":["string","null"],"maxLength":128}}},
+    "reopenApplication": {"type":"object","additionalProperties":false,"properties":{}}
+  }
+}

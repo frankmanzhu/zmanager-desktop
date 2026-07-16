@@ -64,10 +64,18 @@ Owns `.desktop` files, MIME registration, AppImage/Flatpak/deb/rpm packaging hoo
 
 ### macOS Runtime Integration
 
-Owns macOS filename policy, staged native drag dispatch, native window behavior,
-system-icon fallback through `NativePlatform`, and local unnotarized Tauri `.app`
-and `.dmg` builds. The separate SwiftUI project continues to own Finder Sync,
-Quick Look, signing, notarization, and its release packaging.
+`src-tauri::platform::macos` owns the bounded Rust Adapter. The Swift/AppKit
+macOS Native Host owns lifecycle, Services, menus, Launch Services, icons, and
+file-promise presentation. The Native Launch Inbox buffers typed callbacks until
+the React shell is ready. Native Drag Sessions retain core handles and secrets
+only for the lifetime of asynchronous promises. The Finder, Quick Look,
+thumbnail, and Spotlight Extension Suite is built under `native/macos` and uses
+generated contracts or the Public Metadata FFI. One Release Bundle pipeline
+owns nesting, identity, signing, notarization, stapling, installation, and
+replacement migration.
+
+Swift/AppKit contains no application-owned product screen and no archive
+semantics. Quick Look and Spotlight can parse only bounded public metadata.
 
 ## Data Flow
 
@@ -80,6 +88,16 @@ User action
   -> normalized result or job id
   -> frontend state update
   -> poll events for long-running work
+```
+
+Native macOS callbacks enter through a second, typed ingress:
+
+```text
+AppKit/Finder/single-instance callback
+  -> versioned native event or ShellActionRequest
+  -> Native Launch Inbox (ordered, bounded, deduplicated)
+  -> frontend-ready drain and acknowledgement
+  -> shared command router/workspace/controller
 ```
 
 ## Error Model

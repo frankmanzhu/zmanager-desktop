@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use serde::Deserialize;
 
 const ARCHIVE_FILE_TYPES_MANIFEST: &str =
-    include_str!("../../src/app/archiveFileTypes.manifest.json");
+    include_str!("generated/archive_file_types.generated.json");
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

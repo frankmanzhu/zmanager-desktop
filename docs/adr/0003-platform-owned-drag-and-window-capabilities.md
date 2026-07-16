@@ -2,6 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-07-15
+- Superseded in part by: ADR-0004 (macOS full-target ownership) and ADR-0008
+  (macOS asynchronous file-promise drag). Linux staging remains accepted.
 
 ## Context
 

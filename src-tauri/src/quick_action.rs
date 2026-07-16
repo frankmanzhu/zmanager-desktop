@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use tauri::{AppHandle, Emitter, Url};
+use tauri::Url;
 
 use crate::dto::{
     QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
@@ -18,7 +18,6 @@ const QUICK_ACTION_REQUEST_ARG: &str = "--quick-action-request";
 const SHELL_ACTION_REQUEST_ARG: &str = "--shell-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
-const QUICK_ACTION_EVENT: &str = "zmanager-quick-action";
 const MAX_SHELL_ACTION_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
@@ -101,9 +100,16 @@ impl QuickActionLaunchCoordinator {
         std::mem::replace(&mut inner.startup, QuickActionStartupState::NotRequested)
     }
 
-    pub fn ingest_secondary_process_args(&self, args: Vec<OsString>, app: AppHandle) {
+    pub fn ingest_secondary_process_args(
+        &self,
+        args: Vec<OsString>,
+        inbox: &crate::native_launch_inbox::NativeLaunchInbox,
+    ) {
         let state = QuickActionStartupState::from_process_or_user_args(args);
-        let _ = app.emit(QUICK_ACTION_EVENT, state.to_dto());
+        if let QuickActionStartupState::Requested(request) = state {
+            let _ = inbox
+                .ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request));
+        }
     }
 }
 

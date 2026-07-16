@@ -1,0 +1,194 @@
+import AppKit
+import Carbon.HIToolbox
+import Foundation
+import ZManagerGenerated
+
+struct NativeHostEventEncoder {
+    static func encode(
+        kind: NativeInboundEventKind,
+        payload: [String: Any],
+        idempotencyKey: String? = nil,
+        eventID: String = UUID().uuidString,
+        timestampUnixMs: UInt64 = UInt64(Date().timeIntervalSince1970 * 1_000)
+    ) throws -> Data {
+        var event: [String: Any] = [
+            "version": nativeInboundEventVersion,
+            "eventId": eventID,
+            "kind": kind.rawValue,
+            "timestampUnixMs": timestampUnixMs,
+            "payload": payload,
+        ]
+        if let idempotencyKey { event["idempotencyKey"] = idempotencyKey }
+        return try JSONSerialization.data(withJSONObject: event)
+    }
+
+    static func hostedAuthPayload(from url: URL) -> [String: Any]? {
+        guard url.scheme?.lowercased() == "zmanager",
+              url.host?.lowercased() == "auth-callback",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        let values = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap {
+            item in item.value.map { (item.name, $0) }
+        })
+        let forbidden = ["code", "token", "access_token", "authorization_code", "password"]
+        guard forbidden.allSatisfy({ values[$0] == nil }),
+              let state = values["state"], (16 ... 256).contains(state.count),
+              state.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }),
+              let result = values["result"], ["completed", "cancelled", "failed"].contains(result)
+        else { return nil }
+        var payload: [String: Any] = ["state": state, "result": result]
+        if let errorCode = values["error_code"], errorCode.count <= 128 {
+            payload["errorCode"] = errorCode
+        }
+        return payload
+    }
+
+    static func shellActionToken(from url: URL) -> String? {
+        guard url.scheme?.lowercased() == "zmanager",
+              url.host?.lowercased() == "shell-action"
+        else { return nil }
+        let token = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard (22 ... 128).contains(token.count),
+              token.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" })
+        else { return nil }
+        return token
+    }
+}
+
+@MainActor
+final class NativeHostLifecycle: NSObject {
+    typealias Delivery = (Data) -> Void
+
+    private let deliver: Delivery
+    private var observers: [NSObjectProtocol] = []
+    private var started = false
+
+    init(deliver: @escaping Delivery) {
+        self.deliver = deliver
+    }
+
+    func start() {
+        guard !started else { return }
+        started = true
+        let manager = NSAppleEventManager.shared()
+        manager.setEventHandler(
+            self,
+            andSelector: #selector(handleURL(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+        manager.setEventHandler(
+            self,
+            andSelector: #selector(handleOpenDocuments(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEOpenDocuments)
+        )
+        manager.setEventHandler(
+            self,
+            andSelector: #selector(handleReopen(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+        NSApplication.shared.servicesProvider = self
+        observers.append(NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in })
+    }
+
+    func stop() {
+        guard started else { return }
+        started = false
+        let manager = NSAppleEventManager.shared()
+        manager.removeEventHandler(
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+        manager.removeEventHandler(
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEOpenDocuments)
+        )
+        manager.removeEventHandler(
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEReopenApplication)
+        )
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.removeAll()
+        if NSApplication.shared.servicesProvider as AnyObject? === self {
+            NSApplication.shared.servicesProvider = nil
+        }
+    }
+
+    @objc private func handleURL(_ event: NSAppleEventDescriptor, withReplyEvent _: NSAppleEventDescriptor) {
+        guard let value = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: value)
+        else { return }
+        if let token = NativeHostEventEncoder.shellActionToken(from: url) {
+            emit(kind: .shellActionRequest, payload: ["requestToken": token], idempotencyKey: token)
+        } else if let payload = NativeHostEventEncoder.hostedAuthPayload(from: url) {
+            emit(kind: .hostedAuthCallback, payload: payload, idempotencyKey: payload["state"] as? String)
+        }
+    }
+
+    @objc private func handleOpenDocuments(
+        _ event: NSAppleEventDescriptor,
+        withReplyEvent _: NSAppleEventDescriptor
+    ) {
+        guard let descriptor = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject)) else { return }
+        var paths: [String] = []
+        if descriptor.numberOfItems > 0 {
+            for index in 1 ... descriptor.numberOfItems {
+                if let value = descriptor.atIndex(index)?.stringValue { paths.append(value) }
+            }
+        } else if let value = descriptor.stringValue {
+            paths.append(value)
+        }
+        emitOpenPaths(paths)
+    }
+
+    @objc private func handleReopen(_: NSAppleEventDescriptor, withReplyEvent _: NSAppleEventDescriptor) {
+        emit(kind: .reopenApplication, payload: [:])
+    }
+
+    @objc func performZManagerService(
+        _ pasteboard: NSPasteboard,
+        userData: String?,
+        error: AutoreleasingUnsafeMutablePointer<NSString?>
+    ) {
+        let paths = pasteboard.readObjects(forClasses: [NSURL.self], options: [
+            .urlReadingFileURLsOnly: true,
+        ])?.compactMap { ($0 as? URL)?.path } ?? []
+        guard !paths.isEmpty else {
+            error.pointee = "ZManager received no local file paths."
+            return
+        }
+        let action = (userData ?? "open").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ShellActionID(rawValue: action) != nil else {
+            error.pointee = "ZManager received an unknown action."
+            return
+        }
+        emit(kind: .shellActionRequest, payload: ["request": ["kind": action, "paths": paths]])
+    }
+
+    func emitOpenPaths(_ paths: [String]) {
+        let local = Array(paths.prefix(1_024)).filter {
+            !$0.isEmpty && $0.utf8.count <= 4_096 && !$0.contains("\0") && !$0.contains("://")
+        }
+        guard !local.isEmpty else { return }
+        emit(kind: .openPaths, payload: ["paths": local])
+    }
+
+    func emit(
+        kind: NativeInboundEventKind,
+        payload: [String: Any],
+        idempotencyKey: String? = nil
+    ) {
+        guard let data = try? NativeHostEventEncoder.encode(
+            kind: kind,
+            payload: payload,
+            idempotencyKey: idempotencyKey
+        ), data.count <= 1_048_576 else { return }
+        deliver(data)
+    }
+}

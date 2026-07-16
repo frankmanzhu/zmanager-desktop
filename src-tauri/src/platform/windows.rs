@@ -69,6 +69,12 @@ pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
 pub struct WindowsPlatform;
 
 impl NativePlatform for WindowsPlatform {
+    fn initialize_native_host(
+        _inbox: crate::native_launch_inbox::NativeLaunchInbox,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
         if EXPLORER_ACTIONS_ENABLED {
             let _ = crate::archive_file_types::associated_extensions();
@@ -126,6 +132,8 @@ impl NativePlatform for WindowsPlatform {
 
         windows_file_drag::start_drag(items, stream_provider)
     }
+
+    fn shutdown() {}
 }
 
 fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod account;
 mod archive_file_types;
 mod commands;
 mod constants;
@@ -7,34 +8,74 @@ mod dto;
 mod error;
 mod job_dto;
 mod job_registry;
+mod native_drag_session;
+mod native_launch_inbox;
 mod platform;
 mod quick_action;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 fn main() {
+    let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
+    let legacy_startup_state = match startup_window_state {
+        quick_action::QuickActionStartupState::Requested(request) => {
+            native_launch_inbox
+                .ingest(native_launch_inbox::NativeLaunchInbox::from_quick_action(
+                    request,
+                ))
+                .expect("startup native event should be valid");
+            quick_action::QuickActionStartupState::NotRequested
+        }
+        other => other,
+    };
+    platform::initialize_native_host(native_launch_inbox.clone())
+        .expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
+    let account_runtime = account::AccountRuntime::new();
+    let native_drag_sessions = native_drag_session::NativeDragSessionRegistry::new();
     let quick_action_launch_coordinator =
-        quick_action::QuickActionLaunchCoordinator::from_startup_state(startup_window_state);
+        quick_action::QuickActionLaunchCoordinator::from_startup_state(legacy_startup_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
+    let single_instance_inbox = native_launch_inbox.clone();
+    let setup_inbox = native_launch_inbox.clone();
+    let exit_inbox = native_launch_inbox.clone();
 
     let builder = tauri::Builder::default();
     let builder = platform::register_platform_services(builder);
-    builder
+    let app = builder
         .manage(job_registry)
+        .manage(account_runtime)
+        .manage(native_drag_sessions.clone())
         .manage(quick_action_launch_coordinator)
+        .manage(native_launch_inbox)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
-            move |app, argv, _cwd| {
+            move |_app, argv, _cwd| {
                 single_instance_coordinator.ingest_secondary_process_args(
                     argv.into_iter().map(std::ffi::OsString::from).collect(),
-                    app.clone(),
+                    &single_instance_inbox,
                 );
             },
         ))
         .setup(move |app| {
+            let emitter_app = app.handle().clone();
+            setup_inbox
+                .attach_emitter(std::sync::Arc::new(move |window, event| {
+                    emitter_app
+                        .emit_to(
+                            window,
+                            native_launch_inbox::NATIVE_INBOUND_EVENT_NAME,
+                            event,
+                        )
+                        .map_err(|error| error.to_string())
+                }))
+                .map_err(|error| {
+                    std::io::Error::other(format!(
+                        "failed to attach native inbox emitter: {error:?}"
+                    ))
+                })?;
             if let Some(window) = app.get_webview_window("main") {
                 platform::configure_main_window(&window)?;
             }
@@ -53,6 +94,15 @@ fn main() {
             commands::system_file_icons,
             commands::validate_directory,
             commands::quick_action_startup_state,
+            commands::native_frontend_ready,
+            commands::acknowledge_native_event,
+            account::account_snapshot,
+            account::account_begin_hosted_auth,
+            account::account_apply_hosted_callback,
+            account::account_forget,
+            account::account_generate_recipient_key,
+            account::account_remove_recipient_key,
+            account::account_remove_contact,
             commands::list_archive,
             commands::plan_create,
             commands::start_create,
@@ -72,6 +122,13 @@ fn main() {
             commands::resume_job,
             commands::dismiss_job
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run ZManager desktop");
+        .build(tauri::generate_context!())
+        .expect("failed to build ZManager desktop");
+    app.run(move |_app, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            exit_inbox.shutdown();
+            native_drag_sessions.shutdown();
+            platform::shutdown();
+        }
+    });
 }

@@ -1,0 +1,24 @@
+/* Resolve this key in the native presentation target. */
+"archiveType.tzap" = "archiveType.tzap";
+/* Resolve this key in the native presentation target. */
+"archiveType.archive" = "archiveType.archive";
+/* Resolve this key in the native presentation target. */
+"shellAction.open" = "shellAction.open";
+/* Resolve this key in the native presentation target. */
+"shellAction.compress" = "shellAction.compress";
+/* Resolve this key in the native presentation target. */
+"shellAction.extract" = "shellAction.extract";
+/* Resolve this key in the native presentation target. */
+"shellAction.compressZip" = "shellAction.compressZip";
+/* Resolve this key in the native presentation target. */
+"shellAction.compressTzap" = "shellAction.compressTzap";
+/* Resolve this key in the native presentation target. */
+"shellAction.compressSevenZ" = "shellAction.compressSevenZ";
+/* Resolve this key in the native presentation target. */
+"shellAction.compressTarZst" = "shellAction.compressTarZst";
+/* Resolve this key in the native presentation target. */
+"shellAction.compressCleanSource" = "shellAction.compressCleanSource";
+/* Resolve this key in the native presentation target. */
+"shellAction.extractHere" = "shellAction.extractHere";
+/* Resolve this key in the native presentation target. */
+"shellAction.extractToFolder" = "shellAction.extractToFolder";

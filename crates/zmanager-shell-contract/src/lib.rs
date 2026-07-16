@@ -2,22 +2,10 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-pub const SHELL_ACTION_REQUEST_VERSION: u32 = 1;
+mod generated;
+pub use generated::{SHELL_ACTION_POLICIES, ShellActionKind, ShellActionPolicy};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum ShellActionKind {
-    Open,
-    Compress,
-    Extract,
-    CompressZip,
-    CompressTzap,
-    CompressSevenZ,
-    CompressTarZst,
-    CompressCleanSource,
-    ExtractHere,
-    ExtractToFolder,
-}
+pub const SHELL_ACTION_REQUEST_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -102,5 +90,29 @@ mod tests {
         .expect_err("unknown version should fail");
 
         assert_eq!(error, ShellActionContractError::UnsupportedVersion(2));
+    }
+
+    #[test]
+    fn generated_actions_match_the_shared_conformance_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/contracts/native-contracts.conformance.json"
+        ))
+        .expect("conformance fixture should parse");
+        let expected = fixture["actionOrder"]
+            .as_array()
+            .expect("actionOrder should be an array")
+            .iter()
+            .map(|value| value.as_str().expect("action id should be text"))
+            .collect::<Vec<_>>();
+        let actual = SHELL_ACTION_POLICIES
+            .iter()
+            .map(|policy| policy.id)
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
+        assert!(
+            SHELL_ACTION_POLICIES
+                .windows(2)
+                .all(|pair| pair[0].order < pair[1].order)
+        );
     }
 }

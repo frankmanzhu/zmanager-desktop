@@ -1,0 +1,13 @@
+[package]
+name = "zmanager-public-metadata-ffi"
+version = "1.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+serde_json = "1"
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", rev = "ade42602e350dadd666b52319642c206d9df52b6", package = "zmanager-core" }

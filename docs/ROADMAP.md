@@ -75,3 +75,16 @@ Exit criteria:
 
 - Release candidate can be tested on clean Windows and Linux machines.
 
+## Phase 6: macOS full-target replacement
+
+- Execute `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` sequentially.
+- Migrate the bounded Native Host and Extension Suite; keep product GUI in React.
+- Add Native Launch Inbox, Native Drag Sessions, Public Metadata FFI, and Replacement Migration.
+- Unify macOS identity, packaging, signing, notarization, CI, and publication in the Release Bundle.
+- Freeze the former SwiftUI product only after both completion gates pass.
+
+Exit criteria:
+
+- macOS Native Integration Complete and Native Product Replacement Complete both pass.
+- Clean arm64 and x86_64 installed-system upgrade/rollback matrices pass.
+- Exactly one canonical macOS product, extension suite, association owner, and release pipeline remain.

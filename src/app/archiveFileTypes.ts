@@ -1,4 +1,4 @@
-import archiveFileTypesManifest from "./archiveFileTypes.manifest.json";
+import archiveFileTypesManifest from "./generated/archiveFileTypes.generated.json";
 
 const TZAP_EXTENSION_SUFFIX = ".tzap";
 const TZAP_VOLUME_MARKER = ".vol";

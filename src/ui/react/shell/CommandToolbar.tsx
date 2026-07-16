@@ -5,6 +5,7 @@ import {
   FolderOpen,
   SquareMinus,
   Trash2,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ import {
 
 export function CommandToolbar() {
   const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const toolbarGroups = toolbarGroupsForWorkspaceMode(snapshot.shell.activeMode);
   const className = [
@@ -49,6 +51,7 @@ export function CommandToolbar() {
           : <ExtractToolbarGroups groups={toolbarGroups} />}
       </div>
       <div className="toolbar-spacer" />
+      <Button variant="ghost" size="icon" aria-label="TZAP Account" title="TZAP Account" onClick={() => actions.handleAccountIntent({ type: "open" })}><UserRound className="size-4" /></Button>
     </header>
   );
 }

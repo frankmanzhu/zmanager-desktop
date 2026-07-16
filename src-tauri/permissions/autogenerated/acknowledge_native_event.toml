@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-native-event"
+description = "Enables the acknowledge_native_event command without any pre-configured scope."
+commands.allow = ["acknowledge_native_event"]
+
+[[permission]]
+identifier = "deny-acknowledge-native-event"
+description = "Denies the acknowledge_native_event command without any pre-configured scope."
+commands.deny = ["acknowledge_native_event"]

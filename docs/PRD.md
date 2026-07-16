@@ -1,5 +1,9 @@
 # Product Requirements: ZManager Desktop For Windows And Linux
 
+> Status: Superseded by `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and
+> ADR-0004 for platform scope. Retained as historical Windows/Linux inception
+> context; its separate-macOS constraints are not governing policy.
+
 ## Problem Statement
 
 ZManager already has a complete Rust CLI/core and a complete native macOS GUI. Users on Windows and Linux can use the CLI, but they do not have a graphical archive manager that exposes ZManager's safe extraction, broad archive listing, clean source creation, encrypted archive workflows, and progress UI in a desktop-native way.
@@ -98,4 +102,3 @@ The desktop shell should support the same core workflows as the macOS app:
 ## Further Notes
 
 The Windows/Linux app should feel like a quiet operational utility. The value is reliability, safety, broad extraction, clean source creation, and clear progress. It does not need a marketing-heavy UI.
-

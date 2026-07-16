@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "associatedExtensions": [
+    "7z",
+    "7z.001",
+    "apk",
+    "appx",
+    "br",
+    "bz2",
+    "cab",
+    "cbr",
+    "cpio",
+    "deb",
+    "gz",
+    "ipa",
+    "iso",
+    "jar",
+    "lrz",
+    "lz",
+    "lz4",
+    "lzma",
+    "lzo",
+    "rar",
+    "rpm",
+    "tar",
+    "tar.br",
+    "tar.bz2",
+    "tar.gz",
+    "tar.lrz",
+    "tar.lz",
+    "tar.lz4",
+    "tar.lzma",
+    "tar.lzo",
+    "tar.xz",
+    "tar.z",
+    "tar.zst",
+    "tbz2",
+    "tgz",
+    "txz",
+    "tzap",
+    "tzst",
+    "vol000.tzap",
+    "war",
+    "xar",
+    "xpi",
+    "xz",
+    "z",
+    "zip",
+    "zipx",
+    "zst"
+  ],
+  "documentGroups": [
+    {
+      "id": "tzap",
+      "displayKey": "archiveType.tzap",
+      "extensions": [
+        "tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    },
+    {
+      "id": "archives",
+      "displayKey": "archiveType.archive",
+      "extensions": [
+        "7z",
+        "apk",
+        "appx",
+        "cab",
+        "cbr",
+        "cpio",
+        "deb",
+        "gz",
+        "ipa",
+        "iso",
+        "jar",
+        "rar",
+        "rpm",
+        "tar",
+        "tgz",
+        "tar.gz",
+        "tbz2",
+        "tar.bz2",
+        "txz",
+        "tar.xz",
+        "tzap",
+        "tzst",
+        "tar.zst",
+        "gz",
+        "bz2",
+        "xz",
+        "zst",
+        "xar",
+        "war",
+        "xpi",
+        "zip",
+        "zipx",
+        "7z.001"
+      ],
+      "role": "Viewer",
+      "rank": "Alternate"
+    }
+  ],
+  "exportedTypes": [
+    {
+      "identifier": "com.frankmanzhu.zmanager.tzap",
+      "descriptionKey": "archiveType.tzap",
+      "conformsTo": [
+        "public.data"
+      ],
+      "extensions": [
+        "tzap"
+      ],
+      "mimeTypes": [
+        "application/x-tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    }
+  ]
+}

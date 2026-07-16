@@ -43,7 +43,7 @@ pub struct ProjectContract {
     pub platform_integration: ProjectIntegrationContract,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemFileIconRequest {
     pub entries: Vec<SystemFileIconRequestEntry>,
@@ -51,6 +51,7 @@ pub struct SystemFileIconRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Serialize)]
 pub struct SystemFileIconRequestEntry {
     pub key: String,
     pub path: String,
@@ -58,7 +59,7 @@ pub struct SystemFileIconRequestEntry {
     pub is_directory: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemFileIconResponse {
     pub icons: Vec<SystemFileIconDto>,
@@ -66,6 +67,7 @@ pub struct SystemFileIconResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Deserialize)]
 pub struct SystemFileIconDto {
     pub key: String,
     pub data_url: Option<String>,
@@ -85,39 +87,7 @@ pub struct ValidateDirectoryResponse {
     pub accessible: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum QuickActionKindDto {
-    Open,
-    Compress,
-    Extract,
-    CompressZip,
-    CompressTzap,
-    CompressSevenZ,
-    CompressTarZst,
-    CompressCleanSource,
-    ExtractHere,
-    ExtractToFolder,
-}
-
-impl From<zmanager_shell_contract::ShellActionKind> for QuickActionKindDto {
-    fn from(action: zmanager_shell_contract::ShellActionKind) -> Self {
-        use zmanager_shell_contract::ShellActionKind;
-
-        match action {
-            ShellActionKind::Open => Self::Open,
-            ShellActionKind::Compress => Self::Compress,
-            ShellActionKind::Extract => Self::Extract,
-            ShellActionKind::CompressZip => Self::CompressZip,
-            ShellActionKind::CompressTzap => Self::CompressTzap,
-            ShellActionKind::CompressSevenZ => Self::CompressSevenZ,
-            ShellActionKind::CompressTarZst => Self::CompressTarZst,
-            ShellActionKind::CompressCleanSource => Self::CompressCleanSource,
-            ShellActionKind::ExtractHere => Self::ExtractHere,
-            ShellActionKind::ExtractToFolder => Self::ExtractToFolder,
-        }
-    }
-}
+pub use zmanager_shell_contract::ShellActionKind as QuickActionKindDto;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

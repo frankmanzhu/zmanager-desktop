@@ -1,5 +1,9 @@
 # Agent Implementation Steps
 
+> Status: Superseded for macOS scope by
+> `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and ADR-0004. Historical
+> Windows/Linux sequencing remains reference material only.
+
 This document is the low-ambiguity build guide for future implementation agents. Use it together with `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/REQUIREMENTS.md`, and `docs/ROADMAP.md`.
 
 ## Integrity Snapshot

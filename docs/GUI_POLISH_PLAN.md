@@ -1,5 +1,9 @@
 # ZManager Desktop GUI Polish Plan
 
+> Status: Superseded for platform scope by
+> `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and ADR-0004. Completed shared
+> UX requirements remain reference evidence.
+
 Date: 2026-06-12
 
 ## Design Brief

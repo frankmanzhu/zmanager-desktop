@@ -1,11 +1,10 @@
 # ZManager Desktop context
 
-ZManager Desktop is the cross-platform Tauri archive manager built on
-`zmanager-core`. Windows and Linux are the signed/release packaging targets;
-macOS supports local unnotarized `.app` and `.dmg` bundles for the Tauri runtime.
-The separately maintained native SwiftUI app continues to own Finder extensions,
-Quick Look, signing, notarization, and its release packaging. This repository
-owns the shared shell and application-facing integration. Archive semantics and
+ZManager Desktop is the single cross-platform Tauri archive manager built on
+`zmanager-core`. Windows, Linux, and macOS are first-class build, package, and
+release targets. This repository owns the replacement macOS Native Host,
+Extension Suite, Release Bundle, and Replacement Migration. The former SwiftUI
+repository is frozen reference evidence after cutover. Archive semantics and
 extraction safety remain core-owned.
 
 ## Domain glossary
@@ -94,6 +93,48 @@ The operating-system adapter that supplies the complete native capability set
 required by the Desktop Shell. Every supported platform implements the shared
 Rust `NativePlatform` interface; callers use platform-neutral wrapper functions
 and never select or invoke operating-system-specific implementations directly.
+
+### macOS Native Host
+
+The bounded Swift/AppKit runtime embedded in the Tauri application. It owns
+macOS lifecycle callbacks, Services, system menus, Launch Services, icons, and
+file-promise presentation. It emits typed events and never owns archive jobs or
+application product screens.
+
+### macOS Extension Suite
+
+The Finder Sync, Quick Look preview and thumbnail, and Spotlight targets built
+and signed from this repository. They consume generated contracts or the
+metadata-only FFI and perform no general archive or account work.
+
+### Native Launch Inbox
+
+The Rust-owned ordered, bounded, acknowledgement-based queue that joins early
+native callbacks and single-instance requests to frontend readiness without
+losing, duplicating, or exposing secret-bearing events.
+
+### Native Drag Session
+
+A Rust-owned archive-handle and password-lifetime session paired with a Swift
+file-promise drag. Bytes are streamed only after Finder chooses a destination.
+
+### Public Metadata FFI
+
+The separately pinned, bounded ABI for reading public TZAP metadata in Quick
+Look and Spotlight. It exposes no archive jobs, account state, private keys, or
+mutations.
+
+### Release Bundle
+
+The one signed, notarized, and stapled macOS application plus nested host,
+extensions, importer, libraries, manifests, and architecture-labelled release
+artifacts produced by this repository.
+
+### Replacement Migration
+
+The versioned, idempotent, rollback-aware conversion of old native preferences,
+Application Support state, registrations, associations, and install identity to
+the Release Bundle.
 
 ## Ownership boundaries
 

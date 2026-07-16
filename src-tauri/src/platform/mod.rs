@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tauri::{Builder, Wry};
 
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
+use crate::native_launch_inbox::NativeLaunchInbox;
 
 pub struct PlatformProfile {
     pub platform: &'static str,
@@ -112,6 +113,7 @@ impl NativeFileDragError {
 /// Adding another operating system requires an adapter that implements every
 /// method here before it can become the active platform.
 pub(crate) trait NativePlatform {
+    fn initialize_native_host(inbox: NativeLaunchInbox) -> Result<(), String>;
     fn register_services(builder: Builder<Wry>) -> Builder<Wry>;
     fn integration_profile() -> PlatformProfile;
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error>;
@@ -125,6 +127,7 @@ pub(crate) trait NativePlatform {
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
     ) -> Result<NativeFileDragOutcome, NativeFileDragError>;
+    fn shutdown();
 }
 
 #[cfg(target_os = "windows")]
@@ -138,6 +141,10 @@ type ActivePlatform = macos::MacOsPlatform;
 
 pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     ActivePlatform::register_services(builder)
+}
+
+pub fn initialize_native_host(inbox: NativeLaunchInbox) -> Result<(), String> {
+    ActivePlatform::initialize_native_host(inbox)
 }
 
 pub fn integration_profile() -> PlatformProfile {
@@ -165,6 +172,10 @@ pub fn start_native_file_drag(
     stream_provider: NativeFileDragStreamProvider,
 ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
     ActivePlatform::start_native_file_drag(window, items, stream_provider)
+}
+
+pub fn shutdown() {
+    ActivePlatform::shutdown();
 }
 
 #[cfg(test)]

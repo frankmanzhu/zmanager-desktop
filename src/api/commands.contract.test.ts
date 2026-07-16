@@ -24,6 +24,43 @@ const COMMAND_WRAPPERS = [
   },
   { command: "quick_action_startup_state", call: () => api.fetchQuickActionStartupState() },
   {
+    command: "native_frontend_ready",
+    args: { windowLabel: "main" },
+    call: () => api.nativeFrontendReady("main"),
+  },
+  {
+    command: "acknowledge_native_event",
+    args: { windowLabel: "main", eventId: "event-1234567890" },
+    call: () => api.acknowledgeNativeEvent("main", "event-1234567890"),
+  },
+  { command: "account_snapshot", call: () => api.fetchAccountSnapshot() },
+  {
+    command: "account_begin_hosted_auth",
+    request: { localService: false },
+    call: () => api.beginAccountHostedAuth(false),
+  },
+  {
+    command: "account_apply_hosted_callback",
+    request: { state: "state-1234567890", result: "completed" },
+    call: () => api.applyAccountHostedCallback({ state: "state-1234567890", result: "completed" }),
+  },
+  { command: "account_forget", call: () => api.forgetAccount() },
+  {
+    command: "account_generate_recipient_key",
+    request: { label: "Personal" },
+    call: () => api.generateAccountRecipientKey("Personal"),
+  },
+  {
+    command: "account_remove_recipient_key",
+    request: { id: "recipient-1" },
+    call: () => api.removeAccountRecipientKey("recipient-1"),
+  },
+  {
+    command: "account_remove_contact",
+    request: { id: "contact-1" },
+    call: () => api.removeAccountContact("contact-1"),
+  },
+  {
     command: "list_archive",
     request: { archivePath: "C:/archives/demo.zip", password: "secret" },
     call: () => api.listArchive({ archivePath: "C:/archives/demo.zip", password: "secret" }),
@@ -192,5 +229,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/commands::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }

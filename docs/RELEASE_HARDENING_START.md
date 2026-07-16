@@ -17,7 +17,9 @@ This file tracks the initial hardening work from Slice 11.
 - [x] Pin `zmanager-core` for release (tag or vendored submodule) and document expected resolution path.
 - [x] Review and tighten Tauri security policy before release.
 - [x] Add crash-safe cleanup for preview directories and partial outputs.
-- [ ] Capture platform smoke-test matrix outcomes (Windows + Linux install/launch/open tests).
+- [ ] Capture required Windows, Linux, and macOS install/launch/open smoke matrices.
+- [ ] Pass `scripts/release-gate-macos.sh` for separate arm64 and x86_64 Release Bundles.
+- [ ] Verify Developer ID signatures inside-out, notarization, stapling, Gatekeeper, exact identifiers, entitlements, linkage, and one installed canonical product.
 
 ## Fixture sync runbook
 
@@ -81,6 +83,10 @@ Capture each run in release PR:
 - Ubuntu 22.04 clean VM
   - Install AppImage (`appimage` target)
   - Launch app, open supported archive, run extract to an existing folder, dismiss completed job
+- macOS 14+ arm64 and x86_64 clean machines
+  - Install the architecture-labelled notarized DMG and verify Gatekeeper
+  - Exercise cold/warm open, Services, Finder, Quick Look, Spotlight, menus, file promises, account callback, and default-opener restore
+  - Upgrade from published native v1.0.0, verify Replacement Migration and exactly one canonical app/extension/association owner, then test documented rollback
 
 ## Notes
 - Slice 10 platform integration now has a shared runtime contract surface exposed through:

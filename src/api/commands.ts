@@ -1,6 +1,8 @@
 import { invoke, type Channel } from "@tauri-apps/api/core";
 
 import type {
+  AccountHostedAuthLaunchDto,
+  AccountSnapshotDto,
   ArchiveListingDto,
   CancelJobRequest,
   CancelJobResponseDto,
@@ -35,6 +37,42 @@ import type {
   VerifyTzapCertificateResponse,
 } from "./types";
 
+export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_snapshot");
+}
+
+export async function beginAccountHostedAuth(localService = false): Promise<AccountHostedAuthLaunchDto> {
+  return invoke<AccountHostedAuthLaunchDto>("account_begin_hosted_auth", {
+    request: { localService },
+  });
+}
+
+export async function applyAccountHostedCallback(request: {
+  state: string;
+  result: "completed" | "cancelled" | "failed";
+  errorCode?: string | null;
+}): Promise<void> {
+  return invoke<void>("account_apply_hosted_callback", { request });
+}
+
+export async function forgetAccount(): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_forget");
+}
+
+export async function generateAccountRecipientKey(label?: string): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_generate_recipient_key", {
+    request: { label },
+  });
+}
+
+export async function removeAccountRecipientKey(id: string): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_remove_recipient_key", { request: { id } });
+}
+
+export async function removeAccountContact(id: string): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_remove_contact", { request: { id } });
+}
+
 export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
   return invoke<HealthcheckResponse>("healthcheck");
 }
@@ -61,6 +99,17 @@ export async function validateDirectory(
 
 export async function fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto> {
   return invoke<QuickActionStartupStateDto>("quick_action_startup_state");
+}
+
+export async function nativeFrontendReady(windowLabel: string): Promise<number> {
+  return invoke<number>("native_frontend_ready", { windowLabel });
+}
+
+export async function acknowledgeNativeEvent(
+  windowLabel: string,
+  eventId: string,
+): Promise<void> {
+  return invoke<void>("acknowledge_native_event", { windowLabel, eventId });
 }
 
 export async function listArchive(request: ListArchiveRequest): Promise<ArchiveListingDto> {

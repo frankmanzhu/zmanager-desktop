@@ -1,5 +1,8 @@
 # ZManager Desktop Windows GUI Design Guide
 
+> Status: Windows-specific visual guidance only. Its historical macOS exclusion
+> is superseded by ADR-0004 and does not govern repository ownership.
+
 Date: 2026-07-07
 
 ## Design Goal

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-account-begin-hosted-auth"
+description = "Enables the account_begin_hosted_auth command without any pre-configured scope."
+commands.allow = ["account_begin_hosted_auth"]
+
+[[permission]]
+identifier = "deny-account-begin-hosted-auth"
+description = "Denies the account_begin_hosted_auth command without any pre-configured scope."
+commands.deny = ["account_begin_hosted_auth"]

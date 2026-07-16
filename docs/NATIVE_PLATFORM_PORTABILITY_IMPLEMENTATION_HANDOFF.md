@@ -1,5 +1,8 @@
 # Native Platform Portability Implementation Handoff
 
+> Status: Superseded by `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and
+> ADR-0004 through ADR-0009. Retained as portability history.
+
 - Status: Ready for implementation
 - Date: 2026-07-15
 - Primary environment: Linux

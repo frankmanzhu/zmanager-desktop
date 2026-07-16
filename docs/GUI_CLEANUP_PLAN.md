@@ -1,5 +1,9 @@
 # ZManager Desktop GUI Cleanup Plan
 
+> Status: Superseded for macOS ownership by
+> `MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md` and ADR-0004. React cleanup
+> goals remain applicable.
+
 Date: 2026-06-11
 
 ## Goal

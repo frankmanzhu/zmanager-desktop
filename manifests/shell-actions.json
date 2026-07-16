@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "requestVersion": 1,
+  "actions": [
+    {"id":"open","rustCase":"Open","displayKey":"shellAction.open","order":10,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
+    {"id":"compress","rustCase":"Compress","displayKey":"shellAction.compress","order":20,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"extract","rustCase":"Extract","displayKey":"shellAction.extract","order":30,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
+    {"id":"compressZip","rustCase":"CompressZip","displayKey":"shellAction.compressZip","order":40,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"compressTzap","rustCase":"CompressTzap","displayKey":"shellAction.compressTzap","order":50,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"compressSevenZ","rustCase":"CompressSevenZ","displayKey":"shellAction.compressSevenZ","order":60,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"compressTarZst","rustCase":"CompressTarZst","displayKey":"shellAction.compressTarZst","order":70,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"compressCleanSource","rustCase":"CompressCleanSource","displayKey":"shellAction.compressCleanSource","order":80,"selectionShapes":["single-folder"],"multiplicity":"exactly-one"},
+    {"id":"extractHere","rustCase":"ExtractHere","displayKey":"shellAction.extractHere","order":90,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
+    {"id":"extractToFolder","rustCase":"ExtractToFolder","displayKey":"shellAction.extractToFolder","order":100,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"}
+  ]
+}

@@ -33,7 +33,7 @@ in this order:
 8. `Add to .tzst`
 
 The archive extension set is generated from
-`src/app/archiveFileTypes.manifest.json` plus `.001` split archives. The current
+`manifests/archive-file-types.json` plus `.001` split archives. The current
 Windows registration covers `.001`, `.7z`, `.apk`, `.appx`, `.br`, `.bz2`,
 `.cab`, `.cbr`, `.cpio`, `.deb`, `.gz`, `.ipa`, `.iso`, `.jar`, `.lrz`, `.lz`,
 `.lz4`, `.lzma`, `.lzo`, `.rar`, `.rpm`, `.tar`, `.tbz2`, `.tgz`, `.txz`,

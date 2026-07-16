@@ -14,7 +14,6 @@ export default defineConfig({
   },
   envPrefix: ["VITE_", "TAURI_"],
   test: {
-    exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**"]
+    exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**", "scripts/**"]
   }
 });
-

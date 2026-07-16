@@ -27,6 +27,7 @@ import {
 import type {
   ZManagerDialogSnapshot,
 } from "../../app/display/dialogSnapshots";
+import { createAccountWorkspace, type AccountWorkspaceSnapshot } from "../../app/workspaces/accountWorkspace";
 
 export type {
   ZManagerDialogAction,
@@ -65,6 +66,7 @@ export type ZManagerContextMenuItem = ContextMenuItem;
 export type ZManagerContextMenuActionPayload = ContextMenuActionPayload;
 
 export type ZManagerReactSnapshot = Readonly<{
+  account: AccountWorkspaceSnapshot;
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -232,6 +234,16 @@ export type ZManagerDesktopIntent =
   | Readonly<{ type: "windowControl"; control: "minimize" | "toggleMaximize" | "close" }>
   | Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>;
 
+export type ZManagerAccountIntent =
+  | Readonly<{ type: "open" }>
+  | Readonly<{ type: "close" }>
+  | Readonly<{ type: "refresh" }>
+  | Readonly<{ type: "beginHostedAuth"; local?: boolean }>
+  | Readonly<{ type: "forget" }>
+  | Readonly<{ type: "generateRecipientKey"; label?: string }>
+  | Readonly<{ type: "removeRecipientKey"; id: string }>
+  | Readonly<{ type: "removeContact"; id: string }>;
+
 export type ZManagerContextMenuIntent =
   | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>
   | Readonly<{ type: "hide" }>;
@@ -246,6 +258,7 @@ export type ZManagerReactActions = Readonly<{
   handleArchiveIntent(intent: ZManagerArchiveIntent): void;
   handleCreateIntent(intent: ZManagerCreateIntent): void;
   handleJobsIntent(intent: ZManagerJobsIntent): void;
+  handleAccountIntent(intent: ZManagerAccountIntent): void;
   handleDialogIntent(intent: ZManagerDialogIntent): void;
   handleDesktopIntent(intent: ZManagerDesktopIntent): void;
   handleContextMenuIntent(intent: ZManagerContextMenuIntent): void;
@@ -261,6 +274,7 @@ export type ZManagerReactRuntimeAdapter = Readonly<{
 }>;
 
 export type CreateZManagerReactSnapshotInput = Readonly<{
+  account?: AccountWorkspaceSnapshot;
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -286,6 +300,7 @@ export const noopZManagerReactActions: ZManagerReactActions = Object.freeze({
   handleArchiveIntent() {},
   handleCreateIntent() {},
   handleJobsIntent() {},
+  handleAccountIntent() {},
   handleDialogIntent() {},
   handleDesktopIntent() {},
   handleContextMenuIntent() {},
@@ -310,6 +325,7 @@ export function createZManagerReactSnapshot(
   input: CreateZManagerReactSnapshotInput,
 ): ZManagerReactSnapshot {
   return deepFreezeValue({
+    account: input.account ?? createAccountWorkspace().getSnapshot(),
     shell: input.shell,
     archive: input.archive,
     create: input.create,

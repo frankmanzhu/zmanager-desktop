@@ -36,6 +36,7 @@ use crate::{
         JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry, forward_latest_values},
+    native_launch_inbox::NativeLaunchInbox,
     quick_action::QuickActionLaunchCoordinator,
 };
 use zmanager_core::apple_archive_backend::AppleArchiveError;
@@ -158,6 +159,31 @@ pub fn quick_action_startup_state(
     state: State<'_, QuickActionLaunchCoordinator>,
 ) -> crate::dto::QuickActionStartupStateDto {
     state.startup_state().to_dto()
+}
+
+#[tauri::command]
+pub fn native_frontend_ready(
+    window_label: String,
+    state: State<'_, NativeLaunchInbox>,
+) -> Result<usize, CommandErrorDto> {
+    state.frontend_ready(&window_label).map_err(|error| {
+        CommandErrorDto::invalid_request(format!("native inbox readiness failed: {error:?}"))
+    })
+}
+
+#[tauri::command]
+pub fn acknowledge_native_event(
+    window_label: String,
+    event_id: String,
+    state: State<'_, NativeLaunchInbox>,
+) -> Result<(), CommandErrorDto> {
+    state
+        .acknowledge(&window_label, &event_id)
+        .map_err(|error| {
+            CommandErrorDto::invalid_request(format!(
+                "native event acknowledgement failed: {error:?}"
+            ))
+        })
 }
 
 #[cfg(test)]

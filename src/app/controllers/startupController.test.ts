@@ -10,7 +10,6 @@ import type {
 } from "../../api/types";
 import {
   createStartupController,
-  type QuickActionLaunchEvent,
   type StartupControllerOptions,
 } from "./startupController";
 
@@ -87,7 +86,6 @@ function commandError(overrides: Partial<CommandErrorDto> = {}): CommandErrorDto
 
 function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
   let desktopRuntime = true;
-  let launchListener: ((event: QuickActionLaunchEvent) => void) | null = null;
   const startupStates: QuickActionStartupStateDto[] = [];
   const calls = {
     revealQuickActionStates: [] as QuickActionStartupStateDto[],
@@ -110,15 +108,10 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     }
     return state;
   });
-  const listenQuickActionLaunch = vi.fn(async (listener: (event: QuickActionLaunchEvent) => void) => {
-    launchListener = listener;
-  });
-
   const controller = createStartupController({
     fetchHealthcheck,
     fetchProjectContract,
     fetchQuickActionStartupState,
-    listenQuickActionLaunch,
     isDesktopRuntime() {
       return desktopRuntime;
     },
@@ -169,18 +162,11 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     fetchHealthcheck,
     fetchProjectContract,
     fetchQuickActionStartupState,
-    listenQuickActionLaunch,
     queueStartupStates(...states: QuickActionStartupStateDto[]) {
       startupStates.push(...states);
     },
     setDesktopRuntime(value: boolean) {
       desktopRuntime = value;
-    },
-    emitQuickActionLaunch(state: QuickActionStartupStateDto) {
-      if (!launchListener) {
-        throw new Error("Launch listener was not bound");
-      }
-      launchListener({ payload: state });
     },
   };
 }
@@ -289,37 +275,9 @@ describe("startup controller", () => {
     expect(harness.calls.handledRequests).toEqual([request]);
   });
 
-  it("binds desktop launch events and routes their payload", async () => {
-    const harness = createHarness();
-    const request = quickActionRequest({ kind: "compressZip" });
-
-    await harness.controller.bindQuickActionLaunchEvents();
-    harness.emitQuickActionLaunch(startupState({
-      launchedForQuickAction: true,
-      quickAction: request,
-    }));
-    await Promise.resolve();
-
-    expect(harness.listenQuickActionLaunch).toHaveBeenCalledTimes(1);
-    expect(harness.calls.statuses).toEqual(["translated:quickAction.starting"]);
-    expect(harness.calls.handledRequests).toEqual([request]);
-  });
-
-  it("skips launch event binding outside desktop runtime", async () => {
-    const harness = createHarness();
-    harness.setDesktopRuntime(false);
-
-    await harness.controller.bindQuickActionLaunchEvents();
-
-    expect(harness.listenQuickActionLaunch).not.toHaveBeenCalled();
-  });
-
-  it("initializes desktop runtime by binding launch events then handling startup", async () => {
+  it("initializes desktop runtime by handling the legacy startup state", async () => {
     const order: string[] = [];
     const harness = createHarness({
-      async listenQuickActionLaunch() {
-        order.push("bind");
-      },
       async fetchQuickActionStartupState() {
         order.push("startup");
         return startupState({ launchedForQuickAction: false });
@@ -328,21 +286,21 @@ describe("startup controller", () => {
 
     await harness.controller.initializeDesktopRuntime();
 
-    expect(order).toEqual(["bind", "startup"]);
+    expect(order).toEqual(["startup"]);
     expect(harness.calls.revealQuickActionStates).toHaveLength(1);
   });
 
   it("reports initialization failures and reveals the normal window", async () => {
     const harness = createHarness({
-      async listenQuickActionLaunch() {
-        throw new Error("listen failed");
+      async fetchQuickActionStartupState() {
+        throw new Error("startup failed");
       },
     });
 
     await harness.controller.initializeDesktopRuntime();
 
     expect(harness.calls.statuses).toEqual([
-      "translated:desktopIntegration.initFailed: listen failed",
+      "translated:jobs.quickActionStartupReadFailed: startup failed",
     ]);
     expect(harness.calls.revealNormal).toBe(1);
   });

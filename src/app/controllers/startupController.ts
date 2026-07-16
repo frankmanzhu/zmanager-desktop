@@ -8,10 +8,6 @@ import type {
 } from "../../api/types";
 import type { MessageKey, MessageParams } from "../i18n/translator";
 
-export type QuickActionLaunchEvent = Readonly<{
-  payload: QuickActionStartupStateDto;
-}>;
-
 export type BootstrapState = Readonly<{
   healthcheck: HealthcheckResponse | null;
   contract: ProjectContract | null;
@@ -21,7 +17,6 @@ export type StartupControllerOptions = Readonly<{
   fetchHealthcheck(): Promise<HealthcheckResponse>;
   fetchProjectContract(): Promise<ProjectContract>;
   fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto>;
-  listenQuickActionLaunch(listener: (event: QuickActionLaunchEvent) => void): Promise<unknown>;
   isDesktopRuntime(): boolean;
   revealWindowForStartupQuickAction(state: QuickActionStartupStateDto): Promise<void>;
   revealNormalWindow(): Promise<void>;
@@ -40,7 +35,6 @@ export type StartupControllerOptions = Readonly<{
 export type StartupController = Readonly<{
   handleStartupQuickAction(): Promise<void>;
   handleQuickActionStartupState(state: QuickActionStartupStateDto): Promise<void>;
-  bindQuickActionLaunchEvents(): Promise<void>;
   initializeDesktopRuntime(): Promise<void>;
   loadBootstrapState(): Promise<void>;
 }>;
@@ -105,23 +99,12 @@ export function createStartupController(
     }
   }
 
-  async function bindQuickActionLaunchEvents(): Promise<void> {
-    if (!options.isDesktopRuntime()) {
-      return;
-    }
-
-    await options.listenQuickActionLaunch((event) => {
-      void handleQuickActionStartupState(event.payload);
-    });
-  }
-
   async function initializeDesktopRuntime(): Promise<void> {
     if (!options.isDesktopRuntime()) {
       return;
     }
 
     try {
-      await bindQuickActionLaunchEvents();
       await handleStartupQuickAction();
     } catch (error) {
       options.setOperationalStatus(options.unknownErrorMessage(
@@ -164,7 +147,6 @@ export function createStartupController(
   return {
     handleStartupQuickAction,
     handleQuickActionStartupState,
-    bindQuickActionLaunchEvents,
     initializeDesktopRuntime,
     loadBootstrapState,
   };

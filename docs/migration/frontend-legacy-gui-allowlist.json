@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "policy": "Exact legacy surfaces may not gain violations. If a listed file changes, every listed violation count for that file must shrink; remove the entry when it reaches zero.",
+  "legacyCss": {"path":"src/styles.css","sha256":"1d8346fd9a42812bbbfa6eeca957d7d687f3df3bb72e9eee9e2262ac28f66c1c","maxLines":4044},
+  "tailwindEntrypoints": ["src/styles.tailwind.css"],
+  "entries": [
+    {"path":"src/desktop/previewCleanup.ts","sha256":"86a4acb45e8f6371f7c6b273fd5bacd663a5e3db34457d149d4dd70fda0138d5","eventListeners":3,"inlineStyles":0},
+    {"path":"src/ui/react/interaction/BrowserFileDropAdapter.tsx","sha256":"03d814914f3ec53039dbb38be2a805a468d23e989b46390a25b79bc7a0bf7c24","eventListeners":4,"inlineStyles":0},
+    {"path":"src/ui/react/interaction/PaneResizer.tsx","sha256":"689b8d0ed8c87752b79e24ac6057c5007ef1b32682c7ee7904717c3b68d75369","eventListeners":2,"inlineStyles":0},
+    {"path":"src/ui/react/interaction/ShellKeyboardShortcuts.tsx","sha256":"4733e2a846f0774e7328504502676d154c8df6d4b55d7d3cd12d06c5eb79dcf5","eventListeners":1,"inlineStyles":0},
+    {"path":"src/ui/react/workspace/tableMarqueeSelection.ts","sha256":"912b4f9de15e9e7415ce55b8b7758e6fe3a3a51abcfaaaedf086c95a0411f888","eventListeners":4,"inlineStyles":0},
+    {"path":"src/ui/react/create/CreateWorkspace.tsx","sha256":"dfb78463d178a979a6a0d9d70331165b29cd9e69e732969c96dd691c82c3776f","eventListeners":4,"inlineStyles":2},
+    {"path":"src/ui/react/shell/MenuBar.tsx","sha256":"86b2c7298dc64a282737a851a5a94e063e62f641e0a63ef95da5c26925aa8a23","eventListeners":1,"inlineStyles":0},
+    {"path":"src/ui/react/dialogs/DialogRoot.tsx","sha256":"98af1b413bd041efb597ba37e049b9ea91f99ab4064e6782a89caa395c83cfcd","eventListeners":1,"inlineStyles":0},
+    {"path":"src/ui/react/context-menu/ContextMenuRoot.tsx","sha256":"9ed721ef501bff31397008851e876f7975e6738608efe27ac4dd394a1d25e32c","eventListeners":1,"inlineStyles":1},
+    {"path":"src/ui/react/archive/ArchiveTable.tsx","sha256":"0e0f54945d8e36ac7b7352f1a65172915be936011d0535d59af8b7a7e39b3f78","eventListeners":8,"inlineStyles":2},
+    {"path":"src/ui/react/archive/ArchiveTree.tsx","sha256":"1ccc435846240ff09f15e100a350f8583647932a24bf93ef6375eaedf6d4d1ee","eventListeners":0,"inlineStyles":1}
+  ]
+}
