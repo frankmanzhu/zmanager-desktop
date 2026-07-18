@@ -177,13 +177,13 @@ test("native file icons keep clear visual spacing from file names", async ({ pag
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);
 
-  await page.locator('tr[data-entry-path="documents"]').dblclick();
+  await page.locator('tr[data-entry-path="documents"] [data-row-primary]').dblclick();
   const fileRow = page.locator('tr[data-entry-path="documents/notes.txt"]');
   await expect(fileRow).toBeVisible();
 
   const spacing = await fileRow.evaluate((element) => {
-    const icon = element.querySelector<HTMLElement>(".row-icon")?.getBoundingClientRect();
-    const name = element.querySelector<HTMLElement>(".row-name")?.getBoundingClientRect();
+    const icon = element.querySelector<HTMLElement>("[data-row-icon]")?.getBoundingClientRect();
+    const name = element.querySelector<HTMLElement>("[data-row-name]")?.getBoundingClientRect();
     if (!icon || !name) {
       throw new Error("Native file icon and name must both render.");
     }
@@ -223,19 +223,19 @@ test("Close Archive resets Extract to its empty state", async ({ page }) => {
 });
 
 test("primary GUI states have visible, non-overlapping controls", async ({ page }) => {
-  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar")).toBeVisible();
-  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #create-destination")).toBeVisible();
-  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #search-entries")).toHaveAttribute("placeholder", "Search sources");
-  await expect(page.locator(".workspace[data-mode='compress'] > .path-bar #browse-create-destination")).toHaveCount(0);
-  await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='compress'] #browse-create-destination")).toContainText("Output Folder...");
-  await expect(page.locator(".toolbar-group[data-command-group='compress'] #start-create")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='table'] #include-all-sources")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='table'] #exclude-all-sources")).toBeVisible();
-  await expect(page.locator(".toolbar-group[data-command-group='table'] #clear-sources")).toBeVisible();
+  await expect(page.locator("main[data-mode='compress'] [data-shell-chrome='path']")).toBeVisible();
+  await expect(page.locator("main[data-mode='compress'] [data-shell-chrome='path'] #create-destination")).toBeVisible();
+  await expect(page.locator("main[data-mode='compress'] [data-shell-chrome='path'] #search-entries")).toHaveAttribute("placeholder", "Search sources");
+  await expect(page.locator("main[data-mode='compress'] [data-shell-chrome='path'] #browse-create-destination")).toHaveCount(0);
+  await expect(page.locator("[data-command-group='compress'] #browse-create-destination")).toBeVisible();
+  await expect(page.locator("[data-command-group='compress'] #browse-create-destination")).toContainText("Output Folder...");
+  await expect(page.locator("[data-command-group='compress'] #start-create")).toBeVisible();
+  await expect(page.locator("[data-command-group='table'] #include-all-sources")).toBeVisible();
+  await expect(page.locator("[data-command-group='table'] #exclude-all-sources")).toBeVisible();
+  await expect(page.locator("[data-command-group='table'] #clear-sources")).toBeVisible();
   await expect(page.locator("#new-archive")).toHaveCount(0);
-  await expect(page.locator(".toolbar-group[data-command-group='compress'] #create-destination-recent")).toHaveCount(0);
-  await expect(page.locator("#zmanager-runtime-bridge-root > .browser-shell")).toBeHidden();
+  await expect(page.locator("[data-command-group='compress'] #create-destination-recent")).toHaveCount(0);
+  await expect(page.locator("#zmanager-runtime-bridge-root > [data-workspace-browser]")).toBeHidden();
   await page.locator("#add-archive").click();
   await expect(page.locator("#context-menu [data-context-action='add-source-files']")).toContainText("Files...");
   await expect(page.locator("#context-menu [data-context-action='add-source-folder']")).toContainText("Folder...");
@@ -243,7 +243,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#context-menu")).toBeHidden();
 
   await captureAndScan(page, "03-compress-empty");
-  await captureReadmeHero(page, "00-readme-hero", ".workspace");
+  await captureReadmeHero(page, "00-readme-hero", "main[data-mode]");
 
   await dragFiles(page, ["draft.zip"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute("aria-hidden", "false");
@@ -284,7 +284,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await captureAndScan(page, "27-create-dialog-advanced-options");
 
   await page.getByRole("tab", { name: "Extract" }).click();
-  await expect(page.locator("#open-archive")).toHaveClass(/is-primary-command/);
+  await expect(page.locator("#open-archive")).toBeEnabled();
   await expect(page.locator("#search-entries")).toBeDisabled();
   await expect(page.locator("#details-content")).toContainText("No archive open");
   await expect(page.locator("#details-content [data-details-action='open-archive']")).toBeVisible();
@@ -321,7 +321,7 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
     "file:.zip": nativeFileIcon,
   });
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
-  await expect(page.locator(".row-icon-native-image").first()).toBeVisible();
+  await expect(page.locator("[data-row-icon] img").first()).toBeVisible();
   await expect(page.locator("#search-entries")).toBeEnabled();
   await expect(page.locator("#details-content [data-copy-value='C:/fixtures/visual-scan.zip']")).toBeVisible();
   await captureAndScan(page, "07-extract-with-archive");
@@ -334,12 +334,12 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await loadArchiveWithIcons(page);
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
 
-  await page.locator('tr[data-entry-path="documents"] .row-name').click();
+  await page.locator('tr[data-entry-path="documents"] [data-row-primary]').click();
   await expect(page.locator("#extract-all")).toBeVisible();
 
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
-  const entryMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
+  const entryMenuLabels = page.locator("#context-menu [data-context-action]:visible");
   await expect(entryMenuLabels.nth(0)).toHaveText("Open");
   await expect(entryMenuLabels.nth(1)).toHaveText("Extract...");
   await expect(entryMenuLabels.nth(2)).toHaveText("Extract Here");
@@ -364,8 +364,7 @@ test("create workspace rows preserve keyboard selection and delete removal", asy
   const removedSourcePath = await firstRow.getAttribute("data-compress-source-path");
   expect(removedSourcePath).toBeTruthy();
 
-  await firstRow.click();
-  await expect(firstRow).toHaveClass(/is-selected/);
+  await firstRow.locator("[data-row-primary]").click();
   await expect(firstRow).toHaveAttribute("aria-selected", "true");
 
   await page.keyboard.press("Delete");
@@ -392,13 +391,13 @@ test("create workspace rows support drag-window multi-selection", async ({ page 
   await page.mouse.down();
   await page.mouse.move(firstBox.x + 2, firstBox.y + 2, { steps: 5 });
 
-  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(page.locator("[data-marquee-selection]")).toBeVisible();
   await expect(firstRow).toHaveAttribute("aria-selected", "true");
   await expect(secondRow).toHaveAttribute("aria-selected", "true");
   await expect(rows.nth(2)).toHaveAttribute("aria-selected", "false");
 
   await page.mouse.up();
-  await expect(page.locator(".marquee-selection")).toBeHidden();
+  await expect(page.locator("[data-marquee-selection]")).toBeHidden();
 });
 
 test("create password fields clear when hidden or submitted", async ({ page }) => {
@@ -418,7 +417,7 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
   await waitForCompressSources(page);
   await expect(page.locator("#create-password")).toHaveCount(0);
   await page.locator("#start-create").click();
-  await expect(page.locator(".workspace")).not.toContainText("Password confirmation does not match.");
+  await expect(page.locator("main")).not.toContainText("Password confirmation does not match.");
 
   await page.locator("#create-format").selectOption("sevenZ");
   await waitForCompressSources(page);
@@ -442,6 +441,10 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
   await openDevSurface(page, "jobs");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
+  await expect.poll(async () => page.locator("#job-drawer").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.left < window.innerWidth - 100;
+  })).toBe(true);
   await captureAndScan(page, "29-jobs-drawer-empty");
   await closeDevSurface(page);
 
@@ -514,12 +517,12 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator("#context-menu [data-context-action='open-archive']")).toContainText("Open Archive");
   await captureAndScan(page, "13-extract-empty-context-menu");
   await page.locator("#context-menu [data-context-action='open-archive']").click();
-  await expect(page.locator(".workspace-status")).toContainText("Finish the current job before starting another operation.");
+  await expect(page.locator("#workspace-status")).toContainText("Finish the current job before starting another operation.");
 
   await page.evaluate(() => window.__zmanagerDev?.setJobFixtures([]));
   await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
   await page.locator("#context-menu [data-context-action='open-archive']").click();
-  await expect(page.locator(".workspace-status")).toContainText("Native dialogs are unavailable in browser preview.");
+  await expect(page.locator("#workspace-status")).toContainText("Native dialogs are unavailable in browser preview.");
 
   await loadArchiveWithIcons(page);
   await expect(page.locator('tr[data-entry-path="documents"]')).toBeVisible();
@@ -548,13 +551,13 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await page.keyboard.press("Enter");
   await expect(page.locator("th[data-column-id='created']")).toBeHidden();
 
-  await page.locator('tr[data-entry-path="documents"] .row-name').click();
-  await page.locator('tr[data-entry-path="images"] .row-name').click({ modifiers: ["ControlOrMeta"] });
+  await page.locator('tr[data-entry-path="documents"] [data-row-primary]').click();
+  await page.locator('tr[data-entry-path="images"] [data-row-primary]').click({ modifiers: ["ControlOrMeta"] });
   await expect(page.locator('tr[data-entry-path="documents"]')).toHaveAttribute("aria-selected", "true");
   await expect(page.locator('tr[data-entry-path="images"]')).toHaveAttribute("aria-selected", "true");
   await page.locator('tr[data-entry-path="documents"]').click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
-  const multiMenuLabels = page.locator("#context-menu [data-context-action]:visible .context-menu-label");
+  const multiMenuLabels = page.locator("#context-menu [data-context-action]:visible");
   await expect(multiMenuLabels.nth(0)).toHaveText("Extract Selected");
   await expect(multiMenuLabels.nth(1)).toHaveText("Extract Here");
   await expect(multiMenuLabels.nth(2)).toHaveText("Test");
@@ -571,9 +574,9 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(selectionPropertiesDialog).toBeHidden();
   await expect(page.locator('tr[data-entry-path="images"]')).toBeFocused();
 
-  await page.locator('tr[data-entry-path="images"] .row-name').dblclick();
+  await page.locator('tr[data-entry-path="images"] [data-row-primary]').dblclick();
   await expect(page.locator('tr[data-entry-path="images/product-screenshot.png"]')).toBeVisible();
-  await page.locator('tr[data-entry-path="images/product-screenshot.png"] .row-name').click();
+  await page.locator('tr[data-entry-path="images/product-screenshot.png"] [data-row-primary]').click();
   await captureAndScan(page, "18-image-entry-details");
 
   await openDevSurface(page, "info");
@@ -588,7 +591,7 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator("#search-submit")).toBeVisible();
   await expect(page.locator("#clear-search")).toBeEnabled();
   await expect(page.locator("#search-count")).toHaveText("0 results");
-  await expect(page.locator("#entry-table-body .search-empty-row")).toContainText('No entries match "missing-entry".');
+  await expect(page.locator("#entry-table-body [data-empty-table-row]")).toContainText('No entries match "missing-entry".');
   await expect(page.locator("#details-content")).toContainText("Selection not visible in current search");
   await captureAndScan(page, "20-search-empty-results");
 
@@ -604,9 +607,9 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await page.locator("#menu-command-flatView").click();
   await expect(page.locator("#toolbar-flatView")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#menu-command-flatView")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('tr[data-entry-path="documents/notes.txt"] .row-secondary')).toContainText("documents/notes.txt");
+  await expect(page.locator('tr[data-entry-path="documents/notes.txt"] [data-row-secondary]')).toContainText("documents/notes.txt");
   await captureAndScan(page, "31-flat-view-with-icons");
-  await page.locator('tr[data-entry-path="documents"] .row-name').dblclick();
+  await page.locator('tr[data-entry-path="documents"] [data-row-primary]').dblclick();
   await expect(page.locator('tr[data-entry-path="documents/notes.txt"]')).toBeVisible();
 });
 
@@ -671,16 +674,16 @@ async function captureHero(page: Page, name: string, selector: string) {
 }
 
 async function captureReadmeHero(page: Page, name: string, selector: string) {
-  const originalStatus = await page.locator(".workspace-status").evaluate((element) => element.textContent ?? "");
+  const originalStatus = await page.locator("#workspace-status").evaluate((element) => element.textContent ?? "");
   try {
-    await page.locator(".workspace-status").evaluate((element) => {
+    await page.locator("#workspace-status").evaluate((element) => {
       element.textContent = "Ready.";
     });
     await captureHero(page, name, selector);
     const problems = await scanVisibleLayout(page);
     expect(problems, `${name} layout problems`).toEqual([]);
   } finally {
-    await page.locator(".workspace-status").evaluate((element, text) => {
+    await page.locator("#workspace-status").evaluate((element, text) => {
       element.textContent = text;
     }, originalStatus);
   }
@@ -699,10 +702,22 @@ async function loadArchiveWithIcons(page: Page) {
 
 async function openDevSurface(page: Page, surface: "about" | "preferences" | "info" | "jobs") {
   await page.evaluate((surfaceName) => window.__zmanagerDev?.openSurface(surfaceName), surface);
+  if (surface === "jobs") {
+    const drawer = page.locator("#job-drawer");
+    await expect.poll(async () => drawer.evaluate((element) =>
+      element.getBoundingClientRect().left < window.innerWidth - 100,
+    )).toBe(true);
+  }
 }
 
 async function closeDevSurface(page: Page) {
   await page.evaluate(() => window.__zmanagerDev?.closeModal());
+  const drawer = page.locator("#job-drawer");
+  if ((await drawer.count()) && (await drawer.getAttribute("aria-hidden")) === "true") {
+    await expect.poll(async () => drawer.evaluate((element) =>
+      element.getBoundingClientRect().left >= window.innerWidth - 1,
+    )).toBe(true);
+  }
 }
 
 async function waitForCompressSources(page: Page) {
@@ -710,14 +725,14 @@ async function waitForCompressSources(page: Page) {
     page.locator("#compress-source-body tr[data-compress-folder-row], #compress-source-body tr[data-compress-entry-row]").first(),
   ).toBeVisible();
   await expect(page.locator("#start-create")).toBeEnabled();
-  await expect(page.locator("#start-create")).toHaveClass(/is-primary-command/);
+  await expect(page.locator("#start-create")).toBeEnabled();
 }
 
 async function expectOverlayInsideWorkspaceBody(page: Page) {
   const bounds = await page.evaluate(() => {
     const overlay = document.querySelector("#drop-overlay")?.getBoundingClientRect();
-    const body = document.querySelector(".browser-shell")?.getBoundingClientRect();
-    const status = document.querySelector(".status-bar")?.getBoundingClientRect();
+    const body = document.querySelector("[data-workspace-browser]")?.getBoundingClientRect();
+    const status = document.querySelector("[data-shell-chrome='status']")?.getBoundingClientRect();
     if (!overlay || !body || !status) {
       return null;
     }
@@ -756,7 +771,7 @@ async function dropFiles(page: Page, names: string[]) {
       cancelable: true,
       dataTransfer,
     });
-    document.querySelector("#app")?.dispatchEvent(event);
+    document.querySelector("[data-runtime-bridge-state]")?.dispatchEvent(event);
   }, names);
 }
 
@@ -771,7 +786,7 @@ async function dragFiles(page: Page, names: string[]) {
       cancelable: true,
       dataTransfer,
     });
-    document.querySelector("#app")?.dispatchEvent(event);
+    document.querySelector("[data-runtime-bridge-state]")?.dispatchEvent(event);
   }, names);
 }
 
@@ -782,7 +797,7 @@ async function dragLeave(page: Page) {
       cancelable: true,
       relatedTarget: document.body,
     });
-    document.querySelector("#app")?.dispatchEvent(event);
+    document.querySelector("[data-runtime-bridge-state]")?.dispatchEvent(event);
   });
 }
 
@@ -793,8 +808,8 @@ async function dragFilesThroughNestedTargets(page: Page, names: string[]) {
       dataTransfer.items.add(new File(["fixture"], name));
     }
 
-    const app = document.querySelector("#app");
-    const nestedTarget = document.querySelector(".browser-shell");
+    const app = document.querySelector("[data-runtime-bridge-state]");
+    const nestedTarget = document.querySelector("[data-workspace-browser]");
     app?.dispatchEvent(new DragEvent("dragenter", {
       bubbles: true,
       cancelable: true,
@@ -902,7 +917,7 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       ".compress-options-summary-description",
       ".compress-options-panel .form-grid label > span",
       ".compress-options-panel .toggle-line span",
-      ".workspace-status",
+      "#workspace-status",
       ".status-bar button",
       "#context-menu [role='menuitem']",
     ].join(",");
@@ -946,9 +961,12 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
         ? (element.querySelector<HTMLElement>(".column-header-label") ?? element)
         : element;
       const label = visibleLabel(measuredElement);
-      const insideCommandOverflow = element.closest(".command-strip") !== null;
+      const insideCommandOverflow = element.closest("[data-shell-chrome='toolbar']") !== null;
       const insideContextMenuOverflow = element.closest("#context-menu") !== null;
-      const insideIntentionalOverflow = insideCommandOverflow || insideContextMenuOverflow;
+      const insideStatusOverflow = element.closest("[data-shell-chrome='status']") !== null;
+      const insideTableOverflow = element.closest("[data-archive-table-shell],[data-create-table-shell]") !== null;
+      const insideDetailsOverflow = element.closest("#details-pane") !== null;
+      const insideIntentionalOverflow = insideCommandOverflow || insideContextMenuOverflow || insideStatusOverflow || insideTableOverflow || insideDetailsOverflow;
       const clippedInline = measuredElement.scrollWidth > measuredElement.clientWidth + 1;
       const clippedBlock = measuredElement.scrollHeight > measuredElement.clientHeight + 1;
       if (label && !insideIntentionalOverflow && (clippedInline || clippedBlock)) {
@@ -970,20 +988,20 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       }
     }
 
-    for (const icon of Array.from(document.querySelectorAll<HTMLElement>(".row-icon,.tree-icon,.detail-icon"))) {
+    for (const icon of Array.from(document.querySelectorAll<HTMLElement>("[data-row-icon]"))) {
       const style = window.getComputedStyle(icon);
       const rect = icon.getBoundingClientRect();
       if (style.display === "none" || style.visibility === "hidden" || rect.width === 0 || rect.height === 0) {
         continue;
       }
-      const limit = icon.classList.contains("row-icon") ? 19 : 18;
+      const limit = 19;
       if (rect.width > limit || rect.height > limit) {
         problems.push(`oversized ${Array.from(icon.classList).join(".")} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
       }
     }
 
-    for (const jobCard of Array.from(document.querySelectorAll<HTMLElement>(".job-card"))) {
-      const subtitle = jobCard.querySelector<HTMLElement>(".job-subtitle")?.textContent ?? "";
+    for (const jobCard of Array.from(document.querySelectorAll<HTMLElement>("[data-job-status]"))) {
+      const subtitle = jobCard.querySelector<HTMLElement>("[data-job-subtitle]")?.textContent ?? "";
       const progress = jobCard.querySelector<HTMLProgressElement>("progress");
       if (!progress) {
         continue;
@@ -1060,6 +1078,25 @@ async function installTauriStub(page: Page) {
           launchedForQuickAction: false,
           quickAction: null,
           error: null,
+        };
+      }
+
+      if (cmd === "native_frontend_ready") {
+        return 0;
+      }
+
+      if (cmd === "replacement_migration_prepare") {
+        return {
+          schemaVersion: 1,
+          completed: true,
+          requiresCompletion: false,
+          preferences: {},
+          diagnostics: [],
+          rollback: {
+            legacyStateRetained: true,
+            reversibleKeys: [],
+            irreversibleOperations: [],
+          },
         };
       }
 

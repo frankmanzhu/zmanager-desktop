@@ -13,10 +13,13 @@ const buttonVariants = cva(
         secondary: "border-zinc-300 bg-white text-zinc-950 hover:bg-zinc-100",
         ghost: "text-zinc-900 hover:bg-zinc-100",
         destructive: "bg-red-600 text-white hover:bg-red-700",
-        mode: "h-full min-w-[92px] rounded-none border-transparent bg-transparent px-[14px] text-[var(--text)] shadow-none hover:bg-[var(--native-selection-bg-hover)]",
-        toolbar: "min-h-[30px] min-w-0 gap-[5px] rounded-[3px] border-transparent bg-transparent px-2 py-1 text-xs text-[var(--text)] shadow-none hover:bg-[var(--native-control-bg-hover)]",
-        dialog: "min-h-[30px] rounded-[3px] border border-[var(--border)] bg-[var(--native-control-bg)] px-[12px] py-[5px] text-[13px] text-[var(--text)] shadow-none hover:bg-[var(--native-control-bg-hover)]",
-        dialogPrimary: "min-h-[30px] rounded-[3px] border border-[var(--accent)] bg-[var(--accent)] px-[12px] py-[5px] text-[13px] text-white shadow-none hover:bg-[var(--accent-strong)]",
+        mode: "h-full min-w-[92px] rounded-none border-transparent bg-transparent px-3.5 text-slate-950 shadow-none hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800",
+        toolbar:
+          "min-h-[30px] min-w-0 gap-1.5 rounded border-transparent bg-transparent px-2 py-1 text-xs text-slate-950 shadow-none hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800",
+        dialog:
+          "min-h-[30px] rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] text-slate-950 shadow-none hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800",
+        dialogPrimary:
+          "min-h-[30px] rounded border border-blue-600 bg-blue-600 px-3 py-1.5 text-[13px] text-white shadow-none hover:bg-blue-700",
       },
       size: {
         default: "h-9 px-3",

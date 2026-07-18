@@ -30,7 +30,9 @@ describe("React preferences dialog", () => {
   });
 
   it("keeps every shared create flag with the selected archive-format defaults", () => {
-    const html = renderPreferences(preferencesSnapshot({ defaultArchiveFormat: "tzap" }));
+    const html = renderPreferences(
+      preferencesSnapshot({ defaultArchiveFormat: "tzap" }),
+    );
     const archivePage = html.slice(
       html.indexOf('data-pref-page="archive"'),
       html.indexOf('data-pref-page="extraction"'),
@@ -45,10 +47,12 @@ describe("React preferences dialog", () => {
   });
 
   it("disables save and validates when custom output is selected without a path", () => {
-    const html = renderPreferences(preferencesSnapshot({
-      defaultOutputLocation: "customFolder",
-      customOutputFolderPath: "",
-    }));
+    const html = renderPreferences(
+      preferencesSnapshot({
+        defaultOutputLocation: "customFolder",
+        customOutputFolderPath: "",
+      }),
+    );
 
     expect(html).toContain('id="preferences-save" type="button" disabled=""');
     expect(html).toContain('aria-invalid="true"');
@@ -56,13 +60,18 @@ describe("React preferences dialog", () => {
   });
 
   it("renders long custom output paths in middle-truncated display form", () => {
-    const longPath = "C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output";
-    const html = renderPreferences(preferencesSnapshot({
-      defaultOutputLocation: "customFolder",
-      customOutputFolderPath: longPath,
-    }));
+    const longPath =
+      "C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output";
+    const html = renderPreferences(
+      preferencesSnapshot({
+        defaultOutputLocation: "customFolder",
+        customOutputFolderPath: longPath,
+      }),
+    );
 
-    expect(html).toContain('title="C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output"');
+    expect(html).toContain(
+      'title="C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output"',
+    );
     expect(html).toContain("C:/Users/frankzhu/Doc...rchive Output");
   });
 });
@@ -78,7 +87,9 @@ function renderPreferences(snapshot: ZManagerReactSnapshot): string {
   );
 }
 
-function preferencesSnapshot(patch: Partial<ZManagerReactSnapshot["preferences"]> = {}): ZManagerReactSnapshot {
+function preferencesSnapshot(
+  patch: Partial<ZManagerReactSnapshot["preferences"]> = {},
+): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const draft = preferencesWithPatch(initial.preferences, patch);
   return createZManagerReactSnapshot({

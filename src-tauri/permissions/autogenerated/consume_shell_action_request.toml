@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-consume-shell-action-request"
+description = "Enables the consume_shell_action_request command without any pre-configured scope."
+commands.allow = ["consume_shell_action_request"]
+
+[[permission]]
+identifier = "deny-consume-shell-action-request"
+description = "Denies the consume_shell_action_request command without any pre-configured scope."
+commands.deny = ["consume_shell_action_request"]

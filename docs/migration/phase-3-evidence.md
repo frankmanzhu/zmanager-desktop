@@ -16,12 +16,13 @@
 
 ## Generated consumers
 
-`scripts/generate-native-contracts.mjs` produces 14 deterministic outputs for:
+`scripts/generate-native-contracts.mjs` currently produces 19 deterministic outputs for:
 
 - TypeScript archive policy, action/event types, policies, and localization keys;
 - Rust archive manifest input and the shell-contract action enum/policies;
 - Swift archive, action, and inbound-event contracts;
 - macOS plist/UTType and native localization inputs;
+- English and Simplified Chinese main-bundle Info.plist and Services resources;
 - macOS packaging declarations and Windows NSIS extension declarations; and
 - one cross-language conformance fixture.
 

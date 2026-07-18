@@ -80,14 +80,14 @@ test("synthetic folder rows can be selected from the table row", async ({ page }
   await expect(folderRow).toHaveAttribute("aria-selected", "false");
   await expect(folderRow.locator("input[type='checkbox']")).not.toBeChecked();
 
-  await folderRow.locator(".row-name").click();
+  await folderRow.locator("[data-row-primary]").click();
 
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
   await expect(folderRow.locator("input[type='checkbox']")).toBeChecked();
 });
 
 test("double-clicking a folder row opens the folder after selection", async ({ page }) => {
-  await entryRow(page, "folder").locator(".row-name").dblclick();
+  await entryRow(page, "folder").locator("[data-row-primary]").dblclick();
 
   await expect(entryRow(page, "folder/alpha.txt")).toBeVisible();
   await expect(entryRow(page, "folder/beta.txt")).toBeVisible();
@@ -96,7 +96,7 @@ test("double-clicking a folder row opens the folder after selection", async ({ p
 
 test("dragging a selected synthetic folder row starts native drag for the folder path", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
-  await folderRow.locator(".row-name").click();
+  await folderRow.locator("[data-row-primary]").click();
 
   await dragRowName(page, "folder");
 
@@ -114,8 +114,8 @@ test("additive-click adds rows to the selection without starting native drag-out
   const folderRow = entryRow(page, "folder");
   const rootRow = entryRow(page, "root.txt");
 
-  await rootRow.locator(".row-name").click();
-  await folderRow.locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
+  await rootRow.locator("[data-row-primary]").click();
+  await folderRow.locator("[data-row-primary]").click({ modifiers: ["ControlOrMeta"] });
 
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
@@ -123,8 +123,8 @@ test("additive-click adds rows to the selection without starting native drag-out
 });
 
 test("shift-click selects a visible range without starting native drag-out", async ({ page }) => {
-  await entryRow(page, "folder").locator(".row-name").click();
-  await entryRow(page, "root.txt").locator(".row-name").click({ modifiers: ["Shift"] });
+  await entryRow(page, "folder").locator("[data-row-primary]").click();
+  await entryRow(page, "root.txt").locator("[data-row-primary]").click({ modifiers: ["Shift"] });
 
   await expect(entryRow(page, "folder")).toHaveAttribute("aria-selected", "true");
   await expect(entryRow(page, "root.txt")).toHaveAttribute("aria-selected", "true");
@@ -133,7 +133,7 @@ test("shift-click selects a visible range without starting native drag-out", asy
 
 test("pressing an unselected file row waits for click or drag intent", async ({ page }) => {
   const rootRow = entryRow(page, "root.txt");
-  const box = await rootRow.locator(".row-name").boundingBox();
+  const box = await rootRow.locator("[data-row-primary]").boundingBox();
   if (!box) {
     throw new Error("Unable to locate root row name");
   }
@@ -160,7 +160,7 @@ test("pressing an unselected file row waits for click or drag intent", async ({ 
 
 test("dragging an unselected file row selects it when native drag-out starts", async ({ page }) => {
   const rootRow = entryRow(page, "root.txt");
-  const box = await rootRow.locator(".row-name").boundingBox();
+  const box = await rootRow.locator("[data-row-primary]").boundingBox();
   if (!box) {
     throw new Error("Unable to locate root row name");
   }
@@ -185,8 +185,8 @@ test("dragging an unselected file row selects it when native drag-out starts", a
 });
 
 test("dragging one selected row starts native drag-out for the selected set", async ({ page }) => {
-  await entryRow(page, "root.txt").locator(".row-name").click();
-  await entryRow(page, "folder").locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
+  await entryRow(page, "root.txt").locator("[data-row-primary]").click();
+  await entryRow(page, "folder").locator("[data-row-primary]").click({ modifiers: ["ControlOrMeta"] });
 
   await dragRowName(page, "root.txt");
 
@@ -201,7 +201,7 @@ test("dragging one selected row starts native drag-out for the selected set", as
 });
 
 test("dragging a search result keeps full archive path structure", async ({ page }) => {
-  await entryRow(page, "folder").locator(".row-name").dblclick();
+  await entryRow(page, "folder").locator("[data-row-primary]").dblclick();
   await expect(entryRow(page, "root.txt")).toBeHidden();
 
   await page.locator("#search-entries").fill("root");
@@ -235,19 +235,19 @@ test("dragging blank table space marquee-selects intersecting rows", async ({ pa
   await page.mouse.down();
   await page.mouse.move(folderBox.x + 2, folderBox.y + 2, { steps: 5 });
 
-  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(page.locator("[data-marquee-selection]")).toBeVisible();
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   expect(await nativeDragCalls(page)).toEqual([]);
 
   await page.mouse.up();
-  await expect(page.locator(".marquee-selection")).toBeHidden();
+  await expect(page.locator("[data-marquee-selection]")).toBeHidden();
 });
 
 test("dragging empty list-view space starts marquee selection", async ({ page }) => {
   const folderRow = entryRow(page, "folder");
   const rootRow = entryRow(page, "root.txt");
-  const tableShellBox = await page.locator(".table-shell").boundingBox();
+  const tableShellBox = await page.locator("[data-archive-table-shell]").boundingBox();
   const folderBox = await folderRow.boundingBox();
   const rootBox = await rootRow.boundingBox();
   if (!tableShellBox || !folderBox || !rootBox) {
@@ -260,13 +260,13 @@ test("dragging empty list-view space starts marquee selection", async ({ page })
   await page.mouse.down();
   await page.mouse.move(folderBox.x + 2, folderBox.y + 2, { steps: 8 });
 
-  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(page.locator("[data-marquee-selection]")).toBeVisible();
   await expect(folderRow).toHaveAttribute("aria-selected", "true");
   await expect(rootRow).toHaveAttribute("aria-selected", "true");
   expect(await nativeDragCalls(page)).toEqual([]);
 
   await page.mouse.up();
-  await expect(page.locator(".marquee-selection")).toBeHidden();
+  await expect(page.locator("[data-marquee-selection]")).toBeHidden();
 });
 
 test("archive list suppresses WebView text selection gestures", async ({ page }) => {
@@ -277,13 +277,16 @@ test("archive list suppresses WebView text selection gestures", async ({ page })
     throw new Error("Unable to locate root size cell");
   }
 
-  await expect(await dispatchSelectStartFromCell(sizeCell)).toBe(true);
+  await expect(page.locator("[data-archive-table-shell]")).toHaveCSS(
+    "user-select",
+    "none",
+  );
 
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x - 120, box.y - 32, { steps: 6 });
 
-  await expect(page.locator(".marquee-selection")).toBeVisible();
+  await expect(page.locator("[data-marquee-selection]")).toBeVisible();
   expect(await page.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
 
   await page.mouse.up();
@@ -310,7 +313,7 @@ test("dragging a file row starts native drag for the file and suppresses browser
 }) => {
   const rootRow = entryRow(page, "root.txt");
 
-  await expect(rootRow.locator(".row-icon")).toHaveAttribute("draggable", "false");
+  await expect(rootRow.locator("[data-row-icon]")).toHaveAttribute("draggable", "false");
   await expect(await dispatchDragStartFromIcon(rootRow)).toBe(true);
 
   await dragRowName(page, "root.txt");
@@ -333,7 +336,7 @@ test.describe("linux native drag arming", () => {
 
   test("pressing and holding a row does not prepare or start native drag-out", async ({ page }) => {
     const rootRow = entryRow(page, "root.txt");
-    const box = await rootRow.locator(".row-name").boundingBox();
+    const box = await rootRow.locator("[data-row-primary]").boundingBox();
     if (!box) {
       throw new Error("Unable to locate root row name");
     }
@@ -351,7 +354,7 @@ test.describe("linux native drag arming", () => {
 
   test("linux starts direct native drag only after real drag movement", async ({ page }) => {
     const rootRow = entryRow(page, "root.txt");
-    const box = await rootRow.locator(".row-name").boundingBox();
+    const box = await rootRow.locator("[data-row-primary]").boundingBox();
     if (!box) {
       throw new Error("Unable to locate root row name");
     }
@@ -385,14 +388,14 @@ test.describe("linux native drag arming", () => {
     const folderRow = entryRow(page, "folder");
     const rootRow = entryRow(page, "root.txt");
 
-    await rootRow.locator(".row-name").click();
-    await folderRow.locator(".row-name").click({ modifiers: ["ControlOrMeta"] });
+    await rootRow.locator("[data-row-primary]").click();
+    await folderRow.locator("[data-row-primary]").click({ modifiers: ["ControlOrMeta"] });
 
     await expect(rootRow).toHaveAttribute("aria-selected", "true");
     await expect(folderRow).toHaveAttribute("aria-selected", "true");
     expect(await preparedNativeDragCalls(page)).toEqual([]);
 
-    await rootRow.locator(".row-name").click({ modifiers: ["Shift"] });
+    await rootRow.locator("[data-row-primary]").click({ modifiers: ["Shift"] });
 
     await expect(rootRow).toHaveAttribute("aria-selected", "true");
     await expect(folderRow).toHaveAttribute("aria-selected", "true");
@@ -476,6 +479,25 @@ async function installTauriStub(page: Page, options?: { platform?: "windows" | "
           launchedForQuickAction: false,
           quickAction: null,
           error: null,
+        };
+      }
+
+      if (cmd === "native_frontend_ready") {
+        return 0;
+      }
+
+      if (cmd === "replacement_migration_prepare") {
+        return {
+          schemaVersion: 1,
+          completed: true,
+          requiresCompletion: false,
+          preferences: {},
+          diagnostics: [],
+          rollback: {
+            legacyStateRetained: true,
+            reversibleKeys: [],
+            irreversibleOperations: [],
+          },
         };
       }
 
@@ -618,7 +640,7 @@ async function waitForNativeDragCalls(page: Page): Promise<IpcCall[]> {
 }
 
 async function dragRowName(page: Page, entryPath: string) {
-  const rowName = entryRow(page, entryPath).locator(".row-name");
+  const rowName = entryRow(page, entryPath).locator("[data-row-primary]");
   const box = await rowName.boundingBox();
   if (!box) {
     throw new Error(`Unable to locate row name for ${entryPath}`);
@@ -633,23 +655,12 @@ async function dragRowName(page: Page, entryPath: string) {
 }
 
 async function dispatchDragStartFromIcon(row: ReturnType<typeof entryRow>): Promise<boolean> {
-  return row.locator(".row-icon").evaluate((icon) => {
+  return row.locator("[data-row-icon]").evaluate((icon) => {
     const event = new DragEvent("dragstart", {
       bubbles: true,
       cancelable: true,
     });
     icon.dispatchEvent(event);
-    return event.defaultPrevented;
-  });
-}
-
-async function dispatchSelectStartFromCell(cell: ReturnType<typeof entryRow>): Promise<boolean> {
-  return cell.evaluate((element) => {
-    const event = new Event("selectstart", {
-      bubbles: true,
-      cancelable: true,
-    });
-    element.dispatchEvent(event);
     return event.defaultPrevented;
   });
 }

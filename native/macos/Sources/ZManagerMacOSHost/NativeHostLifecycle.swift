@@ -45,7 +45,7 @@ struct NativeHostEventEncoder {
 
     static func shellActionToken(from url: URL) -> String? {
         guard url.scheme?.lowercased() == "zmanager",
-              url.host?.lowercased() == "shell-action"
+              url.host?.lowercased() == "shell-request"
         else { return nil }
         let token = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard (22 ... 128).contains(token.count),
@@ -60,7 +60,6 @@ final class NativeHostLifecycle: NSObject {
     typealias Delivery = (Data) -> Void
 
     private let deliver: Delivery
-    private var observers: [NSObjectProtocol] = []
     private var started = false
 
     init(deliver: @escaping Delivery) {
@@ -90,11 +89,6 @@ final class NativeHostLifecycle: NSObject {
             andEventID: AEEventID(kAEReopenApplication)
         )
         NSApplication.shared.servicesProvider = self
-        observers.append(NotificationCenter.default.addObserver(
-            forName: NSApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { _ in })
     }
 
     func stop() {
@@ -113,8 +107,6 @@ final class NativeHostLifecycle: NSObject {
             forEventClass: AEEventClass(kCoreEventClass),
             andEventID: AEEventID(kAEReopenApplication)
         )
-        observers.forEach(NotificationCenter.default.removeObserver)
-        observers.removeAll()
         if NSApplication.shared.servicesProvider as AnyObject? === self {
             NSApplication.shared.servicesProvider = nil
         }

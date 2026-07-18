@@ -2,53 +2,961 @@
   "schemaVersion": 1,
   "ledger": "macos-replacement-parity",
   "identityDecision": "docs/migration/macos-identity-decision.json",
-  "allowedStatuses": ["planned", "in-progress", "verified", "retired"],
+  "allowedStatuses": [
+    "planned",
+    "in-progress",
+    "verified",
+    "retired"
+  ],
   "entries": [
-    {"id":"source.finder-sync","kind":"source","referenceSources":["gui/Sources/ZManagerFinderExtension/ZManagerFinderSync.swift"],"referenceTests":["gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"],"observableBehavior":"Finder selection and container menus, selection validation, action order, and host launch","targetModule":"macOS Finder Sync Extension","targetInterface":"generated ShellActionRequest transport","disposition":"migrate-native","automatedProof":"Finder menu and generated-contract Swift tests","manualProof":"installed Finder selection matrix","owner":"macOS integration","status":"planned","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"Finder owns extension menu presentation","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"source.quicklook-preview","kind":"source","referenceSources":["gui/Sources/ZManagerQuickLookPreview/TzapPreviewProvider.swift"],"referenceTests":["gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"],"observableBehavior":"Bounded public TZAP preview and thumbnail rendering","targetModule":"macOS Quick Look Extensions","targetInterface":"Public Metadata FFI","disposition":"migrate-native","automatedProof":"metadata fixture and provider tests","manualProof":"installed Quick Look preview and thumbnail smoke","owner":"macOS integration","status":"planned","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"Quick Look owns extension presentation","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"source.extraction-destinations","kind":"source","referenceSources":["gui/Sources/ZManagerShared/ArchiveExtractionDestinations.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"],"observableBehavior":"Quick extraction destination and collision rules","targetModule":"Extract Workspace","targetInterface":"extract request policy","disposition":"reimplement-shared","automatedProof":"workspace destination-policy tests","manualProof":"extract destination smoke matrix","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.archive-file-types","kind":"source","referenceSources":["gui/Sources/ZManagerShared/ArchiveFileTypes.swift"],"referenceTests":["gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"],"observableBehavior":"Archive suffix, compound suffix, and split-volume recognition","targetModule":"Canonical Archive Type Manifest","targetInterface":"generated Rust, TypeScript, Swift, and package bindings","disposition":"reimplement-shared","automatedProof":"cross-language fixture conformance tests","manualProof":"Finder and open-file type smoke","owner":"shared contracts","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.finder-action-request","kind":"source","referenceSources":["gui/Sources/ZManagerShared/FinderActionRequest.swift"],"referenceTests":["gui/Tests/ZManagerSharedTests/FinderActionRequestTests.swift"],"observableBehavior":"Validated Finder action request encoding and round trip","targetModule":"Shell Action Contract","targetInterface":"versioned generated ShellActionRequest","disposition":"reimplement-shared","automatedProof":"shared conformance fixtures in Rust, TypeScript, and Swift","manualProof":"Finder and Services callback smoke","owner":"shared contracts","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.preferences","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/AppPreferences.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"],"observableBehavior":"Defaults, compatibility reads, output policies, and default-opener persistence","targetModule":"Preferences Controller and Replacement Migration","targetInterface":"typed storage and preference patch interfaces","disposition":"reimplement-shared","automatedProof":"preference compatibility and migration tests","manualProof":"upgrade preference continuity matrix","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.archive-browser","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/ArchiveBrowserView.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"],"observableBehavior":"Listing, selection, extraction, password retry, preview, and archive details","targetModule":"Archive Workspace React surface and controllers","targetInterface":"ArchiveWorkspace intents and snapshots","disposition":"reimplement-shared","automatedProof":"workspace, controller, and React behavior tests","manualProof":"archive browse and extraction E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.archive-job-view-model","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/ArchiveJobViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"],"observableBehavior":"Create planning, format options, passwords, clean source, and job progress","targetModule":"Create and Jobs Workspaces","targetInterface":"workspace/controller job seams","disposition":"reimplement-shared","automatedProof":"create, jobs, and controller tests","manualProof":"create lifecycle E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.content-view","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/ContentView.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"],"observableBehavior":"SwiftUI product navigation and presentation","targetModule":"React App Shell","targetInterface":"Shell Workspace snapshots and intents","disposition":"retire-by-decision","automatedProof":"React shell and navigation tests","manualProof":"full product UI smoke","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":"docs/MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md#final-definition-of-done"},
-    {"id":"source.create-configuration","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/CreateViewConfiguration.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"],"observableBehavior":"Format-specific create configuration and validation","targetModule":"Create Workspace","targetInterface":"create format capabilities and request readiness","disposition":"reimplement-shared","automatedProof":"create configuration tests","manualProof":"format-option E2E matrix","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.default-opener-types","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/DefaultOpenerArchiveTypes.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"],"observableBehavior":"Grouped default-opener archive choices","targetModule":"Canonical Archive Type Manifest","targetInterface":"generated display metadata","disposition":"reimplement-shared","automatedProof":"manifest generation and grouping tests","manualProof":"default-opener preference smoke","owner":"shared contracts","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.default-opener-manager","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/DefaultOpenerManager.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"],"observableBehavior":"Launch Services status, set, restore, and previous-handler persistence","targetModule":"macOS Native Host Launch Services operation","targetInterface":"typed desktop integration Adapter","disposition":"migrate-native","automatedProof":"Swift Launch Services and controller tests","manualProof":"set/restore installed association matrix","owner":"macOS integration","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.monotonic-progress","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/MonotonicProgress.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"],"observableBehavior":"Monotonic normalized job progress","targetModule":"Jobs Workspace","targetInterface":"job event normalization","disposition":"existing","automatedProof":"job feed monotonicity tests","manualProof":"create and extract progress smoke","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.preferences-view","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/PreferencesView.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"],"observableBehavior":"Preference controls and validation","targetModule":"React Preferences Dialog","targetInterface":"typed preference intents","disposition":"reimplement-shared","automatedProof":"React preference behavior tests","manualProof":"preference UI and persistence smoke","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.preview-cleanup","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/PreviewTempCleanup.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"],"observableBehavior":"Preview-root ownership and cleanup policy","targetModule":"Preview Cleanup Controller","targetInterface":"desktop preview-cleanup Adapter","disposition":"reimplement-shared","automatedProof":"cleanup safety, age, ownership, and failure tests","manualProof":"relaunch and shutdown cleanup smoke","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.quick-progress-window","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/QuickArchiveProgressWindow.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"],"observableBehavior":"Background quick-action progress window and real file icons","targetModule":"Disposable Task Windows and macOS icon operation","targetInterface":"Jobs snapshots plus SystemFileIcon DTO","disposition":"reimplement-shared","automatedProof":"task-window lifecycle and icon tests","manualProof":"background-action window smoke","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.account-view","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountView.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Account, certificates, contacts, verification, sharing, and hosted auth presentation","targetModule":"React Account Workspace","targetInterface":"AccountWorkspace intents and snapshots","disposition":"reimplement-shared","automatedProof":"React account-flow tests","manualProof":"account workflow E2E with disposable identity","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"source.account-view-model","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Account authentication, hosted callbacks, identity inventory, contacts, verification, and encrypted sharing orchestration","targetModule":"Account Workspace and Controllers","targetInterface":"injected account/core APIs","disposition":"reimplement-shared","automatedProof":"workspace and controller state-machine tests","manualProof":"disposable account acceptance matrix","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.obligation-bridge","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/TzapObligationBridge.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapObligationBridgeTests.swift"],"observableBehavior":"Obligation DTO mapping and normalized errors","targetModule":"Rust Tauri command layer","targetInterface":"generated account and obligation DTOs","disposition":"reimplement-shared","automatedProof":"Rust command and TypeScript contract tests","manualProof":"account obligation smoke","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"source.application-lifecycle","kind":"source","referenceSources":["gui/Sources/ZManagerTracer/ZManagerTracerApp.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"],"observableBehavior":"Open documents, URLs, Services, activation, reopen, windows, and background lifecycle","targetModule":"macOS Native Host Runtime and Native Launch Inbox","targetInterface":"versioned inbound native-event envelope","disposition":"migrate-native","automatedProof":"Swift host and Rust inbox lifecycle tests","manualProof":"cold/warm/reopen/Services installed matrix","owner":"macOS integration","status":"verified","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"AppKit owns application lifecycle, Services, and system menu surfaces","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"source.spotlight-importer","kind":"source","referenceSources":["gui/Spotlight/ZManagerSpotlightImporter.m"],"referenceTests":["gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"],"observableBehavior":"Public TZAP metadata indexing","targetModule":"macOS Spotlight Importer","targetInterface":"Public Metadata FFI","disposition":"migrate-native","automatedProof":"metadata fixture and importer contract tests","manualProof":"mdimport and mdls installed smoke","owner":"macOS integration","status":"planned","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"Spotlight owns metadata presentation","decision":"docs/migration/macos-identity-decision.json#product"},
-
-    {"id":"test.finder-menu","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"],"observableBehavior":"Finder menu visibility, labels, order, and multiplicity","targetModule":"macOS Finder Sync Extension tests","targetInterface":"Finder menu builder","disposition":"migrate-native","automatedProof":"ported Swift tests pass","manualProof":"Finder selection matrix","owner":"macOS integration","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.quicklook-provider","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"],"observableBehavior":"Public preview and thumbnail metadata","targetModule":"Quick Look and Public Metadata FFI tests","targetInterface":"metadata DTO","disposition":"migrate-native","automatedProof":"ported fixtures pass","manualProof":"Quick Look smoke","owner":"macOS integration","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.finder-request","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerSharedTests/FinderActionRequestTests.swift"],"observableBehavior":"Finder callback validation and encoding","targetModule":"generated contract conformance tests","targetInterface":"ShellActionRequest","disposition":"reimplement-shared","automatedProof":"Rust/TypeScript/Swift fixtures pass","manualProof":"callback smoke","owner":"shared contracts","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.app-delegate","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"],"observableBehavior":"Lifecycle, Services, callbacks, concurrent actions, and windows","targetModule":"Native Host and Inbox tests","targetInterface":"native event envelope","disposition":"migrate-native","automatedProof":"host and inbox tests pass","manualProof":"installed lifecycle matrix","owner":"macOS integration","status":"verified","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.preferences","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"],"observableBehavior":"Preference compatibility and preview cleanup","targetModule":"Preferences and Migration tests","targetInterface":"typed storage","disposition":"reimplement-shared","automatedProof":"compatibility fixtures pass","manualProof":"upgrade continuity smoke","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.archive-browser","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"],"observableBehavior":"Listing, extraction, retry, preview, selection, and destination behavior","targetModule":"Archive Workspace tests","targetInterface":"workspace intents and snapshots","disposition":"reimplement-shared","automatedProof":"workspace/controller tests pass","manualProof":"archive E2E","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.archive-job","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"],"observableBehavior":"Create planning, formats, passwords, progress, and clean source","targetModule":"Create and Jobs Workspace tests","targetInterface":"workspace/controller seams","disposition":"reimplement-shared","automatedProof":"create/job tests pass","manualProof":"create E2E","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.default-opener","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"],"observableBehavior":"Launch Services status, set, restore, and persistence","targetModule":"macOS Launch Services tests","targetInterface":"typed desktop integration Adapter","disposition":"migrate-native","automatedProof":"Swift and controller tests pass","manualProof":"association set/restore smoke","owner":"macOS integration","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.support","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/TestSupport.swift"],"observableBehavior":"Isolated preference suites and native test adapters","targetModule":"shared test support and injected adapters","targetInterface":"test-only effect interfaces","disposition":"reimplement-shared","automatedProof":"replacement suites run without Tauri or AppKit where not required","manualProof":"none; test infrastructure only","owner":"test infrastructure","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.account-view-model","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Account, certificate, contact, verification, sharing, and hosted callback behavior","targetModule":"Account Workspace and Controller tests","targetInterface":"injected account/core APIs","disposition":"reimplement-shared","automatedProof":"account state-machine tests pass","manualProof":"disposable account matrix","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"test.obligation-bridge","kind":"characterization-test","referenceSources":[],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapObligationBridgeTests.swift"],"observableBehavior":"Obligation DTO and normalized error behavior","targetModule":"Rust command and contract tests","targetInterface":"generated account DTOs","disposition":"reimplement-shared","automatedProof":"Rust/TypeScript contract tests pass","manualProof":"account obligation smoke","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-
-    {"id":"flow.account-authentication","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Start, complete, cancel, retry, and sign out of account authentication","targetModule":"Account Workspace","targetInterface":"AccountController","disposition":"reimplement-shared","automatedProof":"authentication state-machine tests","manualProof":"disposable account auth E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.hosted-callback","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/ZManagerTracerApp.swift","gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift","gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Route validated non-secret hosted-auth callbacks across cold and warm launch","targetModule":"Native Launch Inbox and Account Controller","targetInterface":"HostedAuthCallback event","disposition":"reimplement-shared","automatedProof":"inbox and account callback tests","manualProof":"cold/warm callback E2E","owner":"shared product","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.certificates-recipient-keys","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"List, import, export, select, and validate certificates and recipient keys without exposing secrets","targetModule":"Account Workspace and Controllers","targetInterface":"typed certificate and recipient-key APIs","disposition":"reimplement-shared","automatedProof":"controller and redaction tests","manualProof":"disposable identity file-panel E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.contacts","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"List, add, update, remove, and select trusted contacts","targetModule":"Account Workspace","targetInterface":"ContactsController","disposition":"reimplement-shared","automatedProof":"contact state-machine tests","manualProof":"disposable contact E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.document-verification","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Verify a document and present signer/trust results","targetModule":"Account Workspace","targetInterface":"VerificationController","disposition":"reimplement-shared","automatedProof":"verification result and error tests","manualProof":"signed fixture E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.encrypted-sharing","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"],"observableBehavior":"Choose recipients and create encrypted shared archives","targetModule":"Account and Create Workspaces","targetInterface":"SharingController","disposition":"reimplement-shared","automatedProof":"recipient, request, cancellation, and error tests","manualProof":"disposable two-identity sharing E2E","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.preferences-cleanup","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/AppPreferences.swift","gui/Sources/ZManagerTracer/PreviewTempCleanup.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"],"observableBehavior":"Persist compatible defaults and safely clean owned preview roots","targetModule":"Preferences and Preview Cleanup Controllers","targetInterface":"typed storage and cleanup Adapter","disposition":"reimplement-shared","automatedProof":"migration, persistence, redaction, and cleanup tests","manualProof":"upgrade/relaunch cleanup matrix","owner":"shared product","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.default-openers","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/DefaultOpenerManager.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"],"observableBehavior":"Inspect, set, and restore archive default handlers","targetModule":"Launch Services Controller","targetInterface":"typed desktop integration Adapter","disposition":"migrate-native","automatedProof":"Swift and controller tests","manualProof":"installed set/restore matrix","owner":"macOS integration","status":"planned","presentationOwner":"react-shell","uiTechnology":"react-shadcn-tailwind4","nativePresentationJustification":null,"decision":null},
-    {"id":"flow.lifecycle-services","kind":"user-flow","referenceSources":["gui/Sources/ZManagerTracer/ZManagerTracerApp.swift"],"referenceTests":["gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"],"observableBehavior":"Cold/warm open, reopen, Services, activation, and background action lifecycle","targetModule":"macOS Native Host and Native Launch Inbox","targetInterface":"native event envelope","disposition":"migrate-native","automatedProof":"Swift host and Rust inbox tests","manualProof":"installed lifecycle matrix","owner":"macOS integration","status":"verified","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"macOS owns lifecycle and Services surfaces","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"flow.finder","kind":"user-flow","referenceSources":["gui/Sources/ZManagerFinderExtension/ZManagerFinderSync.swift"],"referenceTests":["gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"],"observableBehavior":"Invoke archive actions from Finder selections and containers","targetModule":"macOS Finder Sync Extension","targetInterface":"atomic Shell Action Request transport","disposition":"migrate-native","automatedProof":"selection and transport tests","manualProof":"installed Finder matrix","owner":"macOS integration","status":"planned","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"Finder owns extension menus","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"flow.quicklook-spotlight","kind":"user-flow","referenceSources":["gui/Sources/ZManagerQuickLookPreview/TzapPreviewProvider.swift","gui/Spotlight/ZManagerSpotlightImporter.m"],"referenceTests":["gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"],"observableBehavior":"Preview, thumbnail, and index bounded public TZAP metadata","targetModule":"Quick Look Extensions and Spotlight Importer","targetInterface":"Public Metadata FFI","disposition":"migrate-native","automatedProof":"shared metadata fixtures across all three consumers","manualProof":"qlmanage, Finder thumbnail, mdimport, and mdls smoke","owner":"macOS integration","status":"planned","presentationOwner":"os-mandated-native","uiTechnology":"approved-native-surface","nativePresentationJustification":"Quick Look and Spotlight own presentation","decision":"docs/migration/macos-identity-decision.json#product"},
-    {"id":"flow.packaging-release","kind":"user-flow","referenceSources":["scripts/package-macos-app.sh","scripts/release-smoke.sh"],"referenceTests":[],"observableBehavior":"Build, embed, sign inside-out, notarize, staple, install, register, checksum, and publish one replacement product","targetModule":"Release Bundle pipeline","targetInterface":"release manifest and gate","disposition":"reimplement-shared","automatedProof":"bundle-layout, identity, version, linkage, architecture, signing, and Gatekeeper gate","manualProof":"clean-machine install/upgrade/rollback matrix","owner":"release engineering","status":"planned","presentationOwner":"none","uiTechnology":"none","nativePresentationJustification":null,"decision":null}
+    {
+      "id": "source.finder-sync",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerFinderExtension/ZManagerFinderSync.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"
+      ],
+      "observableBehavior": "Finder selection and container menus, selection validation, action order, and host launch",
+      "targetModule": "macOS Finder Sync Extension",
+      "targetInterface": "generated ShellActionRequest transport",
+      "disposition": "migrate-native",
+      "automatedProof": "Finder menu and generated-contract Swift tests",
+      "manualProof": "installed Finder selection matrix",
+      "owner": "macOS integration",
+      "status": "in-progress",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "Finder owns extension menu presentation",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "source.quicklook-preview",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerQuickLookPreview/TzapPreviewProvider.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"
+      ],
+      "observableBehavior": "Bounded public TZAP preview and thumbnail rendering",
+      "targetModule": "macOS Quick Look Extensions",
+      "targetInterface": "Public Metadata FFI",
+      "disposition": "migrate-native",
+      "automatedProof": "metadata fixture and provider tests",
+      "manualProof": "installed Quick Look preview and thumbnail smoke",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "Quick Look owns extension presentation",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "source.extraction-destinations",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerShared/ArchiveExtractionDestinations.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"
+      ],
+      "observableBehavior": "Quick extraction destination and collision rules",
+      "targetModule": "Extract Workspace",
+      "targetInterface": "extract request policy",
+      "disposition": "reimplement-shared",
+      "automatedProof": "workspace destination-policy tests",
+      "manualProof": "extract destination smoke matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.archive-file-types",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerShared/ArchiveFileTypes.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"
+      ],
+      "observableBehavior": "Archive suffix, compound suffix, and split-volume recognition",
+      "targetModule": "Canonical Archive Type Manifest",
+      "targetInterface": "generated Rust, TypeScript, Swift, and package bindings",
+      "disposition": "reimplement-shared",
+      "automatedProof": "cross-language fixture conformance tests",
+      "manualProof": "Finder and open-file type smoke",
+      "owner": "shared contracts",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.finder-action-request",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerShared/FinderActionRequest.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerSharedTests/FinderActionRequestTests.swift"
+      ],
+      "observableBehavior": "Validated Finder action request encoding and round trip",
+      "targetModule": "Shell Action Contract",
+      "targetInterface": "versioned generated ShellActionRequest",
+      "disposition": "reimplement-shared",
+      "automatedProof": "shared conformance fixtures in Rust, TypeScript, and Swift",
+      "manualProof": "Finder and Services callback smoke",
+      "owner": "shared contracts",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.preferences",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/AppPreferences.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"
+      ],
+      "observableBehavior": "Defaults, compatibility reads, output policies, and default-opener persistence",
+      "targetModule": "Preferences Controller and Replacement Migration",
+      "targetInterface": "typed storage and preference patch interfaces",
+      "disposition": "reimplement-shared",
+      "automatedProof": "preference compatibility and migration tests",
+      "manualProof": "upgrade preference continuity matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.archive-browser",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ArchiveBrowserView.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"
+      ],
+      "observableBehavior": "Listing, selection, extraction, password retry, preview, and archive details",
+      "targetModule": "Archive Workspace React surface and controllers",
+      "targetInterface": "ArchiveWorkspace intents and snapshots",
+      "disposition": "reimplement-shared",
+      "automatedProof": "workspace, controller, and React behavior tests",
+      "manualProof": "archive browse and extraction E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.archive-job-view-model",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ArchiveJobViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"
+      ],
+      "observableBehavior": "Create planning, format options, passwords, clean source, and job progress",
+      "targetModule": "Create and Jobs Workspaces",
+      "targetInterface": "workspace/controller job seams",
+      "disposition": "reimplement-shared",
+      "automatedProof": "create, jobs, and controller tests",
+      "manualProof": "create lifecycle E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.content-view",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ContentView.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"
+      ],
+      "observableBehavior": "SwiftUI product navigation and presentation",
+      "targetModule": "React App Shell",
+      "targetInterface": "Shell Workspace snapshots and intents",
+      "disposition": "retire-by-decision",
+      "automatedProof": "React shell and navigation tests",
+      "manualProof": "full product UI smoke",
+      "owner": "shared product",
+      "status": "retired",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/MACOS_FULL_TARGET_MIGRATION_EXECUTION_PLAN.md#final-definition-of-done"
+    },
+    {
+      "id": "source.create-configuration",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/CreateViewConfiguration.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"
+      ],
+      "observableBehavior": "Format-specific create configuration and validation",
+      "targetModule": "Create Workspace",
+      "targetInterface": "create format capabilities and request readiness",
+      "disposition": "reimplement-shared",
+      "automatedProof": "create configuration tests",
+      "manualProof": "format-option E2E matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.default-opener-types",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/DefaultOpenerArchiveTypes.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"
+      ],
+      "observableBehavior": "Grouped default-opener archive choices",
+      "targetModule": "Canonical Archive Type Manifest",
+      "targetInterface": "generated display metadata",
+      "disposition": "reimplement-shared",
+      "automatedProof": "manifest generation and grouping tests",
+      "manualProof": "default-opener preference smoke",
+      "owner": "shared contracts",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.default-opener-manager",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/DefaultOpenerManager.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"
+      ],
+      "observableBehavior": "Launch Services status, set, restore, and previous-handler persistence",
+      "targetModule": "macOS Native Host Launch Services operation",
+      "targetInterface": "typed desktop integration Adapter",
+      "disposition": "migrate-native",
+      "automatedProof": "Swift Launch Services and controller tests",
+      "manualProof": "set/restore installed association matrix",
+      "owner": "macOS integration",
+      "status": "in-progress",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.monotonic-progress",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/MonotonicProgress.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"
+      ],
+      "observableBehavior": "Monotonic normalized job progress",
+      "targetModule": "Jobs Workspace",
+      "targetInterface": "job event normalization",
+      "disposition": "existing",
+      "automatedProof": "job feed monotonicity tests",
+      "manualProof": "create and extract progress smoke",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.preferences-view",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/PreferencesView.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"
+      ],
+      "observableBehavior": "Preference controls and validation",
+      "targetModule": "React Preferences Dialog",
+      "targetInterface": "typed preference intents",
+      "disposition": "reimplement-shared",
+      "automatedProof": "React preference behavior tests",
+      "manualProof": "preference UI and persistence smoke",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.preview-cleanup",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/PreviewTempCleanup.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"
+      ],
+      "observableBehavior": "Preview-root ownership and cleanup policy",
+      "targetModule": "Preview Cleanup Controller",
+      "targetInterface": "desktop preview-cleanup Adapter",
+      "disposition": "reimplement-shared",
+      "automatedProof": "cleanup safety, age, ownership, and failure tests",
+      "manualProof": "relaunch and shutdown cleanup smoke",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.quick-progress-window",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/QuickArchiveProgressWindow.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"
+      ],
+      "observableBehavior": "Background quick-action progress window and real file icons",
+      "targetModule": "Disposable Task Windows and macOS icon operation",
+      "targetInterface": "Jobs snapshots plus SystemFileIcon DTO",
+      "disposition": "reimplement-shared",
+      "automatedProof": "task-window lifecycle and icon tests",
+      "manualProof": "background-action window smoke",
+      "owner": "shared product",
+      "status": "in-progress",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "source.account-view",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountView.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Retained local identity inventory and secret-free hosted callback presentation; network-backed account and contact exchange is retired",
+      "targetModule": "React Account Workspace",
+      "targetInterface": "AccountWorkspace intents and snapshots",
+      "disposition": "reimplement-shared",
+      "automatedProof": "React account-flow tests",
+      "manualProof": "account workflow E2E with disposable identity",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "source.account-view-model",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Retained local identity inventory, recipient keys, and secret-free hosted callbacks with the unreachable relay/session path retired",
+      "targetModule": "Account Workspace and Controllers",
+      "targetInterface": "injected account/core APIs",
+      "disposition": "reimplement-shared",
+      "automatedProof": "workspace and controller state-machine tests",
+      "manualProof": "disposable account acceptance matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "source.obligation-bridge",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapObligationBridge.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapObligationBridgeTests.swift"
+      ],
+      "observableBehavior": "Obligation DTO mapping and normalized errors",
+      "targetModule": "ADR 0011 retirement boundary",
+      "targetInterface": "no secret-bearing obligation transport",
+      "disposition": "retire-by-decision",
+      "automatedProof": "security tests reject relay/session material in callback URLs",
+      "manualProof": "not applicable; unreachable reference path retired",
+      "owner": "shared product",
+      "status": "retired",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "source.application-lifecycle",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ZManagerTracerApp.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"
+      ],
+      "observableBehavior": "Open documents, URLs, Services, activation, reopen, windows, and background lifecycle",
+      "targetModule": "macOS Native Host Runtime and Native Launch Inbox",
+      "targetInterface": "versioned inbound native-event envelope",
+      "disposition": "migrate-native",
+      "automatedProof": "Swift host and Rust inbox lifecycle tests",
+      "manualProof": "cold/warm/reopen/Services installed matrix",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "AppKit owns application lifecycle, Services, and system menu surfaces",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "source.spotlight-importer",
+      "kind": "source",
+      "referenceSources": [
+        "gui/Spotlight/ZManagerSpotlightImporter.m"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"
+      ],
+      "observableBehavior": "Public TZAP metadata indexing",
+      "targetModule": "macOS Spotlight Importer",
+      "targetInterface": "Public Metadata FFI",
+      "disposition": "migrate-native",
+      "automatedProof": "metadata fixture and importer contract tests",
+      "manualProof": "mdimport and mdls installed smoke",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "Spotlight owns metadata presentation",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "test.finder-menu",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"
+      ],
+      "observableBehavior": "Finder menu visibility, labels, order, and multiplicity",
+      "targetModule": "macOS Finder Sync Extension tests",
+      "targetInterface": "Finder menu builder",
+      "disposition": "migrate-native",
+      "automatedProof": "ported Swift tests pass",
+      "manualProof": "Finder selection matrix",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.quicklook-provider",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"
+      ],
+      "observableBehavior": "Public preview and thumbnail metadata",
+      "targetModule": "Quick Look and Public Metadata FFI tests",
+      "targetInterface": "metadata DTO",
+      "disposition": "migrate-native",
+      "automatedProof": "ported fixtures pass",
+      "manualProof": "Quick Look smoke",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.finder-request",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerSharedTests/FinderActionRequestTests.swift"
+      ],
+      "observableBehavior": "Finder callback validation and encoding",
+      "targetModule": "generated contract conformance tests",
+      "targetInterface": "ShellActionRequest",
+      "disposition": "reimplement-shared",
+      "automatedProof": "Rust/TypeScript/Swift fixtures pass",
+      "manualProof": "callback smoke",
+      "owner": "shared contracts",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.app-delegate",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"
+      ],
+      "observableBehavior": "Lifecycle, Services, callbacks, concurrent actions, and windows",
+      "targetModule": "Native Host and Inbox tests",
+      "targetInterface": "native event envelope",
+      "disposition": "migrate-native",
+      "automatedProof": "host and inbox tests pass",
+      "manualProof": "installed lifecycle matrix",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.preferences",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"
+      ],
+      "observableBehavior": "Preference compatibility and preview cleanup",
+      "targetModule": "Preferences and Migration tests",
+      "targetInterface": "typed storage",
+      "disposition": "reimplement-shared",
+      "automatedProof": "compatibility fixtures pass",
+      "manualProof": "upgrade continuity smoke",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.archive-browser",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveBrowserViewModelTests.swift"
+      ],
+      "observableBehavior": "Listing, extraction, retry, preview, selection, and destination behavior",
+      "targetModule": "Archive Workspace tests",
+      "targetInterface": "workspace intents and snapshots",
+      "disposition": "reimplement-shared",
+      "automatedProof": "workspace/controller tests pass",
+      "manualProof": "archive E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.archive-job",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/ArchiveJobViewModelTests.swift"
+      ],
+      "observableBehavior": "Create planning, formats, passwords, progress, and clean source",
+      "targetModule": "Create and Jobs Workspace tests",
+      "targetInterface": "workspace/controller seams",
+      "disposition": "reimplement-shared",
+      "automatedProof": "create/job tests pass",
+      "manualProof": "create E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.default-opener",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"
+      ],
+      "observableBehavior": "Launch Services status, set, restore, and persistence",
+      "targetModule": "macOS Launch Services tests",
+      "targetInterface": "typed desktop integration Adapter",
+      "disposition": "migrate-native",
+      "automatedProof": "Swift and controller tests pass",
+      "manualProof": "association set/restore smoke",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.support",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TestSupport.swift"
+      ],
+      "observableBehavior": "Isolated preference suites and native test adapters",
+      "targetModule": "shared test support and injected adapters",
+      "targetInterface": "test-only effect interfaces",
+      "disposition": "reimplement-shared",
+      "automatedProof": "replacement suites run without Tauri or AppKit where not required",
+      "manualProof": "none; test infrastructure only",
+      "owner": "test infrastructure",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.account-view-model",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Account, certificate, contact, verification, sharing, and hosted callback behavior",
+      "targetModule": "Account Workspace and Controller tests",
+      "targetInterface": "injected account/core APIs",
+      "disposition": "reimplement-shared",
+      "automatedProof": "account state-machine tests pass",
+      "manualProof": "disposable account matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "test.obligation-bridge",
+      "kind": "characterization-test",
+      "referenceSources": [],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapObligationBridgeTests.swift"
+      ],
+      "observableBehavior": "Obligation DTO and normalized error behavior",
+      "targetModule": "ADR 0011 retirement boundary",
+      "targetInterface": "secret-bearing relay rejection",
+      "disposition": "retire-by-decision",
+      "automatedProof": "callback redaction and rejection tests pass",
+      "manualProof": "not applicable; unreachable reference path retired",
+      "owner": "shared product",
+      "status": "retired",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "flow.account-authentication",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Retire unreachable network session completion while retaining secret-free hosted launch and callback state",
+      "targetModule": "ADR 0011 retirement boundary",
+      "targetInterface": "non-secret callback state only",
+      "disposition": "retire-by-decision",
+      "automatedProof": "callback URL secret rejection and state/expiry tests",
+      "manualProof": "not applicable; network session path retired",
+      "owner": "shared product",
+      "status": "retired",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "flow.hosted-callback",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ZManagerTracerApp.swift",
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift",
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Route validated non-secret hosted-auth callbacks across cold and warm launch",
+      "targetModule": "Native Launch Inbox and Account Controller",
+      "targetInterface": "HostedAuthCallback event",
+      "disposition": "reimplement-shared",
+      "automatedProof": "inbox and account callback tests",
+      "manualProof": "cold/warm callback E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "flow.certificates-recipient-keys",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "List local public certificate metadata and generate/remove recipient keys without exposing private material",
+      "targetModule": "Account Workspace and Controllers",
+      "targetInterface": "typed certificate and recipient-key APIs",
+      "disposition": "reimplement-shared",
+      "automatedProof": "controller and redaction tests",
+      "manualProof": "disposable identity file-panel E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "flow.contacts",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Retire network-backed contact-card exchange and mutation; preserve redacted existing inventory/removal",
+      "targetModule": "ADR 0011 retirement boundary",
+      "targetInterface": "redacted local inventory only",
+      "disposition": "retire-by-decision",
+      "automatedProof": "account snapshot redaction and removal tests",
+      "manualProof": "not applicable; contact exchange path retired",
+      "owner": "shared product",
+      "status": "retired",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "flow.document-verification",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Verify a document and present signer/trust results",
+      "targetModule": "Account Workspace",
+      "targetInterface": "VerificationController",
+      "disposition": "reimplement-shared",
+      "automatedProof": "verification result and error tests",
+      "manualProof": "signed fixture E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "flow.encrypted-sharing",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/TzapAccountViewModel.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/TzapAccountViewModelTests.swift"
+      ],
+      "observableBehavior": "Choose local recipient certificates and create encrypted archives; account-backed sharing is retired",
+      "targetModule": "Account and Create Workspaces",
+      "targetInterface": "SharingController",
+      "disposition": "reimplement-shared",
+      "automatedProof": "recipient, request, cancellation, and error tests",
+      "manualProof": "disposable two-identity sharing E2E",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": "docs/adr/0011-retire-unsafe-hosted-auth-relay.md"
+    },
+    {
+      "id": "flow.preferences-cleanup",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/AppPreferences.swift",
+        "gui/Sources/ZManagerTracer/PreviewTempCleanup.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppPreferencesTests.swift"
+      ],
+      "observableBehavior": "Persist compatible defaults and safely clean owned preview roots",
+      "targetModule": "Preferences and Preview Cleanup Controllers",
+      "targetInterface": "typed storage and cleanup Adapter",
+      "disposition": "reimplement-shared",
+      "automatedProof": "migration, persistence, redaction, and cleanup tests",
+      "manualProof": "upgrade/relaunch cleanup matrix",
+      "owner": "shared product",
+      "status": "verified",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "flow.default-openers",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/DefaultOpenerManager.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/DefaultOpenerManagerTests.swift"
+      ],
+      "observableBehavior": "Inspect, set, and restore archive default handlers",
+      "targetModule": "Launch Services Controller",
+      "targetInterface": "typed desktop integration Adapter",
+      "disposition": "migrate-native",
+      "automatedProof": "Swift and controller tests",
+      "manualProof": "installed set/restore matrix",
+      "owner": "macOS integration",
+      "status": "in-progress",
+      "presentationOwner": "react-shell",
+      "uiTechnology": "react-shadcn-tailwind4",
+      "nativePresentationJustification": null,
+      "decision": null
+    },
+    {
+      "id": "flow.lifecycle-services",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerTracer/ZManagerTracerApp.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerTracerTests/AppDelegateTests.swift"
+      ],
+      "observableBehavior": "Cold/warm open, reopen, Services, activation, and background action lifecycle",
+      "targetModule": "macOS Native Host and Native Launch Inbox",
+      "targetInterface": "native event envelope",
+      "disposition": "migrate-native",
+      "automatedProof": "Swift host and Rust inbox tests",
+      "manualProof": "installed lifecycle matrix",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "macOS owns lifecycle and Services surfaces",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "flow.finder",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerFinderExtension/ZManagerFinderSync.swift"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerFinderExtensionTests/FinderMenuBuilderTests.swift"
+      ],
+      "observableBehavior": "Invoke archive actions from Finder selections and containers",
+      "targetModule": "macOS Finder Sync Extension",
+      "targetInterface": "atomic Shell Action Request transport",
+      "disposition": "migrate-native",
+      "automatedProof": "selection and transport tests",
+      "manualProof": "installed Finder matrix",
+      "owner": "macOS integration",
+      "status": "in-progress",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "Finder owns extension menus",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "flow.quicklook-spotlight",
+      "kind": "user-flow",
+      "referenceSources": [
+        "gui/Sources/ZManagerQuickLookPreview/TzapPreviewProvider.swift",
+        "gui/Spotlight/ZManagerSpotlightImporter.m"
+      ],
+      "referenceTests": [
+        "gui/Tests/ZManagerQuickLookPreviewTests/TzapPreviewProviderTests.swift"
+      ],
+      "observableBehavior": "Preview, thumbnail, and index bounded public TZAP metadata",
+      "targetModule": "Quick Look Extensions and Spotlight Importer",
+      "targetInterface": "Public Metadata FFI",
+      "disposition": "migrate-native",
+      "automatedProof": "shared metadata fixtures across all three consumers",
+      "manualProof": "qlmanage, Finder thumbnail, mdimport, and mdls smoke",
+      "owner": "macOS integration",
+      "status": "verified",
+      "presentationOwner": "os-mandated-native",
+      "uiTechnology": "approved-native-surface",
+      "nativePresentationJustification": "Quick Look and Spotlight own presentation",
+      "decision": "docs/migration/macos-identity-decision.json#product"
+    },
+    {
+      "id": "flow.packaging-release",
+      "kind": "user-flow",
+      "referenceSources": [
+        "scripts/package-macos-app.sh",
+        "scripts/release-smoke.sh"
+      ],
+      "referenceTests": [],
+      "observableBehavior": "Build, embed, sign inside-out, notarize, staple, install, register, checksum, and publish one replacement product",
+      "targetModule": "Release Bundle pipeline",
+      "targetInterface": "release manifest and gate",
+      "disposition": "reimplement-shared",
+      "automatedProof": "bundle-layout, identity, version, linkage, architecture, signing, and Gatekeeper gate",
+      "manualProof": "clean-machine install/upgrade/rollback matrix",
+      "owner": "release engineering",
+      "status": "in-progress",
+      "presentationOwner": "none",
+      "uiTechnology": "none",
+      "nativePresentationJustification": null,
+      "decision": null
+    }
   ]
 }

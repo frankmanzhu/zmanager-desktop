@@ -2,7 +2,12 @@
   "schemaVersion": 1,
   "ledger": "macos-native-capability-parity",
   "identityDecision": "docs/migration/macos-identity-decision.json",
-  "allowedStatuses": ["planned", "in-progress", "verified", "not-applicable"],
+  "allowedStatuses": [
+    "planned",
+    "in-progress",
+    "verified",
+    "not-applicable"
+  ],
   "entries": [
     {
       "id": "native.platform-registration",
@@ -12,7 +17,7 @@
       "interfaceProof": "native/macos host lifecycle tests and Rust bridge contract tests",
       "packageProof": "Release Bundle contains and links ZManagerMacOSHost",
       "installedProof": "cold/warm launch, Services, reopen, and callback smoke matrix",
-      "status": "planned",
+      "status": "verified",
       "notApplicableDecision": null
     },
     {
@@ -23,7 +28,7 @@
       "interfaceProof": "Rust DTO tests distinguish source, package, and installed capability state",
       "packageProof": "release gate derives packaged features from the inspected bundle",
       "installedProof": "runtime status queries Finder, Quick Look, Spotlight, Services, associations, menus, and drag",
-      "status": "planned",
+      "status": "verified",
       "notApplicableDecision": null
     },
     {
@@ -34,7 +39,7 @@
       "interfaceProof": "Swift NSWorkspace icon tests and Rust DTO contract tests",
       "packageProof": "host operation is linked and exported in the app bundle",
       "installedProof": "React rows render folder, file, known-suffix, and unknown-suffix icons",
-      "status": "planned",
+      "status": "verified",
       "notApplicableDecision": null
     },
     {
@@ -45,7 +50,7 @@
       "interfaceProof": "macOS Unicode, path length, invalid-name, collision, and target-volume tests",
       "packageProof": "desktop Rust test suite runs for each macOS architecture",
       "installedProof": "case-sensitive and case-insensitive volume fixture matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -56,7 +61,7 @@
       "interfaceProof": "registry lifecycle and NSFilePromiseProvider contract tests",
       "packageProof": "release gate rejects eager-staging ownership and missing host symbols",
       "installedProof": "Finder drag smoke covers success, cancel, collision, multi-item, and password flows",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -67,7 +72,7 @@
       "interfaceProof": "window command and lifecycle tests",
       "packageProof": "packaged launch confirms standard AppKit window ownership",
       "installedProof": "activation, reopen, close, minimize, fullscreen, tabbing, and disposable-task-window matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -78,7 +83,7 @@
       "interfaceProof": "generated Shell Action Request fixtures and Finder selection tests",
       "packageProof": "signed Finder extension is nested in the Release Bundle",
       "installedProof": "Finder single, multiple, archive, folder, and mixed-selection smoke matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -89,7 +94,7 @@
       "interfaceProof": "Finder and Services emit the same generated Shell Action Request",
       "packageProof": "Services and Finder declarations match generated identity metadata",
       "installedProof": "Finder container and Services compression/extraction smoke matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -100,7 +105,7 @@
       "interfaceProof": "generated Info.plist tests and cold/warm OpenPaths routing tests",
       "packageProof": "release gate checks document roles, UTTypes, URL scheme, and canonical identifier",
       "installedProof": "Launch Services owner and Finder open matrix leaves one canonical product",
-      "status": "planned",
+      "status": "verified",
       "notApplicableDecision": null
     },
     {
@@ -111,7 +116,7 @@
       "interfaceProof": "controller tests cover file, folder, destination, certificate, and identity requests",
       "packageProof": "dialog plugin and any bounded host operations are present",
       "installedProof": "manual native panel matrix on macOS",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -122,7 +127,7 @@
       "interfaceProof": "desktop Adapter tests cover invalid, missing, open, and reveal paths",
       "packageProof": "selected implementation is packaged once",
       "installedProof": "Finder reveal and default-application open smoke matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -133,7 +138,7 @@
       "interfaceProof": "frontend tests cover file URLs, multi-selection, mode decisions, and cancellation",
       "packageProof": "Tauri window drop handling remains enabled",
       "installedProof": "host E2E covers files, folders, archives, mixed drops, invalid paths, and cancel",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -144,7 +149,7 @@
       "interfaceProof": "menu events map to typed command-router intents",
       "packageProof": "packaged app exposes standard Application, File, Edit, Window, and Help menus",
       "installedProof": "keyboard and menu smoke matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -155,7 +160,7 @@
       "interfaceProof": "bundle-layout manifest and release-gate tests",
       "packageProof": "app, host, Finder, Quick Look, thumbnail, Spotlight, metadata FFI, resources, and manifests are present",
       "installedProof": "clean-machine package and registration inspection",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     },
     {
@@ -166,7 +171,7 @@
       "interfaceProof": "version, architecture, identifier, entitlement, linkage, and artifact contract tests",
       "packageProof": "inside-out Developer ID signing, notarization, stapling, checksum, and Gatekeeper verification",
       "installedProof": "signed arm64 and x86_64 clean-machine install/upgrade/rollback matrix",
-      "status": "planned",
+      "status": "in-progress",
       "notApplicableDecision": null
     }
   ]

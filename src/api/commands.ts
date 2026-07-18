@@ -8,6 +8,7 @@ import type {
   CancelJobResponseDto,
   CommandErrorDto,
   CreatePlanResponse,
+  DefaultHandlerSnapshotDto,
   DismissJobRequest,
   GenerateTzapIdentityRequest,
   GenerateTzapIdentityResponse,
@@ -23,8 +24,10 @@ import type {
   PreviewEntryRequest,
   PreviewEntryResponse,
   ProjectContract,
+  QuickActionRequestDto,
   QuickActionStartupStateDto,
   ResumeJobRequest,
+  ReplacementMigrationPrepareResponseDto,
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
@@ -89,6 +92,31 @@ export async function fetchSystemFileIcons(
   });
 }
 
+export async function fetchDefaultHandlerStatus(): Promise<DefaultHandlerSnapshotDto> {
+  return invoke<DefaultHandlerSnapshotDto>("default_handler_status");
+}
+
+export async function setDefaultHandlers(): Promise<DefaultHandlerSnapshotDto> {
+  return invoke<DefaultHandlerSnapshotDto>("default_handler_set");
+}
+
+export async function restoreDefaultHandlers(): Promise<DefaultHandlerSnapshotDto> {
+  return invoke<DefaultHandlerSnapshotDto>("default_handler_restore");
+}
+
+export async function prepareReplacementMigration(): Promise<ReplacementMigrationPrepareResponseDto> {
+  return invoke<ReplacementMigrationPrepareResponseDto>("replacement_migration_prepare");
+}
+
+export async function completeReplacementMigration(
+  schemaVersion: number,
+  appliedPreferenceKeys: string[],
+): Promise<void> {
+  return invoke<void>("replacement_migration_complete", {
+    request: { schemaVersion, appliedPreferenceKeys },
+  });
+}
+
 export async function validateDirectory(
   request: ValidateDirectoryRequest,
 ): Promise<ValidateDirectoryResponse> {
@@ -99,6 +127,12 @@ export async function validateDirectory(
 
 export async function fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto> {
   return invoke<QuickActionStartupStateDto>("quick_action_startup_state");
+}
+
+export async function consumeShellActionRequest(
+  requestToken: string,
+): Promise<QuickActionRequestDto> {
+  return invoke<QuickActionRequestDto>("consume_shell_action_request", { requestToken });
 }
 
 export async function nativeFrontendReady(windowLabel: string): Promise<number> {

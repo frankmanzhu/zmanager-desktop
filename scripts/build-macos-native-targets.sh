@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 APPLICATION_BUNDLE [arm64|x86_64]" >&2
+  exit 2
+fi
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export MACOSX_DEPLOYMENT_TARGET=14.0
+app=$1
+architecture=${2:-$(uname -m)}
+case "$architecture" in
+  arm64)
+    rust_triple="aarch64-apple-darwin"
+    swift_package_triple="arm64-apple-macosx14.0"
+    swift_compile_target="arm64-apple-macos14.0"
+    ;;
+  x86_64)
+    rust_triple="x86_64-apple-darwin"
+    swift_package_triple="x86_64-apple-macosx14.0"
+    swift_compile_target="x86_64-apple-macos14.0"
+    ;;
+  *)
+    echo "unsupported macOS architecture: $architecture" >&2
+    exit 2
+    ;;
+esac
+package="$repo_root/native/macos"
+finder_template="$repo_root/packaging/macos/FinderExtension"
+plugins="$app/Contents/PlugIns"
+appex="$plugins/ZManagerFinderExtension.appex"
+preview_appex="$plugins/ZManagerQuickLookPreview.appex"
+thumbnail_appex="$plugins/ZManagerQuickLookThumbnail.appex"
+spotlight="$app/Contents/Library/Spotlight/ZManagerSpotlight.mdimporter"
+metadata_manifest="$repo_root/crates/zmanager-public-metadata-ffi/Cargo.toml"
+metadata_target="$repo_root/target/macos-public-metadata/$architecture"
+metadata_library="$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.a"
+
+swift build --package-path "$package" -c release --triple "$swift_package_triple"
+CARGO_TARGET_DIR="$metadata_target" cargo build --release --target "$rust_triple" \
+  --manifest-path "$metadata_manifest"
+bin_dir=$(swift build --package-path "$package" -c release --triple "$swift_package_triple" --show-bin-path)
+version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")
+
+sync_bundle_identity() {
+  local bundle=$1
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$bundle/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build" "$bundle/Contents/Info.plist"
+}
+
+metadata_link_args=(
+  "$metadata_library"
+  -lc++ -lpthread -framework CoreFoundation -framework Security
+  -lz -lbz2
+  -liconv -lxml2 -lAppleArchive
+)
+
+rm -rf "$appex"
+mkdir -p "$appex/Contents/MacOS" "$appex/Contents/Resources"
+ditto "$finder_template/Info.plist" "$appex/Contents/Info.plist"
+for localization in "$finder_template"/*.lproj; do
+  ditto "$localization" "$appex/Contents/Resources/$(basename "$localization")"
+done
+
+sync_bundle_identity "$appex"
+
+xcrun swiftc -o "$appex/Contents/MacOS/ZManagerFinderExtension" \
+  -target "$swift_compile_target" \
+  "$bin_dir"/ZManagerGenerated.build/*.swift.o \
+  "$bin_dir"/ZManagerMacOSShared.build/*.swift.o \
+  "$bin_dir"/ZManagerFinderExtensionSupport.build/*.swift.o \
+  "$bin_dir"/ZManagerFinderExtension.build/*.swift.o \
+  -framework AppKit -framework FinderSync -framework Security \
+  -Xlinker -e -Xlinker _NSExtensionMain
+chmod 0755 "$appex/Contents/MacOS/ZManagerFinderExtension"
+
+rm -rf "$preview_appex"
+mkdir -p "$preview_appex/Contents/MacOS" "$preview_appex/Contents/Resources"
+ditto "$repo_root/packaging/macos/QuickLookPreview/Info.plist" "$preview_appex/Contents/Info.plist"
+sync_bundle_identity "$preview_appex"
+xcrun swiftc -o "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
+  -target "$swift_compile_target" \
+  "$bin_dir"/ZManagerPublicMetadataSupport.build/*.swift.o \
+  "$bin_dir"/ZManagerQuickLookPreview.build/*.swift.o \
+  -framework AppKit -framework QuickLookUI -framework UniformTypeIdentifiers \
+  "${metadata_link_args[@]}" \
+  -Xlinker -e -Xlinker _NSExtensionMain
+chmod 0755 "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview"
+
+rm -rf "$thumbnail_appex"
+mkdir -p "$thumbnail_appex/Contents/MacOS" "$thumbnail_appex/Contents/Resources"
+ditto "$repo_root/packaging/macos/QuickLookThumbnail/Info.plist" "$thumbnail_appex/Contents/Info.plist"
+sync_bundle_identity "$thumbnail_appex"
+xcrun swiftc -o "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail" \
+  -target "$swift_compile_target" \
+  "$bin_dir"/ZManagerPublicMetadataSupport.build/*.swift.o \
+  "$bin_dir"/ZManagerQuickLookThumbnail.build/*.swift.o \
+  -framework AppKit -framework QuickLookThumbnailing \
+  "${metadata_link_args[@]}" \
+  -Xlinker -e -Xlinker _NSExtensionMain
+chmod 0755 "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail"
+
+rm -rf "$spotlight"
+mkdir -p "$spotlight/Contents/MacOS" "$spotlight/Contents/Resources/en.lproj" \
+  "$spotlight/Contents/Resources/zh-Hans.lproj"
+ditto "$repo_root/packaging/macos/Spotlight/Info.plist" "$spotlight/Contents/Info.plist"
+ditto "$repo_root/packaging/macos/Spotlight/schema.xml" "$spotlight/Contents/Resources/schema.xml"
+ditto "$repo_root/packaging/macos/Spotlight/en.lproj/schema.strings" \
+  "$spotlight/Contents/Resources/en.lproj/schema.strings"
+ditto "$repo_root/packaging/macos/Spotlight/zh-Hans.lproj/schema.strings" \
+  "$spotlight/Contents/Resources/zh-Hans.lproj/schema.strings"
+sync_bundle_identity "$spotlight"
+xcrun clang -arch "$architecture" -fobjc-arc -mmacosx-version-min=14.0 -bundle \
+  -F "$(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks/CoreServices.framework/Frameworks" \
+  -I "$repo_root/crates/zmanager-public-metadata-ffi/include" \
+  "$repo_root/native/macos/Spotlight/ZManagerSpotlightImporter.m" \
+  -framework Foundation -framework CoreServices \
+  "${metadata_link_args[@]}" \
+  -o "$spotlight/Contents/MacOS/ZManagerSpotlight"
+chmod 0755 "$spotlight/Contents/MacOS/ZManagerSpotlight"
+
+[[ $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$appex/Contents/Info.plist") == \
+  com.frankmanzhu.zmanager.finder-extension ]]
+file "$appex/Contents/MacOS/ZManagerFinderExtension" | grep -q 'Mach-O 64-bit executable'
+"$repo_root/scripts/check-macos-core-revision-and-symbols.sh" \
+  "$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.dylib"
+for executable in \
+  "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
+  "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail" \
+  "$spotlight/Contents/MacOS/ZManagerSpotlight"; do
+  file "$executable" | grep -q 'Mach-O 64-bit'
+  while IFS= read -r symbol; do
+    grep -Fxq "$symbol" "$repo_root/crates/zmanager-public-metadata-ffi/exported-symbols.txt" || {
+      echo "Unexpected ZManager ABI symbol in metadata target: $symbol" >&2
+      exit 1
+    }
+  done < <(nm -m "$executable" | awk '{print $NF}' | grep '^_zmanager_' | sort -u || true)
+  if otool -L "$executable" | grep -Eq '^\s+/(opt/homebrew|usr/local)/'; then
+    echo "Native metadata target contains a build-machine library path: $executable" >&2
+    exit 1
+  fi
+  for required_symbol in \
+    _zmanager_public_metadata_ffi_version \
+    _zmanager_public_metadata_string_free \
+    _zmanager_public_metadata_summary_json; do
+    nm -m "$executable" | awk '{print $NF}' | grep -Fxq "$required_symbol" || {
+      echo "Native metadata target is missing required ABI symbol $required_symbol: $executable" >&2
+      exit 1
+    }
+  done
+done
+otool -ov "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" | \
+  awk '/providePreviewForFileRequest:completionHandler:/ { found = 1 } END { exit !found }' || {
+    echo "Quick Look preview provider method was stripped from the packaged executable" >&2
+    exit 1
+  }
+echo "Embedded Finder, Quick Look, thumbnail, and Spotlight targets in: $app"

@@ -3,10 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::json;
+use zmanager_core::tzap_backend::TzapX509TrustOptions;
 
 const ABI_VERSION: u32 = 1;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_ARCHIVE_BYTES: u64 = 1 << 40;
+const MAX_SIGNATURE_INSPECTION_BYTES: u64 = 256 << 20;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn zmanager_public_metadata_ffi_version() -> u32 {
@@ -55,7 +57,10 @@ fn bounded_summary(archive_path: *const c_char) -> serde_json::Value {
         return error("invalid_path", "Archive path is not valid UTF-8.");
     };
     let path = PathBuf::from(path);
-    match fs::metadata(&path) {
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return error("invalid_path", "Archive path must not be a symbolic link.");
+        }
         Ok(metadata) if !metadata.is_file() => {
             return error("invalid_path", "Archive path is not a regular file.");
         }
@@ -65,34 +70,116 @@ fn bounded_summary(archive_path: *const c_char) -> serde_json::Value {
                 "Archive exceeds the metadata inspection limit.",
             );
         }
-        Err(source) => return error("metadata_failed", &source.to_string()),
+        Err(_) => return error("metadata_failed", "Archive metadata could not be read."),
         _ => {}
     }
 
     match zmanager_core::tzap_backend::summarize_tzap_public_metadata(&path) {
-        Ok(summary) => json!({
-            "ok": true,
-            "metadata": {
+        Ok(summary) => {
+            let format = &summary.format;
+            let signature = if summary.total_size > MAX_SIGNATURE_INSPECTION_BYTES {
+                json!({
+                    "status": "unavailable",
+                    "message": "Signature inspection was skipped because the volume set exceeds the preview limit."
+                })
+            } else {
+                signature_json(&path)
+            };
+            json!({
+                "ok": true,
+                "metadata": {
                 "expected_volume_count": summary.expected_volume_count,
                 "present_volume_count": summary.present_volume_count,
                 "missing_volume_indices": summary.missing_volume_indices,
                 "total_size": summary.total_size,
                 "expected_volume_size": summary.expected_volume_size,
-                "format": {
-                    "format_version": summary.format.format_version,
-                    "volume_format_revision": summary.format.volume_format_revision,
-                    "compression_algorithm": summary.format.compression_algorithm,
-                    "encryption_algorithm": summary.format.encryption_algorithm,
-                    "recovery_algorithm": summary.format.recovery_algorithm,
-                    "key_derivation": summary.format.key_derivation,
-                    "password_required": summary.format.password_required,
-                    "bit_rot_buffer_percentage": summary.format.bit_rot_buffer_percentage,
-                    "volume_loss_tolerance": summary.format.volume_loss_tolerance
-                }
+                    "format": {
+                        "format_version": format.format_version,
+                        "volume_format_revision": format.volume_format_revision,
+                        "archive_uuid": hex_lower(&format.archive_uuid),
+                        "session_id": hex_lower(&format.session_id),
+                        "compression_algorithm": format.compression_algorithm,
+                        "encryption_algorithm": format.encryption_algorithm,
+                        "recovery_algorithm": format.recovery_algorithm,
+                        "key_derivation": format.key_derivation,
+                        "password_required": format.password_required,
+                        "bit_rot_buffer_percentage": format.bit_rot_buffer_percentage,
+                        "volume_loss_tolerance": format.volume_loss_tolerance,
+                        "data_shard_count": format.data_shard_count,
+                        "parity_shard_count": format.parity_shard_count,
+                        "index_data_shard_count": format.index_data_shard_count,
+                        "index_parity_shard_count": format.index_parity_shard_count,
+                        "index_root_data_shard_count": format.index_root_data_shard_count,
+                        "index_root_parity_shard_count": format.index_root_parity_shard_count,
+                        "block_size": format.block_size,
+                        "chunk_size": format.chunk_size,
+                        "envelope_target_size": format.envelope_target_size,
+                        "has_dictionary": format.has_dictionary
+                    }
+                },
+                "signature": signature
+            })
+        }
+        Err(_) => error(
+            "invalid_metadata",
+            "This does not look like a valid TZAP archive.",
+        ),
+    }
+}
+
+fn signature_json(path: &std::path::Path) -> serde_json::Value {
+    match zmanager_core::tzap_backend::verify_tzap_x509_public_no_key(
+        path,
+        &TzapX509TrustOptions {
+            trusted_ca_certificates: Vec::new(),
+            trusted_system_roots: true,
+            include_official_tzap_root: true,
+        },
+    ) {
+        Ok(report) => json!({
+            "status": "verified",
+            "verification_mode": "public-no-key",
+            "root_auth": {
+                "signature_verified": true,
+                "trust_validated": true,
+                "subject": report.subject,
+                "issuer": report.issuer,
+                "serial_number": report.serial_number_hex,
+                "certificate_sha256": hex_lower(&report.certificate_sha256),
+                "signed_at_unix_seconds": report.signed_at_unix_seconds,
+                "verified_chain_subjects": report.verified_chain_subjects,
+                "trust_anchor_subject": report.trust_anchor_subject,
+                "total_data_block_count": report.total_data_block_count
             }
         }),
-        Err(source) => error("invalid_metadata", &source.to_string()),
+        Err(_) => match zmanager_core::tzap_backend::inspect_tzap_x509_public_no_key_signer(path) {
+            Ok(report) => json!({
+                "status": "unverified",
+                "verification_mode": "public-no-key-inspection",
+                "message": "The embedded signer certificate is valid, but system trust was not established.",
+                "root_auth": {
+                    "signature_verified": true,
+                    "trust_validated": false,
+                    "subject": report.subject,
+                    "issuer": report.issuer,
+                    "serial_number": report.serial_number_hex,
+                    "certificate_sha256": hex_lower(&report.certificate_sha256),
+                    "signed_at_unix_seconds": report.signed_at_unix_seconds,
+                    "verified_chain_subjects": [],
+                    "trust_anchor_subject": null,
+                    "total_data_block_count": report.total_data_block_count
+                }
+            }),
+            Err(_) => json!({
+                "status": "unavailable",
+                "message": "No public signer certificate is available."
+            }),
+        },
     }
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn error(code: &str, message: &str) -> serde_json::Value {

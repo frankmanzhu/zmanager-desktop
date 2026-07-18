@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Z-Manager",
+  "identifier": "com.frankmanzhu.zmanager",
+  "bundle": {
+    "macOS": {
+      "minimumSystemVersion": "14.0"
+    }
+  }
+}

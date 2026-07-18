@@ -1,9 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
 [[permission]]
 identifier = "allow-generate-tzap-identity"
-description = "Enables the generate_tzap_identity command."
+description = "Enables the generate_tzap_identity command without any pre-configured scope."
 commands.allow = ["generate_tzap_identity"]
 
 [[permission]]
 identifier = "deny-generate-tzap-identity"
-description = "Denies the generate_tzap_identity command."
+description = "Denies the generate_tzap_identity command without any pre-configured scope."
 commands.deny = ["generate_tzap_identity"]

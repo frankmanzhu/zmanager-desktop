@@ -59,6 +59,12 @@ export function createZManagerAppStore(
   };
 }
 
-export function useZManagerStoreSnapshot(store: ZManagerAppStore): ZManagerReactSnapshot {
-  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+export function useZManagerStoreSnapshot(
+  store: ZManagerAppStore,
+): ZManagerReactSnapshot {
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot,
+  );
 }

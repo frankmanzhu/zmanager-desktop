@@ -14,7 +14,10 @@ export function nativeIconDataUrlForPath(
   return snapshot.systemIcons[systemIconKeyForPath(path, isDirectory)] ?? null;
 }
 
-export function systemIconKeyForPath(path: string, isDirectory: boolean): string {
+export function systemIconKeyForPath(
+  path: string,
+  isDirectory: boolean,
+): string {
   if (isDirectory) {
     return "directory";
   }

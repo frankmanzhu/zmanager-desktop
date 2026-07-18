@@ -1,57 +1,54 @@
-import { useEffect } from "react";
+import type { DragEventHandler, HTMLAttributes } from "react";
 
 import type { DroppedPath } from "../../../app/dropIntent";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 
-export function BrowserFileDropAdapter() {
+export function useBrowserFileDropHandlers(): Pick<
+  HTMLAttributes<HTMLDivElement>,
+  "onDragEnter" | "onDragOver" | "onDragLeave" | "onDrop"
+> {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  if (snapshot.runtime.isDesktop) {
+    return {};
+  }
 
-  useEffect(() => {
-    if (snapshot.runtime.isDesktop) {
-      return;
-    }
-
-    const dropRoot = document.querySelector<HTMLElement>("#app") ?? document.documentElement;
-    const onDragEnter = (event: DragEvent) => {
-      event.preventDefault();
-      actions.handleDesktopIntent({ type: "dropEntered", paths: droppedPathsFromDataTransfer(event.dataTransfer) });
-    };
-    const onDragOver = (event: DragEvent) => {
-      event.preventDefault();
-      actions.handleDesktopIntent({ type: "dropEntered", paths: droppedPathsFromDataTransfer(event.dataTransfer) });
-    };
-    const onDragLeave = (event: DragEvent) => {
-      if (event.relatedTarget instanceof Node && dropRoot.contains(event.relatedTarget)) {
+  const enter: DragEventHandler<HTMLDivElement> = (event) => {
+    event.preventDefault();
+    actions.handleDesktopIntent({
+      type: "dropEntered",
+      paths: droppedPathsFromDataTransfer(event.dataTransfer),
+    });
+  };
+  return {
+    onDragEnter: enter,
+    onDragOver: enter,
+    onDragLeave: (event) => {
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
         return;
       }
       actions.handleDesktopIntent({ type: "dropLeft" });
-    };
-    const onDrop = (event: DragEvent) => {
+    },
+    onDrop: (event) => {
       event.preventDefault();
-      actions.handleDesktopIntent({ type: "droppedPaths", paths: droppedPathsFromDataTransfer(event.dataTransfer) });
-    };
-
-    dropRoot.addEventListener("dragenter", onDragEnter);
-    dropRoot.addEventListener("dragover", onDragOver);
-    dropRoot.addEventListener("dragleave", onDragLeave);
-    dropRoot.addEventListener("drop", onDrop);
-    return () => {
-      dropRoot.removeEventListener("dragenter", onDragEnter);
-      dropRoot.removeEventListener("dragover", onDragOver);
-      dropRoot.removeEventListener("dragleave", onDragLeave);
-      dropRoot.removeEventListener("drop", onDrop);
-    };
-  }, [actions, snapshot.runtime.isDesktop]);
-
-  return null;
+      actions.handleDesktopIntent({
+        type: "droppedPaths",
+        paths: droppedPathsFromDataTransfer(event.dataTransfer),
+      });
+    },
+  };
 }
 
-export function droppedPathsFromDataTransfer(dataTransfer: DataTransfer | null): DroppedPath[] {
+export function droppedPathsFromDataTransfer(
+  dataTransfer: DataTransfer | null,
+): DroppedPath[] {
   const paths: DroppedPath[] = [];
   for (const file of Array.from(dataTransfer?.files ?? [])) {
     const fileWithPath = file as File & { path?: string };
-    const path = fileWithPath.path?.trim() || file.webkitRelativePath?.trim() || file.name.trim();
+    const path =
+      fileWithPath.path?.trim() ||
+      file.webkitRelativePath?.trim() ||
+      file.name.trim();
     if (path) {
       paths.push({ path, kind: "unknown" });
     }

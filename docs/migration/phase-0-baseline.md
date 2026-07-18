@@ -27,7 +27,7 @@ macOS target. The installed-system and replacement evidence is recorded in
 - Captured installed-upgrade snapshot:
   `{10bdef14-c713-4deb-8f31-60305536f3a1}`
 - Swift test deployment target: `arm64e-apple-macos14.0`
-- Available signing identity: Apple Development for Team ID `N864W8975T`
+- Available signing identity: Apple Development for Team ID `9PMA523YY4`
 - Developer ID Application identity: not present in the local keychain
 
 ## Baseline commands and results

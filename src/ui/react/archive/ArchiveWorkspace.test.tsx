@@ -19,8 +19,7 @@ describe("React archive workspace", () => {
     const snapshot = archiveSnapshot();
     const html = renderArchiveWorkspace(snapshot);
 
-    expect(html).toContain('class="path-bar"');
-    expect(html).toContain('class="path-location"');
+    expect(html).toContain('data-shell-chrome="path"');
     expect(html).toContain("Extract to");
     expect(html).toContain('id="extract-destination"');
     expect(html).toContain("C:/output/demo");
@@ -55,16 +54,18 @@ describe("React archive workspace", () => {
 
   it("disables no-archive open actions while another job blocks archive commands", () => {
     const initial = createInitialZManagerReactSnapshot();
-    const html = renderArchiveWorkspace(createZManagerReactSnapshot({
-      ...initial,
-      commands: {
-        ...initial.commands,
-        states: {
-          ...initial.commands.states,
-          open: { enabled: false, reason: JOB_RUNNING_MESSAGE },
+    const html = renderArchiveWorkspace(
+      createZManagerReactSnapshot({
+        ...initial,
+        commands: {
+          ...initial.commands,
+          states: {
+            ...initial.commands.states,
+            open: { enabled: false, reason: JOB_RUNNING_MESSAGE },
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(html).toMatch(/data-empty-action="open-archive"[^>]*disabled=""/);
     expect(html).toMatch(/data-details-action="open-archive"[^>]*disabled=""/);

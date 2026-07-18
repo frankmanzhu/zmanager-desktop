@@ -32,8 +32,8 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         id: "open",
         display_key: "shellAction.open",
         order: 10,
-        selection_shapes: &["single-archive", "multiple-archives"],
-        multiplicity: "one-or-more",
+        selection_shapes: &["single-archive"],
+        multiplicity: "exactly-one",
     },
     ShellActionPolicy {
         kind: ShellActionKind::Compress,
@@ -104,7 +104,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         id: "extractToFolder",
         display_key: "shellAction.extractToFolder",
         order: 100,
-        selection_shapes: &["single-archive", "multiple-archives"],
-        multiplicity: "one-or-more",
+        selection_shapes: &["single-archive"],
+        multiplicity: "exactly-one",
     },
 ];

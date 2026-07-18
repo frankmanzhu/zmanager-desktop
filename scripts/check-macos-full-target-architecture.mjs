@@ -26,6 +26,12 @@ export function sourceViolations(path, text, allowance = null) {
   return errors;
 }
 
+export function cssFileViolation(path, allowlist) {
+  if (allowlist.tailwindEntrypoints.includes(path)) return null;
+  if (allowlist.legacyCss?.path === path) return null;
+  return `${path}: new raw CSS file is forbidden`;
+}
+
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -41,10 +47,15 @@ export function validateWorkspace(workspaceRoot = root) {
   for (const path of production) {
     const rel = relative(workspaceRoot, path);
     if ([".ts", ".tsx"].includes(extname(path))) errors.push(...sourceViolations(rel, readFileSync(path, "utf8"), allowances.get(rel)));
-    if (extname(path) === ".css" && rel !== allowlist.legacyCss.path && !allowlist.tailwindEntrypoints.includes(rel)) errors.push(`${rel}: new raw CSS file is forbidden`);
+    if (extname(path) === ".css") {
+      const violation = cssFileViolation(rel, allowlist);
+      if (violation) errors.push(violation);
+    }
   }
-  const legacyCss = readFileSync(join(workspaceRoot, allowlist.legacyCss.path), "utf8");
-  if (hash(legacyCss) !== allowlist.legacyCss.sha256 && legacyCss.split(/\r?\n/).length >= allowlist.legacyCss.maxLines) errors.push(`${allowlist.legacyCss.path}: modified legacy CSS did not shrink`);
+  if (allowlist.legacyCss) {
+    const legacyCss = readFileSync(join(workspaceRoot, allowlist.legacyCss.path), "utf8");
+    if (hash(legacyCss) !== allowlist.legacyCss.sha256 && legacyCss.split(/\r?\n/).length >= allowlist.legacyCss.maxLines) errors.push(`${allowlist.legacyCss.path}: modified legacy CSS did not shrink`);
+  }
 
   const nativeRoots = [join(workspaceRoot, "src-tauri"), join(workspaceRoot, "native")].filter(existsSync);
   for (const file of nativeRoots.flatMap(walk).filter((path) => [".swift", ".m", ".mm"].includes(extname(path)))) {

@@ -10,6 +10,16 @@ const linuxWindowControlPermissions = [
   "core:window:allow-toggle-maximize",
   "core:window:allow-internal-toggle-maximize",
 ];
+const persistedWindowGeometryPermissions = [
+  "core:window:allow-available-monitors",
+  "core:window:allow-scale-factor",
+  "core:window:allow-inner-position",
+  "core:window:allow-inner-size",
+  "core:window:allow-set-position",
+  "core:window:allow-set-size",
+  "core:window:allow-center",
+  "core:window:allow-show",
+];
 
 declare const process: {
   cwd(): string;
@@ -48,6 +58,22 @@ describe("Tauri command capabilities", () => {
 
   it("allows Linux app-owned titlebar window controls", () => {
     expect(mainWindowPermissionIds()).toEqual(expect.arrayContaining(linuxWindowControlPermissions));
+  });
+
+  it("allows every operation needed to restore and reveal persisted window geometry", () => {
+    expect(mainWindowPermissionIds()).toEqual(
+      expect.arrayContaining(persistedWindowGeometryPermissions),
+    );
+  });
+
+  it("allows every registered product command from the main application window", () => {
+    const mainSource = readWorkspaceFile("src-tauri", "src", "main.rs");
+    const handlerBlock = mainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
+    const commands = [...handlerBlock.matchAll(/(?:commands|account|default_handlers)::([a-zA-Z0-9_]+)/g)]
+      .map((match) => match[1]);
+    const expectedPermissions = commands.map((command) => `allow-${command.replaceAll("_", "-")}`);
+
+    expect(mainWindowPermissionIds()).toEqual(expect.arrayContaining(expectedPermissions));
   });
 
   it("defines the native file drag command permission", () => {

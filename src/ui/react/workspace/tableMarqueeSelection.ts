@@ -1,4 +1,7 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   applyHierarchicalMarqueeSelection,
@@ -26,74 +29,102 @@ export type TableMarqueeSelectionInput = Readonly<{
   applySelection(selection: HierarchicalTableSelectionResult): void;
 }>;
 
-export function armTableMarqueeSelectionGesture(input: TableMarqueeSelectionInput): void {
-  const { event, tableBody, setMarqueeRect } = input;
-  if (!input.canStart(event) || !tableBody) {
-    return;
-  }
+export type TableMarqueeSelectionGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  started: boolean;
+  additive: boolean;
+  baseSelection: Set<string>;
+  tableBody: HTMLTableSectionElement;
+  input: Omit<
+    TableMarqueeSelectionInput,
+    "event" | "selectedPaths" | "tableBody"
+  >;
+};
 
+export function armTableMarqueeSelectionGesture(
+  input: TableMarqueeSelectionInput,
+  gestureRef: MutableRefObject<TableMarqueeSelectionGesture | null>,
+): void {
+  const { event, tableBody } = input;
+  if (!input.canStart(event) || !tableBody) return;
   event.preventDefault();
-  const pointerId = event.pointerId;
-  const startX = event.clientX;
-  const startY = event.clientY;
-  const additive = event.ctrlKey || event.metaKey || event.shiftKey;
-  const baseSelection = new Set(input.selectedPaths);
-  let started = false;
-
-  const onPointerMove = (moveEvent: PointerEvent) => {
-    if (moveEvent.pointerId !== pointerId) {
-      return;
-    }
-
-    const rect = viewportRectBetween(startX, startY, moveEvent.clientX, moveEvent.clientY);
-    if (!started && Math.hypot(rect.width, rect.height) < MARQUEE_SELECTION_THRESHOLD_PX) {
-      return;
-    }
-
-    if (!started) {
-      started = true;
-      document.body.classList.add("is-marquee-selecting");
-      document.addEventListener("click", suppressMarqueeClick, { capture: true, once: true });
-    }
-
-    moveEvent.preventDefault();
-    setMarqueeRect(rect);
-    input.applySelection(applyHierarchicalMarqueeSelection({
-      hitPaths: rowPathsInViewportRect(tableBody, rect, input.rowSelector, input.rowPath),
-      visiblePaths: input.visiblePaths,
-      baseSelection,
-      additive,
-    }));
+  event.currentTarget.setPointerCapture(event.pointerId);
+  gestureRef.current = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    started: false,
+    additive: event.ctrlKey || event.metaKey || event.shiftKey,
+    baseSelection: new Set(input.selectedPaths),
+    tableBody,
+    input,
   };
-
-  const onPointerEnd = (endEvent: PointerEvent) => {
-    if (endEvent.pointerId !== pointerId) {
-      return;
-    }
-
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerEnd);
-    document.removeEventListener("pointercancel", onPointerEnd);
-    document.body.classList.remove("is-marquee-selecting");
-    setMarqueeRect(null);
-  };
-
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerEnd);
-  document.addEventListener("pointercancel", onPointerEnd);
 }
 
-function viewportRectBetween(startX: number, startY: number, endX: number, endY: number): ViewportRect {
+export function continueTableMarqueeSelectionGesture(
+  event: ReactPointerEvent<HTMLElement>,
+  gestureRef: MutableRefObject<TableMarqueeSelectionGesture | null>,
+): void {
+  const gesture = gestureRef.current;
+  if (!gesture || gesture.pointerId !== event.pointerId) return;
+  const rect = viewportRectBetween(
+    gesture.startX,
+    gesture.startY,
+    event.clientX,
+    event.clientY,
+  );
+  if (
+    !gesture.started &&
+    Math.hypot(rect.width, rect.height) < MARQUEE_SELECTION_THRESHOLD_PX
+  )
+    return;
+  if (!gesture.started) {
+    gesture.started = true;
+  }
+  event.preventDefault();
+  gesture.input.setMarqueeRect(rect);
+  gesture.input.applySelection(
+    applyHierarchicalMarqueeSelection({
+      hitPaths: rowPathsInViewportRect(
+        gesture.tableBody,
+        rect,
+        gesture.input.rowSelector,
+        gesture.input.rowPath,
+      ),
+      visiblePaths: gesture.input.visiblePaths,
+      baseSelection: gesture.baseSelection,
+      additive: gesture.additive,
+    }),
+  );
+}
+
+export function endTableMarqueeSelectionGesture(
+  event: ReactPointerEvent<HTMLElement>,
+  gestureRef: MutableRefObject<TableMarqueeSelectionGesture | null>,
+): boolean {
+  const gesture = gestureRef.current;
+  if (!gesture || gesture.pointerId !== event.pointerId) return false;
+  gestureRef.current = null;
+  gesture.input.setMarqueeRect(null);
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+  return gesture.started;
+}
+
+function viewportRectBetween(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): ViewportRect {
   const left = Math.min(startX, endX);
   const top = Math.min(startY, endY);
   const right = Math.max(startX, endX);
   const bottom = Math.max(startY, endY);
-  return {
-    left,
-    top,
-    width: right - left,
-    height: bottom - top,
-  };
+  return { left, top, width: right - left, height: bottom - top };
 }
 
 function rowPathsInViewportRect(
@@ -105,21 +136,17 @@ function rowPathsInViewportRect(
   const right = rect.left + rect.width;
   const bottom = rect.top + rect.height;
   const paths: string[] = [];
-  for (const row of Array.from(tableBody.querySelectorAll<HTMLTableRowElement>(rowSelector))) {
+  for (const row of Array.from(
+    tableBody.querySelectorAll<HTMLTableRowElement>(rowSelector),
+  )) {
     const rowRect = row.getBoundingClientRect();
-    const intersects = rowRect.left <= right
-      && rowRect.right >= rect.left
-      && rowRect.top <= bottom
-      && rowRect.bottom >= rect.top;
+    const intersects =
+      rowRect.left <= right &&
+      rowRect.right >= rect.left &&
+      rowRect.top <= bottom &&
+      rowRect.bottom >= rect.top;
     const path = rowPath(row);
-    if (intersects && path) {
-      paths.push(path);
-    }
+    if (intersects && path) paths.push(path);
   }
   return paths;
-}
-
-function suppressMarqueeClick(event: MouseEvent) {
-  event.preventDefault();
-  event.stopPropagation();
 }

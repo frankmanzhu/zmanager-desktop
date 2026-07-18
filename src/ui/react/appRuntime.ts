@@ -9,25 +9,57 @@ import type {
   ContextMenuActionPayload,
   ContextMenuItem,
 } from "../../app/commands/contextMenuModel";
-import { createDisplayContext, type DisplayContextSnapshot } from "../../app/display/displayContext";
+import {
+  createDisplayContext,
+  type DisplayContextSnapshot,
+} from "../../app/display/displayContext";
 import type { DroppedPath, WorkspaceDropMode } from "../../app/dropIntent";
-import type { ExtractMode, ExtractOverwritePolicy, TzapRestorePolicy } from "../../app/extractFlow";
+import type {
+  ExtractMode,
+  ExtractOverwritePolicy,
+  TzapRestorePolicy,
+} from "../../app/extractFlow";
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
-import { DEFAULT_APP_PREFERENCES, preferencesWithPatch, type AppPreferencePatch, type AppPreferences, type FormatCreateDefaults } from "../../app/preferences";
-import { createPathHistoryStore, type PathHistorySnapshot } from "../../app/pathHistory";
-import { createShellWorkspace, type ShellWorkspaceSnapshot } from "../../app/shell/shellWorkspace";
-import { createArchiveWorkspace, type ArchiveWorkspaceSnapshot } from "../../app/workspaces/archiveWorkspace";
-import { createCreateWorkspace, type CreateWorkspaceOptionPatch, type CreateWorkspaceSnapshot } from "../../app/workspaces/createWorkspace";
-import { createExtractWorkspace, type ExtractWorkspaceOptionPatch, type ExtractWorkspaceSnapshot } from "../../app/workspaces/extractWorkspace";
+import {
+  DEFAULT_APP_PREFERENCES,
+  preferencesWithPatch,
+  type AppPreferencePatch,
+  type AppPreferences,
+  type FormatCreateDefaults,
+} from "../../app/preferences";
+import {
+  createPathHistoryStore,
+  type PathHistorySnapshot,
+} from "../../app/pathHistory";
+import {
+  createShellWorkspace,
+  type ShellWorkspaceSnapshot,
+} from "../../app/shell/shellWorkspace";
+import {
+  createArchiveWorkspace,
+  type ArchiveWorkspaceSnapshot,
+} from "../../app/workspaces/archiveWorkspace";
+import {
+  createCreateWorkspace,
+  type CreateWorkspaceOptionPatch,
+  type CreateWorkspaceSnapshot,
+} from "../../app/workspaces/createWorkspace";
+import {
+  createExtractWorkspace,
+  type ExtractWorkspaceOptionPatch,
+  type ExtractWorkspaceSnapshot,
+} from "../../app/workspaces/extractWorkspace";
 import {
   createJobsWorkspace,
   type FocusedQuickActionProgressSnapshot,
   type JobListSnapshot,
 } from "../../app/workspaces/jobsWorkspace";
-import type {
-  ZManagerDialogSnapshot,
-} from "../../app/display/dialogSnapshots";
-import { createAccountWorkspace, type AccountWorkspaceSnapshot } from "../../app/workspaces/accountWorkspace";
+import type { ZManagerDialogSnapshot } from "../../app/display/dialogSnapshots";
+import {
+  createAccountWorkspace,
+  type AccountWorkspaceSnapshot,
+} from "../../app/workspaces/accountWorkspace";
+import type { DefaultHandlerSnapshot } from "../../app/controllers/defaultHandlerController";
 
 export type {
   ZManagerDialogAction,
@@ -67,6 +99,7 @@ export type ZManagerContextMenuActionPayload = ContextMenuActionPayload;
 
 export type ZManagerReactSnapshot = Readonly<{
   account: AccountWorkspaceSnapshot;
+  defaultHandlers: DefaultHandlerSnapshot;
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -90,8 +123,17 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "navigateUp" }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
-  | Readonly<{ type: "setFlatView"; flatView: boolean; persistPreference?: boolean }>
-  | Readonly<{ type: "setColumnWidth"; columnId: ArchiveTableColumnId; width: number; persist: boolean }>
+  | Readonly<{
+      type: "setFlatView";
+      flatView: boolean;
+      persistPreference?: boolean;
+    }>
+  | Readonly<{
+      type: "setColumnWidth";
+      columnId: ArchiveTableColumnId;
+      width: number;
+      persist: boolean;
+    }>
   | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
   | Readonly<{ type: "sortByColumn"; columnId: ArchiveTableColumnId }>
   | Readonly<{ type: "selectAllVisible" }>
@@ -110,21 +152,44 @@ export type ZManagerArchiveIntent =
       focusedPath: string;
       anchorPath: string;
     }>
-  | Readonly<{ type: "activateRow"; path: string; rowKind: "folder" | "entry" | "parent" }>
+  | Readonly<{
+      type: "activateRow";
+      path: string;
+      rowKind: "folder" | "entry" | "parent";
+    }>
   | Readonly<{ type: "startNativeDrag"; entryPath: string }>
   | Readonly<{ type: "copyDetailsValue"; value: string }>
   | Readonly<{ type: "setExtractDestination"; destinationPath: string }>
   | Readonly<{ type: "browseExtractDestination" }>
   | Readonly<{ type: "setExtractOptions"; patch: ExtractWorkspaceOptionPatch }>
   | Readonly<{ type: "resetExtractDefaults" }>
-  | Readonly<{ type: "setTzapVerificationOptions"; patch: Partial<Pick<ExtractWorkspaceSnapshot["tzapVerification"], "validateTrust" | "trustedSystemRoots" | "includeOfficialTzapRoot">> }>
+  | Readonly<{
+      type: "setTzapVerificationOptions";
+      patch: Partial<
+        Pick<
+          ExtractWorkspaceSnapshot["tzapVerification"],
+          "validateTrust" | "trustedSystemRoots" | "includeOfficialTzapRoot"
+        >
+      >;
+    }>
   | Readonly<{ type: "chooseTzapTrustedCAs" }>
   | Readonly<{ type: "removeTzapTrustedCA"; path: string }>
   | Readonly<{ type: "verifyTzapCertificate" }>
   | Readonly<{ type: "runExtract"; mode: ExtractMode; password: string }>
   | Readonly<{ type: "showEmptyContextMenu"; x: number; y: number }>
-  | Readonly<{ type: "showColumnContextMenu"; columnId: ArchiveTableColumnId; x: number; y: number }>
-  | Readonly<{ type: "showRowContextMenu"; path: string; rowKind: "folder" | "entry" | "parent"; x: number; y: number }>
+  | Readonly<{
+      type: "showColumnContextMenu";
+      columnId: ArchiveTableColumnId;
+      x: number;
+      y: number;
+    }>
+  | Readonly<{
+      type: "showRowContextMenu";
+      path: string;
+      rowKind: "folder" | "entry" | "parent";
+      x: number;
+      y: number;
+    }>
   | Readonly<{ type: "runDetailsAction"; action: string }>;
 
 export type ZManagerCreateIntent =
@@ -132,12 +197,23 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "showAddSourcesMenu"; x: number; y: number }>
   | Readonly<{ type: "clearSources" }>
   | Readonly<{ type: "removeSources"; sourcePaths: readonly string[] }>
-  | Readonly<{ type: "showSourceContextMenu"; sourcePath: string; x: number; y: number }>
+  | Readonly<{
+      type: "showSourceContextMenu";
+      sourcePath: string;
+      x: number;
+      y: number;
+    }>
   | Readonly<{ type: "setDestinationPath"; destinationPath: string }>
   | Readonly<{ type: "browseDestination" }>
-  | Readonly<{ type: "changeFormat"; format: CreateWorkspaceSnapshot["options"]["format"] }>
+  | Readonly<{
+      type: "changeFormat";
+      format: CreateWorkspaceSnapshot["options"]["format"];
+    }>
   | Readonly<{ type: "setOptions"; patch: CreateWorkspaceOptionPatch }>
-  | Readonly<{ type: "chooseTzapCertificate"; target: "recipients" | "identity" | "signer" | "privateKey" | "chain" }>
+  | Readonly<{
+      type: "chooseTzapCertificate";
+      target: "recipients" | "identity" | "signer" | "privateKey" | "chain";
+    }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
@@ -145,14 +221,40 @@ export type ZManagerCreateIntent =
   | Readonly<{ type: "setPathIncluded"; path: string; included: boolean }>
   | Readonly<{ type: "setCurrentFolderIncluded"; included: boolean }>
   | Readonly<{ type: "setVisibleRowsIncluded"; included: boolean }>
-  | Readonly<{ type: "selectRow"; path: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }>
-  | Readonly<{ type: "applySelection"; selectedPaths: readonly string[]; focusedPath: string; anchorPath: string }>
+  | Readonly<{
+      type: "selectRow";
+      path: string;
+      ctrlKey?: boolean;
+      metaKey?: boolean;
+      shiftKey?: boolean;
+    }>
+  | Readonly<{
+      type: "applySelection";
+      selectedPaths: readonly string[];
+      focusedPath: string;
+      anchorPath: string;
+    }>
   | Readonly<{ type: "toggleRowSelection"; path: string }>
   | Readonly<{ type: "focusRow"; path: string }>
   | Readonly<{ type: "removeSelectedSources"; fallbackSourcePath?: string }>
-  | Readonly<{ type: "showCompressRowContextMenu"; path: string; sourcePath?: string; x: number; y: number }>
-  | Readonly<{ type: "runCreate"; password: string; passwordConfirm: string; signingIdentityPassword: string }>
-  | Readonly<{ type: "generateTzapIdentity"; commonName: string; password: string }>;
+  | Readonly<{
+      type: "showCompressRowContextMenu";
+      path: string;
+      sourcePath?: string;
+      x: number;
+      y: number;
+    }>
+  | Readonly<{
+      type: "runCreate";
+      password: string;
+      passwordConfirm: string;
+      signingIdentityPassword: string;
+    }>
+  | Readonly<{
+      type: "generateTzapIdentity";
+      commonName: string;
+      password: string;
+    }>;
 
 export type ZManagerJobsIntent =
   | Readonly<{ type: "openDrawer" }>
@@ -163,7 +265,12 @@ export type ZManagerJobsIntent =
   | Readonly<{ type: "resume"; jobId: string }>
   | Readonly<{ type: "dismiss"; jobId: string }>
   | Readonly<{ type: "retryPassword"; jobId: string }>
-  | Readonly<{ type: "runOutputAction"; jobId: string; actionIndex: number; kind: "open" | "reveal" }>
+  | Readonly<{
+      type: "runOutputAction";
+      jobId: string;
+      actionIndex: number;
+      kind: "open" | "reveal";
+    }>
   | Readonly<{ type: "backgroundFocused" }>
   | Readonly<{ type: "toggleQuickActionPause" }>
   | Readonly<{ type: "cancelFocusedQuickActionJobs" }>;
@@ -199,7 +306,11 @@ export type ZManagerDialogIntent =
     }>
   | Readonly<{ type: "preferences" }>
   | Readonly<{ type: "about" }>
-  | Readonly<{ type: "info"; target?: "current" | "archive"; entryPath?: string }>
+  | Readonly<{
+      type: "info";
+      target?: "current" | "archive";
+      entryPath?: string;
+    }>
   | Readonly<{ type: "infoAction"; action?: string; copyValue?: string }>
   | Readonly<{ type: "copyAboutDiagnostics" }>
   | Readonly<{ type: "preferencesPatch"; patch: AppPreferencePatch }>
@@ -210,8 +321,18 @@ export type ZManagerDialogIntent =
     }>
   | Readonly<{ type: "preferencesChooseOutput" }>
   | Readonly<{ type: "preferencesChooseExtractOutput" }>
-  | Readonly<{ type: "preferencesChooseTzapSigningFile"; target: "identity" | "certificate" | "privateKey" | "chain" }>
-  | Readonly<{ type: "preferencesGenerateTzapIdentity"; commonName: string; password: string }>
+  | Readonly<{
+      type: "preferencesChooseTzapSigningFile";
+      target: "identity" | "certificate" | "privateKey" | "chain";
+    }>
+  | Readonly<{
+      type: "preferencesGenerateTzapIdentity";
+      commonName: string;
+      password: string;
+    }>
+  | Readonly<{ type: "defaultHandlersRefresh" }>
+  | Readonly<{ type: "defaultHandlersSet" }>
+  | Readonly<{ type: "defaultHandlersRestore" }>
   | Readonly<{ type: "preferencesSave" }>
   | Readonly<{ type: "preferencesCancel" }>
   | Readonly<{ type: "closeCurrent" }>;
@@ -230,9 +351,18 @@ export type ZManagerDesktopIntent =
   | Readonly<{ type: "droppedPaths"; paths: readonly DroppedPath[] }>
   | Readonly<{ type: "dropEntered"; paths?: readonly DroppedPath[] }>
   | Readonly<{ type: "dropLeft" }>
-  | Readonly<{ type: "dropChoice"; choice: "openArchive" | "addToCompress" | "cancel" }>
-  | Readonly<{ type: "windowControl"; control: "minimize" | "toggleMaximize" | "close" }>
-  | Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>;
+  | Readonly<{
+      type: "dropChoice";
+      choice: "openArchive" | "addToCompress" | "cancel";
+    }>
+  | Readonly<{
+      type: "windowControl";
+      control: "minimize" | "toggleMaximize" | "close";
+    }>
+  | Readonly<{
+      type: "beginWindowResize";
+      direction: ZManagerWindowResizeDirection;
+    }>;
 
 export type ZManagerAccountIntent =
   | Readonly<{ type: "open" }>
@@ -249,8 +379,7 @@ export type ZManagerContextMenuIntent =
   | Readonly<{ type: "hide" }>;
 
 export type ZManagerKeyboardIntent =
-  | Readonly<{ type: "escape" }>
-  | Readonly<{ type: "focusSearch" }>;
+  Readonly<{ type: "escape" }> | Readonly<{ type: "focusSearch" }>;
 
 export type ZManagerReactActions = Readonly<{
   executeCommand(commandId: CommandId, payload?: CommandRouterPayload): void;
@@ -265,7 +394,9 @@ export type ZManagerReactActions = Readonly<{
   handleKeyboardIntent(intent: ZManagerKeyboardIntent): void;
 }>;
 
-export type ZManagerReactSnapshotListener = (snapshot: ZManagerReactSnapshot) => void;
+export type ZManagerReactSnapshotListener = (
+  snapshot: ZManagerReactSnapshot,
+) => void;
 
 export type ZManagerReactRuntimeAdapter = Readonly<{
   getSnapshot(): ZManagerReactSnapshot;
@@ -275,6 +406,7 @@ export type ZManagerReactRuntimeAdapter = Readonly<{
 
 export type CreateZManagerReactSnapshotInput = Readonly<{
   account?: AccountWorkspaceSnapshot;
+  defaultHandlers?: DefaultHandlerSnapshot;
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -308,7 +440,10 @@ export const noopZManagerReactActions: ZManagerReactActions = Object.freeze({
 });
 
 export function displaySnapshotFromContext(
-  context: Pick<DisplayContextSnapshot, "resolvedLocale" | "documentLanguage" | "documentDirection">,
+  context: Pick<
+    DisplayContextSnapshot,
+    "resolvedLocale" | "documentLanguage" | "documentDirection"
+  >,
 ): ZManagerReactDisplaySnapshot {
   return deepFreezeValue({
     resolvedLocale: context.resolvedLocale,
@@ -317,7 +452,9 @@ export function displaySnapshotFromContext(
   });
 }
 
-export function cloneAppPreferencesSnapshot(preferences: AppPreferences): AppPreferences {
+export function cloneAppPreferencesSnapshot(
+  preferences: AppPreferences,
+): AppPreferences {
   return preferencesWithPatch(preferences, {});
 }
 
@@ -326,6 +463,12 @@ export function createZManagerReactSnapshot(
 ): ZManagerReactSnapshot {
   return deepFreezeValue({
     account: input.account ?? createAccountWorkspace().getSnapshot(),
+    defaultHandlers: input.defaultHandlers ?? {
+      status: "idle",
+      entries: [],
+      canRestore: false,
+      error: null,
+    },
     shell: input.shell,
     archive: input.archive,
     create: input.create,
@@ -334,9 +477,13 @@ export function createZManagerReactSnapshot(
     quickActionProgress: input.quickActionProgress,
     systemIcons: { ...(input.systemIcons ?? {}) },
     preferences: cloneAppPreferencesSnapshot(input.preferences),
-    preferencesDraft: input.preferencesDraft ? cloneAppPreferencesSnapshot(input.preferencesDraft) : null,
+    preferencesDraft: input.preferencesDraft
+      ? cloneAppPreferencesSnapshot(input.preferencesDraft)
+      : null,
     pathHistory: {
-      extractDestinationHistory: [...input.pathHistory.extractDestinationHistory],
+      extractDestinationHistory: [
+        ...input.pathHistory.extractDestinationHistory,
+      ],
       createDestinationHistory: [...input.pathHistory.createDestinationHistory],
       recentArchiveHistory: [...input.pathHistory.recentArchiveHistory],
     },
@@ -347,7 +494,9 @@ export function createZManagerReactSnapshot(
       primaryCommandIds: [...input.commands.primaryCommandIds],
       secondaryCommandIds: [...input.commands.secondaryCommandIds],
     },
-    contextMenu: cloneContextMenuSnapshot(input.contextMenu ?? { visible: false, id: 0 }),
+    contextMenu: cloneContextMenuSnapshot(
+      input.contextMenu ?? { visible: false, id: 0 },
+    ),
     runtime: { isDesktop: Boolean(input.runtime?.isDesktop) },
     dialog: cloneDialogSnapshot(input.dialog ?? { kind: "none" }),
   });
@@ -374,7 +523,8 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
     create: createWorkspace.getSnapshot(),
     extract: extractWorkspace.getSnapshot(),
     jobs: jobsWorkspace.getJobListSnapshot(nowMs),
-    quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
+    quickActionProgress:
+      jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     preferences: DEFAULT_APP_PREFERENCES,
     pathHistory: createPathHistoryStore(null).getSnapshot(),
     display: displaySnapshotFromContext(display),
@@ -397,7 +547,9 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
   });
 }
 
-function cloneContextMenuSnapshot(contextMenu: ZManagerContextMenuSnapshot): ZManagerContextMenuSnapshot {
+function cloneContextMenuSnapshot(
+  contextMenu: ZManagerContextMenuSnapshot,
+): ZManagerContextMenuSnapshot {
   if (!contextMenu.visible) {
     return { visible: false, id: contextMenu.id };
   }
@@ -427,7 +579,9 @@ function cloneContextMenuItem(item: ContextMenuItem): ContextMenuItem {
   }
 }
 
-function cloneDialogSnapshot(dialog: ZManagerDialogSnapshot): ZManagerDialogSnapshot {
+function cloneDialogSnapshot(
+  dialog: ZManagerDialogSnapshot,
+): ZManagerDialogSnapshot {
   switch (dialog.kind) {
     case "none":
       return { kind: "none" };

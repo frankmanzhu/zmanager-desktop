@@ -10,7 +10,9 @@ describe("React shell keyboard shortcut decoder", () => {
   it("maps global command shortcuts to routed command ids", () => {
     const snapshot = createInitialZManagerReactSnapshot();
 
-    expect(decodeShellKeyboardShortcut(snapshot, { key: "o", ctrlKey: true })).toEqual({
+    expect(
+      decodeShellKeyboardShortcut(snapshot, { key: "o", ctrlKey: true }),
+    ).toEqual({
       type: "command",
       commandId: "open",
     });
@@ -24,10 +26,17 @@ describe("React shell keyboard shortcut decoder", () => {
   it("keeps search focus and escape as shell intents", () => {
     const snapshot = createInitialZManagerReactSnapshot();
 
-    expect(decodeShellKeyboardShortcut(snapshot, { key: "f", ctrlKey: true })).toEqual({
+    expect(
+      decodeShellKeyboardShortcut(snapshot, { key: "f", ctrlKey: true }),
+    ).toEqual({
       type: "focusSearch",
     });
-    expect(decodeShellKeyboardShortcut(snapshot, { key: "Escape", editableTarget: true })).toEqual({
+    expect(
+      decodeShellKeyboardShortcut(snapshot, {
+        key: "Escape",
+        editableTarget: true,
+      }),
+    ).toEqual({
       type: "escape",
     });
   });
@@ -52,10 +61,18 @@ describe("React shell keyboard shortcut decoder", () => {
       },
     });
 
-    expect(decodeShellKeyboardShortcut(initial, { key: "o", ctrlKey: true, editableTarget: true })).toEqual({
+    expect(
+      decodeShellKeyboardShortcut(initial, {
+        key: "o",
+        ctrlKey: true,
+        editableTarget: true,
+      }),
+    ).toEqual({
       type: "ignore",
     });
-    expect(decodeShellKeyboardShortcut(dialogSnapshot, { key: "o", ctrlKey: true })).toEqual({
+    expect(
+      decodeShellKeyboardShortcut(dialogSnapshot, { key: "o", ctrlKey: true }),
+    ).toEqual({
       type: "ignore",
     });
   });

@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type CreatePasswordState = Readonly<{
   password: string;
@@ -26,9 +33,13 @@ const FALLBACK_CREATE_PASSWORD_STATE: CreatePasswordState = Object.freeze({
   reset: noop,
 });
 
-const CreatePasswordContext = createContext<CreatePasswordState>(FALLBACK_CREATE_PASSWORD_STATE);
+const CreatePasswordContext = createContext<CreatePasswordState>(
+  FALLBACK_CREATE_PASSWORD_STATE,
+);
 
-export function CreatePasswordProvider({ children }: Readonly<{ children?: ReactNode }>) {
+export function CreatePasswordProvider({
+  children,
+}: Readonly<{ children?: ReactNode }>) {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -39,17 +50,20 @@ export function CreatePasswordProvider({ children }: Readonly<{ children?: React
     setShowPassword(false);
     setSigningIdentityPassword("");
   }, []);
-  const value = useMemo<CreatePasswordState>(() => ({
-    password,
-    passwordConfirm,
-    showPassword,
-    signingIdentityPassword,
-    setPassword,
-    setPasswordConfirm,
-    setShowPassword,
-    setSigningIdentityPassword,
-    reset,
-  }), [password, passwordConfirm, reset, showPassword, signingIdentityPassword]);
+  const value = useMemo<CreatePasswordState>(
+    () => ({
+      password,
+      passwordConfirm,
+      showPassword,
+      signingIdentityPassword,
+      setPassword,
+      setPasswordConfirm,
+      setShowPassword,
+      setSigningIdentityPassword,
+      reset,
+    }),
+    [password, passwordConfirm, reset, showPassword, signingIdentityPassword],
+  );
 
   return (
     <CreatePasswordContext.Provider value={value}>

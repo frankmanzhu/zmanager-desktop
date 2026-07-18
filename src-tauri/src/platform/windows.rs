@@ -22,9 +22,11 @@ use windows_sys::Win32::{
 
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStart, NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
-    ShellActionProfile,
+    DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
+    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot,
+    NativeFileDragCandidate, NativeFileDragError,
+    NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
+    NativePlatform, PlatformProfile, ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -110,6 +112,36 @@ impl NativePlatform for WindowsPlatform {
                 data_url: system_file_icon_data_url(entry),
             })
             .collect()
+    }
+
+    fn default_handlers(
+        _request: &DefaultHandlerRequest,
+    ) -> Result<Vec<DefaultHandlerEntry>, String> {
+        Err("Default-handler control is owned by Windows Settings".to_string())
+    }
+
+    fn read_replacement_migration(
+        _request: &LegacyReplacementMigrationRequest,
+    ) -> Result<LegacyReplacementMigrationSnapshot, String> {
+        Ok(LegacyReplacementMigrationSnapshot::empty())
+    }
+
+    fn reconcile_legacy_registrations(
+        _request: &LegacyRegistrationReconcileRequest,
+    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, String> {
+        Ok(Vec::new())
+    }
+
+    fn set_owner_only_file_permissions(_file: &std::fs::File) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn native_drag_requires_preflight() -> bool {
+        true
+    }
+
+    fn consume_shell_action_request(_token: &str) -> Result<Vec<u8>, String> {
+        Err("Opaque App Group shell-action requests are available only on macOS".to_string())
     }
 
     fn prepare_native_file_drag(

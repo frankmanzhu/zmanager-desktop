@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_APP_PREFERENCES } from "../../../app/preferences";
-import { createCreateWorkspace, type CreateWorkspaceSnapshot } from "../../../app/workspaces/createWorkspace";
+import {
+  createCreateWorkspace,
+  type CreateWorkspaceSnapshot,
+} from "../../../app/workspaces/createWorkspace";
 import { ZManagerAppRuntimeProvider } from "../AppProviders";
 import { createZManagerAppStore } from "../appStore";
 import {
@@ -20,8 +23,7 @@ describe("React create workspace", () => {
   it("renders create sources, plan rows, and options", () => {
     const html = renderCreateWorkspace(createSnapshot());
 
-    expect(html).toContain('class="path-bar"');
-    expect(html).toContain('class="path-location"');
+    expect(html).toContain('data-shell-chrome="path"');
     expect(html).toContain("Destination");
     expect(html).not.toContain('id="nav-back"');
     expect(html).not.toContain('id="nav-up"');
@@ -31,28 +33,40 @@ describe("React create workspace", () => {
     expect(html).toContain('data-pane-resizer="navigation"');
     expect(html).toContain('aria-keyshortcuts="ArrowLeft ArrowRight Home End"');
     expect(html).toContain('id="compress-source-body"');
-    expect(html).toContain('<h1 id="workspace-title">bundle.tzst</h1>');
+    expect(html).toMatch(/<h1 id="workspace-title"[^>]*>bundle\.tzst<\/h1>/);
     expect(html).toContain('id="compress-marquee-hit-surface"');
-    expect(html).toContain('class="compress-table-shell" tabindex="0"');
-    expect(html).toContain('<th class="inclusion-column"><input id="compress-include-all"');
-    expect(html).not.toContain('<span class="column-header-label" aria-hidden="true"></span><input id="compress-include-all"');
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('id="compress-include-all"');
+    expect(html).not.toContain(
+      '<span class="column-header-label" aria-hidden="true"></span><input id="compress-include-all"',
+    );
     expect(html).toContain('data-compress-path="photos-folder"');
     expect(html).toContain('data-compress-source-path="C:/work/photos-folder"');
     expect(html).toContain('id="compress-options-panel"');
-    expect(html).toMatch(/<details[^>]*id="compress-options-panel"[^>]*open=""/);
+    expect(html).toMatch(
+      /<details[^>]*id="compress-options-panel"[^>]*open=""/,
+    );
     expect(html).toContain('id="create-format"');
-    expect(html).toContain('data-state="closed"><input id="create-clean-source"');
+    expect(html).toContain(
+      'data-state="closed"><input id="create-clean-source"',
+    );
     expect(html).not.toContain('title="Delete the source files');
-    expect(html).toMatch(/id="create-compression-level"[\s\S]*value="0">Store<[\s\S]*value="1">Fastest<[\s\S]*value="3">Fast<[\s\S]*value="9">Maximum<[\s\S]*value="22">Ultra</);
+    expect(html).toMatch(
+      /id="create-compression-level"[\s\S]*value="0">Store<[\s\S]*value="1">Fastest<[\s\S]*value="3">Fast<[\s\S]*value="9">Maximum<[\s\S]*value="22">Ultra</,
+    );
     expect(html).not.toContain('<option value="5">5</option>');
   });
 
   it("labels the compress workspace from the destination archive name", () => {
-    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, "C:/abc/abc.zip"));
+    const html = renderCreateWorkspace(
+      createSnapshot("tarZst", undefined, "C:/abc/abc.zip"),
+    );
 
-    expect(html).toContain('<h1 id="workspace-title">abc.zip</h1>');
-    expect(html).toContain('data-crumb-path="" aria-keyshortcuts="Enter Space">abc.zip</button>');
-    expect(html).not.toContain('<h1 id="workspace-title">Files to compress</h1>');
+    expect(html).toMatch(/<h1 id="workspace-title"[^>]*>abc\.zip<\/h1>/);
+    expect(html).toContain(
+      'data-crumb-path="" aria-keyshortcuts="Enter Space">abc.zip</button>',
+    );
+    expect(html).not.toContain(">Files to compress</h1>");
   });
 
   it("renders password-capable formats without serializing password values", () => {
@@ -60,37 +74,57 @@ describe("React create workspace", () => {
 
     expect(html).toContain('value="sevenZ" selected');
     expect(html).toContain('id="create-advanced-options"');
-    expect(html).not.toMatch(/<details[^>]*id="create-advanced-options"[^>]*open=/);
+    expect(html).not.toMatch(
+      /<details[^>]*id="create-advanced-options"[^>]*open=/,
+    );
     expect(html).toContain('id="create-password"');
     expect(html).toContain('id="create-password-confirm"');
     expect(html).toContain('id="create-show-password"');
-    expect(html.indexOf('id="create-clean-source"')).toBeLessThan(html.indexOf('id="create-advanced-options"'));
-    expect(html.indexOf('id="create-respect-gitignore"')).toBeLessThan(html.indexOf('id="create-password"'));
+    expect(html.indexOf('id="create-clean-source"')).toBeLessThan(
+      html.indexOf('id="create-advanced-options"'),
+    );
+    expect(html.indexOf('id="create-respect-gitignore"')).toBeLessThan(
+      html.indexOf('id="create-password"'),
+    );
     expect(html).not.toContain("correct horse");
   });
 
   it("keeps TZAP certificates last inside the collapsed advanced options", () => {
     const html = renderCreateWorkspace(createSnapshot("tzap"));
 
-    expect(html.indexOf('id="create-password"')).toBeLessThan(html.indexOf('id="create-volume"'));
-    expect(html.indexOf('id="create-volume"')).toBeLessThan(html.indexOf('id="create-tzap-recovery"'));
-    expect(html.indexOf('id="create-tzap-recovery"')).toBeLessThan(html.indexOf('id="create-tzap-certificates-title"'));
+    expect(html.indexOf('id="create-password"')).toBeLessThan(
+      html.indexOf('id="create-volume"'),
+    );
+    expect(html.indexOf('id="create-volume"')).toBeLessThan(
+      html.indexOf('id="create-tzap-recovery"'),
+    );
+    expect(html.indexOf('id="create-tzap-recovery"')).toBeLessThan(
+      html.indexOf('id="create-tzap-certificates-title"'),
+    );
   });
 
   it("renders create row selection and focus from the runtime snapshot", () => {
-    const html = renderCreateWorkspace(createSnapshot("tarZst", {
-      selectedPaths: ["quarterly-report.pdf"],
-      focusedPath: "quarterly-report.pdf",
-      anchorPath: "quarterly-report.pdf",
-    }));
+    const html = renderCreateWorkspace(
+      createSnapshot("tarZst", {
+        selectedPaths: ["quarterly-report.pdf"],
+        focusedPath: "quarterly-report.pdf",
+        anchorPath: "quarterly-report.pdf",
+      }),
+    );
 
-    expect(html).toMatch(/class="is-selected is-focused-row"[^>]*data-compress-path="quarterly-report\.pdf"/);
+    expect(html).toMatch(
+      /data-compress-path="quarterly-report\.pdf"[^>]*data-focused="true"[^>]*aria-selected="true"/,
+    );
     expect(html).toContain('aria-selected="true"');
-    expect(html).toContain('aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"');
+    expect(html).toContain(
+      'aria-keyshortcuts="Space Enter Delete ContextMenu Shift+F10"',
+    );
   });
 
   it("keeps the accepted tree visible with a subtle status while filters refresh", () => {
-    const html = renderCreateWorkspace(createSnapshot("tzap", undefined, undefined, true));
+    const html = renderCreateWorkspace(
+      createSnapshot("tzap", undefined, undefined, true),
+    );
 
     expect(html).toContain('role="status" aria-live="polite"');
     expect(html).toContain("Updating filters...");
@@ -98,34 +132,38 @@ describe("React create workspace", () => {
   });
 
   it("uses cached system icons for compress rows when real file icons are enabled", () => {
-    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, undefined, false, {
-      showRealFileIcons: true,
-      systemIcons: {
-        directory: "data:image/png;base64,folder-icon",
-        "file:.zip": "data:image/png;base64,zip-icon",
-        "file:.pdf": "data:image/png;base64,pdf-icon",
-      },
-    }));
+    const html = renderCreateWorkspace(
+      createSnapshot("tarZst", undefined, undefined, false, {
+        showRealFileIcons: true,
+        systemIcons: {
+          directory: "data:image/png;base64,folder-icon",
+          "file:.zip": "data:image/png;base64,zip-icon",
+          "file:.pdf": "data:image/png;base64,pdf-icon",
+        },
+      }),
+    );
 
     expect(html).toContain('src="data:image/png;base64,folder-icon"');
     expect(html).toContain('src="data:image/png;base64,zip-icon"');
     expect(html).toContain('src="data:image/png;base64,pdf-icon"');
-    expect(html.match(/class="row-icon-native-image"/g)).toHaveLength(3);
+    expect(html.match(/src="data:image\/png;base64,/g)).toHaveLength(3);
   });
 
   it("keeps compress rows on SVG icons when real file icons are disabled", () => {
-    const html = renderCreateWorkspace(createSnapshot("tarZst", undefined, undefined, false, {
-      showRealFileIcons: false,
-      systemIcons: {
-        directory: "data:image/png;base64,folder-icon",
-        "file:.zip": "data:image/png;base64,zip-icon",
-        "file:.pdf": "data:image/png;base64,pdf-icon",
-      },
-    }));
+    const html = renderCreateWorkspace(
+      createSnapshot("tarZst", undefined, undefined, false, {
+        showRealFileIcons: false,
+        systemIcons: {
+          directory: "data:image/png;base64,folder-icon",
+          "file:.zip": "data:image/png;base64,zip-icon",
+          "file:.pdf": "data:image/png;base64,pdf-icon",
+        },
+      }),
+    );
 
-    expect(html).not.toContain('class="row-icon-native-image"');
-    expect(html).toContain('class="lucide lucide-folder row-icon-svg"');
-    expect(html).toContain('class="lucide lucide-file row-icon-svg"');
+    expect(html).not.toContain("data:image/png;base64");
+    expect(html).toContain('class="lucide lucide-folder size-4"');
+    expect(html).toContain('class="lucide lucide-file size-4"');
   });
 });
 
@@ -147,7 +185,11 @@ function createSnapshot(
     focusedPath: string;
     anchorPath: string;
   }>,
-  destinationPath = format === "sevenZ" ? "C:/work/bundle.7z" : format === "tzap" ? "C:/work/bundle.tzap" : "C:/work/bundle.tzst",
+  destinationPath = format === "sevenZ"
+    ? "C:/work/bundle.7z"
+    : format === "tzap"
+      ? "C:/work/bundle.tzap"
+      : "C:/work/bundle.tzst",
   refreshing = false,
   iconOptions: Readonly<{
     showRealFileIcons: boolean;
@@ -165,9 +207,15 @@ function createSnapshot(
     "C:/work/quarterly-report.pdf",
   ]);
   if (format === "sevenZ") {
-    workspace.changeFormat("sevenZ", DEFAULT_APP_PREFERENCES.createFormatDefaults.sevenZ);
+    workspace.changeFormat(
+      "sevenZ",
+      DEFAULT_APP_PREFERENCES.createFormatDefaults.sevenZ,
+    );
   } else if (format === "tzap") {
-    workspace.changeFormat("tzap", DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap);
+    workspace.changeFormat(
+      "tzap",
+      DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+    );
   }
   workspace.setDestinationPath(destinationPath);
   const started = workspace.beginPlan();

@@ -1,0 +1,10 @@
+"shellAction.open" = "Open with Z-Manager";
+"shellAction.compress" = "Compress with Z-Manager…";
+"shellAction.extract" = "Extract with Z-Manager…";
+"shellAction.compressZip" = "Compress to ZIP";
+"shellAction.compressTzap" = "Compress to TZAP";
+"shellAction.compressSevenZ" = "Compress to 7z";
+"shellAction.compressTarZst" = "Compress to TAR.ZST";
+"shellAction.compressCleanSource" = "Compress and remove source";
+"shellAction.extractHere" = "Extract here";
+"shellAction.extractToFolder" = "Extract to archive folder";

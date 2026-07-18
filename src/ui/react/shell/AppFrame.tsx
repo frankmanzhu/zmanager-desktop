@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
-import type { ZManagerReactSnapshot, ZManagerWindowResizeDirection } from "../appRuntime";
+import type {
+  ZManagerReactSnapshot,
+  ZManagerWindowResizeDirection,
+} from "../appRuntime";
 import { CommandToolbar } from "./CommandToolbar";
-import { DropOverlay } from "./DropOverlay";
 import { MenuBar } from "./MenuBar";
 import { StatusBar } from "./StatusBar";
 import { TitleBar } from "./TitleBar";
@@ -24,12 +26,15 @@ export type AppFrameProps = Readonly<{
   runtimeBridgeReady?: boolean;
 }>;
 
-export function AppFrame({ children, runtimeBridgeReady = true }: AppFrameProps) {
+export function AppFrame({
+  children,
+  runtimeBridgeReady = true,
+}: AppFrameProps) {
   const snapshot = useZManagerSnapshot();
 
   return (
     <main
-      className="workspace"
+      className="flex h-screen min-h-screen min-w-[320px] flex-col overflow-hidden bg-slate-100 text-[13px] leading-[1.35] text-slate-950 [font-family:'Segoe_UI',system-ui,-apple-system,BlinkMacSystemFont,Ubuntu,Cantarell,'Noto_Sans',Arial,sans-serif] dark:bg-slate-950 dark:text-slate-50 data-[quick-action-mode=job-only]:[&>[data-shell-chrome]:not([data-shell-chrome=title])]:hidden"
       data-job-drawer={snapshot.shell.jobDrawerOpen ? "open" : "closed"}
       data-mode={runtimeBridgeReady ? snapshot.shell.activeMode : undefined}
       data-drop-state={snapshot.shell.dropOverlay.mode}
@@ -42,12 +47,13 @@ export function AppFrame({ children, runtimeBridgeReady = true }: AppFrameProps)
       <CommandToolbar />
       {children}
       <StatusBar />
-      <DropOverlay />
     </main>
   );
 }
 
-function quickActionModeAttribute(snapshot: ZManagerReactSnapshot): string | undefined {
+function quickActionModeAttribute(
+  snapshot: ZManagerReactSnapshot,
+): string | undefined {
   switch (snapshot.shell.quickActionWindow.mode) {
     case "jobOnly":
     case "background":
@@ -64,7 +70,7 @@ function WindowResizeHandles() {
     <>
       {WINDOW_RESIZE_DIRECTIONS.map((direction) => (
         <div
-          className={`window-resize-handle window-resize-handle-${direction.toLowerCase()}`}
+          className={windowResizeHandleClass(direction)}
           data-window-resize-direction={direction}
           aria-hidden="true"
           onPointerDown={(event) => {
@@ -73,11 +79,31 @@ function WindowResizeHandles() {
             }
 
             event.preventDefault();
-            actions.handleDesktopIntent({ type: "beginWindowResize", direction });
+            actions.handleDesktopIntent({
+              type: "beginWindowResize",
+              direction,
+            });
           }}
           key={direction}
         />
       ))}
     </>
   );
+}
+
+function windowResizeHandleClass(
+  direction: ZManagerWindowResizeDirection,
+): string {
+  const base = "fixed z-[1000] hidden [body.manual-window-resize_&]:block";
+  const directions: Record<ZManagerWindowResizeDirection, string> = {
+    North: "inset-x-3 top-0 h-1.5 cursor-ns-resize",
+    East: "inset-y-3 right-0 w-1.5 cursor-ew-resize",
+    South: "inset-x-3 bottom-0 h-1.5 cursor-ns-resize",
+    West: "inset-y-3 left-0 w-1.5 cursor-ew-resize",
+    NorthEast: "right-0 top-0 size-3 cursor-nesw-resize",
+    SouthEast: "bottom-0 right-0 size-3 cursor-nwse-resize",
+    SouthWest: "bottom-0 left-0 size-3 cursor-nesw-resize",
+    NorthWest: "left-0 top-0 size-3 cursor-nwse-resize",
+  };
+  return `${base} ${directions[direction]}`;
 }

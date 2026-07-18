@@ -10,7 +10,10 @@ import {
 } from "../appRuntime";
 import { DialogRoot } from "./DialogRoot";
 
-function renderDialog(dialog: ZManagerDialogSnapshot, currentArchivePath = ""): string {
+function renderDialog(
+  dialog: ZManagerDialogSnapshot,
+  currentArchivePath = "",
+): string {
   const initial = createInitialZManagerReactSnapshot();
   const store = createZManagerAppStore({
     ...initial,
@@ -59,24 +62,27 @@ describe("DialogRoot", () => {
   });
 
   it("renders TZAP metadata policy controls for TZAP archives", () => {
-    const html = renderDialog({
-      kind: "extract",
-      mode: "archive",
-      title: "Extract",
-      message: "Choose a destination.",
-      startLabel: "Extract",
-      destination: "/tmp/out",
-      destinationHistory: [],
-      useSubfolder: false,
-      subfolder: "",
-      pathMode: "full",
-      overwrite: "refuse",
-      stripComponents: "0",
-      deduplicateRoot: false,
-      tzapRestorePolicy: "system",
-      tzapAllowDegraded: true,
-      passwordPromptOpen: false,
-    }, "/tmp/backup.tzap");
+    const html = renderDialog(
+      {
+        kind: "extract",
+        mode: "archive",
+        title: "Extract",
+        message: "Choose a destination.",
+        startLabel: "Extract",
+        destination: "/tmp/out",
+        destinationHistory: [],
+        useSubfolder: false,
+        subfolder: "",
+        pathMode: "full",
+        overwrite: "refuse",
+        stripComponents: "0",
+        deduplicateRoot: false,
+        tzapRestorePolicy: "system",
+        tzapAllowDegraded: true,
+        passwordPromptOpen: false,
+      },
+      "/tmp/backup.tzap",
+    );
 
     expect(html).toContain('id="browse-tzap-restore-policy"');
     expect(html).toContain("numeric user/group ownership");
@@ -105,10 +111,12 @@ describe("DialogRoot", () => {
     const html = renderDialog({
       kind: "about",
       title: "About ZManager",
-      groups: [{
-        title: "Runtime",
-        rows: [["Shell", "browser preview"]],
-      }],
+      groups: [
+        {
+          title: "Runtime",
+          rows: [["Shell", "browser preview"]],
+        },
+      ],
     });
 
     expect(html).toContain("About ZManager");

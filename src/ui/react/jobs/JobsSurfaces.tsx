@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 
-import { formatBytes, formatCompressionRatio, getPathBasename } from "../../../app/formatting";
+import {
+  formatBytes,
+  formatCompressionRatio,
+  getPathBasename,
+} from "../../../app/formatting";
 import { Button } from "../../components/ui/button";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
@@ -10,30 +14,65 @@ type JobItem = ZManagerReactSnapshot["jobs"]["jobs"][number];
 type JobStatus = JobItem["status"];
 type JobKind = JobItem["kind"];
 type QuickProgress = ZManagerReactSnapshot["quickActionProgress"];
-type FocusedContext = Extract<QuickProgress, { state: "tracking" }>["latestContext"];
+type FocusedContext = Extract<
+  QuickProgress,
+  { state: "tracking" }
+>["latestContext"];
 
 export function JobsDrawer() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const open = snapshot.shell.jobDrawerOpen && snapshot.shell.quickActionWindow.mode === "normal";
+  const open =
+    snapshot.shell.jobDrawerOpen &&
+    snapshot.shell.quickActionWindow.mode === "normal";
 
   return (
-    <aside id="job-drawer" className="job-drawer" aria-label={i18n.t("jobs.drawer.aria")} aria-hidden={open ? "false" : "true"}>
-      <div className="job-drawer-header">
+    <aside
+      id="job-drawer"
+      className={`fixed inset-y-0 right-0 z-50 flex w-[min(520px,90vw)] flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform dark:border-slate-700 dark:bg-slate-950 ${open ? "translate-x-0" : "pointer-events-none translate-x-full"}`}
+      aria-label={i18n.t("jobs.drawer.aria")}
+      aria-hidden={open ? "false" : "true"}
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 dark:border-slate-800">
         <div>
           <h2>{i18n.t("jobs.title")}</h2>
           <p>{i18n.t("jobs.description")}</p>
         </div>
-        <div className="job-drawer-actions">
-          <Button id="refresh-jobs" type="button" variant="dialog" size="unset" onClick={() => actions.handleJobsIntent({ type: "poll" })}>{i18n.t("common.refresh")}</Button>
-          <Button id="job-drawer-close" type="button" variant="dialog" size="unset" onClick={() => actions.handleJobsIntent({ type: "closeDrawer" })}>{i18n.t("common.close")}</Button>
+        <div className="flex gap-2">
+          <Button
+            id="refresh-jobs"
+            type="button"
+            variant="dialog"
+            size="unset"
+            onClick={() => actions.handleJobsIntent({ type: "poll" })}
+          >
+            {i18n.t("common.refresh")}
+          </Button>
+          <Button
+            id="job-drawer-close"
+            type="button"
+            variant="dialog"
+            size="unset"
+            onClick={() => actions.handleJobsIntent({ type: "closeDrawer" })}
+          >
+            {i18n.t("common.close")}
+          </Button>
         </div>
       </div>
-      <div id="jobs-list" className="jobs-list" onFocus={() => actions.handleJobsIntent({ type: "poll" })}>
-        {snapshot.jobs.jobs.length
-          ? snapshot.jobs.jobs.map((job) => <JobCard job={job} key={job.jobId} />)
-          : <div className="job-empty"><strong>{i18n.t("jobs.empty.title")}</strong><span>{i18n.t("jobs.empty.description")}</span></div>}
+      <div
+        id="jobs-list"
+        className="grid min-h-0 flex-1 auto-rows-max gap-2 overflow-auto p-4"
+        onFocus={() => actions.handleJobsIntent({ type: "poll" })}
+      >
+        {snapshot.jobs.jobs.length ? (
+          snapshot.jobs.jobs.map((job) => <JobCard job={job} key={job.jobId} />)
+        ) : (
+          <div className="grid min-h-40 place-items-center gap-1 text-center text-sm text-slate-500 dark:text-slate-400">
+            <strong>{i18n.t("jobs.empty.title")}</strong>
+            <span>{i18n.t("jobs.empty.description")}</span>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -43,13 +82,23 @@ function JobCard({ job }: Readonly<{ job: JobItem }>) {
   const snapshot = useZManagerSnapshot();
   const i18n = translatorForSnapshot(snapshot);
   return (
-    <article className="job-card" data-job-status={job.status}>
-      <div className="job-header">
-        <div className="job-heading">
-          <p className="job-title">{formatJobKind(job.kind, snapshot)}</p>
-          <p className="job-subtitle">{job.jobId}</p>
+    <article
+      className="grid content-start gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      data-job-status={job.status}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold">{formatJobKind(job.kind, snapshot)}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+            {job.jobId}
+          </p>
         </div>
-        <span className="job-status-pill">{i18n.t(jobStatusKey(job.status))}</span>
+        <span
+          className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          data-job-subtitle
+        >
+          {i18n.t(jobStatusKey(job.status))}
+        </span>
       </div>
       <JobBody job={job} />
     </article>
@@ -74,19 +123,55 @@ function FailedJobBody({ job }: Readonly<{ job: JobItem }>) {
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const failedEvent = latestFailedEvent(job);
-  const failedMessage = failedEvent?.message ?? job.progress.latestStatusMessage;
+  const failedMessage =
+    failedEvent?.message ?? job.progress.latestStatusMessage;
   const failedItem = failedEvent?.path ?? job.progress.currentFile;
 
   return (
     <>
-      <div className="job-message job-message-error">
-        <strong>{i18n.t("jobs.failed.title", { kind: formatJobKind(job.kind, snapshot) })}</strong>
+      <div className="grid min-w-0 gap-1 rounded-md border border-red-200 bg-red-50 p-2 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+        <strong>
+          {i18n.t("jobs.failed.title", {
+            kind: formatJobKind(job.kind, snapshot),
+          })}
+        </strong>
         <span>{failedMessage}</span>
-        {failedItem ? <small>{i18n.t("jobs.failed.item")} {failedItem}</small> : null}
+        {failedItem ? (
+          <small>
+            {i18n.t("jobs.failed.item")} {failedItem}
+          </small>
+        ) : null}
       </div>
-      <div className="job-actions">
-        {job.canRetryPassword ? <Button type="button" variant="dialog" size="unset" data-retry-password={job.jobId} onClick={() => actions.handleJobsIntent({ type: "retryPassword", jobId: job.jobId })}>{i18n.t("jobs.action.retryPassword")}</Button> : null}
-        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        {job.canRetryPassword ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-retry-password={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({
+                type: "retryPassword",
+                jobId: job.jobId,
+              })
+            }
+          >
+            {i18n.t("jobs.action.retryPassword")}
+          </Button>
+        ) : null}
+        {job.canDismiss ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-dismiss={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })
+            }
+          >
+            {i18n.t("jobs.action.dismiss")}
+          </Button>
+        ) : null}
       </div>
     </>
   );
@@ -98,13 +183,25 @@ function CompletedJobBody({ job }: Readonly<{ job: JobItem }>) {
   const i18n = translatorForSnapshot(snapshot);
   return (
     <>
-      <div className="job-completion">
+      <div className="grid min-w-0 gap-1 rounded-md bg-emerald-50 p-2 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
         <strong>{i18n.t("jobs.completed.title")}</strong>
         <JobSummary job={job} />
       </div>
       <JobOutputActions job={job} />
-      <div className="job-actions">
-        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        {job.canDismiss ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-dismiss={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })
+            }
+          >
+            {i18n.t("jobs.action.dismiss")}
+          </Button>
+        ) : null}
       </div>
       <JobProgressBar job={job} />
     </>
@@ -118,12 +215,24 @@ function CancelledJobBody({ job }: Readonly<{ job: JobItem }>) {
   const currentItem = job.progress.currentFile || i18n.t("jobs.current.none");
   return (
     <>
-      <div className="job-message">
+      <div className="grid min-w-0 gap-1 rounded-md bg-slate-50 p-2 dark:bg-slate-800">
         <strong>{i18n.t("jobs.cancelled.title")}</strong>
         <span>{currentItem}</span>
       </div>
-      <div className="job-actions">
-        {job.canDismiss ? <Button type="button" variant="dialog" size="unset" data-dismiss={job.jobId} onClick={() => actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })}>{i18n.t("jobs.action.dismiss")}</Button> : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        {job.canDismiss ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-dismiss={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "dismiss", jobId: job.jobId })
+            }
+          >
+            {i18n.t("jobs.action.dismiss")}
+          </Button>
+        ) : null}
       </div>
       <JobProgressBar job={job} />
     </>
@@ -137,23 +246,76 @@ function LiveJobBody({ job }: Readonly<{ job: JobItem }>) {
   const currentItem = job.progress.currentFile || i18n.t("jobs.current.none");
   return (
     <>
-      <div className="job-current">
+      <div className="grid min-w-0 gap-1">
         <span>{i18n.t("jobs.current.label")}</span>
         <strong>{currentItem}</strong>
       </div>
       <JobProgressBar job={job} />
-      <div className="job-facts" aria-label={i18n.t("jobs.metrics.aria")}>
-        <span><strong>{filesText(job)}</strong> {i18n.t("jobs.metric.files")}</span>
-        <span><strong>{speedText(job, snapshot)}</strong> {i18n.t("jobs.metric.speed")}</span>
-        <span><strong>{formatDuration(job.progress.remainingMs) || i18n.t("jobs.metric.notAvailable")}</strong> {i18n.t("jobs.metric.remainingTime")}</span>
-        <span><strong>{processedText(job, snapshot)}</strong> {i18n.t("jobs.metric.processed")}</span>
+      <div
+        className="grid grid-cols-2 gap-2 rounded-md bg-slate-50 p-2 text-xs dark:bg-slate-800"
+        aria-label={i18n.t("jobs.metrics.aria")}
+      >
+        <span>
+          <strong>{filesText(job)}</strong> {i18n.t("jobs.metric.files")}
+        </span>
+        <span>
+          <strong>{speedText(job, snapshot)}</strong>{" "}
+          {i18n.t("jobs.metric.speed")}
+        </span>
+        <span>
+          <strong>
+            {formatDuration(job.progress.remainingMs) ||
+              i18n.t("jobs.metric.notAvailable")}
+          </strong>{" "}
+          {i18n.t("jobs.metric.remainingTime")}
+        </span>
+        <span>
+          <strong>{processedText(job, snapshot)}</strong>{" "}
+          {i18n.t("jobs.metric.processed")}
+        </span>
       </div>
-      <div className="job-actions">
-        {job.status === "running" ? <Button type="button" variant="dialog" size="unset" data-pause={job.jobId} onClick={() => actions.handleJobsIntent({ type: "pause", jobId: job.jobId })}>{i18n.t("jobs.action.pause")}</Button> : null}
-        {job.status === "paused" ? <Button type="button" variant="dialog" size="unset" data-resume={job.jobId} onClick={() => actions.handleJobsIntent({ type: "resume", jobId: job.jobId })}>{i18n.t("common.continue")}</Button> : null}
-        {job.status === "queued" || job.status === "running" || job.status === "paused"
-          ? <Button type="button" variant="dialog" size="unset" data-cancel={job.jobId} onClick={() => actions.handleJobsIntent({ type: "cancel", jobId: job.jobId })}>{i18n.t("jobs.action.cancel")}</Button>
-          : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        {job.status === "running" ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-pause={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "pause", jobId: job.jobId })
+            }
+          >
+            {i18n.t("jobs.action.pause")}
+          </Button>
+        ) : null}
+        {job.status === "paused" ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-resume={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "resume", jobId: job.jobId })
+            }
+          >
+            {i18n.t("common.continue")}
+          </Button>
+        ) : null}
+        {job.status === "queued" ||
+        job.status === "running" ||
+        job.status === "paused" ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            data-cancel={job.jobId}
+            onClick={() =>
+              actions.handleJobsIntent({ type: "cancel", jobId: job.jobId })
+            }
+          >
+            {i18n.t("jobs.action.cancel")}
+          </Button>
+        ) : null}
       </div>
     </>
   );
@@ -168,10 +330,31 @@ function JobSummary({ job }: Readonly<{ job: JobItem }>) {
   }
   return (
     <>
-      <p>{i18n.t("jobs.summary.entries", { count: summary.writtenEntries, size: formatBytes(summary.writtenBytes, { locale: snapshot.display.resolvedLocale }) })}</p>
-      {typeof summary.skippedEntries === "number" ? <p>{i18n.t("jobs.summary.skippedCount", { count: summary.skippedEntries })}</p> : null}
-      {summary.warnings.length ? <p>{i18n.t("jobs.summary.warningCount", { count: summary.warnings.length })}</p> : null}
-      <p className="job-output-size">{i18n.t(job.completedSizeLabelKey)}</p>
+      <p>
+        {i18n.t("jobs.summary.entries", {
+          count: summary.writtenEntries,
+          size: formatBytes(summary.writtenBytes, {
+            locale: snapshot.display.resolvedLocale,
+          }),
+        })}
+      </p>
+      {typeof summary.skippedEntries === "number" ? (
+        <p>
+          {i18n.t("jobs.summary.skippedCount", {
+            count: summary.skippedEntries,
+          })}
+        </p>
+      ) : null}
+      {summary.warnings.length ? (
+        <p>
+          {i18n.t("jobs.summary.warningCount", {
+            count: summary.warnings.length,
+          })}
+        </p>
+      ) : null}
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {i18n.t(job.completedSizeLabelKey)}
+      </p>
     </>
   );
 }
@@ -184,9 +367,12 @@ function JobOutputActions({ job }: Readonly<{ job: JobItem }>) {
     return null;
   }
   return (
-    <div className="job-output-actions">
+    <div className="flex flex-wrap gap-2">
       {job.readyOutputActions.map((action, index) => {
-        const label = action.kind === "open" ? i18n.t("jobs.action.openOutput") : i18n.t("jobs.action.revealOutput");
+        const label =
+          action.kind === "open"
+            ? i18n.t("jobs.action.openOutput")
+            : i18n.t("jobs.action.revealOutput");
         return (
           <Button
             type="button"
@@ -195,7 +381,14 @@ function JobOutputActions({ job }: Readonly<{ job: JobItem }>) {
             data-output-action={action.kind}
             data-output-job={job.jobId}
             data-output-index={index}
-            onClick={() => actions.handleJobsIntent({ type: "runOutputAction", jobId: job.jobId, actionIndex: index, kind: action.kind })}
+            onClick={() =>
+              actions.handleJobsIntent({
+                type: "runOutputAction",
+                jobId: job.jobId,
+                actionIndex: index,
+                kind: action.kind,
+              })
+            }
             key={`${action.kind}:${action.path}:${index}`}
           >
             {label}
@@ -211,9 +404,15 @@ function JobProgressBar({ job }: Readonly<{ job: JobItem }>) {
   const i18n = translatorForSnapshot(snapshot);
   const progressValue = job.progress.progressPercent ?? 0;
   const determinate = job.progress.progressPercent !== null || job.isTerminal;
-  return determinate
-    ? <progress aria-label={i18n.t("jobs.progress.aria")} value={progressValue.toFixed(0)} max="100" />
-    : <progress aria-label={i18n.t("jobs.progress.aria")} />;
+  return determinate ? (
+    <progress
+      aria-label={i18n.t("jobs.progress.aria")}
+      value={progressValue.toFixed(0)}
+      max="100"
+    />
+  ) : (
+    <progress aria-label={i18n.t("jobs.progress.aria")} />
+  );
 }
 
 export function QuickActionProgress() {
@@ -221,18 +420,29 @@ export function QuickActionProgress() {
   const progress = snapshot.quickActionProgress;
   const visible = snapshot.shell.quickActionWindow.mode !== "normal";
 
-  return progress.state === "tracking"
-    ? <TrackingQuickActionProgress progress={progress} hidden={!visible} />
-    : <EmptyQuickActionProgress hidden={!visible} />;
+  return progress.state === "tracking" ? (
+    <TrackingQuickActionProgress progress={progress} hidden={!visible} />
+  ) : (
+    <EmptyQuickActionProgress hidden={!visible} />
+  );
 }
 
 function EmptyQuickActionProgress({ hidden }: Readonly<{ hidden: boolean }>) {
   const snapshot = useZManagerSnapshot();
   const i18n = translatorForSnapshot(snapshot);
   return (
-    <section id="quick-progress" className="quick-progress" aria-label={i18n.t("quick.progress.aria")} hidden={hidden}>
+    <section
+      id="quick-progress"
+      className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-6"
+      aria-label={i18n.t("quick.progress.aria")}
+      hidden={hidden}
+    >
       <QuickHeading title={i18n.t("quick.progress.title")} subtitle="" />
-      <dl id="quick-context" className="quick-progress-context" hidden />
+      <dl
+        id="quick-context"
+        className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900"
+        hidden
+      />
       <QuickMetrics
         elapsed="00:00:00"
         totalSize=""
@@ -244,12 +454,20 @@ function EmptyQuickActionProgress({ hidden }: Readonly<{ hidden: boolean }>) {
         compressedSize=""
         ratio=""
       />
-      <div className="quick-progress-current">
+      <div className="grid gap-1 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
         <p id="quick-operation">{i18n.t("quick.operation.starting")}</p>
         <p id="quick-current-path" />
       </div>
-      <progress id="quick-progress-bar" aria-label={i18n.t("quick.progressBar.aria")} />
-      <QuickActions backgroundDisabled continueDisabled cancelDisabled continueLabel={i18n.t("quick.pause")} />
+      <progress
+        id="quick-progress-bar"
+        aria-label={i18n.t("quick.progressBar.aria")}
+      />
+      <QuickActions
+        backgroundDisabled
+        continueDisabled
+        cancelDisabled
+        continueLabel={i18n.t("quick.pause")}
+      />
     </section>
   );
 }
@@ -263,22 +481,42 @@ function TrackingQuickActionProgress({
 }>) {
   const snapshot = useZManagerSnapshot();
   const i18n = translatorForSnapshot(snapshot);
-  const context = focusedJobProgressContextDisplay(progress.latestContext, snapshot);
+  const context = focusedJobProgressContextDisplay(
+    progress.latestContext,
+    snapshot,
+  );
   const operation = quickOperationLabel(progress, snapshot);
-  const ratio = progress.compressedBytes === null || progress.totalBytes === null
-    ? ""
-    : formatCompressionRatio(progress.totalBytes, progress.compressedBytes, {
-        emptyValue: "",
-        fractionDigits: 0,
-        locale: snapshot.display.resolvedLocale,
-      });
+  const ratio =
+    progress.compressedBytes === null || progress.totalBytes === null
+      ? ""
+      : formatCompressionRatio(progress.totalBytes, progress.compressedBytes, {
+          emptyValue: "",
+          fractionDigits: 0,
+          locale: snapshot.display.resolvedLocale,
+        });
   return (
-    <section id="quick-progress" className="quick-progress" aria-label={i18n.t("quick.progress.aria")} hidden={hidden}>
+    <section
+      id="quick-progress"
+      className="grid min-h-0 flex-1 content-start gap-4 overflow-auto p-6"
+      aria-label={i18n.t("quick.progress.aria")}
+      hidden={hidden}
+    >
       <QuickHeading
-        title={progress.jobCount > 1 ? i18n.t("quick.progress.multipleJobs", { count: progress.jobCount }) : context?.title ?? formatJobKind(progress.latestJob.kind, snapshot)}
+        title={
+          progress.jobCount > 1
+            ? i18n.t("quick.progress.multipleJobs", {
+                count: progress.jobCount,
+              })
+            : (context?.title ??
+              formatJobKind(progress.latestJob.kind, snapshot))
+        }
         subtitle={context?.subtitle ?? ""}
       />
-      <dl id="quick-context" className="quick-progress-context" hidden={!context?.rows.length}>
+      <dl
+        id="quick-context"
+        className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900"
+        hidden={!context?.rows.length}
+      >
         {context?.rows.map((row) => (
           <div key={`${row.label}:${row.value}`}>
             <dt>{row.label}</dt>
@@ -288,35 +526,84 @@ function TrackingQuickActionProgress({
       </dl>
       <QuickMetrics
         elapsed={formatDurationClock(progress.elapsedMs)}
-        totalSize={progress.totalBytes === null ? "" : formatBytes(progress.totalBytes, { locale: snapshot.display.resolvedLocale })}
+        totalSize={
+          progress.totalBytes === null
+            ? ""
+            : formatBytes(progress.totalBytes, {
+                locale: snapshot.display.resolvedLocale,
+              })
+        }
         remaining={formatDurationClock(progress.remainingMs)}
-        speed={progress.speedBytesPerSecond === null ? "" : `${formatBytes(progress.speedBytesPerSecond, { locale: snapshot.display.resolvedLocale })}/s`}
-        files={progress.totalFiles === null ? String(progress.processedFiles) : `${progress.processedFiles} / ${progress.totalFiles}`}
-        processed={progress.processedBytes > 0 ? formatBytes(progress.processedBytes, { locale: snapshot.display.resolvedLocale }) : ""}
-        totalFiles={progress.jobCount > 1 ? i18n.t("quick.progress.totalJobs", { count: progress.jobCount }) : ""}
-        compressedSize={progress.compressedBytes === null ? "" : formatBytes(progress.compressedBytes, { locale: snapshot.display.resolvedLocale })}
+        speed={
+          progress.speedBytesPerSecond === null
+            ? ""
+            : `${formatBytes(progress.speedBytesPerSecond, { locale: snapshot.display.resolvedLocale })}/s`
+        }
+        files={
+          progress.totalFiles === null
+            ? String(progress.processedFiles)
+            : `${progress.processedFiles} / ${progress.totalFiles}`
+        }
+        processed={
+          progress.processedBytes > 0
+            ? formatBytes(progress.processedBytes, {
+                locale: snapshot.display.resolvedLocale,
+              })
+            : ""
+        }
+        totalFiles={
+          progress.jobCount > 1
+            ? i18n.t("quick.progress.totalJobs", { count: progress.jobCount })
+            : ""
+        }
+        compressedSize={
+          progress.compressedBytes === null
+            ? ""
+            : formatBytes(progress.compressedBytes, {
+                locale: snapshot.display.resolvedLocale,
+              })
+        }
         ratio={ratio}
       />
-      <div className="quick-progress-current">
+      <div className="grid gap-1 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
         <p id="quick-operation">{operation}</p>
         <p id="quick-current-path">{progress.currentFile}</p>
       </div>
-      {progress.progressPercent === null
-        ? <progress id="quick-progress-bar" aria-label={i18n.t("quick.progressBar.aria")} />
-        : <progress id="quick-progress-bar" aria-label={i18n.t("quick.progressBar.aria")} value={progress.progressPercent} max="100" />}
+      {progress.progressPercent === null ? (
+        <progress
+          id="quick-progress-bar"
+          aria-label={i18n.t("quick.progressBar.aria")}
+        />
+      ) : (
+        <progress
+          id="quick-progress-bar"
+          aria-label={i18n.t("quick.progressBar.aria")}
+          value={progress.progressPercent}
+          max="100"
+        />
+      )}
       <QuickActions
-        backgroundDisabled={progress.allTerminal || progress.anyPaused || snapshot.shell.quickActionWindow.mode === "background"}
+        backgroundDisabled={
+          progress.allTerminal ||
+          progress.anyPaused ||
+          snapshot.shell.quickActionWindow.mode === "background"
+        }
         continueDisabled={!progress.anyActive}
         cancelDisabled={!progress.anyActive}
-        continueLabel={progress.anyPaused ? i18n.t("common.continue") : i18n.t("quick.pause")}
+        continueLabel={
+          progress.anyPaused ? i18n.t("common.continue") : i18n.t("quick.pause")
+        }
       />
     </section>
   );
 }
 
-function QuickHeading({ title, subtitle }: Readonly<{ title: string; subtitle: string }>) {
+function QuickHeading({
+  title,
+  subtitle,
+}: Readonly<{ title: string; subtitle: string }>) {
   return (
-    <div className="quick-progress-heading">
+    <div className="flex items-start justify-between gap-3">
       <div>
         <h2 id="quick-title">{title}</h2>
         <p id="quick-subtitle">{subtitle}</p>
@@ -349,17 +636,64 @@ function QuickMetrics({
   const snapshot = useZManagerSnapshot();
   const i18n = translatorForSnapshot(snapshot);
   return (
-    <div className="quick-progress-grid">
-      <div className="quick-progress-metric"><span>{i18n.t("quick.elapsedTime")}</span><strong id="quick-elapsed">{elapsed}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.totalSize")}</span><strong id="quick-total-size">{totalSize}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.remainingTime")}</span><strong id="quick-remaining">{remaining}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.speed")}</span><strong id="quick-speed">{speed}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.files")}</span><strong id="quick-files">{files}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.processed")}</span><strong id="quick-processed">{processed}</strong></div>
-      <div className="quick-progress-metric"><span /><strong id="quick-total-files">{totalFiles}</strong></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.compressedSize")}</span><strong id="quick-compressed-size">{compressedSize}</strong></div>
-      <div className="quick-progress-metric"><span /><strong /></div>
-      <div className="quick-progress-metric"><span>{i18n.t("quick.compressionRatio")}</span><strong id="quick-ratio">{ratio}</strong></div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <QuickMetric
+        label={i18n.t("quick.elapsedTime")}
+        id="quick-elapsed"
+        value={elapsed}
+      />
+      <QuickMetric
+        label={i18n.t("quick.totalSize")}
+        id="quick-total-size"
+        value={totalSize}
+      />
+      <QuickMetric
+        label={i18n.t("quick.remainingTime")}
+        id="quick-remaining"
+        value={remaining}
+      />
+      <QuickMetric
+        label={i18n.t("quick.speed")}
+        id="quick-speed"
+        value={speed}
+      />
+      <QuickMetric
+        label={i18n.t("quick.files")}
+        id="quick-files"
+        value={files}
+      />
+      <QuickMetric
+        label={i18n.t("quick.processed")}
+        id="quick-processed"
+        value={processed}
+      />
+      <QuickMetric label="" id="quick-total-files" value={totalFiles} />
+      <QuickMetric
+        label={i18n.t("quick.compressedSize")}
+        id="quick-compressed-size"
+        value={compressedSize}
+      />
+      <QuickMetric label="" value="" />
+      <QuickMetric
+        label={i18n.t("quick.compressionRatio")}
+        id="quick-ratio"
+        value={ratio}
+      />
+    </div>
+  );
+}
+
+function QuickMetric({
+  label,
+  value,
+  id,
+}: Readonly<{ label: string; value: string; id?: string }>) {
+  return (
+    <div className="grid gap-1 rounded-lg border border-slate-200 bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900">
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <strong id={id} className="truncate tabular-nums">
+        {value}
+      </strong>
     </div>
   );
 }
@@ -378,7 +712,9 @@ function QuickActions({
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const [pendingAction, setPendingAction] = useState<"background" | "continue" | "cancel" | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    "background" | "continue" | "cancel" | null
+  >(null);
 
   useEffect(() => {
     setPendingAction(null);
@@ -386,7 +722,7 @@ function QuickActions({
 
   const controlsPending = pendingAction !== null;
   return (
-    <div className="quick-progress-actions">
+    <div className="flex flex-wrap justify-end gap-2">
       <Button
         id="quick-background"
         variant="dialog"
@@ -455,7 +791,9 @@ function speedText(job: JobItem, snapshot: ZManagerReactSnapshot): string {
 
 function processedText(job: JobItem, snapshot: ZManagerReactSnapshot): string {
   return job.progress.totalBytes === null
-    ? formatBytes(job.progress.processedBytes, { locale: snapshot.display.resolvedLocale })
+    ? formatBytes(job.progress.processedBytes, {
+        locale: snapshot.display.resolvedLocale,
+      })
     : `${formatBytes(job.progress.processedBytes, { locale: snapshot.display.resolvedLocale })} / ${formatBytes(job.progress.totalBytes, { locale: snapshot.display.resolvedLocale })}`;
 }
 
@@ -477,7 +815,9 @@ function formatDurationClock(milliseconds: number | null): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
+  return [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
 }
 
 function formatJobKind(kind: JobKind, snapshot: ZManagerReactSnapshot): string {
@@ -547,7 +887,13 @@ function quickOperationLabel(
 function focusedJobProgressContextDisplay(
   context: FocusedContext,
   snapshot: ZManagerReactSnapshot,
-): Readonly<{ title: string; subtitle?: string; rows: readonly Readonly<{ label: string; value: string }>[] }> | undefined {
+):
+  | Readonly<{
+      title: string;
+      subtitle?: string;
+      rows: readonly Readonly<{ label: string; value: string }>[];
+    }>
+  | undefined {
   if (!context) {
     return undefined;
   }
@@ -556,39 +902,68 @@ function focusedJobProgressContextDisplay(
     const sourceLabel = context.sources.length === 1 ? "Source" : "Sources";
     return {
       title: "Create archive",
-      subtitle: getPathBasename(context.destinationPath, context.destinationPath),
+      subtitle: getPathBasename(
+        context.destinationPath,
+        context.destinationPath,
+      ),
       rows: progressContextRows([
         { label: sourceLabel, value: sourcePreview },
         { label: "Destination", value: context.destinationPath },
         { label: "Format", value: context.format },
         { label: "Clean source", value: context.cleanSource ? "Yes" : "No" },
-        { label: "Recovery", value: context.format === "tzap" && context.tzapRecoveryPercentage !== undefined ? `${context.tzapRecoveryPercentage}%` : null },
+        {
+          label: "Recovery",
+          value:
+            context.format === "tzap" &&
+            context.tzapRecoveryPercentage !== undefined
+              ? `${context.tzapRecoveryPercentage}%`
+              : null,
+        },
       ]),
     };
   }
 
   const i18n = translatorForSnapshot(snapshot);
   const entryCount = context.entryPaths?.length ?? 0;
-  const entryPreview = context.entryPaths ? truncatedPathPreview(context.entryPaths, 3, 180) : null;
+  const entryPreview = context.entryPaths
+    ? truncatedPathPreview(context.entryPaths, 3, 180)
+    : null;
   return {
-    title: context.title === "selection" ? i18n.t("extract.selectedProgressTitle") : "Extract archive",
+    title:
+      context.title === "selection"
+        ? i18n.t("extract.selectedProgressTitle")
+        : "Extract archive",
     subtitle: getPathBasename(context.archivePath, context.archivePath),
     rows: progressContextRows([
       { label: "Archive", value: context.archivePath },
       { label: "Destination", value: context.destinationPath },
-      { label: "Entries", value: entryCount > 0 ? `${entryCount} selected${entryPreview ? `: ${entryPreview}` : ""}` : "All entries" },
+      {
+        label: "Entries",
+        value:
+          entryCount > 0
+            ? `${entryCount} selected${entryPreview ? `: ${entryPreview}` : ""}`
+            : "All entries",
+      },
       { label: "Overwrite", value: context.overwrite },
     ]),
   };
 }
 
-function progressContextRows(rows: readonly Readonly<{ label: string; value?: string | null }>[]) {
+function progressContextRows(
+  rows: readonly Readonly<{ label: string; value?: string | null }>[],
+) {
   return rows
-    .filter((row): row is Readonly<{ label: string; value: string }> => Boolean(row.value))
+    .filter((row): row is Readonly<{ label: string; value: string }> =>
+      Boolean(row.value),
+    )
     .map((row) => ({ label: row.label, value: row.value }));
 }
 
-function truncatedPathPreview(paths: readonly string[], maxItems = 3, maxLength = 140): string | null {
+function truncatedPathPreview(
+  paths: readonly string[],
+  maxItems = 3,
+  maxLength = 140,
+): string | null {
   if (!paths.length) {
     return null;
   }

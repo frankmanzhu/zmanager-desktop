@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replacement-migration-prepare"
+description = "Enables the replacement_migration_prepare command without any pre-configured scope."
+commands.allow = ["replacement_migration_prepare"]
+
+[[permission]]
+identifier = "deny-replacement-migration-prepare"
+description = "Denies the replacement_migration_prepare command without any pre-configured scope."
+commands.deny = ["replacement_migration_prepare"]

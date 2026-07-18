@@ -19,6 +19,7 @@ const SHELL_ACTION_REQUEST_ARG: &str = "--shell-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
 const MAX_SHELL_ACTION_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+const MAX_APP_GROUP_SHELL_ACTION_REQUEST_BYTES: usize = 1_048_576;
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
 
@@ -389,6 +390,19 @@ fn read_quick_action_request_file(
     validate_request(request.kind, request.paths)
 }
 
+pub fn parse_app_group_shell_action_request(
+    content: &[u8],
+) -> Result<QuickActionRequestDto, String> {
+    if content.is_empty() || content.len() > MAX_APP_GROUP_SHELL_ACTION_REQUEST_BYTES {
+        return Err("App Group shell-action request has an invalid size".to_string());
+    }
+    let content = std::str::from_utf8(content)
+        .map_err(|_| "App Group shell-action request must be UTF-8 JSON".to_string())?;
+    let request = zmanager_shell_contract::ShellActionRequest::from_json(content)
+        .map_err(|error| error.to_string())?;
+    validate_request(request.action.into(), request.paths).map_err(|error| error.message)
+}
+
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
     let normalized = value
         .trim()
@@ -597,6 +611,18 @@ mod tests {
 
     fn state_from_args(args: &[&str]) -> QuickActionStartupState {
         QuickActionStartupState::from_args(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn app_group_shell_action_contract_parses_and_validates_without_paths_in_arguments() {
+        let request = parse_app_group_shell_action_request(
+            br#"{"version":1,"action":"compressZip","paths":["/tmp/one","/tmp/two"]}"#,
+        )
+        .unwrap();
+        assert_eq!(request.kind, QuickActionKindDto::CompressZip);
+        assert_eq!(request.paths, ["/tmp/one", "/tmp/two"]);
+        assert!(parse_app_group_shell_action_request(br#"{"version":2}"#).is_err());
+        assert!(parse_app_group_shell_action_request(&vec![b'x'; 1_048_577]).is_err());
     }
 
     fn requested(args: &[&str]) -> QuickActionRequestDto {

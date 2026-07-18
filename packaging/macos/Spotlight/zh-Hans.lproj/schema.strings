@@ -1,0 +1,5 @@
+"com_frankmanzhu_zmanager_tzapSignatureStatus" = "TZAP 签名";
+"com_frankmanzhu_zmanager_tzapSigner" = "TZAP 签名者";
+"com_frankmanzhu_zmanager_tzapIssuer" = "TZAP 颁发者";
+"com_frankmanzhu_zmanager_tzapEncryption" = "TZAP 加密";
+"com_frankmanzhu_zmanager_tzapVolumeCount" = "TZAP 分卷数";

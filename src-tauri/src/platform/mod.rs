@@ -16,6 +16,8 @@ mod windows_drag_path;
 #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
 compile_error!("ZManager Desktop requires a NativePlatform adapter for this operating system");
 
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 use tauri::{Builder, Wry};
@@ -38,6 +40,108 @@ pub struct PlatformProfile {
 pub struct ShellActionProfile {
     pub label: &'static str,
     pub quick_action: &'static str,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefaultHandlerRequest {
+    pub action: DefaultHandlerAction,
+    pub extensions: Vec<String>,
+    pub bundle_id: String,
+    pub handlers: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DefaultHandlerAction {
+    Status,
+    Set,
+    Restore,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefaultHandlerEntry {
+    pub file_extension: String,
+    pub content_type: Option<String>,
+    pub handler_bundle_id: Option<String>,
+    pub is_current_application: bool,
+    pub error_code: Option<i32>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyReplacementMigrationRequest {
+    pub schema_version: u32,
+    pub legacy_bundle_id: String,
+    pub current_application_path: String,
+    pub legacy_account_state_directory: String,
+    pub temporary_directory: String,
+    pub legacy_application_candidates: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyReplacementPreferences {
+    pub default_archive_format: Option<String>,
+    pub default_clean_source_enabled: Option<bool>,
+    pub legacy_default_create_profile: Option<String>,
+    pub default_output_location: Option<String>,
+    pub custom_output_folder_path: Option<String>,
+    pub quick_open_extraction_enabled: Option<bool>,
+    pub quick_extraction_location: Option<String>,
+    pub quick_extraction_folder_path: Option<String>,
+    pub preview_cleanup_policy: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplacementMigrationDiagnostic {
+    pub key: String,
+    pub code: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyReplacementMigrationSnapshot {
+    pub schema_version: u32,
+    pub preferences: LegacyReplacementPreferences,
+    pub default_handler_restore: HashMap<String, String>,
+    pub legacy_account_state_directory: Option<String>,
+    pub stale_preview_roots: Vec<String>,
+    pub legacy_registration_paths: Vec<String>,
+    pub registration_owners: HashMap<String, String>,
+    pub diagnostics: Vec<ReplacementMigrationDiagnostic>,
+}
+
+impl LegacyReplacementMigrationSnapshot {
+    pub fn empty() -> Self {
+        Self {
+            schema_version: 1,
+            preferences: LegacyReplacementPreferences::default(),
+            default_handler_restore: HashMap::new(),
+            legacy_account_state_directory: None,
+            stale_preview_roots: Vec::new(),
+            legacy_registration_paths: Vec::new(),
+            registration_owners: HashMap::new(),
+            diagnostics: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyRegistrationReconcileRequest {
+    pub schema_version: u32,
+    pub legacy_bundle_id: String,
+    pub current_application_path: String,
+    pub legacy_application_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyRegistrationReconcileResult {
+    pub diagnostics: Vec<ReplacementMigrationDiagnostic>,
 }
 
 #[derive(Clone, Debug)]
@@ -127,6 +231,18 @@ pub(crate) trait NativePlatform {
     fn integration_profile() -> PlatformProfile;
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error>;
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto>;
+    fn default_handlers(
+        request: &DefaultHandlerRequest,
+    ) -> Result<Vec<DefaultHandlerEntry>, String>;
+    fn read_replacement_migration(
+        request: &LegacyReplacementMigrationRequest,
+    ) -> Result<LegacyReplacementMigrationSnapshot, String>;
+    fn reconcile_legacy_registrations(
+        request: &LegacyRegistrationReconcileRequest,
+    ) -> Result<Vec<ReplacementMigrationDiagnostic>, String>;
+    fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()>;
+    fn native_drag_requires_preflight() -> bool;
+    fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String>;
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
         strip_components: usize,
@@ -167,6 +283,36 @@ pub fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), t
 
 pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
     ActivePlatform::system_file_icons(entries)
+}
+
+pub fn default_handlers(
+    request: &DefaultHandlerRequest,
+) -> Result<Vec<DefaultHandlerEntry>, String> {
+    ActivePlatform::default_handlers(request)
+}
+
+pub fn read_replacement_migration(
+    request: &LegacyReplacementMigrationRequest,
+) -> Result<LegacyReplacementMigrationSnapshot, String> {
+    ActivePlatform::read_replacement_migration(request)
+}
+
+pub fn reconcile_legacy_registrations(
+    request: &LegacyRegistrationReconcileRequest,
+) -> Result<Vec<ReplacementMigrationDiagnostic>, String> {
+    ActivePlatform::reconcile_legacy_registrations(request)
+}
+
+pub fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()> {
+    ActivePlatform::set_owner_only_file_permissions(file)
+}
+
+pub fn native_drag_requires_preflight() -> bool {
+    ActivePlatform::native_drag_requires_preflight()
+}
+
+pub fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String> {
+    ActivePlatform::consume_shell_action_request(token)
 }
 
 pub fn prepare_native_file_drag(

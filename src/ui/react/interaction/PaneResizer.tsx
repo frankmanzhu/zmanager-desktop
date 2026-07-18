@@ -1,16 +1,20 @@
 import {
-  APP_DETAILS_PANE_DEFAULT_WIDTH_PX,
+  useRef,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+
+import {
   APP_DETAILS_PANE_MAX_WIDTH_PX,
   APP_DETAILS_PANE_MIN_WIDTH_PX,
-  APP_NAV_PANE_DEFAULT_WIDTH_PX,
   APP_NAV_PANE_MAX_WIDTH_PX,
   APP_NAV_PANE_MIN_WIDTH_PX,
 } from "../../../app/constants";
+import {
+  useResizablePaneLayout,
+  type ResizablePane,
+} from "./ResizablePaneContext";
 
-type ResizablePane = "navigation" | "details";
-
-const PANE_RESIZE_CENTER_MIN_WIDTH_PX = 360;
-const PANE_RESIZE_GUTTER_TOTAL_PX = 10;
 const PANE_RESIZE_KEYBOARD_STEP_PX = 16;
 const PANE_RESIZE_KEYBOARD_LARGE_STEP_PX = 48;
 
@@ -24,10 +28,14 @@ export function PaneResizer({
   pane: ResizablePane;
 }>) {
   const bounds = paneWidthBounds(pane);
+  const dragRef = useRef<PaneResizeDrag | null>(null);
+  const layout = useResizablePaneLayout();
+  const width =
+    pane === "navigation" ? layout.navigationWidth : layout.detailsWidth;
 
   return (
     <div
-      className="pane-resizer"
+      className="group relative z-10 w-1.5 shrink-0 cursor-col-resize bg-transparent outline-none max-[760px]:hidden focus-visible:bg-blue-500/20"
       data-pane-resizer={pane}
       role="separator"
       tabIndex={0}
@@ -37,10 +45,21 @@ export function PaneResizer({
       aria-keyshortcuts="ArrowLeft ArrowRight Home End"
       aria-valuemin={bounds.min}
       aria-valuemax={bounds.max}
-      onPointerDown={(event) => startPaneResize(event.currentTarget, event.nativeEvent, pane)}
-      onKeyDown={(event) => resizePaneByKeyboard(event.currentTarget, event.nativeEvent, pane)}
+      aria-valuenow={Math.round(width)}
+      onPointerDown={(event) => startPaneResize(event, width, dragRef)}
+      onPointerMove={(event) =>
+        continuePaneResize(event, pane, layout.setWidth, dragRef)
+      }
+      onPointerUp={(event) => endPaneResize(event, dragRef)}
+      onPointerCancel={(event) => endPaneResize(event, dragRef)}
+      onKeyDown={(event) =>
+        resizePaneByKeyboard(event.nativeEvent, pane, width, layout.setWidth)
+      }
     >
-      <span className="pane-resizer-grip" aria-hidden="true" />
+      <span
+        className="pointer-events-none absolute inset-y-1/2 left-1/2 h-10 w-px -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-300 group-hover:bg-blue-500 dark:bg-slate-700"
+        aria-hidden="true"
+      />
     </div>
   );
 }
@@ -48,112 +67,94 @@ export function PaneResizer({
 function paneWidthBounds(pane: ResizablePane): { min: number; max: number } {
   return pane === "navigation"
     ? { min: APP_NAV_PANE_MIN_WIDTH_PX, max: APP_NAV_PANE_MAX_WIDTH_PX }
-    : { min: APP_DETAILS_PANE_MIN_WIDTH_PX, max: APP_DETAILS_PANE_MAX_WIDTH_PX };
+    : {
+        min: APP_DETAILS_PANE_MIN_WIDTH_PX,
+        max: APP_DETAILS_PANE_MAX_WIDTH_PX,
+      };
 }
 
-function paneDefaultWidth(pane: ResizablePane): number {
-  return pane === "navigation" ? APP_NAV_PANE_DEFAULT_WIDTH_PX : APP_DETAILS_PANE_DEFAULT_WIDTH_PX;
-}
-
-function paneCssVariable(pane: ResizablePane): string {
-  return pane === "navigation" ? "--zmanager-nav-pane-width" : "--zmanager-details-pane-width";
-}
-
-function paneElements(resizer: HTMLElement): {
-  browserShell: HTMLElement;
-  detailsPane: HTMLElement;
-  navigationPane: HTMLElement;
-} | null {
-  const browserShell = resizer.closest<HTMLElement>(".browser-shell");
-  const navigationPane = browserShell?.querySelector<HTMLElement>("#navigation-pane") ?? null;
-  const detailsPane = browserShell?.querySelector<HTMLElement>("#details-pane") ?? null;
-  if (!browserShell || !navigationPane || !detailsPane) {
-    return null;
-  }
-
-  return { browserShell, detailsPane, navigationPane };
-}
-
-function paneElementForResize(resizer: HTMLElement, pane: ResizablePane): HTMLElement | null {
-  const elements = paneElements(resizer);
-  if (!elements) {
-    return null;
-  }
-
-  return pane === "navigation" ? elements.navigationPane : elements.detailsPane;
-}
-
-function currentResizablePaneWidth(resizer: HTMLElement, pane: ResizablePane): number {
-  const width = paneElementForResize(resizer, pane)?.getBoundingClientRect().width ?? 0;
-  return width > 0 ? width : paneDefaultWidth(pane);
-}
-
-function setResizablePaneWidth(resizer: HTMLElement, pane: ResizablePane, width: number): number {
-  const elements = paneElements(resizer);
+function clampResizablePaneWidth(pane: ResizablePane, width: number): number {
   const { min, max } = paneWidthBounds(pane);
-  if (!elements) {
-    return Math.max(min, Math.min(width, max));
-  }
-
-  const shellWidth = elements.browserShell.getBoundingClientRect().width;
-  const otherPaneWidth = pane === "navigation"
-    ? elements.detailsPane.getBoundingClientRect().width
-    : elements.navigationPane.getBoundingClientRect().width;
-  const maxWidthFromShell = shellWidth - otherPaneWidth - PANE_RESIZE_CENTER_MIN_WIDTH_PX - PANE_RESIZE_GUTTER_TOTAL_PX;
-  const nextWidth = Math.max(min, Math.min(width, max, Math.max(min, maxWidthFromShell)));
-  document.documentElement.style.setProperty(paneCssVariable(pane), `${Math.round(nextWidth)}px`);
-  resizer.setAttribute("aria-valuenow", String(Math.round(nextWidth)));
-  return nextWidth;
+  return Math.max(min, Math.min(width, max));
 }
 
-function startPaneResize(resizer: HTMLElement, event: PointerEvent, pane: ResizablePane) {
-  if (event.button !== 0) {
-    return;
-  }
+type PaneResizeDrag = Readonly<{
+  pointerId: number;
+  startWidth: number;
+  startX: number;
+}>;
 
+function startPaneResize(
+  event: ReactPointerEvent<HTMLElement>,
+  width: number,
+  dragRef: MutableRefObject<PaneResizeDrag | null>,
+) {
+  if (event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
-  document.body.classList.add("is-resizing-pane");
-
-  const startX = event.clientX;
-  const startWidth = currentResizablePaneWidth(resizer, pane);
-
-  const onPointerMove = (moveEvent: PointerEvent) => {
-    const delta = moveEvent.clientX - startX;
-    setResizablePaneWidth(resizer, pane, pane === "navigation" ? startWidth + delta : startWidth - delta);
+  event.currentTarget.setPointerCapture(event.pointerId);
+  dragRef.current = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startWidth: width,
   };
-
-  const onPointerUp = () => {
-    document.body.classList.remove("is-resizing-pane");
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-  };
-
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerUp, { once: true });
 }
 
-function resizePaneByKeyboard(resizer: HTMLElement, event: KeyboardEvent, pane: ResizablePane) {
+function continuePaneResize(
+  event: ReactPointerEvent<HTMLElement>,
+  pane: ResizablePane,
+  setWidth: (pane: ResizablePane, width: number) => void,
+  dragRef: MutableRefObject<PaneResizeDrag | null>,
+) {
+  const drag = dragRef.current;
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  const delta = event.clientX - drag.startX;
+  setWidth(
+    pane,
+    clampResizablePaneWidth(
+      pane,
+      pane === "navigation" ? drag.startWidth + delta : drag.startWidth - delta,
+    ),
+  );
+}
+
+function endPaneResize(
+  event: ReactPointerEvent<HTMLElement>,
+  dragRef: MutableRefObject<PaneResizeDrag | null>,
+) {
+  if (dragRef.current?.pointerId !== event.pointerId) return;
+  dragRef.current = null;
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+}
+
+function resizePaneByKeyboard(
+  event: KeyboardEvent,
+  pane: ResizablePane,
+  currentWidth: number,
+  setWidth: (pane: ResizablePane, width: number) => void,
+) {
   const { min, max } = paneWidthBounds(pane);
-  const currentWidth = currentResizablePaneWidth(resizer, pane);
-  const step = event.shiftKey ? PANE_RESIZE_KEYBOARD_LARGE_STEP_PX : PANE_RESIZE_KEYBOARD_STEP_PX;
+  const step = event.shiftKey
+    ? PANE_RESIZE_KEYBOARD_LARGE_STEP_PX
+    : PANE_RESIZE_KEYBOARD_STEP_PX;
   let nextWidth: number | null = null;
 
   if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
-    nextWidth = pane === "navigation" ? currentWidth - step : currentWidth + step;
+    nextWidth =
+      pane === "navigation" ? currentWidth - step : currentWidth + step;
   } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
-    nextWidth = pane === "navigation" ? currentWidth + step : currentWidth - step;
+    nextWidth =
+      pane === "navigation" ? currentWidth + step : currentWidth - step;
   } else if (event.key === "Home") {
     nextWidth = min;
   } else if (event.key === "End") {
     nextWidth = max;
   }
 
-  if (nextWidth === null) {
-    return;
-  }
-
+  if (nextWidth === null) return;
   event.preventDefault();
   event.stopPropagation();
-  setResizablePaneWidth(resizer, pane, nextWidth);
+  setWidth(pane, clampResizablePaneWidth(pane, nextWidth));
 }

@@ -39,48 +39,58 @@ export function ArchivePathBar() {
       pathPlaceholder={i18n.t("extract.destination.placeholder")}
       onPathChange={(path) => {
         setDestination(path);
-        actions.handleArchiveIntent({ type: "setExtractDestination", destinationPath: path });
+        actions.handleArchiveIntent({
+          type: "setExtractDestination",
+          destinationPath: path,
+        });
       }}
       crumbs={[]}
       crumbsHidden
       emptyCrumbsText=""
-      pathAccessory={(
+      pathAccessory={
         <>
           <button
             id="browse-extract-destination"
-            className="path-accessory-button"
+            className="grid size-8 place-items-center rounded-md border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
             type="button"
             aria-label={i18n.t("nativeDialog.chooseExtractDestination")}
             title={i18n.t("nativeDialog.chooseExtractDestination")}
             disabled={!archive.currentArchivePath}
-            onClick={() => actions.handleArchiveIntent({ type: "browseExtractDestination" })}
+            onClick={() =>
+              actions.handleArchiveIntent({ type: "browseExtractDestination" })
+            }
           >
-            <FolderOpen className="tool-icon" aria-hidden="true" />
+            <FolderOpen className="size-4" aria-hidden="true" />
           </button>
-          <span className="path-default-status">
-            {extract.usesGlobalDefaults ? i18n.t("extract.globalDefault") : i18n.t("extract.customDestination")}
+          <span className="max-w-28 truncate text-[11px] text-slate-500 dark:text-slate-400">
+            {extract.usesGlobalDefaults
+              ? i18n.t("extract.globalDefault")
+              : i18n.t("extract.customDestination")}
           </span>
         </>
-      )}
+      }
       search={{
         query: archive.view.searchQuery,
         disabled: !archive.command.canSearchEntries,
-        clearDisabled: !archive.command.canSearchEntries || !archive.view.searchQuery.trim(),
+        clearDisabled:
+          !archive.command.canSearchEntries || !archive.view.searchQuery.trim(),
         resultText: archive.currentArchivePath
           ? i18n.t(
-            archive.view.selection.visibleSelectablePaths.length === 1
-              ? "search.oneResult"
-              : "search.results",
-            { count: archive.view.selection.visibleSelectablePaths.length },
-          )
+              archive.view.selection.visibleSelectablePaths.length === 1
+                ? "search.oneResult"
+                : "search.results",
+              { count: archive.view.selection.visibleSelectablePaths.length },
+            )
           : "",
         entriesLabel: i18n.t("search.entries"),
         placeholder: i18n.t("search.placeholder"),
         buttonLabel: i18n.t("search.button"),
         clearLabel: i18n.t("search.clear"),
         clearAriaLabel: i18n.t("search.clear.aria"),
-        onChange: (query) => actions.handleArchiveIntent({ type: "setSearchQuery", query }),
-        onSubmit: (query) => actions.handleArchiveIntent({ type: "setSearchQuery", query }),
+        onChange: (query) =>
+          actions.handleArchiveIntent({ type: "setSearchQuery", query }),
+        onSubmit: (query) =>
+          actions.handleArchiveIntent({ type: "setSearchQuery", query }),
         onClear: () => actions.handleArchiveIntent({ type: "clearSearch" }),
       }}
     />

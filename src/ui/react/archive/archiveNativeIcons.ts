@@ -14,7 +14,9 @@ export function nativeIconDataUrlForArchivePath(
   return nativeIconDataUrlForPath(snapshot, archivePath, false);
 }
 
-export function nativeIconDataUrlForFolder(snapshot: ZManagerReactSnapshot): string | null {
+export function nativeIconDataUrlForFolder(
+  snapshot: ZManagerReactSnapshot,
+): string | null {
   return nativeIconDataUrlForPath(snapshot, "folder", true);
 }
 

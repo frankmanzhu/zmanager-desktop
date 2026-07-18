@@ -162,6 +162,20 @@ pub fn quick_action_startup_state(
 }
 
 #[tauri::command]
+pub fn consume_shell_action_request(
+    request_token: String,
+) -> Result<crate::dto::QuickActionRequestDto, CommandErrorDto> {
+    let content =
+        crate::platform::consume_shell_action_request(request_token.trim()).map_err(|_| {
+            CommandErrorDto::invalid_request(
+                "The Finder action request is invalid, expired, or already consumed",
+            )
+        })?;
+    crate::quick_action::parse_app_group_shell_action_request(&content)
+        .map_err(CommandErrorDto::invalid_request)
+}
+
+#[tauri::command]
 pub fn native_frontend_ready(
     window_label: String,
     state: State<'_, NativeLaunchInbox>,
@@ -1109,8 +1123,9 @@ pub fn start_native_file_drag(
         request.strip_components,
         password.as_deref(),
     )?;
-    #[cfg(not(target_os = "macos"))]
-    preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
+    if crate::platform::native_drag_requires_preflight() {
+        preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
+    }
 
     let stream_archive_path = archive_path.clone();
     let stream_password = password.clone();
@@ -2099,7 +2114,6 @@ fn entry_is_under_folder_key(entry_key: &str, folder_key: &str) -> bool {
     entry_key.starts_with(folder_key) && entry_key.len() > folder_key.len()
 }
 
-#[cfg(not(target_os = "macos"))]
 fn preflight_native_drag_stream(
     archive_path: &str,
     password: Option<&str>,

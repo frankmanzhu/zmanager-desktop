@@ -9,23 +9,25 @@ skip_tests=0
 install_application=1
 bundle_kind="all"
 install_dir="${ZMANAGER_MACOS_INSTALL_DIR:-/Applications}"
+architecture="$(uname -m)"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-macos.sh [--install-deps] [--skip-tests] [--no-install] [--install-dir PATH] [--bundle app|dmg|all]
+Usage: scripts/build-macos.sh [--install-deps] [--skip-tests] [--no-install] [--install-dir PATH] [--bundle app|dmg|all] [--arch arm64|x86_64]
 
-Builds macOS Tauri bundles without Developer ID signing or notarization and stages them under
+Builds and stages the unified macOS Tauri Release Bundle under
 /tmp/zmanager-desktop-macos (override with ZMANAGER_MACOS_STAGE_DIR).
 
 By default the script builds the host architecture and produces both a .app
-bundle and a .dmg, then installs ZManager.app into /Applications. Local builds
+bundle and a .dmg, then installs Z-Manager.app into /Applications. Local builds
 embed build-machine codec libraries, rewrite their load paths, and use ad-hoc
-inside-out signing. Protected release signing and notarization use the same
-bundle pipeline in the later release gate.
+inside-out signing. Set ZMANAGER_CODESIGN_IDENTITY to a Developer ID
+Application identity and ZMANAGER_NOTARY_PROFILE to a validated notarytool
+keychain profile to sign, notarize, staple, and Gatekeeper-check the same output.
 
 macOS prerequisites:
   xcode-select --install
-  brew install cmake node
+  brew install cmake node lz4 xz
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 Options:
@@ -36,6 +38,7 @@ Options:
   --install-dir   Install into PATH instead of /Applications. This can also be
                   set with ZMANAGER_MACOS_INSTALL_DIR.
   --bundle VALUE  Build app, dmg, or all bundles. Default: all.
+  --arch VALUE    Build a separate arm64 or x86_64 artifact. Default: host architecture.
   -h, --help      Show this help.
 EOF
 }
@@ -68,6 +71,14 @@ while (($#)); do
       bundle_kind="$2"
       shift
       ;;
+    --arch)
+      if (($# < 2)); then
+        echo "--arch requires arm64 or x86_64." >&2
+        exit 2
+      fi
+      architecture="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -88,6 +99,12 @@ case "$bundle_kind" in
     echo "Unsupported bundle value: $bundle_kind (expected app, dmg, or all)." >&2
     exit 2
     ;;
+esac
+
+case "$architecture" in
+  arm64) rust_triple="aarch64-apple-darwin" ;;
+  x86_64) rust_triple="x86_64-apple-darwin" ;;
+  *) echo "Unsupported macOS architecture: $architecture" >&2; exit 2 ;;
 esac
 
 if [[ -z "$install_dir" ]]; then
@@ -155,12 +172,8 @@ fi
 source_cargo_env
 
 if ((install_deps)); then
-  if ! command -v cmake >/dev/null 2>&1 || node_install_required; then
-    ensure_homebrew
-  fi
-  if ! command -v cmake >/dev/null 2>&1; then
-    brew install cmake
-  fi
+  ensure_homebrew
+  brew install cmake lz4 xz
   if node_install_required; then
     brew install node
   fi
@@ -222,153 +235,103 @@ if ((!skip_tests)); then
   (cd src-tauri && cargo test)
 fi
 
-case "$bundle_kind" in
-  app)
-    tauri_bundles="app"
-    ;;
-  dmg)
-    if ((install_application)); then
-      # Keep the app bundle that the DMG builder normally treats as an
-      # intermediate so it can also be installed into Applications.
-      tauri_bundles="app,dmg"
-    else
-      tauri_bundles="dmg"
-    fi
-    ;;
-  all)
-    tauri_bundles="app,dmg"
-    ;;
-esac
+cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
+bundle_root="$cargo_target_dir/$rust_triple/release/bundle"
+rm -rf "$bundle_root/macos"
 
-tauri_args=(build --bundles "$tauri_bundles" --no-sign)
+tauri_args=(build --bundles app --no-sign --target "$rust_triple")
 npm run tauri -- "${tauri_args[@]}"
 
-cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
-bundle_root="$cargo_target_dir/release/bundle"
+applications=()
+while IFS= read -r candidate; do applications+=("$candidate"); done < <(
+  find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort
+)
+if ((${#applications[@]} != 1)); then
+  echo "Expected exactly one Tauri application under $bundle_root/macos." >&2
+  exit 1
+fi
+application="${applications[0]}"
+scripts/prepare-macos-self-contained-app.sh "$application" "$architecture"
 
-while IFS= read -r application; do
-  scripts/prepare-macos-self-contained-app.sh "$application"
-done < <(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort)
-
+version=$(node -p 'require("./package.json").version')
+artifact_base="Z-Manager-${version}-macos-${architecture}"
 stage_dir="${ZMANAGER_MACOS_STAGE_DIR:-/tmp/zmanager-desktop-macos}"
 install -d -m 0755 "$stage_dir"
+staged_app="$stage_dir/$artifact_base.app"
+zip_artifact="$stage_dir/$artifact_base.zip"
+dmg_artifact="$stage_dir/$artifact_base.dmg"
+rm -rf "$staged_app"
+rm -f "$zip_artifact" "$dmg_artifact"
+ditto "$application" "$staged_app"
 
-stage_app_bundles() {
-  local count=0 artifact staged_artifact
-  while IFS= read -r artifact; do
-    count=$((count + 1))
-    staged_artifact="$stage_dir/$(basename "$artifact")"
-    rm -rf "$staged_artifact"
-    ditto "$artifact" "$staged_artifact"
-    echo "Built application: $artifact"
-    echo "Staged application: $staged_artifact"
-  done < <(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort)
-  if ((count == 0)); then
-    echo "Tauri build completed, but no .app was found under $bundle_root/macos." >&2
-    exit 1
+create_zip() {
+  rm -f "$zip_artifact"
+  ditto -c -k --sequesterRsrc --keepParent "$staged_app" "$zip_artifact"
+}
+
+create_dmg() {
+  local image_root="$stage_dir/.$artifact_base-dmg-root"
+  rm -rf "$image_root"
+  mkdir -p "$image_root"
+  ditto "$staged_app" "$image_root/Z-Manager.app"
+  ln -s /Applications "$image_root/Applications"
+  hdiutil create -quiet -volname "Z-Manager" -srcfolder "$image_root" \
+    -ov -format UDZO "$dmg_artifact"
+  rm -rf "$image_root"
+  if [[ ${ZMANAGER_CODESIGN_IDENTITY:--} != - ]]; then
+    codesign --force --timestamp --sign "$ZMANAGER_CODESIGN_IDENTITY" "$dmg_artifact"
   fi
 }
 
-stage_dmg_bundles() {
-  local count=0 artifact staged_artifact
-  while IFS= read -r artifact; do
-    count=$((count + 1))
-    staged_artifact="$stage_dir/$(basename "$artifact")"
-    install -m 0644 "$artifact" "$staged_artifact"
-    echo "Built disk image: $artifact"
-    echo "Staged disk image: $staged_artifact"
-  done < <(find "$bundle_root/dmg" -maxdepth 1 -type f -name '*.dmg' -print 2>/dev/null | sort)
-  if ((count == 0)); then
-    echo "Tauri build completed, but no .dmg was found under $bundle_root/dmg." >&2
+create_zip
+notary_profile=${ZMANAGER_NOTARY_PROFILE:-}
+if [[ -n "$notary_profile" ]]; then
+  [[ ${ZMANAGER_CODESIGN_IDENTITY:--} == Developer\ ID\ Application:* ]] || {
+    echo "Notarization requires a Developer ID Application identity." >&2
     exit 1
-  fi
-}
-
-install_app_bundle() {
-  local app_count=0 artifact destination temporary backup
-  local use_sudo=0
-
-  if [[ -d "$install_dir" ]]; then
-    if [[ ! -w "$install_dir" ]]; then
-      use_sudo=1
-    fi
-  else
-    local install_parent
-    install_parent="$(dirname "$install_dir")"
-    if [[ ! -d "$install_parent" || ! -w "$install_parent" ]]; then
-      use_sudo=1
-    fi
-  fi
-
-  if ((use_sudo)) && ! command -v sudo >/dev/null 2>&1; then
-    echo "Installing into $install_dir requires sudo access." >&2
-    exit 1
-  fi
-
-  run_install() {
-    if ((use_sudo)); then
-      sudo "$@"
-    else
-      "$@"
-    fi
   }
+  xcrun notarytool submit "$zip_artifact" --keychain-profile "$notary_profile" --wait
+  xcrun stapler staple "$staged_app"
+  create_zip
+fi
 
-  run_install install -d -m 0755 "$install_dir"
-
-  while IFS= read -r artifact; do
-    app_count=$((app_count + 1))
-    if ((app_count > 1)); then
-      echo "More than one macOS application bundle was found under $bundle_root/macos." >&2
-      exit 1
-    fi
-
-    destination="$install_dir/$(basename "$artifact")"
-    temporary="$install_dir/.$(basename "$artifact").zmanager-install-$$"
-    backup="$install_dir/.$(basename "$artifact").zmanager-backup-$$"
-
-    run_install rm -rf "$temporary" "$backup"
-    run_install ditto "$artifact" "$temporary"
-
-    if [[ -e "$destination" ]]; then
-      run_install mv "$destination" "$backup"
-    fi
-    if run_install mv "$temporary" "$destination"; then
-      run_install rm -rf "$backup"
-    else
-      run_install rm -rf "$temporary"
-      if [[ -e "$backup" ]]; then
-        run_install mv "$backup" "$destination"
-      fi
-      echo "Unable to install the application at $destination." >&2
-      exit 1
-    fi
-
-    echo "Installed application: $destination"
-  done < <(find "$bundle_root/macos" -maxdepth 1 -type d -name '*.app' -print 2>/dev/null | sort)
-
-  if ((app_count == 0)); then
-    echo "Installation requested, but no .app was found under $bundle_root/macos." >&2
-    exit 1
+if [[ $bundle_kind != app ]]; then
+  create_dmg
+  if [[ -n "$notary_profile" ]]; then
+    xcrun notarytool submit "$dmg_artifact" --keychain-profile "$notary_profile" --wait
+    xcrun stapler staple "$dmg_artifact"
   fi
-}
+fi
 
-case "$bundle_kind" in
-  app)
-    stage_app_bundles
-    ;;
-  dmg)
-    stage_dmg_bundles
-    ;;
-  all)
-    stage_app_bundles
-    stage_dmg_bundles
-    ;;
-esac
+gate_args=("$staged_app" --expected-arch "$architecture")
+gate_args+=(--zip "$zip_artifact")
+[[ ! -f $dmg_artifact ]] || gate_args+=(--dmg "$dmg_artifact")
+if [[ -n "$notary_profile" ]]; then
+  gate_args+=(--require-developer-id --require-notarization)
+fi
+scripts/release-gate-macos.sh "${gate_args[@]}"
 
 if ((install_application)); then
-  install_app_bundle
+  destination="$install_dir/Z-Manager.app"
+  temporary="$install_dir/.Z-Manager.app.zmanager-install-$$"
+  backup="$install_dir/.Z-Manager.app.zmanager-backup-$$"
+  use_sudo=0
+  [[ -d "$install_dir" && -w "$install_dir" ]] || use_sudo=1
+  run_install() { if ((use_sudo)); then sudo "$@"; else "$@"; fi; }
+  run_install install -d -m 0755 "$install_dir"
+  run_install rm -rf "$temporary" "$backup"
+  run_install ditto "$staged_app" "$temporary"
+  [[ ! -e "$destination" ]] || run_install mv "$destination" "$backup"
+  if run_install mv "$temporary" "$destination"; then
+    run_install rm -rf "$backup"
+  else
+    [[ ! -e "$backup" ]] || run_install mv "$backup" "$destination"
+    echo "Unable to install the application at $destination." >&2
+    exit 1
+  fi
+  echo "Installed application: $destination"
 else
   echo "Skipping application install because --no-install was set."
 fi
 
-echo "Unnotarized macOS artifacts are ready under: $stage_dir"
+echo "macOS $architecture artifacts are ready under: $stage_dir"

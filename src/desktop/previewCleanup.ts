@@ -1,10 +1,8 @@
-import {
-  cleanupPreviewRoots as cleanupPreviewRootsCommand,
-} from "../api/commands";
+import { cleanupPreviewRoots as cleanupPreviewRootsCommand } from "../api/commands";
 
 export interface PreviewCleanupWindow {
-  addEventListener(type: "pagehide" | "beforeunload", listener: () => void): void;
-  removeEventListener(type: "pagehide" | "beforeunload", listener: () => void): void;
+  onpagehide: ((event?: unknown) => unknown) | null;
+  onbeforeunload: ((event?: unknown) => unknown) | null;
 }
 
 export interface PreviewCleanupBindingOptions {
@@ -12,7 +10,9 @@ export interface PreviewCleanupBindingOptions {
 }
 
 function browserWindow(): PreviewCleanupWindow | undefined {
-  return typeof window === "undefined" ? undefined : window;
+  return typeof window === "undefined"
+    ? undefined
+    : (window as unknown as PreviewCleanupWindow);
 }
 
 export async function cleanupPreviewRoots(): Promise<void> {
@@ -28,11 +28,25 @@ export function bindPreviewCleanupOnAppClose(
     return () => undefined;
   }
 
-  windowRef.addEventListener("pagehide", handler);
-  windowRef.addEventListener("beforeunload", handler);
+  const previousPageHide = windowRef.onpagehide;
+  const previousBeforeUnload = windowRef.onbeforeunload;
+  const pageHide = (event?: unknown) => {
+    previousPageHide?.call(windowRef, event);
+    handler();
+  };
+  const beforeUnload = (event?: unknown) => {
+    previousBeforeUnload?.call(windowRef, event);
+    handler();
+  };
+  windowRef.onpagehide = pageHide;
+  windowRef.onbeforeunload = beforeUnload;
 
   return () => {
-    windowRef.removeEventListener("pagehide", handler);
-    windowRef.removeEventListener("beforeunload", handler);
+    if (windowRef.onpagehide === pageHide) {
+      windowRef.onpagehide = previousPageHide;
+    }
+    if (windowRef.onbeforeunload === beforeUnload) {
+      windowRef.onbeforeunload = previousBeforeUnload;
+    }
   };
 }

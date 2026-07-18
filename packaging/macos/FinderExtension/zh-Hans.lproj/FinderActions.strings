@@ -1,0 +1,10 @@
+"shellAction.open" = "使用 Z-Manager 打开";
+"shellAction.compress" = "使用 Z-Manager 压缩…";
+"shellAction.extract" = "使用 Z-Manager 解压…";
+"shellAction.compressZip" = "压缩为 ZIP";
+"shellAction.compressTzap" = "压缩为 TZAP";
+"shellAction.compressSevenZ" = "压缩为 7z";
+"shellAction.compressTarZst" = "压缩为 TAR.ZST";
+"shellAction.compressCleanSource" = "压缩并移除源文件";
+"shellAction.extractHere" = "解压到此处";
+"shellAction.extractToFolder" = "解压到同名文件夹";

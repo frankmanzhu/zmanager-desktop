@@ -11,7 +11,15 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "healthcheck",
             "project_contract",
+            "system_file_icons",
+            "default_handler_status",
+            "default_handler_set",
+            "default_handler_restore",
+            "replacement_migration_prepare",
+            "replacement_migration_complete",
+            "validate_directory",
             "quick_action_startup_state",
+            "consume_shell_action_request",
             "native_frontend_ready",
             "acknowledge_native_event",
             "account_snapshot",
@@ -25,7 +33,10 @@ fn main() {
             "plan_create",
             "start_create",
             "start_extract",
+            "verify_tzap_certificate",
+            "generate_tzap_identity",
             "preview_entry",
+            "start_native_file_drag",
             "cleanup_preview_roots",
             "test_archive",
             "subscribe_job",
@@ -45,6 +56,12 @@ fn link_macos_host() {
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let package = manifest_dir.join("../native/macos");
     let scratch = PathBuf::from(env::var_os("OUT_DIR").expect("out dir")).join("swift-host");
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").expect("target architecture");
+    let swift_triple = match target_arch.as_str() {
+        "aarch64" => "arm64-apple-macosx14.0",
+        "x86_64" => "x86_64-apple-macosx14.0",
+        other => panic!("unsupported macOS target architecture: {other}"),
+    };
     let status = Command::new("swift")
         .args(["build", "--package-path"])
         .arg(&package)
@@ -53,6 +70,8 @@ fn link_macos_host() {
         .args([
             "--configuration",
             "release",
+            "--triple",
+            swift_triple,
             "--product",
             "ZManagerMacOSHost",
         ])

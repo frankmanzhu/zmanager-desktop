@@ -19,10 +19,9 @@ export const SHELL_ACTION_POLICIES = [
     "displayKey": "shellAction.open",
     "order": 10,
     "selectionShapes": [
-      "single-archive",
-      "multiple-archives"
+      "single-archive"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "exactly-one"
   },
   {
     "id": "compress",
@@ -113,9 +112,8 @@ export const SHELL_ACTION_POLICIES = [
     "displayKey": "shellAction.extractToFolder",
     "order": 100,
     "selectionShapes": [
-      "single-archive",
-      "multiple-archives"
+      "single-archive"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "exactly-one"
   }
 ] as const;

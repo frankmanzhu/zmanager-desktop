@@ -4,6 +4,7 @@ mod account;
 mod archive_file_types;
 mod commands;
 mod constants;
+mod default_handlers;
 mod dto;
 mod error;
 mod job_dto;
@@ -12,6 +13,7 @@ mod native_drag_session;
 mod native_launch_inbox;
 mod platform;
 mod quick_action;
+mod replacement_migration;
 
 use tauri::{Emitter, Manager};
 
@@ -92,8 +94,14 @@ fn main() {
             commands::healthcheck,
             commands::project_contract,
             commands::system_file_icons,
+            default_handlers::default_handler_status,
+            default_handlers::default_handler_set,
+            default_handlers::default_handler_restore,
+            replacement_migration::replacement_migration_prepare,
+            replacement_migration::replacement_migration_complete,
             commands::validate_directory,
             commands::quick_action_startup_state,
+            commands::consume_shell_action_request,
             commands::native_frontend_ready,
             commands::acknowledge_native_event,
             account::account_snapshot,

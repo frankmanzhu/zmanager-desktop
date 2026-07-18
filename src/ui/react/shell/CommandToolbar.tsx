@@ -17,6 +17,7 @@ import {
 } from "../../../app/classicCommands";
 import type { CommandRouterPayload } from "../../../app/commands/commandRouter";
 import { Button } from "../../components/ui/button";
+import { cn } from "../../../lib/utils";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerReactSnapshot } from "../appRuntime";
 import { useCreatePasswordState } from "../create/CreatePasswordContext";
@@ -35,61 +36,101 @@ export function CommandToolbar() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const toolbarGroups = toolbarGroupsForWorkspaceMode(snapshot.shell.activeMode);
-  const className = [
-    "command-toolbar",
-    "mode-toolbar",
-    snapshot.preferences.showToolbarLabels ? "show-labels" : "",
-  ].filter(Boolean).join(" ");
-
+  const toolbarGroups = toolbarGroupsForWorkspaceMode(
+    snapshot.shell.activeMode,
+  );
   return (
-    <header className={className} role="toolbar" aria-label={i18n.t("workspace.toolbar.aria")}>
+    <header
+      className="flex h-12 min-h-12 shrink-0 flex-nowrap items-center gap-1 overflow-hidden border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900"
+      data-shell-chrome="toolbar"
+      role="toolbar"
+      aria-label={i18n.t("workspace.toolbar.aria")}
+    >
       <WorkspaceModeTabs />
-      <div className="command-strip">
-        {snapshot.shell.activeMode === "compress"
-          ? <CompressToolbarGroups />
-          : <ExtractToolbarGroups groups={toolbarGroups} />}
+      <div className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden">
+        {snapshot.shell.activeMode === "compress" ? (
+          <CompressToolbarGroups />
+        ) : (
+          <ExtractToolbarGroups groups={toolbarGroups} />
+        )}
       </div>
-      <div className="toolbar-spacer" />
-      <Button variant="ghost" size="icon" aria-label="TZAP Account" title="TZAP Account" onClick={() => actions.handleAccountIntent({ type: "open" })}><UserRound className="size-4" /></Button>
+      <div className="flex-1" />
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="TZAP Account"
+        title="TZAP Account"
+        onClick={() => actions.handleAccountIntent({ type: "open" })}
+      >
+        <UserRound className="size-4" />
+      </Button>
     </header>
   );
 }
 
-function ExtractToolbarGroups({ groups }: Readonly<{ groups: readonly CommandBarGroup[] }>) {
+function ExtractToolbarGroups({
+  groups,
+}: Readonly<{ groups: readonly CommandBarGroup[] }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const passwordState = useExtractPasswordState();
-  const canExtract = snapshot.archive.command.canUseArchive && Boolean(snapshot.extract.destinationPath.trim());
+  const canExtract =
+    snapshot.archive.command.canUseArchive &&
+    Boolean(snapshot.extract.destinationPath.trim());
   const selectedCount = snapshot.archive.view.selection.selectedCount;
 
   return (
     <>
-      <div className="toolbar-group" role="group" aria-label="Extract" data-command-group="extract">
-        <span className="toolbar-group-label">Extract</span>
+      <div
+        className="inline-flex min-w-max items-center gap-0.5 border-r border-slate-200 px-1 dark:border-slate-700"
+        role="group"
+        aria-label="Extract"
+        data-command-group="extract"
+      >
+        <span className="max-w-[92px] truncate px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          Extract
+        </span>
         <ToolbarButton commandId="open" />
         <ToolbarButton commandId="closeArchive" />
         <ToolbarActionButton
           id="extract-all"
           label={i18n.t("extract.allAction")}
-          title={canExtract ? i18n.t("extract.allAction") : i18n.t("extract.chooseDestinationFirst")}
+          title={
+            canExtract
+              ? i18n.t("extract.allAction")
+              : i18n.t("extract.chooseDestinationFirst")
+          }
           Icon={ArchiveRestore}
           primary={canExtract}
           disabled={!canExtract}
           onClick={() => {
-            actions.handleArchiveIntent({ type: "runExtract", mode: "archive", password: passwordState.password });
+            actions.handleArchiveIntent({
+              type: "runExtract",
+              mode: "archive",
+              password: passwordState.password,
+            });
             passwordState.reset();
           }}
         />
         <ToolbarActionButton
           id="extract-selected"
-          label={i18n.t("extract.selectedCountAction", { count: selectedCount })}
-          title={selectedCount ? i18n.t("extract.selectedAction") : i18n.t("extract.selectEntryFirst")}
+          label={i18n.t("extract.selectedCountAction", {
+            count: selectedCount,
+          })}
+          title={
+            selectedCount
+              ? i18n.t("extract.selectedAction")
+              : i18n.t("extract.selectEntryFirst")
+          }
           Icon={ArchiveRestore}
           disabled={!canExtract || selectedCount === 0}
           onClick={() => {
-            actions.handleArchiveIntent({ type: "runExtract", mode: "selection", password: passwordState.password });
+            actions.handleArchiveIntent({
+              type: "runExtract",
+              mode: "selection",
+              password: passwordState.password,
+            });
             passwordState.reset();
           }}
         />
@@ -109,12 +150,16 @@ function WorkspaceModeTabs() {
   const isCompress = snapshot.shell.activeMode === "compress";
 
   return (
-    <div className="mode-switch" role="tablist" aria-label={i18n.t("workspace.mode.aria")}>
+    <div
+      className="inline-flex h-full items-center border-r border-slate-200 pr-1 dark:border-slate-700"
+      role="tablist"
+      aria-label={i18n.t("workspace.mode.aria")}
+    >
       <Button
         id="mode-compress"
         variant="mode"
         size="unset"
-        className={`mode-button${isCompress ? " is-active" : ""}`}
+        className="h-full min-w-[92px] rounded-none border-0 bg-transparent px-3.5 font-medium aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
         type="button"
         role="tab"
         data-workspace-mode="compress"
@@ -127,7 +172,7 @@ function WorkspaceModeTabs() {
         id="mode-extract"
         variant="mode"
         size="unset"
-        className={`mode-button${!isCompress ? " is-active" : ""}`}
+        className="h-full min-w-[92px] rounded-none border-0 bg-transparent px-3.5 font-medium aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
         type="button"
         role="tab"
         data-workspace-mode="extract"
@@ -146,9 +191,21 @@ function ToolbarGroup({
 }: Readonly<{ group: CommandBarGroup; showSeparator: boolean }>) {
   return (
     <>
-      {showSeparator ? <div className="toolbar-separator" aria-hidden="true" /> : null}
-      <div className="toolbar-group" role="group" aria-label={group.label} data-command-group={group.id}>
-        <span className="toolbar-group-label">{group.label}</span>
+      {showSeparator ? (
+        <div
+          className="h-full w-px bg-slate-200 dark:bg-slate-700"
+          aria-hidden="true"
+        />
+      ) : null}
+      <div
+        className="inline-flex min-w-max items-center gap-0.5 border-r border-slate-200 px-1 dark:border-slate-700"
+        role="group"
+        aria-label={group.label}
+        data-command-group={group.id}
+      >
+        <span className="max-w-[92px] truncate px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          {group.label}
+        </span>
         {group.items.map((commandId) => (
           <ToolbarButton commandId={commandId} key={commandId} />
         ))}
@@ -160,15 +217,32 @@ function ToolbarGroup({
 function CompressToolbarGroups() {
   return (
     <>
-      <div className="toolbar-group" role="group" aria-label="Compress" data-command-group="compress">
-        <span className="toolbar-group-label">Compress</span>
+      <div
+        className="inline-flex min-w-max items-center gap-0.5 border-r border-slate-200 px-1 dark:border-slate-700"
+        role="group"
+        aria-label="Compress"
+        data-command-group="compress"
+      >
+        <span className="max-w-[92px] truncate px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          Compress
+        </span>
         <ToolbarButton commandId="add" />
         <CompressDestinationToolbarButton />
         <CreateArchiveToolbarButton />
       </div>
-      <div className="toolbar-separator" aria-hidden="true" />
-      <div className="toolbar-group" role="group" aria-label="Table actions" data-command-group="table">
-        <span className="toolbar-group-label">Table actions</span>
+      <div
+        className="h-full w-px bg-slate-200 dark:bg-slate-700"
+        aria-hidden="true"
+      />
+      <div
+        className="inline-flex min-w-max items-center gap-0.5 border-r border-slate-200 px-1 dark:border-slate-700"
+        role="group"
+        aria-label="Table actions"
+        data-command-group="table"
+      >
+        <span className="max-w-[92px] truncate px-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          Table actions
+        </span>
         <CompressTableToolbarButtons />
       </div>
     </>
@@ -200,7 +274,9 @@ function CreateArchiveToolbarButton() {
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const createPassword = useCreatePasswordState();
-  const canSubmitPassword = snapshot.create.options.password.visible && !snapshot.create.options.password.disabled;
+  const canSubmitPassword =
+    snapshot.create.options.password.visible &&
+    !snapshot.create.options.password.disabled;
   const canCreate = snapshot.create.options.readiness.canCreate;
 
   if (snapshot.shell.activeMode !== "compress") {
@@ -211,7 +287,11 @@ function CreateArchiveToolbarButton() {
     <ToolbarActionButton
       id="start-create"
       label={i18n.t("compress.createArchive")}
-      title={canCreate ? i18n.t("compress.createArchive") : createToolbarUnavailableText(snapshot)}
+      title={
+        canCreate
+          ? i18n.t("compress.createArchive")
+          : createToolbarUnavailableText(snapshot)
+      }
       Icon={FileArchive}
       primary={canCreate}
       disabled={!canCreate}
@@ -219,7 +299,9 @@ function CreateArchiveToolbarButton() {
         actions.handleCreateIntent({
           type: "runCreate",
           password: canSubmitPassword ? createPassword.password : "",
-          passwordConfirm: canSubmitPassword ? createPassword.passwordConfirm : "",
+          passwordConfirm: canSubmitPassword
+            ? createPassword.passwordConfirm
+            : "",
           signingIdentityPassword: createPassword.signingIdentityPassword,
         });
         createPassword.reset();
@@ -247,7 +329,12 @@ function CompressTableToolbarButtons() {
         title={i18n.t("compress.includeAll")}
         Icon={CheckSquare}
         disabled={!tableInclusion.canInclude}
-        onClick={() => actions.handleCreateIntent({ type: "setVisibleRowsIncluded", included: true })}
+        onClick={() =>
+          actions.handleCreateIntent({
+            type: "setVisibleRowsIncluded",
+            included: true,
+          })
+        }
       />
       <ToolbarActionButton
         id="exclude-all-sources"
@@ -255,7 +342,12 @@ function CompressTableToolbarButtons() {
         title={i18n.t("compress.excludeAll")}
         Icon={SquareMinus}
         disabled={!tableInclusion.canExclude}
-        onClick={() => actions.handleCreateIntent({ type: "setVisibleRowsIncluded", included: false })}
+        onClick={() =>
+          actions.handleCreateIntent({
+            type: "setVisibleRowsIncluded",
+            included: false,
+          })
+        }
       />
       <ToolbarActionButton
         id="clear-sources"
@@ -269,12 +361,16 @@ function CompressTableToolbarButtons() {
   );
 }
 
-function compressTableInclusionSummary(snapshot: ZManagerReactSnapshot): Readonly<{
+function compressTableInclusionSummary(
+  snapshot: ZManagerReactSnapshot,
+): Readonly<{
   canInclude: boolean;
   canExclude: boolean;
 }> {
   const currentPlan = snapshot.create.plan.current;
-  const visibleRows = snapshot.create.view.rows.filter((row) => row.rowType !== "parent");
+  const visibleRows = snapshot.create.view.rows.filter(
+    (row) => row.rowType !== "parent",
+  );
   if (!currentPlan || visibleRows.length === 0) {
     return { canInclude: false, canExclude: false };
   }
@@ -315,17 +411,15 @@ function ToolbarActionButton({
   primary?: boolean;
   title?: string;
 }>) {
-  const className = [
-    "tool-button",
-    primary ? "is-primary-command" : "",
-  ].filter(Boolean).join(" ");
-
   return (
     <Button
       id={id}
       variant="toolbar"
       size="unset"
-      className={className}
+      className={cn(
+        "min-h-[30px] min-w-0 gap-1.5 rounded border-0 bg-transparent px-2 py-1 text-xs text-slate-800 shadow-none hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800",
+        primary && "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600",
+      )}
       type="button"
       title={title ?? label}
       aria-label={label}
@@ -333,8 +427,8 @@ function ToolbarActionButton({
       aria-disabled={disabled ? true : undefined}
       onClick={onClick}
     >
-      <Icon className="tool-icon" aria-hidden="true" />
-      <span className="tool-label">{label}</span>
+      <Icon className="size-[15px] opacity-90" aria-hidden="true" />
+      <ToolbarLabel>{label}</ToolbarLabel>
     </Button>
   );
 }
@@ -348,35 +442,52 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: CommandId }>) {
   const secondary = snapshot.commands.secondaryCommandIds.includes(commandId);
   const pressed = snapshot.commands.pressed[commandId];
   const label = toolbarCommandLabel(commandId, snapshot);
-  const className = [
-    "tool-button",
-    primary ? "is-primary-command" : "",
-    secondary ? "is-secondary-command" : "",
-  ].filter(Boolean).join(" ");
-
   return (
     <Button
       id={commandButtonId(commandId)}
       variant="toolbar"
       size="unset"
-      className={className}
+      className={cn(
+        "min-h-[30px] min-w-0 gap-1.5 rounded border-0 bg-transparent px-2 py-1 text-xs text-slate-800 shadow-none hover:bg-slate-100 aria-pressed:bg-blue-50 aria-pressed:text-blue-700 dark:text-slate-100 dark:hover:bg-slate-800 dark:aria-pressed:bg-blue-950 dark:aria-pressed:text-blue-300",
+        primary && "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600",
+        secondary && "text-slate-600 dark:text-slate-300",
+      )}
       type="button"
       data-command-id={commandId}
       aria-label={label}
-      title={state.reason && !state.enabled ? state.reason : localizedCommandTooltip(commandId, snapshot)}
+      title={
+        state.reason && !state.enabled
+          ? state.reason
+          : localizedCommandTooltip(commandId, snapshot)
+      }
       aria-keyshortcuts={commandShortcut(commandId)}
       aria-disabled={!state.enabled}
       aria-pressed={typeof pressed === "boolean" ? pressed : undefined}
       disabled={!state.enabled}
-      onClick={(event) => actions.executeCommand(commandId, toolbarCommandPayload(commandId, event.currentTarget))}
+      onClick={(event) =>
+        actions.executeCommand(
+          commandId,
+          toolbarCommandPayload(commandId, event.currentTarget),
+        )
+      }
     >
-      <Icon className="tool-icon" aria-hidden="true" />
-      <span className="tool-label">{label}</span>
+      <Icon className="size-[15px] opacity-90" aria-hidden="true" />
+      <ToolbarLabel>{label}</ToolbarLabel>
     </Button>
   );
 }
 
-function toolbarCommandLabel(commandId: CommandId, snapshot: ZManagerReactSnapshot): string {
+function ToolbarLabel({ children }: Readonly<{ children: string }>) {
+  const snapshot = useZManagerSnapshot();
+  return snapshot.preferences.showToolbarLabels ? (
+    <span className="inline-flex">{children}</span>
+  ) : null;
+}
+
+function toolbarCommandLabel(
+  commandId: CommandId,
+  snapshot: ZManagerReactSnapshot,
+): string {
   const i18n = translatorForSnapshot(snapshot);
 
   if (snapshot.shell.activeMode === "extract") {
@@ -418,7 +529,10 @@ function createToolbarUnavailableText(snapshot: ZManagerReactSnapshot): string {
   }
 }
 
-function toolbarCommandPayload(commandId: CommandId, button: HTMLElement): CommandRouterPayload | undefined {
+function toolbarCommandPayload(
+  commandId: CommandId,
+  button: HTMLElement,
+): CommandRouterPayload | undefined {
   if (commandId === "add") {
     const rect = button.getBoundingClientRect();
 

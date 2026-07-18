@@ -13,20 +13,22 @@ import {
 import { JobsDrawer, QuickActionProgress } from "./JobsSurfaces";
 
 type JobItem = ZManagerReactSnapshot["jobs"]["jobs"][number];
-type JobItemOverrides =
-  & Pick<JobItem, "jobId" | "kind" | "status">
-  & Partial<Omit<JobItem, "jobId" | "kind" | "status" | "state" | "progress">>
-  & Readonly<{
+type JobItemOverrides = Pick<JobItem, "jobId" | "kind" | "status"> &
+  Partial<Omit<JobItem, "jobId" | "kind" | "status" | "state" | "progress">> &
+  Readonly<{
     progress?: Partial<JobItem["progress"]>;
     progressPercent?: number | null;
   }>;
 
 describe("React jobs surfaces", () => {
   it("renders job drawer cards and output actions from job snapshots", () => {
-    const html = renderJobs(<JobsDrawer />, jobsSnapshot({
-      shell: { jobDrawerOpen: true },
-      jobs: [completedJob(), runningJob()],
-    }));
+    const html = renderJobs(
+      <JobsDrawer />,
+      jobsSnapshot({
+        shell: { jobDrawerOpen: true },
+        jobs: [completedJob(), runningJob()],
+      }),
+    );
 
     expect(html).toContain('id="job-drawer"');
     expect(html).toContain('aria-hidden="false"');
@@ -39,45 +41,48 @@ describe("React jobs surfaces", () => {
   });
 
   it("renders focused quick-action progress with controls and context", () => {
-    const html = renderJobs(<QuickActionProgress />, jobsSnapshot({
-      shell: {
-        quickActionWindow: {
-          mode: "jobOnly",
-          shown: true,
+    const html = renderJobs(
+      <QuickActionProgress />,
+      jobsSnapshot({
+        shell: {
+          quickActionWindow: {
+            mode: "jobOnly",
+            shown: true,
+          },
         },
-      },
-      quickActionProgress: {
-        state: "tracking",
-        jobCount: 1,
-        latestJob: {
-          jobId: "job-running",
-          kind: "zipExtract",
-          status: "running",
+        quickActionProgress: {
+          state: "tracking",
+          jobCount: 1,
+          latestJob: {
+            jobId: "job-running",
+            kind: "zipExtract",
+            status: "running",
+          },
+          latestContext: {
+            kind: "extract",
+            title: "archive",
+            archivePath: "C:/archives/demo.zip",
+            destinationPath: "C:/out",
+            overwrite: "rename",
+          },
+          allTerminal: false,
+          allCompleted: false,
+          anyActive: true,
+          anyPaused: false,
+          elapsedMs: 3723000,
+          remainingMs: 15000,
+          processedFiles: 2,
+          totalFiles: 4,
+          processedBytes: 2048,
+          totalBytes: 4096,
+          compressedBytes: null,
+          speedBytesPerSecond: 1024,
+          progressPercent: 50,
+          currentFile: "docs/readme.md",
+          progressClock: { shouldRun: true },
         },
-        latestContext: {
-          kind: "extract",
-          title: "archive",
-          archivePath: "C:/archives/demo.zip",
-          destinationPath: "C:/out",
-          overwrite: "rename",
-        },
-        allTerminal: false,
-        allCompleted: false,
-        anyActive: true,
-        anyPaused: false,
-        elapsedMs: 3723000,
-        remainingMs: 15000,
-        processedFiles: 2,
-        totalFiles: 4,
-        processedBytes: 2048,
-        totalBytes: 4096,
-        compressedBytes: null,
-        speedBytesPerSecond: 1024,
-        progressPercent: 50,
-        currentFile: "docs/readme.md",
-        progressClock: { shouldRun: true },
-      },
-    }));
+      }),
+    );
 
     expect(html).toContain('id="quick-progress"');
     expect(html).toContain('id="quick-title"');
@@ -92,7 +97,12 @@ describe("React jobs surfaces", () => {
 
   it("keeps backgrounded quick-action jobs in the job-only progress surface", () => {
     const html = renderJobs(
-      createElement("div", null, createElement(QuickActionProgress), createElement(JobsDrawer)),
+      createElement(
+        "div",
+        null,
+        createElement(QuickActionProgress),
+        createElement(JobsDrawer),
+      ),
       jobsSnapshot({
         shell: {
           jobDrawerOpen: true,
@@ -131,29 +141,32 @@ describe("React jobs surfaces", () => {
     );
 
     expect(html).toContain('id="quick-progress"');
-    expect(html).not.toContain('id="quick-progress" class="quick-progress" aria-label="Quick action progress" hidden=""');
+    expect(html).not.toContain(
+      'id="quick-progress" class="quick-progress" aria-label="Quick action progress" hidden=""',
+    );
     expect(html).toContain('id="quick-background" type="button" disabled=""');
     expect(html).toContain('id="job-drawer"');
     expect(html).toContain('aria-hidden="true"');
   });
 });
 
-function renderJobs(node: React.ReactElement, snapshot: ZManagerReactSnapshot): string {
+function renderJobs(
+  node: React.ReactElement,
+  snapshot: ZManagerReactSnapshot,
+): string {
   const store = createZManagerAppStore(snapshot, noopZManagerReactActions);
   return renderToStaticMarkup(
-    createElement(
-      ZManagerAppRuntimeProvider,
-      { store },
-      node,
-    ),
+    createElement(ZManagerAppRuntimeProvider, { store }, node),
   );
 }
 
-function jobsSnapshot(options: Readonly<{
-  shell?: Partial<ZManagerReactSnapshot["shell"]>;
-  jobs?: readonly JobItem[];
-  quickActionProgress?: ZManagerReactSnapshot["quickActionProgress"];
-}>): ZManagerReactSnapshot {
+function jobsSnapshot(
+  options: Readonly<{
+    shell?: Partial<ZManagerReactSnapshot["shell"]>;
+    jobs?: readonly JobItem[];
+    quickActionProgress?: ZManagerReactSnapshot["quickActionProgress"];
+  }>,
+): ZManagerReactSnapshot {
   const initial = createInitialZManagerReactSnapshot();
   const jobs = options.jobs ?? [];
   return createZManagerReactSnapshot({
@@ -168,10 +181,20 @@ function jobsSnapshot(options: Readonly<{
     },
     jobs: {
       jobs,
-      activeJob: jobs[0] ? { kind: jobs[0].kind, status: jobs[0].status } : null,
-      progressClock: { shouldRun: jobs.some((job) => job.status === "queued" || job.status === "running" || job.status === "paused") },
+      activeJob: jobs[0]
+        ? { kind: jobs[0].kind, status: jobs[0].status }
+        : null,
+      progressClock: {
+        shouldRun: jobs.some(
+          (job) =>
+            job.status === "queued" ||
+            job.status === "running" ||
+            job.status === "paused",
+        ),
+      },
     },
-    quickActionProgress: options.quickActionProgress ?? initial.quickActionProgress,
+    quickActionProgress:
+      options.quickActionProgress ?? initial.quickActionProgress,
   });
 }
 
@@ -242,12 +265,16 @@ function jobItem(overrides: JobItemOverrides): JobItem {
       speedBytesPerSecond: 1024,
       compressionRatio: null,
       currentFile: overrides.progress?.currentFile ?? "",
-      progressPercent: overrides.progress?.progressPercent ?? overrides.progressPercent ?? null,
+      progressPercent:
+        overrides.progress?.progressPercent ??
+        overrides.progressPercent ??
+        null,
       latestStatusMessage: "Working",
       ...overrides.progress,
     },
     isTerminal: ["completed", "failed", "cancelled"].includes(overrides.status),
-    completedSizeLabelKey: overrides.completedSizeLabelKey ?? "jobs.summary.archiveSize",
+    completedSizeLabelKey:
+      overrides.completedSizeLabelKey ?? "jobs.summary.archiveSize",
     canRetryPassword: overrides.canRetryPassword ?? false,
     readyOutputActions: overrides.readyOutputActions ?? [],
   };

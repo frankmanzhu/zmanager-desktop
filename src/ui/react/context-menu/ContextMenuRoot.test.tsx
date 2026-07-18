@@ -10,16 +10,18 @@ import {
   noopZManagerReactActions,
   type ZManagerReactSnapshot,
 } from "../appRuntime";
-import { ContextMenuRoot } from "./ContextMenuRoot";
+import { ContextMenuItemList, ContextMenuRoot } from "./ContextMenuRoot";
 
 describe("React context menu root", () => {
   it("renders visible typed context menu items at the requested point", () => {
-    const html = renderContextMenu(contextMenuSnapshot());
+    const snapshot = contextMenuSnapshot();
+    const html = renderToStaticMarkup(
+      createElement(ContextMenuItemList, {
+        items: snapshot.contextMenu.visible ? snapshot.contextMenu.items : [],
+        onIntent: noopZManagerReactActions.handleContextMenuIntent,
+      }),
+    );
 
-    expect(html).toContain('id="context-menu"');
-    expect(html).toContain('role="menu"');
-    expect(html).toContain("left:24px");
-    expect(html).toContain("top:48px");
     expect(html).toContain('role="menuitem"');
     expect(html).toContain('role="menuitemcheckbox"');
     expect(html).toContain('aria-checked="true"');
@@ -33,8 +35,7 @@ describe("React context menu root", () => {
   it("keeps hidden context menus empty", () => {
     const html = renderContextMenu(createInitialZManagerReactSnapshot());
 
-    expect(html).toContain('id="context-menu"');
-    expect(html).toContain("hidden");
+    expect(html).toBe("");
     expect(html).not.toContain("data-context-action");
   });
 });

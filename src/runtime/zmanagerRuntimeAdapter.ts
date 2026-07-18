@@ -66,6 +66,7 @@ import {
   createStartupController,
 } from "../app/controllers/startupController";
 import { createAccountController } from "../app/controllers/accountController";
+import { createDefaultHandlerController } from "../app/controllers/defaultHandlerController";
 import {
   createNativeInboundController,
 } from "../app/controllers/nativeInboundController";
@@ -232,6 +233,7 @@ import {
   fetchAccountSnapshot,
   fetchProjectContract,
   fetchQuickActionStartupState,
+  consumeShellActionRequest,
   fetchSystemFileIcons,
   generateTzapIdentity as generateTzapIdentityCommand,
   generateAccountRecipientKey,
@@ -298,7 +300,10 @@ import {
   cleanupPreviewRoots,
 } from "../desktop/previewCleanup";
 import { listenNativeInboundEvents } from "../desktop/nativeInboundEvents";
+import { listenNativeMenuCommands } from "../desktop/nativeMenu";
+import { defaultHandlerDesktopAdapter } from "../desktop/defaultHandlers";
 import {
+  listenNativeFileDragOutcomes,
   startNativeFileDrag,
 } from "../desktop/nativeDrag";
 import {
@@ -372,6 +377,7 @@ let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogForm
 let activeExtractDialogMessage = "";
 
 let dropUnlisten: (() => void) | null = null;
+const pendingNativeDragCounts = new Map<string, number>();
 
 const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
@@ -921,6 +927,12 @@ const accountController = createAccountController({
   openUrl: openDesktopPath,
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Account operation failed."),
+});
+
+const defaultHandlerController = createDefaultHandlerController({
+  ...defaultHandlerDesktopAdapter,
+  publish: publishReactSnapshot,
+  errorMessage: (error) => unknownErrorMessage(error, "Unable to update macOS default handlers."),
 });
 
 const jobOutputEffects = {
@@ -1564,6 +1576,9 @@ async function startNativeDragOut(entryPath: string) {
       const response = await startNativeFileDrag(request);
       archiveWorkspace.clearPasswordRetry();
       if (response.outcome === "pending") {
+        if (response.sessionId) {
+          pendingNativeDragCounts.set(response.sessionId, response.draggedEntries.length);
+        }
         setOperationalMessage("preview.dragPromiseStarted", {
           count: response.draggedEntries.length,
         });
@@ -1845,6 +1860,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
 
   return createZManagerReactSnapshot({
     account: accountWorkspace.getSnapshot(),
+    defaultHandlers: defaultHandlerController.getSnapshot(),
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
@@ -1994,6 +2010,15 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "preferencesGenerateTzapIdentity":
       void generatePreferenceTzapIdentity(intent.commonName, intent.password);
+      break;
+    case "defaultHandlersRefresh":
+      void defaultHandlerController.refresh();
+      break;
+    case "defaultHandlersSet":
+      void defaultHandlerController.set();
+      break;
+    case "defaultHandlersRestore":
+      void defaultHandlerController.restore();
       break;
     case "preferencesSave":
       void saveReactPreferencesDraft();
@@ -3336,6 +3361,9 @@ async function savePreferencesFromDialog() {
 function openPreferencesDialog() {
   preferencesDialogDraft = appPreferences;
   publishReactSnapshot();
+  if (latestContract?.platformIntegration.platform === "macos") {
+    void defaultHandlerController.refresh();
+  }
 }
 
 async function onSelectReactPreferenceOutputFolder() {
@@ -3572,12 +3600,22 @@ async function handleQuickActionStartupState(state: QuickActionStartupStateDto) 
 
 async function initializeDesktopRuntime() {
   await nativeInboundController.initialize();
+  await listenNativeMenuCommands((commandId) => runRoutedCommand(commandId));
+  await listenNativeFileDragOutcomes(({ payload }) => {
+    const count = pendingNativeDragCounts.get(payload.sessionId) ?? 0;
+    pendingNativeDragCounts.delete(payload.sessionId);
+    if (payload.outcome === "cancelled") {
+      setOperationalMessage("preview.dragCancelled");
+    } else {
+      setOperationalMessage("preview.draggedOut", { count });
+    }
+  });
   await subscribeToJobCatalog();
   await startupController.initializeDesktopRuntime();
 }
 
-async function handleShellActionToken(_requestToken: string): Promise<void> {
-  throw new Error("macOS shell-action token routing is not initialized");
+async function handleShellActionToken(requestToken: string): Promise<void> {
+  await handleQuickActionRequest(await consumeShellActionRequest(requestToken));
 }
 
 async function handleHostedAuthCallback(

@@ -75,7 +75,7 @@ test("fixed create context actions open a directly subscribed disposable task wi
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
   await expectWindowCommand(page, "subscribe_job");
-  await expect(page.locator(".workspace")).toHaveAttribute("data-mode", "compress");
+  await expect(page.locator("main[data-mode]")).toHaveAttribute("data-mode", "compress");
 
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
@@ -152,7 +152,7 @@ test("quick action startup waits for job state before showing the workspace", as
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await expect(page.locator(".workspace")).not.toHaveAttribute("data-mode", /.+/);
+  await expect(page.locator("main")).not.toHaveAttribute("data-mode", /.+/);
   expect((await ipcCalls(page)).some((call) => call.cmd === "plugin:window|show")).toBe(false);
 
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
@@ -225,7 +225,7 @@ test.skip("legacy Main Window background mode is replaced by independent task wi
 
   await page.locator("#quick-background").click();
   await expectWindowCommand(page, "plugin:window|minimize");
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("main")).toHaveAttribute("data-quick-action-mode", "job-only");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
@@ -254,7 +254,7 @@ test.skip("legacy Main Window minimize fallback is replaced by independent task 
   await page.locator("#quick-background").click();
 
   await expectWindowCommand(page, "plugin:window|minimize");
-  await expect(page.locator(".workspace")).toHaveAttribute("data-quick-action-mode", "job-only");
+  await expect(page.locator("main")).toHaveAttribute("data-quick-action-mode", "job-only");
   await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "true");
 });
 
@@ -281,7 +281,7 @@ test.skip("legacy focused Main Window extraction is replaced by a Disposable Tas
     viewportHeight: 420,
   });
 
-  await expect(page.locator(".browser-shell")).toBeVisible();
+  await expect(page.locator("[data-workspace-browser]")).toBeVisible();
 });
 
 async function installQuickActionTauriStub(
@@ -400,6 +400,25 @@ async function installQuickActionTauriStub(
           jobCreatedAts.set(job.jobId, job.createdAt);
         }
         return state;
+      }
+
+      if (cmd === "native_frontend_ready") {
+        return 0;
+      }
+
+      if (cmd === "replacement_migration_prepare") {
+        return {
+          schemaVersion: 1,
+          completed: true,
+          requiresCompletion: false,
+          preferences: {},
+          diagnostics: [],
+          rollback: {
+            legacyStateRetained: true,
+            reversibleKeys: [],
+            irreversibleOperations: [],
+          },
+        };
       }
 
       if (cmd === "start_create" || cmd === "start_extract") {

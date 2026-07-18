@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-default-handler-set"
+description = "Enables the default_handler_set command without any pre-configured scope."
+commands.allow = ["default_handler_set"]
+
+[[permission]]
+identifier = "deny-default-handler-set"
+description = "Denies the default_handler_set command without any pre-configured scope."
+commands.deny = ["default_handler_set"]

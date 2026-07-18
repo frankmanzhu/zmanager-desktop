@@ -13,17 +13,19 @@ describe("disposable task view", () => {
       status: "queued",
       createdAt: "2026-07-11T00:00:00Z",
     });
-    const html = renderToStaticMarkup(createElement(DisposableTaskView, {
-      state,
-      nowMs: Date.parse("2026-07-11T00:00:01Z"),
-      onCancel() {},
-      onClose() {},
-      onContinueInBackground() {},
-      onKeepOpen() {},
-      onMinimize() {},
-      onPause() {},
-      onResume() {},
-    }));
+    const html = renderToStaticMarkup(
+      createElement(DisposableTaskView, {
+        state,
+        nowMs: Date.parse("2026-07-11T00:00:01Z"),
+        onCancel() {},
+        onClose() {},
+        onContinueInBackground() {},
+        onKeepOpen() {},
+        onMinimize() {},
+        onPause() {},
+        onResume() {},
+      }),
+    );
 
     expect(html).toContain("Compressing with ZManager");
     expect(html).toContain("Starting…");
@@ -38,7 +40,8 @@ describe("disposable task view", () => {
       status: "running",
       createdAt: "2026-07-11T00:00:00Z",
     });
-    const fullPath = "C:/Users/example/a-very-long-workspace-name/another-very-long-folder-name/output/reports/quarterly-summary.txt";
+    const fullPath =
+      "C:/Users/example/a-very-long-workspace-name/another-very-long-folder-name/output/reports/quarterly-summary.txt";
     const state = {
       ...initial,
       job: {
@@ -46,17 +49,19 @@ describe("disposable task view", () => {
         progressFacts: { ...initial.job.progressFacts, currentPath: fullPath },
       },
     };
-    const html = renderToStaticMarkup(createElement(DisposableTaskView, {
-      state,
-      nowMs: Date.parse("2026-07-11T00:00:01Z"),
-      onCancel() {},
-      onClose() {},
-      onContinueInBackground() {},
-      onKeepOpen() {},
-      onMinimize() {},
-      onPause() {},
-      onResume() {},
-    }));
+    const html = renderToStaticMarkup(
+      createElement(DisposableTaskView, {
+        state,
+        nowMs: Date.parse("2026-07-11T00:00:01Z"),
+        onCancel() {},
+        onClose() {},
+        onContinueInBackground() {},
+        onKeepOpen() {},
+        onMinimize() {},
+        onPause() {},
+        onResume() {},
+      }),
+    );
 
     expect(html).toContain('class="flex min-h-screen min-w-0 max-w-full');
     expect(html).toContain('data-state="closed"');

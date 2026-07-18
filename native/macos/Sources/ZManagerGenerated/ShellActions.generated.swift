@@ -18,7 +18,7 @@ public struct ShellActionPolicy: Equatable, Sendable {
     public let selectionShapes: [String]
     public let multiplicity: String
     public static let all: [ShellActionPolicy] = [
-        .init(id: .open, displayKey: "shellAction.open", order: 10, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
+        .init(id: .open, displayKey: "shellAction.open", order: 10, selectionShapes: ["single-archive"], multiplicity: "exactly-one"),
         .init(id: .compress, displayKey: "shellAction.compress", order: 20, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
         .init(id: .extract, displayKey: "shellAction.extract", order: 30, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
         .init(id: .compressZip, displayKey: "shellAction.compressZip", order: 40, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
@@ -27,6 +27,6 @@ public struct ShellActionPolicy: Equatable, Sendable {
         .init(id: .compressTarZst, displayKey: "shellAction.compressTarZst", order: 70, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
         .init(id: .compressCleanSource, displayKey: "shellAction.compressCleanSource", order: 80, selectionShapes: ["single-folder"], multiplicity: "exactly-one"),
         .init(id: .extractHere, displayKey: "shellAction.extractHere", order: 90, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
-        .init(id: .extractToFolder, displayKey: "shellAction.extractToFolder", order: 100, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more")
+        .init(id: .extractToFolder, displayKey: "shellAction.extractToFolder", order: 100, selectionShapes: ["single-archive"], multiplicity: "exactly-one")
     ]
 }

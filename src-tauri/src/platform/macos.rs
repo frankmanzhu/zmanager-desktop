@@ -4,11 +4,15 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
+use tauri::menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStart, NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
+    DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
+    LegacyRegistrationReconcileResult, LegacyReplacementMigrationRequest,
+    LegacyReplacementMigrationSnapshot, NativeFileDragCandidate, NativeFileDragError,
+    NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
+    NativePlatform, PlatformProfile, ReplacementMigrationDiagnostic,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -31,6 +35,30 @@ unsafe extern "C" {
     fn zmanager_macos_system_file_icons(
         bytes: *const u8,
         length: usize,
+        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        context: *mut c_void,
+    ) -> i32;
+    fn zmanager_macos_default_handlers(
+        bytes: *const u8,
+        length: usize,
+        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        context: *mut c_void,
+    ) -> i32;
+    fn zmanager_macos_read_replacement_migration(
+        bytes: *const u8,
+        length: usize,
+        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        context: *mut c_void,
+    ) -> i32;
+    fn zmanager_macos_reconcile_legacy_registrations(
+        bytes: *const u8,
+        length: usize,
+        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        context: *mut c_void,
+    ) -> i32;
+    fn zmanager_macos_consume_shell_action_request(
+        token_bytes: *const u8,
+        token_length: usize,
         callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
         context: *mut c_void,
     ) -> i32;
@@ -57,7 +85,14 @@ extern "C" fn host_callback(bytes: *const u8, length: usize, _context: *mut c_vo
     };
     if value["kind"] == "hostStarted" && value["mainThread"] == true {
         HOST_CALLBACK_RECEIVED.store(true, Ordering::Release);
-        if value["appGroupSelfTest"] == true && value["filePromiseSelfTest"] == true {
+        if value["appGroupSelfTest"] == true
+            && value["filePromiseSelfTest"] == true
+            && value["iconSelfTest"] == true
+            && value["defaultHandlerSelfTest"] == true
+        {
+            if value["serviceSelfTest"] != true {
+                eprintln!("ZMANAGER_MACOS_INSTALLED_SERVICE_SELF_TEST_UNAVAILABLE");
+            }
             eprintln!("ZMANAGER_MACOS_INSTALLED_LINKAGE_SELF_TEST_OK");
         }
         return;
@@ -84,7 +119,15 @@ impl NativePlatform for MacOsPlatform {
     }
 
     fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
-        builder
+        builder.menu(build_macos_menu).on_menu_event(|app, event| {
+            let Some(command_id) = event.id().0.strip_prefix("command:") else {
+                return;
+            };
+            let _ = app.emit(
+                "zmanager-native-menu-command",
+                NativeMenuCommandEvent { command_id },
+            );
+        })
     }
 
     fn integration_profile() -> PlatformProfile {
@@ -128,6 +171,70 @@ impl NativePlatform for MacOsPlatform {
         serde_json::from_slice(&output).unwrap_or_else(|_| icon_fallback(entries))
     }
 
+    fn default_handlers(
+        request: &DefaultHandlerRequest,
+    ) -> Result<Vec<DefaultHandlerEntry>, String> {
+        let input = serde_json::to_vec(request).map_err(|error| error.to_string())?;
+        let mut output = Vec::<u8>::new();
+        let result = unsafe {
+            zmanager_macos_default_handlers(
+                input.as_ptr(),
+                input.len(),
+                Some(icon_operation_callback),
+                (&mut output as *mut Vec<u8>).cast(),
+            )
+        };
+        if result != 0 {
+            return Err(format!("macOS default-handler operation failed: {result}"));
+        }
+        serde_json::from_slice(&output).map_err(|error| error.to_string())
+    }
+
+    fn read_replacement_migration(
+        request: &LegacyReplacementMigrationRequest,
+    ) -> Result<LegacyReplacementMigrationSnapshot, String> {
+        call_json_operation(request, zmanager_macos_read_replacement_migration)
+            .map_err(|error| format!("macOS replacement-migration reader failed: {error}"))
+    }
+
+    fn reconcile_legacy_registrations(
+        request: &LegacyRegistrationReconcileRequest,
+    ) -> Result<Vec<ReplacementMigrationDiagnostic>, String> {
+        let result: LegacyRegistrationReconcileResult =
+            call_json_operation(request, zmanager_macos_reconcile_legacy_registrations)
+                .map_err(|error| {
+                    format!("macOS legacy-registration reconciliation failed: {error}")
+                })?;
+        Ok(result.diagnostics)
+    }
+
+    fn set_owner_only_file_permissions(file: &std::fs::File) -> std::io::Result<()> {
+        use std::os::unix::fs::PermissionsExt as _;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+    }
+
+    fn native_drag_requires_preflight() -> bool {
+        false
+    }
+
+    fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String> {
+        let mut output = Vec::<u8>::new();
+        let result = unsafe {
+            zmanager_macos_consume_shell_action_request(
+                token.as_ptr(),
+                token.len(),
+                Some(icon_operation_callback),
+                (&mut output as *mut Vec<u8>).cast(),
+            )
+        };
+        if result != 0 {
+            return Err(format!(
+                "macOS shell-action request could not be consumed: {result}"
+            ));
+        }
+        Ok(output)
+    }
+
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
         strip_components: usize,
@@ -163,6 +270,113 @@ impl NativePlatform for MacOsPlatform {
         unsafe { zmanager_macos_host_shutdown() };
         eprintln!("ZMANAGER_MACOS_HOST_SHUTDOWN_OK");
     }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeMenuCommandEvent<'a> {
+    command_id: &'a str,
+}
+
+fn menu_command(
+    app: &tauri::AppHandle<Wry>,
+    command_id: &str,
+    label: &str,
+    accelerator: Option<&str>,
+) -> tauri::Result<MenuItem<Wry>> {
+    MenuItem::with_id(
+        app,
+        format!("command:{command_id}"),
+        label,
+        true,
+        accelerator,
+    )
+}
+
+fn build_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
+    let about = menu_command(app, "about", "About ZManager", None)?;
+    let preferences = menu_command(app, "options", "Settings…", Some("CmdOrCtrl+,"))?;
+    let app_menu = SubmenuBuilder::new(app, "ZManager")
+        .item(&about)
+        .separator()
+        .item(&preferences)
+        .separator()
+        .hide()
+        .hide_others()
+        .show_all()
+        .separator()
+        .quit()
+        .build()?;
+
+    let open = menu_command(app, "open", "Open Archive…", Some("CmdOrCtrl+O"))?;
+    let add = menu_command(app, "add", "New Archive…", Some("CmdOrCtrl+N"))?;
+    let close_archive = menu_command(app, "closeArchive", "Close Archive", None)?;
+    let extract = menu_command(app, "extract", "Extract…", None)?;
+    let test = menu_command(app, "test", "Test Archive", None)?;
+    let info = menu_command(app, "info", "Archive Info", None)?;
+    let file_menu = SubmenuBuilder::new(app, "File")
+        .item(&open)
+        .item(&add)
+        .item(&close_archive)
+        .separator()
+        .item(&extract)
+        .item(&test)
+        .item(&info)
+        .separator()
+        .close_window()
+        .build()?;
+
+    let select_all = menu_command(app, "selectAll", "Select All Entries", Some("CmdOrCtrl+A"))?;
+    let edit_menu = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .separator()
+        .item(&select_all)
+        .build()?;
+
+    let window_menu = SubmenuBuilder::new(app, "Window")
+        .minimize()
+        .maximize()
+        .fullscreen()
+        .separator()
+        .close_window()
+        .build()?;
+
+    let help = menu_command(app, "helpContents", "ZManager Help", Some("F1"))?;
+    let help_menu = SubmenuBuilder::new(app, "Help").item(&help).build()?;
+
+    MenuBuilder::new(app)
+        .items(&[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu])
+        .build()
+}
+
+fn call_json_operation<Input: Serialize, Output: serde::de::DeserializeOwned>(
+    input: &Input,
+    operation: unsafe extern "C" fn(
+        *const u8,
+        usize,
+        Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        *mut c_void,
+    ) -> i32,
+) -> Result<Output, String> {
+    let input = serde_json::to_vec(input).map_err(|error| error.to_string())?;
+    let mut output = Vec::<u8>::new();
+    let result = unsafe {
+        operation(
+            input.as_ptr(),
+            input.len(),
+            Some(icon_operation_callback),
+            (&mut output as *mut Vec<u8>).cast(),
+        )
+    };
+    if result != 0 {
+        return Err(format!("native operation returned {result}"));
+    }
+    serde_json::from_slice(&output).map_err(|error| error.to_string())
 }
 
 extern "C" fn icon_operation_callback(bytes: *const u8, length: usize, context: *mut c_void) {

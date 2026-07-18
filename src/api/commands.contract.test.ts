@@ -17,12 +17,26 @@ const COMMAND_WRAPPERS = [
     request: { entries: [{ key: "root", path: "C:/demo/root.txt", isDirectory: false }] },
     call: () => api.fetchSystemFileIcons({ entries: [{ key: "root", path: "C:/demo/root.txt", isDirectory: false }] }),
   },
+  { command: "default_handler_status", call: () => api.fetchDefaultHandlerStatus() },
+  { command: "default_handler_set", call: () => api.setDefaultHandlers() },
+  { command: "default_handler_restore", call: () => api.restoreDefaultHandlers() },
+  { command: "replacement_migration_prepare", call: () => api.prepareReplacementMigration() },
+  {
+    command: "replacement_migration_complete",
+    request: { schemaVersion: 1, appliedPreferenceKeys: ["defaultArchiveFormat"] },
+    call: () => api.completeReplacementMigration(1, ["defaultArchiveFormat"]),
+  },
   {
     command: "validate_directory",
     request: { path: "C:/output" },
     call: () => api.validateDirectory({ path: "C:/output" }),
   },
   { command: "quick_action_startup_state", call: () => api.fetchQuickActionStartupState() },
+  {
+    command: "consume_shell_action_request",
+    args: { requestToken: "abcdefghijklmnopqrstuv" },
+    call: () => api.consumeShellActionRequest("abcdefghijklmnopqrstuv"),
+  },
   {
     command: "native_frontend_ready",
     args: { windowLabel: "main" },
@@ -229,5 +243,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/(?:commands|account)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|replacement_migration)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }

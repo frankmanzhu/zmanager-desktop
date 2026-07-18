@@ -1,9 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import {
-  contextMenuItems,
-} from "../../contextMenuHelpers";
-import type { ZManagerContextMenuItem } from "../appRuntime";
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "../../components/ui/popover";
+import { contextMenuItems } from "../../contextMenuHelpers";
+import type {
+  ZManagerContextMenuIntent,
+  ZManagerContextMenuItem,
+} from "../appRuntime";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 
 export function ContextMenuRoot() {
@@ -12,85 +18,83 @@ export function ContextMenuRoot() {
   const menu = snapshot.contextMenu;
   const menuRef = useRef<HTMLDivElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const wasVisibleRef = useRef(false);
-
-  useEffect(() => {
-    const menuElement = menuRef.current;
-    if (!menu.visible || !menuElement) {
-      if (wasVisibleRef.current) {
-        wasVisibleRef.current = false;
-        restoreContextMenuFocus(menuElement, returnFocusRef.current);
-        returnFocusRef.current = null;
-      }
-      return;
-    }
-
-    if (!wasVisibleRef.current) {
-      const active = document.activeElement;
-      returnFocusRef.current = active instanceof HTMLElement && !menuElement.contains(active) ? active : null;
-    }
-    wasVisibleRef.current = true;
-
-    menuElement.style.left = `${menu.x}px`;
-    menuElement.style.top = `${menu.y}px`;
-    const rect = menuElement.getBoundingClientRect();
-    const clampedX = Math.max(4, Math.min(menu.x, window.innerWidth - rect.width - 4));
-    const clampedY = Math.max(4, Math.min(menu.y, window.innerHeight - rect.height - 4));
-    menuElement.style.left = `${clampedX}px`;
-    menuElement.style.top = `${clampedY}px`;
-    contextMenuItems(menuElement)[0]?.focus();
-  }, [menu]);
-
-  useEffect(() => {
-    if (!menu.visible) {
-      return;
-    }
-
-    const ownerDocument = menuRef.current?.ownerDocument ?? document;
-    const hideOnOutsidePointerDown = (event: PointerEvent) => {
-      const menuElement = menuRef.current;
-      if (!menuElement || !(event.target instanceof Node) || menuElement.contains(event.target)) {
-        return;
-      }
-
-      actions.handleContextMenuIntent({ type: "hide" });
-    };
-
-    ownerDocument.addEventListener("pointerdown", hideOnOutsidePointerDown);
-    return () => ownerDocument.removeEventListener("pointerdown", hideOnOutsidePointerDown);
-  }, [actions, menu.visible, menu.id]);
+  const menuX = menu.visible ? menu.x : 0;
+  const menuY = menu.visible ? menu.y : 0;
+  const menuItems = menu.visible ? menu.items : [];
+  const virtualAnchorRef = useRef({
+    getBoundingClientRect: () => DOMRect.fromRect(),
+  });
+  virtualAnchorRef.current.getBoundingClientRect = () =>
+    DOMRect.fromRect({ x: menuX, y: menuY });
 
   return (
-    <div
-      id="context-menu"
-      ref={menuRef}
-      className="context-menu"
-      role="menu"
-      hidden={!menu.visible}
-      style={menu.visible ? { left: menu.x, top: menu.y } : undefined}
-      onKeyDown={(event) => {
-        if (handleContextMenuKeyboard(event.currentTarget, event.nativeEvent)) {
-          actions.handleContextMenuIntent({ type: "hide" });
-          return;
-        }
-      }}
-      onFocus={(event) => {
-        if (!returnFocusRef.current && event.relatedTarget instanceof HTMLElement) {
-          returnFocusRef.current = event.relatedTarget;
-        }
+    <Popover
+      open={menu.visible}
+      onOpenChange={(open) => {
+        if (!open) actions.handleContextMenuIntent({ type: "hide" });
       }}
     >
-      {menu.visible
-        ? menu.items.map((item, index) => renderContextMenuItem(item, index, actions.handleContextMenuIntent))
-        : null}
-    </div>
+      <PopoverAnchor virtualRef={virtualAnchorRef} />
+      <PopoverContent
+        id="context-menu"
+        ref={menuRef}
+        className="min-w-[220px] w-auto rounded-lg border border-slate-200 bg-white p-1 text-[13px] text-slate-950 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+        role="menu"
+        align="start"
+        side="right"
+        sideOffset={0}
+        collisionPadding={4}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          const menuElement = menuRef.current;
+          const active = menuElement?.ownerDocument.activeElement;
+          returnFocusRef.current =
+            active instanceof HTMLElement && !menuElement?.contains(active)
+              ? active
+              : null;
+          if (menuElement) contextMenuItems(menuElement)[0]?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreContextMenuFocus(menuRef.current, returnFocusRef.current);
+          returnFocusRef.current = null;
+        }}
+        onInteractOutside={() =>
+          actions.handleContextMenuIntent({ type: "hide" })
+        }
+        onKeyDown={(event) => {
+          if (
+            handleContextMenuKeyboard(event.currentTarget, event.nativeEvent)
+          ) {
+            actions.handleContextMenuIntent({ type: "hide" });
+          }
+        }}
+      >
+        <ContextMenuItemList
+          items={menuItems}
+          onIntent={actions.handleContextMenuIntent}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function ContextMenuItemList({
+  items,
+  onIntent,
+}: Readonly<{
+  items: readonly ZManagerContextMenuItem[];
+  onIntent(intent: ZManagerContextMenuIntent): void;
+}>) {
+  return items.map((item, index) =>
+    renderContextMenuItem(item, index, onIntent),
   );
 }
 
 function renderContextMenuItem(
   item: ZManagerContextMenuItem,
   index: number,
-  onIntent: ReturnType<typeof useZManagerActions>["handleContextMenuIntent"],
+  onIntent: (intent: ZManagerContextMenuIntent) => void,
 ) {
   switch (item.type) {
     case "action":
@@ -99,6 +103,7 @@ function renderContextMenuItem(
           key={contextMenuItemKey(item, index)}
           type="button"
           role="menuitem"
+          className="flex min-h-7 w-full items-center justify-start rounded border-0 bg-transparent px-7 py-1 text-left hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50 dark:hover:bg-slate-800"
           data-context-action={item.payload.action}
           data-column-id={item.payload.columnId}
           data-archive-path={item.payload.archivePath}
@@ -112,7 +117,7 @@ function renderContextMenuItem(
             onIntent({ type: "action", payload: item.payload });
           }}
         >
-          <span className="context-menu-label">{item.label}</span>
+          <span>{item.label}</span>
         </button>
       );
     case "checkbox":
@@ -120,7 +125,7 @@ function renderContextMenuItem(
         <button
           key={contextMenuItemKey(item, index)}
           type="button"
-          className="context-check-item"
+          className="relative flex min-h-7 w-full items-center justify-start rounded border-0 bg-transparent px-7 py-1 text-left hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50 dark:hover:bg-slate-800"
           role="menuitemcheckbox"
           data-context-action={item.payload.action}
           data-column-id={item.payload.columnId}
@@ -136,22 +141,36 @@ function renderContextMenuItem(
             onIntent({ type: "action", payload: item.payload });
           }}
         >
-          <span className="context-check" aria-hidden="true" />
-          <span className="context-menu-label">{item.label}</span>
+          <span className="absolute left-3" aria-hidden="true">
+            {item.checked ? "✓" : null}
+          </span>
+          <span>{item.label}</span>
         </button>
       );
     case "caption":
       return (
-        <div key={contextMenuItemKey(item, index)} className="context-menu-caption">
+        <div
+          key={contextMenuItemKey(item, index)}
+          className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+        >
           {item.label}
         </div>
       );
     case "separator":
-      return <div key={contextMenuItemKey(item, index)} className="context-menu-separator" role="separator" />;
+      return (
+        <div
+          key={contextMenuItemKey(item, index)}
+          className="my-1 h-px bg-slate-200 dark:bg-slate-700"
+          role="separator"
+        />
+      );
   }
 }
 
-function contextMenuItemKey(item: ZManagerContextMenuItem, index: number): string {
+function contextMenuItemKey(
+  item: ZManagerContextMenuItem,
+  index: number,
+): string {
   switch (item.type) {
     case "action":
     case "checkbox":
@@ -163,7 +182,10 @@ function contextMenuItemKey(item: ZManagerContextMenuItem, index: number): strin
   }
 }
 
-function handleContextMenuKeyboard(contextMenu: HTMLElement, event: KeyboardEvent): boolean {
+function handleContextMenuKeyboard(
+  contextMenu: HTMLElement,
+  event: KeyboardEvent,
+): boolean {
   const items = contextMenuItems(contextMenu);
   if (items.length === 0) {
     return false;
@@ -184,7 +206,11 @@ function handleContextMenuKeyboard(contextMenu: HTMLElement, event: KeyboardEven
     event.preventDefault();
     event.stopPropagation();
     return true;
-  } else if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+  } else if (
+    event.key === "Enter" ||
+    event.key === " " ||
+    event.key === "Spacebar"
+  ) {
     event.preventDefault();
     event.stopPropagation();
     items[activeIndex]?.click();
@@ -199,7 +225,10 @@ function handleContextMenuKeyboard(contextMenu: HTMLElement, event: KeyboardEven
   return false;
 }
 
-function restoreContextMenuFocus(contextMenu: HTMLElement | null, restoreTarget: HTMLElement | null) {
+function restoreContextMenuFocus(
+  contextMenu: HTMLElement | null,
+  restoreTarget: HTMLElement | null,
+) {
   if (!contextMenu || !restoreTarget) {
     return;
   }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schema version="1.0" xmlns="http://www.apple.com/metadata">
+  <attributes>
+    <attribute name="com_frankmanzhu_zmanager_tzapSignatureStatus" multivalued="false" type="CFString"/>
+    <attribute name="com_frankmanzhu_zmanager_tzapSigner" multivalued="false" type="CFString"/>
+    <attribute name="com_frankmanzhu_zmanager_tzapIssuer" multivalued="false" type="CFString"/>
+    <attribute name="com_frankmanzhu_zmanager_tzapEncryption" multivalued="false" type="CFString"/>
+    <attribute name="com_frankmanzhu_zmanager_tzapVolumeCount" multivalued="false" type="CFNumber"/>
+  </attributes>
+  <types><type name="com.frankmanzhu.zmanager.tzap"><allattrs>
+    com_frankmanzhu_zmanager_tzapSignatureStatus
+    com_frankmanzhu_zmanager_tzapSigner
+    com_frankmanzhu_zmanager_tzapIssuer
+    com_frankmanzhu_zmanager_tzapEncryption
+    com_frankmanzhu_zmanager_tzapVolumeCount
+    kMDItemAuthors
+    kMDItemDescription
+    kMDItemKind
+    kMDItemSecurityMethod
+  </allattrs><displayattrs>
+    com_frankmanzhu_zmanager_tzapSignatureStatus
+    com_frankmanzhu_zmanager_tzapSigner
+    com_frankmanzhu_zmanager_tzapIssuer
+    com_frankmanzhu_zmanager_tzapEncryption
+    com_frankmanzhu_zmanager_tzapVolumeCount
+  </displayattrs></type></types>
+</schema>

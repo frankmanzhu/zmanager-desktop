@@ -15,6 +15,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            artifact-name: zmanager-macos-arm64-ci
+          - arch: x86_64
+            runner: macos-15-intel
+            artifact-name: zmanager-macos-x86_64-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust target and frontend dependencies
+        run: |
+          brew install cmake lz4 xz
+          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          npm ci
+
+      - name: Run macOS migration and contract tests
+        run: |
+          npm run test:frontend
+          npm run test:architecture
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
+          cargo test --manifest-path crates/zmanager-public-metadata-ffi/Cargo.toml
+          swift test --package-path native/macos
+
+      - name: Build and inspect ad-hoc release bundle
+        env:
+          ZMANAGER_BUILD_NUMBER: ${{ github.run_number }}
+          ZMANAGER_MACOS_STAGE_DIR: /tmp/zmanager-macos-ci
+        run: |
+          scripts/build-macos.sh --skip-tests --no-install --arch "${{ matrix.arch }}" --bundle all
+          app="/tmp/zmanager-macos-ci/Z-Manager-$(node -p 'require("./package.json").version')-macos-${{ matrix.arch }}.app"
+          scripts/release-gate-macos.sh "$app" --expected-arch "${{ matrix.arch }}" \
+            --report "/tmp/zmanager-macos-ci/inspection-${{ matrix.arch }}.json"
+          scripts/test-macos-register-bundle.sh "$app"
+          scripts/test-release-gate-macos.sh "$app" "${{ matrix.arch }}"
+
+      - name: Upload macOS inspection and test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            /tmp/zmanager-macos-ci/*.app
+            /tmp/zmanager-macos-ci/*.zip
+            /tmp/zmanager-macos-ci/*.dmg
+            /tmp/zmanager-macos-ci/inspection-*.json
+
   windows:
     name: Windows ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}

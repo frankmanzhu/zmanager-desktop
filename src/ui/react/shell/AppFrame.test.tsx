@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import { ZManagerAppRuntimeProvider } from "../AppProviders";
 import { createZManagerAppStore } from "../appStore";
-import { createInitialZManagerReactSnapshot, createZManagerReactSnapshot } from "../appRuntime";
+import {
+  createInitialZManagerReactSnapshot,
+  createZManagerReactSnapshot,
+} from "../appRuntime";
 import { AppFrame } from "./AppFrame";
 
 describe("React AppFrame shell", () => {
@@ -24,10 +27,11 @@ describe("React AppFrame shell", () => {
       ),
     );
 
-    expect(html).toContain('class="workspace"');
-    expect(html).toContain('class="window-titlebar"');
-    expect(html).toContain('class="app-menu"');
-    expect(html).toContain('class="command-toolbar mode-toolbar');
+    expect(html).toContain("<main");
+    expect(html).toContain('data-mode="compress"');
+    expect(html).toContain('data-shell-chrome="title"');
+    expect(html).toContain('data-shell-chrome="menu"');
+    expect(html).toContain('data-shell-chrome="toolbar"');
     expect(html).toContain('id="mode-compress"');
     expect(html).toContain('id="add-archive"');
     expect(html).toContain('id="browse-create-destination"');
@@ -43,18 +47,20 @@ describe("React AppFrame shell", () => {
     expect(html).not.toContain('id="open-archive"');
     expect(html).not.toContain('id="extract-toolbar"');
     expect(html).toContain('id="status-job-button"');
-    expect(html).toContain('id="drop-overlay"');
+    expect(html).not.toContain('id="drop-overlay"');
   });
 
   it("renders extract-mode toolbar commands without compress controls", () => {
     const initialSnapshot = createInitialZManagerReactSnapshot();
-    const store = createZManagerAppStore(createZManagerReactSnapshot({
-      ...initialSnapshot,
-      shell: {
-        ...initialSnapshot.shell,
-        activeMode: "extract",
-      },
-    }));
+    const store = createZManagerAppStore(
+      createZManagerReactSnapshot({
+        ...initialSnapshot,
+        shell: {
+          ...initialSnapshot.shell,
+          activeMode: "extract",
+        },
+      }),
+    );
 
     const html = renderToStaticMarkup(
       createElement(
@@ -95,11 +101,15 @@ describe("React AppFrame shell", () => {
       createElement(
         ZManagerAppRuntimeProvider,
         { store },
-        createElement(AppFrame, { runtimeBridgeReady: false }, createElement("section")),
+        createElement(
+          AppFrame,
+          { runtimeBridgeReady: false },
+          createElement("section"),
+        ),
       ),
     );
 
-    expect(html).toContain('class="workspace"');
+    expect(html).toContain("<main");
     expect(html).not.toContain('data-mode="compress"');
   });
 });

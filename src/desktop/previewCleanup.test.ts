@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  cleanupPreviewRoots as cleanupPreviewRootsCommand,
-} from "../api/commands";
+import { cleanupPreviewRoots as cleanupPreviewRootsCommand } from "../api/commands";
 import {
   bindPreviewCleanupOnAppClose,
   cleanupPreviewRoots,
@@ -31,22 +29,8 @@ function unsetWindow() {
   });
 }
 
-function createWindowStub(): PreviewCleanupWindow & {
-  listeners: Map<"pagehide" | "beforeunload", Set<() => void>>;
-} {
-  const listeners = new Map<"pagehide" | "beforeunload", Set<() => void>>();
-
-  return {
-    listeners,
-    addEventListener(type, listener): void {
-      const typeListeners = listeners.get(type) ?? new Set<() => void>();
-      typeListeners.add(listener);
-      listeners.set(type, typeListeners);
-    },
-    removeEventListener(type, listener): void {
-      listeners.get(type)?.delete(listener);
-    },
-  };
+function createWindowStub(): PreviewCleanupWindow {
+  return { onpagehide: null, onbeforeunload: null };
 }
 
 afterEach(() => {
@@ -67,8 +51,8 @@ describe("desktop preview cleanup adapter", () => {
 
     bindPreviewCleanupOnAppClose(handler, { windowRef });
 
-    windowRef.listeners.get("pagehide")?.forEach((listener) => listener());
-    windowRef.listeners.get("beforeunload")?.forEach((listener) => listener());
+    windowRef.onpagehide?.();
+    windowRef.onbeforeunload?.();
 
     expect(handler).toHaveBeenCalledTimes(2);
   });
@@ -80,10 +64,28 @@ describe("desktop preview cleanup adapter", () => {
     const unbind = bindPreviewCleanupOnAppClose(handler, { windowRef });
     unbind();
 
-    windowRef.listeners.get("pagehide")?.forEach((listener) => listener());
-    windowRef.listeners.get("beforeunload")?.forEach((listener) => listener());
+    windowRef.onpagehide?.();
+    windowRef.onbeforeunload?.();
 
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing lifecycle callbacks and does not overwrite later bindings", () => {
+    const earlier = vi.fn();
+    const later = vi.fn();
+    const handler = vi.fn();
+    const windowRef = createWindowStub();
+    windowRef.onpagehide = earlier;
+
+    const unbind = bindPreviewCleanupOnAppClose(handler, { windowRef });
+    windowRef.onpagehide?.();
+    windowRef.onpagehide = later;
+    unbind();
+    windowRef.onpagehide?.();
+
+    expect(earlier).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledOnce();
+    expect(later).toHaveBeenCalledOnce();
   });
 
   it("is a no-op when window is unavailable", () => {

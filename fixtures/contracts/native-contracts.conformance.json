@@ -18,10 +18,9 @@
       "id": "open",
       "order": 10,
       "selectionShapes": [
-        "single-archive",
-        "multiple-archives"
+        "single-archive"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "exactly-one"
     },
     {
       "id": "compress",
@@ -103,10 +102,9 @@
       "id": "extractToFolder",
       "order": 100,
       "selectionShapes": [
-        "single-archive",
-        "multiple-archives"
+        "single-archive"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "exactly-one"
     }
   ],
   "archivePaths": [

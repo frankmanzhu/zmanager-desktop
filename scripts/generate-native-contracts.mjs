@@ -13,6 +13,46 @@ const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const put = (path, content) => outputs.set(path, content.endsWith("\n") ? content : `${content}\n`);
 const swiftString = (value) => JSON.stringify(value);
 
+const requireUnique = (values, label) => {
+  const duplicates = values.filter((value, index) => values.indexOf(value) !== index);
+  if (duplicates.length) throw new Error(`${label} contains duplicates: ${[...new Set(duplicates)].join(", ")}`);
+};
+requireUnique(archive.singleExtensions, "singleExtensions");
+requireUnique(archive.compoundExtensions, "compoundExtensions");
+requireUnique(archive.splitArchiveSuffixes, "splitArchiveSuffixes");
+const supportedAssociations = [...archive.singleExtensions, ...archive.compoundExtensions, ...archive.splitArchiveSuffixes.map((suffix) => suffix.slice(1))].sort();
+const declaredAssociations = archive.documentGroups.flatMap(({ extensions }) => extensions);
+requireUnique(declaredAssociations, "documentGroups extensions");
+if (JSON.stringify([...declaredAssociations].sort()) !== JSON.stringify(supportedAssociations)) {
+  throw new Error("documentGroups extensions must exactly cover every supported archive association");
+}
+for (const type of archive.exportedTypes) {
+  if (!type.extensions.every((extension) => declaredAssociations.includes(extension))) {
+    throw new Error(`exported type ${type.identifier} is not present in documentGroups`);
+  }
+}
+const serviceActionIds = shell.actions
+  .filter(({ macOSServiceTitle }) => typeof macOSServiceTitle === "string" && macOSServiceTitle.trim() !== "")
+  .map(({ id }) => id);
+if (JSON.stringify(serviceActionIds) !== JSON.stringify(["open", "compress", "extract"])) {
+  throw new Error("macOS Services must declare exactly open, compress, and extract in canonical order");
+}
+for (const group of archive.documentGroups) {
+  if (![group.macOSDisplayName, group.macOSDisplayNameZhHans].every((value) => typeof value === "string" && value.trim() !== "")) {
+    throw new Error(`document group ${group.id} requires English and Simplified Chinese macOS display names`);
+  }
+}
+for (const type of archive.exportedTypes) {
+  if (![type.macOSDescription, type.macOSDescriptionZhHans].every((value) => typeof value === "string" && value.trim() !== "")) {
+    throw new Error(`exported type ${type.identifier} requires English and Simplified Chinese macOS descriptions`);
+  }
+}
+for (const action of shell.actions.filter(({ macOSServiceTitle }) => typeof macOSServiceTitle === "string")) {
+  if (typeof action.macOSServiceTitleZhHans !== "string" || action.macOSServiceTitleZhHans.trim() === "") {
+    throw new Error(`service action ${action.id} requires a Simplified Chinese title`);
+  }
+}
+
 put("src/app/generated/archiveFileTypes.generated.json", json({
   singleExtensions: archive.singleExtensions,
   compoundExtensions: archive.compoundExtensions,
@@ -179,6 +219,37 @@ put("packaging/macos/archive-types.generated.json", json({
   documentGroups: archive.documentGroups,
   exportedTypes: archive.exportedTypes
 }));
+put("packaging/macos/main-info.generated.json", json({
+  schemaVersion: 1,
+  documentGroups: archive.documentGroups,
+  exportedTypes: archive.exportedTypes,
+  services: shell.actions
+    .filter(({ macOSServiceTitle }) => typeof macOSServiceTitle === "string")
+    .map(({ id, displayKey, macOSServiceTitle, order }) => ({
+      id,
+      displayKey,
+      title: macOSServiceTitle,
+      order
+    }))
+}));
+const strings = (pairs) => [...new Map(pairs)].map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)};`).join("\n");
+const englishInfo = [
+  ["CFBundleDisplayName", "Z-Manager"],
+  ["CFBundleName", "Z-Manager"],
+  ...archive.documentGroups.map(({ displayKey, macOSDisplayName }) => [displayKey, macOSDisplayName]),
+  ...archive.exportedTypes.map(({ descriptionKey, macOSDescription }) => [descriptionKey, macOSDescription]),
+];
+const chineseInfo = [
+  ["CFBundleDisplayName", "Z-Manager"],
+  ["CFBundleName", "Z-Manager"],
+  ...archive.documentGroups.map(({ displayKey, macOSDisplayNameZhHans }) => [displayKey, macOSDisplayNameZhHans]),
+  ...archive.exportedTypes.map(({ descriptionKey, macOSDescriptionZhHans }) => [descriptionKey, macOSDescriptionZhHans]),
+];
+const serviceActions = shell.actions.filter(({ macOSServiceTitle }) => typeof macOSServiceTitle === "string");
+put("packaging/macos/Main/en.lproj/InfoPlist.strings", strings(englishInfo));
+put("packaging/macos/Main/zh-Hans.lproj/InfoPlist.strings", strings(chineseInfo));
+put("packaging/macos/Main/en.lproj/ServicesMenu.strings", strings(serviceActions.map(({ macOSServiceTitle }) => [macOSServiceTitle, macOSServiceTitle])));
+put("packaging/macos/Main/zh-Hans.lproj/ServicesMenu.strings", strings(serviceActions.map(({ macOSServiceTitle, macOSServiceTitleZhHans }) => [macOSServiceTitle, macOSServiceTitleZhHans])));
 
 const fixture = {
   schemaVersion: 1,

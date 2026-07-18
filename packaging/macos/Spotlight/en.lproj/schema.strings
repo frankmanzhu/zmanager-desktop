@@ -1,0 +1,5 @@
+"com_frankmanzhu_zmanager_tzapSignatureStatus" = "TZAP Signature";
+"com_frankmanzhu_zmanager_tzapSigner" = "TZAP Signed By";
+"com_frankmanzhu_zmanager_tzapIssuer" = "TZAP Issuer";
+"com_frankmanzhu_zmanager_tzapEncryption" = "TZAP Encryption";
+"com_frankmanzhu_zmanager_tzapVolumeCount" = "TZAP Volume Count";

@@ -3,7 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "./AppShell";
-import { ReactRuntimeMetadata, ZManagerAppRuntimeProvider, useZManagerActions, useZManagerSnapshot } from "./AppProviders";
+import {
+  ReactRuntimeMetadata,
+  ZManagerAppRuntimeProvider,
+  useZManagerActions,
+  useZManagerSnapshot,
+} from "./AppProviders";
 import { createZManagerAppStore } from "./appStore";
 import {
   createInitialZManagerReactSnapshot,
@@ -29,7 +34,9 @@ declare function require(id: "path"): {
 const { readdirSync, readFileSync, statSync } = require("fs");
 const { join } = require("path");
 
-function reactSourceFiles(directory = join(process.cwd(), "src", "ui", "react")): string[] {
+function reactSourceFiles(
+  directory = join(process.cwd(), "src", "ui", "react"),
+): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(directory)) {
     const path = join(directory, entry);
@@ -80,7 +87,8 @@ describe("AppShell", () => {
 
   it("subscribes to snapshot replacement and delegates intents without mutating snapshots", () => {
     const executeCommand = vi.fn<ZManagerReactActions["executeCommand"]>();
-    const handleArchiveIntent = vi.fn<ZManagerReactActions["handleArchiveIntent"]>();
+    const handleArchiveIntent =
+      vi.fn<ZManagerReactActions["handleArchiveIntent"]>();
     const store = createZManagerAppStore(createInitialZManagerReactSnapshot(), {
       ...noopZManagerReactActions,
       executeCommand,
@@ -93,7 +101,9 @@ describe("AppShell", () => {
     store.getActions().executeCommand("open", { openSource: "clipboard" });
     store.getActions().handleArchiveIntent({ type: "navigateBack" });
 
-    expect(executeCommand).toHaveBeenCalledWith("open", { openSource: "clipboard" });
+    expect(executeCommand).toHaveBeenCalledWith("open", {
+      openSource: "clipboard",
+    });
     expect(handleArchiveIntent).toHaveBeenCalledWith({ type: "navigateBack" });
     expect(store.getSnapshot()).toBe(originalSnapshot);
 

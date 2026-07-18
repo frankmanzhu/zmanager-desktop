@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "documentGroups": [
+    {
+      "id": "tzap",
+      "displayKey": "archiveType.tzap",
+      "macOSDisplayName": "TZAP archive",
+      "macOSDisplayNameZhHans": "TZAP 归档",
+      "extensions": [
+        "tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    },
+    {
+      "id": "archives",
+      "displayKey": "archiveType.archive",
+      "macOSDisplayName": "Archive",
+      "macOSDisplayNameZhHans": "归档",
+      "extensions": [
+        "7z",
+        "apk",
+        "appx",
+        "br",
+        "bz2",
+        "cab",
+        "cbr",
+        "cpio",
+        "deb",
+        "gz",
+        "ipa",
+        "iso",
+        "jar",
+        "lz",
+        "lz4",
+        "lzma",
+        "lzo",
+        "lrz",
+        "rar",
+        "rpm",
+        "tar",
+        "tbz2",
+        "tgz",
+        "txz",
+        "tzst",
+        "war",
+        "xar",
+        "xpi",
+        "xz",
+        "z",
+        "zip",
+        "zipx",
+        "zst",
+        "tar.br",
+        "tar.bz2",
+        "tar.gz",
+        "tar.lz",
+        "tar.lz4",
+        "tar.lzma",
+        "tar.lzo",
+        "tar.lrz",
+        "tar.xz",
+        "tar.z",
+        "tar.zst",
+        "7z.001",
+        "vol000.tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Alternate"
+    }
+  ],
+  "exportedTypes": [
+    {
+      "identifier": "com.frankmanzhu.zmanager.tzap",
+      "descriptionKey": "archiveType.tzap",
+      "macOSDescription": "TZAP archive",
+      "macOSDescriptionZhHans": "TZAP 归档",
+      "conformsTo": [
+        "public.data"
+      ],
+      "extensions": [
+        "tzap"
+      ],
+      "mimeTypes": [
+        "application/x-tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    }
+  ],
+  "services": [
+    {
+      "id": "open",
+      "displayKey": "shellAction.open",
+      "title": "Open with Z-Manager",
+      "order": 10
+    },
+    {
+      "id": "compress",
+      "displayKey": "shellAction.compress",
+      "title": "Compress with Z-Manager",
+      "order": 20
+    },
+    {
+      "id": "extract",
+      "displayKey": "shellAction.extract",
+      "title": "Extract with Z-Manager",
+      "order": 30
+    }
+  ]
+}

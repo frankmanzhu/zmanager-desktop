@@ -30,7 +30,7 @@
 | Decision | Frozen value |
 |---|---|
 | Application bundle and installed name | `com.frankmanzhu.zmanager`; `Z-Manager.app` |
-| Team | `N864W8975T` |
+| Team | `9PMA523YY4` |
 | App Group | `group.com.frankmanzhu.zmanager` |
 | Finder / Quick Look preview / thumbnail / Spotlight | Released identifiers under `com.frankmanzhu.zmanager.*` |
 | URL scheme / exported UTType | `zmanager`; `com.frankmanzhu.zmanager.tzap` |

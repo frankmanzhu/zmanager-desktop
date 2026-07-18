@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type ExtractPasswordState = Readonly<{
   password: string;
@@ -18,22 +25,29 @@ const FALLBACK_EXTRACT_PASSWORD_STATE: ExtractPasswordState = Object.freeze({
   reset: noop,
 });
 
-const ExtractPasswordContext = createContext<ExtractPasswordState>(FALLBACK_EXTRACT_PASSWORD_STATE);
+const ExtractPasswordContext = createContext<ExtractPasswordState>(
+  FALLBACK_EXTRACT_PASSWORD_STATE,
+);
 
-export function ExtractPasswordProvider({ children }: Readonly<{ children?: ReactNode }>) {
+export function ExtractPasswordProvider({
+  children,
+}: Readonly<{ children?: ReactNode }>) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const reset = useCallback(() => {
     setPassword("");
     setShowPassword(false);
   }, []);
-  const value = useMemo<ExtractPasswordState>(() => ({
-    password,
-    showPassword,
-    setPassword,
-    setShowPassword,
-    reset,
-  }), [password, reset, showPassword]);
+  const value = useMemo<ExtractPasswordState>(
+    () => ({
+      password,
+      showPassword,
+      setPassword,
+      setShowPassword,
+      reset,
+    }),
+    [password, reset, showPassword],
+  );
 
   return (
     <ExtractPasswordContext.Provider value={value}>

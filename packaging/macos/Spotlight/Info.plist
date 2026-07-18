@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleDocumentTypes</key><array><dict>
+    <key>CFBundleTypeRole</key><string>MDImporter</string>
+    <key>LSItemContentTypes</key><array><string>com.frankmanzhu.zmanager.tzap</string></array>
+  </dict></array>
+  <key>CFBundleExecutable</key><string>ZManagerSpotlight</string>
+  <key>CFBundleIdentifier</key><string>com.frankmanzhu.zmanager.spotlight-importer</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>ZManagerSpotlight</string>
+  <key>CFBundlePackageType</key><string>BNDL</string>
+  <key>CFBundleShortVersionString</key><string>0.0.0</string>
+  <key>CFBundleVersion</key><string>0</string>
+  <key>CFPlugInDynamicRegisterFunction</key><string></string>
+  <key>CFPlugInDynamicRegistration</key><string>NO</string>
+  <key>CFPlugInFactories</key><dict>
+    <key>C483C010-8E7F-458A-A792-48C5C6C194DA</key><string>MetadataImporterPluginFactory</string>
+  </dict>
+  <key>CFPlugInTypes</key><dict>
+    <key>8B08C4BF-415B-11D8-B3F9-0003936726FC</key><array><string>C483C010-8E7F-458A-A792-48C5C6C194DA</string></array>
+  </dict>
+  <key>CFPlugInUnloadFunction</key><string></string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+</dict></plist>

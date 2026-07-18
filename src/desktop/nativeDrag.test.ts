@@ -8,12 +8,17 @@ import type {
   NativeFileDragResponse,
 } from "../api/types";
 import {
+  listenNativeFileDragOutcomes,
+  NATIVE_FILE_DRAG_OUTCOME_EVENT,
   startNativeFileDrag,
 } from "./nativeDrag";
+
+const listenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/commands", () => ({
   runStartNativeFileDrag: vi.fn(),
 }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
 
 describe("desktop native drag adapter", () => {
   it("delegates native file drag requests to the API command", async () => {
@@ -46,5 +51,14 @@ describe("desktop native drag adapter", () => {
     vi.mocked(runStartNativeFileDrag).mockRejectedValue(error);
 
     await expect(startNativeFileDrag(request)).rejects.toBe(error);
+  });
+
+  it("listens for asynchronous native drag outcomes", async () => {
+    const dispose = vi.fn();
+    const listener = vi.fn();
+    listenMock.mockResolvedValue(dispose);
+
+    await expect(listenNativeFileDragOutcomes(listener)).resolves.toBe(dispose);
+    expect(listenMock).toHaveBeenCalledWith(NATIVE_FILE_DRAG_OUTCOME_EVENT, listener);
   });
 });

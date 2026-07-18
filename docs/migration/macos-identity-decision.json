@@ -12,7 +12,7 @@
     "displayName": "Z-Manager",
     "applicationBundleName": "Z-Manager.app",
     "bundleIdentifier": "com.frankmanzhu.zmanager",
-    "teamIdentifier": "N864W8975T",
+    "teamIdentifier": "9PMA523YY4",
     "appGroupIdentifier": "group.com.frankmanzhu.zmanager",
     "urlSchemes": ["zmanager"],
     "exportedUTTypes": ["com.frankmanzhu.zmanager.tzap"],

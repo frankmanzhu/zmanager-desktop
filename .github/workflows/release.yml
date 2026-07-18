@@ -18,6 +18,125 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  package-macos:
+    name: macOS ${{ matrix.arch }} signed package
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            artifact-name: zmanager-macos-arm64
+          - arch: x86_64
+            runner: macos-15-intel
+            artifact-name: zmanager-macos-x86_64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bind package to the installed acceptance build
+        run: |
+          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
+          release_version="${release_tag#v}"
+          build_number=$(node -p 'require("./docs/migration/macos-release-acceptance.json").release.buildNumber')
+          node scripts/validate-macos-release-acceptance.mjs \
+            docs/migration/macos-release-acceptance.json \
+            --version "$release_version" --build "$build_number" --arch "${{ matrix.arch }}"
+          echo "ZMANAGER_RELEASE_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies
+        run: |
+          brew install cmake lz4 xz
+          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          npm ci
+
+      - name: Import Developer ID and notary credentials
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_MAIN_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_MAIN_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_FINDER_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_FINDER_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.MACOS_NOTARY_PRIVATE_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          : "${MACOS_DEVELOPER_ID_P12_BASE64:?missing Developer ID certificate}"
+          : "${MACOS_DEVELOPER_ID_P12_PASSWORD:?missing certificate password}"
+          : "${MACOS_MAIN_PROVISIONING_PROFILE_BASE64:?missing main Developer ID provisioning profile}"
+          : "${MACOS_FINDER_PROVISIONING_PROFILE_BASE64:?missing Finder Developer ID provisioning profile}"
+          : "${MACOS_NOTARY_PRIVATE_KEY_BASE64:?missing notary API key}"
+          : "${MACOS_NOTARY_KEY_ID:?missing notary key ID}"
+          : "${MACOS_NOTARY_ISSUER_ID:?missing notary issuer ID}"
+          keychain="$RUNNER_TEMP/zmanager-release.keychain-db"
+          certificate="$RUNNER_TEMP/zmanager-developer-id.p12"
+          api_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+          main_profile="$RUNNER_TEMP/ZManagerMain.provisionprofile"
+          finder_profile="$RUNNER_TEMP/ZManagerFinder.provisionprofile"
+          keychain_password="$(openssl rand -hex 32)"
+          printf '%s' "$MACOS_DEVELOPER_ID_P12_BASE64" | base64 --decode > "$certificate"
+          printf '%s' "$MACOS_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$api_key"
+          printf '%s' "$MACOS_MAIN_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$main_profile"
+          printf '%s' "$MACOS_FINDER_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$finder_profile"
+          chmod 0600 "$certificate" "$api_key" "$main_profile" "$finder_profile"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$MACOS_DEVELOPER_ID_P12_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)
+          [[ $identity == "Developer ID Application:"*"(9PMA523YY4)" ]] || {
+            echo "Expected Developer ID Application identity for Team 9PMA523YY4" >&2
+            exit 1
+          }
+          xcrun notarytool store-credentials ZManagerCI --key "$api_key" \
+            --key-id "$MACOS_NOTARY_KEY_ID" --issuer "$MACOS_NOTARY_ISSUER_ID" \
+            --keychain "$keychain" --validate
+          {
+            echo "ZMANAGER_CI_KEYCHAIN=$keychain"
+            echo "ZMANAGER_CODESIGN_IDENTITY=$identity"
+            echo "ZMANAGER_NOTARY_PROFILE=ZManagerCI"
+            echo "ZMANAGER_MAIN_PROVISIONING_PROFILE=$main_profile"
+            echo "ZMANAGER_FINDER_PROVISIONING_PROFILE=$finder_profile"
+          } >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize, staple, and inspect
+        env:
+          ZMANAGER_BUILD_NUMBER: ${{ env.ZMANAGER_RELEASE_BUILD_NUMBER }}
+          ZMANAGER_MACOS_STAGE_DIR: /tmp/zmanager-macos-release
+        run: |
+          scripts/build-macos.sh --skip-tests --no-install --arch "${{ matrix.arch }}" --bundle all
+          version=$(node -p 'require("./package.json").version')
+          app="/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.app"
+          scripts/release-gate-macos.sh "$app" --expected-arch "${{ matrix.arch }}" \
+            --require-developer-id --require-notarization \
+            --zip "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.zip" \
+            --dmg "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.dmg" \
+            --report "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}-inspection.json"
+          cd /tmp/zmanager-macos-release
+          shasum -a 256 "Z-Manager-${version}-macos-${{ matrix.arch }}.zip" \
+            "Z-Manager-${version}-macos-${{ matrix.arch }}.dmg" \
+            > "Z-Manager-${version}-macos-${{ matrix.arch }}-SHA256SUMS.txt"
+
+      - name: Upload signed macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          if-no-files-found: error
+          path: |
+            /tmp/zmanager-macos-release/*.zip
+            /tmp/zmanager-macos-release/*.dmg
+            /tmp/zmanager-macos-release/*-inspection.json
+            /tmp/zmanager-macos-release/*-SHA256SUMS.txt
+
+      - name: Remove release credentials
+        if: always()
+        run: |
+          security delete-keychain "${ZMANAGER_CI_KEYCHAIN:-$RUNNER_TEMP/zmanager-release.keychain-db}" 2>/dev/null || true
+          find "$RUNNER_TEMP" -maxdepth 1 -type f \( -name '*.p12' -o -name 'AuthKey_*.p8' -o -name '*.provisionprofile' \) -delete
+
   package-windows:
     name: Windows ${{ matrix.arch }} package
     runs-on: ${{ matrix.runner }}
@@ -116,13 +235,42 @@ jobs:
           path: |
             /tmp/zmanager-desktop-rpm/*.rpm
 
+  macos-installed-acceptance:
+    name: macOS installed-system acceptance
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout acceptance record
+        uses: actions/checkout@v4
+
+      - name: Require completed arm64 and x86_64 acceptance
+        run: |
+          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
+          release_version="${release_tag#v}"
+          build_number=$(node -p 'require("./docs/migration/macos-release-acceptance.json").release.buildNumber')
+          node scripts/validate-macos-release-acceptance.mjs \
+            docs/migration/macos-release-acceptance.json --require-passed \
+            --version "$release_version" --build "$build_number" --arch arm64
+          node scripts/validate-macos-release-acceptance.mjs \
+            docs/migration/macos-release-acceptance.json --require-passed \
+            --version "$release_version" --build "$build_number" --arch x86_64
+          node scripts/validate-macos-cutover.mjs
+
+      - name: Upload installed-system acceptance record
+        uses: actions/upload-artifact@v4
+        with:
+          name: zmanager-macos-installed-acceptance
+          if-no-files-found: error
+          path: docs/migration/macos-release-acceptance.json
+
   publish:
     name: Publish release
     runs-on: ubuntu-24.04
     needs:
+      - package-macos
       - package-windows
       - package-deb
       - package-rpm
+      - macos-installed-acceptance
 
     steps:
       - name: Download release artifacts
@@ -182,6 +330,24 @@ jobs:
               zmanager-linux-arm64-rpm)
                 normalized_name="zmanager-desktop-${release_version}-linux-arm64.rpm"
                 ;;
+              zmanager-macos-arm64|zmanager-macos-x86_64)
+                case "$file_name" in
+                  Z-Manager-${release_version}-macos-*.zip|Z-Manager-${release_version}-macos-*.dmg|Z-Manager-${release_version}-macos-*-inspection.json|Z-Manager-${release_version}-macos-*-SHA256SUMS.txt)
+                    normalized_name="$file_name"
+                    ;;
+                  *)
+                    echo "Skipping unknown macOS artifact: $file_name" >&2
+                    continue
+                    ;;
+                esac
+                ;;
+              zmanager-macos-installed-acceptance)
+                [[ $file_name == macos-release-acceptance.json ]] || {
+                  echo "Skipping unknown acceptance artifact: $file_name" >&2
+                  continue
+                }
+                normalized_name="Z-Manager-${release_version}-macos-installed-acceptance.json"
+                ;;
               *)
                 echo "Skipping unexpected artifact directory: $artifact_dir" >&2
                 continue
@@ -196,12 +362,30 @@ jobs:
             cp "$src" "release-bundles/$normalized_name"
             seen_names["$normalized_name"]="1"
             artifact_count=$((artifact_count + 1))
-          done < <(find release-artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' \) -print0)
+          done < <(find release-artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.zip' -o -name '*.dmg' -o -name '*-inspection.json' -o -name '*-acceptance.json' -o -name '*-SHA256SUMS.txt' \) -print0)
 
           if [ "$artifact_count" -eq 0 ]; then
             echo "No packaged artifacts found" >&2
             exit 1
           fi
+
+          required_macos_artifacts=(
+            "Z-Manager-${release_version}-macos-arm64.zip"
+            "Z-Manager-${release_version}-macos-arm64.dmg"
+            "Z-Manager-${release_version}-macos-arm64-inspection.json"
+            "Z-Manager-${release_version}-macos-arm64-SHA256SUMS.txt"
+            "Z-Manager-${release_version}-macos-x86_64.zip"
+            "Z-Manager-${release_version}-macos-x86_64.dmg"
+            "Z-Manager-${release_version}-macos-x86_64-inspection.json"
+            "Z-Manager-${release_version}-macos-x86_64-SHA256SUMS.txt"
+            "Z-Manager-${release_version}-macos-installed-acceptance.json"
+          )
+          for required in "${required_macos_artifacts[@]}"; do
+            if [[ ! -f "release-bundles/$required" ]]; then
+              echo "Required macOS release artifact is missing: $required" >&2
+              exit 1
+            fi
+          done
 
           sha256_file="release-bundles/zmanager-desktop-${release_version}-SHA256SUMS.txt"
           tmp_sha256="$(mktemp)"
@@ -220,7 +404,7 @@ jobs:
             Automated release of zmanager-desktop from GitHub Actions.
 
             - Built from pinned zmanager dependency tag.
-            - Includes Windows portable and installer binaries, plus Linux DEB/RPM packages.
+            - Includes notarized and stapled macOS arm64/x86_64 ZIP and DMG artifacts, Windows portable and installer binaries, and Linux DEB/RPM packages.
             - SHA256SUMS file is included for artifact verification.
           files: |
             release-bundles/*

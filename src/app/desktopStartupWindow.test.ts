@@ -16,7 +16,10 @@ const { readFileSync } = require("fs");
 const { join } = require("path");
 
 function readWorkspaceFile(...parts: string[]): string {
-  return readFileSync(join(process.cwd(), ...parts), "utf8").replace(/\r\n/g, "\n");
+  return readFileSync(join(process.cwd(), ...parts), "utf8").replace(
+    /\r\n/g,
+    "\n",
+  );
 }
 
 describe("desktop startup window", () => {
@@ -46,7 +49,9 @@ describe("desktop startup window", () => {
     const invokeHandlerStart = mainRs.indexOf(".invoke_handler", setupStart);
     expect(invokeHandlerStart).toBeGreaterThan(setupStart);
 
-    expect(mainRs.slice(setupStart, invokeHandlerStart)).not.toContain(".show()");
+    expect(mainRs.slice(setupStart, invokeHandlerStart)).not.toContain(
+      ".show()",
+    );
   });
 
   it("uses platform-profile window decorations without operating-system conditionals", () => {
@@ -58,37 +63,84 @@ describe("desktop startup window", () => {
   });
 
   it("provides Linux custom chrome resize handles for undecorated windows", () => {
-    const runtimeAdapterTs = readWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
-    const appRuntimeTs = readWorkspaceFile("src", "ui", "react", "appRuntime.ts");
-    const appFrameTsx = readWorkspaceFile("src", "ui", "react", "shell", "AppFrame.tsx");
-    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
-    const styles = readWorkspaceFile("src", "styles.css");
+    const runtimeAdapterTs = readWorkspaceFile(
+      "src",
+      "runtime",
+      "zmanagerRuntimeAdapter.ts",
+    );
+    const appRuntimeTs = readWorkspaceFile(
+      "src",
+      "ui",
+      "react",
+      "appRuntime.ts",
+    );
+    const appFrameTsx = readWorkspaceFile(
+      "src",
+      "ui",
+      "react",
+      "shell",
+      "AppFrame.tsx",
+    );
+    const windowControllerTs = readWorkspaceFile(
+      "src",
+      "desktop",
+      "windowController.ts",
+    );
 
     expect(appFrameTsx).toContain("function WindowResizeHandles()");
     expect(appFrameTsx).toContain("data-window-resize-direction");
-    expect(appFrameTsx).toContain('actions.handleDesktopIntent({ type: "beginWindowResize", direction })');
-    expect(appRuntimeTs).toContain('Readonly<{ type: "beginWindowResize"; direction: ZManagerWindowResizeDirection }>');
-    expect(runtimeAdapterTs).toContain("void appWindowController.beginResizeDrag(intent.direction");
-    expect(windowControllerTs).toContain("startResizeDragging(direction: AppWindowResizeDirection)");
-    expect(styles).toContain("body.manual-window-resize .window-resize-handle");
+    expect(appFrameTsx).toContain('type: "beginWindowResize",');
+    expect(appRuntimeTs).toContain('type: "beginWindowResize";');
+    expect(appRuntimeTs).toContain("direction: ZManagerWindowResizeDirection;");
+    expect(runtimeAdapterTs).toContain(
+      "void appWindowController.beginResizeDrag(intent.direction",
+    );
+    expect(windowControllerTs).toContain(
+      "startResizeDragging(direction: AppWindowResizeDirection)",
+    );
+    expect(appFrameTsx).toContain("[body.manual-window-resize_&]:block");
   });
 
   it("centers normal startup when no saved geometry is available", () => {
-    const runtimeAdapterTs = readWorkspaceFile("src", "runtime", "zmanagerRuntimeAdapter.ts");
-    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
+    const runtimeAdapterTs = readWorkspaceFile(
+      "src",
+      "runtime",
+      "zmanagerRuntimeAdapter.ts",
+    );
+    const windowControllerTs = readWorkspaceFile(
+      "src",
+      "desktop",
+      "windowController.ts",
+    );
 
-    expect(runtimeAdapterTs).toContain("await appWindowController.revealNormalWindow();");
-    expect(windowControllerTs).toContain("async function restoreNormalWindowGeometryOrCenter()");
-    expect(windowControllerTs).toContain("const restored = await restoreNormalWindowGeometry();");
-    expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().center();");
-    expect(windowControllerTs).toContain("await restoreNormalWindowGeometryOrCenter();");
-    expect(windowControllerTs).toContain("await dependencies.getCurrentWindow().show();");
+    expect(runtimeAdapterTs).toContain(
+      "await appWindowController.revealNormalWindow();",
+    );
+    expect(windowControllerTs).toContain(
+      "async function restoreNormalWindowGeometryOrCenter()",
+    );
+    expect(windowControllerTs).toContain(
+      "const restored = await restoreNormalWindowGeometry();",
+    );
+    expect(windowControllerTs).toContain(
+      "await dependencies.getCurrentWindow().center();",
+    );
+    expect(windowControllerTs).toContain(
+      "await restoreNormalWindowGeometryOrCenter();",
+    );
+    expect(windowControllerTs).toContain(
+      "await dependencies.getCurrentWindow().show();",
+    );
   });
 
   it("keeps Tauri window and geometry ownership in the desktop adapter", () => {
     const mainTs = readWorkspaceFile("src", "main.ts");
     const runtimeBridgeTs = readWorkspaceFile("src", "runtimeBridge.ts");
-    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
+    const windowControllerTs = readWorkspaceFile(
+      "src",
+      "desktop",
+      "windowController.ts",
+    );
 
     expect(mainTs).not.toContain("@tauri-apps/api/window");
     expect(runtimeBridgeTs).not.toContain("@tauri-apps/api/window");
@@ -99,20 +151,40 @@ describe("desktop startup window", () => {
     expect(mainTs).not.toContain("zmanager.windowGeometry");
     expect(runtimeBridgeTs).not.toContain("zmanager.windowGeometry");
     expect(windowControllerTs).toContain('from "@tauri-apps/api/window"');
-    expect(windowControllerTs).toContain('export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";');
+    expect(windowControllerTs).toContain(
+      'export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";',
+    );
     expect(windowControllerTs).toContain("restorableWindowGeometry");
-    expect(windowControllerTs).toContain("const scaleFactor = await currentWindow.scaleFactor();");
-    expect(windowControllerTs).toContain("monitors = await dependencies.availableMonitors();");
-    expect(windowControllerTs).toContain("const size = (await currentWindow.innerSize()).toLogical(scaleFactor);");
-    expect(windowControllerTs).toContain("const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);");
+    expect(windowControllerTs).toContain(
+      "const scaleFactor = await currentWindow.scaleFactor();",
+    );
+    expect(windowControllerTs).toContain(
+      "monitors = await dependencies.availableMonitors();",
+    );
+    expect(windowControllerTs).toContain(
+      "const size = (await currentWindow.innerSize()).toLogical(scaleFactor);",
+    );
+    expect(windowControllerTs).toContain(
+      "const position = (await currentWindow.innerPosition()).toLogical(scaleFactor);",
+    );
     expect(windowControllerTs).toContain('unit: "logical"');
   });
 
   it("falls back to centering when saved geometry is not restorable on the current monitors", () => {
-    const windowControllerTs = readWorkspaceFile("src", "desktop", "windowController.ts");
+    const windowControllerTs = readWorkspaceFile(
+      "src",
+      "desktop",
+      "windowController.ts",
+    );
 
-    expect(windowControllerTs).toContain("const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);");
-    expect(windowControllerTs).toContain("if (!geometry) {\n      return false;\n    }");
-    expect(windowControllerTs).toContain("if (!restored) {\n      await dependencies.getCurrentWindow().center();\n    }");
+    expect(windowControllerTs).toContain(
+      "const geometry = restorableWindowGeometry(storedGeometry, monitors, scaleFactor);",
+    );
+    expect(windowControllerTs).toContain(
+      "if (!geometry) {\n      return false;\n    }",
+    );
+    expect(windowControllerTs).toContain(
+      "if (!restored) {\n      await dependencies.getCurrentWindow().center();\n    }",
+    );
   });
 });

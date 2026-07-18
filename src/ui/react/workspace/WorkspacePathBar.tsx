@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useShellSearchInputRef } from "../interaction/ShellInteractionContext";
 
 export type WorkspacePathCrumb = Readonly<{
   name: string;
@@ -56,13 +57,19 @@ export function WorkspacePathBar({
   onCrumbClick,
 }: WorkspacePathBarProps) {
   return (
-    <section className="path-bar" aria-label={ariaLabel}>
-      <label className="path-location">
-        <span className="path-location-label">{locationLabel}</span>
-        <span className="path-location-control">
+    <section
+      className="flex h-11 min-h-11 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900"
+      data-shell-chrome="path"
+      aria-label={ariaLabel}
+    >
+      <label className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="shrink-0 text-xs font-semibold text-slate-600 dark:text-slate-300">
+          {locationLabel}
+        </span>
+        <span className="flex min-w-0 flex-1 items-center">
           <input
             id={pathInputId}
-            className="path-field"
+            className="h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-sm shadow-inner outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
             type="text"
             aria-label={pathAriaLabel}
             value={displayPath}
@@ -74,20 +81,25 @@ export function WorkspacePathBar({
         </span>
       </label>
       {pathAccessory ? (
-        <div className="path-accessory">{pathAccessory}</div>
+        <div className="flex min-w-0 items-center gap-2">{pathAccessory}</div>
       ) : (
-        <div id="path-crumbs" className="path-crumbs" aria-live="polite" hidden={crumbsHidden}>
+        <div
+          id="path-crumbs"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs text-slate-500 dark:text-slate-400"
+          aria-live="polite"
+          hidden={crumbsHidden}
+        >
           {crumbsHidden
             ? emptyCrumbsText
             : crumbs.map((crumb, index) => (
-              <PathCrumb
-                key={`${crumb.path}-${index}`}
-                name={crumb.name}
-                path={crumb.path}
-                showSeparator={index > 0}
-                onClick={onCrumbClick}
-              />
-            ))}
+                <PathCrumb
+                  key={`${crumb.path}-${index}`}
+                  name={crumb.name}
+                  path={crumb.path}
+                  showSeparator={index > 0}
+                  onClick={onCrumbClick}
+                />
+              ))}
         </div>
       )}
       <WorkspaceSearchControls search={search} />
@@ -110,6 +122,7 @@ function PathCrumb({
     <>
       {showSeparator ? <span aria-hidden="true">&gt;</span> : null}
       <button
+        className="min-h-7 truncate rounded px-1.5 hover:bg-slate-100 hover:text-slate-950 dark:hover:bg-slate-800 dark:hover:text-white"
         type="button"
         data-crumb-path={path}
         aria-keyshortcuts="Enter Space"
@@ -127,17 +140,20 @@ function WorkspaceSearchControls({
   search: WorkspacePathSearch;
 }>) {
   const [draft, setDraft] = useState(search.query);
+  const searchInputRef = useShellSearchInputRef();
 
   useEffect(() => {
     setDraft(search.query);
   }, [search.query]);
 
   return (
-    <div className="search-box" role="search">
-      <label className="search-field">
+    <div className="flex min-w-0 items-center gap-1.5" role="search">
+      <label className="min-w-[150px] flex-1">
         <span className="sr-only">{search.entriesLabel}</span>
         <input
+          ref={searchInputRef}
           id="search-entries"
+          className="h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-950"
           type="search"
           placeholder={search.placeholder}
           aria-keyshortcuts="Control+F"
@@ -151,7 +167,7 @@ function WorkspaceSearchControls({
       </label>
       <button
         id="search-submit"
-        className="search-action"
+        className="min-h-8 rounded-md border border-slate-300 bg-white px-2 text-xs hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
         type="button"
         disabled={search.disabled}
         onClick={() => search.onSubmit?.(draft)}
@@ -160,7 +176,7 @@ function WorkspaceSearchControls({
       </button>
       <button
         id="clear-search"
-        className="search-action quiet-action"
+        className="min-h-8 rounded-md border border-transparent bg-transparent px-2 text-xs hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"
         type="button"
         disabled={search.clearDisabled}
         aria-label={search.clearAriaLabel}
@@ -168,7 +184,12 @@ function WorkspaceSearchControls({
       >
         {search.clearLabel}
       </button>
-      <output id="search-count" className="search-count" htmlFor="search-entries" aria-live="polite">
+      <output
+        id="search-count"
+        className="min-w-[54px] text-right text-[11px] text-slate-500 dark:text-slate-400"
+        htmlFor="search-entries"
+        aria-live="polite"
+      >
         {search.resultText}
       </output>
     </div>

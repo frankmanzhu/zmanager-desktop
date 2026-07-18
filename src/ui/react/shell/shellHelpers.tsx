@@ -28,22 +28,36 @@ import {
   type CommandStateMap,
   type MenuGroup,
 } from "../../../app/classicCommands";
-import { createTranslator, type Translator } from "../../../app/i18n/translator";
+import {
+  createTranslator,
+  type Translator,
+} from "../../../app/i18n/translator";
 import type { ZManagerReactSnapshot } from "../appRuntime";
 
-export function translatorForSnapshot(snapshot: ZManagerReactSnapshot): Translator {
+export function translatorForSnapshot(
+  snapshot: ZManagerReactSnapshot,
+): Translator {
   return createTranslator(snapshot.display.resolvedLocale);
 }
 
-export function localizedCommandLabel(commandId: CommandId, snapshot: ZManagerReactSnapshot): string {
+export function localizedCommandLabel(
+  commandId: CommandId,
+  snapshot: ZManagerReactSnapshot,
+): string {
   return commandLabel(commandId, translatorForSnapshot(snapshot));
 }
 
-export function localizedCommandTooltip(commandId: CommandId, snapshot: ZManagerReactSnapshot): string {
+export function localizedCommandTooltip(
+  commandId: CommandId,
+  snapshot: ZManagerReactSnapshot,
+): string {
   return commandTooltipText(commandId, translatorForSnapshot(snapshot));
 }
 
-export function localizedMenuGroupLabel(label: MenuGroup["label"], snapshot: ZManagerReactSnapshot): string {
+export function localizedMenuGroupLabel(
+  label: MenuGroup["label"],
+  snapshot: ZManagerReactSnapshot,
+): string {
   return menuGroupLabel(label, translatorForSnapshot(snapshot));
 }
 
