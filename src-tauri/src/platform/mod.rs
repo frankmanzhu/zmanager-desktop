@@ -51,6 +51,7 @@ pub struct NativeFileDragCandidate {
 pub struct NativeFileDragItem {
     pub entry_path: String,
     pub display_path: String,
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub size: Option<u64>,
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub modified_unix_seconds: Option<u64>,
@@ -58,11 +59,19 @@ pub struct NativeFileDragItem {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragOutcome {
+    Pending,
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     Dropped,
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     Cancelled,
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     NoDrop,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeFileDragStart {
+    pub outcome: NativeFileDragOutcome,
+    pub session_id: Option<String>,
 }
 
 pub type NativeFileDragStreamProvider =
@@ -126,7 +135,8 @@ pub(crate) trait NativePlatform {
         window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<NativeFileDragOutcome, NativeFileDragError>;
+        registry: &crate::native_drag_session::NativeDragSessionRegistry,
+    ) -> Result<NativeFileDragStart, NativeFileDragError>;
     fn shutdown();
 }
 
@@ -170,8 +180,9 @@ pub fn start_native_file_drag(
     window: &tauri::WebviewWindow<Wry>,
     items: &[NativeFileDragItem],
     stream_provider: NativeFileDragStreamProvider,
-) -> Result<NativeFileDragOutcome, NativeFileDragError> {
-    ActivePlatform::start_native_file_drag(window, items, stream_provider)
+    registry: &crate::native_drag_session::NativeDragSessionRegistry,
+) -> Result<NativeFileDragStart, NativeFileDragError> {
+    ActivePlatform::start_native_file_drag(window, items, stream_provider, registry)
 }
 
 pub fn shutdown() {

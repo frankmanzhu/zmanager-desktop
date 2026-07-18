@@ -23,7 +23,8 @@ use windows_sys::Win32::{
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
     NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
+    NativeFileDragStart, NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
+    ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -122,7 +123,8 @@ impl NativePlatform for WindowsPlatform {
         _window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+        _registry: &crate::native_drag_session::NativeDragSessionRegistry,
+    ) -> Result<NativeFileDragStart, NativeFileDragError> {
         if items.is_empty() {
             return Err(NativeFileDragError::new(
                 "No archive files are available to drag.",
@@ -130,7 +132,10 @@ impl NativePlatform for WindowsPlatform {
             ));
         }
 
-        windows_file_drag::start_drag(items, stream_provider)
+        Ok(NativeFileDragStart {
+            outcome: windows_file_drag::start_drag(items, stream_provider)?,
+            session_id: None,
+        })
     }
 
     fn shutdown() {}

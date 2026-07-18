@@ -17,8 +17,9 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
+unicode-normalization = "0.1"
 zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
-zmanager-core = { git = "https://github.com/tzap-org/zmanager", rev = "ade42602e350dadd666b52319642c206d9df52b6", package = "zmanager-core" }
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", rev = "a17e847f22df487a493792a9aeea8c8683f8d871", package = "zmanager-core" }
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22.1"
@@ -48,6 +49,3 @@ gdk = "0.18.2"
 gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-drag = "2.1.1"

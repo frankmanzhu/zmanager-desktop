@@ -7,6 +7,7 @@ public typealias ZManagerPromiseWriteCallback = @convention(c) (
     UnsafePointer<UInt8>?, Int, UnsafePointer<UInt8>?, Int, UnsafeMutableRawPointer?
 ) -> Int32
 public typealias ZManagerPromiseOutcomeCallback = @convention(c) (Int32, UnsafeMutableRawPointer?) -> Void
+public typealias ZManagerPromiseReleaseCallback = @convention(c) (UnsafeMutableRawPointer?) -> Void
 
 private struct PromiseDragItem: Decodable {
     let entryPath: String
@@ -14,23 +15,58 @@ private struct PromiseDragItem: Decodable {
     let fileType: String
 }
 
+private final class PromiseCallbackLease: @unchecked Sendable {
+    let sessionID: String
+    let write: ZManagerPromiseWriteCallback
+    let outcome: ZManagerPromiseOutcomeCallback
+    let context: UnsafeMutableRawPointer?
+    private let release: ZManagerPromiseReleaseCallback
+    private let lock = NSLock()
+    private var remaining: Int
+
+    init(
+        sessionID: String,
+        promiseCount: Int,
+        write: @escaping ZManagerPromiseWriteCallback,
+        outcome: @escaping ZManagerPromiseOutcomeCallback,
+        release: @escaping ZManagerPromiseReleaseCallback,
+        context: UnsafeMutableRawPointer?
+    ) {
+        self.sessionID = sessionID
+        remaining = promiseCount
+        self.write = write
+        self.outcome = outcome
+        self.release = release
+        self.context = context
+    }
+
+    func promiseFinished() {
+        lock.lock()
+        remaining = max(remaining - 1, 0)
+        let finished = remaining == 0
+        lock.unlock()
+        if finished {
+            DispatchQueue.main.async { ActivePromiseDrags.shared.remove(self.sessionID) }
+        }
+    }
+
+    deinit { release(context) }
+}
+
 @MainActor
 private final class PromiseDragSource: NSObject, NSDraggingSource {
     let sessionID: String
     let writers: [FilePromiseStreamWriter]
-    let outcome: ZManagerPromiseOutcomeCallback
-    let context: UnsafeMutableRawPointer?
+    let lease: PromiseCallbackLease
 
     init(
         sessionID: String,
         writers: [FilePromiseStreamWriter],
-        outcome: @escaping ZManagerPromiseOutcomeCallback,
-        context: UnsafeMutableRawPointer?
+        lease: PromiseCallbackLease
     ) {
         self.sessionID = sessionID
         self.writers = writers
-        self.outcome = outcome
-        self.context = context
+        self.lease = lease
     }
 
     func draggingSession(
@@ -39,8 +75,8 @@ private final class PromiseDragSource: NSObject, NSDraggingSource {
     ) -> NSDragOperation { .copy }
 
     func draggingSession(_: NSDraggingSession, endedAt _: NSPoint, operation: NSDragOperation) {
-        outcome(operation.isEmpty ? 1 : 0, context)
-        ActivePromiseDrags.shared.remove(sessionID)
+        lease.outcome(operation.isEmpty ? 1 : 0, lease.context)
+        if operation.isEmpty { ActivePromiseDrags.shared.remove(sessionID) }
     }
 }
 
@@ -58,6 +94,7 @@ private final class PromiseStartInput: @unchecked Sendable {
     let items: [PromiseDragItem]
     let write: ZManagerPromiseWriteCallback
     let outcome: ZManagerPromiseOutcomeCallback
+    let release: ZManagerPromiseReleaseCallback
     let context: UnsafeMutableRawPointer?
     var result: Int32 = 0
 
@@ -67,6 +104,7 @@ private final class PromiseStartInput: @unchecked Sendable {
         items: [PromiseDragItem],
         write: @escaping ZManagerPromiseWriteCallback,
         outcome: @escaping ZManagerPromiseOutcomeCallback,
+        release: @escaping ZManagerPromiseReleaseCallback,
         context: UnsafeMutableRawPointer?
     ) {
         self.view = view
@@ -74,25 +112,35 @@ private final class PromiseStartInput: @unchecked Sendable {
         self.items = items
         self.write = write
         self.outcome = outcome
+        self.release = release
         self.context = context
     }
 
     @MainActor func start() {
         guard let event = NSApplication.shared.currentEvent else { result = 4; return }
+        let lease = PromiseCallbackLease(
+            sessionID: sessionID,
+            promiseCount: items.count,
+            write: write,
+            outcome: outcome,
+            release: release,
+            context: context
+        )
         var writers: [FilePromiseStreamWriter] = []
         var draggingItems: [NSDraggingItem] = []
         for (index, item) in items.enumerated() {
-            let writer = FilePromiseStreamWriter(promisedName: item.promisedName) { [self] destination in
+            let writer = FilePromiseStreamWriter(promisedName: item.promisedName) { destination in
+                defer { lease.promiseFinished() }
                 let entry = Data(item.entryPath.utf8)
                 let path = Data(destination.path.utf8)
                 let status = entry.withUnsafeBytes { entryBytes in
                     path.withUnsafeBytes { pathBytes in
-                        write(
+                        lease.write(
                             entryBytes.bindMemory(to: UInt8.self).baseAddress,
                             entryBytes.count,
                             pathBytes.bindMemory(to: UInt8.self).baseAddress,
                             pathBytes.count,
-                            context
+                            lease.context
                         )
                     }
                 }
@@ -104,7 +152,7 @@ private final class PromiseStartInput: @unchecked Sendable {
             let draggingItem = NSDraggingItem(pasteboardWriter: provider)
             draggingItem.setDraggingFrame(
                 NSRect(x: CGFloat(index * 8), y: 0, width: 32, height: 32),
-                contents: NSWorkspace.shared.icon(forFileType: item.fileType)
+                contents: NSWorkspace.shared.icon(for: UTType(item.fileType) ?? .data)
             )
             writers.append(writer)
             draggingItems.append(draggingItem)
@@ -112,10 +160,13 @@ private final class PromiseStartInput: @unchecked Sendable {
         let source = PromiseDragSource(
             sessionID: sessionID,
             writers: writers,
-            outcome: outcome,
-            context: context
+            lease: lease
         )
         ActivePromiseDrags.shared.retain(source)
+        let retainedSessionID = sessionID
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15 * 60) {
+            ActivePromiseDrags.shared.remove(retainedSessionID)
+        }
         view.beginDraggingSession(with: draggingItems, event: event, source: source)
     }
 }
@@ -129,9 +180,10 @@ public func zmanagerMacOSStartPromiseDrag(
     _ itemLength: Int,
     _ write: ZManagerPromiseWriteCallback?,
     _ outcome: ZManagerPromiseOutcomeCallback?,
+    _ release: ZManagerPromiseReleaseCallback?,
     _ context: UnsafeMutableRawPointer?
 ) -> Int32 {
-    guard let viewPointer, let sessionBytes, let itemBytes, let write, let outcome,
+    guard let viewPointer, let sessionBytes, let itemBytes, let write, let outcome, let release,
           sessionLength > 0, sessionLength <= 128, itemLength > 0, itemLength <= 1_048_576,
           let sessionID = String(data: Data(bytes: sessionBytes, count: sessionLength), encoding: .utf8),
           let items = try? JSONDecoder().decode(
@@ -145,6 +197,7 @@ public func zmanagerMacOSStartPromiseDrag(
         items: items,
         write: write,
         outcome: outcome,
+        release: release,
         context: context
     )
     if Thread.isMainThread { MainActor.assumeIsolated { input.start() } }

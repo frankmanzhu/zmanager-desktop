@@ -84,6 +84,7 @@ pub enum JobKindDto {
     SevenZCreate,
     SevenZExtract,
     RarExtract,
+    TarGzCreate,
     TarZstdCreate,
     TarZstdExtract,
     TzapCreate,

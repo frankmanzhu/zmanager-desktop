@@ -9,7 +9,8 @@ use tauri::{Builder, Wry};
 
 use super::{
     NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
+    NativeFileDragStart, NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
+    ShellActionProfile,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -123,7 +124,8 @@ impl NativePlatform for LinuxPlatform {
         _window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+        _registry: &crate::native_drag_session::NativeDragSessionRegistry,
+    ) -> Result<NativeFileDragStart, NativeFileDragError> {
         if items.is_empty() {
             return Err(NativeFileDragError::new(
                 "No archive files are available to drag.",
@@ -132,7 +134,10 @@ impl NativePlatform for LinuxPlatform {
         }
 
         let staged_drag = StagedFileDrag::create("Linux", items, stream_provider)?;
-        linux_file_drag::start_drag(staged_drag)
+        Ok(NativeFileDragStart {
+            outcome: linux_file_drag::start_drag(staged_drag)?,
+            session_id: None,
+        })
     }
 
     fn shutdown() {}

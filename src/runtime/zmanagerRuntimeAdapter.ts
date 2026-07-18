@@ -1563,7 +1563,11 @@ async function startNativeDragOut(entryPath: string) {
     try {
       const response = await startNativeFileDrag(request);
       archiveWorkspace.clearPasswordRetry();
-      if (response.outcome === "cancelled") {
+      if (response.outcome === "pending") {
+        setOperationalMessage("preview.dragPromiseStarted", {
+          count: response.draggedEntries.length,
+        });
+      } else if (response.outcome === "cancelled") {
         setOperationalMessage("preview.dragCancelled");
       } else if (response.outcome === "noDrop") {
         setOperationalMessage("preview.dragNoDrop");

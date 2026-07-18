@@ -2244,6 +2244,7 @@ impl From<JobKind> for JobKindDto {
             JobKind::SevenZCreate => JobKindDto::SevenZCreate,
             JobKind::SevenZExtract => JobKindDto::SevenZExtract,
             JobKind::RarExtract => JobKindDto::RarExtract,
+            JobKind::TarGzCreate => JobKindDto::TarGzCreate,
             JobKind::TarZstdCreate => JobKindDto::TarZstdCreate,
             JobKind::TarZstdExtract => JobKindDto::TarZstdExtract,
             JobKind::TzapCreate => JobKindDto::TzapCreate,

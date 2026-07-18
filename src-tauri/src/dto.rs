@@ -305,12 +305,14 @@ pub struct NativeFileDragRequest {
 #[serde(rename_all = "camelCase")]
 pub struct NativeFileDragResponse {
     pub outcome: NativeFileDragOutcomeDto,
+    pub session_id: Option<String>,
     pub dragged_entries: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NativeFileDragOutcomeDto {
+    Pending,
     Dropped,
     Cancelled,
     NoDrop,

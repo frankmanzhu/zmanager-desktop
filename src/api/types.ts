@@ -271,7 +271,8 @@ export type NativeFileDragRequest = {
 };
 
 export type NativeFileDragResponse = {
-  outcome: "dropped" | "cancelled" | "noDrop";
+  outcome: "pending" | "dropped" | "cancelled" | "noDrop";
+  sessionId: string | null;
   draggedEntries: string[];
 };
 
@@ -467,6 +468,7 @@ export type JobKind =
   | "sevenZCreate"
   | "sevenZExtract"
   | "rarExtract"
+  | "tarGzCreate"
   | "tarZstdCreate"
   | "tarZstdExtract"
   | "tzapCreate"

@@ -1094,6 +1094,7 @@ pub fn start_native_file_drag(
     window: tauri::WebviewWindow,
     request: NativeFileDragRequest,
     _registry: State<'_, JobRegistry>,
+    drag_registry: State<'_, crate::native_drag_session::NativeDragSessionRegistry>,
 ) -> Result<NativeFileDragResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
@@ -1108,6 +1109,7 @@ pub fn start_native_file_drag(
         request.strip_components,
         password.as_deref(),
     )?;
+    #[cfg(not(target_os = "macos"))]
     preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
 
     let stream_archive_path = archive_path.clone();
@@ -1123,11 +1125,17 @@ pub fn start_native_file_drag(
             .map_err(native_file_drag_error_from_command)
         });
 
-    let outcome = crate::platform::start_native_file_drag(&window, &drag_items, stream_provider)
-        .map_err(map_native_file_drag_error)?;
+    let start = crate::platform::start_native_file_drag(
+        &window,
+        &drag_items,
+        stream_provider,
+        &drag_registry,
+    )
+    .map_err(map_native_file_drag_error)?;
 
     Ok(NativeFileDragResponse {
-        outcome: map_native_file_drag_outcome(outcome),
+        outcome: map_native_file_drag_outcome(start.outcome),
+        session_id: start.session_id,
         dragged_entries: drag_items
             .iter()
             .map(|item| item.entry_path.clone())
@@ -1947,6 +1955,7 @@ fn map_native_file_drag_outcome(
     outcome: crate::platform::NativeFileDragOutcome,
 ) -> NativeFileDragOutcomeDto {
     match outcome {
+        crate::platform::NativeFileDragOutcome::Pending => NativeFileDragOutcomeDto::Pending,
         crate::platform::NativeFileDragOutcome::Dropped => NativeFileDragOutcomeDto::Dropped,
         crate::platform::NativeFileDragOutcome::Cancelled => NativeFileDragOutcomeDto::Cancelled,
         crate::platform::NativeFileDragOutcome::NoDrop => NativeFileDragOutcomeDto::NoDrop,
@@ -2090,6 +2099,7 @@ fn entry_is_under_folder_key(entry_key: &str, folder_key: &str) -> bool {
     entry_key.starts_with(folder_key) && entry_key.len() > folder_key.len()
 }
 
+#[cfg(not(target_os = "macos"))]
 fn preflight_native_drag_stream(
     archive_path: &str,
     password: Option<&str>,

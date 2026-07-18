@@ -25,6 +25,7 @@ describe("desktop native drag adapter", () => {
     };
     const response: NativeFileDragResponse = {
       outcome: "dropped",
+      sessionId: null,
       draggedEntries: ["docs/readme.txt"],
     };
     vi.mocked(runStartNativeFileDrag).mockResolvedValue(response);

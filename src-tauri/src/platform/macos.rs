@@ -1,15 +1,18 @@
 use std::ffi::c_void;
+use std::path::Path;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
-use tauri::{Builder, Wry};
+use serde::Serialize;
+use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
     NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
-    staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
+    NativeFileDragStart, NativeFileDragStreamProvider, NativePlatform, PlatformProfile,
+    staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
+use crate::native_drag_session::NativeDragSessionRegistry;
 
 pub const PLATFORM_NAME: &str = "macos";
 
@@ -29,6 +32,17 @@ unsafe extern "C" {
         bytes: *const u8,
         length: usize,
         callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
+        context: *mut c_void,
+    ) -> i32;
+    fn zmanager_macos_start_promise_drag(
+        view: *mut c_void,
+        session_bytes: *const u8,
+        session_length: usize,
+        item_bytes: *const u8,
+        item_length: usize,
+        write: Option<extern "C" fn(*const u8, usize, *const u8, usize, *mut c_void) -> i32>,
+        outcome: Option<extern "C" fn(i32, *mut c_void)>,
+        release: Option<extern "C" fn(*mut c_void)>,
         context: *mut c_void,
     ) -> i32;
 }
@@ -135,15 +149,14 @@ impl NativePlatform for MacOsPlatform {
         window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
         stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+        registry: &NativeDragSessionRegistry,
+    ) -> Result<NativeFileDragStart, NativeFileDragError> {
         if items.is_empty() {
             return Err(NativeFileDragError::invalid_request(
                 "No archive files are available to drag.",
             ));
         }
-
-        let staged_drag = StagedFileDrag::create("macOS", items, stream_provider)?;
-        start_macos_file_drag(window, staged_drag)
+        start_macos_file_promise_drag(window, items, stream_provider, registry)
     }
 
     fn shutdown() {
@@ -170,84 +183,149 @@ fn icon_fallback(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDt
         .collect()
 }
 
-fn start_macos_file_drag(
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PromiseDragItemDto {
+    entry_path: String,
+    promised_name: String,
+    file_type: &'static str,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PromiseDragOutcomeEvent {
+    session_id: String,
+    outcome: &'static str,
+}
+
+struct PromiseDragContext {
+    registry: NativeDragSessionRegistry,
+    session_id: String,
+    app_handle: tauri::AppHandle<Wry>,
+}
+
+extern "C" fn promise_write_callback(
+    entry_bytes: *const u8,
+    entry_length: usize,
+    destination_bytes: *const u8,
+    destination_length: usize,
+    context: *mut c_void,
+) -> i32 {
+    if context.is_null()
+        || entry_bytes.is_null()
+        || destination_bytes.is_null()
+        || entry_length == 0
+        || entry_length > 4_096
+        || destination_length == 0
+        || destination_length > 32_768
+    {
+        return 1;
+    }
+    let context = unsafe { &*context.cast::<PromiseDragContext>() };
+    let entry = unsafe { std::slice::from_raw_parts(entry_bytes, entry_length) };
+    let destination = unsafe { std::slice::from_raw_parts(destination_bytes, destination_length) };
+    let (Ok(entry), Ok(destination)) =
+        (std::str::from_utf8(entry), std::str::from_utf8(destination))
+    else {
+        return 2;
+    };
+    match context
+        .registry
+        .write_promise(&context.session_id, entry, Path::new(destination))
+    {
+        Ok(_) => 0,
+        Err(_) => 3,
+    }
+}
+
+extern "C" fn promise_outcome_callback(outcome: i32, context: *mut c_void) {
+    if context.is_null() {
+        return;
+    }
+    let context = unsafe { &*context.cast::<PromiseDragContext>() };
+    let outcome = if outcome == 0 { "dropped" } else { "cancelled" };
+    if outcome == "cancelled" {
+        context.registry.cancel(&context.session_id);
+    }
+    let _ = context.app_handle.emit(
+        "native-file-drag-outcome",
+        PromiseDragOutcomeEvent {
+            session_id: context.session_id.clone(),
+            outcome,
+        },
+    );
+}
+
+extern "C" fn promise_release_callback(context: *mut c_void) {
+    if context.is_null() {
+        return;
+    }
+    let context = unsafe { Box::from_raw(context.cast::<PromiseDragContext>()) };
+    context.registry.cancel(&context.session_id);
+}
+
+fn start_macos_file_promise_drag(
     window: &tauri::WebviewWindow<Wry>,
-    staged_drag: StagedFileDrag,
-) -> Result<NativeFileDragOutcome, NativeFileDragError> {
-    let drag_paths = staged_drag.drag_paths().to_vec();
-    if drag_paths.is_empty() {
-        return Err(NativeFileDragError::invalid_request(
-            "No staged files are available to drag.",
+    items: &[NativeFileDragItem],
+    stream_provider: NativeFileDragStreamProvider,
+    registry: &NativeDragSessionRegistry,
+) -> Result<NativeFileDragStart, NativeFileDragError> {
+    let descriptors = NativeDragSessionRegistry::descriptors(items)?;
+    let session_id = registry.create(items, stream_provider)?;
+    let promise_items = descriptors
+        .into_iter()
+        .map(|descriptor| PromiseDragItemDto {
+            entry_path: descriptor.promise_path,
+            promised_name: descriptor.promised_name,
+            file_type: if descriptor.is_directory {
+                "public.folder"
+            } else {
+                "public.data"
+            },
+        })
+        .collect::<Vec<_>>();
+    let item_json = serde_json::to_vec(&promise_items).map_err(|error| {
+        NativeFileDragError::new(
+            format!("Unable to describe macOS file promises: {error}"),
+            None::<String>,
+        )
+    })?;
+    let view = window.ns_view().map_err(|error| {
+        NativeFileDragError::new(
+            format!("Unable to access the macOS drag source view: {error}"),
+            None::<String>,
+        )
+    })?;
+    let context = Box::new(PromiseDragContext {
+        registry: registry.clone(),
+        session_id: session_id.clone(),
+        app_handle: window.app_handle().clone(),
+    });
+    let context = Box::into_raw(context).cast::<c_void>();
+    let result = unsafe {
+        zmanager_macos_start_promise_drag(
+            view,
+            session_id.as_ptr(),
+            session_id.len(),
+            item_json.as_ptr(),
+            item_json.len(),
+            Some(promise_write_callback),
+            Some(promise_outcome_callback),
+            Some(promise_release_callback),
+            context,
+        )
+    };
+    if result != 0 {
+        let context = unsafe { Box::from_raw(context.cast::<PromiseDragContext>()) };
+        context.registry.cancel(&context.session_id);
+        return Err(NativeFileDragError::new(
+            format!("macOS file-promise drag could not be started: {result}"),
+            Some("Try dragging again, or use Extract... if Finder rejects the drag."),
         ));
     }
-
-    let staged_drag = Arc::new(Mutex::new(Some(staged_drag)));
-    let staged_for_callback = Arc::clone(&staged_drag);
-    let window = window.clone();
-    let drag_window = window.clone();
-    let (start_sender, start_receiver) = mpsc::sync_channel(1);
-    let (outcome_sender, outcome_receiver) = mpsc::sync_channel(1);
-
-    window
-        .run_on_main_thread(move || {
-            let result = drag::start_drag(
-                &drag_window,
-                drag::DragItem::Files(drag_paths),
-                drag::Image::Raw(include_bytes!("../../icons/icon.png").to_vec()),
-                move |result, _cursor_position| {
-                    let outcome = match result {
-                        drag::DragResult::Dropped => {
-                            if let Some(staged) = staged_for_callback
-                                .lock()
-                                .expect("macOS staged drag mutex poisoned")
-                                .take()
-                            {
-                                staged.keep_for_file_manager_copy();
-                            }
-                            NativeFileDragOutcome::Dropped
-                        }
-                        drag::DragResult::Cancel => {
-                            let _ = staged_for_callback
-                                .lock()
-                                .expect("macOS staged drag mutex poisoned")
-                                .take();
-                            NativeFileDragOutcome::Cancelled
-                        }
-                    };
-                    let _ = outcome_sender.send(outcome);
-                },
-                drag::Options::default(),
-            )
-            .map_err(|error| error.to_string());
-            let _ = start_sender.send(result);
-        })
-        .map_err(|error| {
-            NativeFileDragError::new(
-                format!("Unable to schedule macOS drag-out: {error}"),
-                Some("Try dragging again, or use Extract... if Finder rejects the drag."),
-            )
-        })?;
-
-    start_receiver
-        .recv()
-        .map_err(|error| {
-            NativeFileDragError::new(
-                format!("macOS drag-out did not start: {error}"),
-                Some("Try dragging again, or use Extract... if Finder rejects the drag."),
-            )
-        })?
-        .map_err(|error| {
-            NativeFileDragError::new(
-                format!("macOS drag-out could not be started: {error}"),
-                Some("Try dragging again, or use Extract... if Finder rejects the drag."),
-            )
-        })?;
-
-    outcome_receiver.recv().map_err(|error| {
-        NativeFileDragError::new(
-            format!("macOS drag-out ended without an outcome: {error}"),
-            Some("Try dragging again, or use Extract... if Finder rejects the drag."),
-        )
+    Ok(NativeFileDragStart {
+        outcome: NativeFileDragOutcome::Pending,
+        session_id: Some(session_id),
     })
 }
 
