@@ -14,6 +14,12 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $repoRoot
 
+$resolvedArch = $Architecture
+if ($resolvedArch -eq "Auto") {
+    $resolvedArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+}
+$targetTriple = if ($resolvedArch -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
+
 function Resolve-OptionalCommand {
     param([string[]]$Names)
 
@@ -102,9 +108,12 @@ function Resolve-NpmCommand {
 }
 
 function Assert-ReleaseExecutableIsNotRunning {
-    $releaseExe = Join-Path $repoRoot "src-tauri\target\release\zmanager-desktop.exe"
+    $releaseExe = Join-Path $repoRoot "src-tauri\target\$targetTriple\release\zmanager-desktop.exe"
     if (-not (Test-Path $releaseExe)) {
-        return
+        $releaseExe = Join-Path $repoRoot "src-tauri\target\release\zmanager-desktop.exe"
+        if (-not (Test-Path $releaseExe)) {
+            return
+        }
     }
 
     $resolvedReleaseExe = (Resolve-Path $releaseExe).Path
@@ -123,9 +132,12 @@ function Assert-ReleaseExecutableIsNotRunning {
 }
 
 function Resolve-LatestNsisInstaller {
-    $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
+    $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\$targetTriple\release\bundle\nsis"
     if (-not (Test-Path $nsisBundleDir)) {
-        throw "NSIS bundle directory was not found after build: $nsisBundleDir"
+        $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
+        if (-not (Test-Path $nsisBundleDir)) {
+            throw "NSIS bundle directory was not found after build: $nsisBundleDir"
+        }
     }
 
     $installer = Get-ChildItem -Path $nsisBundleDir -Filter "ZManager_*-setup.exe" |
@@ -176,6 +188,8 @@ $tauriCli = Join-Path $repoRoot "node_modules\@tauri-apps\cli\tauri.js"
 $resolvedNodeDir = Split-Path $resolvedNodePath -Parent
 $env:PATH = "$resolvedNodeDir;" + $env:PATH
 
+# Target triple is resolved at the top of the script
+
 if (-not (Test-Path $tauriCli)) {
     throw "Tauri CLI was not found under node_modules. Run npm install before building."
 }
@@ -194,7 +208,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($npmCommand) {
-    $runCommand = "& '$resolvedNodePath' '$tauriCli' build"
+    $runCommand = "& '$resolvedNodePath' '$tauriCli' build --target $targetTriple"
 } else {
     $shimDir = Join-Path $env:TEMP "zmanager-desktop-build-shims"
     New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
@@ -224,7 +238,7 @@ exit /b 1
 
     $env:PATH = "$shimDir;" + $env:PATH
     Write-Host "npm was not found; using local Node and a temporary npm run build shim."
-    $runCommand = "& '$resolvedNodePath' '$tauriCli' build"
+    $runCommand = "& '$resolvedNodePath' '$tauriCli' build --target $targetTriple"
 }
 
 & (Join-Path $PSScriptRoot "setup-windows-static-env.ps1") `
