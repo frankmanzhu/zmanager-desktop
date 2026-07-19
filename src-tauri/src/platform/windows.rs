@@ -23,10 +23,9 @@ use windows_sys::Win32::{
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
     DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
-    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot,
-    NativeFileDragCandidate, NativeFileDragError,
-    NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    NativePlatform, PlatformProfile, ShellActionProfile,
+    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, NativeFileDragCandidate,
+    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart,
+    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 

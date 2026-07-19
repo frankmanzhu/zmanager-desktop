@@ -201,10 +201,9 @@ impl NativePlatform for MacOsPlatform {
         request: &LegacyRegistrationReconcileRequest,
     ) -> Result<Vec<ReplacementMigrationDiagnostic>, String> {
         let result: LegacyRegistrationReconcileResult =
-            call_json_operation(request, zmanager_macos_reconcile_legacy_registrations)
-                .map_err(|error| {
-                    format!("macOS legacy-registration reconciliation failed: {error}")
-                })?;
+            call_json_operation(request, zmanager_macos_reconcile_legacy_registrations).map_err(
+                |error| format!("macOS legacy-registration reconciliation failed: {error}"),
+            )?;
         Ok(result.diagnostics)
     }
 

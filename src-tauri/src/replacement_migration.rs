@@ -144,17 +144,15 @@ pub fn replacement_migration_prepare(
             stale_preview_roots: snapshot.stale_preview_roots,
             legacy_registration_paths: snapshot.legacy_registration_paths,
         };
-        state.diagnostics.extend(sanitize_diagnostics(snapshot.diagnostics));
+        state
+            .diagnostics
+            .extend(sanitize_diagnostics(snapshot.diagnostics));
         state.steps.native_state_read = true;
         write_state(&state_path, &state)?;
-
     }
 
     if !state.steps.stale_preview_roots_cleaned {
-        cleanup_stale_preview_roots(
-            &state.backup.stale_preview_roots,
-            &mut state.diagnostics,
-        );
+        cleanup_stale_preview_roots(&state.backup.stale_preview_roots, &mut state.diagnostics);
         state.steps.stale_preview_roots_cleaned = true;
         write_state(&state_path, &state)?;
     }
@@ -164,10 +162,9 @@ pub fn replacement_migration_prepare(
             &app,
             &state.backup.default_handler_restore,
         ) {
-            state.diagnostics.push(diagnostic(
-                "defaultOpenerSavedPreviousHandlers",
-                error.code,
-            ));
+            state
+                .diagnostics
+                .push(diagnostic("defaultOpenerSavedPreviousHandlers", error.code));
         }
         state.steps.default_handler_restore_migrated = true;
         write_state(&state_path, &state)?;
@@ -195,9 +192,7 @@ pub fn replacement_migration_prepare(
                 legacy_application_paths: state.backup.legacy_registration_paths.clone(),
             };
             match crate::platform::reconcile_legacy_registrations(&request) {
-                Ok(diagnostics) => state
-                    .diagnostics
-                    .extend(sanitize_diagnostics(diagnostics)),
+                Ok(diagnostics) => state.diagnostics.extend(sanitize_diagnostics(diagnostics)),
                 Err(_) => state
                     .diagnostics
                     .push(diagnostic("registration.reconcile", "operation_failed")),
@@ -550,7 +545,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt as _;
-            assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
         assert!(root.read_dir().unwrap().all(|entry| {
             !entry
@@ -573,12 +571,16 @@ mod tests {
         assert!(matches!(load_state(&path), LoadedState::Corrupt));
         preserve_unreadable_state(&path, "corrupt").unwrap();
         assert!(!path.exists());
-        let preserved = root.read_dir().unwrap().filter_map(Result::ok).find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("replacement-migration-v1.corrupt.")
-        });
+        let preserved = root
+            .read_dir()
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("replacement-migration-v1.corrupt.")
+            });
         assert_eq!(fs::read(preserved.unwrap().path()).unwrap(), b"not json");
         let _ = fs::remove_dir_all(root);
     }
@@ -638,6 +640,9 @@ mod tests {
             diagnostic("secret", "value with spaces"),
             diagnostic("access_token=secret", "failed"),
         ]);
-        assert_eq!(sanitized, vec![diagnostic("previewRoots", "cleanup_failed")]);
+        assert_eq!(
+            sanitized,
+            vec![diagnostic("previewRoots", "cleanup_failed")]
+        );
     }
 }

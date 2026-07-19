@@ -9,10 +9,9 @@ use tauri::{Builder, Wry};
 
 use super::{
     DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
-    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot,
-    NativeFileDragCandidate, NativeFileDragError,
-    NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    NativePlatform, PlatformProfile, ShellActionProfile,
+    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, NativeFileDragCandidate,
+    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart,
+    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};

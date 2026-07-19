@@ -162,8 +162,7 @@ fn map_legacy_handlers_to_extensions(
         .filter_map(|entry| {
             let content_type = entry.content_type.as_ref()?;
             let handler = legacy_handlers_by_content_type.get(content_type)?;
-            (handler != current_bundle_id)
-                .then(|| (entry.file_extension.clone(), handler.clone()))
+            (handler != current_bundle_id).then(|| (entry.file_extension.clone(), handler.clone()))
         })
         .collect()
 }
@@ -288,19 +287,15 @@ mod tests {
                 "com.frankmanzhu.zmanager.tzap".to_string(),
                 "com.frankmanzhu.zmanager".to_string(),
             ),
-            ("public.unknown".to_string(), "com.example.Other".to_string()),
+            (
+                "public.unknown".to_string(),
+                "com.example.Other".to_string(),
+            ),
         ]);
 
         assert_eq!(
-            map_legacy_handlers_to_extensions(
-                &entries,
-                &legacy,
-                "com.frankmanzhu.zmanager"
-            ),
-            HashMap::from([(
-                "zip".to_string(),
-                "com.apple.ArchiveUtility".to_string()
-            )])
+            map_legacy_handlers_to_extensions(&entries, &legacy, "com.frankmanzhu.zmanager"),
+            HashMap::from([("zip".to_string(), "com.apple.ArchiveUtility".to_string())])
         );
     }
 }
