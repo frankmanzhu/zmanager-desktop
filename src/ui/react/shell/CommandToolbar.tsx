@@ -47,7 +47,7 @@ export function CommandToolbar() {
       aria-label={i18n.t("workspace.toolbar.aria")}
     >
       <WorkspaceModeTabs />
-      <div className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden">
+      <div className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {snapshot.shell.activeMode === "compress" ? (
           <CompressToolbarGroups />
         ) : (
@@ -157,9 +157,9 @@ function WorkspaceModeTabs() {
     >
       <Button
         id="mode-compress"
-        variant="mode"
-        size="unset"
-        className="h-full min-w-[92px] rounded-none border-0 bg-transparent px-3.5 font-medium aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
+        variant="ghost"
+        size="sm"
+        className="h-full min-w-[92px] rounded-none border-transparent bg-transparent px-3.5 text-slate-950 shadow-none hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800 aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
         type="button"
         role="tab"
         data-workspace-mode="compress"
@@ -170,9 +170,9 @@ function WorkspaceModeTabs() {
       </Button>
       <Button
         id="mode-extract"
-        variant="mode"
-        size="unset"
-        className="h-full min-w-[92px] rounded-none border-0 bg-transparent px-3.5 font-medium aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
+        variant="ghost"
+        size="sm"
+        className="h-full min-w-[92px] rounded-none border-transparent bg-transparent px-3.5 text-slate-950 shadow-none hover:bg-slate-100 dark:text-slate-50 dark:hover:bg-slate-800 aria-selected:bg-slate-100 aria-selected:shadow-[inset_0_-2px_0_#2563eb] dark:aria-selected:bg-slate-800"
         type="button"
         role="tab"
         data-workspace-mode="extract"
@@ -414,11 +414,11 @@ function ToolbarActionButton({
   return (
     <Button
       id={id}
-      variant="toolbar"
-      size="unset"
+      variant={primary ? "default" : "ghost"}
+      size="sm"
       className={cn(
-        "min-h-[30px] min-w-0 gap-1.5 rounded border-0 bg-transparent px-2 py-1 text-xs text-slate-800 shadow-none hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800",
-        primary && "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600",
+        "gap-1.5 h-8 px-2 text-xs",
+        disabled && "opacity-50",
       )}
       type="button"
       title={title ?? label}
@@ -445,12 +445,12 @@ function ToolbarButton({ commandId }: Readonly<{ commandId: CommandId }>) {
   return (
     <Button
       id={commandButtonId(commandId)}
-      variant="toolbar"
-      size="unset"
+      variant={primary ? "default" : "ghost"}
+      size="sm"
       className={cn(
-        "min-h-[30px] min-w-0 gap-1.5 rounded border-0 bg-transparent px-2 py-1 text-xs text-slate-800 shadow-none hover:bg-slate-100 aria-pressed:bg-blue-50 aria-pressed:text-blue-700 dark:text-slate-100 dark:hover:bg-slate-800 dark:aria-pressed:bg-blue-950 dark:aria-pressed:text-blue-300",
-        primary && "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600",
+        "gap-1.5 h-8 px-2 text-xs",
         secondary && "text-slate-600 dark:text-slate-300",
+        pressed && "bg-slate-200 dark:bg-slate-700",
       )}
       type="button"
       data-command-id={commandId}
