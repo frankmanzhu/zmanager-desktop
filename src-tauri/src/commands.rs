@@ -2101,7 +2101,7 @@ fn push_native_drag_listing_entry<'a>(
 }
 
 fn archive_entry_key(path: &str) -> String {
-    path.split(|character| character == '/' || character == '\\')
+    path.split(['/', '\\'])
         .filter(|component| !component.is_empty())
         .collect::<Vec<_>>()
         .join("/")
@@ -2584,10 +2584,10 @@ fn split_collision_name(name: &str) -> (&str, &str) {
         }
     }
 
-    if let Some(dot_index) = name.rfind('.') {
-        if dot_index > 0 {
-            return name.split_at(dot_index);
-        }
+    if let Some(dot_index) = name.rfind('.')
+        && dot_index > 0
+    {
+        return name.split_at(dot_index);
     }
 
     (name, "")
@@ -3325,8 +3325,7 @@ mod tests {
         assert!(
             missing_password_events
                 .iter()
-                .any(|event| event.code.as_deref()
-                    == Some(constants::COMMAND_ERROR_PASSWORD_REQUIRED)),
+                .any(|event| event.code == Some(constants::COMMAND_ERROR_PASSWORD_REQUIRED)),
             "missing password extract should fail with password_required",
         );
 
@@ -3354,8 +3353,7 @@ mod tests {
         assert!(
             invalid_password_events
                 .iter()
-                .any(|event| event.code.as_deref()
-                    == Some(constants::COMMAND_ERROR_INVALID_PASSWORD)),
+                .any(|event| event.code == Some(constants::COMMAND_ERROR_INVALID_PASSWORD)),
             "invalid password extract should fail with invalid_password",
         );
         assert!(

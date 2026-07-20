@@ -200,15 +200,11 @@ pub enum ArchiveFormatDto {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum DestinationCollisionStrategyDto {
+    #[default]
     Refuse,
     Rename,
-}
-
-impl Default for DestinationCollisionStrategyDto {
-    fn default() -> Self {
-        Self::Refuse
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -437,7 +433,9 @@ pub struct DismissJobRequest {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum OverwritePolicyDto {
+    #[default]
     Refuse,
     Replace,
     Rename,
@@ -452,10 +450,4 @@ pub enum TzapRestorePolicyDto {
     Portable,
     SameOs,
     System,
-}
-
-impl Default for OverwritePolicyDto {
-    fn default() -> Self {
-        Self::Refuse
-    }
 }

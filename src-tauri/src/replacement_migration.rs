@@ -121,7 +121,7 @@ pub fn replacement_migration_prepare(
     }
 
     let mut state = match load_state(&state_path) {
-        LoadedState::Current(state) => state,
+        LoadedState::Current(state) => *state,
         LoadedState::Missing => initialize_state(),
         LoadedState::Corrupt => {
             preserve_unreadable_state(&state_path, "corrupt")?;
@@ -172,12 +172,12 @@ pub fn replacement_migration_prepare(
 
     if !state.steps.identity_inventory_migrated {
         let new_root = data_directory.join("tzap-state");
-        if let Some(legacy_root) = state.backup.legacy_account_state_directory.as_deref() {
-            if let Err(code) = migrate_identity_inventory(Path::new(legacy_root), &new_root) {
-                state
-                    .diagnostics
-                    .push(diagnostic("account.identityInventory", code));
-            }
+        if let Some(legacy_root) = state.backup.legacy_account_state_directory.as_deref()
+            && let Err(code) = migrate_identity_inventory(Path::new(legacy_root), &new_root)
+        {
+            state
+                .diagnostics
+                .push(diagnostic("account.identityInventory", code));
         }
         state.steps.identity_inventory_migrated = true;
         write_state(&state_path, &state)?;
@@ -226,7 +226,9 @@ pub fn replacement_migration_complete(
         .app_data_dir()
         .map(|path| path.join(STATE_FILE_NAME))
         .map_err(|error| migration_error("migration_state_path_failed", error))?;
-    let LoadedState::Current(mut state) = load_state(&state_path) else {
+    let mut state = if let LoadedState::Current(state) = load_state(&state_path) {
+        *state
+    } else {
         return Err(CommandErrorDto::invalid_request(
             "Replacement migration was not prepared",
         ));
@@ -368,7 +370,7 @@ fn rollback_summary(reversible_keys: Vec<String>) -> ReplacementMigrationRollbac
 
 enum LoadedState {
     Missing,
-    Current(MigrationState),
+    Current(Box<MigrationState>),
     Future(u32),
     Corrupt,
 }
@@ -393,7 +395,7 @@ fn load_state(path: &Path) -> LoadedState {
         return LoadedState::Corrupt;
     }
     serde_json::from_value(value)
-        .map(LoadedState::Current)
+        .map(|s| LoadedState::Current(Box::new(s)))
         .unwrap_or(LoadedState::Corrupt)
 }
 
@@ -528,8 +530,10 @@ mod tests {
             diagnostics: Vec::new(),
         };
         write_state(&path, &state).unwrap();
-        let LoadedState::Current(reloaded) = load_state(&path) else {
-            panic!("current state should reload");
+        let reloaded = if let LoadedState::Current(state) = load_state(&path) {
+            *state
+        } else {
+            panic!("expected current state")
         };
         assert!(reloaded.steps.native_state_read);
         assert!(!reloaded.steps.complete());

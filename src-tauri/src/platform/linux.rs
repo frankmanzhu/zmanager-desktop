@@ -280,10 +280,10 @@ mod linux_file_drag {
                 !drag_failed_for_end.get() && drag_selected_copy_action(context.selected_action());
             dropped_for_end.set(was_dropped);
             drag_finished_for_end.set(true);
-            if let Some(staged_drag) = staged_drag_for_end.borrow_mut().take() {
-                if was_dropped {
-                    staged_drag.keep_for_file_manager_copy();
-                }
+            if let Some(staged_drag) = staged_drag_for_end.borrow_mut().take()
+                && was_dropped
+            {
+                staged_drag.keep_for_file_manager_copy();
             }
         });
 

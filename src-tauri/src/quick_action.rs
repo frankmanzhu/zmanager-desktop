@@ -90,10 +90,9 @@ struct QuickActionLaunchState {
 
 impl QuickActionLaunchCoordinator {
     pub fn from_startup_state(state: QuickActionStartupState) -> Self {
-        let coordinator = Self {
+        Self {
             inner: Arc::new(Mutex::new(QuickActionLaunchState { startup: state })),
-        };
-        coordinator
+        }
     }
 
     pub fn startup_state(&self) -> QuickActionStartupState {
@@ -381,7 +380,7 @@ fn read_quick_action_request_file(
     if value.get("version").is_some() || value.get("action").is_some() {
         let request = zmanager_shell_contract::ShellActionRequest::from_json(&content)
             .map_err(|error| QuickActionError::invalid(error.to_string()))?;
-        return validate_request(request.action.into(), request.paths);
+        return validate_request(request.action, request.paths);
     }
 
     let request = serde_json::from_value::<QuickActionRequestDto>(value).map_err(|error| {
@@ -400,7 +399,7 @@ pub fn parse_app_group_shell_action_request(
         .map_err(|_| "App Group shell-action request must be UTF-8 JSON".to_string())?;
     let request = zmanager_shell_contract::ShellActionRequest::from_json(content)
         .map_err(|error| error.to_string())?;
-    validate_request(request.action.into(), request.paths).map_err(|error| error.message)
+    validate_request(request.action, request.paths).map_err(|error| error.message)
 }
 
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
@@ -536,15 +535,16 @@ fn percent_decode_uri_path(path: &str) -> String {
     let mut index = 0;
 
     while index < bytes.len() {
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
-            if let (Some(high), Some(low)) = (
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let (Some(high), Some(low)) = (
                 hex_digit_value(bytes[index + 1]),
                 hex_digit_value(bytes[index + 2]),
-            ) {
-                decoded.push((high << 4) | low);
-                index += 3;
-                continue;
-            }
+            )
+        {
+            decoded.push((high << 4) | low);
+            index += 3;
+            continue;
         }
 
         decoded.push(bytes[index]);

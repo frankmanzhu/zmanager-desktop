@@ -1,3 +1,5 @@
+#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
@@ -191,7 +193,7 @@ fn group_promises(
                 "Native drag item has no promised name",
             ));
         };
-        if root == "." || root == ".." || root.as_bytes().len() > 255 {
+        if root == "." || root == ".." || root.len() > 255 {
             return Err(NativeFileDragError::invalid_request(
                 "Native drag item has an invalid promised name",
             ));
@@ -229,9 +231,9 @@ fn group_promises(
 fn validate_promised_path(path: &str) -> Result<(), NativeFileDragError> {
     let components = path.split('/').collect::<Vec<_>>();
     if components.is_empty()
-        || components.iter().any(|part| {
-            part.is_empty() || *part == "." || *part == ".." || part.as_bytes().len() > 255
-        })
+        || components
+            .iter()
+            .any(|part| part.is_empty() || *part == "." || *part == ".." || part.len() > 255)
     {
         return Err(NativeFileDragError::invalid_request(
             "Native drag item has an invalid or overlong path component",

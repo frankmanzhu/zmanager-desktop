@@ -584,7 +584,8 @@ impl JobRegistry {
             let ids = state
                 .subscriptions
                 .iter()
-                .filter_map(|(id, subscription)| (subscription.owner == owner).then(|| id.clone()))
+                .filter(|&(_id, subscription)| subscription.owner == owner)
+                .map(|(id, _subscription)| id.clone())
                 .collect::<Vec<_>>();
             for id in ids {
                 if let Some(subscription) = state.subscriptions.remove(&id) {
@@ -989,10 +990,10 @@ impl JobRegistry {
             if matches!(event, JobEvent::EntryFinished { .. }) {
                 record.processed_entries = record.processed_entries.saturating_add(1);
             }
-            if matches!(event, JobEvent::Completed { .. }) {
-                if let Some(entries) = event_dto.entries {
-                    record.processed_entries = record.processed_entries.max(entries);
-                }
+            if matches!(event, JobEvent::Completed { .. })
+                && let Some(entries) = event_dto.entries
+            {
+                record.processed_entries = record.processed_entries.max(entries);
             }
             if event_dto.entries.is_none() && record.processed_entries > 0 {
                 event_dto.entries = Some(record.processed_entries);
@@ -1094,10 +1095,8 @@ impl JobRegistry {
                     record.status = JobStatusDto::Cancelled
                 }
                 JobEventKindDto::Paused => record.status = JobStatusDto::Paused,
-                JobEventKindDto::Resumed => {
-                    if record.status == JobStatusDto::Paused {
-                        record.status = JobStatusDto::Running;
-                    }
+                JobEventKindDto::Resumed if record.status == JobStatusDto::Paused => {
+                    record.status = JobStatusDto::Running;
                 }
                 _ => {}
             }
@@ -1446,9 +1445,8 @@ fn cancel_job_subscriptions(state: &mut RegistryState, job_id: &str) {
     let ids = state
         .subscriptions
         .iter()
-        .filter_map(|(id, subscription)| {
-            (subscription.job_id.as_deref() == Some(job_id)).then(|| id.clone())
-        })
+        .filter(|&(_id, subscription)| subscription.job_id.as_deref() == Some(job_id))
+        .map(|(id, _subscription)| id.clone())
         .collect::<Vec<_>>();
     for id in ids {
         if let Some(subscription) = state.subscriptions.remove(&id) {
@@ -1461,6 +1459,73 @@ impl Drop for JobRegistry {
     fn drop(&mut self) {
         self.cleanup_preview_roots();
     }
+}
+
+pub struct JobEventCollector {
+    registry: JobRegistry,
+    job_id: String,
+}
+
+impl JobEventCollector {
+    pub fn new(registry: &JobRegistry, job_id: String) -> Self {
+        Self {
+            registry: registry.clone(),
+            job_id,
+        }
+    }
+
+    pub fn emit_direct(&mut self, event: JobEventDto) {
+        self.registry.wait_if_paused(&self.job_id);
+        self.registry.emit_direct_event(&self.job_id, event);
+    }
+}
+
+impl JobEventSink for JobEventCollector {
+    fn emit(&mut self, event: JobEvent) {
+        self.registry.wait_if_paused(&self.job_id);
+        self.registry.emit_job_event(&self.job_id, event);
+    }
+}
+
+impl From<JobKind> for JobKindDto {
+    fn from(kind: JobKind) -> Self {
+        match kind {
+            JobKind::ZipCreate => JobKindDto::ZipCreate,
+            JobKind::ZipExtract => JobKindDto::ZipExtract,
+            JobKind::SevenZCreate => JobKindDto::SevenZCreate,
+            JobKind::SevenZExtract => JobKindDto::SevenZExtract,
+            JobKind::RarExtract => JobKindDto::RarExtract,
+            JobKind::TarGzCreate => JobKindDto::TarGzCreate,
+            JobKind::TarZstdCreate => JobKindDto::TarZstdCreate,
+            JobKind::TarZstdExtract => JobKindDto::TarZstdExtract,
+            JobKind::TzapCreate => JobKindDto::TzapCreate,
+            JobKind::TzapExtract => JobKindDto::TzapExtract,
+            JobKind::AppleArchiveCreate => JobKindDto::AppleArchiveCreate,
+            JobKind::AppleArchiveExtract => JobKindDto::AppleArchiveExtract,
+            JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
+            JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,
+        }
+    }
+}
+
+impl From<JobPhase> for JobPhaseDto {
+    fn from(phase: JobPhase) -> Self {
+        match phase {
+            JobPhase::PlanningPayload => JobPhaseDto::PlanningPayload,
+            JobPhase::PlanningMetadata => JobPhaseDto::PlanningMetadata,
+            JobPhase::EmittingPayload => JobPhaseDto::EmittingPayload,
+            JobPhase::EmittingMetadata => JobPhaseDto::EmittingMetadata,
+            JobPhase::CommittingOutput => JobPhaseDto::CommittingOutput,
+        }
+    }
+}
+
+fn now_timestamp() -> String {
+    let since_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+
+    since_epoch.as_secs().to_string()
 }
 
 #[cfg(test)]
@@ -2208,71 +2273,4 @@ mod tests {
         );
         let _ = fs::remove_dir_all(&root);
     }
-}
-
-pub struct JobEventCollector {
-    registry: JobRegistry,
-    job_id: String,
-}
-
-impl JobEventCollector {
-    pub fn new(registry: &JobRegistry, job_id: String) -> Self {
-        Self {
-            registry: registry.clone(),
-            job_id,
-        }
-    }
-
-    pub fn emit_direct(&mut self, event: JobEventDto) {
-        self.registry.wait_if_paused(&self.job_id);
-        self.registry.emit_direct_event(&self.job_id, event);
-    }
-}
-
-impl JobEventSink for JobEventCollector {
-    fn emit(&mut self, event: JobEvent) {
-        self.registry.wait_if_paused(&self.job_id);
-        self.registry.emit_job_event(&self.job_id, event);
-    }
-}
-
-impl From<JobKind> for JobKindDto {
-    fn from(kind: JobKind) -> Self {
-        match kind {
-            JobKind::ZipCreate => JobKindDto::ZipCreate,
-            JobKind::ZipExtract => JobKindDto::ZipExtract,
-            JobKind::SevenZCreate => JobKindDto::SevenZCreate,
-            JobKind::SevenZExtract => JobKindDto::SevenZExtract,
-            JobKind::RarExtract => JobKindDto::RarExtract,
-            JobKind::TarGzCreate => JobKindDto::TarGzCreate,
-            JobKind::TarZstdCreate => JobKindDto::TarZstdCreate,
-            JobKind::TarZstdExtract => JobKindDto::TarZstdExtract,
-            JobKind::TzapCreate => JobKindDto::TzapCreate,
-            JobKind::TzapExtract => JobKindDto::TzapExtract,
-            JobKind::AppleArchiveCreate => JobKindDto::AppleArchiveCreate,
-            JobKind::AppleArchiveExtract => JobKindDto::AppleArchiveExtract,
-            JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
-            JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,
-        }
-    }
-}
-
-impl From<JobPhase> for JobPhaseDto {
-    fn from(phase: JobPhase) -> Self {
-        match phase {
-            JobPhase::PlanningPayload => JobPhaseDto::PlanningPayload,
-            JobPhase::PlanningMetadata => JobPhaseDto::PlanningMetadata,
-            JobPhase::EmittingPayload => JobPhaseDto::EmittingPayload,
-            JobPhase::EmittingMetadata => JobPhaseDto::EmittingMetadata,
-            JobPhase::CommittingOutput => JobPhaseDto::CommittingOutput,
-        }
-    }
-}
-
-fn now_timestamp() -> String {
-    let since_epoch = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-
-    since_epoch.as_secs().to_string()
 }

@@ -2,16 +2,12 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum ErrorSeverityDto {
     Info,
     Warning,
+    #[default]
     Error,
-}
-
-impl Default for ErrorSeverityDto {
-    fn default() -> Self {
-        Self::Error
-    }
 }
 
 #[derive(Debug, Serialize)]

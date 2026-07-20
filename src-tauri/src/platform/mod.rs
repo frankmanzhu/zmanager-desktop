@@ -139,6 +139,7 @@ pub struct LegacyRegistrationReconcileRequest {
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[serde(rename_all = "camelCase")]
 pub struct LegacyRegistrationReconcileResult {
     pub diagnostics: Vec<ReplacementMigrationDiagnostic>,
