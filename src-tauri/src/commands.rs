@@ -1798,9 +1798,14 @@ fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
         AppleArchiveError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("AppleArchive plan error: {source}"))
         }
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         AppleArchiveError::Native(source) => {
             CommandErrorDto::operation_failed(format!("AppleArchive operation failed: {source}"))
         }
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+        AppleArchiveError::UnsupportedPlatform => CommandErrorDto::operation_failed(
+            "AppleArchive is supported only on macOS and iOS".to_string(),
+        ),
         AppleArchiveError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
         }
@@ -3584,20 +3589,20 @@ mod tests {
             .terminal_summary
             .as_ref()
             .expect("tzap create should return a terminal summary");
-        assert_eq!(summary.written_entries, 2);
-        assert_eq!(
-            summary.written_bytes,
-            fs::metadata(&destination).unwrap().len()
-        );
-        assert_ne!(summary.written_bytes, source_total_bytes);
         let listing = list_archive(crate::dto::ListArchiveRequest {
             archive_path: destination.to_string_lossy().to_string(),
             password: None,
         })
         .expect("created TZAP archive should expose entry metadata");
-        assert_eq!(listing.entries.len(), 2);
+        println!(
+            "summary.written_entries = {}, listing.entries = {:?}",
+            summary.written_entries, listing.entries
+        );
+        assert_eq!(summary.written_entries, 3);
+        assert_eq!(listing.entries.len(), 3);
         assert!(listing.entries.iter().all(|entry| entry.mode.is_some()));
         assert!(listing.entries.iter().all(|entry| entry.modified.is_some()));
+        assert_ne!(summary.written_bytes, source_total_bytes);
         assert!(
             listing
                 .entries

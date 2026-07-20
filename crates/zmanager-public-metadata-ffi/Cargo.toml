@@ -10,11 +10,11 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 
 [dependencies]
 serde_json = "1"
-zmanager-core = { git = "https://github.com/tzap-org/zmanager", rev = "a17e847f22df487a493792a9aeea8c8683f8d871", package = "zmanager-core" }
+zmanager-core = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.7", package = "zmanager-core" }
 
 [patch.crates-io]
 # The registry 1.0.6 package predates the macOS static-compression linkage
 # hardening present at the pinned core revision. Keep extension linkage on the
 # exact same revision as zmanager-core so no Homebrew dylib or deployment target
 # leaks into Quick Look or Spotlight.
-zmanager-libarchive-sys = { git = "https://github.com/tzap-org/zmanager", rev = "a17e847f22df487a493792a9aeea8c8683f8d871" }
+zmanager-libarchive-sys = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.7" }
