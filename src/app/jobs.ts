@@ -23,6 +23,7 @@ export type JobRetryContext =
       stripComponents: number;
       tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
       tzapAllowDegraded?: boolean;
+      tzapAllowAbsoluteSymlinks?: boolean;
     }
   | {
       retryKind: "testArchive";

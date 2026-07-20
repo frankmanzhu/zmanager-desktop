@@ -149,6 +149,7 @@ describe("AppShell", () => {
         deduplicateRoot: false,
         tzapRestorePolicy: "portable",
         tzapAllowDegraded: false,
+        tzapAllowAbsoluteSymlinks: false,
         passwordPromptOpen: true,
       },
     });

@@ -19,7 +19,7 @@ tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 unicode-normalization = "0.1"
 zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
-zmanager-core = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.7", package = "zmanager-core" }
+zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmanager-core" }
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22.1"
@@ -52,4 +52,7 @@ gtk = "0.18.2"
 
 [patch.crates-io]
 zmanager-libarchive-sys = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.7" }
+tzap-core = { path = "../../tzap/crates/tzap-core" }
+tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
+tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }
 

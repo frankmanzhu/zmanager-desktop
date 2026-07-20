@@ -27,9 +27,9 @@ time = { version = "0.3.47", features = ["parsing"] }
 x509-parser = "0.18.1"
 sevenz-rust2 = { version = "0.21.0", default-features = false, features = ["aes256", "compress", "util"] }
 tar = "0.4.45"
-tzap-core = { git = "https://github.com/tzap-org/tzap", rev = "0b37b1e977969bde84fb0bca4d0f706bfadd817b", version = "0.1.9" }
-tzap-plugin-keywrap = { git = "https://github.com/tzap-org/tzap", rev = "0b37b1e977969bde84fb0bca4d0f706bfadd817b", version = "0.1.9" }
-tzap-plugin-signing = { git = "https://github.com/tzap-org/tzap", rev = "0b37b1e977969bde84fb0bca4d0f706bfadd817b", version = "0.1.9" }
+tzap-core = { path = "../../../../../../tzap/crates/tzap-core", version = "0.1.11" }
+tzap-plugin-keywrap = { path = "../../../../../../tzap/crates/tzap-plugin-keywrap", version = "0.1.11" }
+tzap-plugin-signing = { path = "../../../../../../tzap/crates/tzap-plugin-signing", version = "0.1.11" }
 zip = "8.6.0"
 zeroize = "1.8.2"
 zmanager-apple-archive = { path = "../zmanager-apple-archive", version = "1.0.5" }

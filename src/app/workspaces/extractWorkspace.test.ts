@@ -46,6 +46,7 @@ describe("extract workspace", () => {
       deduplicateRoot: false,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: true,
       password: "secret",
     });
   });

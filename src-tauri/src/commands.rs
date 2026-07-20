@@ -933,6 +933,7 @@ pub(crate) fn start_extract_internal(
     let tzap_restore_options = TzapRestoreOptions {
         policy: map_tzap_restore_policy(request.tzap_restore_policy),
         allow_degraded: request.tzap_allow_degraded,
+        allow_absolute_symlinks: request.tzap_allow_absolute_symlinks,
     };
     let archive_path = archive_path;
     let destination_path = destination_path;
@@ -1352,6 +1353,7 @@ fn run_selected_extract_job(
                 strip_components: policy.strip_components,
                 tzap_restore_policy: tzap_restore_options.policy,
                 tzap_allow_degraded: tzap_restore_options.allow_degraded,
+                tzap_allow_absolute_symlinks: tzap_restore_options.allow_absolute_symlinks,
             },
         )
         .map_err(map_archive_browser_error)?;
@@ -3219,6 +3221,7 @@ mod tests {
                 strip_components: 0,
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
+                tzap_allow_absolute_symlinks: false,
             },
             &registry,
         )
@@ -3315,6 +3318,7 @@ mod tests {
                 strip_components: 0,
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
+                tzap_allow_absolute_symlinks: false,
             },
             &registry,
         )
@@ -3343,6 +3347,7 @@ mod tests {
                 strip_components: 0,
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
+                tzap_allow_absolute_symlinks: false,
             },
             &registry,
         )
@@ -3378,6 +3383,7 @@ mod tests {
                 strip_components: 0,
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
+                tzap_allow_absolute_symlinks: false,
             },
             &registry,
         )
@@ -3756,6 +3762,7 @@ mod tests {
             strip_components: 0,
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -3841,6 +3848,7 @@ mod tests {
             strip_components: 0,
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a renamed-destination job");
@@ -3914,6 +3922,7 @@ mod tests {
             strip_components: 0,
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -3992,6 +4001,7 @@ mod tests {
             strip_components: 0,
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("selected extract command should start a job");

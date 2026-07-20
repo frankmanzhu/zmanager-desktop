@@ -51,6 +51,7 @@ describe("DialogRoot", () => {
       deduplicateRoot: false,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
       passwordPromptOpen: false,
     });
 
@@ -79,6 +80,7 @@ describe("DialogRoot", () => {
         deduplicateRoot: false,
         tzapRestorePolicy: "system",
         tzapAllowDegraded: true,
+        tzapAllowAbsoluteSymlinks: false,
         passwordPromptOpen: false,
       },
       "/tmp/backup.tzap",

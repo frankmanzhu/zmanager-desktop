@@ -27,7 +27,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tzap_core::format::{
     AeadAlgo, CRYPTO_HEADER_FIXED_LEN, CompressionAlgo, FORMAT_VERSION, FecAlgo, FormatError,
     KdfAlgo, READER_MAX_ARGON2ID_M_COST_KIB, READER_MAX_ARGON2ID_PARALLELISM,
-    READER_MAX_ARGON2ID_T_COST, VOLUME_FORMAT_REV_44, VOLUME_HEADER_LEN,
+    READER_MAX_ARGON2ID_T_COST, VOLUME_FORMAT_REV_45, VOLUME_HEADER_LEN,
 };
 use tzap_core::reader::{
     ArchiveEntry, ArchiveIndexEntry, ExtractedArchiveMember, PublicNoKeyDiagnostic,
@@ -637,7 +637,19 @@ pub fn create_tzap_from_manifest_with_context(
             &mut sink,
         )
     } else {
-        let mut progress = |archive_path: &str, bytes: u64| {
+        struct TzapProgressSink<'a, F: FnMut(&str, u64)> {
+            func: &'a mut F,
+        }
+
+        impl<'a, F: FnMut(&str, u64)> tzap_core::writer::ArchiveWriteProgressSink for TzapProgressSink<'a, F> {
+            fn phase_started(&mut self, _phase: tzap_core::writer::ArchiveWritePhase) {}
+
+            fn source_bytes_read(&mut self, _phase: tzap_core::writer::ArchiveWritePhase, archive_path: &str, bytes: u64) {
+                (self.func)(archive_path, bytes)
+            }
+        }
+
+        let mut progress_func = |archive_path: &str, bytes: u64| {
             if started_paths.insert(archive_path.to_owned()) {
                 context.entry_started(archive_path, file_sizes.get(archive_path).copied());
             }
@@ -652,6 +664,8 @@ pub fn create_tzap_from_manifest_with_context(
                 }
             }
         };
+        let mut progress = TzapProgressSink { func: &mut progress_func };
+
         write_archive_sources_to_sink_with_progress(
             &file_sources,
             &master_key,
@@ -1177,7 +1191,7 @@ fn recipient_wrap_archive_identity_for_writer(
         archive_uuid,
         session_id,
         format_version: FORMAT_VERSION,
-        volume_format_rev: VOLUME_FORMAT_REV_44,
+        volume_format_rev: VOLUME_FORMAT_REV_45,
     }
 }
 
@@ -1800,7 +1814,7 @@ pub fn extract_tzap_with_overwrite_resolver_and_recipient_key(
 ///
 /// # Errors
 ///
-/// Returns [`TzapError`] when the archive cannot be opened or verified.
+/// Returns [`TzapError`] when the archive cannot be opened or listed.
 pub fn test_tzap_with_password_filter(
     archive: impl AsRef<Path>,
     password: &str,
@@ -2518,7 +2532,11 @@ fn extract_tzap_file_from_opened_archive(
         entry_path,
         temp_root.path(),
         SafeExtractionOptions {
-            overwrite_existing: false,
+            overwrite_existing: replace_existing,
+            restore_policy: tzap_core::entry_metadata::RestorePolicy::Portable,
+            allow_degraded: true,
+            system_authorized: false,
+            allow_absolute_symlinks: false,
         },
     )?
     else {
@@ -2545,6 +2563,10 @@ fn collect_regular_file_sources(
 
         match entry.file_type {
             ManifestFileType::File => {
+                let path_bytes = entry.archive_path.clone().into_bytes();
+                if let Err(_e) = tzap_core::metadata::validate_file_path_bytes(&path_bytes, 4096) {
+                    warnings.push(format!("VALIDATION FAILED FOR: {:?}", entry.archive_path));
+                }
                 files.push(TzapRegularFileSource {
                     archive_path: entry.archive_path.clone(),
                     source_path: entry.source_path.clone(),
@@ -2773,6 +2795,11 @@ fn materialize_non_regular_member(
     }
 
     match member.kind {
+        TarEntryKind::CharacterDevice | TarEntryKind::BlockDevice | TarEntryKind::Fifo => {
+            return Err(TzapError::Format(FormatError::InvalidArchive(
+                "unsupported device member in TZAP archive",
+            )));
+        }
         TarEntryKind::Regular => {
             return Err(TzapError::Format(FormatError::InvalidArchive(
                 "regular TZAP member reached non-regular materializer",
@@ -3279,6 +3306,9 @@ fn extraction_kind_from_tzap_entry(
     member: Option<&ExtractedArchiveMember>,
 ) -> ExtractionEntryKind {
     match entry.kind {
+        TarEntryKind::CharacterDevice | TarEntryKind::BlockDevice | TarEntryKind::Fifo => {
+            ExtractionEntryKind::File
+        }
         TarEntryKind::Regular => ExtractionEntryKind::File,
         TarEntryKind::Directory => ExtractionEntryKind::Directory,
         TarEntryKind::Symlink => ExtractionEntryKind::Symlink {
@@ -3302,12 +3332,13 @@ fn tzap_entry_from_archive_entry(entry: ArchiveEntry) -> TzapEntry {
         kind: tzap_entry_kind_from_member_kind(entry.kind),
         size: entry.file_data_size,
         mode: entry.mode,
-        mtime: entry.mtime,
+        mtime: entry.mtime.seconds as u64,
     }
 }
 
 fn tzap_entry_kind_from_member_kind(kind: TarEntryKind) -> TzapEntryKind {
     match kind {
+        TarEntryKind::CharacterDevice | TarEntryKind::BlockDevice | TarEntryKind::Fifo => TzapEntryKind::File,
         TarEntryKind::Regular => TzapEntryKind::File,
         TarEntryKind::Directory => TzapEntryKind::Directory,
         TarEntryKind::Symlink => TzapEntryKind::Symlink,
@@ -3337,8 +3368,8 @@ impl RegularFileSource for TzapRegularFileSource {
         self.mode
     }
 
-    fn mtime(&self) -> u64 {
-        self.mtime
+    fn mtime(&self) -> tzap_core::entry_metadata::ArchiveTimestamp {
+        tzap_core::entry_metadata::ArchiveTimestamp::from_seconds(self.mtime as i64)
     }
 
     fn open(&self) -> Result<Box<dyn io::Read + '_>, ArchiveWriteError> {

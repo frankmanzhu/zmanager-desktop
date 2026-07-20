@@ -486,6 +486,8 @@ export const enMessages = {
   "extract.tzapRestorePolicy.system.help": "Explicitly authorize numeric user/group ownership and privileged system-class metadata. Unsupported native metadata stops extraction unless degraded restore is allowed.",
   "extract.tzapAllowDegraded": "Allow degraded metadata restore",
   "extract.tzapAllowDegraded.help": "Continue when requested native metadata cannot be restored, and report every skipped item as a job warning.",
+  "extract.tzapAllowAbsoluteSymlinks": "Allow absolute symlinks",
+  "extract.tzapAllowAbsoluteSymlinks.help": "Extract absolute symlinks that might point outside the extraction destination.",
   "extract.stripComponents": "Strip components",
   "create.options.title": "Archive Options",
   "create.options.description": "Format, compression, password, and archive safety settings.",

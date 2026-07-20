@@ -273,6 +273,7 @@ export function createQuickActionController(
             stripComponents: destinationPlan.stripComponents,
             tzapRestorePolicy: options.preferences().defaultTzapRestorePolicy,
             tzapAllowDegraded: options.preferences().defaultTzapAllowDegraded,
+            tzapAllowAbsoluteSymlinks: options.preferences().defaultTzapAllowAbsoluteSymlinks,
             ...(password ? { password } : {}),
           });
           const response = await options.runStartExtract(request);
@@ -287,6 +288,7 @@ export function createQuickActionController(
               stripComponents: destinationPlan.stripComponents,
               tzapRestorePolicy: request.tzapRestorePolicy,
               tzapAllowDegraded: request.tzapAllowDegraded,
+              tzapAllowAbsoluteSymlinks: request.tzapAllowAbsoluteSymlinks,
             },
             focusProgress: true,
             autoCloseAction: "closeWindow",

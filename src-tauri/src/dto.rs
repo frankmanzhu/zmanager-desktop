@@ -265,6 +265,8 @@ pub struct StartExtractRequest {
     pub tzap_restore_policy: TzapRestorePolicyDto,
     #[serde(default)]
     pub tzap_allow_degraded: bool,
+    #[serde(default)]
+    pub tzap_allow_absolute_symlinks: bool,
 }
 
 #[derive(Debug, Deserialize)]

@@ -68,6 +68,7 @@ function retryContextForRequest(
     stripComponents: input.stripComponents,
     tzapRestorePolicy: input.tzapRestorePolicy,
     tzapAllowDegraded: input.tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks,
   };
 }
 
@@ -108,6 +109,7 @@ export function createExtractStartController(
         stripComponents: resolvedInput.stripComponents,
         tzapRestorePolicy: resolvedInput.tzapRestorePolicy,
         tzapAllowDegraded: resolvedInput.tzapAllowDegraded,
+        tzapAllowAbsoluteSymlinks: resolvedInput.tzapAllowAbsoluteSymlinks,
         password: resolvedInput.password,
       });
     if (!requestResult.ok) {

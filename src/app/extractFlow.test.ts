@@ -22,6 +22,7 @@ describe("extract flow helpers", () => {
       stripComponents: 0,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
     });
   });
 
@@ -35,6 +36,7 @@ describe("extract flow helpers", () => {
       stripComponents: 1,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
       password: "secret",
     });
 
@@ -48,6 +50,7 @@ describe("extract flow helpers", () => {
       stripComponents: 1,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
       password: "secret",
     });
   });
@@ -75,6 +78,7 @@ describe("extract flow helpers", () => {
       deduplicateRoot: false,
       tzapRestorePolicy: "system",
       tzapAllowDegraded: true,
+      tzapAllowAbsoluteSymlinks: true,
       password: " secret ",
     }, {
       currentFolder: "docs/releases",
@@ -92,6 +96,7 @@ describe("extract flow helpers", () => {
       entryReferences: ["root/docs/releases/readme.txt"],
       tzapRestorePolicy: "system",
       tzapAllowDegraded: true,
+      tzapAllowAbsoluteSymlinks: true,
     });
   });
 

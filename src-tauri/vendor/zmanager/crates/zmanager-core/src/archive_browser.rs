@@ -92,6 +92,9 @@ pub struct BrowserExtractOptions<'a> {
     pub overwrite: OverwritePolicy,
     /// Leading archive path components to drop before writing.
     pub strip_components: usize,
+    pub tzap_restore_policy: tzap_core::entry_metadata::RestorePolicy,
+    pub tzap_allow_degraded: bool,
+    pub tzap_allow_absolute_symlinks: bool,
 }
 
 impl Default for BrowserExtractOptions<'_> {
@@ -100,6 +103,9 @@ impl Default for BrowserExtractOptions<'_> {
             password: None,
             overwrite: OverwritePolicy::Refuse,
             strip_components: 0,
+            tzap_restore_policy: tzap_core::entry_metadata::RestorePolicy::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
         }
     }
 }
@@ -539,7 +545,7 @@ fn list_tzap_entries(
             kind: tzap_entry_kind_from_index_entry_path(&entry.path),
             size: Some(entry.file_data_size),
             compressed_size: None,
-            modified: (entry.mtime != 0).then(|| entry.mtime.to_string()),
+            modified: None,
         })
         .collect();
     Ok(BrowserListing { entries })

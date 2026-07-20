@@ -487,23 +487,19 @@ impl<'a> ExtractionSafetyPlanner<'a> {
     ) -> Result<(), ExtractionSafetyError> {
         let target_text = target.to_string_lossy();
         reject_raw_path_hazards(&target_text)?;
-        if target.is_absolute() {
-            return Err(ExtractionSafetyError::LinkTargetEscapes {
-                target: target.to_path_buf(),
-            });
-        }
+        if !target.is_absolute() {
+            let Some(parent) = destination_path.parent() else {
+                return Err(ExtractionSafetyError::LinkTargetEscapes {
+                    target: target.to_path_buf(),
+                });
+            };
+            let resolved_target = lexically_normalize(&parent.join(target));
 
-        let Some(parent) = destination_path.parent() else {
-            return Err(ExtractionSafetyError::LinkTargetEscapes {
-                target: target.to_path_buf(),
-            });
-        };
-        let resolved_target = lexically_normalize(&parent.join(target));
-
-        if !resolved_target.starts_with(&self.destination_root) {
-            return Err(ExtractionSafetyError::LinkTargetEscapes {
-                target: target.to_path_buf(),
-            });
+            if !resolved_target.starts_with(&self.destination_root) {
+                return Err(ExtractionSafetyError::LinkTargetEscapes {
+                    target: target.to_path_buf(),
+                });
+            }
         }
 
         Ok(())

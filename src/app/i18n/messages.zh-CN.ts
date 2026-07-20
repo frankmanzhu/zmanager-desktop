@@ -321,6 +321,8 @@ export const zhCnMessages = {
   "extract.tzapRestorePolicy.system.help": "明确授权数字用户/组所有权和特权系统级元数据。除非允许降级还原，否则不受支持的原生元数据会停止解压。",
   "extract.tzapAllowDegraded": "允许降级还原元数据",
   "extract.tzapAllowDegraded.help": "请求的原生元数据无法还原时继续，并将每个跳过项目报告为任务警告。",
+  "extract.tzapAllowAbsoluteSymlinks": "允许绝对符号链接",
+  "extract.tzapAllowAbsoluteSymlinks.help": "提取可能指向提取目的地之外的绝对符号链接。",
   "extract.stripComponents": "剥离路径层级",
   "create.options.title": "归档选项",
   "create.options.description": "格式、压缩、密码和归档安全设置。",

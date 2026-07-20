@@ -1511,6 +1511,7 @@ function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefa
     deduplicateRoot: appPreferences.defaultExtractDeduplicateRoot,
     tzapRestorePolicy: appPreferences.defaultTzapRestorePolicy,
     tzapAllowDegraded: appPreferences.defaultTzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: appPreferences.defaultTzapAllowAbsoluteSymlinks,
   };
 }
 
@@ -2402,6 +2403,7 @@ function buildReactExtractDialogSnapshot(
     deduplicateRoot: form.deduplicateRoot,
     tzapRestorePolicy: form.tzapRestorePolicy,
     tzapAllowDegraded: form.tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: form.tzapAllowAbsoluteSymlinks,
     passwordPromptOpen: form.passwordPromptOpen,
   };
 }

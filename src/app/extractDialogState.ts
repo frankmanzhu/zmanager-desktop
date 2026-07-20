@@ -10,6 +10,7 @@ export type ExtractDialogFormSnapshot = Readonly<{
   deduplicateRoot: boolean;
   tzapRestorePolicy: TzapRestorePolicy;
   tzapAllowDegraded: boolean;
+  tzapAllowAbsoluteSymlinks: boolean;
   passwordPromptOpen: boolean;
 }>;
 
@@ -25,6 +26,7 @@ export const DEFAULT_EXTRACT_DIALOG_FORM: ExtractDialogFormSnapshot = Object.fre
   deduplicateRoot: false,
   tzapRestorePolicy: "portable",
   tzapAllowDegraded: false,
+  tzapAllowAbsoluteSymlinks: false,
   passwordPromptOpen: false,
 });
 
@@ -41,6 +43,7 @@ export function createExtractDialogFormSnapshot(
     deduplicateRoot: patch.deduplicateRoot ?? DEFAULT_EXTRACT_DIALOG_FORM.deduplicateRoot,
     tzapRestorePolicy: normalizeTzapRestorePolicy(patch.tzapRestorePolicy),
     tzapAllowDegraded: patch.tzapAllowDegraded ?? DEFAULT_EXTRACT_DIALOG_FORM.tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: patch.tzapAllowAbsoluteSymlinks ?? DEFAULT_EXTRACT_DIALOG_FORM.tzapAllowAbsoluteSymlinks,
     passwordPromptOpen: patch.passwordPromptOpen ?? DEFAULT_EXTRACT_DIALOG_FORM.passwordPromptOpen,
   };
 }
@@ -69,6 +72,7 @@ export function extractStartInputFromDialogForm(
     deduplicateRoot: form.deduplicateRoot,
     tzapRestorePolicy: form.tzapRestorePolicy,
     tzapAllowDegraded: form.tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: form.tzapAllowAbsoluteSymlinks,
     ...(password.trim() ? { password: password.trim() } : {}),
   };
 }

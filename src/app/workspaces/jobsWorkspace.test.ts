@@ -83,6 +83,7 @@ describe("jobs workspace", () => {
       entryPaths: ["one.txt"],
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
     });
     expect(JSON.stringify(failedWorkspace.getRetryContext("failed-job"))).not.toContain("password");
 

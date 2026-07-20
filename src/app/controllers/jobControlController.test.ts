@@ -388,6 +388,7 @@ describe("job control controller", () => {
       stripComponents: 1,
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
       password: "secret",
     });
     expect(harness.calls.addJobs[0]).toMatchObject({

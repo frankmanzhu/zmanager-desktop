@@ -20,6 +20,7 @@ export type PreferenceStorageKey =
   | "defaultExtractDeduplicateRoot"
   | "defaultTzapRestorePolicy"
   | "defaultTzapAllowDegraded"
+  | "defaultTzapAllowAbsoluteSymlinks"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
   | "showRealFileIcons"
@@ -51,6 +52,7 @@ export const PREFERENCE_KEYS = {
   defaultExtractDeduplicateRoot: "zmanager.defaultExtractDeduplicateRoot",
   defaultTzapRestorePolicy: "zmanager.defaultTzapRestorePolicy",
   defaultTzapAllowDegraded: "zmanager.defaultTzapAllowDegraded",
+  defaultTzapAllowAbsoluteSymlinks: "zmanager.defaultTzapAllowAbsoluteSymlinks",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
   showRealFileIcons: "zmanager.showRealFileIcons",

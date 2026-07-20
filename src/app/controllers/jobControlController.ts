@@ -192,6 +192,7 @@ export function createJobControlController(
       stripComponents: context.stripComponents,
       tzapRestorePolicy: context.tzapRestorePolicy ?? "portable",
       tzapAllowDegraded: context.tzapAllowDegraded ?? false,
+      tzapAllowAbsoluteSymlinks: context.tzapAllowAbsoluteSymlinks ?? false,
       password,
     }));
   }
