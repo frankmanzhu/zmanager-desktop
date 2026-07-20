@@ -42,6 +42,7 @@ is reference evidence only. Never reimplement archive behavior in TypeScript.
 - `npm run test:e2e`: run Playwright tests.
 - `npm run tauri dev`: run the desktop shell.
 - `cd src-tauri && cargo check`: check the Rust command layer.
+- `cd src-tauri && cargo fmt`: format the Rust code to pass CI.
 - `cd src-tauri && cargo test`: run Rust tests.
 - `scripts/build-linux-ubuntu-deb.sh`: build Ubuntu/Debian `.deb`.
 - `scripts/build-linux-fedora-rpm.sh`: build Fedora `.rpm`.
@@ -123,6 +124,8 @@ For every bug fix, include the test that proves the fix whenever feasible. For e
 ## Commit & Pull Request Guidelines
 
 Recent history uses short imperative summaries, for example `Fix context menu`. Keep commits focused. Pull requests should include a description, test commands run, linked issue or requirement, and screenshots for UI changes.
+
+Always run `cd src-tauri && cargo fmt` after making any Rust backend code changes to check and apply the correct format. If this is skipped, the CI pipeline will fail.
 
 Use the repository's configured SSH remote for Git pushes. A missing `gh` CLI login
 does not block committing or pushing when SSH authentication is available; require
