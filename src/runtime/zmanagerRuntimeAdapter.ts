@@ -1147,7 +1147,9 @@ async function closeFocusedJobProgress() {
 }
 
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
-  if (state.quickActionJobs?.length) {
+  const target = shellWorkspace.selectQuickActionStartupRevealTarget(state);
+
+  if (target === "jobOnly") {
     disposableTaskLifecycle.observeQuickActionLaunch();
     return;
   }
