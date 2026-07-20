@@ -369,6 +369,26 @@ fn map_cancelled_7z_create_result<T>(
     }
 }
 
+struct LazyFileReader {
+    path: PathBuf,
+    file: Option<File>,
+}
+
+impl LazyFileReader {
+    fn new(path: PathBuf) -> Self {
+        Self { path, file: None }
+    }
+}
+
+impl Read for LazyFileReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.file.is_none() {
+            self.file = Some(File::open(&self.path)?);
+        }
+        self.file.as_mut().unwrap().read(buf)
+    }
+}
+
 struct SevenZProgressReader<'a, R> {
     inner: R,
     archive_path: String,
@@ -1309,12 +1329,9 @@ fn write_solid_manifest<W: Write + Seek>(
             }
             ManifestFileType::File => {
                 let archive_entry = sevenz_archive_entry(entry, preserve_metadata);
-                let file = File::open(&entry.source_path).map_err(|source| SevenZError::Io {
-                    path: entry.source_path.clone(),
-                    source,
-                })?;
+                let lazy_file = LazyFileReader::new(entry.source_path.clone());
                 let reader = SevenZProgressReader::new(
-                    file,
+                    lazy_file,
                     entry.archive_path.clone(),
                     progress.cloned(),
                     cancellation_token.cloned(),
