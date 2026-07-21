@@ -165,6 +165,7 @@ pub struct NativeFileDragItem {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragOutcome {
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Pending,
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     Dropped,

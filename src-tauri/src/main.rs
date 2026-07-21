@@ -15,6 +15,7 @@ mod platform;
 mod quick_action;
 mod replacement_migration;
 
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 use std::time::SystemTime;
 
 use tauri::{Emitter, Manager};
@@ -134,6 +135,7 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ZManager desktop");
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     let opened_inbox = native_launch_inbox.clone();
     app.run(move |_app_handle, event| {
         match event {

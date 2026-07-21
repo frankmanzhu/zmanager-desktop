@@ -1,0 +1,7 @@
+# Suppress LNK4099 (missing PDB for OpenSSL static lib) — the PDB is not
+# shipped with prebuilt/vendored OpenSSL; the warning is harmless.
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-Clink-arg=/ignore:4099"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Clink-arg=/ignore:4099"]
