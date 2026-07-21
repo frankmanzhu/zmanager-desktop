@@ -15,6 +15,8 @@ mod platform;
 mod quick_action;
 mod replacement_migration;
 
+use std::time::SystemTime;
+
 use tauri::{Emitter, Manager};
 
 fn main() {
@@ -50,7 +52,7 @@ fn main() {
         .manage(account_runtime)
         .manage(native_drag_sessions.clone())
         .manage(quick_action_launch_coordinator)
-        .manage(native_launch_inbox)
+        .manage(native_launch_inbox.clone())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
@@ -132,11 +134,43 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ZManager desktop");
-    app.run(move |_app, event| {
-        if matches!(event, tauri::RunEvent::Exit) {
-            exit_inbox.shutdown();
-            native_drag_sessions.shutdown();
-            platform::shutdown();
+    let opened_inbox = native_launch_inbox.clone();
+    app.run(move |_app_handle, event| {
+        match event {
+            tauri::RunEvent::Opened { urls } => {
+                let pid = std::process::id();
+                let timestamp_ms = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+                    .min(u128::from(u64::MAX)) as u64;
+                for (index, url) in urls.iter().enumerate() {
+                    if url.scheme() == "zmanager" && url.host_str() == Some("shell-request") {
+                        let token = url.path().trim_start_matches('/').to_string();
+                        if !token.is_empty() {
+                            let event = native_launch_inbox::NativeInboundEvent {
+                                version: native_launch_inbox::NATIVE_INBOUND_EVENT_VERSION,
+                                event_id: format!("tauri-url-{pid}-{timestamp_ms}-{index}"),
+                                kind: native_launch_inbox::NativeInboundEventKind::ShellActionRequest,
+                                timestamp_unix_ms: timestamp_ms,
+                                idempotency_key: Some(token.clone()),
+                                payload: native_launch_inbox::NativeInboundPayload::ShellActionToken(
+                                    native_launch_inbox::ShellActionTokenPayload {
+                                        request_token: token,
+                                    },
+                                ),
+                            };
+                            let _ = opened_inbox.ingest(event);
+                        }
+                    }
+                }
+            }
+            tauri::RunEvent::Exit => {
+                exit_inbox.shutdown();
+                native_drag_sessions.shutdown();
+                platform::shutdown();
+            }
+            _ => {}
         }
     });
 }

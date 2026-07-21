@@ -39,7 +39,7 @@ public final class ZManagerFinderSync: FIFinderSync {
             NSLocalizedString($0, tableName: "FinderActions", bundle: .main, comment: "")
         }
         guard !actions.isEmpty else { return nil }
-        let menu = NSMenu(title: "ZManager")
+        let submenu = NSMenu(title: "ZManager")
         for action in actions {
             let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
             item.target = self
@@ -47,8 +47,12 @@ public final class ZManagerFinderSync: FIFinderSync {
                 "action": action.id.rawValue,
                 "paths": urls.map(\.path),
             ]
-            menu.addItem(item)
+            submenu.addItem(item)
         }
+        let menu = NSMenu(title: "")
+        let containerItem = NSMenuItem(title: "ZManager", action: nil, keyEquivalent: "")
+        containerItem.submenu = submenu
+        menu.addItem(containerItem)
         return menu
     }
 
