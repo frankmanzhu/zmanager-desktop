@@ -44,6 +44,7 @@ const COMPRESS_TZAP_CLSID: GUID = GUID::from_u128(0xbeeb01f9_5243_4f96_9bb1_54fa
 const COMPRESS_ZIP_CLSID: GUID = GUID::from_u128(0xaa751926_e80f_47a5_9e03_dfa87926f23a);
 const COMPRESS_SEVEN_Z_CLSID: GUID = GUID::from_u128(0xc910bf28_3121_48f7_a8a1_2f4d8f587ce8);
 const COMPRESS_TAR_ZST_CLSID: GUID = GUID::from_u128(0x9838e6cb_f43e_4fc9_96f1_7f0f4bdbb728);
+const COMPRESS_TAR_GZ_CLSID: GUID = GUID::from_u128(0x7f3e8a1b_2c4d_45f6_9a7b_8c9d0e1f2a3b);
 
 static LIVE_OBJECTS: AtomicU32 = AtomicU32::new(0);
 static SERVER_LOCKS: AtomicU32 = AtomicU32::new(0);
@@ -59,6 +60,7 @@ enum ExplorerAction {
     CompressZip,
     CompressSevenZ,
     CompressTarZst,
+    CompressTarGz,
 }
 
 impl ExplorerAction {
@@ -72,6 +74,7 @@ impl ExplorerAction {
             COMPRESS_ZIP_CLSID => Some(Self::CompressZip),
             COMPRESS_SEVEN_Z_CLSID => Some(Self::CompressSevenZ),
             COMPRESS_TAR_ZST_CLSID => Some(Self::CompressTarZst),
+            COMPRESS_TAR_GZ_CLSID => Some(Self::CompressTarGz),
             _ => None,
         }
     }
@@ -86,6 +89,7 @@ impl ExplorerAction {
             Self::CompressZip => COMPRESS_ZIP_CLSID,
             Self::CompressSevenZ => COMPRESS_SEVEN_Z_CLSID,
             Self::CompressTarZst => COMPRESS_TAR_ZST_CLSID,
+            Self::CompressTarGz => COMPRESS_TAR_GZ_CLSID,
         }
     }
 
@@ -99,6 +103,7 @@ impl ExplorerAction {
             Self::CompressZip => w!("Add to .zip"),
             Self::CompressSevenZ => w!("Add to .7z"),
             Self::CompressTarZst => w!("Add to .tzst"),
+            Self::CompressTarGz => w!("Add to .tgz"),
         }
     }
 
@@ -112,6 +117,7 @@ impl ExplorerAction {
             Self::CompressZip => ShellActionKind::CompressZip,
             Self::CompressSevenZ => ShellActionKind::CompressSevenZ,
             Self::CompressTarZst => ShellActionKind::CompressTarZst,
+            Self::CompressTarGz => ShellActionKind::CompressTarGz,
         }
     }
 
@@ -401,6 +407,7 @@ mod tests {
             (COMPRESS_ZIP_CLSID, ShellActionKind::CompressZip),
             (COMPRESS_SEVEN_Z_CLSID, ShellActionKind::CompressSevenZ),
             (COMPRESS_TAR_ZST_CLSID, ShellActionKind::CompressTarZst),
+            (COMPRESS_TAR_GZ_CLSID, ShellActionKind::CompressTarGz),
         ];
 
         for (class_id, expected) in cases {

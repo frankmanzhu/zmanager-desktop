@@ -53,6 +53,7 @@ describe("Windows context menu installer hook", () => {
       '"06AddToZip" "Add to .zip"',
       '"07AddToSevenZ" "Add to .7z"',
       '"08AddToTzst" "Add to .tzst"',
+      '"09AddToTgz" "Add to .tgz"',
     ];
 
     let cursor = -1;

@@ -78,6 +78,7 @@ CREATE_ACTIONS = (
     ("AddToZip", "Add to .zip", "compress-zip"),
     ("AddToSevenZ", "Add to .7z", "compress-7z"),
     ("AddToTzst", "Add to .tzst", "compress-tzst"),
+    ("AddToTgz", "Add to .tgz", "compress-tgz"),
 )
 
 

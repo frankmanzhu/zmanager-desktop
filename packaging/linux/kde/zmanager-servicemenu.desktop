@@ -3,7 +3,7 @@ Type=Service
 Name=ZManager
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=application/octet-stream;inode/directory;
-Actions=AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;
+Actions=AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;
 X-KDE-Priority=TopLevel
 X-KDE-Submenu=ZManager
 
@@ -31,3 +31,8 @@ Exec=zmanager-desktop --quick-action compress-7z --path %F
 Name=Add to .tzst
 Icon=zmanager-desktop
 Exec=zmanager-desktop --quick-action compress-tzst --path %F
+
+[Desktop Action AddToTgz]
+Name=Add to .tgz
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action compress-tgz --path %F

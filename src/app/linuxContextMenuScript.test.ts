@@ -39,6 +39,7 @@ const createActions: ExpectedAction[] = [
   { action: "AddToZip", label: "Add to .zip", quickAction: "compress-zip", pathToken: "%F" },
   { action: "AddToSevenZ", label: "Add to .7z", quickAction: "compress-7z", pathToken: "%F" },
   { action: "AddToTzst", label: "Add to .tzst", quickAction: "compress-tzst", pathToken: "%F" },
+  { action: "AddToTgz", label: "Add to .tgz", quickAction: "compress-tgz", pathToken: "%F" },
 ];
 
 const windowsOrderedActions = [...archiveActions, ...createActions];

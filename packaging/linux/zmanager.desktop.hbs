@@ -10,7 +10,7 @@ StartupWMClass=zmanager-desktop
 StartupNotify=true
 Terminal=false
 Type=Application
-Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;
+Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;
 
 [Desktop Action ExtractHere]
 Name=Extract Here
@@ -50,4 +50,9 @@ Icon={{icon}}
 [Desktop Action AddToTzst]
 Name=Add to .tzst
 Exec={{exec}} --quick-action compress-tzst --path %F
+Icon={{icon}}
+
+[Desktop Action AddToTgz]
+Name=Add to .tgz
+Exec={{exec}} --quick-action compress-tgz --path %F
 Icon={{icon}}
