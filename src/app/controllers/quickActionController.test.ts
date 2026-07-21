@@ -276,6 +276,7 @@ describe("quick action controller", () => {
   it.each([
     { format: "zip", kind: "compressZip" },
     { format: "tarZst", kind: "compressTarZst" },
+    { format: "tarGz", kind: "compressTarGz" },
     { format: "tzap", kind: "compressTzap" },
     { format: "sevenZ", kind: "compressSevenZ" },
   ] as const)("applies all persisted $format flags to its fixed-format quick action", async ({ format, kind }) => {

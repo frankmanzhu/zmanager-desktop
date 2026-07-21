@@ -216,11 +216,17 @@ describe("quick action helpers", () => {
       DEFAULT_APP_PREFERENCES,
       handlers,
     );
+    await runQuickActionRequest(
+      { kind: "compressTarGz", paths: ["/tmp/source"] },
+      DEFAULT_APP_PREFERENCES,
+      handlers,
+    );
 
     expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", true);
     expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", true);
     expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", true);
     expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", true);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(5, ["/tmp/source"], "tarGz", true);
   });
 
   it("routes associated archive opens to browsing regardless of extraction defaults", async () => {

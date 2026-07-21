@@ -865,6 +865,7 @@ function quickOperationLabel(
     case "zipCreate":
     case "sevenZCreate":
     case "tarZstdCreate":
+    case "tarGzCreate":
     case "tzapCreate":
     case "appleArchiveCreate":
       return i18n.t("quick.operation.adding");

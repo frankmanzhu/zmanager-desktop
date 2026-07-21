@@ -455,6 +455,7 @@ fn validate_request(
         | QuickActionKindDto::CompressTzap
         | QuickActionKindDto::CompressSevenZ
         | QuickActionKindDto::CompressTarZst
+        | QuickActionKindDto::CompressTarGz
         | QuickActionKindDto::CompressCleanSource => {
             if paths.is_empty() {
                 return Err(QuickActionError::invalid(
