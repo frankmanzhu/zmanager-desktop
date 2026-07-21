@@ -1,0 +1,40 @@
+# Normalize all text files to LF in the repository.
+# This overrides per-machine core.autocrlf settings so every
+# checkout uses LF regardless of OS.
+* text=auto eol=lf
+
+# Windows batch files — modern cmd.exe (Win 10+) handles LF fine.
+*.bat text eol=lf
+*.cmd text eol=lf
+
+# PowerShell scripts use LF just like Unix shells.
+*.ps1 text eol=lf
+
+# Shell scripts must always be LF.
+*.sh text eol=lf
+
+# Generated macOS property-list files — must stay LF.
+*.plist text eol=lf
+*.strings text eol=lf
+
+# Binary files — never convert.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.wasm binary
+*.node binary
+*.p12 binary
+*.p8 binary
+*.provisionprofile binary
+
+# Lock files — treat as text with LF.
+Cargo.lock text eol=lf
+package-lock.json text eol=lf
