@@ -260,7 +260,13 @@
 !macroend
 
 !macro ZM_REFRESH_SHELL_ASSOCIATIONS
-  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
+  ; SHCNE_ASSOCCHANGED (0x08000000) with SHCNF_FLUSH (0x1000) forces Explorer to
+  ; immediately re-read the registry and discover new COM context menu handlers
+  ; instead of relying on cached state from before the installation.
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x1000, i 0, i 0)'
+  ; WM_SETTINGCHANGE (0x001A) broadcast ensures any loaded Explorer shell views
+  ; pick up the new registry entries without waiting for the next process start.
+  System::Call 'user32::SendMessageTimeoutW(i 0xFFFF, i 0x001A, i 0, w "Shell", i 0x0002, i 5000, *i 0)'
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
