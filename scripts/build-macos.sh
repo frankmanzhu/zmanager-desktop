@@ -330,10 +330,12 @@ if ((install_application)); then
     exit 1
   fi
   echo "Installed application: $destination"
-  # Register Finder Sync Extension so it appears in Finder's context menu
+  # Register Finder Sync Extension so it appears in Finder's context menu.
+  # If the extension doesn't show in Finder, enable it manually:
+  #   System Settings > General > Login Items & Extensions > Finder Extensions > ZManager
   if [[ -d "$destination/Contents/PlugIns/ZManagerFinderExtension.appex" ]]; then
     pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
-    echo "Registered Finder Sync Extension"
+    echo "Registered Finder Sync Extension (enable in System Settings if it doesn't appear)"
   fi
 else
   echo "Skipping application install because --no-install was set."

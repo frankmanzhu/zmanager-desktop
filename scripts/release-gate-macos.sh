@@ -160,8 +160,6 @@ expected_macho=(
   "Contents/PlugIns/ZManagerQuickLookPreview.appex/Contents/MacOS/ZManagerQuickLookPreview"
   "Contents/PlugIns/ZManagerQuickLookThumbnail.appex/Contents/MacOS/ZManagerQuickLookThumbnail"
   "Contents/Library/Spotlight/ZManagerSpotlight.mdimporter/Contents/MacOS/ZManagerSpotlight"
-  "Contents/Frameworks/liblz4.1.dylib"
-  "Contents/Frameworks/liblzma.5.dylib"
 )
 actual_macho=()
 actual_executable=()
