@@ -1699,6 +1699,62 @@ mod tests {
     }
 
     #[test]
+    fn subscribed_job_progress_reports_job_wide_cumulative_bytes() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+        let mut snapshots = registry
+            .subscribe_job_snapshot(&response.job_id)
+            .expect("job subscription should exist");
+        let _ = snapshots.borrow_and_update();
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::BytesProcessed {
+                path: Some("docs/one.txt".to_string()),
+                recent_paths: vec!["docs/one.txt".to_string()],
+                recent_path_identities: vec![[1; 32]],
+                bytes: 10,
+                total_bytes_processed: 10,
+                entries: 0,
+                total_entries_processed: 0,
+                recent_paths_truncated: false,
+            },
+        );
+        assert!(
+            snapshots
+                .has_changed()
+                .expect("subscription should remain open")
+        );
+        assert_eq!(
+            snapshots.borrow_and_update().progress_facts.processed_bytes,
+            10
+        );
+
+        registry.emit_job_event(
+            &response.job_id,
+            zmanager_core::jobs::JobEvent::BytesProcessed {
+                path: Some("docs/two.txt".to_string()),
+                recent_paths: vec!["docs/two.txt".to_string()],
+                recent_path_identities: vec![[2; 32]],
+                bytes: 20,
+                total_bytes_processed: 30,
+                entries: 0,
+                total_entries_processed: 0,
+                recent_paths_truncated: false,
+            },
+        );
+        assert!(
+            snapshots
+                .has_changed()
+                .expect("subscription should remain open")
+        );
+        assert_eq!(
+            snapshots.borrow_and_update().progress_facts.processed_bytes,
+            30
+        );
+    }
+
+    #[test]
     fn cancel_request_marks_token() {
         let registry = JobRegistry::new();
         let (response, token) = registry.create_job(JobKindDto::ZipExtract);
