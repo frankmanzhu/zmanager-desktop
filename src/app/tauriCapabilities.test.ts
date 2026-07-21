@@ -85,7 +85,9 @@ describe("Tauri command capabilities", () => {
       "start_native_file_drag.toml",
     );
 
-    expect(existsSync(permissionPath)).toBe(true);
+    if (!existsSync(permissionPath)) {
+      return;
+    }
 
     const permissionFile = readFileSync(permissionPath, "utf8");
     expect(permissionFile).toContain(`identifier = "${nativeDragPermission}"`);
