@@ -195,6 +195,7 @@ pub struct PlanCreateRequest {
 pub enum ArchiveFormatDto {
     Zip,
     TarZst,
+    TarGz,
     Tzap,
     SevenZ,
 }

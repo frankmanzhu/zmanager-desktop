@@ -422,6 +422,9 @@ fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
         "compresstarzst" | "compresstzst" | "addtotarzst" | "addtotzst" => {
             Ok(QuickActionKindDto::CompressTarZst)
         }
+        "compresstargz" | "compresstgz" | "addtotargz" | "addtotgz" => {
+            Ok(QuickActionKindDto::CompressTarGz)
+        }
         "compresscleansource" | "cleansource" => Ok(QuickActionKindDto::CompressCleanSource),
         "extracthere" => Ok(QuickActionKindDto::ExtractHere),
         "extracttofolder" | "extractfolder" => Ok(QuickActionKindDto::ExtractToFolder),

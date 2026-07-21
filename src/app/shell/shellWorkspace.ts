@@ -132,6 +132,7 @@ function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): bo
     "compressTzap",
     "compressSevenZ",
     "compressTarZst",
+    "compressTarGz",
     "compressCleanSource",
     "extractHere",
     "extractToFolder",

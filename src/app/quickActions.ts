@@ -204,6 +204,13 @@ export async function runQuickActionRequest(
         createDefaultsForFormat(preferences, "tarZst").cleanSource,
       );
       break;
+    case "compressTarGz":
+      await handlers.startCreate(
+        request.paths,
+        "tarGz",
+        createDefaultsForFormat(preferences, "tarGz").cleanSource,
+      );
+      break;
     case "compressCleanSource":
       await handlers.startCreate(request.paths, "tarZst", true);
       break;

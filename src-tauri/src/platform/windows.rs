@@ -66,6 +66,10 @@ pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
         label: "ZManager > Add to .tzst",
         quick_action: "compressTarZst",
     },
+    ShellActionProfile {
+        label: "ZManager > Add to .tar.gz",
+        quick_action: "compressTarGz",
+    },
 ];
 
 pub struct WindowsPlatform;

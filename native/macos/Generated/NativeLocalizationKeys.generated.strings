@@ -17,6 +17,8 @@
 /* Resolve this key in the native presentation target. */
 "shellAction.compressTarZst" = "shellAction.compressTarZst";
 /* Resolve this key in the native presentation target. */
+"shellAction.compressTarGz" = "shellAction.compressTarGz";
+/* Resolve this key in the native presentation target. */
 "shellAction.compressCleanSource" = "shellAction.compressCleanSource";
 /* Resolve this key in the native presentation target. */
 "shellAction.extractHere" = "shellAction.extractHere";

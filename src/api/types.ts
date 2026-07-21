@@ -192,7 +192,7 @@ export type CreatePlanEntryDto = {
 export type StartCreateRequest = {
   sources: string[];
   destinationPath: string;
-  format: "zip" | "tarZst" | "tzap" | "sevenZ";
+  format: "zip" | "tarZst" | "tzap" | "sevenZ" | "tarGz";
   cleanSource: boolean;
   excludeNames?: string[];
   excludeArchivePaths?: string[];

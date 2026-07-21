@@ -506,6 +506,7 @@ export const enMessages = {
   "create.preserveMetadata": "Preserve metadata",
   "create.preserveMetadata.zip.tooltip": "Store Unix permission bits when they are available. ZIP does not preserve every filesystem attribute.",
   "create.preserveMetadata.tarZst.tooltip": "Store permission bits and modification times for files, folders, and symbolic links.",
+  "create.preserveMetadata.tarGz.tooltip": "Store permission bits and modification times for files, folders, and symbolic links.",
   "create.preserveMetadata.tzap.tooltip": "Store file permission bits, modification times, and the archive completion time.",
   "create.preserveMetadata.sevenZ.tooltip": "Store timestamps and filesystem attributes supported by the 7Z backend.",
   "create.replaceExisting": "Replace existing",

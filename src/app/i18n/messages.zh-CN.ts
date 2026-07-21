@@ -341,6 +341,7 @@ export const zhCnMessages = {
   "create.preserveMetadata": "保留元数据",
   "create.preserveMetadata.zip.tooltip": "在可用时保存 Unix 权限位。ZIP 不会保留所有文件系统属性。",
   "create.preserveMetadata.tarZst.tooltip": "保存文件、文件夹和符号链接的权限位及修改时间。",
+  "create.preserveMetadata.tarGz.tooltip": "保存文件、文件夹和符号链接的权限位及修改时间。",
   "create.preserveMetadata.tzap.tooltip": "保存文件权限位、修改时间和归档完成时间。",
   "create.preserveMetadata.sevenZ.tooltip": "保存 7Z 后端支持的时间戳和文件系统属性。",
   "create.replaceExisting": "替换现有文件",

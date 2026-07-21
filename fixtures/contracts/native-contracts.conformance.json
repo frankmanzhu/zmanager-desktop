@@ -9,6 +9,7 @@
     "compressTzap",
     "compressSevenZ",
     "compressTarZst",
+    "compressTarGz",
     "compressCleanSource",
     "extractHere",
     "extractToFolder"
@@ -74,6 +75,16 @@
     {
       "id": "compressTarZst",
       "order": 70,
+      "selectionShapes": [
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more"
+    },
+    {
+      "id": "compressTarGz",
+      "order": 75,
       "selectionShapes": [
         "files",
         "folders",

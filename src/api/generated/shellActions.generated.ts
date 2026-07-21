@@ -8,6 +8,7 @@ export const SHELL_ACTION_IDS = [
   "compressTzap",
   "compressSevenZ",
   "compressTarZst",
+  "compressTarGz",
   "compressCleanSource",
   "extractHere",
   "extractToFolder"
@@ -81,6 +82,17 @@ export const SHELL_ACTION_POLICIES = [
     "id": "compressTarZst",
     "displayKey": "shellAction.compressTarZst",
     "order": 70,
+    "selectionShapes": [
+      "files",
+      "folders",
+      "mixed"
+    ],
+    "multiplicity": "one-or-more"
+  },
+  {
+    "id": "compressTarGz",
+    "displayKey": "shellAction.compressTarGz",
+    "order": 75,
     "selectionShapes": [
       "files",
       "folders",

@@ -7,6 +7,7 @@ public enum ShellActionID: String, Codable, CaseIterable, Sendable {
     case compressTzap
     case compressSevenZ
     case compressTarZst
+    case compressTarGz
     case compressCleanSource
     case extractHere
     case extractToFolder
@@ -25,6 +26,7 @@ public struct ShellActionPolicy: Equatable, Sendable {
         .init(id: .compressTzap, displayKey: "shellAction.compressTzap", order: 50, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
         .init(id: .compressSevenZ, displayKey: "shellAction.compressSevenZ", order: 60, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
         .init(id: .compressTarZst, displayKey: "shellAction.compressTarZst", order: 70, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
+        .init(id: .compressTarGz, displayKey: "shellAction.compressTarGz", order: 75, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
         .init(id: .compressCleanSource, displayKey: "shellAction.compressCleanSource", order: 80, selectionShapes: ["single-folder"], multiplicity: "exactly-one"),
         .init(id: .extractHere, displayKey: "shellAction.extractHere", order: 90, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
         .init(id: .extractToFolder, displayKey: "shellAction.extractToFolder", order: 100, selectionShapes: ["single-archive"], multiplicity: "exactly-one")

@@ -48,6 +48,7 @@ use zmanager_core::jobs::{
     run_7z_extract_job_with_password_and_policy,
     run_libarchive_extract_job_with_password_and_policy,
     run_rar_extract_job_with_password_and_policy,
+    run_tar_gz_create_job_from_sources_with_plan_options,
     run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
     run_tzap_create_job_from_sources_with_plan_options,
     run_tzap_extract_job_with_password_and_policy_and_restore_options,
@@ -63,6 +64,7 @@ use zmanager_core::raw_stream_backend::RawStreamError;
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
 use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, SevenZError};
+use zmanager_core::tar_gz_backend::{TarGzCreateOptions, TarGzCreateReport};
 use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
 use zmanager_core::tzap_backend::{
     TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509SigningOptions,
@@ -348,6 +350,7 @@ fn create_progress_estimate_for_format(
             .count(),
         crate::dto::ArchiveFormatDto::Zip
         | crate::dto::ArchiveFormatDto::TarZst
+        | crate::dto::ArchiveFormatDto::TarGz
         | crate::dto::ArchiveFormatDto::SevenZ => manifest.included_count(),
     };
 
@@ -417,6 +420,7 @@ pub(crate) fn start_create_internal(
     let kind = match request.format {
         crate::dto::ArchiveFormatDto::Zip => JobKindDto::ZipCreate,
         crate::dto::ArchiveFormatDto::TarZst => JobKindDto::TarZstdCreate,
+        crate::dto::ArchiveFormatDto::TarGz => JobKindDto::TarGzCreate,
         crate::dto::ArchiveFormatDto::Tzap => JobKindDto::TzapCreate,
         crate::dto::ArchiveFormatDto::SevenZ => JobKindDto::SevenZCreate,
     };
@@ -560,6 +564,27 @@ pub(crate) fn start_create_internal(
                 )
                 .map(to_terminal_summary_for_tar_create)
                 .map_err(map_tar_zst_error)
+            }
+            crate::dto::ArchiveFormatDto::TarGz => {
+                let level = compression_level
+                    .and_then(|value| i32::try_from(value).ok())
+                    .unwrap_or(TarGzCreateOptions::default().level);
+                let create_options = TarGzCreateOptions {
+                    level,
+                    preserve_metadata,
+                    replace_existing,
+                    ..TarGzCreateOptions::default()
+                };
+                run_tar_gz_create_job_from_sources_with_plan_options(
+                    &request_sources,
+                    &destination,
+                    &create_options,
+                    &plan_options,
+                    &token,
+                    &mut sink,
+                )
+                .map(to_terminal_summary_for_tar_gz_create)
+                .map_err(map_tar_gz_error)
             }
             crate::dto::ArchiveFormatDto::Tzap => {
                 let recipient_certificates = tzap_certificates
@@ -1746,6 +1771,20 @@ fn map_tar_zst_error(error: zmanager_core::tar_zst_backend::TarZstdError) -> Com
     }
 }
 
+fn map_tar_gz_error(error: zmanager_core::tar_gz_backend::TarGzError) -> CommandErrorDto {
+    match error {
+        zmanager_core::tar_gz_backend::TarGzError::Io { path, source } => {
+            map_io_error(path.to_string_lossy().to_string(), source)
+        }
+        zmanager_core::tar_gz_backend::TarGzError::Plan(source) => {
+            CommandErrorDto::operation_failed(format!("TAR.GZ plan error: {source}"))
+        }
+        zmanager_core::tar_gz_backend::TarGzError::Cancelled(_) => {
+            CommandErrorDto::cancelled("TAR.GZ job was cancelled.")
+        }
+    }
+}
+
 fn map_7z_error(error: SevenZError) -> CommandErrorDto {
     match error {
         SevenZError::PasswordRequired => CommandErrorDto::password_required(
@@ -2336,6 +2375,15 @@ fn to_terminal_summary_for_zip_create(report: ZipCreateReport) -> JobTerminalSum
 }
 
 fn to_terminal_summary_for_tar_create(report: TarZstdCreateReport) -> JobTerminalSummaryDto {
+    JobTerminalSummaryDto {
+        written_entries: report.written_entries,
+        skipped_entries: None,
+        written_bytes: report.written_bytes,
+        warnings: report.warnings,
+    }
+}
+
+fn to_terminal_summary_for_tar_gz_create(report: TarGzCreateReport) -> JobTerminalSummaryDto {
     JobTerminalSummaryDto {
         written_entries: report.written_entries,
         skipped_entries: None,

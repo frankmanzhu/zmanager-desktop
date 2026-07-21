@@ -17,6 +17,7 @@ const CREATE_FORMAT_EXTENSIONS = {
   tarZst: "tzst",
   tzap: "tzap",
   sevenZ: "7z",
+  tarGz: "tgz",
 } satisfies Record<CreateArchiveFormat, string>;
 
 const CREATE_FORMAT_ALLOWED_EXTENSIONS = {
@@ -24,9 +25,10 @@ const CREATE_FORMAT_ALLOWED_EXTENSIONS = {
   tarZst: ["tzst", "tar.zst"],
   tzap: ["tzap"],
   sevenZ: ["7z"],
+  tarGz: ["tgz", "tar.gz"],
 } satisfies Record<CreateArchiveFormat, string[]>;
 
-const RECOGNIZED_CREATE_EXTENSIONS = ["tar.zst", "zip", "tzst", "tzap", "7z"];
+const RECOGNIZED_CREATE_EXTENSIONS = ["tar.gz", "tar.zst", "zip", "tgz", "tzst", "tzap", "7z"];
 const CREATE_PASSWORD_FORMATS = new Set<CreateArchiveFormat>(["zip", "tzap", "sevenZ"]);
 
 export const TZAP_RECOVERY_PERCENTAGE_DEFAULT = 5;
@@ -498,7 +500,7 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     preserveMetadata: input.preserveMetadata,
     ...(input.password && createFormatSupportsPassword(input.format) ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),
-    ...(volumeSize !== undefined && input.format !== "tarZst" ? { volumeSize } : {}),
+    ...(volumeSize !== undefined && input.format !== "tarZst" && input.format !== "tarGz" ? { volumeSize } : {}),
     ...(input.format === "zip" ? { zipCompression: input.zipCompression ?? "deflate" } : {}),
     ...(input.format === "tzap"
       ? {

@@ -1486,6 +1486,7 @@ function FormatSelect({
     >
       <option value="zip">ZIP</option>
       <option value="tarZst">TZST</option>
+      <option value="tarGz">TGZ</option>
       <option value="tzap">TZAP</option>
       <option value="sevenZ">7Z</option>
     </select>

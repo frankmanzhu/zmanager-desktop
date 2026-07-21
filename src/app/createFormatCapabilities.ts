@@ -47,6 +47,15 @@ const CAPABILITIES: Record<CreateArchiveFormat, CreateFormatCapabilities> = {
     tzapVolumeLossTolerance: false,
     sevenZAdvanced: true,
   }),
+  tarGz: Object.freeze({
+    password: false,
+    splitVolumes: false,
+    compressionLevel: true,
+    zipCompression: false,
+    tzapRecovery: false,
+    tzapVolumeLossTolerance: false,
+    sevenZAdvanced: false,
+  }),
 };
 
 export function createFormatCapabilities(format: CreateArchiveFormat): CreateFormatCapabilities {

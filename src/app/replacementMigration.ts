@@ -71,7 +71,7 @@ function replacementPreferenceValues(
 ): Partial<Record<MigratedPreferenceKey, string>> {
   const values: Partial<Record<MigratedPreferenceKey, string>> = {};
   const archiveFormat = oneOf(
-    ["tarZst", "tzap", "sevenZ", "zip"] as const,
+    ["tarZst", "tarGz", "tzap", "sevenZ", "zip"] as const,
     legacy.defaultArchiveFormat,
   ) ?? (legacy.legacyDefaultCreateProfile === "zip"
     ? "zip"
