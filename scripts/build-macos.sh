@@ -320,7 +320,7 @@ if ((install_application)); then
   use_sudo=0
   [[ -d "$install_dir" && -w "$install_dir" ]] || use_sudo=1
   run_install() { if ((use_sudo)); then sudo "$@"; else "$@"; fi; }
-  run_install install -d -m 0755 "$install_dir"
+  run_install mkdir -p "$install_dir"
   run_install rm -rf "$temporary" "$backup"
   run_install ditto "$staged_app" "$temporary"
   [[ ! -e "$destination" ]] || run_install mv "$destination" "$backup"
