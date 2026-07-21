@@ -137,6 +137,7 @@ fn main() {
     let opened_inbox = native_launch_inbox.clone();
     app.run(move |_app_handle, event| {
         match event {
+            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
             tauri::RunEvent::Opened { urls } => {
                 let pid = std::process::id();
                 let timestamp_ms = SystemTime::now()

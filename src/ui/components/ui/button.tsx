@@ -9,9 +9,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-zinc-950 text-white hover:bg-zinc-800",
-        secondary: "border-zinc-300 bg-white text-zinc-950 hover:bg-zinc-100",
-        ghost: "text-zinc-900 hover:bg-zinc-100",
+        default:
+          "bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-100",
+        secondary:
+          "border-zinc-300 bg-white text-zinc-950 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
+        ghost:
+          "text-zinc-900 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800",
         destructive: "bg-red-600 text-white hover:bg-red-700",
         dialog:
           "min-h-[30px] rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] text-slate-950 shadow-none hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800",
