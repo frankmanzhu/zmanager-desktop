@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
+$cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
 
 if ([string]::IsNullOrWhiteSpace($LogDir)) {
     $LogDir = Join-Path $repoRoot "target/release-gate"
@@ -37,8 +38,8 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $LogDir "smoke-windows-static-$resolvedArchitecture-$timestamp.log"
-$artifactPath = Join-Path $repoRoot "src-tauri/target/release/zmanager-desktop.exe"
-$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_$resolvedArchitecture-setup.exe"
+$artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
+$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_0.1.0_$resolvedArchitecture-setup.exe"
 
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Script) {
     Write-Host ""

@@ -14,6 +14,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $repoRoot
 
+# Respect CARGO_TARGET_DIR so build artifacts land in a short path
+# (avoids Windows MAX_PATH issues with deeply nested build outputs).
+$cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
+
 $resolvedArch = $Architecture
 if ($resolvedArch -eq "Auto") {
     $resolvedArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
@@ -108,9 +112,9 @@ function Resolve-NpmCommand {
 }
 
 function Assert-ReleaseExecutableIsNotRunning {
-    $releaseExe = Join-Path $repoRoot "src-tauri\target\$targetTriple\release\zmanager-desktop.exe"
+    $releaseExe = Join-Path $cargoTargetDir "$targetTriple\release\zmanager-desktop.exe"
     if (-not (Test-Path $releaseExe)) {
-        $releaseExe = Join-Path $repoRoot "src-tauri\target\release\zmanager-desktop.exe"
+        $releaseExe = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
         if (-not (Test-Path $releaseExe)) {
             return
         }
@@ -132,9 +136,9 @@ function Assert-ReleaseExecutableIsNotRunning {
 }
 
 function Resolve-LatestNsisInstaller {
-    $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\$targetTriple\release\bundle\nsis"
+    $nsisBundleDir = Join-Path $cargoTargetDir "$targetTriple\release\bundle\nsis"
     if (-not (Test-Path $nsisBundleDir)) {
-        $nsisBundleDir = Join-Path $repoRoot "src-tauri\target\release\bundle\nsis"
+        $nsisBundleDir = Join-Path $cargoTargetDir "release\bundle\nsis"
         if (-not (Test-Path $nsisBundleDir)) {
             throw "NSIS bundle directory was not found after build: $nsisBundleDir"
         }

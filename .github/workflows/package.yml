@@ -38,6 +38,7 @@ jobs:
           brew install cmake lz4 xz
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
+          scripts/ensure-sibling-repos.sh
 
       - name: Run macOS migration and contract tests
         run: |

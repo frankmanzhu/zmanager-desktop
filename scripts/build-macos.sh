@@ -230,6 +230,8 @@ if [[ ! -d node_modules ]] || ! npm ls --depth=0 @tauri-apps/cli typescript vite
   npm install
 fi
 
+scripts/ensure-sibling-repos.sh
+
 if ((!skip_tests)); then
   npm run test:frontend
   (cd src-tauri && cargo test)

@@ -442,6 +442,14 @@ Invoke-Step "Verify configured build environment" {
 }
 
 if ($Build) {
+    Invoke-Step "Ensure sibling repositories" {
+        $siblingScript = Join-Path $PSScriptRoot "ensure-sibling-repos.ps1"
+        & $siblingScript
+        if ($LASTEXITCODE -ne 0) {
+            throw "Sibling repository setup failed with exit code $LASTEXITCODE."
+        }
+    }
+
     Invoke-Step "Build Windows artifact" {
         $buildScript = Join-Path $PSScriptRoot "build-windows-static.ps1"
         & $buildScript `

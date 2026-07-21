@@ -300,12 +300,16 @@ if npm_install_required; then
   npm install
 fi
 
+scripts/ensure-sibling-repos.sh
+
 if ((!skip_tests)); then
   npm run test:frontend
   (cd src-tauri && cargo test)
 fi
 
 npm run tauri -- build --bundles deb
+
+cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 
 apt_stage_dir="${ZMANAGER_DEB_STAGE_DIR:-/tmp/zmanager-desktop-deb}"
 install -d -m 0755 "$apt_stage_dir"
@@ -319,10 +323,10 @@ while IFS= read -r artifact; do
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Apt-readable package: $staged_artifact"
-done < <(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
+done < <(find "$cargo_target_dir/release/bundle/deb" -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
 
 if ((deb_count == 0)); then
-  echo "Tauri build completed, but no .deb package was found under src-tauri/target/release/bundle/deb." >&2
+  echo "Tauri build completed, but no .deb package was found under $cargo_target_dir/release/bundle/deb." >&2
   exit 1
 fi
 

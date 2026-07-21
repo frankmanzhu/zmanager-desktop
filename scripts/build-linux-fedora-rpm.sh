@@ -265,6 +265,8 @@ if [[ ! -d node_modules ]]; then
   npm install
 fi
 
+scripts/ensure-sibling-repos.sh
+
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 if [[ -e "$cargo_target_dir" && ! -w "$cargo_target_dir" ]]; then
   if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
@@ -302,10 +304,10 @@ while IFS= read -r artifact; do
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Dnf-readable package: $staged_artifact"
-done < <(find "$CARGO_TARGET_DIR/release/bundle/rpm" -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)
+done < <(find "$cargo_target_dir/release/bundle/rpm" -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)
 
 if ((rpm_count == 0)); then
-  echo "Tauri build completed, but no .rpm package was found under $CARGO_TARGET_DIR/release/bundle/rpm." >&2
+  echo "Tauri build completed, but no .rpm package was found under $cargo_target_dir/release/bundle/rpm." >&2
   exit 1
 fi
 

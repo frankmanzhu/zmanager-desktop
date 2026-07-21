@@ -50,6 +50,7 @@ jobs:
           brew install cmake lz4 xz
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
+          scripts/ensure-sibling-repos.sh
 
       - name: Import Developer ID and notary credentials
         env:

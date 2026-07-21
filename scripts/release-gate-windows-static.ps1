@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
+$cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
 $logDir = Join-Path $repoRoot "target/release-gate"
 $installDir = Join-Path $logDir "installed-app"
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -32,8 +33,8 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $logDir "release-gate-windows-static-$resolvedArchitecture-$timestamp.log"
-$installerPath = Join-Path $repoRoot "src-tauri/target/release/bundle/nsis/ZManager_0.1.0_$resolvedArchitecture-setup.exe"
-$artifactPath = Join-Path $repoRoot "src-tauri/target/release/zmanager-desktop.exe"
+$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_0.1.0_$resolvedArchitecture-setup.exe"
+$artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
 $gateResult = "Pass"
 $gateNotes = "Release gate passed. Log: $transcriptPath"
 
