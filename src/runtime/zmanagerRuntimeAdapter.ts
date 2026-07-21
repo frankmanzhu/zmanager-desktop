@@ -1512,6 +1512,7 @@ function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefa
     tzapRestorePolicy: appPreferences.defaultTzapRestorePolicy,
     tzapAllowDegraded: appPreferences.defaultTzapAllowDegraded,
     tzapAllowAbsoluteSymlinks: appPreferences.defaultTzapAllowAbsoluteSymlinks,
+    ignoreSymlinks: appPreferences.defaultExtractIgnoreSymlinks,
   };
 }
 
@@ -2404,6 +2405,7 @@ function buildReactExtractDialogSnapshot(
     tzapRestorePolicy: form.tzapRestorePolicy,
     tzapAllowDegraded: form.tzapAllowDegraded,
     tzapAllowAbsoluteSymlinks: form.tzapAllowAbsoluteSymlinks,
+    ignoreSymlinks: form.ignoreSymlinks,
     passwordPromptOpen: form.passwordPromptOpen,
   };
 }
@@ -2454,6 +2456,8 @@ function extractDialogFormFromIntent(
     deduplicateRoot: input.deduplicateRoot,
     tzapRestorePolicy: input.tzapRestorePolicy,
     tzapAllowDegraded: input.tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks,
+    ignoreSymlinks: input.ignoreSymlinks,
     passwordPromptOpen: activeExtractDialogForm.passwordPromptOpen,
   });
 }
@@ -3423,6 +3427,8 @@ function openExtractDialog(mode: ExtractMode) {
       stripComponents: activeExtractDialogForm.stripComponents,
       tzapRestorePolicy: extractWorkspace.getSnapshot().tzapRestorePolicy,
       tzapAllowDegraded: extractWorkspace.getSnapshot().tzapAllowDegraded,
+      tzapAllowAbsoluteSymlinks: extractWorkspace.getSnapshot().tzapAllowAbsoluteSymlinks,
+      ignoreSymlinks: extractWorkspace.getSnapshot().ignoreSymlinks,
     }),
     extractDialogMessageForMode(mode),
   );

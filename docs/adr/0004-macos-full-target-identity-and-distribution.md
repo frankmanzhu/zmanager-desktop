@@ -6,7 +6,7 @@
 
 ## Context
 
-The native product shipped as `Z-Manager.app` with identifier
+The native product shipped as `ZManager.app` with identifier
 `com.frankmanzhu.zmanager`. A differently named application with the same
 identifier leaves duplicate Launch Services registrations. The Desktop Shell
 must replace that product without downgrading version or splitting ownership.

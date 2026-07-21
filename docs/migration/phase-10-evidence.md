@@ -35,7 +35,7 @@ extensions and an arm64 Spotlight bundle. Their extension points, exact TZAP
 UTI, macOS 14 minimum, sandbox entitlements, schema, localized display strings,
 and nested signing order are generated and inspected by the build.
 
-The corrected ad-hoc app was installed at `/Applications/Z-Manager.app` in the
+The corrected ad-hoc app was installed at `/Applications/ZManager.app` in the
 Parallels macOS 26.5.2 arm64 VM. `pluginkit` resolved exactly the installed
 thumbnail and preview bundle paths and version `1.1.0`; the installed preview
 binary contains the required Objective-C selector and all three metadata ABI

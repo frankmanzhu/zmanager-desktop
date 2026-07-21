@@ -760,6 +760,7 @@ describe("archive workspace load state", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "secret",
     }));
 
@@ -771,6 +772,7 @@ describe("archive workspace load state", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "secret",
     });
     expect("entryPaths" in request).toBe(false);

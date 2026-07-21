@@ -47,6 +47,7 @@ describe("extract dialog state", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "secret",
     });
   });

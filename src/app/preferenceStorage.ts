@@ -21,6 +21,7 @@ export type PreferenceStorageKey =
   | "defaultTzapRestorePolicy"
   | "defaultTzapAllowDegraded"
   | "defaultTzapAllowAbsoluteSymlinks"
+  | "defaultExtractIgnoreSymlinks"
   | "previewCleanupPolicy"
   | "showParentFolderItem"
   | "showRealFileIcons"
@@ -53,6 +54,7 @@ export const PREFERENCE_KEYS = {
   defaultTzapRestorePolicy: "zmanager.defaultTzapRestorePolicy",
   defaultTzapAllowDegraded: "zmanager.defaultTzapAllowDegraded",
   defaultTzapAllowAbsoluteSymlinks: "zmanager.defaultTzapAllowAbsoluteSymlinks",
+  defaultExtractIgnoreSymlinks: "zmanager.defaultExtractIgnoreSymlinks",
   previewCleanupPolicy: "zmanager.previewCleanupPolicy",
   showParentFolderItem: "zmanager.showParentFolderItem",
   showRealFileIcons: "zmanager.showRealFileIcons",

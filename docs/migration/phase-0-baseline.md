@@ -57,7 +57,7 @@ The `v1.0.0` tag and native packaging script define this release identity:
 - Application bundle identifier: `com.frankmanzhu.zmanager`
 - Shipped product version: `1.0.0` (Git tag `v1.0.0`)
 - Build number: `1`
-- Application bundle name: `Z-Manager.app`
+- Application bundle name: `ZManager.app`
 - Minimum macOS version: 14.0
 - Published GUI architecture: Apple Silicon only. The GitHub `v1.0.0` release
   contains one arm64 ZIP and one arm64 DMG; it contains no Intel GUI artifact.
@@ -92,9 +92,9 @@ state.
 The published artifacts used for installed-system capture were downloaded from
 the GitHub [`v1.0.0` release](https://github.com/frankmanzhu/zmanager-gui/releases/tag/v1.0.0):
 
-- `Z-Manager.zip` — SHA-256
+- `ZManager.zip` — SHA-256
   `1f127c12b0285f18af05f205c14aeebb1bab4b88c15380b146f2e30d293e8198`
-- `Z-Manager.dmg` — SHA-256
+- `ZManager.dmg` — SHA-256
   `931372c3b0efc42adaf5f65921216c0331bfd7ac23ed03230196afb2f78e3aa0`
 
 The published app passes `codesign --verify --deep --strict` and its executable
@@ -102,10 +102,10 @@ is arm64-only. For reproducibility comparison, an isolated artifact was also
 built from a clean detached `v1.0.0` worktree. That rebuild is not byte-identical
 to the published artifact and was not used for the installed-system capture:
 
-- `Z-Manager.app`
-- `Z-Manager.zip` — SHA-256
+- `ZManager.app`
+- `ZManager.zip` — SHA-256
   `7647949bdbb06b04bdb8b30c399947d81d07ba959e892ac74e0492055b012046`
-- `Z-Manager.dmg` — SHA-256
+- `ZManager.dmg` — SHA-256
   `7d7278dabd6c4aaa496322cf2475fc60b4818132854f9d92270d04e5bbfda0ac`
 
 ## Native source inventory
@@ -240,7 +240,7 @@ native packages. They are migration requirements, not Phase 0 blockers:
 1. Both packaged applications reference
    `/opt/homebrew/opt/xz/lib/liblzma.5.dylib` and do not embed it. They terminate
    on a clean machine before UI startup.
-2. The tagged app is named `Z-Manager.app`, while the current reference build is
+2. The tagged app is named `ZManager.app`, while the current reference build is
    named `ZManager.app`. Installing the latter beside the former leaves two
    user-local bundles with the canonical identifier and makes `open -b` owner
    resolution ambiguous.

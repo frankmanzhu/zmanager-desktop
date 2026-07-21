@@ -892,6 +892,8 @@ pub(crate) fn start_extract_internal(
                 strip_components: request.strip_components,
                 tzap_restore_policy: request.tzap_restore_policy,
                 tzap_allow_degraded: request.tzap_allow_degraded,
+                tzap_allow_absolute_symlinks: request.tzap_allow_absolute_symlinks,
+                ignore_symlinks: request.ignore_symlinks,
             }),
             vec![JobOutputArtifactDto {
                 artifact_id: "output".into(),
@@ -929,7 +931,11 @@ pub(crate) fn start_extract_internal(
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
     let family_for_thread = family;
-    let policy = extraction_policy(request.overwrite, request.strip_components);
+    let policy = extraction_policy(
+        request.overwrite,
+        request.strip_components,
+        request.ignore_symlinks,
+    );
     let tzap_restore_options = TzapRestoreOptions {
         policy: map_tzap_restore_policy(request.tzap_restore_policy),
         allow_degraded: request.tzap_allow_degraded,
@@ -1354,6 +1360,7 @@ fn run_selected_extract_job(
                 tzap_restore_policy: tzap_restore_options.policy,
                 tzap_allow_degraded: tzap_restore_options.allow_degraded,
                 tzap_allow_absolute_symlinks: tzap_restore_options.allow_absolute_symlinks,
+                ignore_symlinks: policy.ignore_symlinks,
             },
         )
         .map_err(map_archive_browser_error)?;
@@ -2305,6 +2312,7 @@ fn map_tzap_restore_policy(policy: TzapRestorePolicyDto) -> TzapRestorePolicy {
 fn extraction_policy(
     overwrite: crate::dto::OverwritePolicyDto,
     strip_components: usize,
+    ignore_symlinks: bool,
 ) -> ExtractionPolicy {
     ExtractionPolicy {
         overwrite: map_overwrite_policy(overwrite),
@@ -2313,6 +2321,7 @@ fn extraction_policy(
         exclude_patterns: Vec::new(),
         strip_components,
         limits: Default::default(),
+        ignore_symlinks,
     }
 }
 
@@ -3222,6 +3231,7 @@ mod tests {
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
                 tzap_allow_absolute_symlinks: false,
+                ignore_symlinks: false,
             },
             &registry,
         )
@@ -3319,6 +3329,7 @@ mod tests {
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
                 tzap_allow_absolute_symlinks: false,
+                ignore_symlinks: false,
             },
             &registry,
         )
@@ -3348,6 +3359,7 @@ mod tests {
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
                 tzap_allow_absolute_symlinks: false,
+                ignore_symlinks: false,
             },
             &registry,
         )
@@ -3384,6 +3396,7 @@ mod tests {
                 tzap_restore_policy: TzapRestorePolicyDto::Portable,
                 tzap_allow_degraded: false,
                 tzap_allow_absolute_symlinks: false,
+                ignore_symlinks: false,
             },
             &registry,
         )
@@ -3763,6 +3776,7 @@ mod tests {
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
             tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -3849,6 +3863,7 @@ mod tests {
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
             tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a renamed-destination job");
@@ -3923,6 +3938,7 @@ mod tests {
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
             tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("extract command should start a job");
@@ -4002,6 +4018,7 @@ mod tests {
             tzap_restore_policy: TzapRestorePolicyDto::Portable,
             tzap_allow_degraded: false,
             tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
         };
         let extract_job = start_extract_internal(extract_request, &registry)
             .expect("selected extract command should start a job");
@@ -4144,7 +4161,7 @@ mod tests {
             "unused-destination",
             &["sources/keep.txt".to_string()],
             None,
-            extraction_policy(OverwritePolicyDto::Replace, 0),
+            extraction_policy(OverwritePolicyDto::Replace, 0, false),
             TzapRestoreOptions::default(),
             &token,
             &mut sink,

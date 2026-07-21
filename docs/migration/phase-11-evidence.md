@@ -69,7 +69,7 @@ initial migration window.
 The Parallels macOS 26.5.2 arm64 VM was seeded with last-release preferences,
 legacy default-opener state, a stale preview root, and a coexisting
 `/Applications/ZManager.app`. The Phase 11 app was then installed at
-`/Applications/Z-Manager.app` and launched without an interactive login step.
+`/Applications/ZManager.app` and launched without an interactive login step.
 
 The owner-only state record reported every step complete, the seven expected
 typed preference keys, and no diagnostics. The new default-handler restore file

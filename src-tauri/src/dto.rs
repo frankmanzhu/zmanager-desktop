@@ -267,6 +267,8 @@ pub struct StartExtractRequest {
     pub tzap_allow_degraded: bool,
     #[serde(default)]
     pub tzap_allow_absolute_symlinks: bool,
+    #[serde(default)]
+    pub ignore_symlinks: bool,
 }
 
 #[derive(Debug, Deserialize)]

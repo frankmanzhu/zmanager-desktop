@@ -323,6 +323,8 @@ export const zhCnMessages = {
   "extract.tzapAllowDegraded.help": "请求的原生元数据无法还原时继续，并将每个跳过项目报告为任务警告。",
   "extract.tzapAllowAbsoluteSymlinks": "允许绝对符号链接",
   "extract.tzapAllowAbsoluteSymlinks.help": "提取可能指向提取目的地之外的绝对符号链接。",
+  "extract.ignoreSymlinks": "忽略符号链接",
+  "extract.ignoreSymlinks.help": "提取时不提取符号链接。",
   "extract.stripComponents": "剥离路径层级",
   "create.options.title": "归档选项",
   "create.options.description": "格式、压缩、密码和归档安全设置。",

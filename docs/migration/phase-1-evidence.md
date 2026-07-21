@@ -29,7 +29,7 @@
 
 | Decision | Frozen value |
 |---|---|
-| Application bundle and installed name | `com.frankmanzhu.zmanager`; `Z-Manager.app` |
+| Application bundle and installed name | `com.frankmanzhu.zmanager`; `ZManager.app` |
 | Team | `9PMA523YY4` |
 | App Group | `group.com.frankmanzhu.zmanager` |
 | Finder / Quick Look preview / thumbnail / Spotlight | Released identifiers under `com.frankmanzhu.zmanager.*` |
@@ -50,7 +50,7 @@ before publication; development signing is not treated as release signing.
 The Parallels VM was restored to clean snapshot
 `{37a9b547-fc89-4d8c-b4c1-4dc4fcfaef34}`. The published `v1.0.0` application was
 installed first. An identity-only `1.1.0` fixture was then installed at the
-same `Z-Manager.app` path, registered with Launch Services, and inspected.
+same `ZManager.app` path, registered with Launch Services, and inspected.
 
 - Fixture SHA-256:
   `3c88198745a60011bb8d365677226a0cecf129507bba47da75c00c39deda2e1f`

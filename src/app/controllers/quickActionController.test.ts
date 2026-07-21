@@ -427,6 +427,7 @@ describe("quick action controller", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     } satisfies StartExtractRequest);
     expect(harness.runStartExtract).toHaveBeenNthCalledWith(2, {
       archivePath: "C:/archives/demo.zip",
@@ -437,6 +438,7 @@ describe("quick action controller", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "retry-secret",
     } satisfies StartExtractRequest);
     expect(harness.calls.promptedRetryCodes).toEqual(["password_required"]);
@@ -453,6 +455,7 @@ describe("quick action controller", () => {
           tzapRestorePolicy: "portable",
           tzapAllowDegraded: false,
           tzapAllowAbsoluteSymlinks: false,
+          ignoreSymlinks: false,
         },
         focusProgress: true,
         autoCloseAction: "closeWindow",

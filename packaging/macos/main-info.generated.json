@@ -92,19 +92,19 @@
     {
       "id": "open",
       "displayKey": "shellAction.open",
-      "title": "Open with Z-Manager",
+      "title": "Open with ZManager",
       "order": 10
     },
     {
       "id": "compress",
       "displayKey": "shellAction.compress",
-      "title": "Compress with Z-Manager",
+      "title": "Compress with ZManager",
       "order": 20
     },
     {
       "id": "extract",
       "displayKey": "shellAction.extract",
-      "title": "Extract with Z-Manager",
+      "title": "Extract with ZManager",
       "order": 30
     }
   ]

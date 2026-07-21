@@ -24,6 +24,7 @@ export type JobRetryContext =
       tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
       tzapAllowDegraded?: boolean;
       tzapAllowAbsoluteSymlinks?: boolean;
+      ignoreSymlinks?: boolean;
     }
   | {
       retryKind: "testArchive";

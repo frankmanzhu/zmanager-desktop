@@ -9,8 +9,8 @@
     "https://github.com/frankmanzhu/zmanager-gui/releases/tag/v1.0.0"
   ],
   "product": {
-    "displayName": "Z-Manager",
-    "applicationBundleName": "Z-Manager.app",
+    "displayName": "ZManager",
+    "applicationBundleName": "ZManager.app",
     "bundleIdentifier": "com.frankmanzhu.zmanager",
     "teamIdentifier": "9PMA523YY4",
     "appGroupIdentifier": "group.com.frankmanzhu.zmanager",
@@ -35,12 +35,12 @@
     "firstReplacementVersion": "1.1.0",
     "buildNumberSource": "release workflow run number, overridden locally by ZMANAGER_BUILD_NUMBER",
     "initialBuildNumber": "1",
-    "artifactVersionFormat": "Z-Manager-{version}-macos-{architecture}"
+    "artifactVersionFormat": "ZManager-{version}-macos-{architecture}"
   },
   "verification": {
     "lastReleaseIdentity": "verified from published v1.0.0 application",
     "teamIdentifier": "verified from the locally installed Apple Development certificate",
-    "cleanMachineReplacement": "verified by replacing the old app at the same Z-Manager.app path in the Phase 1 VM identity fixture",
+    "cleanMachineReplacement": "verified by replacing the old app at the same ZManager.app path in the Phase 1 VM identity fixture",
     "appGroupRegistration": "must be reverified by the protected Developer ID release job before publication"
   }
 }

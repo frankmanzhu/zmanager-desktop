@@ -488,6 +488,8 @@ export const enMessages = {
   "extract.tzapAllowDegraded.help": "Continue when requested native metadata cannot be restored, and report every skipped item as a job warning.",
   "extract.tzapAllowAbsoluteSymlinks": "Allow absolute symlinks",
   "extract.tzapAllowAbsoluteSymlinks.help": "Extract absolute symlinks that might point outside the extraction destination.",
+  "extract.ignoreSymlinks": "Ignore symbolic links",
+  "extract.ignoreSymlinks.help": "Do not extract symbolic links during extraction.",
   "extract.stripComponents": "Strip components",
   "create.options.title": "Archive Options",
   "create.options.description": "Format, compression, password, and archive safety settings.",

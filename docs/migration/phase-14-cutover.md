@@ -14,7 +14,7 @@ packaging/signing/publication path must not publish a competing product, but it
 must not be deleted.
 
 At authorization time, release operations must verify exactly one installed
-`Z-Manager.app`, one `zmanager` URL owner, one archive association owner, and
+`ZManager.app`, one `zmanager` URL owner, one archive association owner, and
 one installed path for Finder, Quick Look preview, Quick Look thumbnail, and
 Spotlight identifiers. Support follows `phase-11-rollback.md`: restore native
 `1.0.0`, exact-path register it, restore preserved non-secret preferences and

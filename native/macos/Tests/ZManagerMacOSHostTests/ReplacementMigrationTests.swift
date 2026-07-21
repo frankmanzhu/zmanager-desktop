@@ -18,7 +18,7 @@ func migrationReaderAllowListsValuesAndReportsKeysWithoutValues() throws {
     let request = LegacyReplacementMigrationRequest(
         schemaVersion: 1,
         legacyBundleID: "com.frankmanzhu.zmanager",
-        currentApplicationPath: root.appending(path: "Z-Manager.app").path,
+        currentApplicationPath: root.appending(path: "ZManager.app").path,
         legacyAccountStateDirectory: account.path,
         temporaryDirectory: root.path,
         legacyApplicationCandidates: []
@@ -82,7 +82,7 @@ func missingDirectoriesAndMalformedLegacyDataProduceANonBlockingSnapshot() {
 func registrationPlanAlwaysRegistersCurrentBeforeRemovingExactLegacyPaths() throws {
     let root = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
         .appending(path: "zmanager-registration-plan-\(UUID().uuidString)")
-    let current = root.appending(path: "Z-Manager.app", directoryHint: .isDirectory)
+    let current = root.appending(path: "ZManager.app", directoryHint: .isDirectory)
     let legacy = root.appending(path: "ZManager.app", directoryHint: .isDirectory)
     try makeApp(at: current, bundleID: "com.frankmanzhu.zmanager")
     try makeApp(at: legacy, bundleID: "com.frankmanzhu.zmanager")

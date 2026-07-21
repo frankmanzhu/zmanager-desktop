@@ -69,6 +69,7 @@ function retryContextForRequest(
     tzapRestorePolicy: input.tzapRestorePolicy,
     tzapAllowDegraded: input.tzapAllowDegraded,
     tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks,
+    ignoreSymlinks: input.ignoreSymlinks,
   };
 }
 
@@ -110,6 +111,7 @@ export function createExtractStartController(
         tzapRestorePolicy: resolvedInput.tzapRestorePolicy,
         tzapAllowDegraded: resolvedInput.tzapAllowDegraded,
         tzapAllowAbsoluteSymlinks: resolvedInput.tzapAllowAbsoluteSymlinks,
+        ignoreSymlinks: resolvedInput.ignoreSymlinks,
         password: resolvedInput.password,
       });
     if (!requestResult.ok) {

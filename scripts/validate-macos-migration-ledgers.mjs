@@ -252,7 +252,7 @@ if (identity.status !== "frozen")
   errors.push("macOS identity decision is not frozen");
 if (identity.product?.bundleIdentifier !== "com.frankmanzhu.zmanager")
   errors.push("canonical bundle identifier changed");
-if (identity.product?.applicationBundleName !== "Z-Manager.app")
+if (identity.product?.applicationBundleName !== "ZManager.app")
   errors.push("canonical installed bundle name changed");
 if (identity.product?.appGroupIdentifier !== "group.com.frankmanzhu.zmanager")
   errors.push("stable App Group changed");

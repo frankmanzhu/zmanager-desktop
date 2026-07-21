@@ -50,6 +50,8 @@ pub enum JobRetryDescriptorDto {
         strip_components: usize,
         tzap_restore_policy: TzapRestorePolicyDto,
         tzap_allow_degraded: bool,
+        tzap_allow_absolute_symlinks: bool,
+        ignore_symlinks: bool,
     },
     TestArchive {
         action_id: String,

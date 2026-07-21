@@ -290,6 +290,8 @@ export type ZManagerDialogIntent =
       deduplicateRoot: boolean;
       tzapRestorePolicy: TzapRestorePolicy;
       tzapAllowDegraded: boolean;
+      tzapAllowAbsoluteSymlinks: boolean;
+      ignoreSymlinks: boolean;
       password: string;
     }>
   | Readonly<{
@@ -303,6 +305,8 @@ export type ZManagerDialogIntent =
       deduplicateRoot: boolean;
       tzapRestorePolicy: TzapRestorePolicy;
       tzapAllowDegraded: boolean;
+      tzapAllowAbsoluteSymlinks: boolean;
+      ignoreSymlinks: boolean;
     }>
   | Readonly<{ type: "preferences" }>
   | Readonly<{ type: "about" }>

@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-readonly app="${1:-/Applications/Z-Manager.app}"
+readonly app="${1:-/Applications/ZManager.app}"
 readonly executable="$app/Contents/MacOS/zmanager-desktop"
 readonly log_file="${TMPDIR:-/tmp}/zmanager-installed-host-smoke.log"
 

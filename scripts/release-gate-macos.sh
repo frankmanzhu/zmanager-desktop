@@ -76,7 +76,7 @@ with open(sys.argv[2], encoding="utf-8") as source:
     generated = json.load(source)
 expected = {
     "CFBundleIdentifier": "com.frankmanzhu.zmanager",
-    "CFBundleName": "Z-Manager",
+    "CFBundleName": "ZManager",
     "CFBundleShortVersionString": sys.argv[3],
     "LSMinimumSystemVersion": "14.0",
 }
@@ -110,7 +110,7 @@ if info.get("UTExportedTypeDeclarations") != expected_exported:
 expected_services = [{
     "NSMenuItem": {"default": service["title"]},
     "NSMessage": "performZManagerService",
-    "NSPortName": "Z-Manager",
+    "NSPortName": "ZManager",
     "NSSendTypes": ["NSFilenamesPboardType"],
     "NSUserData": service["id"],
 } for service in sorted(generated["services"], key=lambda item: item["order"])]
@@ -279,7 +279,7 @@ if [[ -n $dmg ]]; then
     mountpoint="$entitlements_dir/dmg"
     mkdir -p "$mountpoint"
     if hdiutil attach -readonly -nobrowse -mountpoint "$mountpoint" "$dmg" >/dev/null 2>&1; then
-      mounted_app="$mountpoint/Z-Manager.app"
+      mounted_app="$mountpoint/ZManager.app"
       source_hash=$(codesign -d --verbose=4 "$app" 2>&1 | awk -F= '$1 == "CDHash" {print $2; exit}')
       mounted_hash=$(codesign -d --verbose=4 "$mounted_app" 2>&1 | awk -F= '$1 == "CDHash" {print $2; exit}')
       [[ -n $source_hash && $source_hash == "$mounted_hash" ]] && pass || \

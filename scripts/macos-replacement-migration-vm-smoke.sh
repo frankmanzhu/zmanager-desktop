@@ -18,7 +18,7 @@ seed() {
   chown -R "$user_name":staff "$user_home/Library/Application Support/ZManager" \
     /tmp/zmanager-preview-999999-1
   if [[ ! -d /Applications/ZManager.app ]]; then
-    ditto /Applications/Z-Manager.app /Applications/ZManager.app
+    ditto /Applications/ZManager.app /Applications/ZManager.app
     chown -R "$user_name":staff /Applications/ZManager.app
   fi
   local defaults=(sudo -H -u "$user_name" defaults write "$legacy_domain")

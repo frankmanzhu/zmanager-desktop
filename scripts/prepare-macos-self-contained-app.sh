@@ -69,7 +69,7 @@ info["UTExportedTypeDeclarations"] = [{
 info["NSServices"] = [{
     "NSMenuItem": {"default": service["title"]},
     "NSMessage": "performZManagerService",
-    "NSPortName": "Z-Manager",
+    "NSPortName": "ZManager",
     "NSSendTypes": ["NSFilenamesPboardType"],
     "NSUserData": service["id"],
 } for service in sorted(generated["services"], key=lambda item: item["order"])]
@@ -158,7 +158,7 @@ codesign --verify --deep --strict "$app"
 
 bundle_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app/Contents/Info.plist")
 bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
-[[ $bundle_name == Z-Manager ]] || { echo "Unexpected macOS bundle name: $bundle_name" >&2; exit 1; }
+[[ $bundle_name == ZManager ]] || { echo "Unexpected macOS bundle name: $bundle_name" >&2; exit 1; }
 [[ $bundle_identifier == com.frankmanzhu.zmanager ]] || { echo "Unexpected macOS bundle identifier: $bundle_identifier" >&2; exit 1; }
 [[ $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist") == "$minimum_macos" ]] || {
   echo "Unexpected macOS deployment target" >&2

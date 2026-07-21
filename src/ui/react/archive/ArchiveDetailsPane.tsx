@@ -367,6 +367,20 @@ function ExtractOptions() {
           />
           <span>{i18n.t("extract.deduplicateRoot")}</span>
         </label>
+        <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+          <input
+            id="extract-ignore-symlinks"
+            type="checkbox"
+            checked={options.ignoreSymlinks}
+            onChange={(event) =>
+              actions.handleArchiveIntent({
+                type: "setExtractOptions",
+                patch: { ignoreSymlinks: event.currentTarget.checked },
+              })
+            }
+          />
+          <span>{i18n.t("extract.ignoreSymlinks")}</span>
+        </label>
       </div>
       <button
         className="ml-0 inline-flex rounded-lg border-0 bg-transparent px-2 py-1.5 text-[11px] hover:bg-slate-100 dark:hover:bg-slate-800 [@media(max-height:560px)]:hidden"
@@ -481,6 +495,24 @@ function ExtractOptions() {
                   <span>{i18n.t("extract.tzapAllowDegraded")}</span>
                   <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
                     {i18n.t("extract.tzapAllowDegraded.help")}
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-[11px] font-medium">
+                <Checkbox
+                  id="extract-tzap-allow-absolute-symlinks"
+                  checked={options.tzapAllowAbsoluteSymlinks}
+                  onCheckedChange={(checked) =>
+                    actions.handleArchiveIntent({
+                      type: "setExtractOptions",
+                      patch: { tzapAllowAbsoluteSymlinks: checked === true },
+                    })
+                  }
+                />
+                <span className="grid gap-0.5">
+                  <span>{i18n.t("extract.tzapAllowAbsoluteSymlinks")}</span>
+                  <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
+                    {i18n.t("extract.tzapAllowAbsoluteSymlinks.help")}
                   </span>
                 </span>
               </label>

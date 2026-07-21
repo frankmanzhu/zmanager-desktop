@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleDisplayName</key><string>Z-Manager Finder Extension</string>
+  <key>CFBundleDisplayName</key><string>ZManager Finder Extension</string>
   <key>CFBundleExecutable</key><string>ZManagerFinderExtension</string>
   <key>CFBundleIdentifier</key><string>com.frankmanzhu.zmanager.finder-extension</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>

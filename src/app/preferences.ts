@@ -70,6 +70,7 @@ export type AppPreferences = {
   defaultTzapRestorePolicy: TzapRestorePolicy;
   defaultTzapAllowDegraded: boolean;
   defaultTzapAllowAbsoluteSymlinks: boolean;
+  defaultExtractIgnoreSymlinks: boolean;
   previewCleanupPolicy: PreviewCleanupPolicy;
   showParentFolderItem: boolean;
   showRealFileIcons: boolean;
@@ -161,6 +162,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   defaultTzapRestorePolicy: "portable",
   defaultTzapAllowDegraded: false,
   defaultTzapAllowAbsoluteSymlinks: false,
+  defaultExtractIgnoreSymlinks: false,
   previewCleanupPolicy: "beforeNextPreview",
   showParentFolderItem: true,
   showRealFileIcons: true,
@@ -448,6 +450,10 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       storage.getItem(PREFERENCE_KEYS.defaultTzapAllowAbsoluteSymlinks),
       DEFAULT_APP_PREFERENCES.defaultTzapAllowAbsoluteSymlinks,
     ),
+    defaultExtractIgnoreSymlinks: storedBool(
+      storage.getItem(PREFERENCE_KEYS.defaultExtractIgnoreSymlinks),
+      DEFAULT_APP_PREFERENCES.defaultExtractIgnoreSymlinks,
+    ),
     volumeSizePresets: loadVolumeSizePresets(storage.getItem(PREFERENCE_KEYS.volumeSizePresets)),
     previewCleanupPolicy: isOneOf(PREVIEW_CLEANUP_POLICIES, previewCleanupPolicy)
       ? previewCleanupPolicy
@@ -516,6 +522,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.defaultTzapRestorePolicy, preferences.defaultTzapRestorePolicy);
   storage.setItem(PREFERENCE_KEYS.defaultTzapAllowDegraded, String(preferences.defaultTzapAllowDegraded));
   storage.setItem(PREFERENCE_KEYS.defaultTzapAllowAbsoluteSymlinks, String(preferences.defaultTzapAllowAbsoluteSymlinks));
+  storage.setItem(PREFERENCE_KEYS.defaultExtractIgnoreSymlinks, String(preferences.defaultExtractIgnoreSymlinks));
   storage.setItem(PREFERENCE_KEYS.previewCleanupPolicy, preferences.previewCleanupPolicy);
   storage.setItem(PREFERENCE_KEYS.showParentFolderItem, String(preferences.showParentFolderItem));
   storage.setItem(PREFERENCE_KEYS.showRealFileIcons, String(preferences.showRealFileIcons));
@@ -584,6 +591,9 @@ export function preferencesWithPatch(
     ),
     defaultTzapAllowAbsoluteSymlinks: Boolean(
       patch.defaultTzapAllowAbsoluteSymlinks ?? preferences.defaultTzapAllowAbsoluteSymlinks,
+    ),
+    defaultExtractIgnoreSymlinks: Boolean(
+      patch.defaultExtractIgnoreSymlinks ?? preferences.defaultExtractIgnoreSymlinks,
     ),
   };
 }

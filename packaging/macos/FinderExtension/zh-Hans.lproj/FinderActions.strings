@@ -1,6 +1,6 @@
-"shellAction.open" = "使用 Z-Manager 打开";
-"shellAction.compress" = "使用 Z-Manager 压缩…";
-"shellAction.extract" = "使用 Z-Manager 解压…";
+"shellAction.open" = "使用 ZManager 打开";
+"shellAction.compress" = "使用 ZManager 压缩…";
+"shellAction.extract" = "使用 ZManager 解压…";
 "shellAction.compressZip" = "压缩为 ZIP";
 "shellAction.compressTzap" = "压缩为 TZAP";
 "shellAction.compressSevenZ" = "压缩为 7z";

@@ -5,8 +5,8 @@ readonly guest_user="${ZMANAGER_VM_USER:-localadmin}"
 readonly guest_uid="$(id -u "$guest_user")"
 readonly guest_user_home="$(dscl . -read "/Users/$guest_user" NFSHomeDirectory | awk '{print $2}')"
 readonly kit_root="/Users/Shared/ZManagerMigrationPhase0-20260716"
-readonly old_zip="$kit_root/Z-Manager.zip"
-readonly old_app="$guest_user_home/Applications/ZManager Migration Baseline/Z-Manager.app"
+readonly old_zip="$kit_root/ZManager.zip"
+readonly old_app="$guest_user_home/Applications/ZManager Migration Baseline/ZManager.app"
 readonly current_app="$guest_user_home/Applications/ZManager Migration Baseline/ZManager.app"
 readonly finder_bundle_id="com.frankmanzhu.zmanager.finder-extension"
 readonly quicklook_bundle_id="com.frankmanzhu.zmanager.quicklook-preview"
@@ -70,10 +70,10 @@ prepare_old_release() {
   local staging
   staging="$(mktemp -d /tmp/zmanager-native-v1.XXXXXX)"
   ditto -x -k "$old_zip" "$staging"
-  [[ -d "$staging/Z-Manager.app" ]] || fail "Native v1.0.0 ZIP does not contain Z-Manager.app."
-  codesign --verify --deep --strict "$staging/Z-Manager.app"
+  [[ -d "$staging/ZManager.app" ]] || fail "Native v1.0.0 ZIP does not contain ZManager.app."
+  codesign --verify --deep --strict "$staging/ZManager.app"
   install -d -m 0755 "$(dirname "$old_app")"
-  ditto "$staging/Z-Manager.app" "$old_app"
+  ditto "$staging/ZManager.app" "$old_app"
   chown -R "$guest_user":staff "$(dirname "$old_app")"
   rm -rf "$staging"
   codesign --verify --deep --strict "$old_app"
@@ -238,7 +238,7 @@ upgrade() {
       echo '- Single-product installed state: PASS'
     else
       echo '- Single-product installed state: KNOWN BASELINE FAILURE'
-      echo '- Cause: the tagged release is named `Z-Manager.app` while the current native build is named `ZManager.app`.'
+      echo '- Cause: the tagged release is named `ZManager.app` while the current native build is named `ZManager.app`.'
     fi
     echo '- Preference values emitted: no'
   } > "$upgrade_report"

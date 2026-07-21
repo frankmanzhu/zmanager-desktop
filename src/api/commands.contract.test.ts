@@ -123,6 +123,7 @@ const COMMAND_WRAPPERS = [
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     },
     call: () => api.runStartExtract({
       archivePath: "C:/archives/demo.zip",
@@ -132,6 +133,7 @@ const COMMAND_WRAPPERS = [
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     }),
   },
   {

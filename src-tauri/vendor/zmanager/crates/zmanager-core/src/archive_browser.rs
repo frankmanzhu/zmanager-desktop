@@ -95,6 +95,7 @@ pub struct BrowserExtractOptions<'a> {
     pub tzap_restore_policy: tzap_core::entry_metadata::RestorePolicy,
     pub tzap_allow_degraded: bool,
     pub tzap_allow_absolute_symlinks: bool,
+    pub ignore_symlinks: bool,
 }
 
 impl Default for BrowserExtractOptions<'_> {
@@ -106,6 +107,7 @@ impl Default for BrowserExtractOptions<'_> {
             tzap_restore_policy: tzap_core::entry_metadata::RestorePolicy::Portable,
             tzap_allow_degraded: false,
             tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
         }
     }
 }
@@ -305,7 +307,7 @@ pub fn extract_entry_with_options(
                 source,
             }
         })?;
-    let policy = extraction_policy(options.overwrite, options.strip_components);
+    let policy = extraction_policy(options.overwrite, options.strip_components, options.ignore_symlinks);
 
     if is_zip_family_archive(archive_path) && !libarchive_backend::is_split_zip_path(archive_path) {
         extract_zip_entry(
@@ -851,10 +853,15 @@ fn decision_write_plan(
     }
 }
 
-fn extraction_policy(overwrite: OverwritePolicy, strip_components: usize) -> ExtractionPolicy {
+fn extraction_policy(
+    overwrite: OverwritePolicy,
+    strip_components: usize,
+    ignore_symlinks: bool,
+) -> ExtractionPolicy {
     ExtractionPolicy {
         overwrite,
         strip_components,
+        ignore_symlinks,
         ..ExtractionPolicy::default()
     }
 }

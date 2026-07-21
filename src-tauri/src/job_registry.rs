@@ -2142,6 +2142,8 @@ mod tests {
                     strip_components: 0,
                     tzap_restore_policy: crate::dto::TzapRestorePolicyDto::Portable,
                     tzap_allow_degraded: false,
+                    tzap_allow_absolute_symlinks: false,
+                    ignore_symlinks: false,
                 }),
                 Vec::new(),
                 Vec::new(),

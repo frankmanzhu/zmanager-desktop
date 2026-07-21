@@ -2,7 +2,7 @@
 
 - Evidence date: 2026-07-16 (Australia/Sydney)
 - Result: **PASS with known baseline failures**
-- Published source: [Z-Manager GUI v1.0.0](https://github.com/frankmanzhu/zmanager-gui/releases/tag/v1.0.0)
+- Published source: [ZManager GUI v1.0.0](https://github.com/frankmanzhu/zmanager-gui/releases/tag/v1.0.0)
 - Disposable system: Parallels Desktop Apple Virtualization VM `macOS`
 - Guest: macOS 26.5.2 (`25F84`), arm64, console user `localadmin` (UID 501)
 - Clean snapshot: `{37a9b547-fc89-4d8c-b4c1-4dc4fcfaef34}`
@@ -16,8 +16,8 @@ state were emitted by this capture.
 
 | Artifact | SHA-256 | Observed identity |
 |---|---|---|
-| Published `Z-Manager.zip` | `1f127c12b0285f18af05f205c14aeebb1bab4b88c15380b146f2e30d293e8198` | `Z-Manager.app`; `com.frankmanzhu.zmanager`; version `1.0.0`; build `1`; macOS 14.0; arm64 |
-| Published `Z-Manager.dmg` | `931372c3b0efc42adaf5f65921216c0331bfd7ac23ed03230196afb2f78e3aa0` | Same published application |
+| Published `ZManager.zip` | `1f127c12b0285f18af05f205c14aeebb1bab4b88c15380b146f2e30d293e8198` | `ZManager.app`; `com.frankmanzhu.zmanager`; version `1.0.0`; build `1`; macOS 14.0; arm64 |
+| Published `ZManager.dmg` | `931372c3b0efc42adaf5f65921216c0331bfd7ac23ed03230196afb2f78e3aa0` | Same published application |
 | Current native reference ZIP | `d63eb7511e36d40ab59c935aee24c4b67b0469feb363c022dfe4e8325bf9675e` | `ZManager.app`; `com.frankmanzhu.zmanager`; version `1.0`; build `1`; arm64 |
 
 The official GUI release contains no `x86_64` application artifact. Both

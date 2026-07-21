@@ -26,7 +26,7 @@ fn main() {
             })
             .collect()
     } else {
-        b"Z-Manager installed metadata smoke fixture\n".to_vec()
+        b"ZManager installed metadata smoke fixture\n".to_vec()
     };
     fs::write(&source, payload).unwrap();
     let size = fs::metadata(&source).unwrap().len();

@@ -174,7 +174,7 @@ show create actions.
 GNOME install checks:
 
 ```sh
-dpkg -s z-manager python3-nautilus
+dpkg -s zmanager python3-nautilus
 ls -l /usr/share/nautilus-python/extensions/zmanager_nautilus.py
 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 import importlib.util

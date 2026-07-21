@@ -234,14 +234,14 @@ put("packaging/macos/main-info.generated.json", json({
 }));
 const strings = (pairs) => [...new Map(pairs)].map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)};`).join("\n");
 const englishInfo = [
-  ["CFBundleDisplayName", "Z-Manager"],
-  ["CFBundleName", "Z-Manager"],
+  ["CFBundleDisplayName", "ZManager"],
+  ["CFBundleName", "ZManager"],
   ...archive.documentGroups.map(({ displayKey, macOSDisplayName }) => [displayKey, macOSDisplayName]),
   ...archive.exportedTypes.map(({ descriptionKey, macOSDescription }) => [descriptionKey, macOSDescription]),
 ];
 const chineseInfo = [
-  ["CFBundleDisplayName", "Z-Manager"],
-  ["CFBundleName", "Z-Manager"],
+  ["CFBundleDisplayName", "ZManager"],
+  ["CFBundleName", "ZManager"],
   ...archive.documentGroups.map(({ displayKey, macOSDisplayNameZhHans }) => [displayKey, macOSDisplayNameZhHans]),
   ...archive.exportedTypes.map(({ descriptionKey, macOSDescriptionZhHans }) => [descriptionKey, macOSDescriptionZhHans]),
 ];

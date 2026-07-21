@@ -181,6 +181,7 @@ export type BuildArchiveWorkspaceExtractRequestInput = {
   tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
+  ignoreSymlinks?: boolean;
   password?: string;
 };
 
@@ -593,6 +594,7 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
           tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
           tzapAllowDegraded: input.tzapAllowDegraded ?? false,
           tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
+          ignoreSymlinks: input.ignoreSymlinks ?? false,
           ...(input.password ? { password: input.password } : {}),
         }),
       };

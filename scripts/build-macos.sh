@@ -19,7 +19,7 @@ Builds and stages the unified macOS Tauri Release Bundle under
 /tmp/zmanager-desktop-macos (override with ZMANAGER_MACOS_STAGE_DIR).
 
 By default the script builds the host architecture and produces both a .app
-bundle and a .dmg, then installs Z-Manager.app into /Applications. Local builds
+bundle and a .dmg, then installs ZManager.app into /Applications. Local builds
 embed build-machine codec libraries, rewrite their load paths, and use ad-hoc
 inside-out signing. Set ZMANAGER_CODESIGN_IDENTITY to a Developer ID
 Application identity and ZMANAGER_NOTARY_PROFILE to a validated notarytool
@@ -254,7 +254,7 @@ application="${applications[0]}"
 scripts/prepare-macos-self-contained-app.sh "$application" "$architecture"
 
 version=$(node -p 'require("./package.json").version')
-artifact_base="Z-Manager-${version}-macos-${architecture}"
+artifact_base="ZManager-${version}-macos-${architecture}"
 stage_dir="${ZMANAGER_MACOS_STAGE_DIR:-/tmp/zmanager-desktop-macos}"
 install -d -m 0755 "$stage_dir"
 staged_app="$stage_dir/$artifact_base.app"
@@ -273,9 +273,9 @@ create_dmg() {
   local image_root="$stage_dir/.$artifact_base-dmg-root"
   rm -rf "$image_root"
   mkdir -p "$image_root"
-  ditto "$staged_app" "$image_root/Z-Manager.app"
+  ditto "$staged_app" "$image_root/ZManager.app"
   ln -s /Applications "$image_root/Applications"
-  hdiutil create -quiet -volname "Z-Manager" -srcfolder "$image_root" \
+  hdiutil create -quiet -volname "ZManager" -srcfolder "$image_root" \
     -ov -format UDZO "$dmg_artifact"
   rm -rf "$image_root"
   if [[ ${ZMANAGER_CODESIGN_IDENTITY:--} != - ]]; then
@@ -312,9 +312,9 @@ fi
 scripts/release-gate-macos.sh "${gate_args[@]}"
 
 if ((install_application)); then
-  destination="$install_dir/Z-Manager.app"
-  temporary="$install_dir/.Z-Manager.app.zmanager-install-$$"
-  backup="$install_dir/.Z-Manager.app.zmanager-backup-$$"
+  destination="$install_dir/ZManager.app"
+  temporary="$install_dir/.ZManager.app.zmanager-install-$$"
+  backup="$install_dir/.ZManager.app.zmanager-backup-$$"
   use_sudo=0
   [[ -d "$install_dir" && -w "$install_dir" ]] || use_sudo=1
   run_install() { if ((use_sudo)); then sudo "$@"; else "$@"; fi; }

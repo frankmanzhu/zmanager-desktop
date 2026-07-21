@@ -1,6 +1,6 @@
-"shellAction.open" = "Open with Z-Manager";
-"shellAction.compress" = "Compress with Z-Manager…";
-"shellAction.extract" = "Extract with Z-Manager…";
+"shellAction.open" = "Open with ZManager";
+"shellAction.compress" = "Compress with ZManager…";
+"shellAction.extract" = "Extract with ZManager…";
 "shellAction.compressZip" = "Compress to ZIP";
 "shellAction.compressTzap" = "Compress to TZAP";
 "shellAction.compressSevenZ" = "Compress to 7z";

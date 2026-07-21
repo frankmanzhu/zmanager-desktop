@@ -42,12 +42,12 @@
 
 Parallels macOS VM snapshot
 `{6d9cc999-31a1-4801-8b16-50035986663e}` contains the ad-hoc-signed installed
-`/Applications/Z-Manager.app`. The installed gate proved:
+`/Applications/ZManager.app`. The installed gate proved:
 
 - canonical `com.frankmanzhu.zmanager` identity and macOS 14 minimum;
 - strict deep signature verification and self-contained dynamic linkage;
 - a visible 1280×900 React main window after a cold launch;
-- native Z-Manager/File/Edit/Window/Help menus;
+- native ZManager/File/Edit/Window/Help menus;
 - installed host icon and Launch Services status operations; and
 - installed Native Host, App Group, and deferred file-promise linkage.
 

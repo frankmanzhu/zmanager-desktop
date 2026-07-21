@@ -248,6 +248,7 @@ export type StartExtractRequest = {
   tzapRestorePolicy: "content" | "portable" | "sameOs" | "system";
   tzapAllowDegraded: boolean;
   tzapAllowAbsoluteSymlinks: boolean;
+  ignoreSymlinks: boolean;
 };
 
 export type PreviewEntryRequest = {
@@ -439,6 +440,7 @@ export type JobRetryDescriptorDto =
       tzapRestorePolicy?: StartExtractRequest["tzapRestorePolicy"];
       tzapAllowDegraded?: boolean;
       tzapAllowAbsoluteSymlinks?: boolean;
+      ignoreSymlinks?: boolean;
     }
   | {
       retryKind: "testArchive";

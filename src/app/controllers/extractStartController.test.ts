@@ -83,6 +83,7 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     tzapRestorePolicy: "portable",
     tzapAllowDegraded: false,
     tzapAllowAbsoluteSymlinks: false,
+    ignoreSymlinks: false,
     password: undefined as string | undefined,
   };
   const startExtract = vi.fn(async () => startJobResponse());
@@ -169,6 +170,7 @@ describe("extract start controller", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     });
     expect(harness.calls.recordDestination).toEqual(["C:/out/demo"]);
     expect(harness.calls.closeDialog).toBe(1);
@@ -185,6 +187,7 @@ describe("extract start controller", () => {
           tzapRestorePolicy: "portable",
           tzapAllowDegraded: false,
           tzapAllowAbsoluteSymlinks: false,
+          ignoreSymlinks: false,
         },
         focusProgress: true,
         autoCloseAction: "returnToWorkspace",
@@ -207,6 +210,7 @@ describe("extract start controller", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     });
     expect(harness.calls.jobs[0]).toMatchObject({
       options: {

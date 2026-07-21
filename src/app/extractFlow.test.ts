@@ -23,6 +23,7 @@ describe("extract flow helpers", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
     });
   });
 
@@ -37,6 +38,7 @@ describe("extract flow helpers", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "secret",
     });
 
@@ -51,6 +53,7 @@ describe("extract flow helpers", () => {
       tzapRestorePolicy: "portable",
       tzapAllowDegraded: false,
       tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
       password: "secret",
     });
   });
@@ -79,6 +82,7 @@ describe("extract flow helpers", () => {
       tzapRestorePolicy: "system",
       tzapAllowDegraded: true,
       tzapAllowAbsoluteSymlinks: true,
+      ignoreSymlinks: true,
       password: " secret ",
     }, {
       currentFolder: "docs/releases",
@@ -97,6 +101,7 @@ describe("extract flow helpers", () => {
       tzapRestorePolicy: "system",
       tzapAllowDegraded: true,
       tzapAllowAbsoluteSymlinks: true,
+      ignoreSymlinks: true,
     });
   });
 

@@ -255,6 +255,7 @@ function retainedRetryContext(snapshot: DesktopJobSnapshotDto): JobRetryContext 
     tzapRestorePolicy: descriptor.tzapRestorePolicy ?? "portable",
     tzapAllowDegraded: descriptor.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: descriptor.tzapAllowAbsoluteSymlinks ?? false,
+    ignoreSymlinks: descriptor.ignoreSymlinks ?? false,
   };
 }
 

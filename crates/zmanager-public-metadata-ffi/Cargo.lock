@@ -2282,16 +2282,16 @@ checksum = "b142a20ec14a91d5bc708c1dc21b080c550113d8aa77afa29635673a65dd02c5"
 
 [[package]]
 name = "zmanager-apple-archive"
-version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=a17e847f22df487a493792a9aeea8c8683f8d871#a17e847f22df487a493792a9aeea8c8683f8d871"
+version = "1.0.7"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "zmanager-core"
-version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=a17e847f22df487a493792a9aeea8c8683f8d871#a17e847f22df487a493792a9aeea8c8683f8d871"
+version = "1.0.7"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
 dependencies = [
  "base64",
  "brotli",
@@ -2323,8 +2323,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive"
-version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=a17e847f22df487a493792a9aeea8c8683f8d871#a17e847f22df487a493792a9aeea8c8683f8d871"
+version = "1.0.7"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -2332,8 +2332,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive-sys"
-version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=a17e847f22df487a493792a9aeea8c8683f8d871#a17e847f22df487a493792a9aeea8c8683f8d871"
+version = "1.0.7"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
 dependencies = [
  "cmake",
  "libc",
@@ -2353,8 +2353,8 @@ dependencies = [
 
 [[package]]
 name = "zmanager-unrar"
-version = "1.0.6"
-source = "git+https://github.com/tzap-org/zmanager?rev=a17e847f22df487a493792a9aeea8c8683f8d871#a17e847f22df487a493792a9aeea8c8683f8d871"
+version = "1.0.7"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
 dependencies = [
  "cc",
  "zeroize",

@@ -69,7 +69,7 @@ plans.
 
 The exact reviewed arm64 ZIP (SHA-256
 `1d779b9af96372e08969fa6643e4b0bea47b771993f472364059e3a2acb4d818`)
-was installed into `/Applications/Z-Manager.app` in the Parallels VM as build
+was installed into `/Applications/ZManager.app` in the Parallels VM as build
 `12002`. Installed linkage, Spotlight metadata, replacement migration, and the
 on-screen application window passed. `pluginkit` resolves Finder and both Quick
 Look extensions only from the installed bundle. The 1280×900 React window was

@@ -32,7 +32,7 @@ public final class ZManagerFinderSync: FIFinderSync {
             NSLocalizedString($0, tableName: "FinderActions", bundle: .main, comment: "")
         }
         guard !actions.isEmpty else { return nil }
-        let menu = NSMenu(title: "Z-Manager")
+        let menu = NSMenu(title: "ZManager")
         for action in actions {
             let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
             item.target = self

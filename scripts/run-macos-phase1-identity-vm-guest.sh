@@ -11,13 +11,13 @@ console_user=$(stat -f '%Su' /dev/console)
 uid=$(id -u "$console_user")
 home=$(dscl . -read "/Users/$console_user" NFSHomeDirectory | awk '{print $2}')
 install_root="$home/Applications/ZManager Migration Baseline"
-app="$install_root/Z-Manager.app"
+app="$install_root/ZManager.app"
 report="/Users/Shared/ZManagerMigrationPhase0-20260716/phase-1-identity-evidence.md"
 stage=$(mktemp -d /tmp/zmanager-phase1-identity.XXXXXX)
 trap 'rm -rf "$stage"' EXIT
 
 ditto -x -k "$zip" "$stage"
-candidate="$stage/Z-Manager.app"
+candidate="$stage/ZManager.app"
 [[ -d "$candidate" ]]
 [[ $(defaults read "$candidate/Contents/Info" CFBundleIdentifier) == com.frankmanzhu.zmanager ]]
 [[ $(defaults read "$candidate/Contents/Info" CFBundleShortVersionString) == 1.1.0 ]]

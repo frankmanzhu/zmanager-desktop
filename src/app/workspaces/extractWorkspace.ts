@@ -14,7 +14,7 @@ export type TzapVerificationSnapshot = Readonly<{
 
 export type ExtractWorkspaceOptionPatch = Partial<Pick<
   ExtractWorkspaceSnapshot,
-  "destinationPath" | "pathMode" | "overwrite" | "stripComponents" | "deduplicateRoot" | "tzapRestorePolicy" | "tzapAllowDegraded" | "tzapAllowAbsoluteSymlinks" | "passwordPromptOpen"
+  "destinationPath" | "pathMode" | "overwrite" | "stripComponents" | "deduplicateRoot" | "tzapRestorePolicy" | "tzapAllowDegraded" | "tzapAllowAbsoluteSymlinks" | "ignoreSymlinks" | "passwordPromptOpen"
 >>;
 
 export type ExtractWorkspaceDefaults = Readonly<{
@@ -26,6 +26,7 @@ export type ExtractWorkspaceDefaults = Readonly<{
   tzapRestorePolicy?: TzapRestorePolicy;
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
+  ignoreSymlinks?: boolean;
 }>;
 
 export type ExtractWorkspaceSnapshot = Readonly<{
@@ -37,6 +38,7 @@ export type ExtractWorkspaceSnapshot = Readonly<{
   tzapRestorePolicy: TzapRestorePolicy;
   tzapAllowDegraded: boolean;
   tzapAllowAbsoluteSymlinks: boolean;
+  ignoreSymlinks: boolean;
   usesGlobalDefaults: boolean;
   passwordPromptOpen: boolean;
   tzapVerification: TzapVerificationSnapshot;
@@ -63,6 +65,7 @@ const FALLBACK_DEFAULTS: ExtractWorkspaceDefaults = Object.freeze({
   tzapRestorePolicy: "portable",
   tzapAllowDegraded: false,
   tzapAllowAbsoluteSymlinks: false,
+  ignoreSymlinks: false,
 });
 
 export function createExtractWorkspace(initialDefaults: ExtractWorkspaceDefaults = FALLBACK_DEFAULTS): ExtractWorkspace {
@@ -139,6 +142,7 @@ export function createExtractWorkspace(initialDefaults: ExtractWorkspaceDefaults
         tzapRestorePolicy: state.tzapRestorePolicy,
         tzapAllowDegraded: state.tzapAllowDegraded,
         tzapAllowAbsoluteSymlinks: state.tzapAllowAbsoluteSymlinks,
+        ignoreSymlinks: state.ignoreSymlinks,
         ...(password.trim() ? { password: password.trim() } : {}),
       };
     },
@@ -159,6 +163,7 @@ function snapshotFromDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorksp
     tzapRestorePolicy: defaults.tzapRestorePolicy ?? "portable",
     tzapAllowDegraded: defaults.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: defaults.tzapAllowAbsoluteSymlinks ?? false,
+    ignoreSymlinks: defaults.ignoreSymlinks ?? false,
     usesGlobalDefaults: true,
     passwordPromptOpen: false,
     tzapVerification: freezeVerification({
@@ -183,6 +188,7 @@ function normalizeDefaults(defaults: ExtractWorkspaceDefaults): ExtractWorkspace
     tzapRestorePolicy: normalizeTzapRestorePolicy(defaults.tzapRestorePolicy),
     tzapAllowDegraded: Boolean(defaults.tzapAllowDegraded),
     tzapAllowAbsoluteSymlinks: Boolean(defaults.tzapAllowAbsoluteSymlinks),
+    ignoreSymlinks: Boolean(defaults.ignoreSymlinks),
   };
 }
 
@@ -201,6 +207,7 @@ function normalizedPatch(
     ...(patch.tzapRestorePolicy === undefined ? {} : { tzapRestorePolicy: normalizeTzapRestorePolicy(patch.tzapRestorePolicy) }),
     ...(patch.tzapAllowDegraded === undefined ? {} : { tzapAllowDegraded: Boolean(patch.tzapAllowDegraded) }),
     ...(patch.tzapAllowAbsoluteSymlinks === undefined ? {} : { tzapAllowAbsoluteSymlinks: Boolean(patch.tzapAllowAbsoluteSymlinks) }),
+    ...(patch.ignoreSymlinks === undefined ? {} : { ignoreSymlinks: Boolean(patch.ignoreSymlinks) }),
     ...(patch.passwordPromptOpen === undefined
       ? {}
       : { passwordPromptOpen: Boolean(patch.passwordPromptOpen) }),

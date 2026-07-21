@@ -17,6 +17,7 @@ export type ExtractStartInput = Readonly<{
   tzapRestorePolicy?: TzapRestorePolicy;
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
+  ignoreSymlinks?: boolean;
   password?: string;
 }>;
 
@@ -30,6 +31,7 @@ export type ResolvedExtractStartInput = Readonly<{
   tzapRestorePolicy: TzapRestorePolicy;
   tzapAllowDegraded: boolean;
   tzapAllowAbsoluteSymlinks: boolean;
+  ignoreSymlinks: boolean;
 }>;
 
 export type ResolveExtractStartInputContext = Readonly<{
@@ -50,6 +52,7 @@ export type BuildStartExtractRequestInput = {
   tzapRestorePolicy?: TzapRestorePolicy;
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
+  ignoreSymlinks?: boolean;
 };
 
 export function buildStartExtractRequest(input: BuildStartExtractRequestInput): StartExtractRequest {
@@ -65,6 +68,7 @@ export function buildStartExtractRequest(input: BuildStartExtractRequestInput): 
     tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
     tzapAllowDegraded: input.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
+    ignoreSymlinks: input.ignoreSymlinks ?? false,
     ...(input.password ? { password: input.password } : {}),
   };
 }
@@ -92,6 +96,7 @@ export function resolveExtractStartInput(
     tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
     tzapAllowDegraded: input.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
+    ignoreSymlinks: input.ignoreSymlinks ?? false,
   };
 }
 

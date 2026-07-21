@@ -366,6 +366,12 @@ function ExtractDialog({
   const [tzapAllowDegraded, setTzapAllowDegraded] = useState(
     dialog.tzapAllowDegraded,
   );
+  const [tzapAllowAbsoluteSymlinks, setTzapAllowAbsoluteSymlinks] = useState(
+    dialog.tzapAllowAbsoluteSymlinks,
+  );
+  const [ignoreSymlinks, setIgnoreSymlinks] = useState(
+    dialog.ignoreSymlinks,
+  );
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const canExtract = destination.trim().length > 0;
@@ -383,6 +389,8 @@ function ExtractDialog({
     setDeduplicateRoot(dialog.deduplicateRoot);
     setTzapRestorePolicy(dialog.tzapRestorePolicy);
     setTzapAllowDegraded(dialog.tzapAllowDegraded);
+    setTzapAllowAbsoluteSymlinks(dialog.tzapAllowAbsoluteSymlinks);
+    setIgnoreSymlinks(dialog.ignoreSymlinks);
   }, [
     dialog.destination,
     dialog.useSubfolder,
@@ -393,6 +401,8 @@ function ExtractDialog({
     dialog.deduplicateRoot,
     dialog.tzapRestorePolicy,
     dialog.tzapAllowDegraded,
+    dialog.tzapAllowAbsoluteSymlinks,
+    dialog.ignoreSymlinks,
   ]);
 
   useEffect(() => {
@@ -414,6 +424,8 @@ function ExtractDialog({
     deduplicateRoot,
     tzapRestorePolicy,
     tzapAllowDegraded,
+    tzapAllowAbsoluteSymlinks,
+    ignoreSymlinks,
   };
 
   return (
@@ -621,6 +633,17 @@ function ExtractDialog({
                   />
                   <span>{i18n.t("extract.deduplicateRoot")}</span>
                 </label>
+                <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <input
+                    id="extract-ignore-symlinks"
+                    type="checkbox"
+                    checked={ignoreSymlinks}
+                    onChange={(event) =>
+                      setIgnoreSymlinks(event.currentTarget.checked)
+                    }
+                  />
+                  <span>{i18n.t("extract.ignoreSymlinks")}</span>
+                </label>
                 {isTzap ? (
                   <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
                     <label className="grid gap-1.5">
@@ -675,6 +698,21 @@ function ExtractDialog({
                         <span>{i18n.t("extract.tzapAllowDegraded")}</span>
                         <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
                           {i18n.t("extract.tzapAllowDegraded.help")}
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-xs font-medium">
+                      <Checkbox
+                        id="extract-tzap-allow-absolute-symlinks"
+                        checked={tzapAllowAbsoluteSymlinks}
+                        onCheckedChange={(checked) =>
+                          setTzapAllowAbsoluteSymlinks(checked === true)
+                        }
+                      />
+                      <span className="grid gap-0.5">
+                        <span>{i18n.t("extract.tzapAllowAbsoluteSymlinks")}</span>
+                        <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
+                          {i18n.t("extract.tzapAllowAbsoluteSymlinks.help")}
                         </span>
                       </span>
                     </label>

@@ -16,7 +16,7 @@ preference values.
 1. Restore a clean macOS 14-or-newer arm64 VM snapshot, or create a new
    interactive standard macOS user.
 2. Sign into that user's graphical session.
-3. Download the published `v1.0.0` `Z-Manager.zip` from
+3. Download the published `v1.0.0` `ZManager.zip` from
    <https://github.com/frankmanzhu/zmanager-gui/releases/tag/v1.0.0> and verify
    SHA-256
    `1f127c12b0285f18af05f205c14aeebb1bab4b88c15380b146f2e30d293e8198`.

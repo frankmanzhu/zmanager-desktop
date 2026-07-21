@@ -109,16 +109,16 @@ jobs:
         run: |
           scripts/build-macos.sh --skip-tests --no-install --arch "${{ matrix.arch }}" --bundle all
           version=$(node -p 'require("./package.json").version')
-          app="/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.app"
+          app="/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.app"
           scripts/release-gate-macos.sh "$app" --expected-arch "${{ matrix.arch }}" \
             --require-developer-id --require-notarization \
-            --zip "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.zip" \
-            --dmg "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}.dmg" \
-            --report "/tmp/zmanager-macos-release/Z-Manager-${version}-macos-${{ matrix.arch }}-inspection.json"
+            --zip "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.zip" \
+            --dmg "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.dmg" \
+            --report "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}-inspection.json"
           cd /tmp/zmanager-macos-release
-          shasum -a 256 "Z-Manager-${version}-macos-${{ matrix.arch }}.zip" \
-            "Z-Manager-${version}-macos-${{ matrix.arch }}.dmg" \
-            > "Z-Manager-${version}-macos-${{ matrix.arch }}-SHA256SUMS.txt"
+          shasum -a 256 "ZManager-${version}-macos-${{ matrix.arch }}.zip" \
+            "ZManager-${version}-macos-${{ matrix.arch }}.dmg" \
+            > "ZManager-${version}-macos-${{ matrix.arch }}-SHA256SUMS.txt"
 
       - name: Upload signed macOS release artifacts
         uses: actions/upload-artifact@v4
@@ -332,7 +332,7 @@ jobs:
                 ;;
               zmanager-macos-arm64|zmanager-macos-x86_64)
                 case "$file_name" in
-                  Z-Manager-${release_version}-macos-*.zip|Z-Manager-${release_version}-macos-*.dmg|Z-Manager-${release_version}-macos-*-inspection.json|Z-Manager-${release_version}-macos-*-SHA256SUMS.txt)
+                  ZManager-${release_version}-macos-*.zip|ZManager-${release_version}-macos-*.dmg|ZManager-${release_version}-macos-*-inspection.json|ZManager-${release_version}-macos-*-SHA256SUMS.txt)
                     normalized_name="$file_name"
                     ;;
                   *)
@@ -346,7 +346,7 @@ jobs:
                   echo "Skipping unknown acceptance artifact: $file_name" >&2
                   continue
                 }
-                normalized_name="Z-Manager-${release_version}-macos-installed-acceptance.json"
+                normalized_name="ZManager-${release_version}-macos-installed-acceptance.json"
                 ;;
               *)
                 echo "Skipping unexpected artifact directory: $artifact_dir" >&2
@@ -370,15 +370,15 @@ jobs:
           fi
 
           required_macos_artifacts=(
-            "Z-Manager-${release_version}-macos-arm64.zip"
-            "Z-Manager-${release_version}-macos-arm64.dmg"
-            "Z-Manager-${release_version}-macos-arm64-inspection.json"
-            "Z-Manager-${release_version}-macos-arm64-SHA256SUMS.txt"
-            "Z-Manager-${release_version}-macos-x86_64.zip"
-            "Z-Manager-${release_version}-macos-x86_64.dmg"
-            "Z-Manager-${release_version}-macos-x86_64-inspection.json"
-            "Z-Manager-${release_version}-macos-x86_64-SHA256SUMS.txt"
-            "Z-Manager-${release_version}-macos-installed-acceptance.json"
+            "ZManager-${release_version}-macos-arm64.zip"
+            "ZManager-${release_version}-macos-arm64.dmg"
+            "ZManager-${release_version}-macos-arm64-inspection.json"
+            "ZManager-${release_version}-macos-arm64-SHA256SUMS.txt"
+            "ZManager-${release_version}-macos-x86_64.zip"
+            "ZManager-${release_version}-macos-x86_64.dmg"
+            "ZManager-${release_version}-macos-x86_64-inspection.json"
+            "ZManager-${release_version}-macos-x86_64-SHA256SUMS.txt"
+            "ZManager-${release_version}-macos-installed-acceptance.json"
           )
           for required in "${required_macos_artifacts[@]}"; do
             if [[ ! -f "release-bundles/$required" ]]; then

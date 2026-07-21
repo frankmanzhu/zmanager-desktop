@@ -11,11 +11,11 @@ output_zip=$2
 version=$(node -p 'require("./package.json").version')
 work=$(mktemp -d "${TMPDIR:-/tmp}/zmanager-phase1-identity.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-app="$work/Z-Manager.app"
+app="$work/ZManager.app"
 
 ditto "$source_app" "$app"
-/usr/libexec/PlistBuddy -c "Set :CFBundleName Z-Manager" "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Z-Manager" "$app/Contents/Info.plist" 2>/dev/null || true
+/usr/libexec/PlistBuddy -c "Set :CFBundleName ZManager" "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ZManager" "$app/Contents/Info.plist" 2>/dev/null || true
 
 while IFS= read -r -d '' plist; do
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$plist"

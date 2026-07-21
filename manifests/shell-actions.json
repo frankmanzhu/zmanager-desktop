@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "requestVersion": 1,
   "actions": [
-    {"id":"open","rustCase":"Open","displayKey":"shellAction.open","macOSServiceTitle":"Open with Z-Manager","macOSServiceTitleZhHans":"使用 Z-Manager 打开","order":10,"selectionShapes":["single-archive"],"multiplicity":"exactly-one"},
-    {"id":"compress","rustCase":"Compress","displayKey":"shellAction.compress","macOSServiceTitle":"Compress with Z-Manager","macOSServiceTitleZhHans":"使用 Z-Manager 压缩","order":20,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"extract","rustCase":"Extract","displayKey":"shellAction.extract","macOSServiceTitle":"Extract with Z-Manager","macOSServiceTitleZhHans":"使用 Z-Manager 解压","order":30,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
+    {"id":"open","rustCase":"Open","displayKey":"shellAction.open","macOSServiceTitle":"Open with ZManager","macOSServiceTitleZhHans":"使用 ZManager 打开","order":10,"selectionShapes":["single-archive"],"multiplicity":"exactly-one"},
+    {"id":"compress","rustCase":"Compress","displayKey":"shellAction.compress","macOSServiceTitle":"Compress with ZManager","macOSServiceTitleZhHans":"使用 ZManager 压缩","order":20,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
+    {"id":"extract","rustCase":"Extract","displayKey":"shellAction.extract","macOSServiceTitle":"Extract with ZManager","macOSServiceTitleZhHans":"使用 ZManager 解压","order":30,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
     {"id":"compressZip","rustCase":"CompressZip","displayKey":"shellAction.compressZip","order":40,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
     {"id":"compressTzap","rustCase":"CompressTzap","displayKey":"shellAction.compressTzap","order":50,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
     {"id":"compressSevenZ","rustCase":"CompressSevenZ","displayKey":"shellAction.compressSevenZ","order":60,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
