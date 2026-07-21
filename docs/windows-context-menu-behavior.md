@@ -31,6 +31,7 @@ in this order:
 6. `Add to .zip`
 7. `Add to .7z`
 8. `Add to .tzst`
+9. `Add to .tgz`
 
 The archive extension set is generated from
 `manifests/archive-file-types.json` plus `.001` split archives. The current
@@ -56,6 +57,7 @@ Right-clicking a selected folder shows `ZManager` with the create actions:
 3. `Add to .zip`
 4. `Add to .7z`
 5. `Add to .tzst`
+6. `Add to .tgz`
 
 Right-clicking a folder background also shows the same create actions, using the
 current folder as the target.
@@ -74,6 +76,7 @@ verbs launch the GUI directly through quick-action arguments:
 - `zmanager-desktop.exe --quick-action compress-zip --path "%V"`
 - `zmanager-desktop.exe --quick-action compress-7z --path "%V"`
 - `zmanager-desktop.exe --quick-action compress-tzst --path "%V"`
+- `zmanager-desktop.exe --quick-action compress-tgz --path "%V"`
 
 Legacy `%1` parsing remains available for compatibility but is not used by new
 selected-item registrations.
@@ -83,8 +86,9 @@ The app validates every quick action again before starting work:
 - `open` requires exactly one supported archive path.
 - `extract-here` accepts one or more supported archive paths.
 - `extract-to-folder` requires exactly one supported archive path.
-- `compress`, `compress-tzap`, `compress-zip`, `compress-7z`, and
-  `compress-tzst` require at least one local file or folder path.
+- `compress`, `compress-tzap`, `compress-zip`, `compress-7z`,
+  `compress-tzst`, and `compress-tgz` require at least one local file or
+  folder path.
 - Passwords must never be supplied through quick-action arguments.
 
 ## Multi-Select Limits

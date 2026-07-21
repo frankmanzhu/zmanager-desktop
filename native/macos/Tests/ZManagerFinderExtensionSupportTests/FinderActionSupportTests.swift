@@ -15,10 +15,10 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
         for: [item("/tmp/one.zip"), item("/tmp/two.tar.gz")], localize: { $0 }
     ).map(\.id) == [.extract, .extractHere])
     #expect(FinderMenuBuilder.actions(for: [item("/tmp/folder", directory: true)], localize: { $0 }).map(\.id)
-        == [.compress, .compressZip, .compressTzap, .compressSevenZ, .compressTarZst, .compressCleanSource])
+        == [.compress, .compressZip, .compressTzap, .compressSevenZ, .compressTarZst, .compressTarGz, .compressCleanSource])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/folder", directory: true), item("/tmp/readme.txt")], localize: { $0 }
-    ).map(\.id) == [.compress, .compressZip, .compressTzap, .compressSevenZ, .compressTarZst])
+    ).map(\.id) == [.compress, .compressZip, .compressTzap, .compressSevenZ, .compressTarZst, .compressTarGz])
 }
 
 @Test func finderArchiveClassificationCoversCompoundSplitAndUnsupportedPaths() {

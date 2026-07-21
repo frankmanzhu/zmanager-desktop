@@ -163,7 +163,7 @@ enum LegacyReplacementMigrationReader {
         return LegacyReplacementPreferences(
             defaultArchiveFormat: string(
                 "defaultArchiveFormat",
-                allowed: ["tarZst", "tzap", "sevenZ", "zip"]
+                allowed: ["tarZst", "tarGz", "tzap", "sevenZ", "zip"]
             ),
             defaultCleanSourceEnabled: boolean("defaultCleanSourceEnabled"),
             legacyDefaultCreateProfile: string(

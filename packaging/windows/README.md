@@ -17,11 +17,12 @@ CLI contract:
 - `zmanager-desktop.exe --quick-action compress-zip --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-7z --path "<target>"`
 - `zmanager-desktop.exe --quick-action compress-tzst --path "<target>"`
+- `zmanager-desktop.exe --quick-action compress-tgz --path "<target>"`
 - `zmanager-desktop.exe --quick-action-request "<legacy-request.json>"`
 
 Explorer shows a single `ZManager` cascaded menu. Supported archive extensions show
 `Extract Here`, `Extract to Archive Folder`, and `Open archive` first, followed by `Add to archive...`,
-`Add to .tzap`, `Add to .zip`, `Add to .7z`, and `Add to .tzst`, so archive files
+`Add to .tzap`, `Add to .zip`, `Add to .7z`, `Add to .tzst`, and `Add to .tgz`, so archive files
 can also be archived again. Selected folders and folder backgrounds show the same
 add actions. The installed COM-backed `*\shell` cascade gives generic file
 selections the same create actions in the classic context menu and receives the

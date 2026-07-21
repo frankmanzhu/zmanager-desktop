@@ -133,6 +133,7 @@ Quick-action command contract:
 - `zmanager-desktop --quick-action compress-zip --path <target>...`
 - `zmanager-desktop --quick-action compress-7z --path <target>...`
 - `zmanager-desktop --quick-action compress-tzst --path <target>...`
+- `zmanager-desktop --quick-action compress-tgz --path <target>...`
 
 These labels and command routes mirror the Windows `ZManager` cascaded context
 menu documented in `docs/windows-context-menu-behavior.md`. The app validates

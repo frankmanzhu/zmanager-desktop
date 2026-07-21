@@ -5,6 +5,7 @@
 "shellAction.compressTzap" = "Compress to TZAP";
 "shellAction.compressSevenZ" = "Compress to 7z";
 "shellAction.compressTarZst" = "Compress to TAR.ZST";
+"shellAction.compressTarGz" = "Compress to TAR.GZ";
 "shellAction.compressCleanSource" = "Compress and remove source";
 "shellAction.extractHere" = "Extract here";
 "shellAction.extractToFolder" = "Extract to archive folder";
