@@ -159,4 +159,22 @@ otool -ov "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" | \
     echo "Quick Look preview provider method was stripped from the packaged executable" >&2
     exit 1
   }
+# Re-sign appex bundles after replacing their binaries. The Swift build writes new
+# Mach-O executables into an already-signed bundle, which invalidates the existing
+# code signature. Ad-hoc re-signing with entitlements restores the app sandbox
+# permissions required to run inside quicklookd and the Finder Sync host.
+quicklook_entitlements="$repo_root/packaging/macos/QuickLook/ZManagerQuickLook.entitlements"
+finder_entitlements="$repo_root/packaging/macos/FinderExtension/ZManagerFinderExtension.entitlements"
+for bundle in "$preview_appex" "$thumbnail_appex"; do
+  if [[ -f "$bundle/Contents/MacOS/$(basename "$bundle" .appex)" ]]; then
+    codesign --force --sign - --entitlements "$quicklook_entitlements" "$bundle"
+  fi
+done
+if [[ -f "$appex/Contents/MacOS/ZManagerFinderExtension" ]]; then
+  codesign --force --sign - --entitlements "$finder_entitlements" "$appex"
+fi
+# Re-sign Spotlight importer (sandboxed, no special entitlements).
+if [[ -f "$spotlight/Contents/MacOS/ZManagerSpotlight" ]]; then
+  codesign --force --sign - "$spotlight"
+fi
 echo "Embedded Finder, Quick Look, thumbnail, and Spotlight targets in: $app"

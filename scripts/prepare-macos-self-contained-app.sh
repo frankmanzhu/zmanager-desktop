@@ -180,12 +180,22 @@ lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A/Framewo
 # Re-register so the freshly-signed bundle and its extensions are picked up.
 "$lsregister" -f "$app"
 
-# Register Finder Sync Extension with the system so it appears in Finder's context menu.
-# The app must be installed in a location macOS trusts (e.g. /Applications) for this to persist.
-if [[ -d "$finder_appex" ]]; then
-  pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
-  echo "Registered Finder Sync Extension"
-fi
+# Register all app extensions with pluginkit so the system discovers them.
+# Ad-hoc signed extensions require explicit registration; they won't be
+# auto-discovered until the parent app is launched.
+for appex in \
+  "$app/Contents/PlugIns/ZManagerFinderExtension.appex" \
+  "$app/Contents/PlugIns/ZManagerQuickLookPreview.appex" \
+  "$app/Contents/PlugIns/ZManagerQuickLookThumbnail.appex"; do
+  if [[ -d "$appex" ]]; then
+    pluginkit -a "$appex" 2>/dev/null || true
+  fi
+done
+# Enable all extensions. Finder Sync needs user approval in System Settings.
+pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
+pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-preview 2>/dev/null || true
+pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-thumbnail 2>/dev/null || true
+echo "Registered system extensions (Finder Sync, Quick Look, Spotlight)"
 
 # Reset QuickLook daemon so it loads the freshly-built generators instead
 # of any cached or stale extension references from prior builds.
