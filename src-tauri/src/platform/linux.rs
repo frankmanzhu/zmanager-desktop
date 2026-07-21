@@ -57,7 +57,7 @@ pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
         quick_action: "compressTarZst",
     },
     ShellActionProfile {
-        label: "ZManager > Add to .tar.gz",
+        label: "ZManager > Add to .tgz",
         quick_action: "compressTarGz",
     },
 ];

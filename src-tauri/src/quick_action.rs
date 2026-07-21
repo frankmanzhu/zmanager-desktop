@@ -743,6 +743,10 @@ mod tests {
             requested(&["--quick-action", "compress-tzst", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tzst.kind, QuickActionKindDto::CompressTarZst);
 
+        let compress_tgz =
+            requested(&["--quick-action", "compress-tgz", "--path", "C:/tmp/source"]);
+        assert_eq!(compress_tgz.kind, QuickActionKindDto::CompressTarGz);
+
         let unknown_option_compress = requested(&[
             "--quick-action",
             "compress-tzap",
