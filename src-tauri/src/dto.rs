@@ -30,6 +30,7 @@ pub struct ProjectIntegrationContract {
     pub window_decorations: bool,
     pub custom_window_chrome: bool,
     pub manual_window_resize: bool,
+    pub native_menu_bar: bool,
     pub associated_extensions: Vec<String>,
     pub shell_actions: Vec<ProjectIntegrationShellActionDto>,
 }

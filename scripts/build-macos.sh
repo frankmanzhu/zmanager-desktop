@@ -330,6 +330,11 @@ if ((install_application)); then
     exit 1
   fi
   echo "Installed application: $destination"
+  # Register Finder Sync Extension so it appears in Finder's context menu
+  if [[ -d "$destination/Contents/PlugIns/ZManagerFinderExtension.appex" ]]; then
+    pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
+    echo "Registered Finder Sync Extension"
+  fi
 else
   echo "Skipping application install because --no-install was set."
 fi

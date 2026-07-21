@@ -21,6 +21,7 @@ export type ProjectContract = {
     windowDecorations: boolean;
     customWindowChrome: boolean;
     manualWindowResize: boolean;
+    nativeMenuBar: boolean;
     associatedExtensions: string[];
     shellActions: {
       label: string;

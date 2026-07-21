@@ -33,6 +33,7 @@ pub struct PlatformProfile {
     pub window_decorations: bool,
     pub custom_window_chrome: bool,
     pub manual_window_resize: bool,
+    pub native_menu_bar: bool,
     pub associated_extensions: Vec<String>,
     pub shell_actions: &'static [ShellActionProfile],
 }
@@ -359,6 +360,7 @@ mod tests {
         assert!(profile.window_decorations);
         assert!(!profile.custom_window_chrome);
         assert!(!profile.manual_window_resize);
+        assert!(!profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
         assert!(!profile.shell_actions.is_empty());
     }
@@ -375,6 +377,7 @@ mod tests {
         assert!(!profile.window_decorations);
         assert!(profile.custom_window_chrome);
         assert!(profile.manual_window_resize);
+        assert!(!profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
         assert!(!profile.shell_actions.is_empty());
     }
@@ -391,6 +394,7 @@ mod tests {
         assert!(profile.window_decorations);
         assert!(!profile.custom_window_chrome);
         assert!(!profile.manual_window_resize);
+        assert!(profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
         assert!(profile.shell_actions.is_empty());
     }

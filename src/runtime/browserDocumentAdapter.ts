@@ -30,6 +30,7 @@ export type BrowserDocumentAdapter = Readonly<{
 export type BrowserPlatformProfile = Readonly<{
   customWindowChrome: boolean;
   manualWindowResize: boolean;
+  nativeMenuBar: boolean;
 }>;
 
 export type CreateBrowserDocumentAdapterOptions = Readonly<{
@@ -70,6 +71,7 @@ export function createBrowserDocumentAdapter(
       useManualWindowResize = profile?.manualWindowResize === true;
       documentRef.body.classList.toggle("custom-window-chrome", useCustomWindowChrome);
       documentRef.body.classList.toggle("manual-window-resize", useManualWindowResize);
+      documentRef.body.classList.toggle("native-menu-bar", profile?.nativeMenuBar === true);
     },
     setQuickActionJobMode(active) {
       documentRef.body.classList.toggle("quick-action-job-mode", active);

@@ -84,6 +84,7 @@ impl NativePlatform for LinuxPlatform {
             window_decorations: false,
             custom_window_chrome: true,
             manual_window_resize: true,
+            native_menu_bar: false,
             associated_extensions: crate::archive_file_types::associated_extensions(),
             shell_actions: DESKTOP_SHELL_ACTIONS,
         }

@@ -139,6 +139,7 @@ impl NativePlatform for MacOsPlatform {
             window_decorations: true,
             custom_window_chrome: false,
             manual_window_resize: false,
+            native_menu_bar: true,
             associated_extensions: crate::archive_file_types::associated_extensions(),
             shell_actions: &[],
         }

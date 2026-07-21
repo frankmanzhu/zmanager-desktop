@@ -154,6 +154,7 @@ describe("dialog snapshots", () => {
         windowDecorations: true,
         customWindowChrome: false,
         manualWindowResize: false,
+        nativeMenuBar: false,
         associatedExtensions: [".zip", ".7z"],
         shellActions: [{ label: "Extract Here", quickAction: "extractHere" }],
       },

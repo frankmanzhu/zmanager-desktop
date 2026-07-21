@@ -100,6 +100,7 @@ pub fn project_contract() -> crate::dto::ProjectContract {
             window_decorations: integration.window_decorations,
             custom_window_chrome: integration.custom_window_chrome,
             manual_window_resize: integration.manual_window_resize,
+            native_menu_bar: integration.native_menu_bar,
             associated_extensions: integration.associated_extensions,
             shell_actions: integration
                 .shell_actions

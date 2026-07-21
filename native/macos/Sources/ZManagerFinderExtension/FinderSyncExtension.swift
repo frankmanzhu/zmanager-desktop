@@ -7,7 +7,14 @@ import ZManagerMacOSShared
 @objc(ZManagerFinderSync)
 public final class ZManagerFinderSync: FIFinderSync {
     private lazy var transport: FinderRequestTransport? = {
-        guard let inbox = try? AppGroupRequestInbox.applicationGroup() else { return nil }
+        let inbox: AppGroupRequestInbox
+        if let override = ProcessInfo.processInfo.environment["ZMANAGER_MACOS_APP_GROUP_REQUEST_DIR"] {
+            inbox = AppGroupRequestInbox(directory: URL(filePath: override, directoryHint: .isDirectory))
+        } else if let group = try? AppGroupRequestInbox.applicationGroup() {
+            inbox = group
+        } else {
+            return nil
+        }
         return FinderRequestTransport(inbox: inbox) { NSWorkspace.shared.open($0) }
     }()
 

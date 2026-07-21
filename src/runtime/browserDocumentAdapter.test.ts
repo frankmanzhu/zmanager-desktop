@@ -10,10 +10,11 @@ describe("browser document adapter", () => {
     });
 
     adapter.initializeLayout();
-    adapter.applyPlatformProfile({ customWindowChrome: true, manualWindowResize: true });
+    adapter.applyPlatformProfile({ customWindowChrome: true, manualWindowResize: true, nativeMenuBar: false });
 
     expect(fakeDocument.toggledClasses).toContainEqual(["custom-window-chrome", true]);
     expect(fakeDocument.toggledClasses).toContainEqual(["manual-window-resize", true]);
+    expect(fakeDocument.toggledClasses).toContainEqual(["native-menu-bar", false]);
     expect(fakeDocument.styleValues["--zmanager-min-window-width"]).toBe("720px");
     expect(fakeDocument.styleValues["--zmanager-statusbar-parts"]).toBe("5");
     expect(adapter.usesCustomWindowChrome()).toBe(true);
@@ -26,7 +27,7 @@ describe("browser document adapter", () => {
       documentRef: fakeDocument.documentRef,
     });
 
-    adapter.applyPlatformProfile({ customWindowChrome: false, manualWindowResize: false });
+    adapter.applyPlatformProfile({ customWindowChrome: false, manualWindowResize: false, nativeMenuBar: false });
     adapter.setQuickActionJobMode(true);
     adapter.applyDisplayMetadata({
       documentLanguage: "zh-CN",
@@ -37,6 +38,7 @@ describe("browser document adapter", () => {
     expect(fakeDocument.toggledClasses).toEqual([
       ["custom-window-chrome", false],
       ["manual-window-resize", false],
+      ["native-menu-bar", false],
       ["quick-action-job-mode", true],
       ["quick-action-job-mode", false],
     ]);

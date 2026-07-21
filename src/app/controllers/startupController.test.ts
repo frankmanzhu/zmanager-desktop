@@ -38,6 +38,7 @@ function contract(overrides: Partial<ProjectContract> = {}): ProjectContract {
       windowDecorations: true,
       customWindowChrome: false,
       manualWindowResize: false,
+      nativeMenuBar: false,
       associatedExtensions: [".zip"],
       shellActions: [],
     },

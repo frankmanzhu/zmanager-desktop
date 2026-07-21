@@ -35,7 +35,7 @@ export function MenuBar() {
   return (
     <nav
       ref={navRef}
-      className="flex h-[30px] min-h-[30px] shrink-0 select-none items-center gap-0.5 border-b border-slate-200 bg-white px-2.5 text-left dark:border-slate-800 dark:bg-slate-900"
+      className="flex h-[30px] min-h-[30px] shrink-0 select-none items-center gap-0.5 border-b border-slate-200 bg-white px-2.5 text-left dark:border-slate-800 dark:bg-slate-900 [body.native-menu-bar_&]:hidden"
       data-shell-chrome="menu"
       aria-label={i18n.t("workspace.menu.aria")}
       onBlur={(event) => {

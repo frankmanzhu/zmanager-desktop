@@ -171,4 +171,12 @@ if otool -L "$executable" | grep -Eq '^\s+/(opt/homebrew|usr/local)/'; then
   echo "Application still contains build-machine library paths" >&2
   exit 1
 fi
+
+# Register Finder Sync Extension with the system so it appears in Finder's context menu.
+# The app must be installed in a location macOS trusts (e.g. /Applications) for this to persist.
+if [[ -d "$finder_appex" ]]; then
+  pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
+  echo "Registered Finder Sync Extension"
+fi
+
 echo "Prepared self-contained signed application: $app"
