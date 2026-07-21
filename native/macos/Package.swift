@@ -31,8 +31,7 @@ let package = Package(
             dependencies: ["ZManagerPublicMetadataSupport"]
         ),
         .target(
-            name: "ZManagerQuickLookThumbnail",
-            dependencies: ["ZManagerPublicMetadataSupport"]
+            name: "ZManagerQuickLookThumbnail"
         ),
         .target(name: "ZManagerMacOSHost", dependencies: ["ZManagerGenerated", "ZManagerMacOSShared"]),
         .testTarget(name: "ZManagerGeneratedTests", dependencies: ["ZManagerGenerated"]),

@@ -95,10 +95,8 @@ ditto "$repo_root/packaging/macos/QuickLookThumbnail/Info.plist" "$thumbnail_app
 sync_bundle_identity "$thumbnail_appex"
 xcrun swiftc -o "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail" \
   -target "$swift_compile_target" \
-  "$bin_dir"/ZManagerPublicMetadataSupport.build/*.swift.o \
   "$bin_dir"/ZManagerQuickLookThumbnail.build/*.swift.o \
   -framework AppKit -framework QuickLookThumbnailing \
-  "${metadata_link_args[@]}" \
   -Xlinker -e -Xlinker _NSExtensionMain
 chmod 0755 "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail"
 
@@ -141,6 +139,11 @@ for executable in \
     echo "Native metadata target contains a build-machine library path: $executable" >&2
     exit 1
   fi
+done
+# Verify metadata FFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
+for executable in \
+  "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
+  "$spotlight/Contents/MacOS/ZManagerSpotlight"; do
   for required_symbol in \
     _zmanager_public_metadata_ffi_version \
     _zmanager_public_metadata_string_free \

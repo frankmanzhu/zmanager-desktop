@@ -332,6 +332,13 @@ if ((install_application)); then
     exit 1
   fi
   echo "Installed application: $destination"
+  # Re-register with Launch Services so the new app bundle, Quick Look extensions,
+  # and Spotlight importer replace any prior cached registrations at this path.
+  # The staged app is already registered during earlier build steps; unregister it
+  # first so repeated local rebuilds don't accumulate stale entries.
+  lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+  "$lsregister" -u "$staged_app" 2>/dev/null || true
+  "$lsregister" -f "$destination"
   # Register Finder Sync Extension so it appears in Finder's context menu.
   # If the extension doesn't show in Finder, enable it manually:
   #   System Settings > General > Login Items & Extensions > Finder Extensions > ZManager
@@ -339,6 +346,10 @@ if ((install_application)); then
     pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
     echo "Registered Finder Sync Extension (enable in System Settings if it doesn't appear)"
   fi
+  # Reset QuickLook daemon so it loads the freshly-installed generators instead
+  # of any cached or stale extension references.
+  qlmanage -r 2>/dev/null || true
+  killall quicklookd 2>/dev/null || true
 else
   echo "Skipping application install because --no-install was set."
 fi

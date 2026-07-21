@@ -49,7 +49,8 @@ func rendersUnsignedAndUntrustedArchivesWithoutClaimingVerification() {
         "metadata": ["format": [:]],
         "signature": ["status": "unverified", "root_auth": ["subject": "CN=Local Signer"]],
     ])
-    #expect(PublicMetadataThumbnailCard.make(inspected).title == "Signature inspected")
+    #expect(inspected.signatureStatus == .inspected)
+    #expect(inspected.signer == "CN=Local Signer")
 }
 
 @Test

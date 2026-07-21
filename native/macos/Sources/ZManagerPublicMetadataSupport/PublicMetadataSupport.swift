@@ -211,22 +211,3 @@ public enum PublicMetadataHTML {
     }
 }
 
-public struct PublicMetadataThumbnailCard: Equatable, Sendable {
-    public let title: String
-    public let subtitle: String
-    public let detail: String
-
-    public static func make(_ summary: PublicMetadataSummary) -> Self {
-        if let error = summary.errorMessage {
-            return Self(title: "Preview unavailable", subtitle: error, detail: "TZAP")
-        }
-        let title: String = switch summary.signatureStatus {
-        case .verified: "Signature verified"
-        case .inspected: "Signature inspected"
-        case .unavailable: "TZAP archive"
-        }
-        let subtitle = summary.signer ?? summary.encryptionAlgorithm ?? "Public metadata"
-        let detail = summary.totalSize.map { ByteCountFormatter.string(fromByteCount: Int64(clamping: $0), countStyle: .file) } ?? "TZAP"
-        return Self(title: title, subtitle: subtitle, detail: detail)
-    }
-}

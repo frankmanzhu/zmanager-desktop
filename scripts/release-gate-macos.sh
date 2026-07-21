@@ -258,9 +258,9 @@ for relative in "${expected_macho[@]}"; do
   ((bad_rpath == 0)) && pass || fail "bad rpath in $relative: $rpaths"
 done
 
+# Verify metadata FFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
 for executable in \
   "$app/Contents/PlugIns/ZManagerQuickLookPreview.appex/Contents/MacOS/ZManagerQuickLookPreview" \
-  "$app/Contents/PlugIns/ZManagerQuickLookThumbnail.appex/Contents/MacOS/ZManagerQuickLookThumbnail" \
   "$app/Contents/Library/Spotlight/ZManagerSpotlight.mdimporter/Contents/MacOS/ZManagerSpotlight"; do
   for symbol in _zmanager_public_metadata_ffi_version _zmanager_public_metadata_string_free _zmanager_public_metadata_summary_json; do
     nm -m "$executable" 2>/dev/null | awk '{print $NF}' | grep -Fxq "$symbol" && pass || fail "missing metadata symbol $symbol in ${executable#"$app/"}"

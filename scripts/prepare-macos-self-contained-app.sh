@@ -172,11 +172,24 @@ if otool -L "$executable" | grep -Eq '^\s+/(opt/homebrew|usr/local)/'; then
   exit 1
 fi
 
+# Unregister any prior Launch Services registration at this app path so repeated
+# local builds don't accumulate stale entries. This is especially important for
+# Quick Look and Spotlight extensions, which are cached by their appex paths.
+lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+"$lsregister" -u "$app" 2>/dev/null || true
+# Re-register so the freshly-signed bundle and its extensions are picked up.
+"$lsregister" -f "$app"
+
 # Register Finder Sync Extension with the system so it appears in Finder's context menu.
 # The app must be installed in a location macOS trusts (e.g. /Applications) for this to persist.
 if [[ -d "$finder_appex" ]]; then
   pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
   echo "Registered Finder Sync Extension"
 fi
+
+# Reset QuickLook daemon so it loads the freshly-built generators instead
+# of any cached or stale extension references from prior builds.
+qlmanage -r 2>/dev/null || true
+killall quicklookd 2>/dev/null || true
 
 echo "Prepared self-contained signed application: $app"
