@@ -13,6 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $repoRoot
+. (Join-Path $PSScriptRoot "windows-install-location.ps1")
 
 # Respect CARGO_TARGET_DIR so build artifacts land in a short path
 # (avoids Windows MAX_PATH issues with deeply nested build outputs).
@@ -160,18 +161,12 @@ function Install-NsisBuild {
         [string]$RequestedInstallDir
     )
 
-    $arguments = @("/S")
-    if (-not [string]::IsNullOrWhiteSpace($RequestedInstallDir)) {
-        $resolvedInstallDir = [System.IO.Path]::GetFullPath($RequestedInstallDir)
-        if (Test-Path $RequestedInstallDir) {
-            $resolvedInstallDir = (Resolve-Path $RequestedInstallDir).Path
-        }
-        $arguments += "/D=$resolvedInstallDir"
-    }
+    $resolvedInstallDir = Resolve-ZManagerInstallDirectory -RequestedInstallDir $RequestedInstallDir
+    $arguments = New-ZManagerNsisInstallArguments -InstallDirectory $resolvedInstallDir
 
     Write-Host "Installing built NSIS package: $InstallerPath"
-    if (-not [string]::IsNullOrWhiteSpace($RequestedInstallDir)) {
-        Write-Host "Install directory: $($arguments[-1].Substring(3))"
+    if ($resolvedInstallDir) {
+        Write-Host "Install directory: $resolvedInstallDir"
     }
 
     $installer = Start-Process `
@@ -207,6 +202,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 $shellIntegrationTest = Join-Path $PSScriptRoot "test-windows-shell-integration.ps1"
 & powershell -ExecutionPolicy Bypass -File $shellIntegrationTest
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+$installLocationTest = Join-Path $PSScriptRoot "test-windows-install-location.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $installLocationTest
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
