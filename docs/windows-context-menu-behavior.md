@@ -101,6 +101,24 @@ timing window or coalesce launches. `Add to archive...` appends the request's
 paths to the singleton Main Window's active Create Workspace. Fixed-format
 create actions start one job containing every path in the request.
 
+## Window Lifecycle
+
+The generated shell-action contract classifies each action by window
+disposition:
+
+- `open`, `compress` (**Add to archive...**), and `extract` use the singleton
+  Main Window and leave it available after the operation.
+- Fixed-format create actions and `extractHere`/`extractToFolder` use a
+  Disposable Task Window. A cold launch keeps the Main Window hidden and exits
+  its hidden coordinator after the request, task window, and job have all
+  settled.
+- A disposable action forwarded into an already-normal app session does not
+  close that existing Main Window.
+
+Cold-start transfer into the Native Launch Inbox preserves the disposition but
+does not retain a second executable copy of the request. This prevents both a
+normal-window reveal and duplicate execution.
+
 ## Linux Parity Target
 
 Linux file-manager integration should mirror the Windows action labels, ordering,

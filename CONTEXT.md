@@ -33,6 +33,9 @@ not replace or duplicate the Main Window.
 A shell or startup request that begins a specific operation with its inputs and
 destination already implied. Quick actions normally use a Disposable Task
 Window. The general **Add to archive** action targets the singleton Main Window.
+Each shell action declares this window disposition in the generated shell-action
+contract so cold startup, single-instance forwarding, and frontend routing use
+the same classification.
 
 ### Shell Action Request
 

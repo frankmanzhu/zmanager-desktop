@@ -7,6 +7,7 @@ import {
   quickExtractDestinationPlan,
   quickExtractSingleRootFolder,
   runQuickActionRequest,
+  quickActionWindowDisposition,
   uniqueQuickActionPaths,
   unsupportedQuickExtractPath,
   type QuickActionPathHelpers,
@@ -24,6 +25,14 @@ const pathHelpers: QuickActionPathHelpers = {
 };
 
 describe("quick action helpers", () => {
+  it("uses generated policies for Main Window and Disposable Task Window actions", () => {
+    expect(quickActionWindowDisposition("open")).toBe("mainWindow");
+    expect(quickActionWindowDisposition("compress")).toBe("mainWindow");
+    expect(quickActionWindowDisposition("extract")).toBe("mainWindow");
+    expect(quickActionWindowDisposition("compressTzap")).toBe("disposableTask");
+    expect(quickActionWindowDisposition("extractHere")).toBe("disposableTask");
+  });
+
   it("deduplicates and trims quick-action paths", () => {
     expect(uniqueQuickActionPaths([" a ", "", "b", "a", " b "])).toEqual(["a", "b"]);
   });

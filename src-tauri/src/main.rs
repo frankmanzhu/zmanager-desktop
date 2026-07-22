@@ -26,17 +26,8 @@ fn main() {
     let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
     record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
-    let legacy_startup_state = match startup_window_state {
-        quick_action::QuickActionStartupState::Requested(request) => {
-            native_launch_inbox
-                .ingest(native_launch_inbox::NativeLaunchInbox::from_quick_action(
-                    request,
-                ))
-                .expect("startup native event should be valid");
-            quick_action::QuickActionStartupState::NotRequested
-        }
-        other => other,
-    };
+    let legacy_startup_state =
+        startup_window_state.forward_requested_to_native_inbox(&native_launch_inbox);
     platform::initialize_native_host(native_launch_inbox.clone())
         .expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
@@ -65,6 +56,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
             move |_app, argv, _cwd| {
+                record_secondary_arguments(&single_instance_diagnostics, &argv);
                 let state = single_instance_coordinator.ingest_secondary_process_args(
                     argv.into_iter().map(std::ffi::OsString::from).collect(),
                     &single_instance_inbox,
@@ -221,6 +213,13 @@ fn record_launch_classification(
                 .and_then(|value| value.as_str().map(str::to_owned)),
             request.paths.len(),
         ),
+        quick_action::QuickActionStartupState::ForwardedToNativeInbox(kind) => (
+            "quickActionForwarded",
+            serde_json::to_value(kind)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned)),
+            0,
+        ),
         quick_action::QuickActionStartupState::Invalid(_) => ("invalid", None, 0),
     };
     let _ = diagnostics.record(
@@ -239,6 +238,41 @@ fn record_launch_classification(
                     .unwrap_or(serde_json::Value::Null),
             ),
             ("pathCount", serde_json::json!(path_count)),
+        ]),
+    );
+}
+
+fn record_secondary_arguments(diagnostics: &diagnostics::DiagnosticLog, args: &[String]) {
+    let _ = diagnostics.record(
+        "launch",
+        "secondaryArgumentsObserved",
+        diagnostics::fields([
+            ("argumentCount", serde_json::json!(args.len())),
+            (
+                "hasQuickActionArgument",
+                serde_json::json!(args.iter().any(|arg| {
+                    arg == "--quick-action"
+                        || arg == "--action"
+                        || arg.starts_with("--quick-action=")
+                        || arg.starts_with("--action=")
+                })),
+            ),
+            (
+                "hasRequestArgument",
+                serde_json::json!(args.iter().any(|arg| {
+                    arg == "--quick-action-request"
+                        || arg == "--shell-action-request"
+                        || arg.starts_with("--quick-action-request=")
+                        || arg.starts_with("--shell-action-request=")
+                })),
+            ),
+            (
+                "hasPathArgument",
+                serde_json::json!(
+                    args.iter()
+                        .any(|arg| arg == "--path" || arg.starts_with("--path="))
+                ),
+            ),
         ]),
     );
 }

@@ -161,6 +161,7 @@ import {
   type JobRetryContext,
 } from "../app/jobs";
 import { createDisposableTaskLifecycle } from "../app/shell/disposableTaskLifecycle";
+import { runInboundQuickAction } from "../app/shell/quickActionLaunchDisposition";
 import {
   createJobsWorkspace,
   type FocusedJobAutoCloseAction,
@@ -313,7 +314,10 @@ import {
   type AppWindowResizeDirection,
 } from "../desktop/windowController";
 import { createDisposableTaskWindowManager } from "../desktop/disposableTaskWindowManager";
-import { createDesktopDiagnosticRecorder } from "../desktop/diagnostics";
+import {
+  createDesktopDiagnosticRecorder,
+  persistDiagnosticEvent,
+} from "../desktop/diagnostics";
 import {
   createBrowserDocumentAdapter,
 } from "./browserDocumentAdapter";
@@ -899,7 +903,7 @@ const startupController = createStartupController({
   revealWindowForStartupQuickAction,
   revealNormalWindow: revealNormalAppWindow,
   activateQuickActionJobs,
-  handleQuickActionRequest,
+  handleQuickActionRequest: routeQuickActionRequest,
   setOperationalStatus,
   setOperationalMessage,
   setBrowseError: (text) => setBrowseState("error", text),
@@ -920,7 +924,7 @@ const nativeInboundController = createNativeInboundController({
   listen: listenNativeInboundEvents,
   markFrontendReady: nativeFrontendReady,
   acknowledge: acknowledgeNativeEvent,
-  handleQuickAction: handleQuickActionRequest,
+  handleQuickAction: routeQuickActionRequest,
   handleShellActionToken,
   handleHostedAuthCallback,
   revealApplication: revealNormalAppWindow,
@@ -1182,6 +1186,7 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
       target,
       launchedForQuickAction: state.launchedForQuickAction,
       action: state.quickAction?.kind ?? null,
+      windowDisposition: state.windowDisposition ?? null,
       jobCount: state.quickActionJobs?.length ?? 0,
       hasError: Boolean(state.error),
     },
@@ -2342,6 +2347,8 @@ function maybeCloseQuickActionOnlyCoordinator(): void {
     fields: {
       ...input,
       quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
+      quickActionActivityObserved: disposableTaskLifecycle.getSnapshot().quickActionActivityObserved,
+      pendingQuickActionRequests: disposableTaskLifecycle.getSnapshot().pendingQuickActionRequests,
     },
   });
   void appWindowController.closeCurrentWindow();
@@ -3646,8 +3653,33 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
   await quickActionController.startQuickExtract(paths, action);
 }
 
-async function handleQuickActionRequest(request: QuickActionRequestDto) {
+async function executeQuickActionRequest(request: QuickActionRequestDto) {
   await quickActionController.handleQuickActionRequest(request);
+}
+
+async function routeQuickActionRequest(request: QuickActionRequestDto) {
+  await runInboundQuickAction(request, {
+    observeDisposableTaskLaunch: disposableTaskLifecycle.observeQuickActionLaunch,
+    beginDisposableTaskRequest: disposableTaskLifecycle.beginQuickActionRequest,
+    endDisposableTaskRequest: disposableTaskLifecycle.endQuickActionRequest,
+    revealMainWindow: revealNormalAppWindow,
+    onDispositionApplied: (disposition) => {
+      const lifecycle = disposableTaskLifecycle.getSnapshot();
+      diagnostics.record({
+        scope: "quickActionLifecycle",
+        name: "requestDispositionApplied",
+        fields: {
+          action: request.kind,
+          disposition,
+          normalLaunchObserved: lifecycle.normalLaunchObserved,
+          quickActionOnlyCoordinator: lifecycle.quickActionOnlyCoordinator,
+          pendingQuickActionRequests: lifecycle.pendingQuickActionRequests,
+        },
+      });
+    },
+    execute: executeQuickActionRequest,
+    onDisposableTaskRequestSettled: maybeCloseQuickActionOnlyCoordinator,
+  });
 }
 
 async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
@@ -3670,6 +3702,10 @@ async function handleQuickActionStartupState(state: QuickActionStartupStateDto) 
 }
 
 async function initializeDesktopRuntime() {
+  await persistDiagnosticEvent({
+    scope: "frontend",
+    name: "desktopInitializationStarted",
+  }).catch(() => {});
   await nativeInboundController.initialize();
   await listenNativeMenuCommands((commandId) => runRoutedCommand(commandId));
   await listenNativeFileDragOutcomes(({ payload }) => {
@@ -3686,7 +3722,7 @@ async function initializeDesktopRuntime() {
 }
 
 async function handleShellActionToken(requestToken: string): Promise<void> {
-  await handleQuickActionRequest(await consumeShellActionRequest(requestToken));
+  await routeQuickActionRequest(await consumeShellActionRequest(requestToken));
 }
 
 async function handleHostedAuthCallback(

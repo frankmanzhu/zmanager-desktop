@@ -144,6 +144,18 @@ describe("shell workspace state", () => {
     ).toBe("jobOnly");
   });
 
+  it("selects no Main Window for a quick action forwarded through the Native Launch Inbox", () => {
+    const workspace = createShellWorkspace();
+
+    expect(
+      workspace.selectQuickActionStartupRevealTarget({
+        launchedForQuickAction: true,
+        windowDisposition: "disposableTask",
+        quickAction: null,
+      }),
+    ).toBe("jobOnly");
+  });
+
   it("selects normal window for non-job startup, errors, or review quick actions", () => {
     const workspace = createShellWorkspace();
 
@@ -160,6 +172,16 @@ describe("shell workspace state", () => {
           message: "Could not read startup state.",
         },
         quickActionJobs: [{ jobId: "job-1", kind: "zipExtract", status: "queued", createdAt: "2026-07-08T00:00:00Z" }],
+      }),
+    ).toBe("normal");
+    expect(
+      workspace.selectQuickActionStartupRevealTarget({
+        launchedForQuickAction: true,
+        windowDisposition: "mainWindow",
+        quickAction: {
+          kind: "compressTzap",
+          paths: ["C:/source"],
+        },
       }),
     ).toBe("normal");
     expect(

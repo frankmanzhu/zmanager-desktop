@@ -191,6 +191,22 @@ describe("startup controller", () => {
     expect(harness.calls.revealNormal).toBe(0);
   });
 
+  it("uses forwarded disposition for reveal without executing the inbox request twice", async () => {
+    const harness = createHarness();
+    const forwarded = startupState({
+      launchedForQuickAction: true,
+      windowDisposition: "disposableTask",
+      quickAction: null,
+    });
+    harness.queueStartupStates(forwarded, startupState({ launchedForQuickAction: false }));
+
+    await harness.controller.handleStartupQuickAction();
+
+    expect(harness.calls.revealQuickActionStates).toEqual([forwarded]);
+    expect(harness.calls.handledRequests).toEqual([]);
+    expect(harness.calls.revealNormal).toBe(0);
+  });
+
   it("does not run startup handling outside desktop runtime", async () => {
     const harness = createHarness();
     harness.setDesktopRuntime(false);

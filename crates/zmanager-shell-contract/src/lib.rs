@@ -3,7 +3,9 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 mod generated;
-pub use generated::{SHELL_ACTION_POLICIES, ShellActionKind, ShellActionPolicy};
+pub use generated::{
+    SHELL_ACTION_POLICIES, ShellActionKind, ShellActionPolicy, ShellActionWindowDisposition,
+};
 
 pub const SHELL_ACTION_REQUEST_VERSION: u32 = 1;
 
@@ -38,6 +40,16 @@ impl ShellActionRequest {
     pub fn to_json(&self) -> Result<String, ShellActionContractError> {
         serde_json::to_string(self)
             .map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))
+    }
+}
+
+impl ShellActionKind {
+    pub fn window_disposition(self) -> ShellActionWindowDisposition {
+        SHELL_ACTION_POLICIES
+            .iter()
+            .find(|policy| policy.kind == self)
+            .expect("every generated shell action must have a policy")
+            .window_disposition
     }
 }
 
@@ -114,5 +126,34 @@ mod tests {
                 .windows(2)
                 .all(|pair| pair[0].order < pair[1].order)
         );
+    }
+
+    #[test]
+    fn generated_window_dispositions_separate_main_and_disposable_actions() {
+        for kind in [
+            ShellActionKind::Open,
+            ShellActionKind::Compress,
+            ShellActionKind::Extract,
+        ] {
+            assert_eq!(
+                kind.window_disposition(),
+                ShellActionWindowDisposition::MainWindow
+            );
+        }
+        for kind in [
+            ShellActionKind::CompressZip,
+            ShellActionKind::CompressTzap,
+            ShellActionKind::CompressSevenZ,
+            ShellActionKind::CompressTarZst,
+            ShellActionKind::CompressTarGz,
+            ShellActionKind::CompressCleanSource,
+            ShellActionKind::ExtractHere,
+            ShellActionKind::ExtractToFolder,
+        ] {
+            assert_eq!(
+                kind.window_disposition(),
+                ShellActionWindowDisposition::DisposableTask
+            );
+        }
     }
 }

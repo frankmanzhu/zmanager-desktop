@@ -22,7 +22,8 @@ export const SHELL_ACTION_POLICIES = [
     "selectionShapes": [
       "single-archive"
     ],
-    "multiplicity": "exactly-one"
+    "multiplicity": "exactly-one",
+    "windowDisposition": "mainWindow"
   },
   {
     "id": "compress",
@@ -33,7 +34,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "mainWindow"
   },
   {
     "id": "extract",
@@ -43,7 +45,8 @@ export const SHELL_ACTION_POLICIES = [
       "single-archive",
       "multiple-archives"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "mainWindow"
   },
   {
     "id": "compressZip",
@@ -54,7 +57,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "compressTzap",
@@ -65,7 +69,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "compressSevenZ",
@@ -76,7 +81,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "compressTarZst",
@@ -87,7 +93,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "compressTarGz",
@@ -98,7 +105,8 @@ export const SHELL_ACTION_POLICIES = [
       "folders",
       "mixed"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "compressCleanSource",
@@ -107,7 +115,8 @@ export const SHELL_ACTION_POLICIES = [
     "selectionShapes": [
       "single-folder"
     ],
-    "multiplicity": "exactly-one"
+    "multiplicity": "exactly-one",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "extractHere",
@@ -117,7 +126,8 @@ export const SHELL_ACTION_POLICIES = [
       "single-archive",
       "multiple-archives"
     ],
-    "multiplicity": "one-or-more"
+    "multiplicity": "one-or-more",
+    "windowDisposition": "disposableTask"
   },
   {
     "id": "extractToFolder",
@@ -126,6 +136,7 @@ export const SHELL_ACTION_POLICIES = [
     "selectionShapes": [
       "single-archive"
     ],
-    "multiplicity": "exactly-one"
+    "multiplicity": "exactly-one",
+    "windowDisposition": "disposableTask"
   }
 ] as const;

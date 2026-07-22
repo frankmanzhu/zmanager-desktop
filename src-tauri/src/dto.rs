@@ -88,7 +88,10 @@ pub struct ValidateDirectoryResponse {
     pub accessible: bool,
 }
 
-pub use zmanager_shell_contract::ShellActionKind as QuickActionKindDto;
+pub use zmanager_shell_contract::{
+    ShellActionKind as QuickActionKindDto,
+    ShellActionWindowDisposition as QuickActionWindowDispositionDto,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -109,6 +112,7 @@ pub struct QuickActionStartupErrorDto {
 #[serde(rename_all = "camelCase")]
 pub struct QuickActionStartupStateDto {
     pub launched_for_quick_action: bool,
+    pub window_disposition: Option<QuickActionWindowDispositionDto>,
     pub quick_action: Option<QuickActionRequestDto>,
     pub quick_action_jobs: Vec<StartJobResponseDto>,
     pub error: Option<QuickActionStartupErrorDto>,

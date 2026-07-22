@@ -18,6 +18,8 @@ fn main() {
             "replacement_migration_prepare",
             "replacement_migration_complete",
             "validate_directory",
+            "record_diagnostic_event",
+            "diagnostic_log_info",
             "quick_action_startup_state",
             "consume_shell_action_request",
             "native_frontend_ready",

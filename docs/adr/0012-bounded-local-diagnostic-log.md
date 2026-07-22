@@ -52,3 +52,6 @@ active path is initialized.
 - Frontend tests prove desktop-only forwarding through the diagnostic adapter.
 - Command contract tests keep the TypeScript wrappers aligned with the Rust
   invoke handler.
+- Capability tests require every registered command, including diagnostics, to
+  appear in both the main-window allowlist and Tauri permission-generation
+  manifest.

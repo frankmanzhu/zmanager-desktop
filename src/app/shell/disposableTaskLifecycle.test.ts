@@ -12,6 +12,10 @@ describe("disposable task lifecycle", () => {
   it("closes a quick-action-only coordinator after work and windows finish", () => {
     const lifecycle = createDisposableTaskLifecycle();
     lifecycle.observeQuickActionLaunch();
+    lifecycle.beginQuickActionRequest();
+
+    expect(lifecycle.shouldCloseCoordinator(idle)).toBe(false);
+    lifecycle.endQuickActionRequest();
 
     expect(lifecycle.shouldCloseCoordinator(idle)).toBe(true);
     expect(lifecycle.shouldCloseCoordinator({ ...idle, hasActiveJobs: true })).toBe(false);
@@ -26,6 +30,8 @@ describe("disposable task lifecycle", () => {
     expect(lifecycle.getSnapshot()).toEqual({
       normalLaunchObserved: true,
       quickActionOnlyCoordinator: false,
+      quickActionActivityObserved: false,
+      pendingQuickActionRequests: 0,
     });
     expect(lifecycle.shouldCloseCoordinator(idle)).toBe(false);
   });

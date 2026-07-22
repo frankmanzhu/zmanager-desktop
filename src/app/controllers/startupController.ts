@@ -52,6 +52,7 @@ export function createStartupController(
       name: "stateReceived",
       fields: {
         launchedForQuickAction: state.launchedForQuickAction,
+        windowDisposition: state.windowDisposition ?? null,
         action: state.quickAction?.kind ?? null,
         pathCount: state.quickAction?.paths.length ?? 0,
         jobCount: state.quickActionJobs?.length ?? 0,

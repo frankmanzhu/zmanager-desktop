@@ -1,5 +1,6 @@
 import type { DropIntentDecision, WorkspaceDropMode } from "../dropIntent";
 import type { QuickActionRequestDto, QuickActionStartupStateDto } from "../../api/types";
+import { quickActionWindowDisposition } from "../quickActions";
 
 export type DropOverlayMode = "idle" | "active" | "choosing";
 export type DropOverlayTarget = "compress" | "extract" | "choose" | "blocked" | "unknown";
@@ -127,16 +128,7 @@ function freezePendingDropChoice(choice: PendingDropChoice): PendingDropChoice {
 }
 
 function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
-  return Boolean(request && [
-    "compressZip",
-    "compressTzap",
-    "compressSevenZ",
-    "compressTarZst",
-    "compressTarGz",
-    "compressCleanSource",
-    "extractHere",
-    "extractToFolder",
-  ].includes(request.kind));
+  return Boolean(request && quickActionWindowDisposition(request.kind) === "disposableTask");
 }
 
 function hasQuickActionJobs(state: QuickActionStartupStateDto): boolean {
@@ -212,7 +204,9 @@ export function createShellWorkspace(): ShellWorkspace {
       if (
         state.launchedForQuickAction &&
         !state.error &&
-        (hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))
+        (state.windowDisposition === "disposableTask"
+          || (state.windowDisposition === undefined
+            && (hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))))
       ) {
         return "jobOnly";
       }

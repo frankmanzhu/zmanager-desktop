@@ -27,6 +27,7 @@ const TZAP_VOLUME_MARKER: &str = ".vol";
 pub enum QuickActionStartupState {
     NotRequested,
     Requested(QuickActionRequestDto),
+    ForwardedToNativeInbox(QuickActionKindDto),
     Invalid(QuickActionError),
 }
 
@@ -54,22 +55,50 @@ impl QuickActionStartupState {
         }
     }
 
+    pub fn forward_requested_to_native_inbox(
+        self,
+        inbox: &crate::native_launch_inbox::NativeLaunchInbox,
+    ) -> Self {
+        match self {
+            Self::Requested(request) => {
+                let kind = request.kind;
+                inbox
+                    .ingest(
+                        crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request),
+                    )
+                    .expect("startup native event should be valid");
+                Self::ForwardedToNativeInbox(kind)
+            }
+            other => other,
+        }
+    }
+
     pub fn to_dto(&self) -> QuickActionStartupStateDto {
         match self {
             Self::NotRequested => QuickActionStartupStateDto {
                 launched_for_quick_action: false,
+                window_disposition: None,
                 quick_action: None,
                 quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::Requested(request) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
+                window_disposition: Some(request.kind.window_disposition()),
                 quick_action: Some(request.clone()),
+                quick_action_jobs: Vec::new(),
+                error: None,
+            },
+            Self::ForwardedToNativeInbox(kind) => QuickActionStartupStateDto {
+                launched_for_quick_action: true,
+                window_disposition: Some(kind.window_disposition()),
+                quick_action: None,
                 quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::Invalid(error) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
+                window_disposition: None,
                 quick_action: None,
                 quick_action_jobs: Vec::new(),
                 error: Some(error.to_dto()),
@@ -900,6 +929,46 @@ mod tests {
             .expect("frontend should receive the atomic request before starting a job");
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/folder1", "C:/tmp/folder2"]);
+    }
+
+    #[test]
+    fn cold_start_forwarding_preserves_disposable_window_disposition_without_duplicate_request() {
+        let inbox = crate::native_launch_inbox::NativeLaunchInbox::new();
+        let delivered = Arc::new(Mutex::new(Vec::new()));
+        let delivered_for_emitter = delivered.clone();
+        inbox
+            .attach_emitter(Arc::new(move |_window, event| {
+                delivered_for_emitter
+                    .lock()
+                    .expect("delivery lock poisoned")
+                    .push(event.clone());
+                Ok(())
+            }))
+            .unwrap();
+        let forwarded = QuickActionStartupState::Requested(QuickActionRequestDto {
+            kind: QuickActionKindDto::CompressTzap,
+            paths: vec!["C:/tmp/source".to_string()],
+        })
+        .forward_requested_to_native_inbox(&inbox);
+
+        let dto = forwarded.to_dto();
+        assert!(dto.launched_for_quick_action);
+        assert_eq!(
+            dto.window_disposition,
+            Some(crate::dto::QuickActionWindowDispositionDto::DisposableTask)
+        );
+        assert!(dto.quick_action.is_none());
+
+        assert_eq!(inbox.frontend_ready("main"), Ok(1));
+        let delivered = delivered.lock().expect("delivery lock poisoned");
+        assert_eq!(delivered.len(), 1);
+        let crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) =
+            &delivered[0].payload
+        else {
+            panic!("expected one forwarded shell action request");
+        };
+        assert_eq!(payload.request.kind, QuickActionKindDto::CompressTzap);
+        assert_eq!(payload.request.paths, ["C:/tmp/source"]);
     }
 
     #[test]

@@ -17,6 +17,13 @@ pub enum ShellActionKind {
     ExtractToFolder,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ShellActionWindowDisposition {
+    MainWindow,
+    DisposableTask,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShellActionPolicy {
     pub kind: ShellActionKind,
@@ -25,6 +32,7 @@ pub struct ShellActionPolicy {
     pub order: u16,
     pub selection_shapes: &'static [&'static str],
     pub multiplicity: &'static str,
+    pub window_disposition: ShellActionWindowDisposition,
 }
 
 pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
@@ -35,6 +43,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 10,
         selection_shapes: &["single-archive"],
         multiplicity: "exactly-one",
+        window_disposition: ShellActionWindowDisposition::MainWindow,
     },
     ShellActionPolicy {
         kind: ShellActionKind::Compress,
@@ -43,6 +52,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 20,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::MainWindow,
     },
     ShellActionPolicy {
         kind: ShellActionKind::Extract,
@@ -51,6 +61,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 30,
         selection_shapes: &["single-archive", "multiple-archives"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::MainWindow,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressZip,
@@ -59,6 +70,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 40,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressTzap,
@@ -67,6 +79,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 50,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressSevenZ,
@@ -75,6 +88,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 60,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressTarZst,
@@ -83,6 +97,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 70,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressTarGz,
@@ -91,6 +106,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 75,
         selection_shapes: &["files", "folders", "mixed"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::CompressCleanSource,
@@ -99,6 +115,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 80,
         selection_shapes: &["single-folder"],
         multiplicity: "exactly-one",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::ExtractHere,
@@ -107,6 +124,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 90,
         selection_shapes: &["single-archive", "multiple-archives"],
         multiplicity: "one-or-more",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
         kind: ShellActionKind::ExtractToFolder,
@@ -115,5 +133,6 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         order: 100,
         selection_shapes: &["single-archive"],
         multiplicity: "exactly-one",
+        window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
 ];

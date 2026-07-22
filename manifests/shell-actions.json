@@ -2,16 +2,16 @@
   "schemaVersion": 1,
   "requestVersion": 1,
   "actions": [
-    {"id":"open","rustCase":"Open","displayKey":"shellAction.open","macOSServiceTitle":"Open with ZManager","macOSServiceTitleZhHans":"使用 ZManager 打开","order":10,"selectionShapes":["single-archive"],"multiplicity":"exactly-one"},
-    {"id":"compress","rustCase":"Compress","displayKey":"shellAction.compress","macOSServiceTitle":"Compress with ZManager","macOSServiceTitleZhHans":"使用 ZManager 压缩","order":20,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"extract","rustCase":"Extract","displayKey":"shellAction.extract","macOSServiceTitle":"Extract with ZManager","macOSServiceTitleZhHans":"使用 ZManager 解压","order":30,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
-    {"id":"compressZip","rustCase":"CompressZip","displayKey":"shellAction.compressZip","order":40,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"compressTzap","rustCase":"CompressTzap","displayKey":"shellAction.compressTzap","order":50,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"compressSevenZ","rustCase":"CompressSevenZ","displayKey":"shellAction.compressSevenZ","order":60,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"compressTarZst","rustCase":"CompressTarZst","displayKey":"shellAction.compressTarZst","order":70,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"compressTarGz","rustCase":"CompressTarGz","displayKey":"shellAction.compressTarGz","order":75,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more"},
-    {"id":"compressCleanSource","rustCase":"CompressCleanSource","displayKey":"shellAction.compressCleanSource","order":80,"selectionShapes":["single-folder"],"multiplicity":"exactly-one"},
-    {"id":"extractHere","rustCase":"ExtractHere","displayKey":"shellAction.extractHere","order":90,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more"},
-    {"id":"extractToFolder","rustCase":"ExtractToFolder","displayKey":"shellAction.extractToFolder","order":100,"selectionShapes":["single-archive"],"multiplicity":"exactly-one"}
+    {"id":"open","rustCase":"Open","displayKey":"shellAction.open","macOSServiceTitle":"Open with ZManager","macOSServiceTitleZhHans":"使用 ZManager 打开","order":10,"selectionShapes":["single-archive"],"multiplicity":"exactly-one","windowDisposition":"mainWindow"},
+    {"id":"compress","rustCase":"Compress","displayKey":"shellAction.compress","macOSServiceTitle":"Compress with ZManager","macOSServiceTitleZhHans":"使用 ZManager 压缩","order":20,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"mainWindow"},
+    {"id":"extract","rustCase":"Extract","displayKey":"shellAction.extract","macOSServiceTitle":"Extract with ZManager","macOSServiceTitleZhHans":"使用 ZManager 解压","order":30,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more","windowDisposition":"mainWindow"},
+    {"id":"compressZip","rustCase":"CompressZip","displayKey":"shellAction.compressZip","order":40,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"compressTzap","rustCase":"CompressTzap","displayKey":"shellAction.compressTzap","order":50,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"compressSevenZ","rustCase":"CompressSevenZ","displayKey":"shellAction.compressSevenZ","order":60,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"compressTarZst","rustCase":"CompressTarZst","displayKey":"shellAction.compressTarZst","order":70,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"compressTarGz","rustCase":"CompressTarGz","displayKey":"shellAction.compressTarGz","order":75,"selectionShapes":["files","folders","mixed"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"compressCleanSource","rustCase":"CompressCleanSource","displayKey":"shellAction.compressCleanSource","order":80,"selectionShapes":["single-folder"],"multiplicity":"exactly-one","windowDisposition":"disposableTask"},
+    {"id":"extractHere","rustCase":"ExtractHere","displayKey":"shellAction.extractHere","order":90,"selectionShapes":["single-archive","multiple-archives"],"multiplicity":"one-or-more","windowDisposition":"disposableTask"},
+    {"id":"extractToFolder","rustCase":"ExtractToFolder","displayKey":"shellAction.extractToFolder","order":100,"selectionShapes":["single-archive"],"multiplicity":"exactly-one","windowDisposition":"disposableTask"}
   ]
 }

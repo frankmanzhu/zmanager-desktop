@@ -1,4 +1,5 @@
 import type { QuickActionRequestDto, StartExtractRequest } from "../api/types";
+import { SHELL_ACTION_POLICIES } from "../api/generated/shellActions.generated";
 import { isSupportedArchivePath, baseNameWithoutKnownArchiveExtension } from "./archiveFileTypes";
 import {
   commonSourceParentDirectory,
@@ -15,6 +16,7 @@ import {
 } from "./preferences";
 
 export type QuickActionExtractMode = Exclude<DefaultExtractionBehavior, "askEveryTime">;
+export type QuickActionWindowDisposition = "mainWindow" | "disposableTask";
 
 export type QuickActionPathHelpers = CreatePathHelpers & {
   joinNativePath: (parentPath: string, childName: string) => string;
@@ -41,6 +43,16 @@ export type QuickActionHandlers = {
 
 export function uniqueQuickActionPaths(paths: string[]): string[] {
   return Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+}
+
+export function quickActionWindowDisposition(
+  kind: QuickActionRequestDto["kind"],
+): QuickActionWindowDisposition {
+  const policy = SHELL_ACTION_POLICIES.find((candidate) => candidate.id === kind);
+  if (!policy) {
+    throw new Error(`Missing shell action policy for ${kind}`);
+  }
+  return policy.windowDisposition;
 }
 
 export function quickCreateDestination(

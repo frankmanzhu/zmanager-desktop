@@ -69,11 +69,24 @@ describe("Tauri command capabilities", () => {
   it("allows every registered product command from the main application window", () => {
     const mainSource = readWorkspaceFile("src-tauri", "src", "main.rs");
     const handlerBlock = mainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-    const commands = [...handlerBlock.matchAll(/(?:commands|account|default_handlers)::([a-zA-Z0-9_]+)/g)]
+    const commands = [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|replacement_migration)::([a-zA-Z0-9_]+)/g)]
       .map((match) => match[1]);
     const expectedPermissions = commands.map((command) => `allow-${command.replaceAll("_", "-")}`);
 
     expect(mainWindowPermissionIds()).toEqual(expect.arrayContaining(expectedPermissions));
+  });
+
+  it("generates permissions for every registered product command", () => {
+    const mainSource = readWorkspaceFile("src-tauri", "src", "main.rs");
+    const handlerBlock = mainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
+    const registeredCommands = [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|replacement_migration)::([a-zA-Z0-9_]+)/g)]
+      .map((match) => match[1]);
+    const buildSource = readWorkspaceFile("src-tauri", "build.rs");
+    const manifestBlock = buildSource.match(/AppManifest::new\(\)\.commands\(&\[([\s\S]*?)\]\)/)?.[1] ?? "";
+    const permissionCommands = [...manifestBlock.matchAll(/"([a-zA-Z0-9_]+)"/g)]
+      .map((match) => match[1]);
+
+    expect(permissionCommands).toEqual(expect.arrayContaining(registeredCommands));
   });
 
   it("defines the native file drag command permission", () => {
