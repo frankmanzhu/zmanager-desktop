@@ -166,6 +166,8 @@ describe("dialog snapshots", () => {
       contract,
       appTitle: "Test Manager",
       appVersion: "9.9.9",
+      diagnosticLogPath: "C:/Program Files/ZManager/logs/zmanager-diagnostics.log",
+      diagnosticLogLocation: "installation",
     });
 
     expect(serializeAboutDiagnostics(snapshot)).toBe([
@@ -188,6 +190,8 @@ describe("dialog snapshots", () => {
       "Status: ready",
       "Extensions: .zip, .7z",
       "Shell actions: Extract Here (extractHere)",
+      "Diagnostic log: C:/Program Files/ZManager/logs/zmanager-diagnostics.log",
+      "Log location: installation folder",
     ].join("\n"));
   });
 

@@ -9,6 +9,9 @@
 - Support clean source archive planning and creation.
 - Support encrypted archive workflows without logging or persisting passwords.
 - Show job lifecycle, progress, diagnostics, warnings, cancellation, completion, and failure.
+- Retain a bounded local Diagnostic Log for packaged lifecycle troubleshooting;
+  prefer the installation `logs/` directory, report any per-user fallback, and
+  never include passwords, opaque request tokens, or selected paths.
 - Keep all three platforms as one shared desktop product with isolated native integration.
 
 ## Functional Requirements

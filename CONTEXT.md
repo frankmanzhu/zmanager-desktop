@@ -70,6 +70,14 @@ A long-running create, extract, preview, or test operation registered by the
 Rust job layer. Jobs expose normalized progress and terminal events and support
 cancellation where the core operation permits it.
 
+### Diagnostic Log
+
+The bounded, structured, secret-free lifecycle log owned by the Rust desktop
+boundary. Its preferred location is the running installation's `logs/`
+directory, with an explicitly reported per-user fallback when the installation
+is read-only. It records action kinds, counts, states, and decisions rather than
+passwords, opaque tokens, or selected paths.
+
 TZAP create jobs also expose phase-native progress for planning payload,
 planning metadata, emitting payload, emitting metadata, and committing output.
 Repeated source-byte totals belong to different phases and must not be merged
@@ -183,6 +191,8 @@ guards. Do not reimplement these behaviors in TypeScript.
   passwords, DOM nodes, mutable collections, or pending Tauri promises.
 - Passwords are never logged, persisted, placed in diagnostics, or passed via
   command-line arguments.
+- Diagnostic events remain structured and bounded. They use counts and stable
+  state names instead of selected paths, request tokens, or free-form secrets.
 - Stable workflow and DTO values remain language-neutral. Localization and
   formatting occur at display boundaries.
 - Storage-backed preferences and path histories use typed normalization modules;

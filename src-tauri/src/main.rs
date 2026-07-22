@@ -5,6 +5,7 @@ mod archive_file_types;
 mod commands;
 mod constants;
 mod default_handlers;
+mod diagnostics;
 mod dto;
 mod error;
 mod job_dto;
@@ -21,8 +22,10 @@ use std::time::SystemTime;
 use tauri::{Emitter, Manager};
 
 fn main() {
+    let diagnostics = diagnostics::DiagnosticLog::new();
     let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
+    record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
     let legacy_startup_state = match startup_window_state {
         quick_action::QuickActionStartupState::Requested(request) => {
             native_launch_inbox
@@ -45,6 +48,9 @@ fn main() {
     let single_instance_inbox = native_launch_inbox.clone();
     let setup_inbox = native_launch_inbox.clone();
     let exit_inbox = native_launch_inbox.clone();
+    let single_instance_diagnostics = diagnostics.clone();
+    let setup_diagnostics = diagnostics.clone();
+    let exit_diagnostics = diagnostics.clone();
 
     let builder = tauri::Builder::default();
     let builder = platform::register_platform_services(builder);
@@ -52,19 +58,26 @@ fn main() {
         .manage(job_registry)
         .manage(account_runtime)
         .manage(native_drag_sessions.clone())
+        .manage(diagnostics.clone())
         .manage(quick_action_launch_coordinator)
         .manage(native_launch_inbox.clone())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(
             move |_app, argv, _cwd| {
-                single_instance_coordinator.ingest_secondary_process_args(
+                let state = single_instance_coordinator.ingest_secondary_process_args(
                     argv.into_iter().map(std::ffi::OsString::from).collect(),
                     &single_instance_inbox,
+                );
+                record_launch_classification(
+                    &single_instance_diagnostics,
+                    "secondaryProcess",
+                    &state,
                 );
             },
         ))
         .setup(move |app| {
+            let _ = setup_diagnostics.initialize(app.path().app_log_dir().ok());
             let emitter_app = app.handle().clone();
             setup_inbox
                 .attach_emitter(std::sync::Arc::new(move |window, event| {
@@ -88,6 +101,21 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                let window_class = if window.label() == "main" {
+                    "main"
+                } else if window.label().starts_with("task-") {
+                    "disposableTask"
+                } else {
+                    "other"
+                };
+                let _ = window.state::<diagnostics::DiagnosticLog>().record(
+                    "window",
+                    "destroyed",
+                    diagnostics::fields([(
+                        "windowClass",
+                        serde_json::Value::String(window_class.to_string()),
+                    )]),
+                );
                 window
                     .state::<job_registry::JobRegistry>()
                     .cleanup_owner_subscriptions(window.label());
@@ -103,6 +131,8 @@ fn main() {
             replacement_migration::replacement_migration_prepare,
             replacement_migration::replacement_migration_complete,
             commands::validate_directory,
+            diagnostics::record_diagnostic_event,
+            diagnostics::diagnostic_log_info,
             commands::quick_action_startup_state,
             commands::consume_shell_action_request,
             commands::native_frontend_ready,
@@ -137,43 +167,78 @@ fn main() {
         .expect("failed to build ZManager desktop");
     #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     let opened_inbox = native_launch_inbox.clone();
-    app.run(move |_app_handle, event| {
-        match event {
-            #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-            tauri::RunEvent::Opened { urls } => {
-                let pid = std::process::id();
-                let timestamp_ms = SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-                    .min(u128::from(u64::MAX)) as u64;
-                for (index, url) in urls.iter().enumerate() {
-                    if url.scheme() == "zmanager" && url.host_str() == Some("shell-request") {
-                        let token = url.path().trim_start_matches('/').to_string();
-                        if !token.is_empty() {
-                            let event = native_launch_inbox::NativeInboundEvent {
-                                version: native_launch_inbox::NATIVE_INBOUND_EVENT_VERSION,
-                                event_id: format!("tauri-url-{pid}-{timestamp_ms}-{index}"),
-                                kind: native_launch_inbox::NativeInboundEventKind::ShellActionRequest,
-                                timestamp_unix_ms: timestamp_ms,
-                                idempotency_key: Some(token.clone()),
-                                payload: native_launch_inbox::NativeInboundPayload::ShellActionToken(
-                                    native_launch_inbox::ShellActionTokenPayload {
-                                        request_token: token,
-                                    },
-                                ),
-                            };
-                            let _ = opened_inbox.ingest(event);
-                        }
+    app.run(move |_app_handle, event| match event {
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
+        tauri::RunEvent::Opened { urls } => {
+            let pid = std::process::id();
+            let timestamp_ms = SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
+            for (index, url) in urls.iter().enumerate() {
+                if url.scheme() == "zmanager" && url.host_str() == Some("shell-request") {
+                    let token = url.path().trim_start_matches('/').to_string();
+                    if !token.is_empty() {
+                        let event = native_launch_inbox::NativeInboundEvent {
+                            version: native_launch_inbox::NATIVE_INBOUND_EVENT_VERSION,
+                            event_id: format!("tauri-url-{pid}-{timestamp_ms}-{index}"),
+                            kind: native_launch_inbox::NativeInboundEventKind::ShellActionRequest,
+                            timestamp_unix_ms: timestamp_ms,
+                            idempotency_key: Some(token.clone()),
+                            payload: native_launch_inbox::NativeInboundPayload::ShellActionToken(
+                                native_launch_inbox::ShellActionTokenPayload {
+                                    request_token: token,
+                                },
+                            ),
+                        };
+                        let _ = opened_inbox.ingest(event);
                     }
                 }
             }
-            tauri::RunEvent::Exit => {
-                exit_inbox.shutdown();
-                native_drag_sessions.shutdown();
-                platform::shutdown();
-            }
-            _ => {}
         }
+        tauri::RunEvent::Exit => {
+            let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
+            exit_inbox.shutdown();
+            native_drag_sessions.shutdown();
+            platform::shutdown();
+        }
+        _ => {}
     });
+}
+
+fn record_launch_classification(
+    diagnostics: &diagnostics::DiagnosticLog,
+    source: &str,
+    state: &quick_action::QuickActionStartupState,
+) {
+    let (classification, action, path_count) = match state {
+        quick_action::QuickActionStartupState::NotRequested => ("normal", None, 0),
+        quick_action::QuickActionStartupState::Requested(request) => (
+            "quickAction",
+            serde_json::to_value(&request.kind)
+                .ok()
+                .and_then(|value| value.as_str().map(str::to_owned)),
+            request.paths.len(),
+        ),
+        quick_action::QuickActionStartupState::Invalid(_) => ("invalid", None, 0),
+    };
+    let _ = diagnostics.record(
+        "launch",
+        "classified",
+        diagnostics::fields([
+            ("source", serde_json::Value::String(source.to_string())),
+            (
+                "classification",
+                serde_json::Value::String(classification.to_string()),
+            ),
+            (
+                "action",
+                action
+                    .map(serde_json::Value::String)
+                    .unwrap_or(serde_json::Value::Null),
+            ),
+            ("pathCount", serde_json::json!(path_count)),
+        ]),
+    );
 }

@@ -1,6 +1,7 @@
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import type { StartJobResponseDto } from "../api/types";
+import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../app/diagnostics";
 
 type WindowEvent = Readonly<{ payload: unknown }>;
 
@@ -16,6 +17,7 @@ export type DisposableTaskWindowManagerOptions = Readonly<{
   createWindow?: (label: string, options: Record<string, unknown>) => DisposableTaskWindowHandle;
   onReady(jobId: string): void;
   onAllClosed(): void;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type DisposableTaskWindowManager = Readonly<{
@@ -28,6 +30,7 @@ export function createDisposableTaskWindowManager(
   options: DisposableTaskWindowManagerOptions,
 ): DisposableTaskWindowManager {
   const windows = new Map<string, DisposableTaskWindowHandle>();
+  const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
   const createWindow = options.createWindow ?? ((label, windowOptions) => (
     new WebviewWindow(label, windowOptions) as unknown as DisposableTaskWindowHandle
   ));
@@ -36,6 +39,11 @@ export function createDisposableTaskWindowManager(
     async open(job) {
       const existing = windows.get(job.jobId);
       if (existing) {
+        diagnostics.record({
+          scope: "disposableTaskWindow",
+          name: "existingWindowFocused",
+          fields: { jobKind: job.kind, openWindowCount: windows.size },
+        });
         await existing.show();
         await existing.setFocus();
         return false;
@@ -54,16 +62,38 @@ export function createDisposableTaskWindowManager(
         visible: true,
       });
       windows.set(job.jobId, taskWindow);
+      diagnostics.record({
+        scope: "disposableTaskWindow",
+        name: "created",
+        fields: { jobKind: job.kind, initialStatus: job.status, openWindowCount: windows.size },
+      });
 
-      await taskWindow.once<null>("zmanager-task-ready", () => options.onReady(job.jobId));
+      await taskWindow.once<null>("zmanager-task-ready", () => {
+        diagnostics.record({
+          scope: "disposableTaskWindow",
+          name: "ready",
+          fields: { jobKind: job.kind, openWindowCount: windows.size },
+        });
+        options.onReady(job.jobId);
+      });
       await taskWindow.once<null>("tauri://destroyed", () => {
         windows.delete(job.jobId);
+        diagnostics.record({
+          scope: "disposableTaskWindow",
+          name: "destroyed",
+          fields: { jobKind: job.kind, openWindowCount: windows.size },
+        });
         if (windows.size === 0) {
           options.onAllClosed();
         }
       });
       await taskWindow.once<WindowEvent>("tauri://error", () => {
         windows.delete(job.jobId);
+        diagnostics.record({
+          scope: "disposableTaskWindow",
+          name: "creationFailed",
+          fields: { jobKind: job.kind, openWindowCount: windows.size },
+        });
         if (windows.size === 0) {
           options.onAllClosed();
         }

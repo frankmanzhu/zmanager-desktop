@@ -10,6 +10,7 @@ import type {
   TestArchiveRequest,
 } from "../../api/types";
 import { unknownErrorMessage } from "../dialogs";
+import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 import { buildStartExtractRequest } from "../extractFlow";
 import type { MessageKey, MessageParams } from "../i18n/translator";
 import type { JobRetryContext } from "../jobs";
@@ -71,6 +72,7 @@ export type JobControlControllerOptions = Readonly<{
   revealQuickActionJobWindow(): Promise<void>;
   closeFocusedJobProgress(): Promise<void>;
   closeAppWindow(): void;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type JobControlController = Readonly<{
@@ -90,12 +92,20 @@ export type JobControlController = Readonly<{
 export function createJobControlController(
   options: JobControlControllerOptions,
 ): JobControlController {
+  const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
+
   function quickActionControllableJobIds(): string[] {
     return [...options.workspace.getControllableFocusedQuickActionJobIds()];
   }
 
   async function closeFocusedQuickActionProgress(): Promise<void> {
-    if (options.workspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
+    const autoCloseAction = options.workspace.getFocusedJobAutoCloseAction();
+    diagnostics.record({
+      scope: "quickActionLifecycle",
+      name: "closeActionExecuting",
+      fields: { autoCloseAction },
+    });
+    if (autoCloseAction === "returnToWorkspace") {
       await options.closeFocusedJobProgress();
       return;
     }
@@ -145,9 +155,22 @@ export function createJobControlController(
   }
 
   function maybeCloseCompletedQuickActionWindow(): void {
+    const canEvaluate = options.canEvaluateQuickActionCompletion();
+    const autoClosePending = options.quickActionAutoCloseTimer.hasQuickActionAutoClosePending();
     const decision = options.workspace.selectFocusedQuickActionCompletion({
-      canEvaluate: options.canEvaluateQuickActionCompletion(),
-      autoClosePending: options.quickActionAutoCloseTimer.hasQuickActionAutoClosePending(),
+      canEvaluate,
+      autoClosePending,
+    });
+    diagnostics.record({
+      scope: "quickActionLifecycle",
+      name: "completionEvaluated",
+      fields: {
+        action: decision.action,
+        canEvaluate,
+        autoClosePending,
+        autoCloseAction: options.workspace.getFocusedJobAutoCloseAction(),
+        backgrounded: options.isQuickActionWindowBackgrounded(),
+      },
     });
 
     if (decision.action === "wait") {
@@ -167,7 +190,17 @@ export function createJobControlController(
     options.setOperationalMessage("jobs.completed");
     options.renderQuickProgress();
     options.quickActionAutoCloseTimer.scheduleQuickActionAutoClose(() => {
+      diagnostics.record({
+        scope: "quickActionLifecycle",
+        name: "autoCloseElapsed",
+        fields: { autoCloseAction: options.workspace.getFocusedJobAutoCloseAction() },
+      });
       void closeFocusedQuickActionProgress();
+    });
+    diagnostics.record({
+      scope: "quickActionLifecycle",
+      name: "autoCloseScheduled",
+      fields: { autoCloseAction: options.workspace.getFocusedJobAutoCloseAction() },
     });
   }
 

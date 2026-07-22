@@ -4,6 +4,7 @@ import {
   type NativeInboundHostedAuthEvent,
 } from "../../api/generated/nativeInboundEvents.generated";
 import type { QuickActionRequestDto } from "../../api/types";
+import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 
 export type NativeInboundControllerOptions = Readonly<{
   isDesktopRuntime(): boolean;
@@ -16,6 +17,7 @@ export type NativeInboundControllerOptions = Readonly<{
   revealApplication(): Promise<void>;
   reportFailure(error: unknown): void;
   windowLabel?: string;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type NativeInboundController = Readonly<{
@@ -27,9 +29,15 @@ export function createNativeInboundController(
   options: NativeInboundControllerOptions,
 ): NativeInboundController {
   const windowLabel = options.windowLabel ?? "main";
+  const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
   let deliveryChain = Promise.resolve();
 
   async function process(event: NativeInboundEvent): Promise<void> {
+    diagnostics.record({
+      scope: "nativeInbound",
+      name: "eventReceived",
+      fields: nativeInboundDiagnosticFields(event),
+    });
     if (event.version !== NATIVE_INBOUND_EVENT_VERSION) {
       throw new Error(`unsupported native inbound event version: ${event.version}`);
     }
@@ -54,6 +62,11 @@ export function createNativeInboundController(
     }
 
     await options.acknowledge(windowLabel, event.eventId);
+    diagnostics.record({
+      scope: "nativeInbound",
+      name: "eventAcknowledged",
+      fields: { kind: event.kind },
+    });
   }
 
   async function initialize(): Promise<void> {
@@ -64,10 +77,42 @@ export function createNativeInboundController(
     await options.listen((envelope) => {
       deliveryChain = deliveryChain
         .then(() => process(envelope.payload))
-        .catch((error) => options.reportFailure(error));
+        .catch((error) => {
+          diagnostics.record({
+            scope: "nativeInbound",
+            name: "deliveryFailed",
+            fields: { errorType: error instanceof Error ? error.name : "unknown" },
+          });
+          options.reportFailure(error);
+        });
     });
-    await options.markFrontendReady(windowLabel);
+    const pendingCount = await options.markFrontendReady(windowLabel);
+    diagnostics.record({
+      scope: "nativeInbound",
+      name: "frontendReady",
+      fields: { pendingCount, windowClass: windowLabel === "main" ? "main" : "other" },
+    });
   }
 
   return { initialize, process };
+}
+
+function nativeInboundDiagnosticFields(
+  event: NativeInboundEvent,
+): Record<string, string | number | boolean | null> {
+  if (event.kind === "openPaths") {
+    return { kind: event.kind, pathCount: event.payload.paths.length, transport: "paths" };
+  }
+  if (event.kind === "shellActionRequest") {
+    if ("request" in event.payload) {
+      return {
+        kind: event.kind,
+        action: event.payload.request.kind,
+        pathCount: event.payload.request.paths.length,
+        transport: "inlineRequest",
+      };
+    }
+    return { kind: event.kind, transport: "opaqueToken" };
+  }
+  return { kind: event.kind };
 }

@@ -6,6 +6,7 @@ import type {
   QuickActionStartupStateDto,
   StartJobResponseDto,
 } from "../../api/types";
+import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 import type { MessageKey, MessageParams } from "../i18n/translator";
 
 export type BootstrapState = Readonly<{
@@ -30,6 +31,7 @@ export type StartupControllerOptions = Readonly<{
   message(key: MessageKey, params?: MessageParams): string;
   setBootstrapState(state: BootstrapState): void;
   onBootstrapStateChanged(): void;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type StartupController = Readonly<{
@@ -42,7 +44,20 @@ export type StartupController = Readonly<{
 export function createStartupController(
   options: StartupControllerOptions,
 ): StartupController {
+  const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
+
   async function handleQuickActionStartupState(state: QuickActionStartupStateDto): Promise<void> {
+    diagnostics.record({
+      scope: "startup",
+      name: "stateReceived",
+      fields: {
+        launchedForQuickAction: state.launchedForQuickAction,
+        action: state.quickAction?.kind ?? null,
+        pathCount: state.quickAction?.paths.length ?? 0,
+        jobCount: state.quickActionJobs?.length ?? 0,
+        errorCode: state.error?.code ?? null,
+      },
+    });
     if (!state.launchedForQuickAction) {
       return;
     }
@@ -89,6 +104,11 @@ export function createStartupController(
         }
       }
     } catch (error) {
+      diagnostics.record({
+        scope: "startup",
+        name: "stateReadFailed",
+        fields: { errorCode: options.toCommandError(error)?.code ?? "unknown" },
+      });
       options.setOperationalStatus(options.unknownErrorMessage(
         error,
         options.message("jobs.quickActionStartupReadFailed"),
@@ -107,6 +127,11 @@ export function createStartupController(
     try {
       await handleStartupQuickAction();
     } catch (error) {
+      diagnostics.record({
+        scope: "startup",
+        name: "desktopInitializationFailed",
+        fields: { errorCode: options.toCommandError(error)?.code ?? "unknown" },
+      });
       options.setOperationalStatus(options.unknownErrorMessage(
         error,
         options.message("desktopIntegration.initFailed"),

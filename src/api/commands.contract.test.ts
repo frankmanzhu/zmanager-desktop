@@ -31,6 +31,20 @@ const COMMAND_WRAPPERS = [
     request: { path: "C:/output" },
     call: () => api.validateDirectory({ path: "C:/output" }),
   },
+  {
+    command: "record_diagnostic_event",
+    request: {
+      scope: "quickAction",
+      name: "requestReceived",
+      fields: { action: "compressZip", pathCount: 2 },
+    },
+    call: () => api.recordDiagnosticEvent({
+      scope: "quickAction",
+      name: "requestReceived",
+      fields: { action: "compressZip", pathCount: 2 },
+    }),
+  },
+  { command: "diagnostic_log_info", call: () => api.fetchDiagnosticLogInfo() },
   { command: "quick_action_startup_state", call: () => api.fetchQuickActionStartupState() },
   {
     command: "consume_shell_action_request",
@@ -247,5 +261,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|replacement_migration)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|replacement_migration)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }

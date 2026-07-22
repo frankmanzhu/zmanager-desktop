@@ -120,6 +120,8 @@ export type AboutDialogSnapshotInput = Readonly<{
   contract?: ProjectContract | null;
   appTitle?: string;
   appVersion?: string;
+  diagnosticLogPath?: string | null;
+  diagnosticLogLocation?: string | null;
 }>;
 
 export function buildArchiveInfoDialogSnapshot(
@@ -219,6 +221,11 @@ export function buildAboutDialogSnapshot(
     contract?.platformIntegration.shellActions
       .map((action) => `${action.label} (${action.quickAction})`)
       .join(", ") ?? "-";
+  const diagnosticLogLocation = input.diagnosticLogLocation === "installation"
+    ? message(display, "about.diagnostics.logLocationInstallation")
+    : input.diagnosticLogLocation === "userFallback"
+      ? message(display, "about.diagnostics.logLocationFallback")
+      : message(display, "about.diagnostics.unavailable");
 
   return {
     kind: "about",
@@ -278,6 +285,11 @@ export function buildAboutDialogSnapshot(
           [message(display, "about.diagnostics.status"), healthcheck?.status ?? message(display, "about.diagnostics.frontendOnly")],
           [message(display, "about.diagnostics.extensions"), contract?.platformIntegration.associatedExtensions.join(", ") ?? "-"],
           [message(display, "about.diagnostics.shellActions"), shellActions],
+          [
+            message(display, "about.diagnostics.logPath"),
+            input.diagnosticLogPath ?? message(display, "about.diagnostics.unavailable"),
+          ],
+          [message(display, "about.diagnostics.logLocation"), diagnosticLogLocation],
         ],
       },
     ],

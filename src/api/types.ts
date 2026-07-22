@@ -79,6 +79,19 @@ export type QuickActionStartupStateDto = {
   error?: QuickActionStartupErrorDto | null;
 };
 
+export type DiagnosticEventRequest = {
+  scope: string;
+  name: string;
+  fields: Record<string, string | number | boolean | null>;
+};
+
+export type DiagnosticLogInfoDto = {
+  enabled: boolean;
+  path: string | null;
+  sessionId: string;
+  location: string;
+};
+
 export type AccountCertificateDto = {
   certificateId: string;
   certificateSha256: string;

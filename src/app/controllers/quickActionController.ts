@@ -8,6 +8,7 @@ import type {
   StartJobResponseDto,
 } from "../../api/types";
 import { isSupportedArchivePath } from "../archiveFileTypes";
+import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 import { createFormatSupportsPassword, type CreateArchiveFormat } from "../createFlow";
 import { buildStartExtractRequest } from "../extractFlow";
 import type { MessageKey, MessageParams } from "../i18n/translator";
@@ -77,6 +78,7 @@ export type QuickActionControllerOptions = Readonly<{
   readBrowseState(): BrowseState;
   setBrowseError(message: string): void;
   openExtractDialog(mode: "archive"): void;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type QuickActionController = Readonly<{
@@ -90,6 +92,8 @@ export type QuickActionController = Readonly<{
 export function createQuickActionController(
   options: QuickActionControllerOptions,
 ): QuickActionController {
+  const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
+
   async function startQuickCreate(
     paths: string[],
     format: CreateArchiveFormat,
@@ -159,6 +163,11 @@ export function createQuickActionController(
 
       const request = requestResult.request;
       const response = await options.runStartCreate(request);
+      diagnostics.record({
+        scope: "quickAction",
+        name: "createJobStarted",
+        fields: { format, cleanSource, pathCount: sources.length, jobKind: response.kind },
+      });
       options.recordCreateDestination(request.destinationPath);
       options.addJob(response, {
         focusProgress: true,
@@ -169,6 +178,11 @@ export function createQuickActionController(
       options.setOperationalMessage("quickCreate.started");
     } catch (error) {
       const commandError = options.toCommandError(error);
+      diagnostics.record({
+        scope: "quickAction",
+        name: "createStartFailed",
+        fields: { format, errorCode: commandError?.code ?? "unknown" },
+      });
       options.setOperationalStatus(
         commandError?.message ?? options.message("quickCreate.unableStart"),
       );
@@ -278,6 +292,11 @@ export function createQuickActionController(
             ...(password ? { password } : {}),
           });
           const response = await options.runStartExtract(request);
+          diagnostics.record({
+            scope: "quickAction",
+            name: "extractJobStarted",
+            fields: { action, jobKind: response.kind },
+          });
           options.recordExtractDestination(destinationPlan.destinationPath);
           options.addJob(response, {
             retryContext: {
@@ -301,6 +320,11 @@ export function createQuickActionController(
         } catch (error) {
           const commandError = options.toCommandError(error);
           if (options.isPasswordCommandError(commandError)) {
+            diagnostics.record({
+              scope: "quickAction",
+              name: "extractPasswordRequired",
+              fields: { action, errorCode: commandError?.code ?? "unknown" },
+            });
             const nextPassword = options.promptForCommandRetry(commandError?.code ?? "");
             if (!nextPassword) {
               options.setOperationalStatus(commandError?.message ?? options.message("quickExtract.unableExtract", { archivePath }));
@@ -310,6 +334,11 @@ export function createQuickActionController(
             continue;
           }
 
+          diagnostics.record({
+            scope: "quickAction",
+            name: "extractStartFailed",
+            fields: { action, errorCode: commandError?.code ?? "unknown" },
+          });
           options.setOperationalStatus(
             commandError?.message ?? options.message("quickExtract.unableExtract", { archivePath }),
           );
@@ -323,6 +352,11 @@ export function createQuickActionController(
   }
 
   async function handleQuickActionRequest(request: QuickActionRequestDto): Promise<void> {
+    diagnostics.record({
+      scope: "quickAction",
+      name: "requestReceived",
+      fields: { action: request.kind, pathCount: request.paths.length },
+    });
     await runQuickActionRequest(request, options.preferences(), {
       openArchive: options.openArchive,
       openCreateReview: openQuickCreateReview,

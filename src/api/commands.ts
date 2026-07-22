@@ -9,6 +9,8 @@ import type {
   CommandErrorDto,
   CreatePlanResponse,
   DefaultHandlerSnapshotDto,
+  DiagnosticEventRequest,
+  DiagnosticLogInfoDto,
   DismissJobRequest,
   GenerateTzapIdentityRequest,
   GenerateTzapIdentityResponse,
@@ -123,6 +125,14 @@ export async function validateDirectory(
   return invoke<ValidateDirectoryResponse>("validate_directory", {
     request,
   });
+}
+
+export async function recordDiagnosticEvent(request: DiagnosticEventRequest): Promise<void> {
+  return invoke<void>("record_diagnostic_event", { request });
+}
+
+export async function fetchDiagnosticLogInfo(): Promise<DiagnosticLogInfoDto> {
+  return invoke<DiagnosticLogInfoDto>("diagnostic_log_info");
 }
 
 export async function fetchQuickActionStartupState(): Promise<QuickActionStartupStateDto> {

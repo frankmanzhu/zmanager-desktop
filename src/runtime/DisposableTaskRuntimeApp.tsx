@@ -14,6 +14,7 @@ import {
   minimizeDisposableTaskWindow,
 } from "../desktop/disposableTaskWindow";
 import { createTauriJobFeed } from "../desktop/jobFeed";
+import { persistDiagnosticEvent } from "../desktop/diagnostics";
 import { DisposableTaskView } from "../ui/react/tasks/DisposableTaskApp";
 
 const AUTO_CLOSE_SUCCESS_MS = 850;
@@ -29,6 +30,14 @@ export function DisposableTaskRuntimeApp() {
 function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResponseDto }>) {
   const [state, dispatch] = useReducer(reduceDisposableTask, bootstrap, createDisposableTask);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    void persistDiagnosticEvent({
+      scope: "disposableTaskSurface",
+      name: "mounted",
+      fields: { jobKind: bootstrap.kind, initialStatus: bootstrap.status },
+    }).catch(() => {});
+  }, [bootstrap.kind, bootstrap.status]);
 
   useEffect(() => {
     let disposed = false;
@@ -56,13 +65,27 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
   }, [state]);
 
   useEffect(() => {
+    void persistDiagnosticEvent({
+      scope: "disposableTaskSurface",
+      name: "phaseChanged",
+      fields: { jobKind: state.job.kind, phase: state.phase, jobStatus: state.job.status },
+    }).catch(() => {});
+  }, [state.job.kind, state.job.status, state.phase]);
+
+  useEffect(() => {
     if (state.phase !== "succeeded" && state.phase !== "cancelled") return;
     const timer = window.setTimeout(() => dispatch({ type: "autoCloseElapsed" }), AUTO_CLOSE_SUCCESS_MS);
     return () => window.clearTimeout(timer);
   }, [state.phase]);
 
   useEffect(() => {
-    if (state.phase === "closing") void closeDisposableTaskWindow();
+    if (state.phase === "closing") {
+      void persistDiagnosticEvent({
+        scope: "disposableTaskSurface",
+        name: "closeRequested",
+        fields: { jobKind: state.job.kind, jobStatus: state.job.status },
+      }).catch(() => {}).finally(() => closeDisposableTaskWindow());
+    }
   }, [state.phase]);
 
   const cancel = async () => {

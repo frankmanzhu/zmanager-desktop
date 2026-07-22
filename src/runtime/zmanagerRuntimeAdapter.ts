@@ -232,6 +232,7 @@ import {
   fetchHealthcheck,
   fetchAccountSnapshot,
   fetchProjectContract,
+  fetchDiagnosticLogInfo,
   fetchQuickActionStartupState,
   consumeShellActionRequest,
   fetchSystemFileIcons,
@@ -258,6 +259,7 @@ import type {
   BrowseState,
   CreatePlanEntryDto,
   CreatePlanResponse,
+  DiagnosticLogInfoDto,
   HealthcheckResponse,
   JobState,
   ListArchiveRequest,
@@ -311,6 +313,7 @@ import {
   type AppWindowResizeDirection,
 } from "../desktop/windowController";
 import { createDisposableTaskWindowManager } from "../desktop/disposableTaskWindowManager";
+import { createDesktopDiagnosticRecorder } from "../desktop/diagnostics";
 import {
   createBrowserDocumentAdapter,
 } from "./browserDocumentAdapter";
@@ -382,14 +385,17 @@ const pendingNativeDragCounts = new Map<string, number>();
 const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 const disposableTaskLifecycle = createDisposableTaskLifecycle();
+const diagnostics = createDesktopDiagnosticRecorder();
 const disposableTaskWindows = createDisposableTaskWindowManager({
   onReady: () => {},
   onAllClosed: () => {
     maybeCloseQuickActionOnlyCoordinator();
   },
+  diagnostics,
 });
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
+let latestDiagnosticLogInfo: DiagnosticLogInfoDto | null = null;
 let reactDialogSnapshot: ZManagerDialogSnapshot = { kind: "none" };
 const reactRuntimeStore = createReactRuntimeStore({
   createSnapshot: createCurrentReactSnapshot,
@@ -786,10 +792,17 @@ const appWindowEffects = {
       return;
     }
 
-    const closeOrHide = disposableTaskWindows.hasOpenWindows() || jobsWorkspace.hasActiveJob()
+    const hasOpenTaskWindows = disposableTaskWindows.hasOpenWindows();
+    const hasActiveJobs = jobsWorkspace.hasActiveJob();
+    const closeOrHide = hasOpenTaskWindows || hasActiveJobs
       ? appWindowController.hideCurrentWindow()
       : appWindowController.closeCurrentWindow();
-    if (disposableTaskWindows.hasOpenWindows() || jobsWorkspace.hasActiveJob()) {
+    diagnostics.record({
+      scope: "mainWindow",
+      name: hasOpenTaskWindows || hasActiveJobs ? "hideRequested" : "closeRequested",
+      fields: { hasOpenTaskWindows, hasActiveJobs },
+    });
+    if (hasOpenTaskWindows || hasActiveJobs) {
       disposableTaskLifecycle.observeMainWindowHiddenForTasks();
       shellWorkspace.setQuickActionWindowShown(false);
     }
@@ -875,6 +888,7 @@ const quickActionController = createQuickActionController({
   readBrowseState: archiveBrowseState,
   setBrowseError: (text) => setBrowseState("error", text),
   openExtractDialog,
+  diagnostics,
 });
 
 const startupController = createStartupController({
@@ -898,6 +912,7 @@ const startupController = createStartupController({
     browserDocument.applyPlatformProfile(state.contract?.platformIntegration ?? null);
   },
   onBootstrapStateChanged: publishBootstrapStateSnapshot,
+  diagnostics,
 });
 
 const nativeInboundController = createNativeInboundController({
@@ -913,6 +928,7 @@ const nativeInboundController = createNativeInboundController({
     error,
     message("desktopIntegration.initFailed"),
   )),
+  diagnostics,
 });
 
 const accountController = createAccountController({
@@ -970,6 +986,7 @@ const jobControlController = createJobControlController({
   revealQuickActionJobWindow: () => revealQuickActionJobWindow(),
   closeFocusedJobProgress: () => closeFocusedJobProgress(),
   closeAppWindow,
+  diagnostics,
 });
 
 function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
@@ -1053,6 +1070,11 @@ function renderNormalWorkspaceOnce() {
 }
 
 async function revealNormalAppWindow() {
+  diagnostics.record({
+    scope: "mainWindow",
+    name: "normalRevealRequested",
+    fields: { alreadyShown: shellWorkspace.getSnapshot().quickActionWindow.shown },
+  });
   disposableTaskLifecycle.observeNormalLaunch();
   renderNormalWorkspaceOnce();
   if (!isDesktopRuntime() || shellWorkspace.getSnapshot().quickActionWindow.shown) {
@@ -1071,6 +1093,11 @@ async function revealQuickActionJobWindow(
   autoCloseAction: FocusedJobAutoCloseAction = "closeWindow",
 ) {
   const wasInJobMode = isQuickActionJobMode();
+  diagnostics.record({
+    scope: "mainWindow",
+    name: "progressRevealRequested",
+    fields: { wasInJobMode, autoCloseAction },
+  });
   if (!wasInJobMode || autoCloseAction === "closeWindow") {
     setFocusedJobAutoCloseAction(autoCloseAction);
   }
@@ -1148,6 +1175,17 @@ async function closeFocusedJobProgress() {
 
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
   const target = shellWorkspace.selectQuickActionStartupRevealTarget(state);
+  diagnostics.record({
+    scope: "startup",
+    name: "revealTargetSelected",
+    fields: {
+      target,
+      launchedForQuickAction: state.launchedForQuickAction,
+      action: state.quickAction?.kind ?? null,
+      jobCount: state.quickActionJobs?.length ?? 0,
+      hasError: Boolean(state.error),
+    },
+  });
 
   if (target === "jobOnly") {
     disposableTaskLifecycle.observeQuickActionLaunch();
@@ -2289,14 +2327,23 @@ function renderJobs() {
 }
 
 function maybeCloseQuickActionOnlyCoordinator(): void {
-  if (!disposableTaskLifecycle.shouldCloseCoordinator({
+  const input = {
     desktopRuntime: isDesktopRuntime(),
     hasOpenTaskWindows: disposableTaskWindows.hasOpenWindows(),
     hasActiveJobs: jobsWorkspace.hasActiveJob(),
     mainWindowShown: shellWorkspace.getSnapshot().quickActionWindow.shown,
-  })) {
+  };
+  if (!disposableTaskLifecycle.shouldCloseCoordinator(input)) {
     return;
   }
+  diagnostics.record({
+    scope: "quickActionLifecycle",
+    name: "coordinatorCloseRequested",
+    fields: {
+      ...input,
+      quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
+    },
+  });
   void appWindowController.closeCurrentWindow();
 }
 
@@ -3169,6 +3216,8 @@ function currentAboutDialogSnapshot(): Extract<ZManagerDialogSnapshot, { kind: "
     display: displayContext,
     healthcheck: latestHealthcheck,
     contract: latestContract,
+    diagnosticLogPath: latestDiagnosticLogInfo?.path ?? null,
+    diagnosticLogLocation: latestDiagnosticLogInfo?.location ?? null,
   });
 }
 
@@ -3527,6 +3576,18 @@ function addJobState(
   } = {},
 ) {
   const useDisposableWindow = Boolean(options.focusProgress && isDesktopRuntime());
+  diagnostics.record({
+    scope: "jobPresentation",
+    name: "jobAdded",
+    fields: {
+      jobKind: response.kind,
+      initialStatus: response.status,
+      focusProgress: Boolean(options.focusProgress),
+      useDisposableWindow,
+      autoCloseAction: options.autoCloseAction ?? null,
+      quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
+    },
+  });
   if (options.focusProgress && !useDisposableWindow) {
     void revealQuickActionJobWindow(options.autoCloseAction ?? "returnToWorkspace");
   }
@@ -4014,6 +4075,13 @@ async function onDismissJob(jobId: string) {
 }
 
 async function loadBootstrapState() {
+  if (isDesktopRuntime()) {
+    try {
+      latestDiagnosticLogInfo = await fetchDiagnosticLogInfo();
+    } catch {
+      latestDiagnosticLogInfo = null;
+    }
+  }
   await startupController.loadBootstrapState();
 }
 

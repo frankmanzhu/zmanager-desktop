@@ -104,12 +104,14 @@ impl QuickActionLaunchCoordinator {
         &self,
         args: Vec<OsString>,
         inbox: &crate::native_launch_inbox::NativeLaunchInbox,
-    ) {
+    ) -> QuickActionStartupState {
         let state = QuickActionStartupState::from_process_or_user_args(args);
-        if let QuickActionStartupState::Requested(request) = state {
-            let _ = inbox
-                .ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request));
+        if let QuickActionStartupState::Requested(request) = &state {
+            let _ = inbox.ingest(
+                crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request.clone()),
+            );
         }
+        state
     }
 }
 
