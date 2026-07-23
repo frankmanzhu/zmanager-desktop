@@ -81,7 +81,7 @@ export function MenuBar() {
               {localizedMenuGroupLabel(group.label, snapshot)}
             </summary>
             <div className="absolute left-0 top-full z-[70] grid min-w-[220px] rounded-lg border border-slate-200 bg-white p-1 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
-              {group.items.map((item, index) => (
+              {group.items.map((item: MenuItem, index: number) => (
                 <MenuEntry
                   item={item}
                   closeMenu={() => setOpenGroupLabel(null)}

@@ -38,8 +38,11 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $LogDir "smoke-windows-static-$resolvedArchitecture-$timestamp.log"
+$packageJsonPath = Join-Path $repoRoot "package.json"
+$packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+$productVersion = $packageJson.version
 $artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
-$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_0.1.0_$resolvedArchitecture-setup.exe"
+$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_$productVersion`_$resolvedArchitecture-setup.exe"
 
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Script) {
     Write-Host ""

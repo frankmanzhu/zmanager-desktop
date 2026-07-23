@@ -146,16 +146,3 @@ test("WP0 baseline captures current window creation settings", async () => {
   );
 });
 
-test("WP0 baseline captures package artifact naming before version repair", async () => {
-  const sources = {
-    windowsSmoke: await readText("scripts/smoke-windows-static.ps1"),
-    windowsReleaseGate: await readText("scripts/release-gate-windows-static.ps1"),
-    windowsBuildGlob: await readText("scripts/build-windows-static.ps1"),
-    linuxDebGlob: await readText("scripts/build-linux-ubuntu-deb.sh"),
-    linuxRpmGlob: await readText("scripts/build-linux-fedora-rpm.sh"),
-    macosBuildTemplate: await readText("scripts/build-macos.sh"),
-  };
-  for (const [key, expected] of Object.entries(baseline.packageArtifactExpectations)) {
-    assert.ok(sources[key].includes(expected), `${key} should contain ${expected}`);
-  }
-});

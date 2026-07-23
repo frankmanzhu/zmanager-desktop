@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Native Integration Release Evidence",
+  "description": "Cross-platform schema for recording native capability packaging and registration proof.",
+  "type": "object",
+  "required": [
+    "productName",
+    "productVersion",
+    "os",
+    "packageKind",
+    "architecture",
+    "artifacts",
+    "capabilities",
+    "inspection",
+    "registration",
+    "testCommand"
+  ],
+  "properties": {
+    "productName": {
+      "type": "string"
+    },
+    "productVersion": {
+      "type": "string"
+    },
+    "os": {
+      "type": "string",
+      "enum": ["windows", "linux", "macos"]
+    },
+    "packageKind": {
+      "type": "string",
+      "enum": ["nsis", "msi", "deb", "rpm", "app", "dmg"]
+    },
+    "architecture": {
+      "type": "string",
+      "enum": ["x64", "arm64"]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of capability identifiers expected to be supported by this package."
+    },
+    "inspection": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "not-applicable"]
+        },
+        "details": {
+          "type": "string"
+        }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "not-applicable"]
+        },
+        "details": {
+          "type": "string"
+        }
+      }
+    },
+    "installedState": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "exercisedScenarios": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "normalizedFailures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "testCommand": {
+      "type": "string"
+    }
+  }
+}

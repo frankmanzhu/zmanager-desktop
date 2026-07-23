@@ -33,7 +33,10 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $logDir "release-gate-windows-static-$resolvedArchitecture-$timestamp.log"
-$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_0.1.0_$resolvedArchitecture-setup.exe"
+$packageJsonPath = Join-Path $repoRoot "package.json"
+$packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+$productVersion = $packageJson.version
+$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_$productVersion`_$resolvedArchitecture-setup.exe"
 $artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
 $gateResult = "Pass"
 $gateNotes = "Release gate passed. Log: $transcriptPath"

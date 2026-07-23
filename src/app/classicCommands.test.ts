@@ -308,8 +308,9 @@ describe("command state selector", () => {
       .map(([id]) => id as keyof typeof COMMAND_DEFINITIONS);
 
     for (const id of unsupportedCommands) {
-      expect(state[id].enabled).toBe(false);
-      expect(state[id].reason).toBe(UNSUPPORTED_OPERATION_MESSAGE);
+      const cmdId = id as CommandId;
+      expect(state[cmdId].enabled).toBe(false);
+      expect(state[cmdId].reason).toBe(UNSUPPORTED_OPERATION_MESSAGE);
     }
   });
 });

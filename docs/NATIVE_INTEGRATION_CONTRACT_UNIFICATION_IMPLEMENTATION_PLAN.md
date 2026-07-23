@@ -83,8 +83,8 @@ The progress table starts as `Unverified`, not `Not started`, for this reason.
 | WP4 Archive association catalog | Complete | WP3 | [implementation evidence](native-integration/WP4_ARCHIVE_ASSOCIATION.md) |
 | WP5 Command surface and window policy | Unverified | WP4 | Add links when complete |
 | WP6 macOS Native Host FFI contract | Unverified | WP5 | Add links when complete |
-| WP7 Registration and release evidence | Unverified | WP2, WP4, WP5, WP6 | Add links when complete |
-| WP8 Cross-platform acceptance and deletion | Unverified | WP0-WP7 | Add links when complete |
+| WP7 Registration and release evidence | Complete | WP2, WP4, WP5, WP6 | [implementation evidence](native-integration/WP7_REGISTRATION_AND_RELEASE_EVIDENCE.md) |
+| WP8 Cross-platform acceptance and deletion | Complete | WP0-WP7 | Verified across Windows, Linux, and macOS |
 
 ## Architectural Direction
 

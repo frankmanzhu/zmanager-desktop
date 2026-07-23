@@ -304,6 +304,9 @@ while IFS= read -r artifact; do
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Dnf-readable package: $staged_artifact"
+  product_version=$(node -e "console.log(require('./package.json').version)")
+  scripts/inspect-linux-package.sh "$staged_artifact" "x86_64" "$product_version" > "$dnf_stage_dir/evidence-$(basename "$staged_artifact").json"
+  echo "Evidence generated for $staged_artifact."
 done < <(find "$cargo_target_dir/release/bundle/rpm" -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)
 
 if ((rpm_count == 0)); then

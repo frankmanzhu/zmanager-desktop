@@ -323,6 +323,9 @@ while IFS= read -r artifact; do
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Apt-readable package: $staged_artifact"
+  product_version=$(node -e "console.log(require('./package.json').version)")
+  scripts/inspect-linux-package.sh "$staged_artifact" "amd64" "$product_version" > "$apt_stage_dir/evidence-$(basename "$staged_artifact").json"
+  echo "Evidence generated for $staged_artifact."
 done < <(find "$cargo_target_dir/release/bundle/deb" -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
 
 if ((deb_count == 0)); then
