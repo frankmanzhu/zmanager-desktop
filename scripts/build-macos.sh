@@ -332,32 +332,21 @@ if ((install_application)); then
     exit 1
   fi
   echo "Installed application: $destination"
-  # Re-register with Launch Services so the new app bundle, Quick Look extensions,
-  # and Spotlight importer replace any prior cached registrations at this path.
-  # The staged app is already registered during earlier build steps; unregister it
-  # first so repeated local rebuilds don't accumulate stale entries.
-  lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
-  "$lsregister" -u "$staged_app" 2>/dev/null || true
-  "$lsregister" -f "$destination"
-  # Register all app extensions with pluginkit so Finder Sync, Quick Look, and
-  # Spotlight pick up the freshly-installed bundles. Without explicit registration,
-  # ad-hoc signed extensions may not be discovered until the app is launched.
-  for appex in \
-    "$destination/Contents/PlugIns/ZManagerFinderExtension.appex" \
-    "$destination/Contents/PlugIns/ZManagerQuickLookPreview.appex" \
-    "$destination/Contents/PlugIns/ZManagerQuickLookThumbnail.appex"; do
-    if [[ -d "$appex" ]]; then
-      pluginkit -a "$appex" 2>/dev/null || true
+  # Unregister all ZManager application bundles from the stage directory to
+  # remove extensions registered by previous builds at different version paths.
+  # Each call is best-effort — the register step below also includes self-healing
+  # cleanup via pluginkit -m enumeration for any paths missed here.
+  for stale_app in "$stage_dir"/ZManager-*-"$architecture".app; do
+    if [[ -d "$stale_app" ]]; then
+      "$repo_root/scripts/macos-register-bundle.sh" unregister "$stale_app" 2>/dev/null || true
     fi
   done
-  # Enable each extension. Finder Sync requires user approval in System Settings,
-  # but Quick Look and Spotlight extensions take effect immediately.
-  pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
-  pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-preview 2>/dev/null || true
-  pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-thumbnail 2>/dev/null || true
-  echo "Registered system extensions (Finder Sync, Quick Look, Spotlight)"
+  # Register the installed application and its extensions. The register action
+  # performs a self-healing remove-then-add cycle that eliminates duplicate
+  # registrations at any previous path for the same bundle IDs.
+  "$repo_root/scripts/macos-register-bundle.sh" register "$destination"
   # Reset QuickLook daemon so it loads the freshly-installed generators instead
-  # of any cached or stale extension references.
+  # of any cached or stale extension references from prior builds.
   qlmanage -r 2>/dev/null || true
   killall quicklookd 2>/dev/null || true
 else

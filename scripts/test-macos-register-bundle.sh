@@ -26,3 +26,50 @@ fi
 grep -Fq 'register completed for exact bundle path:' <<<"$register_plan"
 grep -Fq 'unregister completed for exact bundle path:' <<<"$unregister_plan"
 echo "deterministic macOS registration plans passed"
+
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/zmanager-registration-test.XXXXXX")
+trap 'rm -rf "$test_root"' EXIT
+fake_pluginkit="$test_root/pluginkit"
+stale_root="$test_root/Old ZManager.app"
+export ZMANAGER_TEST_STALE_FINDER="$stale_root/Contents/PlugIns/ZManagerFinderExtension.appex"
+export ZMANAGER_TEST_STALE_PREVIEW="$stale_root/Contents/PlugIns/ZManagerQuickLookPreview.appex"
+export ZMANAGER_TEST_STALE_THUMBNAIL="$stale_root/Contents/PlugIns/ZManagerQuickLookThumbnail.appex"
+cat >"$fake_pluginkit" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+bundle_id=${!#}
+case "$bundle_id" in
+  com.frankmanzhu.zmanager.finder-extension)
+    path=$ZMANAGER_TEST_STALE_FINDER
+    ;;
+  com.frankmanzhu.zmanager.quicklook-preview)
+    path=$ZMANAGER_TEST_STALE_PREVIEW
+    ;;
+  com.frankmanzhu.zmanager.quicklook-thumbnail)
+    path=$ZMANAGER_TEST_STALE_THUMBNAIL
+    ;;
+  *)
+    exit 2
+    ;;
+esac
+printf '+    %s(1.0.0)\n' "$bundle_id"
+printf '            Path = %s\n' "$path"
+SH
+chmod +x "$fake_pluginkit"
+
+stale_plan=$(
+  ZMANAGER_PLUGINKIT="$fake_pluginkit" \
+    "$repo_root/scripts/macos-register-bundle.sh" register "$app" --dry-run
+)
+quoted_fake_pluginkit=$(printf '%q' "$fake_pluginkit")
+for stale_path in \
+  "$ZMANAGER_TEST_STALE_FINDER" \
+  "$ZMANAGER_TEST_STALE_PREVIEW" \
+  "$ZMANAGER_TEST_STALE_THUMBNAIL"; do
+  quoted=$(printf '%q' "$stale_path")
+  grep -Fq "$quoted_fake_pluginkit -r $quoted" <<<"$stale_plan" || {
+    echo "registration plan does not remove stale extension path: $stale_path" >&2
+    exit 1
+  }
+done
+echo "self-healing registration plan verified"

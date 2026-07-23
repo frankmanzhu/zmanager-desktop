@@ -314,9 +314,10 @@ enum LegacyReplacementMigrationReader {
 
     private static func currentRegistrationOwners() -> [String: String] {
         var owners: [String: String] = [:]
-        if let scheme = LSCopyDefaultHandlerForURLScheme("zmanager" as CFString)?
-            .takeRetainedValue() as String? {
-            owners["urlScheme.zmanager"] = scheme
+        if let url = URL(string: "zmanager://"),
+           let appURL = NSWorkspace.shared.urlForApplication(toOpen: url),
+           let bundleID = Bundle(url: appURL)?.bundleIdentifier {
+            owners["urlScheme.zmanager"] = bundleID
         }
         if let type = UTType(filenameExtension: "tzap"),
            let handler = LSCopyDefaultRoleHandlerForContentType(type.identifier as CFString, .all)?

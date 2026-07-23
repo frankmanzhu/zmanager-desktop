@@ -40,7 +40,31 @@ optional() {
   if ((dry_run)); then run "$@"; else "$@" || true; fi
 }
 
+# Remove ALL registered instances of each ZManager extension bundle ID from
+# pluginkit, regardless of whether the underlying bundle still exists on disk.
+# This is the self-healing step that prevents duplicate context menu entries
+# from accumulated stale builds at different paths (staged, versioned, etc.).
+remove_all_registrations() {
+  for bundle_id in \
+    com.frankmanzhu.zmanager.finder-extension \
+    com.frankmanzhu.zmanager.quicklook-preview \
+    com.frankmanzhu.zmanager.quicklook-thumbnail; do
+    while IFS= read -r registered_path; do
+      [[ -n "$registered_path" ]] || continue
+      optional "$pluginkit" -r "$registered_path"
+    done < <(
+      "$pluginkit" -m -A -D -vvv -i "$bundle_id" 2>/dev/null |
+        sed -n 's/^[[:space:]]*Path = //p'
+    )
+  done
+}
+
 if [[ $action == register ]]; then
+  # Self-healing: remove ALL registered instances of our ZManager extension
+  # bundle IDs, not just the one at the current app path. This prevents
+  # duplicate context menu entries from staged-path extensions accumulated
+  # across rebuilds with different version numbers or build directories.
+  remove_all_registrations
   # Remove only registrations for this exact bundle path before registering the
   # same path. Never reset another application or the user's whole LS database.
   optional "$lsregister" -u "$app"

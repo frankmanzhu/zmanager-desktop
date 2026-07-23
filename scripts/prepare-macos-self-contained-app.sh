@@ -172,34 +172,8 @@ if otool -L "$executable" | grep -Eq '^\s+/(opt/homebrew|usr/local)/'; then
   exit 1
 fi
 
-# Unregister any prior Launch Services registration at this app path so repeated
-# local builds don't accumulate stale entries. This is especially important for
-# Quick Look and Spotlight extensions, which are cached by their appex paths.
-lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
-"$lsregister" -u "$app" 2>/dev/null || true
-# Re-register so the freshly-signed bundle and its extensions are picked up.
-"$lsregister" -f "$app"
-
-# Register all app extensions with pluginkit so the system discovers them.
-# Ad-hoc signed extensions require explicit registration; they won't be
-# auto-discovered until the parent app is launched.
-for appex in \
-  "$app/Contents/PlugIns/ZManagerFinderExtension.appex" \
-  "$app/Contents/PlugIns/ZManagerQuickLookPreview.appex" \
-  "$app/Contents/PlugIns/ZManagerQuickLookThumbnail.appex"; do
-  if [[ -d "$appex" ]]; then
-    pluginkit -a "$appex" 2>/dev/null || true
-  fi
-done
-# Enable all extensions. Finder Sync needs user approval in System Settings.
-pluginkit -e use -i com.frankmanzhu.zmanager.finder-extension 2>/dev/null || true
-pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-preview 2>/dev/null || true
-pluginkit -e use -i com.frankmanzhu.zmanager.quicklook-thumbnail 2>/dev/null || true
-echo "Registered system extensions (Finder Sync, Quick Look, Spotlight)"
-
-# Reset QuickLook daemon so it loads the freshly-built generators instead
-# of any cached or stale extension references from prior builds.
-qlmanage -r 2>/dev/null || true
-killall quicklookd 2>/dev/null || true
+# Launch Services, pluginkit, Quick Look, and Spotlight registration is deferred
+# to the install step in build-macos.sh. Registering this ephemeral build output
+# would leave stale extension paths behind after it is copied or removed.
 
 echo "Prepared self-contained signed application: $app"
