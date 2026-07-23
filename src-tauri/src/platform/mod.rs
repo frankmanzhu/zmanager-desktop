@@ -166,9 +166,13 @@ pub enum NativeFileDragOutcome {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeFileDragStart {
-    Pending { session_id: String },
+    Pending {
+        session_id: String,
+    },
     #[cfg_attr(target_os = "macos", allow(dead_code))]
-    Settled { outcome: NativeFileDragOutcome },
+    Settled {
+        outcome: NativeFileDragOutcome,
+    },
 }
 
 pub type NativeFileDragStreamProvider =

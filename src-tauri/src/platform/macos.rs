@@ -520,7 +520,6 @@ fn menu_command(
 
 include!("../generated/macos_menu.generated.rs");
 
-
 fn call_json_operation<Input: Serialize, Output: serde::de::DeserializeOwned>(
     input: &Input,
     operation: unsafe extern "C" fn(
