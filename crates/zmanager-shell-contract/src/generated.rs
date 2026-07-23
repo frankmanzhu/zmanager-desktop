@@ -26,8 +26,8 @@ impl ShellActionKind {
             "compresszip" | "addtozip" => Some(Self::CompressZip),
             "compresstzap" | "addtotzap" => Some(Self::CompressTzap),
             "compress7z" | "compresssevenz" | "addto7z" | "addtosevenz" => Some(Self::CompressSevenZ),
-            "compresstarzst" | "compresstzst" | "addtotarzst" | "addtotzst" => Some(Self::CompressTarZst),
-            "compresstargz" | "compresstgz" | "addtotargz" | "addtotgz" => Some(Self::CompressTarGz),
+            "compresstzst" | "compresstarzst" | "addtotarzst" | "addtotzst" => Some(Self::CompressTarZst),
+            "compresstgz" | "compresstargz" | "addtotargz" | "addtotgz" => Some(Self::CompressTarGz),
             "compresscleansource" | "cleansource" => Some(Self::CompressCleanSource),
             "extracthere" => Some(Self::ExtractHere),
             "extracttofolder" | "extractfolder" => Some(Self::ExtractToFolder),
@@ -163,7 +163,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         selection_shapes: &["single-archive", "multiple-archives", "files", "folders", "mixed"],
         multiplicity: "one-or-more",
         native_surfaces: &["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"],
-        compatibility_aliases: &["compress-tar-zst", "compress-tzst", "add-to-tar-zst", "add-to-tzst"],
+        compatibility_aliases: &["compress-tzst", "compress-tar-zst", "add-to-tar-zst", "add-to-tzst"],
         window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {
@@ -178,7 +178,7 @@ pub const SHELL_ACTION_POLICIES: &[ShellActionPolicy] = &[
         selection_shapes: &["single-archive", "multiple-archives", "files", "folders", "mixed"],
         multiplicity: "one-or-more",
         native_surfaces: &["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"],
-        compatibility_aliases: &["compress-tar-gz", "compress-tgz", "add-to-tar-gz", "add-to-tgz"],
+        compatibility_aliases: &["compress-tgz", "compress-tar-gz", "add-to-tar-gz", "add-to-tgz"],
         window_disposition: ShellActionWindowDisposition::DisposableTask,
     },
     ShellActionPolicy {

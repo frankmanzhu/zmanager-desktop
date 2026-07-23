@@ -231,8 +231,8 @@ export const SHELL_ACTION_POLICIES = [
       "macosFinder"
     ],
     "compatibilityAliases": [
-      "compress-tar-zst",
       "compress-tzst",
+      "compress-tar-zst",
       "add-to-tar-zst",
       "add-to-tzst"
     ],
@@ -267,8 +267,8 @@ export const SHELL_ACTION_POLICIES = [
       "macosFinder"
     ],
     "compatibilityAliases": [
-      "compress-tar-gz",
       "compress-tgz",
+      "compress-tar-gz",
       "add-to-tar-gz",
       "add-to-tgz"
     ],

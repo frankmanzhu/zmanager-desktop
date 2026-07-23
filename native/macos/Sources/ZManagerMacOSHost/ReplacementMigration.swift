@@ -1,3 +1,4 @@
+import ZManagerGenerated
 import AppKit
 import CoreServices
 import Darwin
@@ -5,7 +6,7 @@ import Foundation
 import UniformTypeIdentifiers
 import ZManagerMacOSShared
 
-private let replacementMigrationMaximumBytes = 1_048_576
+private let replacementMigrationMaximumBytes = MacOSFFILimits.maxRequestBytes
 private let replacementMigrationSchemaVersion = 1
 private let legacyPreferenceKeys: Set<String> = [
     "defaultArchiveFormat",
@@ -363,10 +364,10 @@ public func zmanagerMacOSReadReplacementMigration(
           ), request.schemaVersion == replacementMigrationSchemaVersion,
           request.legacyBundleID == "com.frankmanzhu.zmanager",
           request.legacyApplicationCandidates.count <= 8
-    else { return 1 }
+    else { return MacOSFFIErrorMapping.invalidPayload }
     let domain = UserDefaults.standard.persistentDomain(forName: request.legacyBundleID) ?? [:]
     let snapshot = LegacyReplacementMigrationReader.read(request: request, domain: domain)
-    guard let output = try? JSONEncoder().encode(snapshot) else { return 2 }
+    guard let output = try? JSONEncoder().encode(snapshot) else { return MacOSFFIErrorMapping.systemError }
     output.withUnsafeBytes { buffer in
         callback(buffer.bindMemory(to: UInt8.self).baseAddress, buffer.count, context)
     }
@@ -387,7 +388,7 @@ public func zmanagerMacOSReconcileLegacyRegistrations(
           ), request.schemaVersion == replacementMigrationSchemaVersion,
           request.legacyBundleID == "com.frankmanzhu.zmanager",
           request.legacyApplicationPaths.count <= 8
-    else { return 1 }
+    else { return MacOSFFIErrorMapping.invalidPayload }
     var diagnostics: [ReplacementMigrationDiagnostic] = []
     for command in LegacyReplacementMigrationReader.registrationCommands(request: request) {
         let process = Process()
@@ -407,7 +408,7 @@ public func zmanagerMacOSReconcileLegacyRegistrations(
         }
     }
     let result = LegacyRegistrationReconcileResult(diagnostics: diagnostics)
-    guard let output = try? JSONEncoder().encode(result) else { return 2 }
+    guard let output = try? JSONEncoder().encode(result) else { return MacOSFFIErrorMapping.systemError }
     output.withUnsafeBytes { buffer in
         callback(buffer.bindMemory(to: UInt8.self).baseAddress, buffer.count, context)
     }

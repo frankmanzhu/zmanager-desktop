@@ -1,3 +1,4 @@
+import ZManagerGenerated
 import AppKit
 import Foundation
 import UniformTypeIdentifiers
@@ -184,13 +185,13 @@ public func zmanagerMacOSStartPromiseDrag(
     _ context: UnsafeMutableRawPointer?
 ) -> Int32 {
     guard let viewPointer, let sessionBytes, let itemBytes, let write, let outcome, let release,
-          sessionLength > 0, sessionLength <= 128, itemLength > 0, itemLength <= 1_048_576,
+          sessionLength > 0, sessionLength <= 128, itemLength > 0, itemLength <= MacOSFFILimits.maxRequestBytes,
           let sessionID = String(data: Data(bytes: sessionBytes, count: sessionLength), encoding: .utf8),
           let items = try? JSONDecoder().decode(
               [PromiseDragItem].self,
               from: Data(bytes: itemBytes, count: itemLength)
           ), !items.isEmpty, items.count <= 1_024
-    else { return 1 }
+    else { return MacOSFFIErrorMapping.invalidPayload }
     let input = PromiseStartInput(
         view: Unmanaged<NSView>.fromOpaque(viewPointer).takeUnretainedValue(),
         sessionID: sessionID,

@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "commands": [
+    {"id": "open", "label": "Open...", "labelKey": "command.open", "shortcut": "Ctrl+O", "macOSAccelerator": "CmdOrCtrl+O", "tooltip": "Open archive (Ctrl+O)"},
+    {"id": "closeArchive", "label": "Close Archive", "labelKey": "command.closeArchive", "tooltip": "Close the current archive"},
+    {"id": "openInside", "label": "Open in Archive", "labelKey": "command.openInside", "shortcut": "Ctrl+PageDown"},
+    {"id": "openOutside", "label": "Open Outside", "labelKey": "command.openOutside", "shortcut": "Shift+Enter"},
+    {"id": "view", "label": "View", "labelKey": "command.view", "shortcut": "F3", "tooltip": "View (F3)"},
+    {"id": "edit", "label": "Edit", "shortcut": "F4", "unsupported": true, "mutation": true},
+    {"id": "rename", "label": "Rename", "shortcut": "F2", "unsupported": true, "mutation": true},
+    {"id": "copyTo", "label": "Copy To...", "shortcut": "F5", "tooltip": "Copy To... (F5)"},
+    {"id": "moveTo", "label": "Move To...", "shortcut": "F6", "unsupported": true, "mutation": true},
+    {"id": "delete", "label": "Delete", "shortcut": "Delete", "unsupported": true, "mutation": true},
+    {"id": "splitFile", "label": "Split file...", "unsupported": true},
+    {"id": "combineFiles", "label": "Combine files...", "unsupported": true},
+    {"id": "properties", "label": "Properties", "labelKey": "command.properties", "shortcut": "Alt+Enter", "tooltip": "Properties (Alt+Enter)"},
+    {"id": "comment", "label": "Comment...", "shortcut": "Ctrl+Z", "unsupported": true, "mutation": true},
+    {"id": "crc32", "label": "CRC-32", "unsupported": true},
+    {"id": "crc64", "label": "CRC-64", "unsupported": true},
+    {"id": "xxh64", "label": "XXH64", "unsupported": true},
+    {"id": "md5", "label": "MD5", "unsupported": true},
+    {"id": "sha1", "label": "SHA-1", "unsupported": true},
+    {"id": "sha256", "label": "SHA-256", "unsupported": true},
+    {"id": "sha384", "label": "SHA-384", "unsupported": true},
+    {"id": "sha512", "label": "SHA-512", "unsupported": true},
+    {"id": "sha3256", "label": "SHA3-256", "unsupported": true},
+    {"id": "blake2sp", "label": "BLAKE2sp", "unsupported": true},
+    {"id": "crcAll", "label": "All", "unsupported": true},
+    {"id": "diff", "label": "Diff", "unsupported": true},
+    {"id": "createFolder", "label": "Create Folder", "shortcut": "F7", "unsupported": true, "mutation": true},
+    {"id": "exit", "label": "Exit", "labelKey": "command.exit", "shortcut": "Alt+F4"},
+    {"id": "selectAll", "label": "Select All", "labelKey": "command.selectAll", "shortcut": "Ctrl+A", "macOSAccelerator": "CmdOrCtrl+A"},
+    {"id": "deselectAll", "label": "Deselect All", "labelKey": "command.deselectAll", "shortcut": "Shift+Numpad Minus"},
+    {"id": "invertSelection", "label": "Invert Selection", "labelKey": "command.invertSelection", "shortcut": "Numpad Star"},
+    {"id": "selectMask", "label": "Select...", "shortcut": "Numpad Plus", "unsupported": true},
+    {"id": "deselectMask", "label": "Deselect...", "shortcut": "Numpad Minus", "unsupported": true},
+    {"id": "selectByType", "label": "Select by Type", "labelKey": "command.selectByType", "shortcut": "Alt+Numpad Plus"},
+    {"id": "deselectByType", "label": "Deselect by Type", "labelKey": "command.deselectByType", "shortcut": "Alt+Numpad Minus"},
+    {"id": "largeIcons", "label": "Large Icons", "shortcut": "Ctrl+1", "unsupported": true},
+    {"id": "smallIcons", "label": "Small Icons", "shortcut": "Ctrl+2", "unsupported": true},
+    {"id": "listView", "label": "List", "shortcut": "Ctrl+3", "unsupported": true},
+    {"id": "detailsView", "label": "Details", "shortcut": "Ctrl+4"},
+    {"id": "sortName", "label": "Name", "labelKey": "command.sortName", "shortcut": "Ctrl+F3"},
+    {"id": "sortType", "label": "Type", "labelKey": "command.sortType", "shortcut": "Ctrl+F4"},
+    {"id": "sortDate", "label": "Date", "labelKey": "command.sortDate", "shortcut": "Ctrl+F5"},
+    {"id": "sortSize", "label": "Size", "labelKey": "command.sortSize", "shortcut": "Ctrl+F6"},
+    {"id": "unsorted", "label": "Unsorted", "shortcut": "Ctrl+F7", "unsupported": true},
+    {"id": "flatView", "label": "Flat View", "labelKey": "command.flatView"},
+    {"id": "twoPanels", "label": "2 Panels", "shortcut": "F9", "unsupported": true},
+    {"id": "standardToolbar", "label": "Standard Toolbar"},
+    {"id": "showButtonText", "label": "Show Buttons Text", "labelKey": "command.showButtonText"},
+    {"id": "openRoot", "label": "Open Root Folder", "shortcut": "\\"},
+    {"id": "upOneLevel", "label": "Up One Level", "labelKey": "commands.upOneLevel", "shortcut": "Backspace"},
+    {"id": "foldersHistory", "label": "Folders History...", "shortcut": "Alt+F12", "unsupported": true},
+    {"id": "refresh", "label": "Refresh", "labelKey": "common.refresh", "shortcut": "Ctrl+R", "tooltip": "Refresh (Ctrl+R)"},
+    {"id": "autoRefresh", "label": "Auto Refresh", "unsupported": true},
+    {"id": "addFavorite", "label": "Add folder to Favorites as", "unsupported": true},
+    {"id": "options", "label": "Options...", "labelKey": "command.options", "macOSAccelerator": "CmdOrCtrl+,"},
+    {"id": "benchmark", "label": "Benchmark", "unsupported": true},
+    {"id": "deleteTempFiles", "label": "Delete Temporary Files...", "labelKey": "command.deleteTempFiles"},
+    {"id": "helpContents", "label": "Contents...", "labelKey": "command.helpContents", "shortcut": "F1", "unsupported": true, "macOSAccelerator": "F1"},
+    {"id": "about", "label": "About ZManager...", "labelKey": "command.about"},
+    {"id": "jobs", "label": "Jobs", "tooltip": "Open Jobs task center"},
+    {"id": "add", "label": "Add", "labelKey": "command.add", "shortcut": "Ctrl+N", "macOSAccelerator": "CmdOrCtrl+N", "tooltip": "Add (Ctrl+N)"},
+    {"id": "extract", "label": "Extract", "labelKey": "command.extract", "shortcut": "F5", "tooltip": "Extract (F5)"},
+    {"id": "test", "label": "Test", "labelKey": "command.test", "tooltip": "Test archive"},
+    {"id": "copy", "label": "Copy", "labelKey": "command.copy", "shortcut": "F5", "tooltip": "Copy (F5)"},
+    {"id": "move", "label": "Move", "shortcut": "F6", "unsupported": true, "mutation": true},
+    {"id": "info", "label": "Info", "labelKey": "command.info", "shortcut": "Alt+Enter", "tooltip": "Info (Alt+Enter)"}
+  ],
+  "menus": [
+    {
+      "label": "ZManager",
+      "platforms": ["macos"],
+      "items": [
+        {"kind": "command", "id": "about"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "options"},
+        {"kind": "separator"},
+        {"kind": "macos-hide"},
+        {"kind": "macos-hide-others"},
+        {"kind": "macos-show-all"},
+        {"kind": "separator"},
+        {"kind": "macos-quit"}
+      ]
+    },
+    {
+      "label": "File",
+      "platforms": ["macos"],
+      "items": [
+        {"kind": "command", "id": "open"},
+        {"kind": "command", "id": "add"},
+        {"kind": "command", "id": "closeArchive"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "extract"},
+        {"kind": "command", "id": "test"},
+        {"kind": "command", "id": "info"},
+        {"kind": "separator"},
+        {"kind": "macos-close-window"}
+      ]
+    },
+    {
+      "label": "File",
+      "platforms": ["windows", "linux"],
+      "items": [
+        {"kind": "command", "id": "open"},
+        {"kind": "command", "id": "openInside"},
+        {"kind": "command", "id": "openOutside"},
+        {"kind": "command", "id": "view"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "properties"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "exit"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "platforms": ["macos"],
+      "items": [
+        {"kind": "macos-undo"},
+        {"kind": "macos-redo"},
+        {"kind": "separator"},
+        {"kind": "macos-cut"},
+        {"kind": "macos-copy"},
+        {"kind": "macos-paste"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "selectAll"}
+      ]
+    },
+    {
+      "label": "Edit",
+      "platforms": ["windows", "linux"],
+      "items": [
+        {"kind": "command", "id": "selectAll"},
+        {"kind": "command", "id": "deselectAll"},
+        {"kind": "command", "id": "invertSelection"},
+        {"kind": "command", "id": "selectByType"},
+        {"kind": "command", "id": "deselectByType"}
+      ]
+    },
+    {
+      "label": "View",
+      "platforms": ["windows", "linux"],
+      "items": [
+        {"kind": "command", "id": "sortName"},
+        {"kind": "command", "id": "sortType"},
+        {"kind": "command", "id": "sortDate"},
+        {"kind": "command", "id": "sortSize"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "flatView"},
+        {"kind": "separator"},
+        {
+          "kind": "submenu",
+          "label": "Toolbars",
+          "labelKey": "commandMenu.toolbars",
+          "items": [
+            {"kind": "command", "id": "showButtonText"}
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Tools",
+      "platforms": ["windows", "linux"],
+      "items": [
+        {"kind": "command", "id": "options"},
+        {"kind": "separator"},
+        {"kind": "command", "id": "deleteTempFiles"}
+      ]
+    },
+    {
+      "label": "Window",
+      "platforms": ["macos"],
+      "items": [
+        {"kind": "macos-minimize"},
+        {"kind": "macos-maximize"},
+        {"kind": "macos-fullscreen"},
+        {"kind": "separator"},
+        {"kind": "macos-close-window"}
+      ]
+    },
+    {
+      "label": "Help",
+      "items": [
+        {"kind": "command", "id": "helpContents", "platforms": ["macos"]},
+        {"kind": "command", "id": "about", "platforms": ["windows", "linux"]}
+      ]
+    }
+  ],
+  "toolbarGroups": [
+    {"id": "compress", "label": "Compress", "items": ["add"]},
+    {"id": "extract", "label": "Extract", "items": ["open", "closeArchive", "extract", "test"]},
+    {"id": "table", "label": "Table actions", "items": ["view", "copy", "info", "refresh", "selectAll", "flatView"]},
+    {"id": "jobs", "label": "Jobs", "items": ["jobs"]},
+    {"id": "settings", "label": "Settings", "items": ["options", "deleteTempFiles"]},
+    {"id": "help", "label": "Help", "items": ["helpContents", "about"]}
+  ]
+}

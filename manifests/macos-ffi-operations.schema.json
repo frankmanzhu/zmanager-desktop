@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MacOS FFIOperations",
+  "type": "object",
+  "properties": {
+    "errorMapping": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "maxRequestBytes": {
+          "type": "integer"
+        },
+        "maxResponseBytes": {
+          "type": "integer"
+        },
+        "maxDragItems": {
+          "type": "integer"
+        }
+      },
+      "required": ["maxRequestBytes", "maxResponseBytes", "maxDragItems"]
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["lifecycle", "async-json", "async-drag"]
+          }
+        },
+        "required": ["name", "type"]
+      }
+    }
+  },
+  "required": ["errorMapping", "limits", "operations"]
+}

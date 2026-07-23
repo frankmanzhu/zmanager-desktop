@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Application Commands",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "labelKey": { "type": "string" },
+          "shortcut": { "type": "string" },
+          "macOSAccelerator": { "type": "string" },
+          "tooltip": { "type": "string" },
+          "unsupported": { "type": "boolean" },
+          "mutation": { "type": "boolean" }
+        },
+        "required": ["id", "label"],
+        "additionalProperties": false
+      }
+    },
+    "menus": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "platforms": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["macos", "windows", "linux"] }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string", "enum": ["command", "separator", "submenu", "macos-hide", "macos-hide-others", "macos-show-all", "macos-quit", "macos-close-window", "macos-undo", "macos-redo", "macos-cut", "macos-copy", "macos-paste", "macos-minimize", "macos-maximize", "macos-fullscreen"] },
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "labelKey": { "type": "string" },
+                "platforms": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["macos", "windows", "linux"] }
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": { "type": "string", "enum": ["command", "separator", "macos-hide", "macos-hide-others", "macos-show-all", "macos-quit", "macos-close-window", "macos-undo", "macos-redo", "macos-cut", "macos-copy", "macos-paste", "macos-minimize", "macos-maximize", "macos-fullscreen"] },
+                      "id": { "type": "string" },
+                      "platforms": {
+                        "type": "array",
+                        "items": { "type": "string", "enum": ["macos", "windows", "linux"] }
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["label", "items"],
+        "additionalProperties": false
+      }
+    },
+    "toolbarGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["id", "label", "items"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["schemaVersion", "commands", "menus", "toolbarGroups"],
+  "additionalProperties": false
+}

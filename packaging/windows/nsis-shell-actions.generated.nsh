@@ -53,6 +53,6 @@
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "02AddToTzap" "Add to .tzap" "compress-tzap" "%V"
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "03AddToZip" "Add to .zip" "compress-zip" "%V"
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "04AddToSevenZ" "Add to .7z" "compress-7z" "%V"
-  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "05AddToTzst" "Add to .tzst" "compress-tar-zst" "%V"
-  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "06AddToTgz" "Add to .tgz" "compress-tar-gz" "%V"
+  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "05AddToTzst" "Add to .tzst" "compress-tzst" "%V"
+  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "06AddToTgz" "Add to .tgz" "compress-tgz" "%V"
 !macroend

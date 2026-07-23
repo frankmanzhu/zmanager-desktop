@@ -48,10 +48,10 @@ Icon=zmanager-desktop
 
 [Desktop Action AddToTzst]
 Name=Add to .tzst
-Exec=zmanager-desktop --quick-action compress-tar-zst --path %F
+Exec=zmanager-desktop --quick-action compress-tzst --path %F
 Icon=zmanager-desktop
 
 [Desktop Action AddToTgz]
 Name=Add to .tgz
-Exec=zmanager-desktop --quick-action compress-tar-gz --path %F
+Exec=zmanager-desktop --quick-action compress-tgz --path %F
 Icon=zmanager-desktop

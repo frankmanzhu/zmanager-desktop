@@ -1,3 +1,4 @@
+import ZManagerGenerated
 import AppKit
 import Foundation
 import ZManagerMacOSShared
@@ -81,12 +82,12 @@ public func zmanagerMacOSHostStart(
     _ callback: ZManagerHostCallback?,
     _ context: UnsafeMutableRawPointer?
 ) -> Int32 {
-    guard let callback else { return 1 }
+    guard let callback else { return MacOSFFIErrorMapping.invalidPayload }
     let state = HostState.shared
     state.lock.lock()
     guard !state.running else {
         state.lock.unlock()
-        return 2
+        return MacOSFFIErrorMapping.systemError
     }
     state.callback = callback
     state.context = context

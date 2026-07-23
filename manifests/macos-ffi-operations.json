@@ -1,0 +1,51 @@
+{
+  "errorMapping": {
+    "success": 0,
+    "invalidPayload": 1,
+    "systemError": 2,
+    "notAvailable": 3
+  },
+  "limits": {
+    "maxRequestBytes": 1048576,
+    "maxResponseBytes": 8388608,
+    "maxDragItems": 1000
+  },
+  "operations": [
+    {
+      "name": "zmanager_macos_host_start",
+      "type": "lifecycle"
+    },
+    {
+      "name": "zmanager_macos_host_shutdown",
+      "type": "lifecycle"
+    },
+    {
+      "name": "zmanager_macos_host_is_running",
+      "type": "lifecycle"
+    },
+    {
+      "name": "zmanager_macos_system_file_icons",
+      "type": "async-json"
+    },
+    {
+      "name": "zmanager_macos_default_handlers",
+      "type": "async-json"
+    },
+    {
+      "name": "zmanager_macos_read_replacement_migration",
+      "type": "async-json"
+    },
+    {
+      "name": "zmanager_macos_reconcile_legacy_registrations",
+      "type": "async-json"
+    },
+    {
+      "name": "zmanager_macos_consume_shell_action_request",
+      "type": "async-json"
+    },
+    {
+      "name": "zmanager_macos_start_promise_drag",
+      "type": "async-drag"
+    }
+  ]
+}

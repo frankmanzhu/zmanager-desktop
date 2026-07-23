@@ -31,57 +31,10 @@ static NATIVE_LAUNCH_INBOX: OnceLock<crate::native_launch_inbox::NativeLaunchInb
     OnceLock::new();
 static NATIVE_DIAGNOSTICS: OnceLock<crate::diagnostics::DiagnosticLog> = OnceLock::new();
 
-unsafe extern "C" {
-    fn zmanager_macos_host_start(
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_host_shutdown();
-    fn zmanager_macos_system_file_icons(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_default_handlers(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_read_replacement_migration(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_reconcile_legacy_registrations(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_consume_shell_action_request(
-        token_bytes: *const u8,
-        token_length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    fn zmanager_macos_start_promise_drag(
-        view: *mut c_void,
-        session_bytes: *const u8,
-        session_length: usize,
-        item_bytes: *const u8,
-        item_length: usize,
-        write: Option<extern "C" fn(*const u8, usize, *const u8, usize, *mut c_void) -> i32>,
-        outcome: Option<extern "C" fn(i32, *mut c_void)>,
-        release: Option<extern "C" fn(*mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-}
+include!("../generated/macos_ffi.generated.rs");
 
 extern "C" fn host_callback(bytes: *const u8, length: usize, _context: *mut c_void) {
-    if bytes.is_null() || length > 1_048_576 {
+    if bytes.is_null() || length > MAX_REQUEST_BYTES {
         return;
     }
     let payload = unsafe { std::slice::from_raw_parts(bytes, length) };
@@ -565,66 +518,8 @@ fn menu_command(
     )
 }
 
-fn build_macos_menu(app: &tauri::AppHandle<Wry>) -> tauri::Result<Menu<Wry>> {
-    let about = menu_command(app, "about", "About ZManager", None)?;
-    let preferences = menu_command(app, "options", "Settings…", Some("CmdOrCtrl+,"))?;
-    let app_menu = SubmenuBuilder::new(app, "ZManager")
-        .item(&about)
-        .separator()
-        .item(&preferences)
-        .separator()
-        .hide()
-        .hide_others()
-        .show_all()
-        .separator()
-        .quit()
-        .build()?;
+include!("../generated/macos_menu.generated.rs");
 
-    let open = menu_command(app, "open", "Open Archive…", Some("CmdOrCtrl+O"))?;
-    let add = menu_command(app, "add", "New Archive…", Some("CmdOrCtrl+N"))?;
-    let close_archive = menu_command(app, "closeArchive", "Close Archive", None)?;
-    let extract = menu_command(app, "extract", "Extract…", None)?;
-    let test = menu_command(app, "test", "Test Archive", None)?;
-    let info = menu_command(app, "info", "Archive Info", None)?;
-    let file_menu = SubmenuBuilder::new(app, "File")
-        .item(&open)
-        .item(&add)
-        .item(&close_archive)
-        .separator()
-        .item(&extract)
-        .item(&test)
-        .item(&info)
-        .separator()
-        .close_window()
-        .build()?;
-
-    let select_all = menu_command(app, "selectAll", "Select All Entries", Some("CmdOrCtrl+A"))?;
-    let edit_menu = SubmenuBuilder::new(app, "Edit")
-        .undo()
-        .redo()
-        .separator()
-        .cut()
-        .copy()
-        .paste()
-        .separator()
-        .item(&select_all)
-        .build()?;
-
-    let window_menu = SubmenuBuilder::new(app, "Window")
-        .minimize()
-        .maximize()
-        .fullscreen()
-        .separator()
-        .close_window()
-        .build()?;
-
-    let help = menu_command(app, "helpContents", "ZManager Help", Some("F1"))?;
-    let help_menu = SubmenuBuilder::new(app, "Help").item(&help).build()?;
-
-    MenuBuilder::new(app)
-        .items(&[&app_menu, &file_menu, &edit_menu, &window_menu, &help_menu])
-        .build()
-}
 
 fn call_json_operation<Input: Serialize, Output: serde::de::DeserializeOwned>(
     input: &Input,
@@ -652,7 +547,7 @@ fn call_json_operation<Input: Serialize, Output: serde::de::DeserializeOwned>(
 }
 
 extern "C" fn icon_operation_callback(bytes: *const u8, length: usize, context: *mut c_void) {
-    if bytes.is_null() || context.is_null() || length > 8 * 1_048_576 {
+    if bytes.is_null() || context.is_null() || length > MAX_RESPONSE_BYTES {
         return;
     }
     let output = unsafe { &mut *context.cast::<Vec<u8>>() };

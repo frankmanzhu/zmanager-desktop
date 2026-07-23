@@ -57,8 +57,8 @@ ARCHIVE_ACTIONS = (
     ("AddToTzap", "Add to .tzap", "compress-tzap", True),
     ("AddToZip", "Add to .zip", "compress-zip", True),
     ("AddToSevenZ", "Add to .7z", "compress-7z", True),
-    ("AddToTzst", "Add to .tzst", "compress-tar-zst", True),
-    ("AddToTgz", "Add to .tgz", "compress-tar-gz", True),
+    ("AddToTzst", "Add to .tzst", "compress-tzst", True),
+    ("AddToTgz", "Add to .tgz", "compress-tgz", True),
 )
 
 CREATE_ACTIONS = (
@@ -66,6 +66,6 @@ CREATE_ACTIONS = (
     ("AddToTzap", "Add to .tzap", "compress-tzap"),
     ("AddToZip", "Add to .zip", "compress-zip"),
     ("AddToSevenZ", "Add to .7z", "compress-7z"),
-    ("AddToTzst", "Add to .tzst", "compress-tar-zst"),
-    ("AddToTgz", "Add to .tgz", "compress-tar-gz"),
+    ("AddToTzst", "Add to .tzst", "compress-tzst"),
+    ("AddToTgz", "Add to .tgz", "compress-tgz"),
 )

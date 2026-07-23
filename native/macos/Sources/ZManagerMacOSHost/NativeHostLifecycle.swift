@@ -180,7 +180,7 @@ final class NativeHostLifecycle: NSObject {
             kind: kind,
             payload: payload,
             idempotencyKey: idempotencyKey
-        ), data.count <= 1_048_576 else { return }
+        ), data.count <= MacOSFFILimits.maxRequestBytes else { return }
         deliver(data)
     }
 }

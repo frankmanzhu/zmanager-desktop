@@ -22,17 +22,6 @@ type ExpectedAction = {
   pathToken: "%F" | "%f";
 };
 
-const archiveActions: ExpectedAction[] = [
-  { action: "ExtractHere", label: "Extract Here", quickAction: "extract-here", pathToken: "%F" },
-  {
-    action: "ExtractToFolder",
-    label: "Extract to Archive Folder",
-    quickAction: "extract-to-folder",
-    pathToken: "%f",
-  },
-  { action: "OpenArchive", label: "Open archive", quickAction: "open", pathToken: "%f" },
-];
-
 const createActions: ExpectedAction[] = [
   { action: "AddToArchive", label: "Add to archive...", quickAction: "compress", pathToken: "%F" },
   { action: "AddToTzap", label: "Add to .tzap", quickAction: "compress-tzap", pathToken: "%F" },
@@ -42,7 +31,19 @@ const createActions: ExpectedAction[] = [
   { action: "AddToTgz", label: "Add to .tgz", quickAction: "compress-tgz", pathToken: "%F" },
 ];
 
-const windowsOrderedActions = [...archiveActions, ...createActions];
+const archiveActions: ExpectedAction[] = [
+  { action: "ExtractHere", label: "Extract Here", quickAction: "extract-here", pathToken: "%F" },
+  {
+    action: "ExtractToFolder",
+    label: "Extract to Archive Folder",
+    quickAction: "extract-to-folder",
+    pathToken: "%f",
+  },
+  { action: "OpenArchive", label: "Open archive", quickAction: "open", pathToken: "%f" },
+  ...createActions,
+];
+
+const windowsOrderedActions = [...archiveActions];
 
 function readWorkspaceFile(...parts: string[]): string {
   return readFileSync(join(process.cwd(), ...parts), "utf8").replace(/\r\n/g, "\n");
@@ -131,9 +132,16 @@ describe("Linux context menu packaging", () => {
     expect(extension).toContain("def get_background_items(self, *args)");
     expect(extension).toContain("class ZManagerMenuProvider");
     expect(extension).toContain('label="ZManager"');
+
+    const generatedExtension = readWorkspaceFile(
+      "packaging",
+      "linux",
+      "nautilus",
+      "zmanager_shell_actions_generated.py",
+    );
     for (const action of windowsOrderedActions) {
-      expect(extension).toContain(`"${action.label}"`);
-      expect(extension).toContain(`"${action.quickAction}"`);
+      expect(generatedExtension).toContain(`"${action.label}"`);
+      expect(generatedExtension).toContain(`"${action.quickAction}"`);
     }
 
     for (const [packageConfig, nautilusDependency] of [

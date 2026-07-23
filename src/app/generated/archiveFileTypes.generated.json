@@ -174,9 +174,7 @@
       "primaryExtensions": [
         "zst"
       ],
-      "compoundExtensions": [
-        "tar.zst"
-      ],
+      "compoundExtensions": [],
       "splitSuffixes": [],
       "mimeType": "application/zstd",
       "mimeAliases": [],
@@ -189,7 +187,9 @@
       "primaryExtensions": [
         "tzst"
       ],
-      "compoundExtensions": [],
+      "compoundExtensions": [
+        "tar.zst"
+      ],
       "splitSuffixes": [],
       "mimeType": "application/x-zmanager-tzst",
       "mimeAliases": [],

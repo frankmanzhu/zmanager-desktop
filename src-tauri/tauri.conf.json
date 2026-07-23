@@ -109,8 +109,7 @@
       },
       {
         "ext": [
-          "zst",
-          "tar.zst"
+          "zst"
         ],
         "name": "zstd archive",
         "description": "zstd archive",
@@ -119,7 +118,8 @@
       },
       {
         "ext": [
-          "tzst"
+          "tzst",
+          "tar.zst"
         ],
         "name": "tzst archive",
         "description": "tzst archive",

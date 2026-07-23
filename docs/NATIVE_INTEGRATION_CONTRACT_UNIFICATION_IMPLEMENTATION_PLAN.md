@@ -80,7 +80,7 @@ The progress table starts as `Unverified`, not `Not started`, for this reason.
 | WP1 Native Integration Contract foundation | Complete | WP0 | [implementation evidence](native-integration/WP1_NATIVE_INTEGRATION_CONTRACT_FOUNDATION.md), [`native-capabilities.json`](../manifests/native-capabilities.json), [`native-capability-contract.test.mjs`](../scripts/native-capability-contract.test.mjs), [ADR-0001](adr/0001-native-platform-contract.md) |
 | WP2 Quick Action vertical slice | Implemented; installed proof in WP7/WP8 | WP1 | [implementation evidence](native-integration/WP2_QUICK_ACTION_VERTICAL_SLICE.md), [`shell-actions.json`](../manifests/shell-actions.json), [`shell-action-artifact-parity.test.mjs`](../scripts/shell-action-artifact-parity.test.mjs), [ADR-0013](adr/0013-generated-shell-action-window-disposition.md) |
 | WP3 Native Platform capability migration | Complete | WP2 | [implementation evidence](native-integration/WP3_NATIVE_PLATFORM_CAPABILITY_MIGRATION.md), [ADR-0001](adr/0001-native-platform-contract.md) |
-| WP4 Archive association catalog | Unverified | WP3 | Add links when complete |
+| WP4 Archive association catalog | Complete | WP3 | [implementation evidence](native-integration/WP4_ARCHIVE_ASSOCIATION.md) |
 | WP5 Command surface and window policy | Unverified | WP4 | Add links when complete |
 | WP6 macOS Native Host FFI contract | Unverified | WP5 | Add links when complete |
 | WP7 Registration and release evidence | Unverified | WP2, WP4, WP5, WP6 | Add links when complete |

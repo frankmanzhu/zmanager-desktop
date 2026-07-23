@@ -10,73 +10,22 @@ export const NO_SELECTION_MESSAGE = "Select one or more entries first.";
 export const NO_ENTRIES_MESSAGE = "No entries are available.";
 export const JOB_RUNNING_MESSAGE = "Finish the current job before starting another operation.";
 
-export type CommandId =
-  | "open"
-  | "closeArchive"
-  | "openInside"
-  | "openOutside"
-  | "view"
-  | "edit"
-  | "rename"
-  | "copyTo"
-  | "moveTo"
-  | "delete"
-  | "splitFile"
-  | "combineFiles"
-  | "properties"
-  | "comment"
-  | "crc32"
-  | "crc64"
-  | "xxh64"
-  | "md5"
-  | "sha1"
-  | "sha256"
-  | "sha384"
-  | "sha512"
-  | "sha3256"
-  | "blake2sp"
-  | "crcAll"
-  | "diff"
-  | "createFolder"
-  | "exit"
-  | "selectAll"
-  | "deselectAll"
-  | "invertSelection"
-  | "selectMask"
-  | "deselectMask"
-  | "selectByType"
-  | "deselectByType"
-  | "largeIcons"
-  | "smallIcons"
-  | "listView"
-  | "detailsView"
-  | "sortName"
-  | "sortType"
-  | "sortDate"
-  | "sortSize"
-  | "unsorted"
-  | "flatView"
-  | "twoPanels"
-  | "standardToolbar"
-  | "showButtonText"
-  | "openRoot"
-  | "upOneLevel"
-  | "foldersHistory"
-  | "refresh"
-  | "autoRefresh"
-  | "addFavorite"
-  | "options"
-  | "benchmark"
-  | "deleteTempFiles"
-  | "helpContents"
-  | "about"
-  | "jobs"
-  | "add"
-  | "extract"
-  | "test"
-  | "copy"
-  | "move"
-  | "info";
+import {
+  COMMAND_DEFINITIONS,
+  CLASSIC_MENU_GROUPS,
+  CLASSIC_TOOLBAR_GROUPS,
+  CLASSIC_TOOLBAR_ORDER,
+  type GeneratedCommandId,
+} from "../api/generated/applicationCommands.generated";
+
+export type CommandId = GeneratedCommandId;
+
+export {
+  COMMAND_DEFINITIONS,
+  CLASSIC_MENU_GROUPS,
+  CLASSIC_TOOLBAR_GROUPS,
+  CLASSIC_TOOLBAR_ORDER
+};
 
 export type CommandDefinition = {
   id: CommandId;
@@ -106,145 +55,7 @@ export type CommandBarGroup = {
   items: CommandId[];
 };
 
-export const COMMAND_DEFINITIONS: Record<CommandId, CommandDefinition> = {
-  open: { id: "open", label: "Open...", labelKey: "command.open", shortcut: "Ctrl+O", tooltip: "Open archive (Ctrl+O)" },
-  closeArchive: { id: "closeArchive", label: "Close Archive", labelKey: "command.closeArchive", tooltip: "Close the current archive" },
-  openInside: { id: "openInside", label: "Open in Archive", labelKey: "command.openInside", shortcut: "Ctrl+PageDown" },
-  openOutside: { id: "openOutside", label: "Open Outside", labelKey: "command.openOutside", shortcut: "Shift+Enter" },
-  view: { id: "view", label: "View", labelKey: "command.view", shortcut: "F3", tooltip: "View (F3)" },
-  edit: { id: "edit", label: "Edit", shortcut: "F4", unsupported: true, mutation: true },
-  rename: { id: "rename", label: "Rename", shortcut: "F2", unsupported: true, mutation: true },
-  copyTo: { id: "copyTo", label: "Copy To...", shortcut: "F5", tooltip: "Copy To... (F5)" },
-  moveTo: { id: "moveTo", label: "Move To...", shortcut: "F6", unsupported: true, mutation: true },
-  delete: { id: "delete", label: "Delete", shortcut: "Delete", unsupported: true, mutation: true },
-  splitFile: { id: "splitFile", label: "Split file...", unsupported: true },
-  combineFiles: { id: "combineFiles", label: "Combine files...", unsupported: true },
-  properties: { id: "properties", label: "Properties", labelKey: "command.properties", shortcut: "Alt+Enter", tooltip: "Properties (Alt+Enter)" },
-  comment: { id: "comment", label: "Comment...", shortcut: "Ctrl+Z", unsupported: true, mutation: true },
-  crc32: { id: "crc32", label: "CRC-32", unsupported: true },
-  crc64: { id: "crc64", label: "CRC-64", unsupported: true },
-  xxh64: { id: "xxh64", label: "XXH64", unsupported: true },
-  md5: { id: "md5", label: "MD5", unsupported: true },
-  sha1: { id: "sha1", label: "SHA-1", unsupported: true },
-  sha256: { id: "sha256", label: "SHA-256", unsupported: true },
-  sha384: { id: "sha384", label: "SHA-384", unsupported: true },
-  sha512: { id: "sha512", label: "SHA-512", unsupported: true },
-  sha3256: { id: "sha3256", label: "SHA3-256", unsupported: true },
-  blake2sp: { id: "blake2sp", label: "BLAKE2sp", unsupported: true },
-  crcAll: { id: "crcAll", label: "All", unsupported: true },
-  diff: { id: "diff", label: "Diff", unsupported: true },
-  createFolder: { id: "createFolder", label: "Create Folder", shortcut: "F7", unsupported: true, mutation: true },
-  exit: { id: "exit", label: "Exit", labelKey: "command.exit", shortcut: "Alt+F4" },
-  selectAll: { id: "selectAll", label: "Select All", labelKey: "command.selectAll", shortcut: "Ctrl+A" },
-  deselectAll: { id: "deselectAll", label: "Deselect All", labelKey: "command.deselectAll", shortcut: "Shift+Numpad Minus" },
-  invertSelection: { id: "invertSelection", label: "Invert Selection", labelKey: "command.invertSelection", shortcut: "Numpad Star" },
-  selectMask: { id: "selectMask", label: "Select...", shortcut: "Numpad Plus", unsupported: true },
-  deselectMask: { id: "deselectMask", label: "Deselect...", shortcut: "Numpad Minus", unsupported: true },
-  selectByType: { id: "selectByType", label: "Select by Type", labelKey: "command.selectByType", shortcut: "Alt+Numpad Plus" },
-  deselectByType: { id: "deselectByType", label: "Deselect by Type", labelKey: "command.deselectByType", shortcut: "Alt+Numpad Minus" },
-  largeIcons: { id: "largeIcons", label: "Large Icons", shortcut: "Ctrl+1", unsupported: true },
-  smallIcons: { id: "smallIcons", label: "Small Icons", shortcut: "Ctrl+2", unsupported: true },
-  listView: { id: "listView", label: "List", shortcut: "Ctrl+3", unsupported: true },
-  detailsView: { id: "detailsView", label: "Details", shortcut: "Ctrl+4" },
-  sortName: { id: "sortName", label: "Name", labelKey: "command.sortName", shortcut: "Ctrl+F3" },
-  sortType: { id: "sortType", label: "Type", labelKey: "command.sortType", shortcut: "Ctrl+F4" },
-  sortDate: { id: "sortDate", label: "Date", labelKey: "command.sortDate", shortcut: "Ctrl+F5" },
-  sortSize: { id: "sortSize", label: "Size", labelKey: "command.sortSize", shortcut: "Ctrl+F6" },
-  unsorted: { id: "unsorted", label: "Unsorted", shortcut: "Ctrl+F7", unsupported: true },
-  flatView: { id: "flatView", label: "Flat View", labelKey: "command.flatView" },
-  twoPanels: { id: "twoPanels", label: "2 Panels", shortcut: "F9", unsupported: true },
-  standardToolbar: { id: "standardToolbar", label: "Standard Toolbar" },
-  showButtonText: { id: "showButtonText", label: "Show Buttons Text", labelKey: "command.showButtonText" },
-  openRoot: { id: "openRoot", label: "Open Root Folder", shortcut: "\\" },
-  upOneLevel: { id: "upOneLevel", label: "Up One Level", labelKey: "commands.upOneLevel", shortcut: "Backspace" },
-  foldersHistory: { id: "foldersHistory", label: "Folders History...", shortcut: "Alt+F12", unsupported: true },
-  refresh: { id: "refresh", label: "Refresh", labelKey: "common.refresh", shortcut: "Ctrl+R", tooltip: "Refresh (Ctrl+R)" },
-  autoRefresh: { id: "autoRefresh", label: "Auto Refresh", unsupported: true },
-  addFavorite: { id: "addFavorite", label: "Add folder to Favorites as", unsupported: true },
-  options: { id: "options", label: "Options...", labelKey: "command.options" },
-  benchmark: { id: "benchmark", label: "Benchmark", unsupported: true },
-  deleteTempFiles: { id: "deleteTempFiles", label: "Delete Temporary Files...", labelKey: "command.deleteTempFiles" },
-  helpContents: { id: "helpContents", label: "Contents...", labelKey: "command.helpContents", shortcut: "F1", unsupported: true },
-  about: { id: "about", label: "About ZManager...", labelKey: "command.about" },
-  jobs: { id: "jobs", label: "Jobs", tooltip: "Open Jobs task center" },
-  add: { id: "add", label: "Add", labelKey: "command.add", shortcut: "Ctrl+N", tooltip: "Add (Ctrl+N)" },
-  extract: { id: "extract", label: "Extract", labelKey: "command.extract", shortcut: "F5", tooltip: "Extract (F5)" },
-  test: { id: "test", label: "Test", labelKey: "command.test", tooltip: "Test archive" },
-  copy: { id: "copy", label: "Copy", labelKey: "command.copy", shortcut: "F5", tooltip: "Copy (F5)" },
-  move: { id: "move", label: "Move", shortcut: "F6", unsupported: true, mutation: true },
-  info: { id: "info", label: "Info", labelKey: "command.info", shortcut: "Alt+Enter", tooltip: "Info (Alt+Enter)" },
-};
 
-export const CLASSIC_MENU_GROUPS: MenuGroup[] = [
-  {
-    label: "File",
-    items: [
-      { kind: "command", id: "open" },
-      { kind: "command", id: "openInside" },
-      { kind: "command", id: "openOutside" },
-      { kind: "command", id: "view" },
-      { kind: "separator" },
-      { kind: "command", id: "properties" },
-      { kind: "separator" },
-      { kind: "command", id: "exit" },
-    ],
-  },
-  {
-    label: "Edit",
-    items: [
-      { kind: "command", id: "selectAll" },
-      { kind: "command", id: "deselectAll" },
-      { kind: "command", id: "invertSelection" },
-      { kind: "command", id: "selectByType" },
-      { kind: "command", id: "deselectByType" },
-    ],
-  },
-  {
-    label: "View",
-    items: [
-      { kind: "command", id: "sortName" },
-      { kind: "command", id: "sortType" },
-      { kind: "command", id: "sortDate" },
-      { kind: "command", id: "sortSize" },
-      { kind: "separator" },
-      { kind: "command", id: "flatView" },
-      { kind: "separator" },
-      {
-        kind: "submenu",
-        label: "Toolbars",
-        labelKey: "commandMenu.toolbars",
-        items: [
-          { kind: "command", id: "showButtonText" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Tools",
-    items: [
-      { kind: "command", id: "options" },
-      { kind: "separator" },
-      { kind: "command", id: "deleteTempFiles" },
-    ],
-  },
-  {
-    label: "Help",
-    items: [
-      { kind: "command", id: "about" },
-    ],
-  },
-];
-
-export const CLASSIC_TOOLBAR_GROUPS: CommandBarGroup[] = [
-  { id: "compress", label: "Compress", items: ["add"] },
-  { id: "extract", label: "Extract", items: ["open", "closeArchive", "extract", "test"] },
-  { id: "table", label: "Table actions", items: ["view", "copy", "info", "refresh", "selectAll", "flatView"] },
-  { id: "jobs", label: "Jobs", items: ["jobs"] },
-  { id: "settings", label: "Settings", items: ["options", "deleteTempFiles"] },
-  { id: "help", label: "Help", items: ["helpContents", "about"] },
-];
-
-export const CLASSIC_TOOLBAR_ORDER: CommandId[] = CLASSIC_TOOLBAR_GROUPS.flatMap((group) => group.items);
 
 export type ToolbarWorkspaceMode = "compress" | "extract";
 

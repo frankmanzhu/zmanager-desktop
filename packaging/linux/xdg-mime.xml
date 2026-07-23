@@ -3,6 +3,7 @@
   <mime-type type="application/x-zmanager-tzst">
     <comment>ZManager TZST archive</comment>
     <glob pattern="*.tzst"/>
+    <glob pattern="*.tar.zst"/>
   </mime-type>
   <mime-type type="application/x-zmanager-tzap">
     <comment>ZManager TZAP archive</comment>

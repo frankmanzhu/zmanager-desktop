@@ -1,3 +1,4 @@
+import ZManagerGenerated
 import AppKit
 import CoreServices
 import Foundation
@@ -38,11 +39,11 @@ public func zmanagerMacOSSystemFileIcons(
     _ callback: ZManagerHostCallback?,
     _ context: UnsafeMutableRawPointer?
 ) -> Int32 {
-    guard let bytes, count >= 0, count <= 1_048_576, let callback else { return 1 }
+    guard let bytes, count >= 0, count <= MacOSFFILimits.maxRequestBytes, let callback else { return MacOSFFIErrorMapping.invalidPayload }
     let input = Data(bytes: bytes, count: count)
     guard let requests = try? JSONDecoder().decode([IconRequest].self, from: input),
           requests.count <= 1_024
-    else { return 2 }
+    else { return MacOSFFIErrorMapping.systemError }
     let result = OperationResult()
     let work = {
         let responses = requests.map {
@@ -124,7 +125,7 @@ public func zmanagerMacOSDefaultHandlers(
     _ callback: ZManagerHostCallback?,
     _ context: UnsafeMutableRawPointer?
 ) -> Int32 {
-    guard let bytes, count > 0, count <= 1_048_576, let callback,
+    guard let bytes, count > 0, count <= MacOSFFILimits.maxRequestBytes, let callback,
           let request = try? JSONDecoder().decode(
               DefaultHandlerRequest.self,
               from: Data(bytes: bytes, count: count)
@@ -139,7 +140,7 @@ public func zmanagerMacOSDefaultHandlers(
                               && component.allSatisfy { $0.isLetter || $0.isNumber }
                       }
           })
-    else { return 1 }
+    else { return MacOSFFIErrorMapping.invalidPayload }
 
     let result = OperationResult()
     let work = {
@@ -177,7 +178,7 @@ public func zmanagerMacOSConsumeShellActionRequest(
               data: Data(bytes: tokenBytes, count: tokenLength),
               encoding: .utf8
           )
-    else { return 1 }
+    else { return MacOSFFIErrorMapping.invalidPayload }
     do {
         let inbox: AppGroupRequestInbox
         if let value = getenv("ZMANAGER_MACOS_APP_GROUP_REQUEST_DIR") {
@@ -193,6 +194,6 @@ public func zmanagerMacOSConsumeShellActionRequest(
         }
         return 0
     } catch {
-        return 2
+        return MacOSFFIErrorMapping.systemError
     }
 }

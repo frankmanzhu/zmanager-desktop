@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS } from "./archiveFileTypes";
+import { SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS } from "./archiveFileTypes";
 
 declare const process: {
   cwd(): string;
@@ -21,7 +21,7 @@ const script = readFileSync(
   "utf8",
 );
 
-const expectedWindowsArchiveExtensions = [...SUPPORTED_SINGLE_ARCHIVE_EXTENSIONS, "001"]
+const expectedWindowsArchiveExtensions = [...new Set([...SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS])]
   .map((extension) => `.${extension}`)
   .sort();
 
@@ -56,9 +56,14 @@ describe("Windows context menu installer hook", () => {
       '"09AddToTgz" "Add to .tgz"',
     ];
 
+    const generatedScript = readFileSync(
+      join(process.cwd(), "packaging", "windows", "nsis-shell-actions.generated.nsh"),
+      "utf8",
+    );
+
     let cursor = -1;
     for (const marker of expected) {
-      const index = script.indexOf(marker);
+      const index = generatedScript.indexOf(marker);
       expect(index, `${marker} should be present`).toBeGreaterThan(-1);
       expect(index, `${marker} should follow the previous action`).toBeGreaterThan(cursor);
       cursor = index;

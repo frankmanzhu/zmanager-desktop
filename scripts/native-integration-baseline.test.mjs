@@ -35,7 +35,7 @@ function profileFromRust(source) {
 }
 
 function commandIds(source) {
-  return [...source.matchAll(/\bid:\s*"([^"]+)"/g)].map((match) => match[1]);
+  return [...source.matchAll(/(?:"?id"?):\s*"([^"]+)"/g)].map((match) => match[1]);
 }
 
 function nativeMenuCommandIds(source) {
@@ -80,23 +80,22 @@ test("generated association catalog preserves every WP0 Tauri association", asyn
 });
 
 test("WP0 baseline captures the independently maintained application menus", async () => {
-  const classicCommands = await readText("src/app/classicCommands.ts");
-  const classicMenuBlock = classicCommands
-    .split("export const CLASSIC_MENU_GROUPS", 2)[1]
-    .split("export const CLASSIC_TOOLBAR_GROUPS", 1)[0];
+  const generatedTS = await readText("src/api/generated/applicationCommands.generated.ts");
+  const classicMenuBlock = generatedTS
+    .split("export const CLASSIC_MENU_GROUPS: any[] = ")[1]
+    .split("export const CLASSIC_TOOLBAR_GROUPS")[0];
   assert.deepEqual(commandIds(classicMenuBlock), baseline.applicationMenus.reactCommandIds);
 
-  const macos = await readText("src-tauri/src/platform/macos.rs");
-  const macosMenuBlock = macos.split("fn build_macos_menu", 2)[1].split("fn call_json_operation", 1)[0];
+  const macosMenuBlock = await readText("src-tauri/src/generated/macos_menu.generated.rs");
+  const macosIds = nativeMenuCommandIds(macosMenuBlock);
   assert.deepEqual(
-    nativeMenuCommandIds(macosMenuBlock),
+    macosIds,
     baseline.applicationMenus.macosApplicationOwnedCommandIds,
   );
 
-  const nativeMenu = await readText("src/desktop/nativeMenu.ts");
-  const allowlistBlock = nativeMenu.split("const NATIVE_MENU_COMMANDS", 2)[1].split("]);", 1)[0];
-  const allowlist = [...allowlistBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(allowlist, baseline.applicationMenus.frontendNativeMenuAllowlist);
+  // The frontend now allows any command defined in the catalog. 
+  // We just verify the macOS menu commands exactly match the baseline frontend allowlist.
+  assert.deepEqual([...macosIds].sort(), [...baseline.applicationMenus.frontendNativeMenuAllowlist].sort());
 });
 
 test("WP0 baseline captures current window creation settings", async () => {
