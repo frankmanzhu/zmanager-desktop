@@ -14,21 +14,26 @@ public enum ShellActionID: String, Codable, CaseIterable, Sendable {
 }
 public struct ShellActionPolicy: Equatable, Sendable {
     public let id: ShellActionID
+    public let canonicalLabel: String
     public let displayKey: String
+    public let nativeVerb: String
     public let order: Int
+    public let contextMenuOrder: Int?
+    public let contextMenuContexts: [String]
     public let selectionShapes: [String]
     public let multiplicity: String
+    public let nativeSurfaces: [String]
     public static let all: [ShellActionPolicy] = [
-        .init(id: .open, displayKey: "shellAction.open", order: 10, selectionShapes: ["single-archive"], multiplicity: "exactly-one"),
-        .init(id: .compress, displayKey: "shellAction.compress", order: 20, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .extract, displayKey: "shellAction.extract", order: 30, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
-        .init(id: .compressZip, displayKey: "shellAction.compressZip", order: 40, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .compressTzap, displayKey: "shellAction.compressTzap", order: 50, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .compressSevenZ, displayKey: "shellAction.compressSevenZ", order: 60, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .compressTarZst, displayKey: "shellAction.compressTarZst", order: 70, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .compressTarGz, displayKey: "shellAction.compressTarGz", order: 75, selectionShapes: ["files", "folders", "mixed"], multiplicity: "one-or-more"),
-        .init(id: .compressCleanSource, displayKey: "shellAction.compressCleanSource", order: 80, selectionShapes: ["single-folder"], multiplicity: "exactly-one"),
-        .init(id: .extractHere, displayKey: "shellAction.extractHere", order: 90, selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more"),
-        .init(id: .extractToFolder, displayKey: "shellAction.extractToFolder", order: 100, selectionShapes: ["single-archive"], multiplicity: "exactly-one")
+        .init(id: .open, canonicalLabel: "Open archive", displayKey: "shellAction.open", nativeVerb: "OpenArchive", order: 10, contextMenuOrder: 30, contextMenuContexts: ["archiveSingle"], selectionShapes: ["single-archive"], multiplicity: "exactly-one", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder", "macosServices"]),
+        .init(id: .compress, canonicalLabel: "Add to archive...", displayKey: "shellAction.compress", nativeVerb: "AddToArchive", order: 20, contextMenuOrder: 40, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder", "macosServices"]),
+        .init(id: .extract, canonicalLabel: "Extract with ZManager...", displayKey: "shellAction.extract", nativeVerb: "Extract", order: 30, contextMenuOrder: nil, contextMenuContexts: [], selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more", nativeSurfaces: ["macosServices"]),
+        .init(id: .compressZip, canonicalLabel: "Add to .zip", displayKey: "shellAction.compressZip", nativeVerb: "AddToZip", order: 40, contextMenuOrder: 60, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .compressTzap, canonicalLabel: "Add to .tzap", displayKey: "shellAction.compressTzap", nativeVerb: "AddToTzap", order: 50, contextMenuOrder: 50, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .compressSevenZ, canonicalLabel: "Add to .7z", displayKey: "shellAction.compressSevenZ", nativeVerb: "AddToSevenZ", order: 60, contextMenuOrder: 70, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .compressTarZst, canonicalLabel: "Add to .tzst", displayKey: "shellAction.compressTarZst", nativeVerb: "AddToTzst", order: 70, contextMenuOrder: 80, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .compressTarGz, canonicalLabel: "Add to .tgz", displayKey: "shellAction.compressTarGz", nativeVerb: "AddToTgz", order: 75, contextMenuOrder: 90, contextMenuContexts: ["archiveSingle", "archiveMultiple", "creation", "container"], selectionShapes: ["single-archive", "multiple-archives", "files", "folders", "mixed"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .compressCleanSource, canonicalLabel: "Compress and remove source", displayKey: "shellAction.compressCleanSource", nativeVerb: "CompressCleanSource", order: 80, contextMenuOrder: nil, contextMenuContexts: [], selectionShapes: ["single-folder"], multiplicity: "exactly-one", nativeSurfaces: []),
+        .init(id: .extractHere, canonicalLabel: "Extract Here", displayKey: "shellAction.extractHere", nativeVerb: "ExtractHere", order: 90, contextMenuOrder: 10, contextMenuContexts: ["archiveSingle", "archiveMultiple"], selectionShapes: ["single-archive", "multiple-archives"], multiplicity: "one-or-more", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"]),
+        .init(id: .extractToFolder, canonicalLabel: "Extract to Archive Folder", displayKey: "shellAction.extractToFolder", nativeVerb: "ExtractToFolder", order: 100, contextMenuOrder: 20, contextMenuContexts: ["archiveSingle"], selectionShapes: ["single-archive"], multiplicity: "exactly-one", nativeSurfaces: ["windowsExplorer", "linuxDesktop", "linuxNautilus", "linuxKde", "macosFinder"])
     ]
 }

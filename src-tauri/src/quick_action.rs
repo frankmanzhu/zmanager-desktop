@@ -433,6 +433,12 @@ pub fn parse_app_group_shell_action_request(
     validate_request(request.action, request.paths).map_err(|error| error.message)
 }
 
+pub fn validate_ingested_shell_action_request(
+    request: QuickActionRequestDto,
+) -> Result<QuickActionRequestDto, String> {
+    validate_request(request.kind, request.paths).map_err(|error| error.message)
+}
+
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
     let normalized = value
         .trim()
@@ -441,29 +447,11 @@ fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
         .flat_map(char::to_lowercase)
         .collect::<String>();
 
-    match normalized.as_str() {
-        "compress" => Ok(QuickActionKindDto::Compress),
-        "open" | "browse" => Ok(QuickActionKindDto::Open),
-        "extract" => Ok(QuickActionKindDto::Extract),
-        "compresszip" | "addtozip" => Ok(QuickActionKindDto::CompressZip),
-        "compresstzap" | "addtotzap" => Ok(QuickActionKindDto::CompressTzap),
-        "compress7z" | "compresssevenz" | "addto7z" | "addtosevenz" => {
-            Ok(QuickActionKindDto::CompressSevenZ)
-        }
-        "compresstarzst" | "compresstzst" | "addtotarzst" | "addtotzst" => {
-            Ok(QuickActionKindDto::CompressTarZst)
-        }
-        "compresstargz" | "compresstgz" | "addtotargz" | "addtotgz" => {
-            Ok(QuickActionKindDto::CompressTarGz)
-        }
-        "compresscleansource" | "cleansource" => Ok(QuickActionKindDto::CompressCleanSource),
-        "extracthere" => Ok(QuickActionKindDto::ExtractHere),
-        "extracttofolder" | "extractfolder" => Ok(QuickActionKindDto::ExtractToFolder),
-        _ => Err(
+    zmanager_shell_contract::ShellActionKind::from_normalized_compatibility_alias(&normalized)
+        .ok_or_else(|| {
             QuickActionError::invalid(format!("unknown quick action: {value}"))
-                .with_hint("Use compress or extract."),
-        ),
-    }
+                .with_hint("Use a generated shell action identifier.")
+        })
 }
 
 fn validate_request(

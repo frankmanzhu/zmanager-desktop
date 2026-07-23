@@ -31,106 +31,17 @@ use windows::{
             IExplorerCommand_Impl, IShellItemArray, SHStrDupW, SIGDN_FILESYSPATH,
         },
     },
-    core::{BOOL, Error, GUID, HRESULT, Interface, PCWSTR, PWSTR, Ref, Result as WindowsResult, w},
+    core::{BOOL, Error, GUID, HRESULT, Interface, PWSTR, Ref, Result as WindowsResult},
 };
 use windows_core::implement;
 use zmanager_shell_contract::{ShellActionKind, ShellActionRequest};
 
-const OPEN_CLSID: GUID = GUID::from_u128(0x8ac91dd4_b918_4118_9635_9407a4731972);
-const EXTRACT_HERE_CLSID: GUID = GUID::from_u128(0x5e7c0abe_ac4c_4d4b_bedd_a9133d7f80d4);
-const EXTRACT_TO_FOLDER_CLSID: GUID = GUID::from_u128(0xae04555b_2c6b_42c1_870a_9b15e1e0b82b);
-const COMPRESS_CLSID: GUID = GUID::from_u128(0x8bd7f398_a6c3_40a2_a4f8_725e0d671366);
-const COMPRESS_TZAP_CLSID: GUID = GUID::from_u128(0xbeeb01f9_5243_4f96_9bb1_54fa4c250cde);
-const COMPRESS_ZIP_CLSID: GUID = GUID::from_u128(0xaa751926_e80f_47a5_9e03_dfa87926f23a);
-const COMPRESS_SEVEN_Z_CLSID: GUID = GUID::from_u128(0xc910bf28_3121_48f7_a8a1_2f4d8f587ce8);
-const COMPRESS_TAR_ZST_CLSID: GUID = GUID::from_u128(0x9838e6cb_f43e_4fc9_96f1_7f0f4bdbb728);
-const COMPRESS_TAR_GZ_CLSID: GUID = GUID::from_u128(0x7f3e8a1b_2c4d_45f6_9a7b_8c9d0e1f2a3b);
+mod generated;
+use generated::*;
 
 static LIVE_OBJECTS: AtomicU32 = AtomicU32::new(0);
 static SERVER_LOCKS: AtomicU32 = AtomicU32::new(0);
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ExplorerAction {
-    Open,
-    ExtractHere,
-    ExtractToFolder,
-    Compress,
-    CompressTzap,
-    CompressZip,
-    CompressSevenZ,
-    CompressTarZst,
-    CompressTarGz,
-}
-
-impl ExplorerAction {
-    fn from_clsid(clsid: &GUID) -> Option<Self> {
-        match *clsid {
-            OPEN_CLSID => Some(Self::Open),
-            EXTRACT_HERE_CLSID => Some(Self::ExtractHere),
-            EXTRACT_TO_FOLDER_CLSID => Some(Self::ExtractToFolder),
-            COMPRESS_CLSID => Some(Self::Compress),
-            COMPRESS_TZAP_CLSID => Some(Self::CompressTzap),
-            COMPRESS_ZIP_CLSID => Some(Self::CompressZip),
-            COMPRESS_SEVEN_Z_CLSID => Some(Self::CompressSevenZ),
-            COMPRESS_TAR_ZST_CLSID => Some(Self::CompressTarZst),
-            COMPRESS_TAR_GZ_CLSID => Some(Self::CompressTarGz),
-            _ => None,
-        }
-    }
-
-    fn clsid(self) -> GUID {
-        match self {
-            Self::Open => OPEN_CLSID,
-            Self::ExtractHere => EXTRACT_HERE_CLSID,
-            Self::ExtractToFolder => EXTRACT_TO_FOLDER_CLSID,
-            Self::Compress => COMPRESS_CLSID,
-            Self::CompressTzap => COMPRESS_TZAP_CLSID,
-            Self::CompressZip => COMPRESS_ZIP_CLSID,
-            Self::CompressSevenZ => COMPRESS_SEVEN_Z_CLSID,
-            Self::CompressTarZst => COMPRESS_TAR_ZST_CLSID,
-            Self::CompressTarGz => COMPRESS_TAR_GZ_CLSID,
-        }
-    }
-
-    fn title(self) -> PCWSTR {
-        match self {
-            Self::Open => w!("Open archive"),
-            Self::ExtractHere => w!("Extract Here"),
-            Self::ExtractToFolder => w!("Extract to Archive Folder"),
-            Self::Compress => w!("Add to archive..."),
-            Self::CompressTzap => w!("Add to .tzap"),
-            Self::CompressZip => w!("Add to .zip"),
-            Self::CompressSevenZ => w!("Add to .7z"),
-            Self::CompressTarZst => w!("Add to .tzst"),
-            Self::CompressTarGz => w!("Add to .tgz"),
-        }
-    }
-
-    fn shell_action(self) -> ShellActionKind {
-        match self {
-            Self::Open => ShellActionKind::Open,
-            Self::ExtractHere => ShellActionKind::ExtractHere,
-            Self::ExtractToFolder => ShellActionKind::ExtractToFolder,
-            Self::Compress => ShellActionKind::Compress,
-            Self::CompressTzap => ShellActionKind::CompressTzap,
-            Self::CompressZip => ShellActionKind::CompressZip,
-            Self::CompressSevenZ => ShellActionKind::CompressSevenZ,
-            Self::CompressTarZst => ShellActionKind::CompressTarZst,
-            Self::CompressTarGz => ShellActionKind::CompressTarGz,
-        }
-    }
-
-    fn supports_count(self, count: u32) -> bool {
-        if count == 0 {
-            return false;
-        }
-        match self {
-            Self::Open | Self::ExtractToFolder => count == 1,
-            _ => true,
-        }
-    }
-}
 
 struct LiveObject;
 
@@ -398,21 +309,11 @@ mod tests {
 
     #[test]
     fn every_registered_class_maps_to_one_shell_action() {
-        let cases = [
-            (OPEN_CLSID, ShellActionKind::Open),
-            (EXTRACT_HERE_CLSID, ShellActionKind::ExtractHere),
-            (EXTRACT_TO_FOLDER_CLSID, ShellActionKind::ExtractToFolder),
-            (COMPRESS_CLSID, ShellActionKind::Compress),
-            (COMPRESS_TZAP_CLSID, ShellActionKind::CompressTzap),
-            (COMPRESS_ZIP_CLSID, ShellActionKind::CompressZip),
-            (COMPRESS_SEVEN_Z_CLSID, ShellActionKind::CompressSevenZ),
-            (COMPRESS_TAR_ZST_CLSID, ShellActionKind::CompressTarZst),
-            (COMPRESS_TAR_GZ_CLSID, ShellActionKind::CompressTarGz),
-        ];
-
-        for (class_id, expected) in cases {
-            let action = ExplorerAction::from_clsid(&class_id).expect("class should be registered");
-            assert_eq!(action.shell_action(), expected);
+        for expected in ALL_EXPLORER_ACTIONS {
+            let class_id = expected.clsid();
+            let actual =
+                ExplorerAction::from_clsid(&class_id).expect("class should be registered");
+            assert_eq!(actual, *expected);
         }
     }
 

@@ -217,8 +217,8 @@ fn read_restore_state(path: &Path) -> Result<RestoreState, CommandErrorDto> {
     serde_json::from_slice(&bytes).map_err(|error| operation_error(error.to_string()))
 }
 
-fn operation_error(message: String) -> CommandErrorDto {
-    CommandErrorDto::operation_failed(message)
+fn operation_error(error: impl std::fmt::Display) -> CommandErrorDto {
+    CommandErrorDto::operation_failed(error.to_string())
 }
 
 #[cfg(test)]

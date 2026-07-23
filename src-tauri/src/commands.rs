@@ -26,10 +26,10 @@ use crate::{
         AckSubscriptionRequest, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse,
         DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
         NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
-        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
-        ProjectIntegrationShellActionDto, ResumeJobRequest, StartCreateRequest,
-        StartExtractRequest, SubscribeJobRequest, SubscriptionRequest, SystemFileIconRequest,
-        SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
+        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract, ResumeJobRequest,
+        StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        TransitionalPlatformProfileDto, TzapRestorePolicyDto, ValidateDirectoryRequest,
         ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
@@ -92,6 +92,24 @@ pub fn healthcheck() -> crate::dto::HealthcheckResponse {
 #[tauri::command]
 pub fn project_contract() -> crate::dto::ProjectContract {
     let integration = crate::platform::integration_profile();
+    let package_kind = crate::native_integration::current_package_kind();
+    let capabilities = crate::native_integration::capability_snapshots(
+        integration.platform,
+        package_kind,
+        &crate::platform::capability_observations(),
+    );
+    let selected_item_actions_enabled = crate::native_integration::is_capability_available(
+        &capabilities,
+        crate::native_integration::NativeCapabilityId::ShellSelectedItemActions,
+    );
+    let background_actions_enabled = crate::native_integration::is_capability_available(
+        &capabilities,
+        crate::native_integration::NativeCapabilityId::ShellBackgroundActions,
+    );
+    let file_associations_enabled = crate::native_integration::is_capability_available(
+        &capabilities,
+        crate::native_integration::NativeCapabilityId::FileAssociations,
+    );
 
     ProjectContract {
         commands: constants::PLANNED_COMMANDS,
@@ -99,22 +117,18 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         core_dependency: constants::CORE_DEPENDENCY,
         platform_integration: ProjectIntegrationContract {
             platform: integration.platform,
-            selected_item_actions_enabled: integration.selected_item_actions_enabled,
-            background_actions_enabled: integration.background_actions_enabled,
-            file_associations_enabled: integration.file_associations_enabled,
-            window_decorations: integration.window_decorations,
-            custom_window_chrome: integration.custom_window_chrome,
-            manual_window_resize: integration.manual_window_resize,
-            native_menu_bar: integration.native_menu_bar,
-            associated_extensions: integration.associated_extensions,
-            shell_actions: integration
-                .shell_actions
-                .iter()
-                .map(|action| ProjectIntegrationShellActionDto {
-                    label: action.label,
-                    quick_action: action.quick_action,
-                })
-                .collect(),
+            package_kind,
+            capabilities,
+            transitional_platform_profile: TransitionalPlatformProfileDto {
+                selected_item_actions_enabled,
+                background_actions_enabled,
+                file_associations_enabled,
+                window_decorations: integration.window_decorations,
+                custom_window_chrome: integration.custom_window_chrome,
+                manual_window_resize: integration.manual_window_resize,
+                native_menu_bar: integration.native_menu_bar,
+                associated_extensions: integration.associated_extensions,
+            },
         },
     }
 }
@@ -165,20 +179,6 @@ pub fn quick_action_startup_state(
     state: State<'_, QuickActionLaunchCoordinator>,
 ) -> crate::dto::QuickActionStartupStateDto {
     state.startup_state().to_dto()
-}
-
-#[tauri::command]
-pub fn consume_shell_action_request(
-    request_token: String,
-) -> Result<crate::dto::QuickActionRequestDto, CommandErrorDto> {
-    let content =
-        crate::platform::consume_shell_action_request(request_token.trim()).map_err(|_| {
-            CommandErrorDto::invalid_request(
-                "The Finder action request is invalid, expired, or already consumed",
-            )
-        })?;
-    crate::quick_action::parse_app_group_shell_action_request(&content)
-        .map_err(CommandErrorDto::invalid_request)
 }
 
 #[tauri::command]
@@ -1155,12 +1155,10 @@ pub fn start_native_file_drag(
         request.strip_components,
         password.as_deref(),
     )?;
-    if crate::platform::native_drag_requires_preflight() {
-        preflight_native_drag_stream(&archive_path, password.as_deref(), &drag_items)?;
-    }
-
     let stream_archive_path = archive_path.clone();
     let stream_password = password.clone();
+    let preflight_archive_path = archive_path.clone();
+    let preflight_password = password.clone();
     let stream_provider: crate::platform::NativeFileDragStreamProvider =
         Arc::new(move |entry_path, writer| {
             stream_native_drag_entry(
@@ -1175,14 +1173,30 @@ pub fn start_native_file_drag(
     let start = crate::platform::start_native_file_drag(
         &window,
         &drag_items,
+        || {
+            preflight_native_drag_stream(
+                &preflight_archive_path,
+                preflight_password.as_deref(),
+                &drag_items,
+            )
+            .map_err(native_file_drag_error_from_command)
+        },
         stream_provider,
         &drag_registry,
     )
     .map_err(map_native_file_drag_error)?;
 
+    let (outcome, session_id) = match start {
+        crate::platform::NativeFileDragStart::Pending { session_id } => {
+            (NativeFileDragOutcomeDto::Pending, Some(session_id))
+        }
+        crate::platform::NativeFileDragStart::Settled { outcome } => {
+            (map_native_file_drag_outcome(outcome), None)
+        }
+    };
     Ok(NativeFileDragResponse {
-        outcome: map_native_file_drag_outcome(start.outcome),
-        session_id: start.session_id,
+        outcome,
+        session_id,
         dragged_entries: drag_items
             .iter()
             .map(|item| item.entry_path.clone())
@@ -1849,14 +1863,6 @@ fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
         AppleArchiveError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("AppleArchive plan error: {source}"))
         }
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        AppleArchiveError::Native(source) => {
-            CommandErrorDto::operation_failed(format!("AppleArchive operation failed: {source}"))
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
-        AppleArchiveError::UnsupportedPlatform => CommandErrorDto::operation_failed(
-            "AppleArchive is supported only on macOS and iOS".to_string(),
-        ),
         AppleArchiveError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
         }
@@ -1881,6 +1887,7 @@ fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
         AppleArchiveError::Cancelled => {
             CommandErrorDto::cancelled("AppleArchive job was cancelled.")
         }
+        other => CommandErrorDto::operation_failed(other.to_string()),
     }
 }
 
@@ -2026,7 +2033,6 @@ fn map_native_file_drag_outcome(
     outcome: crate::platform::NativeFileDragOutcome,
 ) -> NativeFileDragOutcomeDto {
     match outcome {
-        crate::platform::NativeFileDragOutcome::Pending => NativeFileDragOutcomeDto::Pending,
         crate::platform::NativeFileDragOutcome::Dropped => NativeFileDragOutcomeDto::Dropped,
         crate::platform::NativeFileDragOutcome::Cancelled => NativeFileDragOutcomeDto::Cancelled,
         crate::platform::NativeFileDragOutcome::NoDrop => NativeFileDragOutcomeDto::NoDrop,

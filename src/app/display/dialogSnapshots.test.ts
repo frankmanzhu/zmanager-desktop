@@ -10,6 +10,7 @@ import {
   buildSelectionInfoDialogSnapshot,
   serializeAboutDiagnostics,
 } from "./dialogSnapshots";
+import { nativeCapabilitySnapshots } from "../../test/nativeCapabilityFixtures";
 
 function rowValue(
   snapshot: Extract<ReturnType<typeof buildArchiveInfoDialogSnapshot>, { kind: "info" }>,
@@ -148,15 +149,22 @@ describe("dialog snapshots", () => {
       coreDependency: "zmanager-core 1.2.3",
       platformIntegration: {
         platform: "windows",
-        selectedItemActionsEnabled: true,
-        backgroundActionsEnabled: false,
-        fileAssociationsEnabled: true,
-        windowDecorations: true,
-        customWindowChrome: false,
-        manualWindowResize: false,
-        nativeMenuBar: false,
-        associatedExtensions: [".zip", ".7z"],
-        shellActions: [{ label: "Extract Here", quickAction: "extractHere" }],
+        packageKind: "development",
+        capabilities: nativeCapabilitySnapshots("windows", {
+          shellSelectedItemActions: "available",
+          shellBackgroundActions: "unavailable",
+          fileAssociations: "available",
+        }),
+        transitionalPlatformProfile: {
+          selectedItemActionsEnabled: true,
+          backgroundActionsEnabled: false,
+          fileAssociationsEnabled: true,
+          windowDecorations: true,
+          customWindowChrome: false,
+          manualWindowResize: false,
+          nativeMenuBar: false,
+          associatedExtensions: [".zip", ".7z"],
+        },
       },
     };
 
@@ -189,7 +197,7 @@ describe("dialog snapshots", () => {
       "Support Diagnostics",
       "Status: ready",
       "Extensions: .zip, .7z",
-      "Shell actions: Extract Here (extractHere)",
+      "Shell actions: enabled",
       "Diagnostic log: C:/Program Files/ZManager/logs/zmanager-diagnostics.log",
       "Log location: installation folder",
     ].join("\n"));

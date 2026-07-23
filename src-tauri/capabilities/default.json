@@ -17,7 +17,6 @@
     "allow-record-diagnostic-event",
     "allow-diagnostic-log-info",
     "allow-quick-action-startup-state",
-    "allow-consume-shell-action-request",
     "allow-native-frontend-ready",
     "allow-acknowledge-native-event",
     "allow-account-snapshot",

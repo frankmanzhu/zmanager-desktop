@@ -57,17 +57,22 @@ private final class StartDelivery: @unchecked Sendable {
         HostState.shared.lifecycle = lifecycle
         HostState.shared.lock.unlock()
         lifecycle.start()
+        let appGroupAvailable = (try? AppGroupRequestInbox.applicationGroup()) != nil
         let selfTest = ProcessInfo.processInfo.environment["ZMANAGER_MACOS_LINKAGE_SELF_TEST"] == "1"
             ? runInstalledLinkageSelfTest() : nil
+        var object: [String: Any] = [
+            "kind": "hostStarted",
+            "mainThread": Thread.isMainThread,
+            "appGroupAvailable": appGroupAvailable,
+        ]
         if let selfTest {
-            var object: [String: Any] = ["kind": "hostStarted", "mainThread": Thread.isMainThread]
             object["appGroupSelfTest"] = selfTest.appGroup
             object["filePromiseSelfTest"] = selfTest.filePromise
             object["iconSelfTest"] = selfTest.icon
             object["defaultHandlerSelfTest"] = selfTest.defaultHandler
             object["serviceSelfTest"] = selfTest.service
-            if let payload = try? JSONSerialization.data(withJSONObject: object) { emit(payload) }
         }
+        if let payload = try? JSONSerialization.data(withJSONObject: object) { emit(payload) }
     }
 }
 

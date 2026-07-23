@@ -13,72 +13,10 @@ try:
 except ValueError:
     gi.require_version("Nautilus", "3.0")
 from gi.repository import GObject, Nautilus
-
-
-ARCHIVE_SUFFIXES = (
-    ".7z.001",
-    ".vol000.tzap",
-    ".tar.br",
-    ".tar.bz2",
-    ".tar.gz",
-    ".tar.lz",
-    ".tar.lz4",
-    ".tar.lzma",
-    ".tar.lzo",
-    ".tar.lrz",
-    ".tar.xz",
-    ".tar.z",
-    ".tar.zst",
-    ".001",
-    ".7z",
-    ".apk",
-    ".appx",
-    ".br",
-    ".bz2",
-    ".cab",
-    ".cbr",
-    ".cpio",
-    ".deb",
-    ".gz",
-    ".ipa",
-    ".iso",
-    ".jar",
-    ".lrz",
-    ".lz",
-    ".lz4",
-    ".lzma",
-    ".lzo",
-    ".rar",
-    ".rpm",
-    ".tar",
-    ".tbz2",
-    ".tgz",
-    ".txz",
-    ".tzap",
-    ".tzst",
-    ".war",
-    ".xar",
-    ".xpi",
-    ".xz",
-    ".z",
-    ".zip",
-    ".zipx",
-    ".zst",
-)
-
-ARCHIVE_ACTIONS = (
-    ("ExtractHere", "Extract Here", "extract-here", True),
-    ("ExtractToFolder", "Extract to Archive Folder", "extract-to-folder", False),
-    ("OpenArchive", "Open archive", "open", False),
-)
-
-CREATE_ACTIONS = (
-    ("AddToArchive", "Add to archive...", "compress"),
-    ("AddToTzap", "Add to .tzap", "compress-tzap"),
-    ("AddToZip", "Add to .zip", "compress-zip"),
-    ("AddToSevenZ", "Add to .7z", "compress-7z"),
-    ("AddToTzst", "Add to .tzst", "compress-tzst"),
-    ("AddToTgz", "Add to .tgz", "compress-tgz"),
+from zmanager_shell_actions_generated import (
+    ARCHIVE_ACTIONS,
+    ARCHIVE_SUFFIXES,
+    CREATE_ACTIONS,
 )
 
 
@@ -213,9 +151,8 @@ def debug_log(event: str, paths: List[str], quick_action: str | None = None) -> 
 
     timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     action_text = f" quick_action={quick_action}" if quick_action else ""
-    paths_text = " ".join(repr(path) for path in paths)
     try:
         with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(f"{timestamp} {event}{action_text} paths=[{paths_text}]\n")
+            log_file.write(f"{timestamp} {event}{action_text} path_count={len(paths)}\n")
     except OSError:
         pass

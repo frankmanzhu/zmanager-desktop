@@ -17,105 +17,314 @@
   "actions": [
     {
       "id": "open",
+      "canonicalLabel": "Open archive",
+      "nativeVerb": "OpenArchive",
       "order": 10,
+      "contextMenuOrder": 30,
+      "contextMenuContexts": [
+        "archiveSingle"
+      ],
       "selectionShapes": [
         "single-archive"
       ],
-      "multiplicity": "exactly-one"
+      "multiplicity": "exactly-one",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder",
+        "macosServices"
+      ],
+      "compatibilityAliases": [
+        "open",
+        "browse"
+      ]
     },
     {
       "id": "compress",
+      "canonicalLabel": "Add to archive...",
+      "nativeVerb": "AddToArchive",
       "order": 20,
+      "contextMenuOrder": 40,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder",
+        "macosServices"
+      ],
+      "compatibilityAliases": [
+        "compress"
+      ]
     },
     {
       "id": "extract",
+      "canonicalLabel": "Extract with ZManager...",
+      "nativeVerb": "Extract",
       "order": 30,
+      "contextMenuOrder": null,
+      "contextMenuContexts": [],
       "selectionShapes": [
         "single-archive",
         "multiple-archives"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "macosServices"
+      ],
+      "compatibilityAliases": [
+        "extract"
+      ]
     },
     {
       "id": "compressZip",
+      "canonicalLabel": "Add to .zip",
+      "nativeVerb": "AddToZip",
       "order": 40,
+      "contextMenuOrder": 60,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "compress-zip",
+        "add-to-zip"
+      ]
     },
     {
       "id": "compressTzap",
+      "canonicalLabel": "Add to .tzap",
+      "nativeVerb": "AddToTzap",
       "order": 50,
+      "contextMenuOrder": 50,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "compress-tzap",
+        "add-to-tzap"
+      ]
     },
     {
       "id": "compressSevenZ",
+      "canonicalLabel": "Add to .7z",
+      "nativeVerb": "AddToSevenZ",
       "order": 60,
+      "contextMenuOrder": 70,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "compress-7z",
+        "compress-seven-z",
+        "add-to-7z",
+        "add-to-seven-z"
+      ]
     },
     {
       "id": "compressTarZst",
+      "canonicalLabel": "Add to .tzst",
+      "nativeVerb": "AddToTzst",
       "order": 70,
+      "contextMenuOrder": 80,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "compress-tar-zst",
+        "compress-tzst",
+        "add-to-tar-zst",
+        "add-to-tzst"
+      ]
     },
     {
       "id": "compressTarGz",
+      "canonicalLabel": "Add to .tgz",
+      "nativeVerb": "AddToTgz",
       "order": 75,
+      "contextMenuOrder": 90,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
       "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
         "files",
         "folders",
         "mixed"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "compress-tar-gz",
+        "compress-tgz",
+        "add-to-tar-gz",
+        "add-to-tgz"
+      ]
     },
     {
       "id": "compressCleanSource",
+      "canonicalLabel": "Compress and remove source",
+      "nativeVerb": "CompressCleanSource",
       "order": 80,
+      "contextMenuOrder": null,
+      "contextMenuContexts": [],
       "selectionShapes": [
         "single-folder"
       ],
-      "multiplicity": "exactly-one"
+      "multiplicity": "exactly-one",
+      "nativeSurfaces": [],
+      "compatibilityAliases": [
+        "compress-clean-source",
+        "clean-source"
+      ]
     },
     {
       "id": "extractHere",
+      "canonicalLabel": "Extract Here",
+      "nativeVerb": "ExtractHere",
       "order": 90,
+      "contextMenuOrder": 10,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple"
+      ],
       "selectionShapes": [
         "single-archive",
         "multiple-archives"
       ],
-      "multiplicity": "one-or-more"
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "extract-here"
+      ]
     },
     {
       "id": "extractToFolder",
+      "canonicalLabel": "Extract to Archive Folder",
+      "nativeVerb": "ExtractToFolder",
       "order": 100,
+      "contextMenuOrder": 20,
+      "contextMenuContexts": [
+        "archiveSingle"
+      ],
       "selectionShapes": [
         "single-archive"
       ],
-      "multiplicity": "exactly-one"
+      "multiplicity": "exactly-one",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder"
+      ],
+      "compatibilityAliases": [
+        "extract-to-folder",
+        "extract-folder"
+      ]
     }
   ],
   "archivePaths": [

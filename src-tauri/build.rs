@@ -21,7 +21,6 @@ fn main() {
             "record_diagnostic_event",
             "diagnostic_log_info",
             "quick_action_startup_state",
-            "consume_shell_action_request",
             "native_frontend_ready",
             "acknowledge_native_event",
             "account_snapshot",

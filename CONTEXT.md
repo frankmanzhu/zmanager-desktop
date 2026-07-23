@@ -100,17 +100,23 @@ defaults. A workflow may override a default without mutating the stored value.
 
 ### Native Platform
 
-The operating-system adapter that supplies the complete native capability set
-required by the Desktop Shell. Every supported platform implements the shared
-Rust `NativePlatform` interface; callers use platform-neutral wrapper functions
-and never select or invoke operating-system-specific implementations directly.
+The operating-system adapter composition that supplies the native capability
+families required by the Desktop Shell. Every supported platform implements the
+applicable Rust capability interfaces, such as default-handler control,
+Replacement Migration, secure local-file protection, system icons, and native
+drag. Callers use platform-neutral wrapper functions and never select or invoke
+operating-system-specific implementations directly. `notApplicable`,
+`unavailable`, and `failed` are typed outcomes rather than successful stubs or
+platform-specific error strings.
 
 ### Native Integration Contract
 
 The cross-platform record of which native capabilities are required, optional,
 or not applicable and whether each capability is implemented in source, included
 in a package, registered after installation, and enabled for the current user.
-It defines common lifecycle states, normalized availability, and verification
+Runtime readiness is a separate fifth layer. The contract reports the current
+package kind explicitly, defines normalized `available`, `unavailable`,
+`failed`, and `notApplicable` outcomes, and binds each layer to verification
 evidence while Windows, Linux, and macOS retain separate native adapters for
 their operating-system mechanisms.
 
@@ -213,6 +219,9 @@ guards. Do not reimplement these behaviors in TypeScript.
   packaging code. The supported Tauri runtimes remain one product surface. Every supported Rust
   platform must provide a complete `NativePlatform` adapter; unsupported targets
   must fail compilation instead of inheriting another operating system's code.
+- Frontend behavior selects native features from Native Integration Contract
+  capability state, never from an operating-system name. Platform names may be
+  displayed as diagnostics only.
 - Rust and TypeScript command contracts require generated bindings or explicit
   contract coverage when changed.
 - A regression fix requires failing-before/passing-after coverage when feasible.

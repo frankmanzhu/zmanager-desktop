@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zmanager.local/contracts/archive-file-types.schema.json",
+  "title": "ZManager archive file type contract",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "singleExtensions",
+    "compoundExtensions",
+    "splitArchiveSuffixes",
+    "associationTypes",
+    "packageAssociationProfiles",
+    "exportedTypes",
+    "documentGroups"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "singleExtensions": {"$ref": "#/$defs/extensions"},
+    "compoundExtensions": {"$ref": "#/$defs/extensions"},
+    "splitArchiveSuffixes": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^\\.[a-z0-9.]+$"},
+      "uniqueItems": true
+    },
+    "associationTypes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "primaryExtensions",
+          "compoundExtensions",
+          "splitSuffixes",
+          "mimeType",
+          "mimeAliases",
+          "windows",
+          "linux",
+          "macos"
+        ],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]+$"},
+          "primaryExtensions": {"$ref": "#/$defs/extensions"},
+          "compoundExtensions": {"$ref": "#/$defs/extensions"},
+          "splitSuffixes": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^\\.[a-z0-9.]+$"},
+            "uniqueItems": true
+          },
+          "mimeType": {
+            "oneOf": [
+              {"type": "string", "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$"},
+              {"type": "null"}
+            ]
+          },
+          "mimeAliases": {
+            "type": "array",
+            "items": {"type": "string", "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$"},
+            "uniqueItems": true
+          },
+          "windows": {"type": "boolean"},
+          "linux": {"type": "boolean"},
+          "macos": {"type": "boolean"}
+        }
+      }
+    },
+    "packageAssociationProfiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windows", "linux", "macos"],
+      "properties": {
+        "windows": {"$ref": "#/$defs/packageProfile"},
+        "linux": {"$ref": "#/$defs/packageProfile"},
+        "macos": {"$ref": "#/$defs/packageProfile"}
+      }
+    },
+    "exportedTypes": {"type": "array"},
+    "documentGroups": {"type": "array"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "extensions": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:\\.[a-z0-9]+)*$"},
+      "uniqueItems": true
+    },
+    "packageProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extensions", "mimeTypes"],
+      "properties": {
+        "extensions": {
+          "oneOf": [
+            {"const": "all"},
+            {"$ref": "#/$defs/extensions"}
+          ]
+        },
+        "mimeTypes": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

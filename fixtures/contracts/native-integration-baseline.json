@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "mode": "characterization",
+  "capturedRevision": "ed10f09",
+  "platformProfiles": {
+    "windows": {
+      "selectedItemActionsEnabled": true,
+      "backgroundActionsEnabled": true,
+      "fileAssociationsEnabled": true,
+      "windowDecorations": true,
+      "customWindowChrome": false,
+      "manualWindowResize": false,
+      "nativeMenuBar": false
+    },
+    "linux": {
+      "selectedItemActionsEnabled": true,
+      "backgroundActionsEnabled": true,
+      "fileAssociationsEnabled": true,
+      "windowDecorations": false,
+      "customWindowChrome": true,
+      "manualWindowResize": true,
+      "nativeMenuBar": false
+    },
+    "macos": {
+      "selectedItemActionsEnabled": false,
+      "backgroundActionsEnabled": false,
+      "fileAssociationsEnabled": true,
+      "windowDecorations": true,
+      "customWindowChrome": false,
+      "manualWindowResize": false,
+      "nativeMenuBar": true
+    }
+  },
+  "tauriFileAssociations": [
+    {"extensions": ["zip", "zipx"], "mimeType": "application/zip"},
+    {"extensions": ["7z"], "mimeType": "application/x-7z-compressed"},
+    {"extensions": ["rar"], "mimeType": "application/vnd.rar"},
+    {"extensions": ["tar"], "mimeType": "application/x-tar"},
+    {"extensions": ["tar.gz", "tgz", "gz"], "mimeType": "application/gzip"},
+    {"extensions": ["tar.xz", "txz", "xz"], "mimeType": "application/x-xz"},
+    {"extensions": ["tar.zst", "tzst"], "mimeType": "application/x-zmanager-tzst"},
+    {"extensions": ["zst"], "mimeType": "application/zstd"},
+    {"extensions": ["tzap"], "mimeType": "application/x-zmanager-tzap"}
+  ],
+  "applicationMenus": {
+    "reactCommandIds": [
+      "open", "openInside", "openOutside", "view", "properties", "exit",
+      "selectAll", "deselectAll", "invertSelection", "selectByType",
+      "deselectByType", "sortName", "sortType", "sortDate", "sortSize",
+      "flatView", "showButtonText", "options", "deleteTempFiles", "about"
+    ],
+    "macosApplicationOwnedCommandIds": [
+      "about", "options", "open", "add", "closeArchive", "extract", "test",
+      "info", "selectAll", "helpContents"
+    ],
+    "frontendNativeMenuAllowlist": [
+      "about", "add", "closeArchive", "extract", "helpContents", "info",
+      "open", "options", "selectAll", "test"
+    ]
+  },
+  "windowSettings": {
+    "main": {
+      "width": 1280,
+      "height": 900,
+      "minWidth": 720,
+      "minHeight": 480,
+      "visible": false
+    },
+    "quickActionMain": {
+      "width": 620,
+      "height": 420,
+      "minWidth": 540,
+      "minHeight": 360
+    },
+    "disposableTask": {
+      "width": 620,
+      "height": 460,
+      "minWidth": 520,
+      "minHeight": 380,
+      "center": true,
+      "resizable": true,
+      "visible": true
+    }
+  },
+  "packageArtifactExpectations": {
+    "windowsSmoke": "ZManager_0.1.0_$resolvedArchitecture-setup.exe",
+    "windowsReleaseGate": "ZManager_0.1.0_$resolvedArchitecture-setup.exe",
+    "windowsBuildGlob": "ZManager_*-setup.exe",
+    "linuxDebGlob": "*.deb",
+    "linuxRpmGlob": "*.rpm",
+    "macosBuildTemplate": "ZManager-${version}-macos-${architecture}"
+  },
+  "knownDrift": [
+    "The static Windows smoke and release-gate scripts expect product version 0.1.0 while the product version is 1.1.0.",
+    "The React and macOS application-owned command sets are independently maintained and not equal.",
+    "Tauri and Linux association lists cover a smaller subset than the archive engine catalog.",
+    "Main quick-action and Disposable Task Window dimensions are independently maintained."
+  ]
+}

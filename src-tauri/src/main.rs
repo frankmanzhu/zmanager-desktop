@@ -12,13 +12,11 @@ mod error;
 mod job_dto;
 mod job_registry;
 mod native_drag_session;
+mod native_integration;
 mod native_launch_inbox;
 mod platform;
 mod quick_action;
 mod replacement_migration;
-
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-use std::time::SystemTime;
 
 use tauri::{Emitter, Manager};
 
@@ -29,7 +27,7 @@ fn main() {
     record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
     let legacy_startup_state =
         startup_window_state.forward_requested_to_native_inbox(&native_launch_inbox);
-    platform::initialize_native_host(native_launch_inbox.clone())
+    platform::initialize_native_host(native_launch_inbox.clone(), diagnostics.clone())
         .expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
     let archive_index_registry = archive_index::ArchiveIndexRegistry::new();
@@ -129,7 +127,6 @@ fn main() {
             diagnostics::record_diagnostic_event,
             diagnostics::diagnostic_log_info,
             commands::quick_action_startup_state,
-            commands::consume_shell_action_request,
             commands::native_frontend_ready,
             commands::acknowledge_native_event,
             account::account_snapshot,
@@ -164,45 +161,17 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ZManager desktop");
-    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-    let opened_inbox = native_launch_inbox.clone();
-    app.run(move |_app_handle, event| match event {
-        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
-        tauri::RunEvent::Opened { urls } => {
-            let pid = std::process::id();
-            let timestamp_ms = SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-                .min(u128::from(u64::MAX)) as u64;
-            for (index, url) in urls.iter().enumerate() {
-                if url.scheme() == "zmanager" && url.host_str() == Some("shell-request") {
-                    let token = url.path().trim_start_matches('/').to_string();
-                    if !token.is_empty() {
-                        let event = native_launch_inbox::NativeInboundEvent {
-                            version: native_launch_inbox::NATIVE_INBOUND_EVENT_VERSION,
-                            event_id: format!("tauri-url-{pid}-{timestamp_ms}-{index}"),
-                            kind: native_launch_inbox::NativeInboundEventKind::ShellActionRequest,
-                            timestamp_unix_ms: timestamp_ms,
-                            idempotency_key: Some(token.clone()),
-                            payload: native_launch_inbox::NativeInboundPayload::ShellActionToken(
-                                native_launch_inbox::ShellActionTokenPayload {
-                                    request_token: token,
-                                },
-                            ),
-                        };
-                        let _ = opened_inbox.ingest(event);
-                    }
-                }
+    app.run(move |_app_handle, event| {
+        platform::handle_run_event(&event, &native_launch_inbox);
+        match event {
+            tauri::RunEvent::Exit => {
+                let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
+                exit_inbox.shutdown();
+                native_drag_sessions.shutdown();
+                platform::shutdown();
             }
+            _ => {}
         }
-        tauri::RunEvent::Exit => {
-            let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
-            exit_inbox.shutdown();
-            native_drag_sessions.shutdown();
-            platform::shutdown();
-        }
-        _ => {}
     });
 }
 

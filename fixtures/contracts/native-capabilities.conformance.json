@@ -1,0 +1,1125 @@
+{
+  "schemaVersion": 1,
+  "packageKind": "development",
+  "platforms": {
+    "windows": [
+      {
+        "id": "shellSelectedItemActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.selected"
+          ],
+          "package": [
+            "package.shell.selected"
+          ],
+          "installed": [
+            "installed.shell.selected"
+          ]
+        }
+      },
+      {
+        "id": "shellBackgroundActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.background"
+          ],
+          "package": [
+            "package.shell.background"
+          ],
+          "installed": [
+            "installed.shell.background"
+          ]
+        }
+      },
+      {
+        "id": "fileAssociations",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.fileAssociations"
+          ],
+          "package": [
+            "package.fileAssociations"
+          ],
+          "installed": [
+            "installed.fileAssociations"
+          ]
+        }
+      },
+      {
+        "id": "systemFileIcons",
+        "applicability": "optional",
+        "firstClass": false,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.systemFileIcons"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "defaultHandlerControl",
+        "applicability": "optional",
+        "firstClass": false,
+        "sourceState": "unavailable",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "unavailable",
+        "availability": "unavailable",
+        "failureCategory": "sourceMissing",
+        "evidence": {
+          "source": [
+            "source.defaultHandlerControl"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeApplicationMenu",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.applicationMenu"
+          ],
+          "package": [
+            "package.macos.applicationMenu"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "mainWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.main"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "disposableTaskWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.disposableTask"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "secureLocalFileProtection",
+        "applicability": "optional",
+        "firstClass": true,
+        "sourceState": "unavailable",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "unavailable",
+        "availability": "unavailable",
+        "failureCategory": "sourceMissing",
+        "evidence": {
+          "source": [
+            "source.secureLocalFileProtection"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeFileDrag",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.nativeFileDrag"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "finderTokenTransport",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.finderTokenTransport"
+          ],
+          "package": [
+            "package.macos.appGroup"
+          ],
+          "installed": [
+            "installed.macos.appGroup"
+          ]
+        }
+      },
+      {
+        "id": "nativeHostLifecycle",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.nativeHost"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "replacementMigration",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.replacementMigration"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "quickLook",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.quickLook"
+          ],
+          "package": [
+            "package.macos.quickLook"
+          ],
+          "installed": [
+            "installed.macos.quickLook"
+          ]
+        }
+      },
+      {
+        "id": "spotlight",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.spotlight"
+          ],
+          "package": [
+            "package.macos.spotlight"
+          ],
+          "installed": [
+            "installed.macos.spotlight"
+          ]
+        }
+      },
+      {
+        "id": "diagnosticLog",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.diagnosticLog"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "installedCapabilityInspection",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.installedInspection"
+          ],
+          "package": [
+            "package.inspection"
+          ],
+          "installed": [
+            "installed.inspection"
+          ]
+        }
+      }
+    ],
+    "linux": [
+      {
+        "id": "shellSelectedItemActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.selected"
+          ],
+          "package": [
+            "package.shell.selected"
+          ],
+          "installed": [
+            "installed.shell.selected"
+          ]
+        }
+      },
+      {
+        "id": "shellBackgroundActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.background"
+          ],
+          "package": [
+            "package.shell.background"
+          ],
+          "installed": [
+            "installed.shell.background"
+          ]
+        }
+      },
+      {
+        "id": "fileAssociations",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.fileAssociations"
+          ],
+          "package": [
+            "package.fileAssociations"
+          ],
+          "installed": [
+            "installed.fileAssociations"
+          ]
+        }
+      },
+      {
+        "id": "systemFileIcons",
+        "applicability": "optional",
+        "firstClass": false,
+        "sourceState": "unavailable",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "unavailable",
+        "availability": "unavailable",
+        "failureCategory": "sourceMissing",
+        "evidence": {
+          "source": [
+            "source.systemFileIcons"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "defaultHandlerControl",
+        "applicability": "optional",
+        "firstClass": false,
+        "sourceState": "unavailable",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "unavailable",
+        "availability": "unavailable",
+        "failureCategory": "sourceMissing",
+        "evidence": {
+          "source": [
+            "source.defaultHandlerControl"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeApplicationMenu",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.applicationMenu"
+          ],
+          "package": [
+            "package.macos.applicationMenu"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "mainWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.main"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "disposableTaskWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.disposableTask"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "secureLocalFileProtection",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.secureLocalFileProtection"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeFileDrag",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.nativeFileDrag"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "finderTokenTransport",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.finderTokenTransport"
+          ],
+          "package": [
+            "package.macos.appGroup"
+          ],
+          "installed": [
+            "installed.macos.appGroup"
+          ]
+        }
+      },
+      {
+        "id": "nativeHostLifecycle",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.nativeHost"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "replacementMigration",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.replacementMigration"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "quickLook",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.quickLook"
+          ],
+          "package": [
+            "package.macos.quickLook"
+          ],
+          "installed": [
+            "installed.macos.quickLook"
+          ]
+        }
+      },
+      {
+        "id": "spotlight",
+        "applicability": "notApplicable",
+        "firstClass": true,
+        "sourceState": "notApplicable",
+        "packageState": "notApplicable",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notApplicable",
+        "availability": "notApplicable",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.spotlight"
+          ],
+          "package": [
+            "package.macos.spotlight"
+          ],
+          "installed": [
+            "installed.macos.spotlight"
+          ]
+        }
+      },
+      {
+        "id": "diagnosticLog",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.diagnosticLog"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "installedCapabilityInspection",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.installedInspection"
+          ],
+          "package": [
+            "package.inspection"
+          ],
+          "installed": [
+            "installed.inspection"
+          ]
+        }
+      }
+    ],
+    "macos": [
+      {
+        "id": "shellSelectedItemActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notInspected",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.selected"
+          ],
+          "package": [
+            "package.shell.selected"
+          ],
+          "installed": [
+            "installed.shell.selected"
+          ]
+        }
+      },
+      {
+        "id": "shellBackgroundActions",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notInspected",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.shell.background"
+          ],
+          "package": [
+            "package.shell.background"
+          ],
+          "installed": [
+            "installed.shell.background"
+          ]
+        }
+      },
+      {
+        "id": "fileAssociations",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.fileAssociations"
+          ],
+          "package": [
+            "package.fileAssociations"
+          ],
+          "installed": [
+            "installed.fileAssociations"
+          ]
+        }
+      },
+      {
+        "id": "systemFileIcons",
+        "applicability": "optional",
+        "firstClass": false,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.systemFileIcons"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "defaultHandlerControl",
+        "applicability": "required",
+        "firstClass": false,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.defaultHandlerControl"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeApplicationMenu",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.applicationMenu"
+          ],
+          "package": [
+            "package.macos.applicationMenu"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "mainWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.main"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "disposableTaskWindowPolicy",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.window.disposableTask"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "secureLocalFileProtection",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.secureLocalFileProtection"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "nativeFileDrag",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.nativeFileDrag"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "finderTokenTransport",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notInspected",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.macos.finderTokenTransport"
+          ],
+          "package": [
+            "package.macos.appGroup"
+          ],
+          "installed": [
+            "installed.macos.appGroup"
+          ]
+        }
+      },
+      {
+        "id": "nativeHostLifecycle",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "runtimeUnavailable",
+        "evidence": {
+          "source": [
+            "source.macos.nativeHost"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "replacementMigration",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.macos.replacementMigration"
+          ],
+          "package": [
+            "package.macos.nativeHost"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "quickLook",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.macos.quickLook"
+          ],
+          "package": [
+            "package.macos.quickLook"
+          ],
+          "installed": [
+            "installed.macos.quickLook"
+          ]
+        }
+      },
+      {
+        "id": "spotlight",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "notInspected",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.macos.spotlight"
+          ],
+          "package": [
+            "package.macos.spotlight"
+          ],
+          "installed": [
+            "installed.macos.spotlight"
+          ]
+        }
+      },
+      {
+        "id": "diagnosticLog",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notInspected",
+        "installedState": "notApplicable",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "available",
+        "failureCategory": null,
+        "evidence": {
+          "source": [
+            "source.diagnosticLog"
+          ],
+          "package": [
+            "package.desktopRuntime"
+          ],
+          "installed": []
+        }
+      },
+      {
+        "id": "installedCapabilityInspection",
+        "applicability": "required",
+        "firstClass": true,
+        "sourceState": "supported",
+        "packageState": "notIncluded",
+        "installedState": "notInspected",
+        "userEnabledState": "notApplicable",
+        "runtimeState": "ready",
+        "availability": "unavailable",
+        "failureCategory": "packageMissing",
+        "evidence": {
+          "source": [
+            "source.installedInspection"
+          ],
+          "package": [
+            "package.inspection"
+          ],
+          "installed": [
+            "installed.inspection"
+          ]
+        }
+      }
+    ]
+  }
+}

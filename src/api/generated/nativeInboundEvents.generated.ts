@@ -23,10 +23,7 @@ export type NativeInboundShellActionEvent = Readonly<{
   kind: "shellActionRequest";
   timestampUnixMs: number;
   idempotencyKey?: string | null;
-  payload: Readonly<
-    | { request: Readonly<{ kind: GeneratedShellActionKind; paths: string[] }> }
-    | { requestToken: string }
-  >;
+  payload: Readonly<{ request: Readonly<{ kind: GeneratedShellActionKind; paths: string[] }> }>;
 }>;
 export type NativeInboundHostedAuthEvent = Readonly<{
   version: typeof NATIVE_INBOUND_EVENT_VERSION;

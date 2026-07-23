@@ -2,9 +2,9 @@
 <component type="desktop-application">
   <id>com.frankmanzhu.zmanager.desktop</id>
   <name>ZManager</name>
-  <summary>Safe archive manager for Windows and Linux</summary>
+  <summary>Safe cross-platform archive manager</summary>
   <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
+  <project_license>Apache-2.0</project_license>
   <description>
     <p>ZManager is a desktop archive manager backed by the ZManager Rust archive engine. It supports browsing, testing, creating, and extracting common archive formats with safety-focused path handling.</p>
   </description>
@@ -14,15 +14,18 @@
     <mediatype>application/zip</mediatype>
     <mediatype>application/x-7z-compressed</mediatype>
     <mediatype>application/vnd.rar</mediatype>
+    <mediatype>application/x-rar-compressed</mediatype>
     <mediatype>application/x-tar</mediatype>
     <mediatype>application/gzip</mediatype>
+    <mediatype>application/x-compressed-tar</mediatype>
     <mediatype>application/x-xz</mediatype>
+    <mediatype>application/x-xz-compressed-tar</mediatype>
     <mediatype>application/zstd</mediatype>
     <mediatype>application/x-zmanager-tzst</mediatype>
     <mediatype>application/x-zmanager-tzap</mediatype>
   </provides>
   <content_rating type="oars-1.1" />
   <releases>
-    <release version="0.1.0" date="2026-06-29" />
+    <release version="1.1.0" date="2026-07-23" />
   </releases>
 </component>

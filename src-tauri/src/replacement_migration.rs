@@ -98,6 +98,20 @@ struct MigrationBackup {
 pub fn replacement_migration_prepare(
     app: tauri::AppHandle,
 ) -> Result<ReplacementMigrationPrepareResponse, CommandErrorDto> {
+    if crate::native_integration::capability_applicability(
+        crate::platform::integration_profile().platform,
+        crate::native_integration::NativeCapabilityId::ReplacementMigration,
+    ) == crate::native_integration::NativeCapabilityApplicability::NotApplicable
+    {
+        return Ok(ReplacementMigrationPrepareResponse {
+            schema_version: SCHEMA_VERSION,
+            completed: true,
+            requires_completion: false,
+            preferences: LegacyReplacementPreferences::default(),
+            diagnostics: Vec::new(),
+            rollback: rollback_summary(Vec::new()),
+        });
+    }
     let data_directory = app
         .path()
         .app_data_dir()

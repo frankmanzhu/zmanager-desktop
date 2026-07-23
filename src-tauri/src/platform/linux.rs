@@ -5,13 +5,16 @@ use std::{
 
 use gio::prelude::*;
 use gtk::prelude::*;
-use tauri::{Builder, Wry};
+use tauri::Wry;
 
 use super::{
-    DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
-    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, NativeFileDragCandidate,
-    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart,
-    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
+    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
+    LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
+    LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
+    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, PlatformProfile,
+    PlatformProfileProvider, ReplacementMigrationAdapter, SecureFileProtector,
+    SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -21,83 +24,56 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 /// This module is intentionally isolated so MIME and desktop packaging concerns
 /// stay platform-owned and out of command payload handling.
 pub const PLATFORM_NAME: &str = "linux";
-pub const DESKTOP_ACTIONS_ENABLED: bool = true;
-
-pub const DESKTOP_SHELL_ACTIONS: &[ShellActionProfile] = &[
-    ShellActionProfile {
-        label: "ZManager > Extract Here",
-        quick_action: "extractHere",
-    },
-    ShellActionProfile {
-        label: "ZManager > Extract to Archive Folder",
-        quick_action: "extractToFolder",
-    },
-    ShellActionProfile {
-        label: "ZManager > Open archive",
-        quick_action: "open",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to archive...",
-        quick_action: "compress",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tzap",
-        quick_action: "compressTzap",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .zip",
-        quick_action: "compressZip",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .7z",
-        quick_action: "compressSevenZ",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tzst",
-        quick_action: "compressTarZst",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tgz",
-        quick_action: "compressTarGz",
-    },
-];
 
 pub struct LinuxPlatform;
 
-impl NativePlatform for LinuxPlatform {
-    fn initialize_native_host(
-        _inbox: crate::native_launch_inbox::NativeLaunchInbox,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
-        if DESKTOP_ACTIONS_ENABLED {
-            let _ = crate::archive_file_types::associated_extensions();
-        }
-
-        builder
-    }
-
+impl PlatformProfileProvider for LinuxPlatform {
     fn integration_profile() -> PlatformProfile {
         PlatformProfile {
             platform: PLATFORM_NAME,
-            selected_item_actions_enabled: DESKTOP_ACTIONS_ENABLED,
-            background_actions_enabled: DESKTOP_ACTIONS_ENABLED,
-            file_associations_enabled: true,
             window_decorations: false,
             custom_window_chrome: true,
             manual_window_resize: true,
             native_menu_bar: false,
             associated_extensions: crate::archive_file_types::associated_extensions(),
-            shell_actions: DESKTOP_SHELL_ACTIONS,
         }
     }
+}
 
+impl CapabilityInspector for LinuxPlatform {
+    fn capability_observations() -> std::collections::HashMap<
+        crate::native_integration::NativeCapabilityId,
+        crate::native_integration::NativeCapabilityObservation,
+    > {
+        use crate::native_integration::{
+            NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityRuntimeState,
+        };
+        [
+            NativeCapabilityId::ShellSelectedItemActions,
+            NativeCapabilityId::ShellBackgroundActions,
+            NativeCapabilityId::SecureLocalFileProtection,
+        ]
+        .into_iter()
+        .map(|id| {
+            (
+                id,
+                NativeCapabilityObservation {
+                    runtime_state: Some(NativeCapabilityRuntimeState::Ready),
+                    ..NativeCapabilityObservation::default()
+                },
+            )
+        })
+        .collect()
+    }
+}
+
+impl MainWindowConfigurator for LinuxPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
         window.set_decorations(Self::integration_profile().window_decorations)
     }
+}
 
+impl SystemFileIconProvider for LinuxPlatform {
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
         entries
             .iter()
@@ -110,38 +86,52 @@ impl NativePlatform for LinuxPlatform {
             })
             .collect()
     }
+}
 
+impl DefaultHandlerController for LinuxPlatform {
     fn default_handlers(
         _request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, String> {
-        Err("Default-handler control is owned by the Linux desktop environment".to_string())
+    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "defaultHandlerControl",
+        ))
     }
+}
 
+impl ReplacementMigrationAdapter for LinuxPlatform {
     fn read_replacement_migration(
         _request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, String> {
-        Ok(LegacyReplacementMigrationSnapshot::empty())
+    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "replacementMigration",
+        ))
     }
 
     fn reconcile_legacy_registrations(
         _request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, String> {
-        Ok(Vec::new())
+    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "replacementMigration",
+        ))
     }
+}
 
-    fn set_owner_only_file_permissions(file: &std::fs::File) -> std::io::Result<()> {
+impl SecureFileProtector for LinuxPlatform {
+    fn set_owner_only_file_permissions(
+        file: &std::fs::File,
+    ) -> Result<(), NativeCapabilityOperationError> {
         use std::os::unix::fs::PermissionsExt as _;
         file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(|_| {
+                NativeCapabilityOperationError::failed(
+                    "secureLocalFileProtection",
+                    "permissionUpdateFailed",
+                )
+            })
     }
+}
 
-    fn native_drag_requires_preflight() -> bool {
-        true
-    }
-
-    fn consume_shell_action_request(_token: &str) -> Result<Vec<u8>, String> {
-        Err("Opaque App Group shell-action requests are available only on macOS".to_string())
-    }
-
+impl NativeFileDragAdapter for LinuxPlatform {
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
         strip_components: usize,
@@ -171,13 +161,10 @@ impl NativePlatform for LinuxPlatform {
         }
 
         let staged_drag = StagedFileDrag::create("Linux", items, stream_provider)?;
-        Ok(NativeFileDragStart {
+        Ok(NativeFileDragStart::Settled {
             outcome: linux_file_drag::start_drag(staged_drag)?,
-            session_id: None,
         })
     }
-
-    fn shutdown() {}
 }
 
 fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {

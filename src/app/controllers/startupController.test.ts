@@ -12,6 +12,7 @@ import {
   createStartupController,
   type StartupControllerOptions,
 } from "./startupController";
+import { nativeCapabilitySnapshots } from "../../test/nativeCapabilityFixtures";
 
 function healthcheck(overrides: Partial<HealthcheckResponse> = {}): HealthcheckResponse {
   return {
@@ -32,15 +33,18 @@ function contract(overrides: Partial<ProjectContract> = {}): ProjectContract {
     coreDependency: "zmanager-core",
     platformIntegration: {
       platform: "windows",
-      selectedItemActionsEnabled: true,
-      backgroundActionsEnabled: true,
-      fileAssociationsEnabled: true,
-      windowDecorations: true,
-      customWindowChrome: false,
-      manualWindowResize: false,
-      nativeMenuBar: false,
-      associatedExtensions: [".zip"],
-      shellActions: [],
+      packageKind: "development",
+      capabilities: nativeCapabilitySnapshots(),
+      transitionalPlatformProfile: {
+        selectedItemActionsEnabled: true,
+        backgroundActionsEnabled: true,
+        fileAssociationsEnabled: true,
+        windowDecorations: true,
+        customWindowChrome: false,
+        manualWindowResize: false,
+        nativeMenuBar: false,
+        associatedExtensions: [".zip"],
+      },
     },
     ...overrides,
   };

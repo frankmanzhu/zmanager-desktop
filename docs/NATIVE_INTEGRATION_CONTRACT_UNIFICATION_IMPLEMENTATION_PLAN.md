@@ -76,10 +76,10 @@ The progress table starts as `Unverified`, not `Not started`, for this reason.
 
 | Work Package | Status | Depends on | Evidence |
 | --- | --- | --- | --- |
-| WP0 Baseline and characterization | Unverified | None | Add links when complete |
-| WP1 Native Integration Contract foundation | Unverified | WP0 | Add links when complete |
-| WP2 Quick Action vertical slice | Unverified | WP1 | Add links when complete |
-| WP3 Native Platform capability migration | Unverified | WP2 | Add links when complete |
+| WP0 Baseline and characterization | Complete | None | [baseline and installed Finder characterization](native-integration/WP0_BASELINE_AND_CHARACTERIZATION.md), [`native-integration-baseline.json`](../fixtures/contracts/native-integration-baseline.json), [`native-integration-baseline.test.mjs`](../scripts/native-integration-baseline.test.mjs), [`check-native-platform-architecture.test.sh`](../scripts/check-native-platform-architecture.test.sh) |
+| WP1 Native Integration Contract foundation | Complete | WP0 | [implementation evidence](native-integration/WP1_NATIVE_INTEGRATION_CONTRACT_FOUNDATION.md), [`native-capabilities.json`](../manifests/native-capabilities.json), [`native-capability-contract.test.mjs`](../scripts/native-capability-contract.test.mjs), [ADR-0001](adr/0001-native-platform-contract.md) |
+| WP2 Quick Action vertical slice | Implemented; installed proof in WP7/WP8 | WP1 | [implementation evidence](native-integration/WP2_QUICK_ACTION_VERTICAL_SLICE.md), [`shell-actions.json`](../manifests/shell-actions.json), [`shell-action-artifact-parity.test.mjs`](../scripts/shell-action-artifact-parity.test.mjs), [ADR-0013](adr/0013-generated-shell-action-window-disposition.md) |
+| WP3 Native Platform capability migration | Complete | WP2 | [implementation evidence](native-integration/WP3_NATIVE_PLATFORM_CAPABILITY_MIGRATION.md), [ADR-0001](adr/0001-native-platform-contract.md) |
 | WP4 Archive association catalog | Unverified | WP3 | Add links when complete |
 | WP5 Command surface and window policy | Unverified | WP4 | Add links when complete |
 | WP6 macOS Native Host FFI contract | Unverified | WP5 | Add links when complete |

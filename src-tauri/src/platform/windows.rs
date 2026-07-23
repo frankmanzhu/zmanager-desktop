@@ -7,7 +7,7 @@ use std::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use tauri::{Builder, Wry};
+use tauri::Wry;
 use windows_sys::Win32::{
     Graphics::Gdi::{
         BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS,
@@ -22,92 +22,67 @@ use windows_sys::Win32::{
 
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
-    DefaultHandlerEntry, DefaultHandlerRequest, LegacyRegistrationReconcileRequest,
-    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, NativeFileDragCandidate,
-    NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome, NativeFileDragStart,
-    NativeFileDragStreamProvider, NativePlatform, PlatformProfile, ShellActionProfile,
+    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
+    LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
+    LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
+    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, PlatformProfile,
+    PlatformProfileProvider, ReplacementMigrationAdapter, SecureFileProtector,
+    SystemFileIconProvider,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 /// Windows-specific shell integration profile values.
 pub const PLATFORM_NAME: &str = "windows";
-pub const EXPLORER_ACTIONS_ENABLED: bool = true;
-
-pub const EXPLORER_SHELL_ACTIONS: &[ShellActionProfile] = &[
-    ShellActionProfile {
-        label: "ZManager > Extract Here",
-        quick_action: "extractHere",
-    },
-    ShellActionProfile {
-        label: "ZManager > Extract to Archive Folder",
-        quick_action: "extractToFolder",
-    },
-    ShellActionProfile {
-        label: "ZManager > Open archive",
-        quick_action: "open",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to archive...",
-        quick_action: "compress",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tzap",
-        quick_action: "compressTzap",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .zip",
-        quick_action: "compressZip",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .7z",
-        quick_action: "compressSevenZ",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tzst",
-        quick_action: "compressTarZst",
-    },
-    ShellActionProfile {
-        label: "ZManager > Add to .tgz",
-        quick_action: "compressTarGz",
-    },
-];
 
 pub struct WindowsPlatform;
 
-impl NativePlatform for WindowsPlatform {
-    fn initialize_native_host(
-        _inbox: crate::native_launch_inbox::NativeLaunchInbox,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
-        if EXPLORER_ACTIONS_ENABLED {
-            let _ = crate::archive_file_types::associated_extensions();
-        }
-
-        builder
-    }
-
+impl PlatformProfileProvider for WindowsPlatform {
     fn integration_profile() -> PlatformProfile {
         PlatformProfile {
             platform: PLATFORM_NAME,
-            selected_item_actions_enabled: EXPLORER_ACTIONS_ENABLED,
-            background_actions_enabled: EXPLORER_ACTIONS_ENABLED,
-            file_associations_enabled: true,
             window_decorations: true,
             custom_window_chrome: false,
             manual_window_resize: false,
             native_menu_bar: false,
             associated_extensions: crate::archive_file_types::associated_extensions(),
-            shell_actions: EXPLORER_SHELL_ACTIONS,
         }
     }
+}
 
+impl CapabilityInspector for WindowsPlatform {
+    fn capability_observations() -> std::collections::HashMap<
+        crate::native_integration::NativeCapabilityId,
+        crate::native_integration::NativeCapabilityObservation,
+    > {
+        use crate::native_integration::{
+            NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityRuntimeState,
+        };
+        [
+            NativeCapabilityId::ShellSelectedItemActions,
+            NativeCapabilityId::ShellBackgroundActions,
+        ]
+        .into_iter()
+        .map(|id| {
+            (
+                id,
+                NativeCapabilityObservation {
+                    runtime_state: Some(NativeCapabilityRuntimeState::Ready),
+                    ..NativeCapabilityObservation::default()
+                },
+            )
+        })
+        .collect()
+    }
+}
+
+impl MainWindowConfigurator for WindowsPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
         window.set_decorations(Self::integration_profile().window_decorations)
     }
+}
 
+impl SystemFileIconProvider for WindowsPlatform {
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
         entries
             .iter()
@@ -117,37 +92,48 @@ impl NativePlatform for WindowsPlatform {
             })
             .collect()
     }
+}
 
+impl DefaultHandlerController for WindowsPlatform {
     fn default_handlers(
         _request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, String> {
-        Err("Default-handler control is owned by Windows Settings".to_string())
+    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "defaultHandlerControl",
+        ))
     }
+}
 
+impl ReplacementMigrationAdapter for WindowsPlatform {
     fn read_replacement_migration(
         _request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, String> {
-        Ok(LegacyReplacementMigrationSnapshot::empty())
+    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "replacementMigration",
+        ))
     }
 
     fn reconcile_legacy_registrations(
         _request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, String> {
-        Ok(Vec::new())
+    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable(
+            "replacementMigration",
+        ))
     }
+}
 
-    fn set_owner_only_file_permissions(_file: &std::fs::File) -> std::io::Result<()> {
-        Ok(())
+impl SecureFileProtector for WindowsPlatform {
+    fn set_owner_only_file_permissions(
+        _file: &std::fs::File,
+    ) -> Result<(), NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::unavailable(
+            "secureLocalFileProtection",
+            "aclImplementationUnavailable",
+        ))
     }
+}
 
-    fn native_drag_requires_preflight() -> bool {
-        true
-    }
-
-    fn consume_shell_action_request(_token: &str) -> Result<Vec<u8>, String> {
-        Err("Opaque App Group shell-action requests are available only on macOS".to_string())
-    }
-
+impl NativeFileDragAdapter for WindowsPlatform {
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
         strip_components: usize,
@@ -168,13 +154,10 @@ impl NativePlatform for WindowsPlatform {
             ));
         }
 
-        Ok(NativeFileDragStart {
+        Ok(NativeFileDragStart::Settled {
             outcome: windows_file_drag::start_drag(items, stream_provider)?,
-            session_id: None,
         })
     }
-
-    fn shutdown() {}
 }
 
 fn system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {

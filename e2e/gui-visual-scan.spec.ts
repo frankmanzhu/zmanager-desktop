@@ -1061,14 +1061,23 @@ async function installTauriStub(page: Page) {
           coreDependency: "stub",
           platformIntegration: {
             platform: "windows",
-            selectedItemActionsEnabled: true,
-            backgroundActionsEnabled: true,
-            fileAssociationsEnabled: true,
-            windowDecorations: true,
-            customWindowChrome: false,
-            manualWindowResize: false,
-            associatedExtensions: ["zip"],
-            shellActions: [],
+            packageKind: "development",
+            capabilities: [
+              "shellSelectedItemActions",
+              "shellBackgroundActions",
+              "fileAssociations",
+              "defaultHandlerControl",
+            ].map((id) => ({ id, availability: "available" })),
+            transitionalPlatformProfile: {
+              selectedItemActionsEnabled: true,
+              backgroundActionsEnabled: true,
+              fileAssociationsEnabled: true,
+              windowDecorations: true,
+              customWindowChrome: false,
+              manualWindowResize: false,
+              nativeMenuBar: false,
+              associatedExtensions: ["zip"],
+            },
           },
         };
       }

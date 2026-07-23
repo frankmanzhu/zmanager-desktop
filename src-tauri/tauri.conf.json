@@ -27,70 +27,112 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "appimage", "deb", "rpm"],
+    "targets": [
+      "nsis",
+      "appimage",
+      "deb",
+      "rpm"
+    ],
     "category": "Utility",
-    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
     "fileAssociations": [
       {
-        "ext": ["zip", "zipx"],
-        "name": "ZIP archive",
-        "description": "ZIP archive",
+        "ext": [
+          "zip",
+          "zipx",
+          "jar",
+          "war",
+          "apk",
+          "ipa",
+          "appx",
+          "xpi"
+        ],
+        "name": "zip archive",
+        "description": "zip archive",
         "role": "Viewer",
         "mimeType": "application/zip"
       },
       {
-        "ext": ["7z"],
-        "name": "7z archive",
-        "description": "7z archive",
+        "ext": [
+          "7z",
+          "7z.001"
+        ],
+        "name": "sevenZip archive",
+        "description": "sevenZip archive",
         "role": "Viewer",
         "mimeType": "application/x-7z-compressed"
       },
       {
-        "ext": ["rar"],
-        "name": "RAR archive",
-        "description": "RAR archive",
+        "ext": [
+          "rar",
+          "cbr"
+        ],
+        "name": "rar archive",
+        "description": "rar archive",
         "role": "Viewer",
         "mimeType": "application/vnd.rar"
       },
       {
-        "ext": ["tar"],
-        "name": "TAR archive",
-        "description": "TAR archive",
+        "ext": [
+          "tar"
+        ],
+        "name": "tar archive",
+        "description": "tar archive",
         "role": "Viewer",
         "mimeType": "application/x-tar"
       },
       {
-        "ext": ["tar.gz", "tgz", "gz"],
-        "name": "Gzip archive",
-        "description": "Gzip archive",
+        "ext": [
+          "gz",
+          "tgz",
+          "tar.gz"
+        ],
+        "name": "gzip archive",
+        "description": "gzip archive",
         "role": "Viewer",
         "mimeType": "application/gzip"
       },
       {
-        "ext": ["tar.xz", "txz", "xz"],
-        "name": "XZ archive",
-        "description": "XZ archive",
+        "ext": [
+          "xz",
+          "txz",
+          "tar.xz"
+        ],
+        "name": "xz archive",
+        "description": "xz archive",
         "role": "Viewer",
         "mimeType": "application/x-xz"
       },
       {
-        "ext": ["tar.zst", "tzst"],
-        "name": "ZManager TZST archive",
-        "description": "ZManager TZST archive",
-        "role": "Viewer",
-        "mimeType": "application/x-zmanager-tzst"
-      },
-      {
-        "ext": ["zst"],
-        "name": "Zstandard archive",
-        "description": "Zstandard archive",
+        "ext": [
+          "zst",
+          "tar.zst"
+        ],
+        "name": "zstd archive",
+        "description": "zstd archive",
         "role": "Viewer",
         "mimeType": "application/zstd"
       },
       {
-        "ext": ["tzap"],
-        "name": "ZManager TZAP archive",
-        "description": "ZManager TZAP archive",
+        "ext": [
+          "tzst"
+        ],
+        "name": "tzst archive",
+        "description": "tzst archive",
+        "role": "Viewer",
+        "mimeType": "application/x-zmanager-tzst"
+      },
+      {
+        "ext": [
+          "tzap",
+          "vol000.tzap"
+        ],
+        "name": "tzap archive",
+        "description": "tzap archive",
         "role": "Viewer",
         "mimeType": "application/x-zmanager-tzap"
       }
@@ -104,7 +146,9 @@
     },
     "linux": {
       "deb": {
-        "depends": ["python3-nautilus"],
+        "depends": [
+          "python3-nautilus"
+        ],
         "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
@@ -116,12 +160,15 @@
           "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
           "/usr/share/nautilus-python/extensions/zmanager_nautilus.py": "../packaging/linux/nautilus/zmanager_nautilus.py",
+          "/usr/share/nautilus-python/extensions/zmanager_shell_actions_generated.py": "../packaging/linux/nautilus/zmanager_shell_actions_generated.py",
           "/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop": "../packaging/linux/kde/zmanager-archive-servicemenu.desktop",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }
       },
       "rpm": {
-        "depends": ["nautilus-python"],
+        "depends": [
+          "nautilus-python"
+        ],
         "desktopTemplate": "../packaging/linux/zmanager.desktop.hbs",
         "postInstallScript": "../packaging/linux/postinstall.sh",
         "postRemoveScript": "../packaging/linux/postremove.sh",
@@ -133,6 +180,7 @@
           "/usr/share/metainfo/com.frankmanzhu.zmanager.desktop.metainfo.xml": "../packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
           "/usr/share/mime/packages/zmanager.xml": "../packaging/linux/xdg-mime.xml",
           "/usr/share/nautilus-python/extensions/zmanager_nautilus.py": "../packaging/linux/nautilus/zmanager_nautilus.py",
+          "/usr/share/nautilus-python/extensions/zmanager_shell_actions_generated.py": "../packaging/linux/nautilus/zmanager_shell_actions_generated.py",
           "/usr/share/kio/servicemenus/zmanager-archive-servicemenu.desktop": "../packaging/linux/kde/zmanager-archive-servicemenu.desktop",
           "/usr/share/kio/servicemenus/zmanager-servicemenu.desktop": "../packaging/linux/kde/zmanager-servicemenu.desktop"
         }

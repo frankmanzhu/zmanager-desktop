@@ -387,20 +387,10 @@ fn validate_event(event: &NativeInboundEvent) -> Result<(), NativeLaunchInboxErr
                 ));
             }
         }
-        (
-            NativeInboundEventKind::ShellActionRequest,
-            NativeInboundPayload::ShellActionToken(payload),
-        ) => {
-            if !(22..=128).contains(&payload.request_token.len())
-                || !payload
-                    .request_token
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-            {
-                return Err(NativeLaunchInboxError::InvalidEvent(
-                    "shell action token is invalid".to_string(),
-                ));
-            }
+        (NativeInboundEventKind::ShellActionRequest, NativeInboundPayload::ShellActionToken(_)) => {
+            return Err(NativeLaunchInboxError::InvalidEvent(
+                "shell action tokens must be consumed before inbox ingestion".to_string(),
+            ));
         }
         (
             NativeInboundEventKind::HostedAuthCallback,
@@ -608,5 +598,20 @@ mod tests {
             NativeInboundPayload::ShellActionRequest(ShellActionRequestPayload { .. })
         ));
         assert!(!serde_json::to_string(&event).unwrap().contains("password"));
+    }
+
+    #[test]
+    fn shell_action_tokens_cannot_enter_the_executable_inbox() {
+        let mut token_event = event("opaque-token");
+        token_event.kind = NativeInboundEventKind::ShellActionRequest;
+        token_event.payload = NativeInboundPayload::ShellActionToken(ShellActionTokenPayload {
+            request_token: "opaque-request-token".to_string(),
+        });
+
+        assert!(matches!(
+            NativeLaunchInbox::new().ingest(token_event),
+            Err(NativeLaunchInboxError::InvalidEvent(message))
+                if message == "shell action tokens must be consumed before inbox ingestion"
+        ));
     }
 }

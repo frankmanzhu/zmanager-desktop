@@ -82,7 +82,7 @@
         "tzap"
       ],
       "mimeTypes": [
-        "application/x-tzap"
+        "application/x-zmanager-tzap"
       ],
       "role": "Viewer",
       "rank": "Owner"

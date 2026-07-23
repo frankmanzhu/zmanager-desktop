@@ -77,6 +77,32 @@ replacement migration.
 Swift/AppKit contains no application-owned product screen and no archive
 semantics. Quick Look and Spotlight can parse only bounded public metadata.
 
+### Native Integration Contract
+
+`manifests/native-capabilities.json` is the semantic catalog for native
+capabilities across Windows, Linux, and macOS. It records applicability, source
+expectations, package kinds, installed probes, user-enabled state, runtime
+readiness requirements, normalized failures, and evidence identifiers.
+
+`project_contract` reports the current package kind explicitly and exposes one
+snapshot per catalog capability. These layers remain independent:
+
+1. source support;
+2. package inclusion;
+3. installed registration;
+4. user-enabled state; and
+5. runtime readiness.
+
+The normalized capability outcome is `available`, `unavailable`, `failed`, or
+`notApplicable`. An available first-class capability must have real source
+support and every layer required by its catalog declaration. Package or
+installed state is never inferred from the operating-system name.
+
+The frontend branches on capability identity and state. It may display the
+platform name as diagnostic information, but it must not use that name to
+select behavior. Native adapters retain their operating-system mechanisms while
+the contract provides shared meaning and comparable evidence.
+
 ## Data Flow
 
 ```text

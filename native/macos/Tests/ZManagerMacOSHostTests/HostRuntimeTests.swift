@@ -14,12 +14,18 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     state.payload = bytes.map { Data(bytes: $0, count: count) }
 }
 
-@Test @MainActor func hostStartsRegistersOnceAndShutsDownWithoutSyntheticEvents() throws {
+@Test @MainActor func hostStartsReportsRuntimeReadinessAndShutsDown() throws {
     let state = CallbackState()
     let context = Unmanaged.passUnretained(state).toOpaque()
     #expect(zmanagerMacOSHostStart(callback, context) == 0)
     #expect(zmanagerMacOSHostIsRunning())
-    #expect(state.payload == nil)
+    let payload = try #require(state.payload)
+    let readiness = try #require(
+        JSONSerialization.jsonObject(with: payload) as? [String: Any]
+    )
+    #expect(readiness["kind"] as? String == "hostStarted")
+    #expect(readiness["mainThread"] as? Bool == true)
+    #expect(readiness["appGroupAvailable"] is Bool)
     #expect(zmanagerMacOSHostStart(callback, context) == 2)
     zmanagerMacOSHostShutdown()
     #expect(!zmanagerMacOSHostIsRunning())

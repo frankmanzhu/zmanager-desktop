@@ -27,20 +27,11 @@ use crate::native_launch_inbox::NativeLaunchInbox;
 
 pub struct PlatformProfile {
     pub platform: &'static str,
-    pub selected_item_actions_enabled: bool,
-    pub background_actions_enabled: bool,
-    pub file_associations_enabled: bool,
     pub window_decorations: bool,
     pub custom_window_chrome: bool,
     pub manual_window_resize: bool,
     pub native_menu_bar: bool,
     pub associated_extensions: Vec<String>,
-    pub shell_actions: &'static [ShellActionProfile],
-}
-
-pub struct ShellActionProfile {
-    pub label: &'static str,
-    pub quick_action: &'static str,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -165,8 +156,6 @@ pub struct NativeFileDragItem {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragOutcome {
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-    Pending,
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     Dropped,
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -176,9 +165,10 @@ pub enum NativeFileDragOutcome {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NativeFileDragStart {
-    pub outcome: NativeFileDragOutcome,
-    pub session_id: Option<String>,
+pub enum NativeFileDragStart {
+    Pending { session_id: String },
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    Settled { outcome: NativeFileDragOutcome },
 }
 
 pub type NativeFileDragStreamProvider =
@@ -224,28 +214,107 @@ impl NativeFileDragError {
     }
 }
 
-/// Complete native capability interface for a supported Desktop Shell platform.
-///
-/// Adding another operating system requires an adapter that implements every
-/// method here before it can become the active platform.
-pub(crate) trait NativePlatform {
-    fn initialize_native_host(inbox: NativeLaunchInbox) -> Result<(), String>;
-    fn register_services(builder: Builder<Wry>) -> Builder<Wry>;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeCapabilityOperationErrorKind {
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    NotApplicable,
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    Unavailable,
+    Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeCapabilityOperationError {
+    pub capability: &'static str,
+    pub code: &'static str,
+    pub kind: NativeCapabilityOperationErrorKind,
+}
+
+impl NativeCapabilityOperationError {
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    pub const fn not_applicable(capability: &'static str) -> Self {
+        Self {
+            capability,
+            code: "notApplicable",
+            kind: NativeCapabilityOperationErrorKind::NotApplicable,
+        }
+    }
+
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    pub const fn unavailable(capability: &'static str, code: &'static str) -> Self {
+        Self {
+            capability,
+            code,
+            kind: NativeCapabilityOperationErrorKind::Unavailable,
+        }
+    }
+
+    pub const fn failed(capability: &'static str, code: &'static str) -> Self {
+        Self {
+            capability,
+            code,
+            kind: NativeCapabilityOperationErrorKind::Failed,
+        }
+    }
+}
+
+impl std::fmt::Display for NativeCapabilityOperationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "native capability {} {} ({})",
+            self.capability,
+            self.code,
+            match self.kind {
+                NativeCapabilityOperationErrorKind::NotApplicable => "not applicable",
+                NativeCapabilityOperationErrorKind::Unavailable => "unavailable",
+                NativeCapabilityOperationErrorKind::Failed => "failed",
+            }
+        )
+    }
+}
+
+impl std::error::Error for NativeCapabilityOperationError {}
+
+pub(crate) trait PlatformProfileProvider {
     fn integration_profile() -> PlatformProfile;
+}
+
+pub(crate) trait CapabilityInspector {
+    fn capability_observations() -> HashMap<
+        crate::native_integration::NativeCapabilityId,
+        crate::native_integration::NativeCapabilityObservation,
+    >;
+}
+
+pub(crate) trait MainWindowConfigurator {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error>;
+}
+
+pub(crate) trait SystemFileIconProvider {
     fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto>;
+}
+
+pub(crate) trait DefaultHandlerController {
     fn default_handlers(
         request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, String>;
+    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError>;
+}
+
+pub(crate) trait ReplacementMigrationAdapter {
     fn read_replacement_migration(
         request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, String>;
+    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError>;
     fn reconcile_legacy_registrations(
         request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<ReplacementMigrationDiagnostic>, String>;
-    fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()>;
-    fn native_drag_requires_preflight() -> bool;
-    fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String>;
+    ) -> Result<Vec<ReplacementMigrationDiagnostic>, NativeCapabilityOperationError>;
+}
+
+pub(crate) trait SecureFileProtector {
+    fn set_owner_only_file_permissions(file: &File) -> Result<(), NativeCapabilityOperationError>;
+}
+
+pub(crate) trait NativeFileDragAdapter {
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
         strip_components: usize,
@@ -256,7 +325,6 @@ pub(crate) trait NativePlatform {
         stream_provider: NativeFileDragStreamProvider,
         registry: &crate::native_drag_session::NativeDragSessionRegistry,
     ) -> Result<NativeFileDragStart, NativeFileDragError>;
-    fn shutdown();
 }
 
 #[cfg(target_os = "windows")]
@@ -269,15 +337,38 @@ type ActivePlatform = linux::LinuxPlatform;
 type ActivePlatform = macos::MacOsPlatform;
 
 pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
-    ActivePlatform::register_services(builder)
+    #[cfg(target_os = "macos")]
+    {
+        return macos::register_services(builder);
+    }
+    #[cfg(not(target_os = "macos"))]
+    builder
 }
 
-pub fn initialize_native_host(inbox: NativeLaunchInbox) -> Result<(), String> {
-    ActivePlatform::initialize_native_host(inbox)
+pub fn initialize_native_host(
+    inbox: NativeLaunchInbox,
+    diagnostics: crate::diagnostics::DiagnosticLog,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos::initialize_native_host(inbox, diagnostics);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (inbox, diagnostics);
+        Ok(())
+    }
 }
 
 pub fn integration_profile() -> PlatformProfile {
     ActivePlatform::integration_profile()
+}
+
+pub fn capability_observations() -> HashMap<
+    crate::native_integration::NativeCapabilityId,
+    crate::native_integration::NativeCapabilityObservation,
+> {
+    ActivePlatform::capability_observations()
 }
 
 pub fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
@@ -290,32 +381,25 @@ pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFi
 
 pub fn default_handlers(
     request: &DefaultHandlerRequest,
-) -> Result<Vec<DefaultHandlerEntry>, String> {
+) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
     ActivePlatform::default_handlers(request)
 }
 
 pub fn read_replacement_migration(
     request: &LegacyReplacementMigrationRequest,
-) -> Result<LegacyReplacementMigrationSnapshot, String> {
+) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
     ActivePlatform::read_replacement_migration(request)
 }
 
 pub fn reconcile_legacy_registrations(
     request: &LegacyRegistrationReconcileRequest,
-) -> Result<Vec<ReplacementMigrationDiagnostic>, String> {
+) -> Result<Vec<ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
     ActivePlatform::reconcile_legacy_registrations(request)
 }
 
 pub fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()> {
     ActivePlatform::set_owner_only_file_permissions(file)
-}
-
-pub fn native_drag_requires_preflight() -> bool {
-    ActivePlatform::native_drag_requires_preflight()
-}
-
-pub fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String> {
-    ActivePlatform::consume_shell_action_request(token)
+        .map_err(|error| std::io::Error::other(format!("{}:{}", error.capability, error.code)))
 }
 
 pub fn prepare_native_file_drag(
@@ -328,14 +412,27 @@ pub fn prepare_native_file_drag(
 pub fn start_native_file_drag(
     window: &tauri::WebviewWindow<Wry>,
     items: &[NativeFileDragItem],
+    preflight: impl FnOnce() -> Result<(), NativeFileDragError>,
     stream_provider: NativeFileDragStreamProvider,
     registry: &crate::native_drag_session::NativeDragSessionRegistry,
 ) -> Result<NativeFileDragStart, NativeFileDragError> {
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    preflight()?;
+    #[cfg(target_os = "macos")]
+    let _ = preflight;
     ActivePlatform::start_native_file_drag(window, items, stream_provider, registry)
 }
 
+pub fn handle_run_event(event: &tauri::RunEvent, inbox: &NativeLaunchInbox) {
+    #[cfg(target_os = "macos")]
+    macos::handle_run_event(event, inbox);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (event, inbox);
+}
+
 pub fn shutdown() {
-    ActivePlatform::shutdown();
+    #[cfg(target_os = "macos")]
+    macos::shutdown();
 }
 
 #[cfg(test)]
@@ -343,10 +440,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn active_platform_satisfies_the_complete_native_interface() {
-        fn assert_native_platform<T: NativePlatform>() {}
+    fn active_platform_declares_each_cross_platform_capability_family() {
+        fn assert_platform<T>()
+        where
+            T: PlatformProfileProvider
+                + CapabilityInspector
+                + MainWindowConfigurator
+                + SystemFileIconProvider
+                + DefaultHandlerController
+                + ReplacementMigrationAdapter
+                + SecureFileProtector
+                + NativeFileDragAdapter,
+        {
+        }
 
-        assert_native_platform::<ActivePlatform>();
+        assert_platform::<ActivePlatform>();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn successful_secure_file_protection_enforces_owner_only_mode() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let path = std::env::temp_dir().join(format!(
+            "zmanager-secure-file-contract-{}",
+            std::process::id()
+        ));
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&path)
+            .expect("test file should be created");
+        set_owner_only_file_permissions(&file).expect("owner-only protection should succeed");
+        let mode = std::fs::metadata(&path)
+            .expect("protected file should exist")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o600);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[test]
+    fn replacement_migration_is_explicitly_not_applicable() {
+        let request = LegacyReplacementMigrationRequest {
+            schema_version: 1,
+            legacy_bundle_id: "legacy".to_string(),
+            current_application_path: "current".to_string(),
+            legacy_account_state_directory: "state".to_string(),
+            temporary_directory: "temporary".to_string(),
+            legacy_application_candidates: Vec::new(),
+        };
+        let error = read_replacement_migration(&request)
+            .expect_err("replacement migration must not return an empty success");
+        assert_eq!(
+            error.kind,
+            NativeCapabilityOperationErrorKind::NotApplicable
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_secure_file_protection_never_reports_false_success() {
+        let path = std::env::temp_dir().join(format!(
+            "zmanager-secure-file-contract-{}",
+            std::process::id()
+        ));
+        let file = std::fs::File::create(&path).expect("test file should be created");
+        let error = ActivePlatform::set_owner_only_file_permissions(&file)
+            .expect_err("missing ACL implementation must be explicit");
+        assert_eq!(error.kind, NativeCapabilityOperationErrorKind::Unavailable);
+        let _ = std::fs::remove_file(path);
     }
 
     #[cfg(target_os = "windows")]
@@ -355,15 +521,11 @@ mod tests {
         let profile = integration_profile();
 
         assert_eq!(profile.platform, "windows");
-        assert!(profile.selected_item_actions_enabled);
-        assert!(profile.background_actions_enabled);
-        assert!(profile.file_associations_enabled);
         assert!(profile.window_decorations);
         assert!(!profile.custom_window_chrome);
         assert!(!profile.manual_window_resize);
         assert!(!profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
-        assert!(!profile.shell_actions.is_empty());
     }
 
     #[cfg(target_os = "linux")]
@@ -372,15 +534,11 @@ mod tests {
         let profile = integration_profile();
 
         assert_eq!(profile.platform, "linux");
-        assert!(profile.selected_item_actions_enabled);
-        assert!(profile.background_actions_enabled);
-        assert!(profile.file_associations_enabled);
         assert!(!profile.window_decorations);
         assert!(profile.custom_window_chrome);
         assert!(profile.manual_window_resize);
         assert!(!profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
-        assert!(!profile.shell_actions.is_empty());
     }
 
     #[cfg(target_os = "macos")]
@@ -389,14 +547,10 @@ mod tests {
         let profile = integration_profile();
 
         assert_eq!(profile.platform, "macos");
-        assert!(!profile.selected_item_actions_enabled);
-        assert!(!profile.background_actions_enabled);
-        assert!(profile.file_associations_enabled);
         assert!(profile.window_decorations);
         assert!(!profile.custom_window_chrome);
         assert!(!profile.manual_window_resize);
         assert!(profile.native_menu_bar);
         assert!(!profile.associated_extensions.is_empty());
-        assert!(profile.shell_actions.is_empty());
     }
 }

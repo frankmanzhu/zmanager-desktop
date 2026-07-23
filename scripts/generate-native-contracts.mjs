@@ -2,16 +2,33 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  buildBaselineCapabilitySnapshots,
+  validateNativeCapabilityManifest,
+} from "./lib/native-capability-contract.mjs";
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
 const readJson = (path) => JSON.parse(readFileSync(resolve(root, path), "utf8"));
 const archive = readJson("manifests/archive-file-types.json");
 const shell = readJson("manifests/shell-actions.json");
 const inbound = readJson("manifests/native-inbound-events.schema.json");
+const productPackage = readJson("package.json");
+const nativeCapabilities = validateNativeCapabilityManifest(
+  readJson("manifests/native-capabilities.json"),
+);
 const outputs = new Map();
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const put = (path, content) => outputs.set(path, content.endsWith("\n") ? content : `${content}\n`);
 const swiftString = (value) => JSON.stringify(value);
+const pascalCase = (value) => `${value[0].toUpperCase()}${value.slice(1)}`;
+const screamingSnakeCase = (value) => value
+  .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+  .replace(/[^A-Za-z0-9]+/g, "_")
+  .toUpperCase();
+const strings = (pairs) => [...new Map(pairs)].map(
+  ([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)};`,
+).join("\n");
 
 const requireUnique = (values, label) => {
   const duplicates = values.filter((value, index) => values.indexOf(value) !== index);
@@ -20,6 +37,40 @@ const requireUnique = (values, label) => {
 requireUnique(archive.singleExtensions, "singleExtensions");
 requireUnique(archive.compoundExtensions, "compoundExtensions");
 requireUnique(archive.splitArchiveSuffixes, "splitArchiveSuffixes");
+requireUnique(archive.associationTypes.map(({ id }) => id), "archive association type ids");
+const typedSingleExtensions = archive.associationTypes.flatMap(({ primaryExtensions }) =>
+  primaryExtensions);
+const typedCompoundExtensions = archive.associationTypes.flatMap(({ compoundExtensions }) =>
+  compoundExtensions);
+const typedSplitSuffixes = archive.associationTypes.flatMap(({ splitSuffixes }) => splitSuffixes);
+requireUnique(typedSingleExtensions, "association type primary extensions");
+requireUnique(typedCompoundExtensions, "association type compound extensions");
+requireUnique(typedSplitSuffixes, "association type split suffixes");
+if (JSON.stringify([...typedSingleExtensions].sort()) !== JSON.stringify([...archive.singleExtensions].sort())
+    || JSON.stringify([...typedCompoundExtensions].sort()) !== JSON.stringify([...archive.compoundExtensions].sort())
+    || JSON.stringify([...typedSplitSuffixes].sort()) !== JSON.stringify([...archive.splitArchiveSuffixes].sort())) {
+  throw new Error("associationTypes must exactly partition all primary, compound, and split archive extensions");
+}
+const canonicalMimeTypes = archive.associationTypes
+  .map(({ mimeType }) => mimeType)
+  .filter((mimeType) => mimeType !== null);
+requireUnique(canonicalMimeTypes, "canonical archive MIME types");
+const mimeOwners = archive.associationTypes.flatMap(({ id, mimeType, mimeAliases }) =>
+  [mimeType, ...mimeAliases].filter((value) => value !== null).map((value) => [value, id]));
+requireUnique(mimeOwners.map(([mimeType]) => mimeType), "archive MIME types and aliases");
+for (const [platform, profile] of Object.entries(archive.packageAssociationProfiles)) {
+  if (!["windows", "linux", "macos"].includes(platform)) {
+    throw new Error(`unknown archive package association platform ${platform}`);
+  }
+  if (profile.extensions !== "all" && !Array.isArray(profile.extensions)) {
+    throw new Error(`${platform} association extensions must be "all" or an array`);
+  }
+  requireUnique(profile.mimeTypes, `${platform} package MIME types`);
+  const knownMimeTypes = new Set(mimeOwners.map(([mimeType]) => mimeType));
+  if (profile.mimeTypes.some((mimeType) => !knownMimeTypes.has(mimeType))) {
+    throw new Error(`${platform} package association profile contains an unknown MIME type`);
+  }
+}
 const supportedAssociations = [...archive.singleExtensions, ...archive.compoundExtensions, ...archive.splitArchiveSuffixes.map((suffix) => suffix.slice(1))].sort();
 const declaredAssociations = archive.documentGroups.flatMap(({ extensions }) => extensions);
 requireUnique(declaredAssociations, "documentGroups extensions");
@@ -36,6 +87,56 @@ const serviceActionIds = shell.actions
   .map(({ id }) => id);
 if (JSON.stringify(serviceActionIds) !== JSON.stringify(["open", "compress", "extract"])) {
   throw new Error("macOS Services must declare exactly open, compress, and extract in canonical order");
+}
+requireUnique(shell.actions.map(({ id }) => id), "shell action ids");
+requireUnique(shell.actions.map(({ rustCase }) => rustCase), "shell action Rust cases");
+requireUnique(shell.actions.map(({ nativeVerb }) => nativeVerb), "shell action native verbs");
+requireUnique(shell.actions.map(({ order }) => order), "shell action contract order");
+const normalizedAliases = shell.actions.flatMap(({ id, compatibilityAliases }) =>
+  compatibilityAliases.map((alias) => ({
+    id,
+    alias,
+    normalized: alias.toLowerCase().replace(/[-_ ]/g, ""),
+  }))
+);
+requireUnique(normalizedAliases.map(({ normalized }) => normalized), "normalized shell action aliases");
+const allowedSurfaces = new Set(shell.nativeSurfaces);
+const allowedContexts = new Set(shell.contextMenuContexts);
+const windowsClsids = [];
+for (const action of shell.actions) {
+  if (![action.canonicalLabel, action.canonicalLabelZhHans, action.displayKey, action.nativeVerb].every(
+    (value) => typeof value === "string" && value.trim() !== "",
+  )) {
+    throw new Error(`shell action ${action.id} requires canonical labels, a display key, and a native verb`);
+  }
+  if (!Array.isArray(action.compatibilityAliases) || !action.compatibilityAliases.length) {
+    throw new Error(`shell action ${action.id} requires compatibility aliases`);
+  }
+  if (!action.nativeSurfaces.every((surface) => allowedSurfaces.has(surface))) {
+    throw new Error(`shell action ${action.id} uses an unknown native surface`);
+  }
+  if (!action.contextMenuContexts.every((context) => allowedContexts.has(context))) {
+    throw new Error(`shell action ${action.id} uses an unknown context-menu context`);
+  }
+  if ((action.contextMenuOrder === null) !== (action.contextMenuContexts.length === 0)) {
+    throw new Error(`shell action ${action.id} context-menu order and contexts disagree`);
+  }
+  if (action.nativeSurfaces.includes("windowsExplorer")) {
+    if (typeof action.windowsClsid !== "string"
+        || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(action.windowsClsid)) {
+      throw new Error(`shell action ${action.id} requires a lowercase Windows CLSID`);
+    }
+    windowsClsids.push(action.windowsClsid);
+  } else if (action.windowsClsid !== null) {
+    throw new Error(`non-Windows shell action ${action.id} must not declare a Windows CLSID`);
+  }
+}
+requireUnique(windowsClsids, "Windows shell action CLSIDs");
+for (const context of shell.contextMenuContexts) {
+  const actions = shell.actions
+    .filter((action) => action.contextMenuContexts.includes(context))
+    .sort((left, right) => left.contextMenuOrder - right.contextMenuOrder);
+  requireUnique(actions.map(({ contextMenuOrder }) => contextMenuOrder), `${context} context-menu order`);
 }
 for (const group of archive.documentGroups) {
   if (![group.macOSDisplayName, group.macOSDisplayNameZhHans].every((value) => typeof value === "string" && value.trim() !== "")) {
@@ -61,12 +162,16 @@ for (const action of shell.actions) {
 put("src/app/generated/archiveFileTypes.generated.json", json({
   singleExtensions: archive.singleExtensions,
   compoundExtensions: archive.compoundExtensions,
-  splitArchiveSuffixes: archive.splitArchiveSuffixes
+  splitArchiveSuffixes: archive.splitArchiveSuffixes,
+  associationTypes: archive.associationTypes,
+  packageAssociationProfiles: archive.packageAssociationProfiles,
 }));
 put("src-tauri/src/generated/archive_file_types.generated.json", json({
   singleExtensions: archive.singleExtensions,
   compoundExtensions: archive.compoundExtensions,
-  splitArchiveSuffixes: archive.splitArchiveSuffixes
+  splitArchiveSuffixes: archive.splitArchiveSuffixes,
+  associationTypes: archive.associationTypes,
+  packageAssociationProfiles: archive.packageAssociationProfiles,
 }));
 
 const actionIds = shell.actions.map(({ id }) => id);
@@ -74,7 +179,7 @@ put("src/api/generated/shellActions.generated.ts", `// Generated by scripts/gene
 export const SHELL_ACTION_REQUEST_VERSION = ${shell.requestVersion} as const;
 export const SHELL_ACTION_IDS = ${JSON.stringify(actionIds, null, 2)} as const;
 export type GeneratedShellActionKind = (typeof SHELL_ACTION_IDS)[number];
-export const SHELL_ACTION_POLICIES = ${JSON.stringify(shell.actions.map(({ id, displayKey, order, selectionShapes, multiplicity, windowDisposition }) => ({ id, displayKey, order, selectionShapes, multiplicity, windowDisposition })), null, 2)} as const;
+export const SHELL_ACTION_POLICIES = ${JSON.stringify(shell.actions.map(({ id, canonicalLabel, displayKey, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces, compatibilityAliases, windowDisposition }) => ({ id, canonicalLabel, displayKey, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces, compatibilityAliases, windowDisposition })), null, 2)} as const;
 `);
 
 put("src/api/generated/nativeInboundEvents.generated.ts", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
@@ -97,10 +202,7 @@ export type NativeInboundShellActionEvent = Readonly<{
   kind: "shellActionRequest";
   timestampUnixMs: number;
   idempotencyKey?: string | null;
-  payload: Readonly<
-    | { request: Readonly<{ kind: GeneratedShellActionKind; paths: string[] }> }
-    | { requestToken: string }
-  >;
+  payload: Readonly<{ request: Readonly<{ kind: GeneratedShellActionKind; paths: string[] }> }>;
 }>;
 export type NativeInboundHostedAuthEvent = Readonly<{
   version: typeof NATIVE_INBOUND_EVENT_VERSION;
@@ -129,6 +231,108 @@ export type NativeInboundEvent =
   | NativeInboundReopenEvent;
 `);
 
+put("src/api/generated/nativeCapabilities.generated.ts", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
+export const NATIVE_CAPABILITY_IDS = ${JSON.stringify(nativeCapabilities.capabilities.map(({ id }) => id), null, 2)} as const;
+export type NativeCapabilityId = (typeof NATIVE_CAPABILITY_IDS)[number];
+export const NATIVE_PACKAGE_KINDS = ${JSON.stringify(nativeCapabilities.packageKinds, null, 2)} as const;
+export type NativePackageKind = (typeof NATIVE_PACKAGE_KINDS)[number];
+export type NativeCapabilityApplicability = "required" | "optional" | "notApplicable";
+export type NativeCapabilityAvailability = "available" | "unavailable" | "failed" | "notApplicable";
+export type NativeCapabilitySourceState = "supported" | "unavailable" | "failed" | "notApplicable";
+export type NativeCapabilityPackageState = "included" | "notIncluded" | "notInspected" | "failed" | "notApplicable";
+export type NativeCapabilityInstalledState = "registered" | "unregistered" | "notInspected" | "failed" | "notApplicable";
+export type NativeCapabilityUserEnabledState = "enabled" | "disabled" | "notInspected" | "failed" | "notApplicable";
+export type NativeCapabilityRuntimeState = "ready" | "unavailable" | "notInspected" | "failed" | "notApplicable";
+export type NativeCapabilityFailureCategory = ${nativeCapabilities.failureCategories.map((value) => JSON.stringify(value)).join(" | ")};
+export type NativeCapabilityEvidence = Readonly<{
+  source: readonly string[];
+  package: readonly string[];
+  installed: readonly string[];
+}>;
+export type NativeCapabilitySnapshot = Readonly<{
+  id: NativeCapabilityId;
+  applicability: NativeCapabilityApplicability;
+  firstClass: boolean;
+  sourceState: NativeCapabilitySourceState;
+  packageState: NativeCapabilityPackageState;
+  installedState: NativeCapabilityInstalledState;
+  userEnabledState: NativeCapabilityUserEnabledState;
+  runtimeState: NativeCapabilityRuntimeState;
+  availability: NativeCapabilityAvailability;
+  failureCategory?: NativeCapabilityFailureCategory | null;
+  evidence: NativeCapabilityEvidence;
+}>;
+export const NATIVE_CAPABILITY_CATALOG = ${JSON.stringify(nativeCapabilities.capabilities, null, 2)} as const;
+
+export function findNativeCapability(
+  capabilities: readonly NativeCapabilitySnapshot[],
+  id: NativeCapabilityId,
+): NativeCapabilitySnapshot {
+  const capability = capabilities.find((candidate) => candidate.id === id);
+  if (!capability) {
+    throw new Error(\`Native capability snapshot is missing \${id}\`);
+  }
+  return capability;
+}
+
+export function isNativeCapabilityAvailable(
+  capabilities: readonly NativeCapabilitySnapshot[],
+  id: NativeCapabilityId,
+): boolean {
+  return findNativeCapability(capabilities, id).availability === "available";
+}
+`);
+
+const rustCapabilityCases = nativeCapabilities.capabilities
+  .map(({ id }) => `    ${pascalCase(id)},`)
+  .join("\n");
+const rustCapabilityIds = nativeCapabilities.capabilities
+  .map(({ id }) => `    NativeCapabilityId::${pascalCase(id)},`)
+  .join("\n");
+const rustPackageCases = nativeCapabilities.packageKinds
+  .map((id) => `    ${pascalCase(id)},`)
+  .join("\n");
+const rustPackageIds = nativeCapabilities.packageKinds
+  .map((id) => `    NativePackageKind::${pascalCase(id)},`)
+  .join("\n");
+put("src-tauri/src/generated/native_capabilities.generated.rs", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeCapabilityId {
+${rustCapabilityCases}
+}
+
+#[cfg(test)]
+pub const NATIVE_CAPABILITY_IDS: &[NativeCapabilityId] = &[
+${rustCapabilityIds}
+];
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum NativePackageKind {
+${rustPackageCases}
+}
+
+#[cfg(test)]
+pub const NATIVE_PACKAGE_KINDS: &[NativePackageKind] = &[
+${rustPackageIds}
+];
+`);
+put(
+  "src-tauri/src/generated/native_capabilities.generated.json",
+  json(nativeCapabilities),
+);
+put("fixtures/contracts/native-capabilities.conformance.json", json({
+  schemaVersion: nativeCapabilities.schemaVersion,
+  packageKind: "development",
+  platforms: Object.fromEntries(
+    nativeCapabilities.platforms.map((platform) => [
+      platform,
+      buildBaselineCapabilitySnapshots(nativeCapabilities, platform, "development"),
+    ]),
+  ),
+}));
+
 const localizationKeys = [...archive.documentGroups.map(({ displayKey }) => displayKey), ...shell.actions.map(({ displayKey }) => displayKey)].filter((key, index, all) => all.indexOf(key) === index);
 put("src/app/generated/nativeLocalizationKeys.generated.ts", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
 export const NATIVE_LOCALIZATION_KEYS = ${JSON.stringify(localizationKeys, null, 2)} as const;
@@ -136,13 +340,22 @@ export type NativeLocalizationKey = (typeof NATIVE_LOCALIZATION_KEYS)[number];
 `);
 
 const rustCases = shell.actions.map(({ rustCase }) => `    ${rustCase},`).join("\n");
-const rustPolicies = shell.actions.map(({ rustCase, id, displayKey, order, selectionShapes, multiplicity, windowDisposition }) => `    ShellActionPolicy {
+const rustAliasArms = shell.actions.map(({ rustCase, compatibilityAliases }) =>
+  `            ${compatibilityAliases.map((alias) => JSON.stringify(alias.toLowerCase().replace(/[-_ ]/g, ""))).join(" | ")} => Some(Self::${rustCase}),`
+).join("\n");
+const rustPolicies = shell.actions.map(({ rustCase, id, canonicalLabel, displayKey, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces, compatibilityAliases, windowDisposition }) => `    ShellActionPolicy {
         kind: ShellActionKind::${rustCase},
         id: "${id}",
+        canonical_label: ${JSON.stringify(canonicalLabel)},
         display_key: "${displayKey}",
+        native_verb: "${nativeVerb}",
         order: ${order},
+        context_menu_order: ${contextMenuOrder === null ? "None" : `Some(${contextMenuOrder})`},
+        context_menu_contexts: &[${contextMenuContexts.map((context) => `"${context}"`).join(", ")}],
         selection_shapes: &[${selectionShapes.map((shape) => `"${shape}"`).join(", ")}],
         multiplicity: "${multiplicity}",
+        native_surfaces: &[${nativeSurfaces.map((surface) => `"${surface}"`).join(", ")}],
+        compatibility_aliases: &[${compatibilityAliases.map((alias) => JSON.stringify(alias)).join(", ")}],
         window_disposition: ShellActionWindowDisposition::${windowDisposition === "mainWindow" ? "MainWindow" : "DisposableTask"},
     },`).join("\n");
 put("crates/zmanager-shell-contract/src/generated.rs", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
@@ -152,6 +365,15 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub enum ShellActionKind {
 ${rustCases}
+}
+
+impl ShellActionKind {
+    pub fn from_normalized_compatibility_alias(value: &str) -> Option<Self> {
+        match value {
+${rustAliasArms}
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -165,10 +387,16 @@ pub enum ShellActionWindowDisposition {
 pub struct ShellActionPolicy {
     pub kind: ShellActionKind,
     pub id: &'static str,
+    pub canonical_label: &'static str,
     pub display_key: &'static str,
+    pub native_verb: &'static str,
     pub order: u16,
+    pub context_menu_order: Option<u16>,
+    pub context_menu_contexts: &'static [&'static str],
     pub selection_shapes: &'static [&'static str],
     pub multiplicity: &'static str,
+    pub native_surfaces: &'static [&'static str],
+    pub compatibility_aliases: &'static [&'static str],
     pub window_disposition: ShellActionWindowDisposition,
 }
 
@@ -190,22 +418,39 @@ ${swiftArchiveArrays}
 
 const swiftKeywords = new Set(["open"]);
 const swiftActionCases = shell.actions.map(({ id }) => `    case ${swiftKeywords.has(id) ? `\`${id}\`` : id}`).join("\n");
-const swiftActionPolicies = shell.actions.map(({ id, displayKey, order, selectionShapes, multiplicity }) => `        .init(id: .${id}, displayKey: ${swiftString(displayKey)}, order: ${order}, selectionShapes: [${selectionShapes.map(swiftString).join(", ")}], multiplicity: ${swiftString(multiplicity)})`).join(",\n");
+const swiftActionPolicies = shell.actions.map(({ id, canonicalLabel, displayKey, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces }) => `        .init(id: .${id}, canonicalLabel: ${swiftString(canonicalLabel)}, displayKey: ${swiftString(displayKey)}, nativeVerb: ${swiftString(nativeVerb)}, order: ${order}, contextMenuOrder: ${contextMenuOrder === null ? "nil" : contextMenuOrder}, contextMenuContexts: [${contextMenuContexts.map(swiftString).join(", ")}], selectionShapes: [${selectionShapes.map(swiftString).join(", ")}], multiplicity: ${swiftString(multiplicity)}, nativeSurfaces: [${nativeSurfaces.map(swiftString).join(", ")}])`).join(",\n");
 put("native/macos/Sources/ZManagerGenerated/ShellActions.generated.swift", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
 public enum ShellActionID: String, Codable, CaseIterable, Sendable {
 ${swiftActionCases}
 }
 public struct ShellActionPolicy: Equatable, Sendable {
     public let id: ShellActionID
+    public let canonicalLabel: String
     public let displayKey: String
+    public let nativeVerb: String
     public let order: Int
+    public let contextMenuOrder: Int?
+    public let contextMenuContexts: [String]
     public let selectionShapes: [String]
     public let multiplicity: String
+    public let nativeSurfaces: [String]
     public static let all: [ShellActionPolicy] = [
 ${swiftActionPolicies}
     ]
 }
 `);
+
+put(
+  "packaging/macos/FinderExtension/en.lproj/FinderActions.strings",
+  strings(shell.actions.map(({ displayKey, canonicalLabel }) => [displayKey, canonicalLabel])),
+);
+put(
+  "packaging/macos/FinderExtension/zh-Hans.lproj/FinderActions.strings",
+  strings(shell.actions.map(({ displayKey, canonicalLabelZhHans }) => [
+    displayKey,
+    canonicalLabelZhHans,
+  ])),
+);
 
 const swiftEventCases = inbound.properties.kind.enum.map((kind) => `    case ${kind}`).join("\n");
 put("native/macos/Sources/ZManagerGenerated/NativeInboundEvents.generated.swift", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
@@ -233,6 +478,77 @@ put("packaging/macos/archive-types.generated.json", json({
   documentGroups: archive.documentGroups,
   exportedTypes: archive.exportedTypes
 }));
+
+const customLinuxTypes = archive.associationTypes.filter(({ mimeType }) =>
+  mimeType?.startsWith("application/x-zmanager-"));
+put("packaging/linux/xdg-mime.xml", `<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+${customLinuxTypes.map((type) => `  <mime-type type="${type.mimeType}">
+    <comment>ZManager ${type.id.toUpperCase()} archive</comment>
+${[...type.primaryExtensions, ...type.compoundExtensions].map((extension) => `    <glob pattern="*.${extension}"/>`).join("\n")}
+  </mime-type>`).join("\n")}
+</mime-info>
+`);
+put("packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml", `<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.frankmanzhu.zmanager.desktop</id>
+  <name>ZManager</name>
+  <summary>Safe cross-platform archive manager</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <description>
+    <p>ZManager is a desktop archive manager backed by the ZManager Rust archive engine. It supports browsing, testing, creating, and extracting common archive formats with safety-focused path handling.</p>
+  </description>
+  <launchable type="desktop-id">zmanager-desktop.desktop</launchable>
+  <provides>
+    <binary>zmanager-desktop</binary>
+${archive.packageAssociationProfiles.linux.mimeTypes.map((mimeType) => `    <mediatype>${mimeType}</mediatype>`).join("\n")}
+  </provides>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="${productPackage.version}" date="2026-07-23" />
+  </releases>
+</component>
+`);
+
+put("fixtures/contracts/archive-associations.conformance.json", json({
+  schemaVersion: archive.schemaVersion,
+  associationTypes: archive.associationTypes,
+  expectedPackages: {
+    development: { extensions: [], mimeTypes: [] },
+    nsis: {
+      extensions: supportedAssociations,
+      mimeTypes: [],
+    },
+    appImage: archive.packageAssociationProfiles.linux,
+    deb: archive.packageAssociationProfiles.linux,
+    rpm: archive.packageAssociationProfiles.linux,
+    macosApp: {
+      extensions: supportedAssociations,
+      mimeTypes: [],
+    },
+    macosDmg: {
+      extensions: supportedAssociations,
+      mimeTypes: [],
+    },
+  },
+}));
+
+const tauriConfig = readJson("src-tauri/tauri.conf.json");
+tauriConfig.bundle.fileAssociations = archive.associationTypes
+  .filter(({ linux }) => linux)
+  .map((type) => ({
+    ext: [
+      ...type.primaryExtensions,
+      ...type.compoundExtensions,
+      ...type.splitSuffixes.map((suffix) => suffix.slice(1)),
+    ],
+    name: `${type.id} archive`,
+    description: `${type.id} archive`,
+    role: "Viewer",
+    mimeType: type.mimeType,
+  }));
+put("src-tauri/tauri.conf.json", json(tauriConfig));
 put("packaging/macos/main-info.generated.json", json({
   schemaVersion: 1,
   documentGroups: archive.documentGroups,
@@ -246,7 +562,6 @@ put("packaging/macos/main-info.generated.json", json({
       order
     }))
 }));
-const strings = (pairs) => [...new Map(pairs)].map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)};`).join("\n");
 const englishInfo = [
   ["CFBundleDisplayName", "ZManager"],
   ["CFBundleName", "ZManager"],
@@ -269,7 +584,7 @@ const fixture = {
   schemaVersion: 1,
   shellActionRequestVersion: shell.requestVersion,
   actionOrder: actionIds,
-  actions: shell.actions.map(({ id, order, selectionShapes, multiplicity }) => ({ id, order, selectionShapes, multiplicity })),
+  actions: shell.actions.map(({ id, canonicalLabel, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces, compatibilityAliases }) => ({ id, canonicalLabel, nativeVerb, order, contextMenuOrder, contextMenuContexts, selectionShapes, multiplicity, nativeSurfaces, compatibilityAliases })),
   archivePaths: [
     { path: "sample.tar.gz", supported: true, suffix: ".tar.gz", baseName: "sample" },
     { path: "sample.7z.001", supported: true, suffix: ".7z.001", baseName: "sample" },
@@ -280,8 +595,195 @@ const fixture = {
 };
 put("fixtures/contracts/native-contracts.conformance.json", json(fixture));
 
+const orderedContextActions = (surface, context) => shell.actions
+  .filter((action) => action.nativeSurfaces.includes(surface)
+    && action.contextMenuContexts.includes(context))
+  .sort((left, right) => left.contextMenuOrder - right.contextMenuOrder);
+const windowsActions = shell.actions.filter(({ nativeSurfaces }) =>
+  nativeSurfaces.includes("windowsExplorer"));
+const windowsGuidName = ({ nativeVerb }) => `${screamingSnakeCase(nativeVerb)}_CLSID`;
+const windowsGuidValue = ({ windowsClsid }) => windowsClsid.replace(
+  /^(.{8})-(.{4})-(.{4})-(.{4})-(.{12})$/,
+  "$1_$2_$3_$4_$5",
+);
+put("native/windows-shell-extension/src/generated.rs", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.
+use windows::core::{GUID, PCWSTR, w};
+use zmanager_shell_contract::ShellActionKind;
+
+${windowsActions.map((action) => `pub(crate) const ${windowsGuidName(action)}: GUID = GUID::from_u128(0x${windowsGuidValue(action)});`).join("\n")}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExplorerAction {
+${windowsActions.map(({ rustCase }) => `    ${rustCase},`).join("\n")}
+}
+
+pub(crate) const ALL_EXPLORER_ACTIONS: &[ExplorerAction] = &[
+${windowsActions.map(({ rustCase }) => `    ExplorerAction::${rustCase},`).join("\n")}
+];
+
+impl ExplorerAction {
+    pub(crate) fn from_clsid(clsid: &GUID) -> Option<Self> {
+        match *clsid {
+${windowsActions.map((action) => `            ${windowsGuidName(action)} => Some(Self::${action.rustCase}),`).join("\n")}
+            _ => None,
+        }
+    }
+
+    pub(crate) fn clsid(self) -> GUID {
+        match self {
+${windowsActions.map((action) => `            Self::${action.rustCase} => ${windowsGuidName(action)},`).join("\n")}
+        }
+    }
+
+    pub(crate) fn title(self) -> PCWSTR {
+        match self {
+${windowsActions.map((action) => `            Self::${action.rustCase} => w!(${JSON.stringify(action.canonicalLabel)}),`).join("\n")}
+        }
+    }
+
+    pub(crate) fn shell_action(self) -> ShellActionKind {
+        match self {
+${windowsActions.map((action) => `            Self::${action.rustCase} => ShellActionKind::${action.rustCase},`).join("\n")}
+        }
+    }
+
+    pub(crate) fn supports_count(self, count: u32) -> bool {
+        if count == 0 {
+            return false;
+        }
+        match self {
+${windowsActions.filter(({ multiplicity }) => multiplicity === "exactly-one").map(({ rustCase }) => `            Self::${rustCase} => count == 1,`).join("\n")}
+            _ => true,
+        }
+    }
+}
+`);
+
+const nsisClsidName = (action) => `ZM_${screamingSnakeCase(action.nativeVerb)}_CLSID`;
+const nsisActionRows = (context, command) => orderedContextActions("windowsExplorer", context)
+  .map((action, index) => {
+    const verb = `${String(index + 1).padStart(2, "0")}${action.nativeVerb}`;
+    if (command) {
+      return `  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "\${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "${verb}" "${action.canonicalLabel}" "${action.compatibilityAliases[0]}" "%V"`;
+    }
+    const key = context === "creation"
+      ? "ZM_CREATE_FILE_SUBCOMMANDS_KEY"
+      : "ZM_ARCHIVE_SUBCOMMANDS_KEY";
+    return `  !insertmacro ZM_WRITE_COM_SUBCOMMAND_VERB "\${${key}}" "${verb}" "${action.canonicalLabel}" "\${${nsisClsidName(action)}}"`;
+  })
+  .join("\n");
+put("packaging/windows/nsis-shell-actions.generated.nsh", `; Generated by scripts/generate-native-contracts.mjs. Do not edit.
+${windowsActions.map((action) => `!define ${nsisClsidName(action)} "{${action.windowsClsid.toUpperCase()}}"`).join("\n")}
+
+!macro ZM_REGISTER_GENERATED_SHELL_EXTENSION_CLASSES
+${windowsActions.map((action) => `  !insertmacro ZM_REGISTER_COM_CLASS "\${${nsisClsidName(action)}}"`).join("\n")}
+!macroend
+
+!macro ZM_UNREGISTER_GENERATED_SHELL_EXTENSION_CLASSES
+${windowsActions.map((action) => `  !insertmacro ZM_UNREGISTER_COM_CLASS "\${${nsisClsidName(action)}}"`).join("\n")}
+!macroend
+
+!macro ZM_REGISTER_GENERATED_ORDERED_SUBCOMMANDS
+${nsisActionRows("archiveSingle", false)}
+${nsisActionRows("creation", false)}
+${nsisActionRows("container", true)}
+!macroend
+`);
+
+const linuxDesktopActions = orderedContextActions("linuxDesktop", "archiveSingle");
+const linuxMimeTypes = `${archive.packageAssociationProfiles.linux.mimeTypes.join(";")};`;
+const desktopActionBlocks = (exec) => linuxDesktopActions.map((action) => `
+[Desktop Action ${action.nativeVerb}]
+Name=${action.canonicalLabel}
+Exec=${exec} --quick-action ${action.compatibilityAliases[0]} --path ${action.multiplicity === "exactly-one" ? "%f" : "%F"}
+Icon=${exec === "{{exec}}" ? "{{icon}}" : "zmanager-desktop"}`).join("\n");
+const desktopActionNames = linuxDesktopActions.map(({ nativeVerb }) => nativeVerb).join(";");
+put("packaging/linux/zmanager-desktop.desktop", `[Desktop Entry]
+Categories=Utility;
+Comment=Safe archive manager for Windows, Linux, and macOS
+Exec=zmanager-desktop %U
+Icon=zmanager-desktop
+MimeType=${linuxMimeTypes}
+Name=ZManager
+StartupWMClass=zmanager-desktop
+StartupNotify=true
+Terminal=false
+Type=Application
+Actions=${desktopActionNames};
+${desktopActionBlocks("zmanager-desktop")}
+`);
+put("packaging/linux/zmanager.desktop.hbs", `[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}Comment={{comment}}{{/if}}
+Exec={{exec}} %U
+Icon={{icon}}
+MimeType=${linuxMimeTypes}
+Name={{name}}
+NoDisplay=true
+StartupWMClass=zmanager-desktop
+StartupNotify=true
+Terminal=false
+Type=Application
+Actions=${desktopActionNames};
+${desktopActionBlocks("{{exec}}")}
+`);
+
+const kdeFile = (contexts, mimeTypes) => {
+  const actions = shell.actions
+    .filter((action) => action.nativeSurfaces.includes("linuxKde")
+      && action.contextMenuContexts.some((context) => contexts.includes(context)))
+    .sort((left, right) => left.contextMenuOrder - right.contextMenuOrder);
+  return `[Desktop Entry]
+Type=Service
+Name=ZManager
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=${mimeTypes}
+Actions=${actions.map(({ nativeVerb }) => nativeVerb).join(";")};
+X-KDE-Priority=TopLevel
+X-KDE-Submenu=ZManager
+${actions.map((action) => `
+[Desktop Action ${action.nativeVerb}]
+Name=${action.canonicalLabel}
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action ${action.compatibilityAliases[0]} --path ${action.multiplicity === "exactly-one" ? "%f" : "%F"}`).join("\n")}
+`;
+};
+put(
+  "packaging/linux/kde/zmanager-servicemenu.desktop",
+  kdeFile(["creation", "container"], "application/octet-stream;inode/directory;"),
+);
+put(
+  "packaging/linux/kde/zmanager-archive-servicemenu.desktop",
+  kdeFile(["archiveSingle", "archiveMultiple"], linuxMimeTypes),
+);
+
+const nautilusArchiveActions = orderedContextActions("linuxNautilus", "archiveSingle")
+  .filter(({ contextMenuContexts }) => contextMenuContexts.some((context) =>
+    context === "archiveSingle" || context === "archiveMultiple"));
+const nautilusCreateActions = orderedContextActions("linuxNautilus", "creation");
+const archiveSuffixes = [
+  ...archive.splitArchiveSuffixes,
+  ...archive.compoundExtensions.map((extension) => `.${extension}`),
+  ...archive.singleExtensions.map((extension) => `.${extension}`),
+].sort((left, right) => right.length - left.length || left.localeCompare(right));
+put("packaging/linux/nautilus/zmanager_shell_actions_generated.py", `# Generated by scripts/generate-native-contracts.mjs. Do not edit.
+ARCHIVE_SUFFIXES = (
+${archiveSuffixes.map((suffix) => `    ${JSON.stringify(suffix)},`).join("\n")}
+)
+
+ARCHIVE_ACTIONS = (
+${nautilusArchiveActions.map((action) => `    (${JSON.stringify(action.nativeVerb)}, ${JSON.stringify(action.canonicalLabel)}, ${JSON.stringify(action.compatibilityAliases[0])}, ${action.contextMenuContexts.includes("archiveMultiple") ? "True" : "False"}),`).join("\n")}
+)
+
+CREATE_ACTIONS = (
+${nautilusCreateActions.map((action) => `    (${JSON.stringify(action.nativeVerb)}, ${JSON.stringify(action.canonicalLabel)}, ${JSON.stringify(action.compatibilityAliases[0])}),`).join("\n")}
+)
+`);
+
 let windowsHook = readFileSync(resolve(root, "packaging/windows/nsis-context-menu.nsh"), "utf8");
-const windowsExtensions = [...new Set([...archive.singleExtensions, "001"])].map((extension) => `.${extension}`).sort((a, b) => a.localeCompare(b));
+const windowsExtensions = [...new Set(supportedAssociations)]
+  .map((extension) => `.${extension}`)
+  .sort((a, b) => a.localeCompare(b));
 const newline = windowsHook.includes("\r\n") ? "\r\n" : "\n";
 for (const [macro, inserted] of [["ZM_REGISTER_ARCHIVE_EXTENSIONS", "ZM_REGISTER_ARCHIVE_EXTENSION"], ["ZM_UNREGISTER_ARCHIVE_EXTENSIONS", "ZM_UNREGISTER_ARCHIVE_EXTENSION"]]) {
   const body = windowsExtensions.map((extension) => `  !insertmacro ${inserted} "${extension}"`).join(newline);

@@ -31,7 +31,6 @@ function harness() {
       calls.push(`ack:${id}`);
     }),
     handleQuickAction: vi.fn(async () => {}),
-    handleShellActionToken: vi.fn(async () => {}),
     handleHostedAuthCallback: vi.fn(async () => {}),
     revealApplication: vi.fn(async () => {}),
     reportFailure: vi.fn(),
@@ -86,19 +85,22 @@ describe("native inbound controller", () => {
     expect(test.options.reportFailure).toHaveBeenCalledOnce();
   });
 
-  it("routes request tokens and secret-free hosted authentication results", async () => {
+  it("routes validated shell requests and secret-free hosted authentication results", async () => {
     const test = harness();
     await test.controller.process(event({
       eventId: "shell-event-123456",
       kind: "shellActionRequest",
-      payload: { requestToken: "abcdefghijklmnopqrstuv" },
+      payload: { request: { kind: "compressZip", paths: ["/tmp/source"] } },
     }));
     await test.controller.process(event({
       eventId: "auth-event-1234567",
       kind: "hostedAuthCallback",
       payload: { state: "state-1234567890", result: "completed" },
     }));
-    expect(test.options.handleShellActionToken).toHaveBeenCalledWith("abcdefghijklmnopqrstuv");
+    expect(test.options.handleQuickAction).toHaveBeenCalledWith({
+      kind: "compressZip",
+      paths: ["/tmp/source"],
+    });
     expect(test.options.handleHostedAuthCallback).toHaveBeenCalledWith({
       state: "state-1234567890",
       result: "completed",

@@ -47,11 +47,6 @@ const COMMAND_WRAPPERS = [
   { command: "diagnostic_log_info", call: () => api.fetchDiagnosticLogInfo() },
   { command: "quick_action_startup_state", call: () => api.fetchQuickActionStartupState() },
   {
-    command: "consume_shell_action_request",
-    args: { requestToken: "abcdefghijklmnopqrstuv" },
-    call: () => api.consumeShellActionRequest("abcdefghijklmnopqrstuv"),
-  },
-  {
     command: "native_frontend_ready",
     args: { windowLabel: "main" },
     call: () => api.nativeFrontendReady("main"),

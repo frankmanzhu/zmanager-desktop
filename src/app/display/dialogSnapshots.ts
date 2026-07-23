@@ -3,6 +3,7 @@ import type {
   HealthcheckResponse,
   ProjectContract,
 } from "../../api/types";
+import { isNativeCapabilityAvailable } from "../../api/generated/nativeCapabilities.generated";
 import {
   APP_TITLE,
   APP_VERSION,
@@ -217,10 +218,11 @@ export function buildAboutDialogSnapshot(
   const display = input.display;
   const healthcheck = input.healthcheck ?? null;
   const contract = input.contract ?? null;
-  const shellActions =
-    contract?.platformIntegration.shellActions
-      .map((action) => `${action.label} (${action.quickAction})`)
-      .join(", ") ?? "-";
+  const capabilityAvailable = (
+    id: Parameters<typeof isNativeCapabilityAvailable>[1],
+  ): boolean => contract
+    ? isNativeCapabilityAvailable(contract.platformIntegration.capabilities, id)
+    : false;
   const diagnosticLogLocation = input.diagnosticLogLocation === "installation"
     ? message(display, "about.diagnostics.logLocationInstallation")
     : input.diagnosticLogLocation === "userFallback"
@@ -261,19 +263,19 @@ export function buildAboutDialogSnapshot(
           ],
           [
             message(display, "about.diagnostics.selectedItemActions"),
-            contract?.platformIntegration.selectedItemActionsEnabled
+            capabilityAvailable("shellSelectedItemActions")
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
           [
             message(display, "about.diagnostics.backgroundActions"),
-            contract?.platformIntegration.backgroundActionsEnabled
+            capabilityAvailable("shellBackgroundActions")
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
           [
             message(display, "about.diagnostics.fileAssociations"),
-            contract?.platformIntegration.fileAssociationsEnabled
+            capabilityAvailable("fileAssociations")
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
@@ -283,8 +285,16 @@ export function buildAboutDialogSnapshot(
         title: message(display, "about.group.support"),
         rows: [
           [message(display, "about.diagnostics.status"), healthcheck?.status ?? message(display, "about.diagnostics.frontendOnly")],
-          [message(display, "about.diagnostics.extensions"), contract?.platformIntegration.associatedExtensions.join(", ") ?? "-"],
-          [message(display, "about.diagnostics.shellActions"), shellActions],
+          [
+            message(display, "about.diagnostics.extensions"),
+            contract?.platformIntegration.transitionalPlatformProfile.associatedExtensions.join(", ") ?? "-",
+          ],
+          [
+            message(display, "about.diagnostics.shellActions"),
+            capabilityAvailable("shellSelectedItemActions")
+              ? message(display, "about.diagnostics.enabled")
+              : message(display, "about.diagnostics.unavailable"),
+          ],
           [
             message(display, "about.diagnostics.logPath"),
             input.diagnosticLogPath ?? message(display, "about.diagnostics.unavailable"),

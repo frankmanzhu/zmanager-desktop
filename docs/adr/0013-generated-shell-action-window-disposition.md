@@ -22,8 +22,10 @@ state becomes a non-executable forwarded marker carrying the action's window
 disposition. The inbox remains the single owner of the executable request, so
 the request is not duplicated.
 
-The frontend routes every startup, native-inbox, and shell-token request through
-one disposition seam before executing it. Main-window actions reveal and retain
+Rust consumes Finder tokens and validates the resulting versioned request before
+the Native Launch Inbox accepts it. The frontend receives only a validated,
+inline shell-action request and routes every startup and native-inbox request
+through one disposition seam before executing it. Main-window actions reveal and retain
 the normal application. Disposable actions mark coordinator ownership, keep the
 Main Window hidden, and bracket request execution with activity tracking. The
 coordinator may exit only after disposable activity was observed and there are

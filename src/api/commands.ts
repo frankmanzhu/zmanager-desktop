@@ -144,12 +144,6 @@ export async function fetchQuickActionStartupState(): Promise<QuickActionStartup
   return invoke<QuickActionStartupStateDto>("quick_action_startup_state");
 }
 
-export async function consumeShellActionRequest(
-  requestToken: string,
-): Promise<QuickActionRequestDto> {
-  return invoke<QuickActionRequestDto>("consume_shell_action_request", { requestToken });
-}
-
 export async function nativeFrontendReady(windowLabel: string): Promise<number> {
   return invoke<number>("native_frontend_ready", { windowLabel });
 }

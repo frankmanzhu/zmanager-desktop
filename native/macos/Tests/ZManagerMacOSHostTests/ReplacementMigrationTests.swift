@@ -83,7 +83,7 @@ func registrationPlanAlwaysRegistersCurrentBeforeRemovingExactLegacyPaths() thro
     let root = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
         .appending(path: "zmanager-registration-plan-\(UUID().uuidString)")
     let current = root.appending(path: "ZManager.app", directoryHint: .isDirectory)
-    let legacy = root.appending(path: "ZManager.app", directoryHint: .isDirectory)
+    let legacy = root.appending(path: "Legacy ZManager.app", directoryHint: .isDirectory)
     try makeApp(at: current, bundleID: "com.frankmanzhu.zmanager")
     try makeApp(at: legacy, bundleID: "com.frankmanzhu.zmanager")
     defer { try? FileManager.default.removeItem(at: root) }

@@ -235,7 +235,6 @@ import {
   fetchProjectContract,
   fetchDiagnosticLogInfo,
   fetchQuickActionStartupState,
-  consumeShellActionRequest,
   fetchSystemFileIcons,
   generateTzapIdentity as generateTzapIdentityCommand,
   generateAccountRecipientKey,
@@ -279,6 +278,7 @@ import type {
 import type {
   NativeInboundHostedAuthEvent,
 } from "../api/generated/nativeInboundEvents.generated";
+import { isNativeCapabilityAvailable } from "../api/generated/nativeCapabilities.generated";
 import {
   isDesktopRuntime,
   openNativeDialog as openRuntimeDialog,
@@ -929,7 +929,9 @@ const startupController = createStartupController({
   setBootstrapState: (state) => {
     latestHealthcheck = state.healthcheck;
     latestContract = state.contract;
-    browserDocument.applyPlatformProfile(state.contract?.platformIntegration ?? null);
+    browserDocument.applyPlatformProfile(
+      state.contract?.platformIntegration.transitionalPlatformProfile ?? null,
+    );
   },
   onBootstrapStateChanged: publishBootstrapStateSnapshot,
   diagnostics,
@@ -941,7 +943,6 @@ const nativeInboundController = createNativeInboundController({
   markFrontendReady: nativeFrontendReady,
   acknowledge: acknowledgeNativeEvent,
   handleQuickAction: routeQuickActionRequest,
-  handleShellActionToken,
   handleHostedAuthCallback,
   revealApplication: revealNormalAppWindow,
   reportFailure: (error) => setOperationalStatus(unknownErrorMessage(
@@ -3457,7 +3458,13 @@ async function savePreferencesFromDialog() {
 function openPreferencesDialog() {
   preferencesDialogDraft = appPreferences;
   publishReactSnapshot();
-  if (latestContract?.platformIntegration.platform === "macos") {
+  if (
+    latestContract
+    && isNativeCapabilityAvailable(
+      latestContract.platformIntegration.capabilities,
+      "defaultHandlerControl",
+    )
+  ) {
     void defaultHandlerController.refresh();
   }
 }
@@ -3751,10 +3758,6 @@ async function initializeDesktopRuntime() {
   });
   await subscribeToJobCatalog();
   await startupController.initializeDesktopRuntime();
-}
-
-async function handleShellActionToken(requestToken: string): Promise<void> {
-  await routeQuickActionRequest(await consumeShellActionRequest(requestToken));
 }
 
 async function handleHostedAuthCallback(

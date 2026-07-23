@@ -371,14 +371,23 @@ async function installQuickActionTauriStub(
           coreDependency: "stub",
           platformIntegration: {
             platform: "linux",
-            selectedItemActionsEnabled: true,
-            backgroundActionsEnabled: true,
-            fileAssociationsEnabled: true,
-            windowDecorations: false,
-            customWindowChrome: true,
-            manualWindowResize: true,
-            associatedExtensions: ["zip", "tzap"],
-            shellActions: [],
+            packageKind: "development",
+            capabilities: [
+              "shellSelectedItemActions",
+              "shellBackgroundActions",
+              "fileAssociations",
+              "defaultHandlerControl",
+            ].map((id) => ({ id, availability: "available" })),
+            transitionalPlatformProfile: {
+              selectedItemActionsEnabled: true,
+              backgroundActionsEnabled: true,
+              fileAssociationsEnabled: true,
+              windowDecorations: false,
+              customWindowChrome: true,
+              manualWindowResize: true,
+              nativeMenuBar: false,
+              associatedExtensions: ["zip", "tzap"],
+            },
           },
         };
       }

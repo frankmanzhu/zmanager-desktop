@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+default_root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root_dir="${ZMANAGER_NATIVE_PLATFORM_CHECK_ROOT:-$default_root_dir}"
 cd "$root_dir"
 
 failures=0
@@ -26,10 +27,16 @@ production_rust_before_tests() {
   ' "$1"
 }
 
+strip_lint_only_cfg_attributes() {
+  sed -E \
+    '/^[[:space:]]*#!?\[cfg_attr\([^,]+,[[:space:]]*(allow|warn|deny|forbid)\([^]]*\)\)\][[:space:]]*$/d'
+}
+
 while IFS= read -r file; do
   file="${file//\\//}"
   [[ "$file" == src-tauri/src/platform/* ]] && continue
   source_without_tests="$(production_rust_before_tests "$file")"
+  source_without_tests="$(printf '%s\n' "$source_without_tests" | strip_lint_only_cfg_attributes)"
   if [[ "$file" == "src-tauri/src/main.rs" ]]; then
     source_without_tests="$(printf '%s\n' "$source_without_tests" | sed '/windows_subsystem = "windows"/d')"
   fi

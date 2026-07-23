@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zmanager.local/contracts/native-capabilities.schema.json",
+  "title": "ZManager Native Integration Capability Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "platforms", "packageKinds", "failureCategories", "capabilities"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "platforms": {
+      "const": ["windows", "linux", "macos"]
+    },
+    "packageKinds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "failureCategories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/capability"}
+    }
+  },
+  "$defs": {
+    "platformMapBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windows", "linux", "macos"]
+    },
+    "applicabilityMap": {
+      "allOf": [
+        {"$ref": "#/$defs/platformMapBase"},
+        {
+          "properties": {
+            "windows": {"enum": ["required", "optional", "notApplicable"]},
+            "linux": {"enum": ["required", "optional", "notApplicable"]},
+            "macos": {"enum": ["required", "optional", "notApplicable"]}
+          }
+        }
+      ]
+    },
+    "sourceExpectationMap": {
+      "allOf": [
+        {"$ref": "#/$defs/platformMapBase"},
+        {
+          "properties": {
+            "windows": {"enum": ["implemented", "optionalUnavailable", "notApplicable"]},
+            "linux": {"enum": ["implemented", "optionalUnavailable", "notApplicable"]},
+            "macos": {"enum": ["implemented", "optionalUnavailable", "notApplicable"]}
+          }
+        }
+      ]
+    },
+    "stringArrayMap": {
+      "allOf": [
+        {"$ref": "#/$defs/platformMapBase"},
+        {
+          "properties": {
+            "windows": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+            "linux": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+            "macos": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+          }
+        }
+      ]
+    },
+    "nullableStringMap": {
+      "allOf": [
+        {"$ref": "#/$defs/platformMapBase"},
+        {
+          "properties": {
+            "windows": {"type": ["string", "null"]},
+            "linux": {"type": ["string", "null"]},
+            "macos": {"type": ["string", "null"]}
+          }
+        }
+      ]
+    },
+    "booleanMap": {
+      "allOf": [
+        {"$ref": "#/$defs/platformMapBase"},
+        {
+          "properties": {
+            "windows": {"type": "boolean"},
+            "linux": {"type": "boolean"},
+            "macos": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "package", "installed"],
+      "properties": {
+        "source": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "package": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "installed": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "firstClass",
+        "applicability",
+        "sourceExpectation",
+        "packageKinds",
+        "installedProbe",
+        "installedRegistrationRequired",
+        "userEnabledState",
+        "runtimeProbeRequired",
+        "failureCategories",
+        "evidence"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][A-Za-z0-9]*$"},
+        "firstClass": {"type": "boolean"},
+        "applicability": {"$ref": "#/$defs/applicabilityMap"},
+        "sourceExpectation": {"$ref": "#/$defs/sourceExpectationMap"},
+        "packageKinds": {"$ref": "#/$defs/stringArrayMap"},
+        "installedProbe": {"$ref": "#/$defs/nullableStringMap"},
+        "installedRegistrationRequired": {"$ref": "#/$defs/booleanMap"},
+        "userEnabledState": {"$ref": "#/$defs/booleanMap"},
+        "runtimeProbeRequired": {"$ref": "#/$defs/booleanMap"},
+        "failureCategories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "evidence": {"$ref": "#/$defs/evidence"}
+      }
+    }
+  }
+}

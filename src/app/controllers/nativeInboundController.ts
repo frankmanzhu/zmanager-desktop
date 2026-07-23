@@ -12,7 +12,6 @@ export type NativeInboundControllerOptions = Readonly<{
   markFrontendReady(windowLabel: string): Promise<number>;
   acknowledge(windowLabel: string, eventId: string): Promise<void>;
   handleQuickAction(request: QuickActionRequestDto): Promise<void>;
-  handleShellActionToken(requestToken: string): Promise<void>;
   handleHostedAuthCallback(payload: NativeInboundHostedAuthEvent["payload"]): Promise<void>;
   revealApplication(): Promise<void>;
   reportFailure(error: unknown): void;
@@ -47,11 +46,7 @@ export function createNativeInboundController(
         await options.handleQuickAction({ kind: "open", paths: event.payload.paths });
         break;
       case "shellActionRequest":
-        if ("request" in event.payload) {
-          await options.handleQuickAction(event.payload.request);
-        } else {
-          await options.handleShellActionToken(event.payload.requestToken);
-        }
+        await options.handleQuickAction(event.payload.request);
         break;
       case "hostedAuthCallback":
         await options.handleHostedAuthCallback(event.payload);
@@ -104,15 +99,12 @@ function nativeInboundDiagnosticFields(
     return { kind: event.kind, pathCount: event.payload.paths.length, transport: "paths" };
   }
   if (event.kind === "shellActionRequest") {
-    if ("request" in event.payload) {
-      return {
-        kind: event.kind,
-        action: event.payload.request.kind,
-        pathCount: event.payload.request.paths.length,
-        transport: "inlineRequest",
-      };
-    }
-    return { kind: event.kind, transport: "opaqueToken" };
+    return {
+      kind: event.kind,
+      action: event.payload.request.kind,
+      pathCount: event.payload.request.paths.length,
+      transport: "validatedRequest",
+    };
   }
   return { kind: event.kind };
 }

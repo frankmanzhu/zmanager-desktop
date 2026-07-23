@@ -1,12 +1,13 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$extensionSource = Join-Path $repoRoot "native\windows-shell-extension\src\lib.rs"
+$extensionSource = Join-Path $repoRoot "native\windows-shell-extension\src\generated.rs"
 $installerHook = Join-Path $repoRoot "packaging\windows\nsis-context-menu.nsh"
+$installerActions = Join-Path $repoRoot "packaging\windows\nsis-shell-actions.generated.nsh"
 $quickActionSource = Join-Path $repoRoot "src-tauri\src\quick_action.rs"
 $extensionArtifact = Join-Path $repoRoot "target\windows-shell-extension\zmanager-shell-extension.dll"
 
 $rust = Get-Content -Raw $extensionSource
-$nsis = Get-Content -Raw $installerHook
+$nsis = (Get-Content -Raw $installerHook) + (Get-Content -Raw $installerActions)
 $quickAction = Get-Content -Raw $quickActionSource
 
 $rustClassIds = [regex]::Matches($rust, 'GUID::from_u128\(0x([0-9a-fA-F_]+)\)') |

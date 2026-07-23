@@ -1,4 +1,8 @@
 import type { GeneratedShellActionKind } from "./generated/shellActions.generated";
+import type {
+  NativeCapabilitySnapshot,
+  NativePackageKind,
+} from "./generated/nativeCapabilities.generated";
 
 export type HealthcheckResponse = {
   engine: string;
@@ -15,18 +19,18 @@ export type ProjectContract = {
   coreDependency: string;
   platformIntegration: {
     platform: string;
-    selectedItemActionsEnabled: boolean;
-    backgroundActionsEnabled: boolean;
-    fileAssociationsEnabled: boolean;
-    windowDecorations: boolean;
-    customWindowChrome: boolean;
-    manualWindowResize: boolean;
-    nativeMenuBar: boolean;
-    associatedExtensions: string[];
-    shellActions: {
-      label: string;
-      quickAction: string;
-    }[];
+    packageKind: NativePackageKind;
+    capabilities: NativeCapabilitySnapshot[];
+    transitionalPlatformProfile: {
+      selectedItemActionsEnabled: boolean;
+      backgroundActionsEnabled: boolean;
+      fileAssociationsEnabled: boolean;
+      windowDecorations: boolean;
+      customWindowChrome: boolean;
+      manualWindowResize: boolean;
+      nativeMenuBar: boolean;
+      associatedExtensions: string[];
+    };
   };
 };
 
