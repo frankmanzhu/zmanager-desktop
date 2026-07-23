@@ -79,7 +79,7 @@ PY
 
 dependencies=()
 while IFS= read -r dependency; do dependencies+=("$dependency"); done < <(otool -L "$executable" | awk 'NR > 1 {print $1}' | grep -E '^/(opt/homebrew|usr/local)/' | sort -u)
-for dependency in "${dependencies[@]}"; do
+for dependency in "${dependencies[@]:-}"; do
   name=$(basename "$dependency")
   ditto "$dependency" "$frameworks/$name"
   chmod 0755 "$frameworks/$name"
