@@ -174,6 +174,57 @@ export type ListArchiveRequest = {
   password?: string;
 };
 
+export type ArchiveIndexStatus = "indexing" | "ready" | "empty" | "failed" | "cancelled";
+
+export type StartArchiveIndexRequest = ListArchiveRequest;
+
+export type ArchiveIndexSnapshotDto = {
+  revision: string;
+  sessionId: string;
+  archivePath: string;
+  status: ArchiveIndexStatus;
+  discoveredEntries: number;
+  discoveredBytes?: number;
+  finalEntryCount?: number;
+  finalTotalBytes?: number;
+  latestFailure?: CommandErrorDto;
+};
+
+export type ArchiveIndexStartResponseDto = {
+  sessionId: string;
+  snapshot: ArchiveIndexSnapshotDto;
+};
+
+export type ArchiveIndexSessionRequest = { sessionId: string; afterRevision?: string };
+
+export type ArchiveChildrenRequest = ArchiveIndexSessionRequest & {
+  parentPath?: string;
+  cursor?: string;
+  limit?: number;
+  expectedRevision?: string;
+  sortKey?: string;
+  sortAscending?: boolean;
+};
+
+export type ArchiveSearchRequest = ArchiveIndexSessionRequest & {
+  query: string;
+  cursor?: string;
+  limit?: number;
+  expectedRevision?: string;
+  sortKey?: string;
+  sortAscending?: boolean;
+};
+
+export type ArchiveChildrenPageDto = {
+  sessionId: string;
+  revision: string;
+  parentPath: string;
+  entries: ArchiveEntryDto[];
+  nextCursor?: string;
+  complete: boolean;
+  childCount: number;
+};
+
 export type PlanCreateRequest = {
   sources: string[];
   cleanSource: boolean;

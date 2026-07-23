@@ -3,7 +3,12 @@ import { invoke, type Channel } from "@tauri-apps/api/core";
 import type {
   AccountHostedAuthLaunchDto,
   AccountSnapshotDto,
-  ArchiveListingDto,
+  ArchiveChildrenPageDto,
+  ArchiveChildrenRequest,
+  ArchiveIndexSessionRequest,
+  ArchiveIndexSnapshotDto,
+  ArchiveIndexStartResponseDto,
+  ArchiveSearchRequest,
   CancelJobRequest,
   CancelJobResponseDto,
   CommandErrorDto,
@@ -18,7 +23,6 @@ import type {
   JobControlResponseDto,
   JobCatalogEnvelopeDto,
   JobSnapshotEnvelopeDto,
-  ListArchiveRequest,
   NativeFileDragRequest,
   NativeFileDragResponse,
   PauseJobRequest,
@@ -31,6 +35,7 @@ import type {
   ResumeJobRequest,
   ReplacementMigrationPrepareResponseDto,
   StartCreateRequest,
+  StartArchiveIndexRequest,
   StartExtractRequest,
   StartJobResponseDto,
   SystemFileIconRequest,
@@ -156,10 +161,32 @@ export async function acknowledgeNativeEvent(
   return invoke<void>("acknowledge_native_event", { windowLabel, eventId });
 }
 
-export async function listArchive(request: ListArchiveRequest): Promise<ArchiveListingDto> {
-  return invoke<ArchiveListingDto>("list_archive", {
-    request,
-  });
+export async function startArchiveIndex(
+  request: StartArchiveIndexRequest,
+): Promise<ArchiveIndexStartResponseDto> {
+  return invoke<ArchiveIndexStartResponseDto>("start_archive_index", { request });
+}
+
+export async function waitArchiveIndex(
+  request: ArchiveIndexSessionRequest,
+): Promise<ArchiveIndexSnapshotDto> {
+  return invoke<ArchiveIndexSnapshotDto>("wait_archive_index", { request });
+}
+
+export async function getArchiveChildren(
+  request: ArchiveChildrenRequest,
+): Promise<ArchiveChildrenPageDto> {
+  return invoke<ArchiveChildrenPageDto>("get_archive_children", { request });
+}
+
+export async function searchArchiveIndex(
+  request: ArchiveSearchRequest,
+): Promise<ArchiveChildrenPageDto> {
+  return invoke<ArchiveChildrenPageDto>("search_archive_index", { request });
+}
+
+export async function closeArchiveIndex(request: ArchiveIndexSessionRequest): Promise<void> {
+  return invoke<void>("close_archive_index", { request });
 }
 
 export async function runPlanCreate(request: PlanCreateRequest): Promise<CreatePlanResponse> {

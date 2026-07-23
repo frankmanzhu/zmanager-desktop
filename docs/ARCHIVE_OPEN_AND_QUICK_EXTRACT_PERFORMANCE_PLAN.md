@@ -1,6 +1,6 @@
 # Archive Open And Quick Extract Performance Implementation Plan
 
-- Status: In progress (Phase 1 hot-path change implemented; measurement and later phases pending)
+- Status: Implemented (Phases 1-4 complete; automated hardening complete on Windows ARM64, cross-platform release smoke remains a release-gate activity)
 - Date: 2026-07-22
 - Scope: Archive Workspace opening and browsing, whole-archive extraction,
   shell quick actions, Desktop Rust command contracts, and `zmanager-core`
@@ -917,6 +917,32 @@ listing, while TAR.ZST and raw-stream wrappers retain cheap header/source-size
 estimates. The command-boundary, valid-backend, and password-retry regressions
 are automated. Native task-window timing and release-hardware budgets remain
 Phase 0/5 verification work.
+
+Implementation completion note (2026-07-23): normal archive browsing now uses
+the Rust-owned Archive Session Registry and no longer invokes the complete-list
+Tauri command. Sessions return immediately, retain latest-value decimal
+revisions with `tokio::sync::watch`, enforce the ADR's active-session, entry,
+metadata, and page limits, reject stale cursors/revisions, and discard closed
+session work. React receives at most one 512-entry table/search page plus the
+directory summaries explicitly loaded for expanded tree branches. Folder,
+flat-view, search, sort, next-page, previous-page, refresh, and tree expansion
+queries are Rust-owned and cursor-paged. The old `list_archive` command is no
+longer registered or exposed by the TypeScript API.
+
+ZIP enumeration is progressive at central-directory entry boundaries and
+publishes retained snapshots after 256 entries or 50 ms. Cancellation is
+checked at every ZIP entry boundary. Other formats use the documented
+collect-then-publish fallback until their backend iterators can expose the same
+visitor seam. Progressive ZIP output is regression-tested for equivalence with
+the previous listing result and for cancellation.
+
+The checked-in, explicitly-run 100,000-entry index characterization test owns
+the initial index budget. On the Windows 11 ARM64 development environment (8
+logical processors, 16 GiB RAM), the debug test built the mixed wide/deep index
+in 727 ms on 2026-07-23, including conservative synthetic-folder and child-index
+memory accounting. This is a reproducible engineering baseline, not a
+release performance claim; release-class native quick-action timings remain in
+the platform release gate.
 
 ### Phase 2: background Archive Session with existing core listing
 

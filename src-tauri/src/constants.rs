@@ -5,7 +5,11 @@ pub const PLATFORM_STRATEGY: &str =
 
 pub const COMMAND_HEALTHCHECK: &str = "healthcheck";
 pub const COMMAND_PROJECT_CONTRACT: &str = "project_contract";
-pub const COMMAND_LIST_ARCHIVE: &str = "list_archive";
+pub const COMMAND_START_ARCHIVE_INDEX: &str = "start_archive_index";
+pub const COMMAND_WAIT_ARCHIVE_INDEX: &str = "wait_archive_index";
+pub const COMMAND_GET_ARCHIVE_CHILDREN: &str = "get_archive_children";
+pub const COMMAND_SEARCH_ARCHIVE_INDEX: &str = "search_archive_index";
+pub const COMMAND_CLOSE_ARCHIVE_INDEX: &str = "close_archive_index";
 pub const COMMAND_TEST_ARCHIVE: &str = "test_archive";
 pub const COMMAND_PLAN_CREATE: &str = "plan_create";
 pub const COMMAND_START_CREATE: &str = "start_create";
@@ -31,7 +35,11 @@ pub const COMMAND_ERROR_OPERATION_FAILED: &str = "operation_failed";
 pub const PLANNED_COMMANDS: &[&str] = &[
     COMMAND_HEALTHCHECK,
     COMMAND_PROJECT_CONTRACT,
-    COMMAND_LIST_ARCHIVE,
+    COMMAND_START_ARCHIVE_INDEX,
+    COMMAND_WAIT_ARCHIVE_INDEX,
+    COMMAND_GET_ARCHIVE_CHILDREN,
+    COMMAND_SEARCH_ARCHIVE_INDEX,
+    COMMAND_CLOSE_ARCHIVE_INDEX,
     COMMAND_TEST_ARCHIVE,
     COMMAND_PLAN_CREATE,
     COMMAND_START_CREATE,

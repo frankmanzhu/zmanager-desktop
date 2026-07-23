@@ -316,6 +316,7 @@ export function menuGroupLabel(label: MenuGroup["label"], i18n?: Translator): st
 }
 
 export function selectCommandState(context: CommandContext): CommandStateMap {
+  const canOperateArchive = context.hasArchive;
   const canUseArchive =
     context.hasArchive &&
     context.browseState !== "loading" &&
@@ -340,7 +341,8 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   };
 
   enable(["open", "add", "options", "helpContents", "about", "jobs", "standardToolbar", "showButtonText", "exit"]);
-  enable(["closeArchive", "extract", "copyTo", "test", "properties", "info", "refresh", "flatView"], canUseArchive, archiveReason);
+  enable(["closeArchive", "extract", "test", "properties", "info", "refresh"], canOperateArchive, archiveReason);
+  enable(["copyTo", "flatView"], canUseArchive, archiveReason);
   enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
   enable(["view", "openOutside"], hasOneSelection && canListEntries && !canOpenInside, hasOneSelection && !canOpenInside ? archiveReason : SINGLE_FILE_REQUIRED_MESSAGE);
   enable(["openInside"], canOpenInside && canListEntries, hasOneSelection ? SINGLE_FOLDER_REQUIRED_MESSAGE : SINGLE_FILE_REQUIRED_MESSAGE);

@@ -121,6 +121,8 @@ export type ZManagerArchiveIntent =
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
   | Readonly<{ type: "navigateBack" }>
   | Readonly<{ type: "navigateUp" }>
+  | Readonly<{ type: "loadNextArchivePage" }>
+  | Readonly<{ type: "loadPreviousArchivePage" }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
   | Readonly<{

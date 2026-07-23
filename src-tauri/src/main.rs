@@ -2,6 +2,7 @@
 
 mod account;
 mod archive_file_types;
+mod archive_index;
 mod commands;
 mod constants;
 mod default_handlers;
@@ -31,6 +32,7 @@ fn main() {
     platform::initialize_native_host(native_launch_inbox.clone())
         .expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
+    let archive_index_registry = archive_index::ArchiveIndexRegistry::new();
     let account_runtime = account::AccountRuntime::new();
     let native_drag_sessions = native_drag_session::NativeDragSessionRegistry::new();
     let quick_action_launch_coordinator =
@@ -47,6 +49,7 @@ fn main() {
     let builder = platform::register_platform_services(builder);
     let app = builder
         .manage(job_registry)
+        .manage(archive_index_registry)
         .manage(account_runtime)
         .manage(native_drag_sessions.clone())
         .manage(diagnostics.clone())
@@ -136,7 +139,11 @@ fn main() {
             account::account_generate_recipient_key,
             account::account_remove_recipient_key,
             account::account_remove_contact,
-            commands::list_archive,
+            commands::start_archive_index,
+            commands::wait_archive_index,
+            commands::get_archive_children,
+            commands::search_archive_index,
+            commands::close_archive_index,
             commands::plan_create,
             commands::start_create,
             commands::start_extract,

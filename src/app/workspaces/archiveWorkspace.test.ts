@@ -580,7 +580,7 @@ describe("archive workspace load state", () => {
     expect(loadingWorkspace.beginLoading({ archivePath: "C:/tmp/project.zip" }).command).toMatchObject({
       browseState: "loading",
       hasArchive: true,
-      canUseArchive: false,
+      canUseArchive: true,
       canListEntries: false,
       canSearchEntries: false,
     });
@@ -671,7 +671,7 @@ describe("archive workspace load state", () => {
       canUseArchive: true,
       canListEntries: false,
       visibleSelectableCount: 0,
-      canSearchEntries: true,
+      canSearchEntries: false,
     });
   });
 
@@ -724,12 +724,12 @@ describe("archive workspace load state", () => {
     expect(failed.command).toMatchObject({
       browseState: "error",
       hasArchive: true,
-      canUseArchive: false,
+      canUseArchive: true,
       canListEntries: false,
-      canSearchEntries: true,
+      canSearchEntries: false,
     });
-    expect(failedCommandState.extract.enabled).toBe(false);
-    expect(failedCommandState.refresh.enabled).toBe(false);
+    expect(failedCommandState.extract.enabled).toBe(true);
+    expect(failedCommandState.refresh.enabled).toBe(true);
 
     const recovered = workspace.setBrowseState("loaded");
     const recoveredCommandState = selectCommandState({

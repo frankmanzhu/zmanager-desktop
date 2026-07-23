@@ -118,6 +118,7 @@ pub struct QuickActionStartupStateDto {
     pub error: Option<QuickActionStartupErrorDto>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveListingResponse {
@@ -149,6 +150,7 @@ pub enum ArchiveEntryKindDto {
     Special,
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListArchiveRequest {
@@ -198,6 +200,7 @@ pub struct ArchiveIndexStartResponseDto {
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveIndexSessionRequest {
     pub session_id: String,
+    pub after_revision: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,6 +212,21 @@ pub struct ArchiveChildrenRequest {
     pub cursor: Option<String>,
     pub limit: Option<usize>,
     pub expected_revision: Option<String>,
+    pub sort_key: Option<String>,
+    pub sort_ascending: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveSearchRequest {
+    pub session_id: String,
+    #[serde(default)]
+    pub query: String,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub expected_revision: Option<String>,
+    pub sort_key: Option<String>,
+    pub sort_ascending: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]

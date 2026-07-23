@@ -241,6 +241,38 @@ export function ArchiveTable() {
           </tbody>
         </table>
       </div>
+      {archive.page.hasPrevious || archive.page.hasNext ? (
+        <nav
+          className="flex h-10 shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-3 dark:border-slate-800"
+          aria-label={i18n.t("browse.pageSummary", {
+            page: archive.page.number,
+            count: archive.page.childCount,
+          })}
+        >
+          <span className="mr-auto text-xs text-slate-500 dark:text-slate-400">
+            {i18n.t("browse.pageSummary", {
+              page: archive.page.number,
+              count: archive.page.childCount,
+            })}
+          </span>
+          <button
+            type="button"
+            className="min-h-8 rounded-md border border-slate-200 px-3 text-xs disabled:opacity-40 dark:border-slate-700"
+            disabled={!archive.page.hasPrevious}
+            onClick={() => actions.handleArchiveIntent({ type: "loadPreviousArchivePage" })}
+          >
+            {i18n.t("common.previous")}
+          </button>
+          <button
+            type="button"
+            className="min-h-8 rounded-md border border-slate-200 px-3 text-xs disabled:opacity-40 dark:border-slate-700"
+            disabled={!archive.page.hasNext}
+            onClick={() => actions.handleArchiveIntent({ type: "loadNextArchivePage" })}
+          >
+            {i18n.t("common.next")}
+          </button>
+        </nav>
+      ) : null}
     </section>
   );
 }

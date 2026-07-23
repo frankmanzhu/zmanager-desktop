@@ -11,6 +11,8 @@ export type ArchiveRuntimeActionEffects = Readonly<{
   navigateToFolder(folderPath: string): void;
   navigateBack(): void;
   navigateUp(): void;
+  loadNextPage(): void | Promise<void>;
+  loadPreviousPage(): void | Promise<void>;
   setSearchQuery(query: string): void;
   clearSearch(): void;
   setFlatView(flatView: boolean, persistPreference: boolean): void;
@@ -68,6 +70,12 @@ export function createArchiveRuntimeActions(
           break;
         case "navigateUp":
           effects.navigateUp();
+          break;
+        case "loadNextArchivePage":
+          void effects.loadNextPage();
+          break;
+        case "loadPreviousArchivePage":
+          void effects.loadPreviousPage();
           break;
         case "setSearchQuery":
           effects.setSearchQuery(intent.query);

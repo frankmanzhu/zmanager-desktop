@@ -89,9 +89,39 @@ const COMMAND_WRAPPERS = [
     call: () => api.removeAccountContact("contact-1"),
   },
   {
-    command: "list_archive",
-    request: { archivePath: "C:/archives/demo.zip", password: "secret" },
-    call: () => api.listArchive({ archivePath: "C:/archives/demo.zip", password: "secret" }),
+    command: "start_archive_index",
+    request: { archivePath: "C:/archives/demo.zip" },
+    call: () => api.startArchiveIndex({ archivePath: "C:/archives/demo.zip" }),
+  },
+  {
+    command: "wait_archive_index",
+    request: { sessionId: "archive-1" },
+    call: () => api.waitArchiveIndex({ sessionId: "archive-1" }),
+  },
+  {
+    command: "get_archive_children",
+    request: { sessionId: "archive-1", parentPath: "folder", limit: 200, expectedRevision: "2" },
+    call: () => api.getArchiveChildren({
+      sessionId: "archive-1",
+      parentPath: "folder",
+      limit: 200,
+      expectedRevision: "2",
+    }),
+  },
+  {
+    command: "search_archive_index",
+    request: { sessionId: "archive-1", query: "readme", limit: 200, expectedRevision: "2" },
+    call: () => api.searchArchiveIndex({
+      sessionId: "archive-1",
+      query: "readme",
+      limit: 200,
+      expectedRevision: "2",
+    }),
+  },
+  {
+    command: "close_archive_index",
+    request: { sessionId: "archive-1" },
+    call: () => api.closeArchiveIndex({ sessionId: "archive-1" }),
   },
   {
     command: "plan_create",

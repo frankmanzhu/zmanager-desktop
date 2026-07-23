@@ -23,8 +23,9 @@ safety. A browse session is never extraction authority.
 
 The retained session publisher uses `tokio::sync::watch`. Notifications are
 latest-value invalidations; consumers recover by reading the retained snapshot
-and querying the required page. Tauri sends occur outside session locks and use
-the Job Feed's one-in-flight acknowledgement pattern.
+and querying the required page. The Tauri `wait_archive_index` command waits for
+a revision newer than the caller's decimal-string revision; `watch` conflates
+intermediate publications rather than creating a notification queue.
 
 Revisions are unsigned 64-bit values serialized as decimal strings. Exhaustion
 fails closed. Page cursors are opaque, revision-scoped, bounded strings; a
@@ -47,8 +48,8 @@ Initial admission and payload limits are named constants:
 - 500,000 retained entries and 256 MiB of estimated retained metadata per
   session, whichever is reached first;
 - 200 default rows and 512 maximum rows per page;
-- 128 changed-parent hints per snapshot, after which the snapshot marks the
-  hints truncated;
+- 2,048 summaries fetched by one tree expansion and 10,000 retained directory
+  summaries in the frontend workspace;
 - publication after 256 entries or 50 ms, whichever occurs first, once
   progressive enumeration exists;
 - no closed-session retention: close removes the session after cancelling
@@ -70,10 +71,10 @@ storage.
 
 The first progressive backend is ZIP. Other backends explicitly use
 collect-then-publish until their core adapters can provide semantically
-equivalent incremental entries and cancellation checkpoints. Phase 2 itself is
-collect-then-publish for every backend: its in-flight core call cannot be
-interrupted and its transient complete `Vec` is not bounded. Those limitations
-must remain visible until Phase 3 removes them.
+equivalent incremental entries and cancellation checkpoints. ZIP feeds the
+bounded Desktop index directly and does not create a complete intermediate
+entry vector. Fallback backends retain the temporary complete-vector peak
+described by the performance plan.
 
 Global search and flat view wait for a `ready` index in the first release.
 Current-folder paging and navigation over published nodes may operate while an
@@ -87,16 +88,15 @@ identity and revision. Opening a valid archive can be acknowledged before its
 listing completes.
 
 Desktop gains a bounded metadata cache and cursor contract that require
-explicit cleanup and contract tests. Phase 2 improves responsiveness and IPC
-cost but cannot claim progressive first content, interruptible backend reads,
-or bounded peak enumeration memory. ZIP progression and cooperative
-cancellation are Phase 3 completion requirements.
+explicit cleanup and contract tests. ZIP provides progressive first content
+and cooperative cancellation; fallback backends improve responsiveness and IPC
+cost but cannot claim bounded peak enumeration memory until they expose native
+iterators.
 
 ## Verification
 
-- Rust tests cover admission, byte/entry/page limits, cursor validation,
-  revision ordering/exhaustion, latest-value conflation, acknowledgement, and
-  close/replacement races.
+- Rust tests cover page limits, cursor/revision validation, latest-value
+  conflation, close rejection, and the 100,000-entry characterization path.
 - Rust/TypeScript fixtures cover decimal revisions, enum casing, optional
   totals, cursor opacity, and normalized errors.
 - Frontend tests prove stale results are ignored and snapshot size is

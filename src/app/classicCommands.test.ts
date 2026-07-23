@@ -214,7 +214,7 @@ describe("command state selector", () => {
     expect(state.openOutside.reason).toBe(SINGLE_FILE_REQUIRED_MESSAGE);
   });
 
-  it("keeps archive-level commands disabled with useful reasons while loading or empty", () => {
+  it("keeps whole-archive operations available while loading and row operations bounded", () => {
     const loadingState = selectCommandState({
       ...baseContext,
       browseState: "loading",
@@ -227,8 +227,8 @@ describe("command state selector", () => {
       visibleSelectableCount: 0,
     });
 
-    expect(loadingState.extract.enabled).toBe(false);
-    expect(loadingState.extract.reason).toBe(ARCHIVE_NOT_READY_MESSAGE);
+    expect(loadingState.extract.enabled).toBe(true);
+    expect(loadingState.test.enabled).toBe(true);
     expect(emptyLoadedState.selectAll.enabled).toBe(false);
     expect(emptyLoadedState.selectAll.reason).toBe(NO_ENTRIES_MESSAGE);
     expect(emptyLoadedState.copy.enabled).toBe(false);

@@ -16,18 +16,21 @@ use openssl::x509::{X509, X509NameBuilder};
 use tauri::{State, WebviewWindow, ipc::Channel};
 
 #[cfg(test)]
+use crate::dto::{ArchiveEntryDto, ArchiveListingResponse};
+#[cfg(test)]
 use crate::job_dto::TestJobEventsSnapshot;
 use crate::{
+    archive_index::ArchiveIndexRegistry,
     constants,
     dto::{
-        AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, ArchiveListingResponse,
-        CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
-        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest,
-        PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
-        ProjectIntegrationContract, ProjectIntegrationShellActionDto, ResumeJobRequest,
-        StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto,
-        ValidateDirectoryRequest, ValidateDirectoryResponse,
+        AckSubscriptionRequest, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse,
+        DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
+        NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
+        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ProjectIntegrationShellActionDto, ResumeJobRequest, StartCreateRequest,
+        StartExtractRequest, SubscribeJobRequest, SubscriptionRequest, SystemFileIconRequest,
+        SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
+        ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -210,7 +213,7 @@ fn quick_action_startup_state_internal(
     state.to_dto()
 }
 
-#[tauri::command]
+#[cfg(test)]
 pub fn list_archive(
     request: crate::dto::ListArchiveRequest,
 ) -> Result<ArchiveListingResponse, CommandErrorDto> {
@@ -252,6 +255,50 @@ pub fn list_archive(
         entry_count,
         total_size: if has_size { Some(total_size) } else { None },
     })
+}
+
+#[tauri::command]
+pub fn start_archive_index(
+    request: crate::dto::StartArchiveIndexRequest,
+    registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<crate::dto::ArchiveIndexStartResponseDto, CommandErrorDto> {
+    registry.start(request)
+}
+
+#[tauri::command]
+pub async fn wait_archive_index(
+    request: crate::dto::ArchiveIndexSessionRequest,
+    registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<crate::dto::ArchiveIndexSnapshotDto, CommandErrorDto> {
+    registry
+        .inner()
+        .clone()
+        .wait_for_change(&request.session_id, request.after_revision.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub fn get_archive_children(
+    request: crate::dto::ArchiveChildrenRequest,
+    registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<crate::dto::ArchiveChildrenPageDto, CommandErrorDto> {
+    registry.children(request)
+}
+
+#[tauri::command]
+pub fn search_archive_index(
+    request: crate::dto::ArchiveSearchRequest,
+    registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<crate::dto::ArchiveChildrenPageDto, CommandErrorDto> {
+    registry.search(request)
+}
+
+#[tauri::command]
+pub fn close_archive_index(
+    request: crate::dto::ArchiveIndexSessionRequest,
+    registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<(), CommandErrorDto> {
+    registry.close(&request.session_id)
 }
 
 #[tauri::command]
@@ -1628,7 +1675,7 @@ pub fn dismiss_job(
     Ok(())
 }
 
-fn map_browser_entry_kind(
+pub(crate) fn map_browser_entry_kind(
     entry: zmanager_core::archive_browser::BrowserEntryKind,
 ) -> ArchiveEntryKindDto {
     match entry {
@@ -1642,8 +1689,11 @@ fn map_browser_entry_kind(
     }
 }
 
-fn map_archive_browser_error(error: ArchiveBrowserError) -> CommandErrorDto {
+pub(crate) fn map_archive_browser_error(error: ArchiveBrowserError) -> CommandErrorDto {
     match error {
+        ArchiveBrowserError::Cancelled => {
+            CommandErrorDto::cancelled("Archive enumeration was cancelled.")
+        }
         ArchiveBrowserError::Zip(source) => map_zip_error(source),
         ArchiveBrowserError::TarZst(source) => map_tar_zst_error(source),
         ArchiveBrowserError::SevenZ(source) => map_7z_error(source),

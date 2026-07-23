@@ -75,6 +75,8 @@ function createEffects(
     navigateToFolder: vi.fn(),
     navigateBack: vi.fn(),
     navigateUp: vi.fn(),
+    loadNextPage: vi.fn(),
+    loadPreviousPage: vi.fn(),
     setSearchQuery: vi.fn(),
     clearSearch: vi.fn(),
     setFlatView: vi.fn(),

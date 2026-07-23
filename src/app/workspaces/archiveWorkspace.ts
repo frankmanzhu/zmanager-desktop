@@ -39,6 +39,8 @@ import {
   type HierarchicalTableSelectionResult,
 } from "../hierarchicalTable";
 
+const MAX_ARCHIVE_TREE_SUMMARIES = 10_000;
+
 export type ArchiveWorkspaceSortState = {
   key: ArchiveSortKey;
   ascending: boolean;
@@ -250,6 +252,12 @@ export type ArchiveWorkspaceSnapshot = ArchiveWorkspaceListingMetadata & {
   passwordRetry: ArchiveWorkspacePasswordRetry | null;
   entries: readonly ArchiveEntryDto[];
   listingRevision: number;
+  page: Readonly<{
+    number: number;
+    childCount: number;
+    hasPrevious: boolean;
+    hasNext: boolean;
+  }>;
   command: ArchiveWorkspaceCommandSnapshot;
   view: ArchiveWorkspaceViewState;
 };
@@ -281,6 +289,18 @@ export type ArchiveLoadSucceededOptions = {
   preserveState?: ArchiveWorkspacePreserveStateInput | false;
 };
 
+export type ArchiveWorkspacePage = {
+  archivePath: string;
+  parentPath: string;
+  entries: readonly ArchiveEntryDto[];
+  entryCount: number;
+  totalSize?: number | null;
+  pageNumber?: number;
+  childCount?: number;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+};
+
 export type ArchiveWorkspace = {
   getSnapshot(): ArchiveWorkspaceSnapshot;
   beginLoading(input: BeginArchiveLoadInput): ArchiveWorkspaceSnapshot;
@@ -288,6 +308,8 @@ export type ArchiveWorkspace = {
     listing: ArchiveListingDto,
     options?: ArchiveLoadSucceededOptions,
   ): ArchiveWorkspaceSnapshot;
+  acceptPage(page: ArchiveWorkspacePage): ArchiveWorkspaceSnapshot;
+  acceptTreePage(entries: readonly ArchiveEntryDto[]): ArchiveWorkspaceSnapshot;
   loadFailed(error: CommandErrorDto | ArchiveWorkspaceUnknownLoadFailure): ArchiveWorkspaceSnapshot;
   setBrowseState(browseState: BrowseState): ArchiveWorkspaceSnapshot;
   navigateToFolder(folderPath: string): ArchiveWorkspaceSnapshot;
@@ -332,6 +354,7 @@ export type CreateArchiveWorkspaceOptions = {
 
 type MutableArchiveWorkspaceState = Omit<ArchiveWorkspaceSnapshot, "command" | "entries" | "view"> & {
   entries: ArchiveEntryDto[];
+  treeEntries: ArchiveEntryDto[];
   view: {
     currentFolder: string;
     navigationHistory: string[];
@@ -369,8 +392,10 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
           ? {}
           : {
               entries: [],
+              treeEntries: [],
               entryCount: 0,
               totalSize: null,
+              page: { number: 1, childCount: 0, hasPrevious: false, hasNext: false },
               view: resetViewState({
                 flatView: state.view.flatView,
                 sort: state.view.sort,
@@ -398,9 +423,53 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
         error: null,
         passwordRetry: null,
         entries,
+        treeEntries: entries,
         listingRevision: state.listingRevision + 1,
+        page: { number: 1, childCount: entries.length, hasPrevious: false, hasNext: false },
         ...metadata,
         view,
+      };
+      return snapshotFromState(state);
+    },
+
+    acceptPage(page) {
+      const entries = cloneEntries(page.entries);
+      state = {
+        ...state,
+        currentArchivePath: page.archivePath.trim(),
+        browseState: "loaded",
+        status: { key: "browse.loadedEntries", values: { count: page.entryCount } },
+        error: null,
+        passwordRetry: null,
+        entries,
+        treeEntries: mergeTreeEntries(state.treeEntries, entries),
+        entryCount: page.entryCount,
+        totalSize: page.totalSize ?? null,
+        listingRevision: state.listingRevision + 1,
+        page: {
+          number: page.pageNumber ?? 1,
+          childCount: page.childCount ?? entries.length,
+          hasPrevious: page.hasPrevious ?? false,
+          hasNext: page.hasNext ?? false,
+        },
+        view: {
+          ...state.view,
+          currentFolder: normalizeArchivePath(page.parentPath),
+          expandedTreeFolders: expandedFolderAndAncestors(
+            state.view.expandedTreeFolders,
+            page.parentPath,
+          ),
+          selection: selectionFromResult(clearHierarchicalTableSelection()),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
+    acceptTreePage(entries) {
+      state = {
+        ...state,
+        treeEntries: mergeTreeEntries(state.treeEntries, entries),
+        listingRevision: state.listingRevision + 1,
       };
       return snapshotFromState(state);
     },
@@ -776,9 +845,11 @@ function createInitialState(
     error: null,
     passwordRetry: null,
     entries: [],
+    treeEntries: [],
     entryCount: 0,
     totalSize: null,
     listingRevision: 0,
+    page: { number: 1, childCount: 0, hasPrevious: false, hasNext: false },
     view: resetViewState({
       flatView: options.flatView,
       sort: normalizeSortState({
@@ -1092,7 +1163,7 @@ function treeFoldersForState(state: MutableArchiveWorkspaceState): ArchiveWorksp
 
   const expandedFolders = new Set(normalizeExpandedTreeFolders(state.view.expandedTreeFolders));
   const folders: ArchiveWorkspaceTreeFolder[] = [];
-  const root = buildArchiveTree(state.entries, { rootName: "" });
+  const root = buildArchiveTree(state.treeEntries, { rootName: "" });
 
   function visit(node: ArchiveFolderNode) {
     folders.push({
@@ -1355,8 +1426,7 @@ function commandSnapshotFromState(
   const hasArchive = Boolean(state.currentArchivePath);
   const canUseArchive =
     hasArchive &&
-    state.browseState !== "loading" &&
-    (state.browseState === "loaded" || state.browseState === "empty");
+    state.browseState !== "idle";
   const selectedEntry = selection.selectedEntries.length === 1
     ? selection.selectedEntries[0]
     : null;
@@ -1371,7 +1441,7 @@ function commandSnapshotFromState(
     visibleSelectableCount: selection.visibleSelectablePaths.length,
     canUseArchive,
     canListEntries: canUseArchive && state.browseState === "loaded",
-    canSearchEntries: hasArchive && state.browseState !== "loading",
+    canSearchEntries: hasArchive && state.browseState === "loaded",
     canNavigateBack: state.view.navigationHistory.length > 0,
   };
 }
@@ -1393,6 +1463,7 @@ function snapshotFromState(state: MutableArchiveWorkspaceState): ArchiveWorkspac
     entryCount: state.entryCount,
     totalSize: state.totalSize,
     listingRevision: state.listingRevision,
+    page: { ...state.page },
     command: { ...command },
     view: {
       currentFolder: state.view.currentFolder,
@@ -1427,6 +1498,26 @@ function cloneStatus(status: ArchiveWorkspaceMessagePayload): ArchiveWorkspaceMe
 
 function cloneEntries(entries: readonly ArchiveEntryDto[]): ArchiveEntryDto[] {
   return entries.map((entry) => ({ ...entry }));
+}
+
+function mergeTreeEntries(
+  existing: readonly ArchiveEntryDto[],
+  visiblePage: readonly ArchiveEntryDto[],
+): ArchiveEntryDto[] {
+  const byPath = new Map(
+    existing
+      .filter((entry) => entry.kind === "directory")
+      .map((entry) => [normalizeArchivePath(entry.path), { ...entry }] as const),
+  );
+  for (const entry of visiblePage) {
+    if (
+      entry.kind === "directory" &&
+      (byPath.has(normalizeArchivePath(entry.path)) || byPath.size < MAX_ARCHIVE_TREE_SUMMARIES)
+    ) {
+      byPath.set(normalizeArchivePath(entry.path), { ...entry });
+    }
+  }
+  return [...byPath.values()];
 }
 
 function cloneRows(rows: readonly ArchiveTableRow[]): ArchiveTableRow[] {

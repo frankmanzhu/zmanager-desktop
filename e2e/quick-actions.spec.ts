@@ -503,15 +503,44 @@ async function installQuickActionTauriStub(
         };
       }
 
-      if (cmd === "list_archive") {
+      if (cmd === "start_archive_index") {
         const request = args.request as { archivePath: string };
         return {
-          archivePath: request.archivePath,
-          entries: [],
-          entryCount: 0,
-          totalSize: 0,
+          sessionId: "archive-e2e",
+          snapshot: {
+            revision: "1",
+            sessionId: "archive-e2e",
+            archivePath: request.archivePath,
+            status: "indexing",
+            discoveredEntries: 0,
+          },
         };
       }
+
+      if (cmd === "wait_archive_index") {
+        return {
+          revision: "2",
+          sessionId: "archive-e2e",
+          archivePath: "C:/fixtures/archive.zip",
+          status: "empty",
+          discoveredEntries: 0,
+          finalEntryCount: 0,
+          finalTotalBytes: 0,
+        };
+      }
+
+      if (cmd === "get_archive_children" || cmd === "search_archive_index") {
+        return {
+          sessionId: "archive-e2e",
+          revision: "2",
+          parentPath: "",
+          entries: [],
+          complete: true,
+          childCount: 0,
+        };
+      }
+
+      if (cmd === "close_archive_index") return undefined;
 
       if (cmd === "system_file_icons") {
         const request = args.request as { entries?: Array<{ key: string }> };

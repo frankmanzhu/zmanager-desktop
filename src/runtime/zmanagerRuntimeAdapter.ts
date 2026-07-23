@@ -239,7 +239,11 @@ import {
   fetchSystemFileIcons,
   generateTzapIdentity as generateTzapIdentityCommand,
   generateAccountRecipientKey,
-  listArchive as listArchiveCommand,
+  startArchiveIndex,
+  waitArchiveIndex,
+  getArchiveChildren,
+  searchArchiveIndex,
+  closeArchiveIndex,
   nativeFrontendReady,
   pauseJob as pauseJobCommand,
   forgetAccount,
@@ -411,14 +415,23 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
   navigateToFolder,
   navigateBack,
   navigateUp,
+  loadNextPage: () => archiveLoadController.loadNextPage(),
+  loadPreviousPage: () => archiveLoadController.loadPreviousPage(),
   setSearchQuery: (query) => {
     publishArchiveSnapshot(archiveWorkspace.setSearchQuery(query));
+    void (query.trim()
+      ? archiveLoadController.loadSearch(query)
+      : archiveLoadController.loadFolder(archiveCurrentFolder()));
   },
   clearSearch,
   setFlatView,
   setColumnWidth: setTableColumnWidth,
   toggleTreeFolder: (folderPath) => {
-    publishArchiveSnapshot(archiveWorkspace.toggleTreeFolder(folderPath));
+    const snapshot = archiveWorkspace.toggleTreeFolder(folderPath);
+    publishArchiveSnapshot(snapshot);
+    if (snapshot.view.expandedTreeFolders.includes(folderPath)) {
+      void archiveLoadController.loadTreeFolder(folderPath);
+    }
   },
   sortByColumn: applySortCommand,
   selectAllVisible: selectVisibleEntries,
@@ -679,19 +692,22 @@ async function subscribeToJobCatalog(): Promise<void> {
 const archiveLoadController = createArchiveLoadController({
   workspace: archiveWorkspace,
   enterExtractWorkspace: () => setWorkspaceMode("extract"),
-  listArchive: listArchiveCommand,
+  startArchiveIndex,
+  waitArchiveIndex,
+  getArchiveChildren,
+  searchArchiveIndex,
+  closeArchiveIndex,
   toCommandError: asCommandError,
   renderLoading: (snapshot) => {
     publishArchiveSnapshot(snapshot);
     setOperationalMessage("status.loadingArchive");
   },
-  acceptListing: (listing, options) => {
-    loadArchiveListingIntoState({
-      archivePath: listing.archivePath,
-      entries: listing.entries,
-      entryCount: listing.entryCount,
-      totalSize: listing.totalSize,
-    }, options);
+  renderPage: (snapshot) => {
+    clearTrackedPreviewState();
+    contextMenuRuntime.hide();
+    applyExtractPreferenceDefaults(snapshot.currentArchivePath);
+    publishArchiveSnapshot(snapshot);
+    setOperationalMessage("archive.loaded");
   },
   renderLoadError: (snapshot, text) => {
     publishArchiveSnapshot(snapshot);
@@ -1022,6 +1038,9 @@ function savePreferencePatch(patch: AppPreferencePatch) {
 
 function setFlatView(nextFlatView: boolean, persistPreference: boolean) {
   publishArchiveSnapshot(archiveWorkspace.setFlatView(nextFlatView));
+  void (nextFlatView
+    ? archiveLoadController.loadSearch(currentSearchQuery())
+    : archiveLoadController.loadFolder(archiveCurrentFolder()));
   if (persistPreference) {
     savePreferencePatch({ flatViewDefault: nextFlatView });
   }
@@ -1030,11 +1049,20 @@ function setFlatView(nextFlatView: boolean, persistPreference: boolean) {
 function applySortCommand(nextSortKey: ArchiveSortKey) {
   publishArchiveSnapshot(archiveWorkspace.applySortCommand(nextSortKey));
   saveTablePreferences();
+  void reloadArchivePageForView();
 }
 
 function applySortDirection(nextSortKey: ArchiveSortKey, ascending: boolean) {
   publishArchiveSnapshot(archiveWorkspace.applySortDirection(nextSortKey, ascending));
   saveTablePreferences();
+  void reloadArchivePageForView();
+}
+
+function reloadArchivePageForView(): Promise<void> {
+  const snapshot = archiveWorkspace.getSnapshot();
+  return snapshot.view.flatView || snapshot.view.searchQuery.trim()
+    ? archiveLoadController.loadSearch(snapshot.view.searchQuery)
+    : archiveLoadController.loadFolder(snapshot.view.currentFolder);
 }
 
 function closeAppWindow() {
@@ -1706,6 +1734,7 @@ function clearSearch() {
     return;
   }
   publishArchiveSnapshot(archiveWorkspace.clearSearch());
+  void archiveLoadController.loadFolder(archiveCurrentFolder());
 }
 
 function currentWorkspaceMode(): WorkspaceDropMode {
@@ -2818,6 +2847,7 @@ function navigateToFolder(folderPath: string) {
   }
 
   publishArchiveSnapshot(snapshot);
+  void archiveLoadController.loadFolder(snapshot.view.currentFolder);
 }
 
 function navigateBack() {
@@ -2830,6 +2860,7 @@ function navigateBack() {
     return;
   }
   publishArchiveSnapshot(snapshot);
+  void archiveLoadController.loadFolder(snapshot.view.currentFolder);
 }
 
 function navigateUp() {
@@ -2845,6 +2876,7 @@ function navigateUp() {
     return;
   }
   publishArchiveSnapshot(snapshot);
+  void archiveLoadController.loadFolder(snapshot.view.currentFolder);
 }
 
 function updateSelectionByIntent(
