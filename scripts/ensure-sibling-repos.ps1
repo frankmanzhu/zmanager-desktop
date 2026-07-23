@@ -41,7 +41,7 @@ if ($ParentDir) {
 }
 
 $tzapRepo = if ($env:ZMANAGER_TZAP_REPO) { $env:ZMANAGER_TZAP_REPO } else { "https://github.com/tzap-org/tzap" }
-$tzapRef = if ($env:ZMANAGER_TZAP_REF) { $env:ZMANAGER_TZAP_REF } else { "v0.1.11" }
+$tzapRef = if ($env:ZMANAGER_TZAP_REF) { $env:ZMANAGER_TZAP_REF } else { "v0.1.12" }
 $tzapDir = if ($env:ZMANAGER_TZAP_DIR) { $env:ZMANAGER_TZAP_DIR } else { Join-Path $parentDir "tzap" }
 
 $zmanagerRepo = if ($env:ZMANAGER_ZMANAGER_REPO) { $env:ZMANAGER_ZMANAGER_REPO } else { "https://github.com/tzap-org/zmanager" }

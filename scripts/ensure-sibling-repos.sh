@@ -22,7 +22,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 parent_dir="$(dirname "$repo_root")"
 
 tzap_repo="${ZMANAGER_TZAP_REPO:-https://github.com/tzap-org/tzap}"
-tzap_ref="${ZMANAGER_TZAP_REF:-v0.1.11}"
+tzap_ref="${ZMANAGER_TZAP_REF:-v0.1.12}"
 tzap_dir="${ZMANAGER_TZAP_DIR:-$parent_dir/tzap}"
 
 zmanager_repo="${ZMANAGER_ZMANAGER_REPO:-https://github.com/tzap-org/zmanager}"
