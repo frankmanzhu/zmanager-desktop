@@ -11,9 +11,9 @@ set -euo pipefail
 #
 # Override defaults via environment variables:
 #   ZMANAGER_TZAP_REPO    – tzap repository URL
-#   ZMANAGER_TZAP_REF     – branch or tag to check out (default: v0.1.11)
+#   ZMANAGER_TZAP_REF     – branch or tag to check out (default: main)
 #   ZMANAGER_ZMANAGER_REPO – zmanager repository URL
-#   ZMANAGER_ZMANAGER_REF  – branch or tag to check out (default: v1.0.7)
+#   ZMANAGER_ZMANAGER_REF  – branch or tag to check out (default: main)
 #
 # Pass --skip-zmanager to skip cloning the zmanager sibling entirely
 # (useful when zmanager-core is pinned to a git dependency in CI).
@@ -22,11 +22,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 parent_dir="$(dirname "$repo_root")"
 
 tzap_repo="${ZMANAGER_TZAP_REPO:-https://github.com/tzap-org/tzap}"
-tzap_ref="${ZMANAGER_TZAP_REF:-v0.1.12}"
+tzap_ref="${ZMANAGER_TZAP_REF:-main}"
 tzap_dir="${ZMANAGER_TZAP_DIR:-$parent_dir/tzap}"
 
 zmanager_repo="${ZMANAGER_ZMANAGER_REPO:-https://github.com/tzap-org/zmanager}"
-zmanager_ref="${ZMANAGER_ZMANAGER_REF:-v1.0.8}"
+zmanager_ref="${ZMANAGER_ZMANAGER_REF:-main}"
 zmanager_dir="${ZMANAGER_ZMANAGER_DIR:-$parent_dir/zmanager}"
 
 skip_zmanager=0

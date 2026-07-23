@@ -16,10 +16,10 @@ path dependency (local-dev mode); CI pins it to git instead.
 
 Override defaults via environment variables:
   ZMANAGER_TZAP_REPO      – tzap repository URL
-  ZMANAGER_TZAP_REF       – branch or tag to check out (default: v0.1.11)
+  ZMANAGER_TZAP_REF       – branch or tag to check out (default: main)
   ZMANAGER_TZAP_DIR       – absolute path for tzap clone
   ZMANAGER_ZMANAGER_REPO  – zmanager repository URL
-  ZMANAGER_ZMANAGER_REF   – branch or tag to check out (default: v1.0.7)
+  ZMANAGER_ZMANAGER_REF   – branch or tag to check out (default: main)
   ZMANAGER_ZMANAGER_DIR   – absolute path for zmanager clone
 
 .Parameter ParentDir
@@ -41,11 +41,11 @@ if ($ParentDir) {
 }
 
 $tzapRepo = if ($env:ZMANAGER_TZAP_REPO) { $env:ZMANAGER_TZAP_REPO } else { "https://github.com/tzap-org/tzap" }
-$tzapRef = if ($env:ZMANAGER_TZAP_REF) { $env:ZMANAGER_TZAP_REF } else { "v0.1.12" }
+$tzapRef = if ($env:ZMANAGER_TZAP_REF) { $env:ZMANAGER_TZAP_REF } else { "main" }
 $tzapDir = if ($env:ZMANAGER_TZAP_DIR) { $env:ZMANAGER_TZAP_DIR } else { Join-Path $parentDir "tzap" }
 
 $zmanagerRepo = if ($env:ZMANAGER_ZMANAGER_REPO) { $env:ZMANAGER_ZMANAGER_REPO } else { "https://github.com/tzap-org/zmanager" }
-$zmanagerRef = if ($env:ZMANAGER_ZMANAGER_REF) { $env:ZMANAGER_ZMANAGER_REF } else { "v1.0.8" }
+$zmanagerRef = if ($env:ZMANAGER_ZMANAGER_REF) { $env:ZMANAGER_ZMANAGER_REF } else { "main" }
 $zmanagerDir = if ($env:ZMANAGER_ZMANAGER_DIR) { $env:ZMANAGER_ZMANAGER_DIR } else { Join-Path $parentDir "zmanager" }
 
 function Invoke-Native {
