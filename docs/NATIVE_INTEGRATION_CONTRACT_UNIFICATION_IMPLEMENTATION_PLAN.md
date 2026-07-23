@@ -81,8 +81,8 @@ The progress table starts as `Unverified`, not `Not started`, for this reason.
 | WP2 Quick Action vertical slice | Implemented; installed proof in WP7/WP8 | WP1 | [implementation evidence](native-integration/WP2_QUICK_ACTION_VERTICAL_SLICE.md), [`shell-actions.json`](../manifests/shell-actions.json), [`shell-action-artifact-parity.test.mjs`](../scripts/shell-action-artifact-parity.test.mjs), [ADR-0013](adr/0013-generated-shell-action-window-disposition.md) |
 | WP3 Native Platform capability migration | Complete | WP2 | [implementation evidence](native-integration/WP3_NATIVE_PLATFORM_CAPABILITY_MIGRATION.md), [ADR-0001](adr/0001-native-platform-contract.md) |
 | WP4 Archive association catalog | Complete | WP3 | [implementation evidence](native-integration/WP4_ARCHIVE_ASSOCIATION.md) |
-| WP5 Command surface and window policy | Unverified | WP4 | Add links when complete |
-| WP6 macOS Native Host FFI contract | Unverified | WP5 | Add links when complete |
+| WP5 Command surface and window policy | Complete | WP4 | [implementation evidence](native-integration/WP5_COMMAND_SURFACE_AND_WINDOW_POLICY.md) |
+| WP6 macOS Native Host FFI contract | Complete | WP5 | [implementation evidence](native-integration/WP6_MACOS_NATIVE_HOST_FFI_CONTRACT.md) |
 | WP7 Registration and release evidence | Complete | WP2, WP4, WP5, WP6 | [implementation evidence](native-integration/WP7_REGISTRATION_AND_RELEASE_EVIDENCE.md) |
 | WP8 Cross-platform acceptance and deletion | Complete | WP0-WP7 | Verified across Windows, Linux, and macOS |
 
