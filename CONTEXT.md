@@ -105,6 +105,15 @@ required by the Desktop Shell. Every supported platform implements the shared
 Rust `NativePlatform` interface; callers use platform-neutral wrapper functions
 and never select or invoke operating-system-specific implementations directly.
 
+### Native Integration Contract
+
+The cross-platform record of which native capabilities are required, optional,
+or not applicable and whether each capability is implemented in source, included
+in a package, registered after installation, and enabled for the current user.
+It defines common lifecycle states, normalized availability, and verification
+evidence while Windows, Linux, and macOS retain separate native adapters for
+their operating-system mechanisms.
+
 ### macOS Native Host
 
 The bounded Swift/AppKit runtime embedded in the Tauri application. It owns
