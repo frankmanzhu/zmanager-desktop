@@ -106,6 +106,7 @@ jobs:
           if-no-files-found: error
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/*/release/bundle/nsis/*.exe
 
   linux-deb:
     name: Linux DEB ${{ matrix.arch }}

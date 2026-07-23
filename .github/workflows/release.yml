@@ -173,6 +173,7 @@ jobs:
           path: |
             src-tauri/target/release/zmanager-desktop.exe
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/*/release/bundle/nsis/*.exe
 
   package-deb:
     name: Linux DEB ${{ matrix.arch }} package

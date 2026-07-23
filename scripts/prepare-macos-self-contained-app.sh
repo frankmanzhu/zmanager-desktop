@@ -131,7 +131,7 @@ PY
   main_entitlements="$signing_work/main.plist"
   finder_entitlements="$signing_work/finder.plist"
 fi
-while IFS= read -r -d '' nested; do codesign --force "${options[@]}" --sign "$identity" "$nested"; done < <(find "$frameworks" -type f -print0)
+while IFS= read -r -d '' nested; do codesign --force ${options[@]+"${options[@]}"} --sign "$identity" "$nested"; done < <(find "$frameworks" -type f -print0)
 while IFS= read -r -d '' extension; do
   case $(basename "$extension") in
     ZManagerFinderExtension.appex)
@@ -145,15 +145,15 @@ while IFS= read -r -d '' extension; do
       exit 1
       ;;
   esac
-  codesign --force "${options[@]}" \
+  codesign --force ${options[@]+"${options[@]}"} \
     --entitlements "$entitlements" \
     --sign "$identity" "$extension"
 done < <(find "$app/Contents/PlugIns" -maxdepth 1 -type d -name '*.appex' -print0 2>/dev/null)
 while IFS= read -r -d '' importer; do
-  codesign --force "${options[@]}" --sign "$identity" "$importer"
+  codesign --force ${options[@]+"${options[@]}"} --sign "$identity" "$importer"
 done < <(find "$app/Contents/Library/Spotlight" -maxdepth 1 -type d -name '*.mdimporter' -print0 2>/dev/null)
-codesign --force "${options[@]}" --sign "$identity" "$executable"
-codesign --force "${options[@]}" \
+codesign --force ${options[@]+"${options[@]}"} --sign "$identity" "$executable"
+codesign --force ${options[@]+"${options[@]}"} \
   --entitlements "$main_entitlements" \
   --sign "$identity" "$app"
 codesign --verify --deep --strict "$app"
