@@ -79,13 +79,15 @@ PY
 
 dependencies=()
 while IFS= read -r dependency; do dependencies+=("$dependency"); done < <(otool -L "$executable" | awk 'NR > 1 {print $1}' | grep -E '^/(opt/homebrew|usr/local)/' | sort -u)
-for dependency in "${dependencies[@]:-}"; do
-  name=$(basename "$dependency")
-  ditto "$dependency" "$frameworks/$name"
-  chmod 0755 "$frameworks/$name"
-  install_name_tool -id "@rpath/$name" "$frameworks/$name"
-  install_name_tool -change "$dependency" "@rpath/$name" "$executable"
-done
+if (( ${#dependencies[@]} > 0 )); then
+  for dependency in "${dependencies[@]}"; do
+    name=$(basename "$dependency")
+    ditto "$dependency" "$frameworks/$name"
+    chmod 0755 "$frameworks/$name"
+    install_name_tool -id "@rpath/$name" "$frameworks/$name"
+    install_name_tool -change "$dependency" "@rpath/$name" "$executable"
+  done
+fi
 
 if ! otool -l "$executable" | grep -q '@executable_path/../Frameworks'; then
   install_name_tool -add_rpath '@executable_path/../Frameworks' "$executable"

@@ -39,7 +39,7 @@
   DeleteRegKey HKCU "Software\Classes\CLSID\${CLSID}"
 !macroend
 
-!include "nsis-shell-actions.generated.nsh"
+!include "${__FILEDIR__}\nsis-shell-actions.generated.nsh"
 
 !macro ZM_REGISTER_SHELL_EXTENSION_CLASSES
   !insertmacro ZM_REGISTER_GENERATED_SHELL_EXTENSION_CLASSES
