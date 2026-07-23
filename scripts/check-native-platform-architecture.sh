@@ -32,6 +32,24 @@ strip_lint_only_cfg_attributes() {
     '/^[[:space:]]*#!?\[cfg_attr\([^,]+,[[:space:]]*(allow|warn|deny|forbid)\([^]]*\)\)\][[:space:]]*$/d'
 }
 
+rg_n() {
+  local pattern="$1"
+  shift
+  if command -v rg >/dev/null 2>&1; then
+    rg -n "$pattern" "$@"
+  else
+    grep -rnE "$pattern" "$@" 2>/dev/null
+  fi
+}
+
+list_rs_files() {
+  if command -v rg >/dev/null 2>&1; then
+    rg --files src-tauri/src -g '*.rs'
+  else
+    find src-tauri/src -type f -name '*.rs'
+  fi
+}
+
 while IFS= read -r file; do
   file="${file//\\//}"
   [[ "$file" == src-tauri/src/platform/* ]] && continue
@@ -41,28 +59,34 @@ while IFS= read -r file; do
     source_without_tests="$(printf '%s\n' "$source_without_tests" | sed '/windows_subsystem = "windows"/d')"
   fi
 
-  platform_selection="$(printf '%s\n' "$source_without_tests" | rg -n 'cfg(_attr)?!?\([^]]*(target_os|\bwindows\b|\bunix\b)' || true)"
+  if command -v rg >/dev/null 2>&1; then
+    platform_selection="$(printf '%s\n' "$source_without_tests" | rg -n 'cfg(_attr)?!?\([^]]*(target_os|\bwindows\b|\bunix\b)' || true)"
+    native_imports="$(printf '%s\n' "$source_without_tests" | rg -n 'windows_sys::|::windows::|\b(gtk|gdk|gio|glib)::' || true)"
+  else
+    platform_selection="$(printf '%s\n' "$source_without_tests" | grep -nE 'cfg(_attr)?!?\([^]]*(target_os|\bwindows\b|\bunix\b)' || true)"
+    native_imports="$(printf '%s\n' "$source_without_tests" | grep -nE 'windows_sys::|::windows::|\b(gtk|gdk|gio|glib)::' || true)"
+  fi
+
   if [[ -n "$platform_selection" ]]; then
     printf 'Production OS selection must live under src-tauri/src/platform: %s\n%s\n' \
       "$file" "$platform_selection" >&2
     failures=1
   fi
 
-  native_imports="$(printf '%s\n' "$source_without_tests" | rg -n 'windows_sys::|::windows::|\b(gtk|gdk|gio|glib)::' || true)"
   if [[ -n "$native_imports" ]]; then
     printf 'Direct native imports must live under src-tauri/src/platform: %s\n%s\n' \
       "$file" "$native_imports" >&2
     failures=1
   fi
-done < <(rg --files src-tauri/src -g '*.rs')
+done < <(list_rs_files)
 
 report_matches \
   'Frontend operating-system detection must use explicit platform capabilities:' \
-  rg -n 'navigator\.(userAgent|platform|userAgentData)' src -g '!*.test.ts' -g '!*.test.tsx'
+  rg_n 'navigator\.(userAgent|platform|userAgentData)' src
 
 report_matches \
   'Shared native drag command code must not regain Windows filename/path policy:' \
-  rg -n 'WINDOWS_FILE_DESCRIPTOR|WINDOWS_RESERVED_FILE_NAMES|virtual_drag_display_path|Windows-(unsafe|reserved)' src-tauri/src/commands.rs
+  rg_n 'WINDOWS_FILE_DESCRIPTOR|WINDOWS_RESERVED_FILE_NAMES|virtual_drag_display_path|Windows-(unsafe|reserved)' src-tauri/src/commands.rs
 
 if [[ "$failures" -ne 0 ]]; then
   exit 1

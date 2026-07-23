@@ -94,6 +94,8 @@ EOF
 check_release_baseline
 
 fedora_packages=(
+  git
+  ripgrep
   ca-certificates
   cmake
   curl
@@ -172,7 +174,7 @@ rust_install_required() {
 collect_missing_commands() {
   local command_name
   missing_commands=()
-  required_commands=(node npm cargo rustc pkg-config rpmbuild rpm cmake)
+  required_commands=(git node npm cargo rustc pkg-config rpmbuild rpm cmake)
   if ((install_package)); then
     required_commands+=(dnf)
     if ((EUID != 0)); then

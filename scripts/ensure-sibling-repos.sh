@@ -26,7 +26,7 @@ tzap_ref="${ZMANAGER_TZAP_REF:-v0.1.11}"
 tzap_dir="${ZMANAGER_TZAP_DIR:-$parent_dir/tzap}"
 
 zmanager_repo="${ZMANAGER_ZMANAGER_REPO:-https://github.com/tzap-org/zmanager}"
-zmanager_ref="${ZMANAGER_ZMANAGER_REF:-v1.0.7}"
+zmanager_ref="${ZMANAGER_ZMANAGER_REF:-v1.0.8}"
 zmanager_dir="${ZMANAGER_ZMANAGER_DIR:-$parent_dir/zmanager}"
 
 skip_zmanager=0

@@ -102,6 +102,7 @@ ubuntu_packages=(
   cmake
   curl
   file
+  git
   gnupg
   libacl1-dev
   libayatana-appindicator3-dev
@@ -119,6 +120,7 @@ ubuntu_packages=(
   libzstd-dev
   patchelf
   pkg-config
+  ripgrep
   zlib1g-dev
 )
 
@@ -180,7 +182,7 @@ npm_install_required() {
 collect_missing_commands() {
   local command_name
   missing_commands=()
-  required_commands=(node npm cargo rustc pkg-config dpkg-deb cmake)
+  required_commands=(git node npm cargo rustc pkg-config dpkg-deb cmake)
   if ((install_package)); then
     required_commands+=(apt-get)
     if ((EUID != 0)); then

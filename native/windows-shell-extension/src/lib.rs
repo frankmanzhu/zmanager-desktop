@@ -31,7 +31,7 @@ use windows::{
             IExplorerCommand_Impl, IShellItemArray, SHStrDupW, SIGDN_FILESYSPATH,
         },
     },
-    core::{BOOL, Error, GUID, HRESULT, Interface, PWSTR, Ref, Result as WindowsResult},
+    core::{BOOL, Error, GUID, HRESULT, Interface, PCWSTR, PWSTR, Ref, Result as WindowsResult},
 };
 use windows_core::implement;
 use zmanager_shell_contract::{ShellActionKind, ShellActionRequest};

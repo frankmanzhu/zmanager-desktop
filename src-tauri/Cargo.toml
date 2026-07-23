@@ -52,7 +52,7 @@ glib = "0.18.5"
 gtk = "0.18.2"
 
 [patch.crates-io]
-zmanager-libarchive-sys = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.7" }
+zmanager-libarchive-sys = { git = "https://github.com/tzap-org/zmanager", tag = "v1.0.8" }
 tzap-core = { path = "../../tzap/crates/tzap-core" }
 tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
 tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }

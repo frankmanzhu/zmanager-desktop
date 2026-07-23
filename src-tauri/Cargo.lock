@@ -6449,7 +6449,7 @@ dependencies = [
 [[package]]
 name = "zmanager-libarchive-sys"
 version = "1.0.7"
-source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.7#530b5439bd6265a0ea958a1c2ed38214ec628875"
+source = "git+https://github.com/tzap-org/zmanager?tag=v1.0.8#1a4b9e86df75a5b4b8024fd454d3a36b1a3964c7"
 dependencies = [
  "cmake",
  "libc",
