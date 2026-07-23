@@ -127,7 +127,7 @@ pub struct ArchiveListingResponse {
     pub total_size: Option<u64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveEntryDto {
     pub path: String,
@@ -139,7 +139,7 @@ pub struct ArchiveEntryDto {
     pub metadata_diagnostics: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ArchiveEntryKindDto {
     File,
@@ -154,6 +154,73 @@ pub enum ArchiveEntryKindDto {
 pub struct ListArchiveRequest {
     pub archive_path: String,
     pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartArchiveIndexRequest {
+    pub archive_path: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArchiveIndexStatusDto {
+    Indexing,
+    Ready,
+    Empty,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveIndexSnapshotDto {
+    pub revision: String,
+    pub session_id: String,
+    pub archive_path: String,
+    pub status: ArchiveIndexStatusDto,
+    pub discovered_entries: usize,
+    pub discovered_bytes: Option<u64>,
+    pub final_entry_count: Option<usize>,
+    pub final_total_bytes: Option<u64>,
+    pub latest_failure: Option<crate::error::CommandErrorDto>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveIndexStartResponseDto {
+    pub session_id: String,
+    pub snapshot: ArchiveIndexSnapshotDto,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveIndexSessionRequest {
+    pub session_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveChildrenRequest {
+    pub session_id: String,
+    #[serde(default)]
+    pub parent_path: String,
+    pub cursor: Option<String>,
+    pub limit: Option<usize>,
+    pub expected_revision: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveChildrenPageDto {
+    pub session_id: String,
+    pub revision: String,
+    pub parent_path: String,
+    pub entries: Vec<ArchiveEntryDto>,
+    pub next_cursor: Option<String>,
+    pub complete: bool,
+    pub child_count: usize,
 }
 
 #[derive(Debug, Serialize)]

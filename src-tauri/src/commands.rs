@@ -874,6 +874,16 @@ pub(crate) fn start_extract_internal(
     request: StartExtractRequest,
     registry: &JobRegistry,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_extract_internal_with_spawner(request, registry, |worker| {
+        thread::spawn(worker);
+    })
+}
+
+fn start_extract_internal_with_spawner(
+    request: StartExtractRequest,
+    registry: &JobRegistry,
+    spawn_worker: impl FnOnce(Box<dyn FnOnce() + Send + 'static>),
+) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let requested_destination_path =
         ensure_non_empty_path(request.destination_path, "destinationPath")?;
@@ -888,12 +898,6 @@ pub(crate) fn start_extract_internal(
         .password
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
-    let extract_progress_estimate = if entry_paths.is_empty() {
-        archive_extract_progress_estimate(&archive_path, password.as_deref())
-    } else {
-        Some((entry_paths.len(), None))
-    };
-
     let family = detect_archive_family(&archive_path);
     let kind = match family {
         ArchiveFamily::Zip => JobKindDto::ZipExtract,
@@ -933,27 +937,6 @@ pub(crate) fn start_extract_internal(
             }],
         )
         .map_err(subscription_error)?;
-    if let Some((total_entries, total_bytes)) = extract_progress_estimate {
-        registry.emit_direct_event(
-            &response.job_id,
-            JobEventDto {
-                event_type: JobEventKindDto::Started,
-                job_kind: Some(kind),
-                phase: None,
-                code: None,
-                hint: None,
-                severity: None,
-                retryable: None,
-                path: None,
-                bytes: None,
-                total_bytes,
-                total_bytes_processed: Some(0),
-                entries: Some(0),
-                total_entries: Some(total_entries),
-                message: Some("Planning extraction.".to_string()),
-            },
-        );
-    }
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
     let family_for_thread = family;
@@ -970,7 +953,7 @@ pub(crate) fn start_extract_internal(
     let archive_path = archive_path;
     let destination_path = destination_path;
 
-    thread::spawn(move || {
+    spawn_worker(Box::new(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
         let result = if entry_paths.is_empty() {
             match family_for_thread {
@@ -1062,7 +1045,7 @@ pub(crate) fn start_extract_internal(
                 );
             }
         }
-    });
+    }));
 
     Ok(response)
 }
@@ -1074,37 +1057,6 @@ fn complete_job_if_needed(
     summary: JobTerminalSummaryDto,
 ) {
     let _ = registry.commit_completed(job_id, kind, summary);
-}
-
-fn archive_extract_progress_estimate(
-    archive_path: &str,
-    password: Option<&str>,
-) -> Option<(usize, Option<u64>)> {
-    let listing = archive_browser::list_entries_with_options(
-        Path::new(archive_path),
-        BrowserListOptions { password },
-    )
-    .ok()?;
-    let mut total_entries = 0usize;
-    let mut total_bytes = 0u64;
-    let mut has_size = false;
-
-    for entry in listing.entries {
-        if matches!(
-            entry.kind,
-            zmanager_core::archive_browser::BrowserEntryKind::Directory
-        ) {
-            continue;
-        }
-
-        total_entries = total_entries.saturating_add(1);
-        if let Some(size) = entry.size {
-            total_bytes = total_bytes.saturating_add(size);
-            has_size = true;
-        }
-    }
-
-    Some((total_entries, has_size.then_some(total_bytes)))
 }
 
 #[tauri::command]
@@ -3304,6 +3256,75 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn whole_archive_extract_returns_the_queued_job_before_worker_enumeration() {
+        let workspace = create_temp_workspace("extract-registration-boundary");
+        let source = workspace.join("source");
+        let destination_archive = workspace.join("created.zip");
+        fs::create_dir_all(&source).expect("fixture source should exist");
+        fs::write(source.join("payload.txt"), b"payload").expect("fixture payload should write");
+
+        let registry = JobRegistry::new();
+        let create_job = start_create_internal(
+            StartCreateRequest {
+                sources: vec![source.to_string_lossy().to_string()],
+                destination_path: destination_archive.to_string_lossy().to_string(),
+                format: crate::dto::ArchiveFormatDto::Zip,
+                clean_source: false,
+                exclude_names: None,
+                exclude_archive_paths: None,
+                include_archive_paths: None,
+                respect_gitignore: false,
+                follow_symlinks: false,
+                replace_existing: true,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+                password: None,
+                compression_level: None,
+                volume_size: None,
+                tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: None,
+                preserve_metadata: false,
+            },
+            &registry,
+        )
+        .expect("fixture archive creation should start");
+        let (create_snapshot, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_snapshot.status, JobStatusDto::Completed);
+
+        let extract_job = start_extract_internal_with_spawner(
+            StartExtractRequest {
+                archive_path: destination_archive.to_string_lossy().to_string(),
+                destination_path: workspace.join("out").to_string_lossy().to_string(),
+                password: None,
+                overwrite: OverwritePolicyDto::Replace,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+                entry_paths: None,
+                strip_components: 0,
+                tzap_restore_policy: TzapRestorePolicyDto::Portable,
+                tzap_allow_degraded: false,
+                tzap_allow_absolute_symlinks: false,
+                ignore_symlinks: false,
+            },
+            &registry,
+            |_worker| {},
+        )
+        .expect("extract job should be registered before its worker runs");
+
+        let snapshot = registry
+            .current_job_snapshot(&extract_job.job_id)
+            .expect("registered extract job should have a retained snapshot");
+        assert_eq!(snapshot.status, JobStatusDto::Queued);
+        assert_eq!(snapshot.progress_facts.total_entries, None);
+        assert_eq!(snapshot.progress_facts.total_bytes, None);
+        let _ = fs::remove_dir_all(workspace);
     }
 
     #[test]

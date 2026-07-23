@@ -10,7 +10,7 @@ pub enum ErrorSeverityDto {
     Error,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandErrorDto {
     pub code: &'static str,

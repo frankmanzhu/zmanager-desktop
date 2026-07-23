@@ -1,6 +1,6 @@
 # Archive Open And Quick Extract Performance Implementation Plan
 
-- Status: Proposed
+- Status: In progress (Phase 1 hot-path change implemented; measurement and later phases pending)
 - Date: 2026-07-22
 - Scope: Archive Workspace opening and browsing, whole-archive extraction,
   shell quick actions, Desktop Rust command contracts, and `zmanager-core`
@@ -484,9 +484,12 @@ target contract.
 ### Core enumeration API
 
 The first Archive Session implementation can wrap the existing
-`list_entries_with_options` call on a worker. This immediately removes native
-enumeration from the synchronous UI flow and avoids sending the full result to
-React, but root contents will still wait for core listing completion.
+`list_entries_with_options` call on a blocking worker. This immediately removes
+native enumeration from the synchronous UI flow and avoids sending the full
+result to React, but root contents will still wait for core listing completion.
+The existing call has no cooperative cancellation seam: Phase 2 can cancel the
+session and discard a late result, but the backend read itself may continue
+until the call returns. True bounded-checkpoint cancellation starts in Phase 3.
 
 True progressive root display requires a core-owned enumeration seam, for
 example:
@@ -551,6 +554,13 @@ If a valid archive exceeds the browse index budget, fail browsing with an
 actionable bounded-index error while leaving **Extract All** available. Do not
 allow an unbounded allocation merely because the previous full-list path was
 also unbounded.
+
+Phase 2 still has one explicitly temporary memory limitation: the existing core
+listing API constructs a complete `Vec` before Desktop can enforce its retained
+index budget. The Phase 2 session and IPC payloads are bounded, but peak native
+memory during that call is not yet bounded independently of archive entry
+count. Phase 3 must replace this transient allocation with the progressive,
+budget-aware visitor before the overall path can claim bounded memory.
 
 ### Ordering and paging
 
@@ -690,7 +700,11 @@ archive scan.
 ### Core extraction wrappers
 
 Review each extraction wrapper in `crates/zmanager-core/src/jobs.rs` for a pre-list
-whose only purpose is calculating `total_bytes` or `total_entries`.
+whose only purpose is calculating `total_bytes` or `total_entries`. Do not remove
+a listing that is reused as authoritative extraction input; the current RAR
+wrapper, for example, converts its listing into the entries passed to the
+extractor and therefore requires a separate backend design before that pass can
+be removed.
 
 For each backend:
 
@@ -839,6 +853,10 @@ format against a central-directory ZIP target.
 
 ## Implementation Phases
 
+Implementation status is tracked here because this plan spans two repositories.
+Phase completion still requires the exit criteria in each section; a checked
+implementation item is not a substitute for those gates.
+
 ### Phase 0: characterization and benchmark harness
 
 Purpose: prove current behavior before changing ownership.
@@ -892,6 +910,14 @@ Exit criteria:
 - missing/invalid password retry remains usable;
 - Rust formatting and focused frontend tests pass.
 
+Implementation note (2026-07-23): Desktop Job registration no longer performs
+`archive_extract_progress_estimate`; ZIP, 7z, Apple Archive, libarchive, and
+TZAP core wrappers no longer pre-list solely for totals. RAR retains its reused
+listing, while TAR.ZST and raw-stream wrappers retain cheap header/source-size
+estimates. The command-boundary, valid-backend, and password-retry regressions
+are automated. Native task-window timing and release-hardware budgets remain
+Phase 0/5 verification work.
+
 ### Phase 2: background Archive Session with existing core listing
 
 Purpose: keep the app responsive before progressive core enumeration is ready.
@@ -900,7 +926,8 @@ Tasks:
 
 - introduce the Desktop Archive Session Registry;
 - add start, subscribe, page, and close commands with explicit contract tests;
-- run existing full core listing on a cancellable blocking worker;
+- run the existing full core listing on a blocking worker, with cancellable
+  session publication and stale-result rejection;
 - build the Rust index after listing completes;
 - send only a bounded root/current-folder page to the frontend;
 - introduce revision and stale-session handling;
@@ -911,6 +938,8 @@ Tasks:
 Limitation:
 
 - first root content still waits for the complete core list in this phase;
+- an in-flight core list cannot be interrupted and its transient complete
+  entry vector is not bounded until the progressive Phase 3 API replaces it;
 - the limitation must be named in release notes or implementation status and
   must not be presented as completed progressive indexing.
 
