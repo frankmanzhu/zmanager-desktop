@@ -11,6 +11,7 @@ import {
   normalizeColumnSettings,
   type ArchiveSortKey,
   type ArchiveTableColumnId,
+  type ArchiveTableColumnSettings,
   type ArchiveTableColumnWidthMap,
 } from "./archiveTable";
 import {
@@ -83,6 +84,7 @@ export type AppPreferences = {
   tableVisibleColumnIds: ArchiveTableColumnId[];
   tableColumnOrderIds: ArchiveTableColumnId[];
   tableColumnWidths: ArchiveTableColumnWidthMap;
+  tableColumnsByFormat: Record<string, ArchiveTableColumnSettings>;
   tableSortKey: ArchiveSortKey;
   tableSortAscending: boolean;
 };
@@ -186,6 +188,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   tableVisibleColumnIds: DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   tableColumnOrderIds: DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
   tableColumnWidths: {},
+  tableColumnsByFormat: {},
   tableSortKey: "name",
   tableSortAscending: true,
 };
@@ -396,6 +399,30 @@ function loadColumnWidths(value: string | null): ArchiveTableColumnWidthMap {
   }
 }
 
+function loadTableColumnsByFormat(value: string | null): Record<string, ArchiveTableColumnSettings> {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const result: Record<string, ArchiveTableColumnSettings> = {};
+    for (const [format, settings] of Object.entries(parsed)) {
+      if (settings && typeof settings === "object") {
+        const raw = settings as Partial<ArchiveTableColumnSettings>;
+        result[format] = normalizeColumnSettings({
+          visibleColumnIds: raw.visibleColumnIds,
+          columnOrderIds: raw.columnOrderIds,
+          columnWidths: raw.columnWidths,
+        });
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPreferences {
   if (!storage) {
     return { ...DEFAULT_APP_PREFERENCES };
@@ -504,6 +531,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
     tableVisibleColumnIds: loadVisibleColumnIds(storage.getItem(PREFERENCE_KEYS.tableVisibleColumns)),
     tableColumnOrderIds: loadColumnOrderIds(storage.getItem(PREFERENCE_KEYS.tableColumnOrder)),
     tableColumnWidths: loadColumnWidths(storage.getItem(PREFERENCE_KEYS.tableColumnWidths)),
+    tableColumnsByFormat: loadTableColumnsByFormat(storage.getItem(PREFERENCE_KEYS.tableColumnsByFormat)),
     tableSortKey: isOneOf(TABLE_SORT_KEYS, tableSortKey)
       ? tableSortKey
       : DEFAULT_APP_PREFERENCES.tableSortKey,
@@ -551,6 +579,7 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.tableVisibleColumns, tableSettings.visibleColumnIds.join(","));
   storage.setItem(PREFERENCE_KEYS.tableColumnOrder, tableSettings.columnOrderIds.join(","));
   storage.setItem(PREFERENCE_KEYS.tableColumnWidths, JSON.stringify(tableSettings.columnWidths));
+  storage.setItem(PREFERENCE_KEYS.tableColumnsByFormat, JSON.stringify(preferences.tableColumnsByFormat));
   storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
   storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
 
@@ -659,7 +688,7 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
 function normalizePreferenceTablePatch(
   preferences: AppPreferences,
   patch: AppPreferencePatch,
-): Pick<AppPreferences, "tableVisibleColumnIds" | "tableColumnOrderIds" | "tableColumnWidths"> {
+): Pick<AppPreferences, "tableVisibleColumnIds" | "tableColumnOrderIds" | "tableColumnWidths" | "tableColumnsByFormat"> {
   const normalized = normalizeColumnSettings({
     visibleColumnIds: patch.tableVisibleColumnIds ?? preferences.tableVisibleColumnIds,
     columnOrderIds: patch.tableColumnOrderIds ?? preferences.tableColumnOrderIds,
@@ -670,6 +699,7 @@ function normalizePreferenceTablePatch(
     tableVisibleColumnIds: normalized.visibleColumnIds,
     tableColumnOrderIds: normalized.columnOrderIds,
     tableColumnWidths: normalized.columnWidths,
+    tableColumnsByFormat: patch.tableColumnsByFormat ?? preferences.tableColumnsByFormat,
   };
 }
 

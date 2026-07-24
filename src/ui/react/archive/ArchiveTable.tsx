@@ -46,13 +46,7 @@ export function ArchiveTable() {
   const i18n = translatorForSnapshot(snapshot);
   const archive = snapshot.archive;
   const openCommandState = snapshot.commands.states.open;
-  const columns = visibleColumns(
-    normalizeColumnSettings({
-      visibleColumnIds: snapshot.preferences.tableVisibleColumnIds,
-      columnOrderIds: snapshot.preferences.tableColumnOrderIds,
-      columnWidths: snapshot.preferences.tableColumnWidths,
-    }),
-  );
+  const columns = visibleColumns(archive.view.tableColumns);
   const showStartEmpty = !archive.currentArchivePath;
   const rows = archive.view.rows;
 

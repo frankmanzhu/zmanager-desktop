@@ -18,8 +18,15 @@ import {
 } from "../extractFlow";
 import {
   buildArchiveBrowserRows,
+  normalizeColumnSettings,
+  moveColumn,
+  resetColumnSettings,
+  setColumnWidth,
+  toggleColumnVisibility,
   sortArchiveRows,
   type ArchiveSortKey,
+  type ArchiveTableColumnSettings,
+  type ArchiveTableColumnId,
   type ArchiveTableRow,
 } from "../archiveTable";
 import {
@@ -238,6 +245,7 @@ export type ArchiveWorkspaceViewState = {
   expandedTreeFolders: readonly string[];
   treeFolders: readonly ArchiveWorkspaceTreeFolder[];
   sort: ArchiveWorkspaceSortState;
+  tableColumns: ArchiveTableColumnSettings;
   rowOptions: ArchiveWorkspaceRowOptions;
   rows: readonly ArchiveTableRow[];
   selection: ArchiveWorkspaceSelectionSnapshot;
@@ -283,10 +291,12 @@ export type ArchiveWorkspacePreserveStateInput = {
   showParentFolderItem?: boolean;
   sortKey?: ArchiveSortKey;
   sortAscending?: boolean;
+  tableColumns?: ArchiveTableColumnSettings;
 };
 
 export type ArchiveLoadSucceededOptions = {
   preserveState?: ArchiveWorkspacePreserveStateInput | false;
+  defaultTableColumns?: ArchiveTableColumnSettings;
 };
 
 export type ArchiveWorkspacePage = {
@@ -342,6 +352,10 @@ export type ArchiveWorkspace = {
   clearPasswordRetry(): ArchiveWorkspaceSnapshot;
   toggleTreeFolder(folderPath: string): ArchiveWorkspaceSnapshot;
   updateSelection(selection: HierarchicalTableSelectionResult): ArchiveWorkspaceSnapshot;
+  setColumnWidth(columnId: ArchiveTableColumnId, width: number): ArchiveWorkspaceSnapshot;
+  toggleColumnVisibility(columnId: ArchiveTableColumnId): ArchiveWorkspaceSnapshot;
+  moveColumn(columnId: ArchiveTableColumnId, direction: "left" | "right"): ArchiveWorkspaceSnapshot;
+  resetColumns(defaults?: ArchiveTableColumnSettings): ArchiveWorkspaceSnapshot;
   reset(): ArchiveWorkspaceSnapshot;
 };
 
@@ -350,6 +364,7 @@ export type CreateArchiveWorkspaceOptions = {
   showParentFolderItem?: boolean;
   sortKey?: ArchiveSortKey;
   sortAscending?: boolean;
+  tableColumns?: ArchiveTableColumnSettings;
 };
 
 type MutableArchiveWorkspaceState = Omit<ArchiveWorkspaceSnapshot, "command" | "entries" | "view"> & {
@@ -362,6 +377,7 @@ type MutableArchiveWorkspaceState = Omit<ArchiveWorkspaceSnapshot, "command" | "
     flatView: boolean;
     expandedTreeFolders: string[];
     sort: ArchiveWorkspaceSortState;
+    tableColumns: ArchiveTableColumnSettings;
     rowOptions: ArchiveWorkspaceRowOptions;
     selection: {
       selectedPaths: string[];
@@ -399,6 +415,7 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
               view: resetViewState({
                 flatView: state.view.flatView,
                 sort: state.view.sort,
+                tableColumns: state.view.tableColumns,
                 rowOptions: state.view.rowOptions,
               }),
             }),
@@ -412,6 +429,9 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
       const view = restoreViewState(entries, options.preserveState, {
         flatView: state.view.flatView,
         sort: state.view.sort,
+        tableColumns: options.preserveState && options.preserveState.tableColumns 
+          ? options.preserveState.tableColumns 
+          : options.defaultTableColumns ?? state.view.tableColumns,
         rowOptions: state.view.rowOptions,
       });
       state = {
@@ -795,6 +815,50 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
       return snapshotFromState(state);
     },
 
+    setColumnWidth(columnId, width) {
+      state = {
+        ...state,
+        view: {
+          ...state.view,
+          tableColumns: setColumnWidth(state.view.tableColumns, columnId, width),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
+    toggleColumnVisibility(columnId) {
+      state = {
+        ...state,
+        view: {
+          ...state.view,
+          tableColumns: toggleColumnVisibility(state.view.tableColumns, columnId),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
+    moveColumn(columnId, direction) {
+      state = {
+        ...state,
+        view: {
+          ...state.view,
+          tableColumns: moveColumn(state.view.tableColumns, columnId, direction),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
+    resetColumns(defaults) {
+      state = {
+        ...state,
+        view: {
+          ...state.view,
+          tableColumns: defaults ?? resetColumnSettings(),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
     reset() {
       state = createInitialState({
         flatView: state.view.flatView,
@@ -866,6 +930,7 @@ function resetViewState(
     flatView?: boolean;
     sort?: ArchiveWorkspaceSortState;
     rowOptions?: Partial<ArchiveWorkspaceRowOptions>;
+    tableColumns?: ArchiveTableColumnSettings;
   } = {},
 ): MutableArchiveWorkspaceState["view"] {
   return {
@@ -875,6 +940,7 @@ function resetViewState(
     flatView: options.flatView ?? false,
     expandedTreeFolders: [""],
     sort: normalizeSortState(options.sort),
+    tableColumns: options.tableColumns ?? normalizeColumnSettings({}),
     rowOptions: normalizeRowOptions(options.rowOptions),
     selection: {
       selectedPaths: [],
@@ -891,6 +957,7 @@ function restoreViewState(
     flatView: boolean;
     sort: ArchiveWorkspaceSortState;
     rowOptions: ArchiveWorkspaceRowOptions;
+    tableColumns: ArchiveTableColumnSettings;
   },
 ): MutableArchiveWorkspaceState["view"] {
   if (!preserveState) {
@@ -898,6 +965,7 @@ function restoreViewState(
       flatView: defaults.flatView,
       sort: defaults.sort,
       rowOptions: defaults.rowOptions,
+      tableColumns: defaults.tableColumns,
     });
   }
 
@@ -950,6 +1018,7 @@ function restoreViewState(
     searchQuery,
     flatView,
     sort,
+    tableColumns: defaults.tableColumns,
     rowOptions,
     expandedTreeFolders: expandedFolderAndAncestors(
       preserveState.expandedTreeFolders,
@@ -1474,6 +1543,11 @@ function snapshotFromState(state: MutableArchiveWorkspaceState): ArchiveWorkspac
       expandedTreeFolders: [...state.view.expandedTreeFolders],
       treeFolders: cloneTreeFolders(treeFolders),
       sort: { ...state.view.sort },
+      tableColumns: {
+        visibleColumnIds: [...state.view.tableColumns.visibleColumnIds],
+        columnOrderIds: [...state.view.tableColumns.columnOrderIds],
+        columnWidths: { ...state.view.tableColumns.columnWidths },
+      },
       rowOptions: { ...state.view.rowOptions },
       rows: cloneRows(rows),
       selection: cloneSelectionSnapshot(selection),

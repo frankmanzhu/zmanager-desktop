@@ -34,6 +34,7 @@ export type PreferenceStorageKey =
   | "tableVisibleColumns"
   | "tableColumnOrder"
   | "tableColumnWidths"
+  | "tableColumnsByFormat"
   | "tableSortKey"
   | "tableSortAscending";
 
@@ -67,6 +68,7 @@ export const PREFERENCE_KEYS = {
   tableVisibleColumns: "zmanager.tableVisibleColumns",
   tableColumnOrder: "zmanager.tableColumnOrder",
   tableColumnWidths: "zmanager.tableColumnWidths",
+  tableColumnsByFormat: "zmanager.tableColumnsByFormat",
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
 } satisfies Record<PreferenceStorageKey, string>;

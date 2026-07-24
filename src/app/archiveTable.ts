@@ -27,7 +27,10 @@ export type ArchiveTableColumnId =
   | "block"
   | "comment"
   | "kind"
-  | "ratio";
+  | "ratio"
+  | "solid"
+  | "linkTarget"
+  | "metadataDiagnostics";
 
 export type ArchiveSortKey = ArchiveTableColumnId;
 
@@ -85,6 +88,9 @@ export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
   { id: "comment", label: "Comment", labelKey: "table.comment", width: 120, align: "left", defaultVisible: false },
   { id: "kind", label: "Type", labelKey: "table.type", width: 90, align: "left", defaultVisible: false },
   { id: "ratio", label: "Ratio", labelKey: "table.ratio", width: 70, align: "right", defaultVisible: false },
+  { id: "solid", label: "Solid", labelKey: "table.solid" as any, width: 60, align: "center", defaultVisible: false },
+  { id: "linkTarget", label: "Link Target", labelKey: "table.linkTarget" as any, width: 160, align: "left", defaultVisible: false },
+  { id: "metadataDiagnostics", label: "Diagnostics", labelKey: "table.metadataDiagnostics" as any, width: 100, align: "right", defaultVisible: false },
 ];
 
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
@@ -282,6 +288,14 @@ export function formatArchiveTableValue(
         fractionDigits: 0,
         locale: i18n?.locale,
       });
+    case "solid":
+      return entry.solid ? "+" : EMPTY_VALUE;
+    case "linkTarget":
+      return entry.linkTarget ?? EMPTY_VALUE;
+    case "metadataDiagnostics":
+      return entry.metadataDiagnostics && entry.metadataDiagnostics.length > 0
+        ? String(entry.metadataDiagnostics.length)
+        : EMPTY_VALUE;
   }
 }
 

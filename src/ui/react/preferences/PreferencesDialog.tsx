@@ -1,6 +1,7 @@
 import { useEffect, useState, type ButtonHTMLAttributes } from "react";
 import {
   Archive,
+  Columns,
   FolderOpen,
   Monitor,
   ShieldCheck,
@@ -25,6 +26,7 @@ import {
   formatVolumeSizePresetList,
   parseVolumeSizePresetList,
 } from "../../../app/volumeSizePresets";
+import { ARCHIVE_TABLE_COLUMNS } from "../../../app/archiveTable";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import {
@@ -40,12 +42,13 @@ import { translatorForSnapshot } from "../shell/shellHelpers";
 import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
 
 type PreferencePage =
-  "folders" | "archive" | "extraction" | "interface" | "safety";
+  "folders" | "archive" | "columns" | "extraction" | "interface" | "safety";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
 
 const PAGE_ICONS: Record<PreferencePage, typeof FolderOpen> = {
   folders: FolderOpen,
   archive: Archive,
+  columns: Columns,
   extraction: Sparkles,
   interface: Monitor,
   safety: ShieldCheck,
@@ -80,6 +83,7 @@ const PAGES: readonly Readonly<{
 }>[] = [
   { id: "folders", labelKey: "preferences.folders.title" },
   { id: "archive", labelKey: "preferences.archiveDefaults.title" },
+  { id: "columns", labelKey: "Columns" as any },
   { id: "extraction", labelKey: "preferences.extraction.title" },
   { id: "interface", labelKey: "preferences.interface.title" },
   { id: "safety", labelKey: "preferences.safety.title" },
@@ -173,7 +177,7 @@ export function PreferencesDialog() {
                 onClick={() => setActivePage(page.id)}
                 key={page.id}
               >
-                {i18n.t(page.labelKey)}
+                {page.id === "columns" ? "Columns" : i18n.t(page.labelKey)}
               </PreferenceNavigationButton>
             ))}
           </nav>
@@ -199,6 +203,10 @@ export function PreferencesDialog() {
               <InterfacePage
                 draft={draft}
                 active={activePage === "interface"}
+              />
+              <ColumnsPage
+                draft={draft}
+                active={activePage === "columns"}
               />
               <SafetyPage draft={draft} active={activePage === "safety"} />
               <p
@@ -1527,4 +1535,91 @@ function middleTruncatePath(value: string): string {
   return value.length <= CUSTOM_OUTPUT_TRUNCATE_LENGTH
     ? value
     : `${value.slice(0, CUSTOM_OUTPUT_TRUNCATE_HEAD)}...${value.slice(-CUSTOM_OUTPUT_TRUNCATE_TAIL)}`;
+}
+
+function ColumnsPage({
+  draft,
+  active,
+}: Readonly<{
+  draft: AppPreferences;
+  active: boolean;
+}>) {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const [selectedFormat, setSelectedFormat] = useState<string>("default");
+
+  const currentColumns = draft.tableColumnsByFormat[selectedFormat] ?? {
+    visibleColumnIds: draft.tableVisibleColumnIds ?? [],
+    columnOrderIds: draft.tableColumnOrderIds ?? [],
+    columnWidths: draft.tableColumnWidths ?? {},
+  };
+
+  const handleToggleColumn = (columnId: string) => {
+    const isVisible = currentColumns.visibleColumnIds.includes(columnId as any);
+    const newVisible = isVisible
+      ? currentColumns.visibleColumnIds.filter((id: string) => id !== columnId)
+      : [...currentColumns.visibleColumnIds, columnId];
+    
+    actions.handleDialogIntent({
+      type: "preferencesPatch",
+      patch: {
+        tableColumnsByFormat: {
+          ...draft.tableColumnsByFormat,
+          [selectedFormat]: {
+            ...currentColumns,
+            visibleColumnIds: newVisible as any,
+          },
+        },
+      },
+    });
+  };
+
+  return (
+    <section
+      className={PREFERENCE_PAGE_CLASS}
+      data-pref-page="columns"
+      hidden={!active}
+    >
+      <h3>Columns</h3>
+      <p className={DESCRIPTION_CLASS}>
+        Configure the default table columns for each archive format.
+      </p>
+      
+      <div className={SETTING_ROW_CLASS}>
+        <label htmlFor="pref-columns-format">Archive Format</label>
+        <div className={SETTING_CONTROL_CLASS}>
+          <Select
+            value={selectedFormat}
+            onValueChange={setSelectedFormat}
+          >
+            <SelectTrigger id="pref-columns-format">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Global Defaults</SelectItem>
+              <SelectItem value="zip">ZIP</SelectItem>
+              <SelectItem value="tarZst">TZST</SelectItem>
+              <SelectItem value="tarGz">TGZ</SelectItem>
+              <SelectItem value="tzap">TZAP</SelectItem>
+              <SelectItem value="sevenZ">7Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        {ARCHIVE_TABLE_COLUMNS.map((column) => (
+          <label key={column.id} className="flex items-center gap-2 text-sm font-medium">
+            <Checkbox
+              checked={currentColumns.visibleColumnIds.includes(column.id as any)}
+              disabled={column.alwaysVisible}
+              onCheckedChange={() => handleToggleColumn(column.id)}
+            />
+            {i18n.t(column.labelKey as any) || column.labelKey}
+          </label>
+        ))}
+      </div>
+    </section>
+  );
 }
