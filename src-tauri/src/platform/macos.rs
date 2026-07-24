@@ -10,10 +10,9 @@ use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
     CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    MainWindowConfigurator,
-    NativeCapabilityOperationError, NativeFileDragAdapter, NativeFileDragCandidate,
-    NativeFileDragError, NativeFileDragItem, NativeFileDragStart, NativeFileDragStreamProvider,
-    SecureFileProtector, SystemFileIconProvider,
+    MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
+    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStart,
+    NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -209,8 +208,6 @@ impl DefaultHandlerController for MacOsPlatform {
         })
     }
 }
-
-
 
 impl SecureFileProtector for MacOsPlatform {
     fn set_owner_only_file_permissions(
@@ -538,8 +535,6 @@ fn menu_command(
 }
 
 include!("../generated/macos_menu.generated.rs");
-
-
 
 extern "C" fn icon_operation_callback(bytes: *const u8, length: usize, context: *mut c_void) {
     if bytes.is_null() || context.is_null() || length > MAX_RESPONSE_BYTES {

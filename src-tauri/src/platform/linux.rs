@@ -8,10 +8,9 @@ use gtk::prelude::*;
 use tauri::Wry;
 
 use super::{
-    MainWindowConfigurator, NativeCapabilityOperationError,
-    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
-    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    SecureFileProtector, SystemFileIconProvider,
+    MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
+    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
+    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -80,8 +79,6 @@ impl DefaultHandlerController for LinuxPlatform {
         ))
     }
 }
-
-
 
 impl SecureFileProtector for LinuxPlatform {
     fn set_owner_only_file_permissions(

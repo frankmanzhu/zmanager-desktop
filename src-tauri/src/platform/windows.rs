@@ -22,8 +22,8 @@ use windows_sys::Win32::{
 
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
-    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    SecureFileProtector, SystemFileIconProvider,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector,
+    SystemFileIconProvider,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -82,8 +82,6 @@ impl DefaultHandlerController for WindowsPlatform {
         ))
     }
 }
-
-
 
 impl SecureFileProtector for WindowsPlatform {
     fn set_owner_only_file_permissions(

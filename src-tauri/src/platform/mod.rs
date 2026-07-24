@@ -52,7 +52,6 @@ pub struct DefaultHandlerEntry {
     pub error_code: Option<i32>,
 }
 
-
 #[derive(Clone, Debug)]
 pub struct NativeFileDragCandidate {
     pub entry_path: String,

@@ -195,8 +195,6 @@ pub fn baseline_capability_snapshots(
     capability_snapshots(platform, package_kind, &HashMap::new())
 }
 
-
-
 fn snapshot_for_definition(
     definition: &NativeCapabilityDefinition,
     platform: &str,

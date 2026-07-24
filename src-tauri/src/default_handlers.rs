@@ -122,8 +122,6 @@ fn restore_state_path(app: &tauri::AppHandle) -> Result<PathBuf, CommandErrorDto
         .map_err(|error| operation_error(error.to_string()))
 }
 
-
-
 fn ensure_no_handler_errors(entries: &[DefaultHandlerEntry]) -> Result<(), CommandErrorDto> {
     let failures = entries
         .iter()
@@ -216,6 +214,4 @@ mod tests {
         }));
         let _ = fs::remove_dir_all(root);
     }
-
-
 }
