@@ -41,7 +41,7 @@ function walk(dir) {
 
 export function validateWorkspace(workspaceRoot = root) {
   const errors = [];
-  const allowlist = JSON.parse(readFileSync(join(workspaceRoot, "docs/migration/frontend-legacy-gui-allowlist.json"), "utf8"));
+  const allowlist = { legacyCss: null, tailwindEntrypoints: ["src/styles.tailwind.css"], entries: [] };
   const allowances = new Map(allowlist.entries.map((entry) => [entry.path, entry]));
   const production = walk(join(workspaceRoot, "src")).filter((path) => !/\.(?:test|spec)\.[^.]+$/.test(path));
   for (const path of production) {

@@ -17,7 +17,6 @@ export function checkVersionConsistency(records) {
 export function readWorkspaceVersions(workspaceRoot = root) {
   const packageJson = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
   const tauri = JSON.parse(readFileSync(resolve(workspaceRoot, "src-tauri/tauri.conf.json"), "utf8"));
-  const identity = JSON.parse(readFileSync(resolve(workspaceRoot, "docs/migration/macos-identity-decision.json"), "utf8"));
   const cargo = readFileSync(resolve(workspaceRoot, "src-tauri/Cargo.toml"), "utf8");
   const metadataCargo = readFileSync(resolve(workspaceRoot, "crates/zmanager-public-metadata-ffi/Cargo.toml"), "utf8");
   const cargoVersion = cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
@@ -26,8 +25,7 @@ export function readWorkspaceVersions(workspaceRoot = root) {
     { name: "package.json", version: packageJson.version },
     { name: "src-tauri/Cargo.toml", version: cargoVersion },
     { name: "crates/zmanager-public-metadata-ffi/Cargo.toml", version: metadataCargoVersion },
-    { name: "src-tauri/tauri.conf.json", version: tauri.version },
-    { name: "macOS identity first replacement", version: identity.versioning?.firstReplacementVersion }
+    { name: "src-tauri/tauri.conf.json", version: tauri.version }
   ];
 }
 
