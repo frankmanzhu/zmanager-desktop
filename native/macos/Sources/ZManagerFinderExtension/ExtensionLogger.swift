@@ -7,7 +7,7 @@ struct ExtensionLogger {
     init() {
         if let override = ProcessInfo.processInfo.environment["ZMANAGER_MACOS_APP_GROUP_REQUEST_DIR"] {
             logURL = URL(fileURLWithPath: override).appendingPathComponent("zmanager-extension.log")
-        } else if let groupURL = try? FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.frankmanzhu.zmanager") {
+        } else if let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.frankmanzhu.zmanager") {
             logURL = groupURL.appendingPathComponent("zmanager-extension.log")
         } else {
             logURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("zmanager-extension.log")

@@ -1,5 +1,6 @@
 // GENERATED FILE - DO NOT EDIT
 
+#[allow(dead_code)]
 unsafe extern "C" {
     pub fn zmanager_macos_host_start(
         callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
@@ -50,6 +51,10 @@ unsafe extern "C" {
     ) -> i32;
 }
 
+
+#[allow(dead_code)]
 pub const MAX_REQUEST_BYTES: usize = 1048576;
+#[allow(dead_code)]
 pub const MAX_RESPONSE_BYTES: usize = 8388608;
+#[allow(dead_code)]
 pub const MAX_DRAG_ITEMS: usize = 1000;

@@ -866,7 +866,7 @@ put("packaging/windows/nsis-context-menu.nsh", windowsHook);
 
 // macOS FFI generator
 {
-  let rust = `// GENERATED FILE - DO NOT EDIT\n\nunsafe extern "C" {\n`;
+  let rust = `// GENERATED FILE - DO NOT EDIT\n\n#[allow(dead_code)]\nunsafe extern "C" {\n`;
   let swift = `// GENERATED FILE - DO NOT EDIT\n\nimport Foundation\n\n`;
 
   for (const op of macosFfi.operations) {
@@ -886,9 +886,9 @@ put("packaging/windows/nsis-context-menu.nsh", windowsHook);
   }
   rust += `}\n\n`;
 
-  rust += `pub const MAX_REQUEST_BYTES: usize = ${macosFfi.limits.maxRequestBytes};\n`;
-  rust += `pub const MAX_RESPONSE_BYTES: usize = ${macosFfi.limits.maxResponseBytes};\n`;
-  rust += `pub const MAX_DRAG_ITEMS: usize = ${macosFfi.limits.maxDragItems};\n`;
+  rust += `\n#[allow(dead_code)]\npub const MAX_REQUEST_BYTES: usize = ${macosFfi.limits.maxRequestBytes};\n`;
+  rust += `#[allow(dead_code)]\npub const MAX_RESPONSE_BYTES: usize = ${macosFfi.limits.maxResponseBytes};\n`;
+  rust += `#[allow(dead_code)]\npub const MAX_DRAG_ITEMS: usize = ${macosFfi.limits.maxDragItems};\n`;
   
   swift += `public enum MacOSFFILimits {\n`;
   swift += `    public static let maxRequestBytes = ${macosFfi.limits.maxRequestBytes}\n`;

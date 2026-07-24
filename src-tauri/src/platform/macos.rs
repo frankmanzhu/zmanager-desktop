@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use serde::Serialize;
-use tauri::menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder};
+use tauri::menu::MenuItem;
 use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
