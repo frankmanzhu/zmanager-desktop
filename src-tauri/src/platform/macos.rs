@@ -14,8 +14,8 @@ use super::{
     LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, MainWindowConfigurator,
     NativeCapabilityOperationError, NativeFileDragAdapter, NativeFileDragCandidate,
     NativeFileDragError, NativeFileDragItem, NativeFileDragStart, NativeFileDragStreamProvider,
-    PlatformProfile, PlatformProfileProvider, ReplacementMigrationAdapter,
-    ReplacementMigrationDiagnostic, SecureFileProtector, SystemFileIconProvider,
+    ReplacementMigrationAdapter, ReplacementMigrationDiagnostic, SecureFileProtector,
+    SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -100,19 +100,6 @@ pub(super) fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
     })
 }
 
-impl PlatformProfileProvider for MacOsPlatform {
-    fn integration_profile() -> PlatformProfile {
-        PlatformProfile {
-            platform: PLATFORM_NAME,
-            window_decorations: true,
-            custom_window_chrome: false,
-            manual_window_resize: false,
-            native_menu_bar: true,
-            associated_extensions: crate::archive_file_types::associated_extensions(),
-        }
-    }
-}
-
 impl CapabilityInspector for MacOsPlatform {
     fn capability_observations() -> std::collections::HashMap<
         crate::native_integration::NativeCapabilityId,
@@ -170,7 +157,7 @@ impl CapabilityInspector for MacOsPlatform {
 
 impl MainWindowConfigurator for MacOsPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
-        window.set_decorations(Self::integration_profile().window_decorations)?;
+        window.set_decorations(true)?;
         if HOST_CALLBACK_RECEIVED.load(Ordering::Acquire) {
             eprintln!("ZMANAGER_MACOS_HOST_CALLBACK_OK");
         }

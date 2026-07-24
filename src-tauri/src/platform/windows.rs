@@ -26,9 +26,8 @@ use super::{
     LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
     LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
     NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
-    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, PlatformProfile,
-    PlatformProfileProvider, ReplacementMigrationAdapter, SecureFileProtector,
-    SystemFileIconProvider,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
+    ReplacementMigrationAdapter, SecureFileProtector, SystemFileIconProvider,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -36,19 +35,6 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 pub const PLATFORM_NAME: &str = "windows";
 
 pub struct WindowsPlatform;
-
-impl PlatformProfileProvider for WindowsPlatform {
-    fn integration_profile() -> PlatformProfile {
-        PlatformProfile {
-            platform: PLATFORM_NAME,
-            window_decorations: true,
-            custom_window_chrome: false,
-            manual_window_resize: false,
-            native_menu_bar: false,
-            associated_extensions: crate::archive_file_types::associated_extensions(),
-        }
-    }
-}
 
 impl CapabilityInspector for WindowsPlatform {
     fn capability_observations() -> std::collections::HashMap<
@@ -78,7 +64,7 @@ impl CapabilityInspector for WindowsPlatform {
 
 impl MainWindowConfigurator for WindowsPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
-        window.set_decorations(Self::integration_profile().window_decorations)
+        window.set_decorations(true)
     }
 }
 

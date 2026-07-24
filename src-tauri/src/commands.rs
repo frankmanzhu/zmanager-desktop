@@ -28,9 +28,8 @@ use crate::{
         NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
         PreviewEntryResponse, ProjectContract, ProjectIntegrationContract, ResumeJobRequest,
         StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
-        TransitionalPlatformProfileDto, TzapRestorePolicyDto, ValidateDirectoryRequest,
-        ValidateDirectoryResponse,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto,
+        ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -91,24 +90,11 @@ pub fn healthcheck() -> crate::dto::HealthcheckResponse {
 
 #[tauri::command]
 pub fn project_contract() -> crate::dto::ProjectContract {
-    let integration = crate::platform::integration_profile();
     let package_kind = crate::native_integration::current_package_kind();
     let capabilities = crate::native_integration::capability_snapshots(
-        integration.platform,
+        std::env::consts::OS,
         package_kind,
         &crate::platform::capability_observations(),
-    );
-    let selected_item_actions_enabled = crate::native_integration::is_capability_available(
-        &capabilities,
-        crate::native_integration::NativeCapabilityId::ShellSelectedItemActions,
-    );
-    let background_actions_enabled = crate::native_integration::is_capability_available(
-        &capabilities,
-        crate::native_integration::NativeCapabilityId::ShellBackgroundActions,
-    );
-    let file_associations_enabled = crate::native_integration::is_capability_available(
-        &capabilities,
-        crate::native_integration::NativeCapabilityId::FileAssociations,
     );
 
     ProjectContract {
@@ -116,19 +102,9 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         platform_strategy: constants::PLATFORM_STRATEGY,
         core_dependency: constants::CORE_DEPENDENCY,
         platform_integration: ProjectIntegrationContract {
-            platform: integration.platform,
+            platform: std::env::consts::OS,
             package_kind,
             capabilities,
-            transitional_platform_profile: TransitionalPlatformProfileDto {
-                selected_item_actions_enabled,
-                background_actions_enabled,
-                file_associations_enabled,
-                window_decorations: integration.window_decorations,
-                custom_window_chrome: integration.custom_window_chrome,
-                manual_window_resize: integration.manual_window_resize,
-                native_menu_bar: integration.native_menu_bar,
-                associated_extensions: integration.associated_extensions,
-            },
         },
     }
 }

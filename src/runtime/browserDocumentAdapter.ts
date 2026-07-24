@@ -20,17 +20,12 @@ import {
 
 export type BrowserDocumentAdapter = Readonly<{
   initializeLayout(): void;
-  applyPlatformProfile(profile: BrowserPlatformProfile | null): void;
+  setCustomWindowChrome(active: boolean): void;
+  setNativeMenuBar(active: boolean): void;
   setQuickActionJobMode(active: boolean): void;
   applyDisplayMetadata(context: DisplayContextSnapshot): void;
   usesCustomWindowChrome(): boolean;
   usesManualWindowResize(): boolean;
-}>;
-
-export type BrowserPlatformProfile = Readonly<{
-  customWindowChrome: boolean;
-  manualWindowResize: boolean;
-  nativeMenuBar: boolean;
 }>;
 
 export type CreateBrowserDocumentAdapterOptions = Readonly<{
@@ -66,12 +61,14 @@ export function createBrowserDocumentAdapter(
       }
       documentRef.documentElement.style.setProperty("--zmanager-statusbar-parts", `${APP_STATUS_BAR_PARTS}`);
     },
-    applyPlatformProfile(profile) {
-      useCustomWindowChrome = profile?.customWindowChrome === true;
-      useManualWindowResize = profile?.manualWindowResize === true;
-      documentRef.body.classList.toggle("custom-window-chrome", useCustomWindowChrome);
-      documentRef.body.classList.toggle("manual-window-resize", useManualWindowResize);
-      documentRef.body.classList.toggle("native-menu-bar", profile?.nativeMenuBar === true);
+    setCustomWindowChrome(active) {
+      useCustomWindowChrome = active;
+      useManualWindowResize = active;
+      documentRef.body.classList.toggle("custom-window-chrome", active);
+      documentRef.body.classList.toggle("manual-window-resize", active);
+    },
+    setNativeMenuBar(active) {
+      documentRef.body.classList.toggle("native-menu-bar", active);
     },
     setQuickActionJobMode(active) {
       documentRef.body.classList.toggle("quick-action-job-mode", active);

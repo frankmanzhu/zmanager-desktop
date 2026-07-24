@@ -15,24 +15,10 @@ pub struct HealthcheckResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TransitionalPlatformProfileDto {
-    pub selected_item_actions_enabled: bool,
-    pub background_actions_enabled: bool,
-    pub file_associations_enabled: bool,
-    pub window_decorations: bool,
-    pub custom_window_chrome: bool,
-    pub manual_window_resize: bool,
-    pub native_menu_bar: bool,
-    pub associated_extensions: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ProjectIntegrationContract {
     pub platform: &'static str,
     pub package_kind: crate::native_integration::NativePackageKind,
     pub capabilities: Vec<crate::native_integration::NativeCapabilitySnapshot>,
-    pub transitional_platform_profile: TransitionalPlatformProfileDto,
 }
 
 #[derive(Debug, Serialize)]

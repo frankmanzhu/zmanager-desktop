@@ -926,9 +926,27 @@ const startupController = createStartupController({
   setBootstrapState: (state) => {
     latestHealthcheck = state.healthcheck;
     latestContract = state.contract;
-    browserDocument.applyPlatformProfile(
-      state.contract?.platformIntegration.transitionalPlatformProfile ?? null,
-    );
+    
+    if (state.contract) {
+      const hasNativeMenu = state.contract.platformIntegration.capabilities.some(
+        c => c.id === "nativeApplicationMenu" && c.status === "available"
+      );
+      browserDocument.setNativeMenuBar(hasNativeMenu);
+    }
+    
+    if (isDesktopRuntime) {
+      import("@tauri-apps/api/webviewWindow").then((module) => {
+        module.getCurrentWebviewWindow().isDecorated().then((decorated) => {
+          browserDocument.setCustomWindowChrome(!decorated);
+        }).catch(() => {
+          browserDocument.setCustomWindowChrome(false);
+        });
+      }).catch(() => {
+        browserDocument.setCustomWindowChrome(false);
+      });
+    } else {
+      browserDocument.setCustomWindowChrome(false);
+    }
   },
   onBootstrapStateChanged: publishBootstrapStateSnapshot,
   diagnostics,

@@ -469,16 +469,7 @@ async function installTauriStub(page: Page, options?: { platform?: "windows" | "
               "fileAssociations",
               "defaultHandlerControl",
             ].map((id) => ({ id, availability: "available" })),
-            transitionalPlatformProfile: {
-              selectedItemActionsEnabled: true,
-              backgroundActionsEnabled: true,
-              fileAssociationsEnabled: true,
-              windowDecorations: platform !== "linux",
-              customWindowChrome: platform === "linux",
-              manualWindowResize: platform === "linux",
-              nativeMenuBar: false,
-              associatedExtensions: ["zip"],
-            },
+
           },
         };
       }

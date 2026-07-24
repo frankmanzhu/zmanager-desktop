@@ -285,10 +285,7 @@ export function buildAboutDialogSnapshot(
         title: message(display, "about.group.support"),
         rows: [
           [message(display, "about.diagnostics.status"), healthcheck?.status ?? message(display, "about.diagnostics.frontendOnly")],
-          [
-            message(display, "about.diagnostics.extensions"),
-            contract?.platformIntegration.transitionalPlatformProfile.associatedExtensions.join(", ") ?? "-",
-          ],
+
           [
             message(display, "about.diagnostics.shellActions"),
             capabilityAvailable("shellSelectedItemActions")

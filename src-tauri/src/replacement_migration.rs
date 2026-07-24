@@ -99,7 +99,7 @@ pub fn replacement_migration_prepare(
     app: tauri::AppHandle,
 ) -> Result<ReplacementMigrationPrepareResponse, CommandErrorDto> {
     if crate::native_integration::capability_applicability(
-        crate::platform::integration_profile().platform,
+        std::env::consts::OS,
         crate::native_integration::NativeCapabilityId::ReplacementMigration,
     ) == crate::native_integration::NativeCapabilityApplicability::NotApplicable
     {

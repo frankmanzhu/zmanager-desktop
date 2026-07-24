@@ -10,29 +10,7 @@ const readJson = async (relativePath) => JSON.parse(await readText(relativePath)
 
 const baseline = await readJson("fixtures/contracts/native-integration-baseline.json");
 
-function profileFromRust(source) {
-  const match = source.match(
-    /fn integration_profile\(\) -> PlatformProfile \{\s*PlatformProfile \{([\s\S]*?)\n\s*}\n\s*}/,
-  );
-  assert.ok(match, "integration profile block should exist");
-  const block = match[1];
-  const boolean = (field) => {
-    const fieldMatch = block.match(new RegExp(`${field}: ([A-Z_]+|true|false)`));
-    assert.ok(fieldMatch, `${field} should have a characterization value`);
-    if (fieldMatch[1] === "true" || fieldMatch[1] === "false") {
-      return fieldMatch[1] === "true";
-    }
-    const constant = source.match(new RegExp(`const ${fieldMatch[1]}: bool = (true|false);`));
-    assert.ok(constant, `${fieldMatch[1]} should be a literal boolean constant`);
-    return constant[1] === "true";
-  };
-  return {
-    windowDecorations: boolean("window_decorations"),
-    customWindowChrome: boolean("custom_window_chrome"),
-    manualWindowResize: boolean("manual_window_resize"),
-    nativeMenuBar: boolean("native_menu_bar"),
-  };
-}
+
 
 function commandIds(source) {
   return [...source.matchAll(/(?:"?id"?):\s*"([^"]+)"/g)].map((match) => match[1]);
@@ -47,19 +25,6 @@ function numericConstant(source, name) {
   assert.ok(match, `${name} should exist`);
   return Number(match[1]);
 }
-
-test("WP0 baseline captures the flat platform profiles before capability migration", async () => {
-  for (const platform of ["windows", "linux", "macos"]) {
-    const source = await readText(`src-tauri/src/platform/${platform}.rs`);
-    const historical = baseline.platformProfiles[platform];
-    assert.deepEqual(profileFromRust(source), {
-      windowDecorations: historical.windowDecorations,
-      customWindowChrome: historical.customWindowChrome,
-      manualWindowResize: historical.manualWindowResize,
-      nativeMenuBar: historical.nativeMenuBar,
-    });
-  }
-});
 
 test("generated association catalog preserves every WP0 Tauri association", async () => {
   const tauriConfig = await readJson("src-tauri/tauri.conf.json");

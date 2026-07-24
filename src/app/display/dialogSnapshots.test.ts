@@ -155,16 +155,6 @@ describe("dialog snapshots", () => {
           shellBackgroundActions: "unavailable",
           fileAssociations: "available",
         }),
-        transitionalPlatformProfile: {
-          selectedItemActionsEnabled: true,
-          backgroundActionsEnabled: false,
-          fileAssociationsEnabled: true,
-          windowDecorations: true,
-          customWindowChrome: false,
-          manualWindowResize: false,
-          nativeMenuBar: false,
-          associatedExtensions: [".zip", ".7z"],
-        },
       },
     };
 
@@ -196,7 +186,6 @@ describe("dialog snapshots", () => {
       "",
       "Support Diagnostics",
       "Status: ready",
-      "Extensions: .zip, .7z",
       "Shell actions: enabled",
       "Diagnostic log: C:/Program Files/ZManager/logs/zmanager-diagnostics.log",
       "Log location: installation folder",

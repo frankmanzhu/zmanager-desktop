@@ -35,16 +35,6 @@ function contract(overrides: Partial<ProjectContract> = {}): ProjectContract {
       platform: "windows",
       packageKind: "development",
       capabilities: nativeCapabilitySnapshots(),
-      transitionalPlatformProfile: {
-        selectedItemActionsEnabled: true,
-        backgroundActionsEnabled: true,
-        fileAssociationsEnabled: true,
-        windowDecorations: true,
-        customWindowChrome: false,
-        manualWindowResize: false,
-        nativeMenuBar: false,
-        associatedExtensions: [".zip"],
-      },
     },
     ...overrides,
   };

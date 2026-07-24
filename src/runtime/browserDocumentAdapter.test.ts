@@ -10,7 +10,8 @@ describe("browser document adapter", () => {
     });
 
     adapter.initializeLayout();
-    adapter.applyPlatformProfile({ customWindowChrome: true, manualWindowResize: true, nativeMenuBar: false });
+    adapter.setCustomWindowChrome(true);
+    adapter.setNativeMenuBar(false);
 
     expect(fakeDocument.toggledClasses).toContainEqual(["custom-window-chrome", true]);
     expect(fakeDocument.toggledClasses).toContainEqual(["manual-window-resize", true]);
@@ -27,7 +28,8 @@ describe("browser document adapter", () => {
       documentRef: fakeDocument.documentRef,
     });
 
-    adapter.applyPlatformProfile({ customWindowChrome: false, manualWindowResize: false, nativeMenuBar: false });
+    adapter.setCustomWindowChrome(false);
+    adapter.setNativeMenuBar(false);
     adapter.setQuickActionJobMode(true);
     adapter.applyDisplayMetadata({
       documentLanguage: "zh-CN",

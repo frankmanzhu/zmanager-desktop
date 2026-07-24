@@ -25,15 +25,6 @@ use tauri::{Builder, Wry};
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 use crate::native_launch_inbox::NativeLaunchInbox;
 
-pub struct PlatformProfile {
-    pub platform: &'static str,
-    pub window_decorations: bool,
-    pub custom_window_chrome: bool,
-    pub manual_window_resize: bool,
-    pub native_menu_bar: bool,
-    pub associated_extensions: Vec<String>,
-}
-
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DefaultHandlerRequest {
@@ -280,10 +271,6 @@ impl std::fmt::Display for NativeCapabilityOperationError {
 
 impl std::error::Error for NativeCapabilityOperationError {}
 
-pub(crate) trait PlatformProfileProvider {
-    fn integration_profile() -> PlatformProfile;
-}
-
 pub(crate) trait CapabilityInspector {
     fn capability_observations() -> HashMap<
         crate::native_integration::NativeCapabilityId,
@@ -362,10 +349,6 @@ pub fn initialize_native_host(
         let _ = (inbox, diagnostics);
         Ok(())
     }
-}
-
-pub fn integration_profile() -> PlatformProfile {
-    ActivePlatform::integration_profile()
 }
 
 pub fn capability_observations() -> HashMap<
@@ -447,8 +430,7 @@ mod tests {
     fn active_platform_declares_each_cross_platform_capability_family() {
         fn assert_platform<T>()
         where
-            T: PlatformProfileProvider
-                + CapabilityInspector
+            T: CapabilityInspector
                 + MainWindowConfigurator
                 + SystemFileIconProvider
                 + DefaultHandlerController
@@ -517,44 +499,5 @@ mod tests {
             .expect_err("missing ACL implementation must be explicit");
         assert_eq!(error.kind, NativeCapabilityOperationErrorKind::Unavailable);
         let _ = std::fs::remove_file(path);
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn windows_profile_preserves_its_integration_capabilities() {
-        let profile = integration_profile();
-
-        assert_eq!(profile.platform, "windows");
-        assert!(profile.window_decorations);
-        assert!(!profile.custom_window_chrome);
-        assert!(!profile.manual_window_resize);
-        assert!(!profile.native_menu_bar);
-        assert!(!profile.associated_extensions.is_empty());
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn linux_profile_preserves_its_integration_capabilities() {
-        let profile = integration_profile();
-
-        assert_eq!(profile.platform, "linux");
-        assert!(!profile.window_decorations);
-        assert!(profile.custom_window_chrome);
-        assert!(profile.manual_window_resize);
-        assert!(!profile.native_menu_bar);
-        assert!(!profile.associated_extensions.is_empty());
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn macos_profile_preserves_native_window_capabilities() {
-        let profile = integration_profile();
-
-        assert_eq!(profile.platform, "macos");
-        assert!(profile.window_decorations);
-        assert!(!profile.custom_window_chrome);
-        assert!(!profile.manual_window_resize);
-        assert!(profile.native_menu_bar);
-        assert!(!profile.associated_extensions.is_empty());
     }
 }

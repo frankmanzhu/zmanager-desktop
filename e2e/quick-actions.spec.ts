@@ -378,16 +378,7 @@ async function installQuickActionTauriStub(
               "fileAssociations",
               "defaultHandlerControl",
             ].map((id) => ({ id, availability: "available" })),
-            transitionalPlatformProfile: {
-              selectedItemActionsEnabled: true,
-              backgroundActionsEnabled: true,
-              fileAssociationsEnabled: true,
-              windowDecorations: false,
-              customWindowChrome: true,
-              manualWindowResize: true,
-              nativeMenuBar: false,
-              associatedExtensions: ["zip", "tzap"],
-            },
+
           },
         };
       }

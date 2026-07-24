@@ -35,19 +35,6 @@ for (const absolute of await sourceFiles(path.join(repoRoot, "src"))) {
   );
 }
 
-const transitionalOwners = new Set([
-  "src/api/types.ts",
-  "src/app/display/dialogSnapshots.ts",
-  "src/runtime/zmanagerRuntimeAdapter.ts",
-]);
-for (const absolute of await sourceFiles(path.join(repoRoot, "src"))) {
-  const relative = path.relative(repoRoot, absolute);
-  const source = await readFile(absolute, "utf8");
-  if (source.includes("transitionalPlatformProfile") && !transitionalOwners.has(relative)) {
-    violations.push(`${relative}: transitional platform profile has a new production caller`);
-  }
-}
-
 if (violations.length) {
   throw new Error(
     `Native Integration Contract architecture violations:\n${violations.join("\n")}`,

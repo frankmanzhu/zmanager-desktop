@@ -12,9 +12,8 @@ use super::{
     LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
     LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
     NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
-    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, PlatformProfile,
-    PlatformProfileProvider, ReplacementMigrationAdapter, SecureFileProtector,
-    SystemFileIconProvider,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
+    ReplacementMigrationAdapter, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -26,19 +25,6 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 pub const PLATFORM_NAME: &str = "linux";
 
 pub struct LinuxPlatform;
-
-impl PlatformProfileProvider for LinuxPlatform {
-    fn integration_profile() -> PlatformProfile {
-        PlatformProfile {
-            platform: PLATFORM_NAME,
-            window_decorations: false,
-            custom_window_chrome: true,
-            manual_window_resize: true,
-            native_menu_bar: false,
-            associated_extensions: crate::archive_file_types::associated_extensions(),
-        }
-    }
-}
 
 impl CapabilityInspector for LinuxPlatform {
     fn capability_observations() -> std::collections::HashMap<
@@ -69,7 +55,7 @@ impl CapabilityInspector for LinuxPlatform {
 
 impl MainWindowConfigurator for LinuxPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
-        window.set_decorations(Self::integration_profile().window_decorations)
+        window.set_decorations(false)
     }
 }
 

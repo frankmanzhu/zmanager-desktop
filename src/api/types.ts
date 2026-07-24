@@ -21,16 +21,7 @@ export type ProjectContract = {
     platform: string;
     packageKind: NativePackageKind;
     capabilities: NativeCapabilitySnapshot[];
-    transitionalPlatformProfile: {
-      selectedItemActionsEnabled: boolean;
-      backgroundActionsEnabled: boolean;
-      fileAssociationsEnabled: boolean;
-      windowDecorations: boolean;
-      customWindowChrome: boolean;
-      manualWindowResize: boolean;
-      nativeMenuBar: boolean;
-      associatedExtensions: string[];
-    };
+
   };
 };
 
