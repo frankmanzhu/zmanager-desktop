@@ -32,14 +32,6 @@
       "type": "async-json"
     },
     {
-      "name": "zmanager_macos_read_replacement_migration",
-      "type": "async-json"
-    },
-    {
-      "name": "zmanager_macos_reconcile_legacy_registrations",
-      "type": "async-json"
-    },
-    {
       "name": "zmanager_macos_consume_shell_action_request",
       "type": "async-json"
     },

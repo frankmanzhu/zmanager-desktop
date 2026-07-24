@@ -46,7 +46,7 @@ with open(path, "rb") as source:
     info = plistlib.load(source)
 info["CFBundleURLTypes"] = [{
     "CFBundleTypeRole": "Viewer",
-    "CFBundleURLName": "com.frankmanzhu.zmanager.shell-request",
+    "CFBundleURLName": "org.tzap-org.zmanager.shell-request",
     "CFBundleURLSchemes": identity["urlSchemes"],
 }]
 info["CFBundleDocumentTypes"] = [{
@@ -54,7 +54,7 @@ info["CFBundleDocumentTypes"] = [{
     "CFBundleTypeExtensions": group["extensions"],
     "CFBundleTypeRole": group["role"],
     "LSHandlerRank": group["rank"],
-    **({"LSItemContentTypes": ["com.frankmanzhu.zmanager.tzap"]}
+    **({"LSItemContentTypes": ["org.tzap-org.zmanager.tzap"]}
        if group["id"] == "tzap" else {}),
 } for group in generated["documentGroups"]]
 info["UTExportedTypeDeclarations"] = [{
@@ -109,7 +109,7 @@ if [[ $identity == Developer\ ID\ Application:* ]]; then
   signing_work=$(mktemp -d "${TMPDIR:-/tmp}/zmanager-signing-entitlements.XXXXXX")
   trap '[[ -z ${signing_work:-} ]] || rm -rf "$signing_work"' EXIT
   /usr/bin/python3 - "$main_entitlements" "$signing_work/main.plist" \
-    com.frankmanzhu.zmanager <<'PY'
+    org.tzap-org.zmanager <<'PY'
 import plistlib, sys
 with open(sys.argv[1], "rb") as source:
     entitlements = plistlib.load(source)
@@ -119,7 +119,7 @@ with open(sys.argv[2], "wb") as destination:
     plistlib.dump(entitlements, destination)
 PY
   /usr/bin/python3 - "$finder_entitlements" "$signing_work/finder.plist" \
-    com.frankmanzhu.zmanager.finder-extension <<'PY'
+    org.tzap-org.zmanager.finder-extension <<'PY'
 import plistlib, sys
 with open(sys.argv[1], "rb") as source:
     entitlements = plistlib.load(source)
@@ -161,7 +161,7 @@ codesign --verify --deep --strict "$app"
 bundle_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$app/Contents/Info.plist")
 bundle_identifier=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
 [[ $bundle_name == ZManager ]] || { echo "Unexpected macOS bundle name: $bundle_name" >&2; exit 1; }
-[[ $bundle_identifier == com.frankmanzhu.zmanager ]] || { echo "Unexpected macOS bundle identifier: $bundle_identifier" >&2; exit 1; }
+[[ $bundle_identifier == org.tzap-org.zmanager ]] || { echo "Unexpected macOS bundle identifier: $bundle_identifier" >&2; exit 1; }
 [[ $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist") == "$minimum_macos" ]] || {
   echo "Unexpected macOS deployment target" >&2
   exit 1

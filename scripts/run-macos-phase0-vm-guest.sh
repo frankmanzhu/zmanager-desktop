@@ -8,8 +8,8 @@ readonly kit_root="/Users/Shared/ZManagerMigrationPhase0-20260716"
 readonly old_zip="$kit_root/ZManager.zip"
 readonly old_app="$guest_user_home/Applications/ZManager Migration Baseline/ZManager.app"
 readonly current_app="$guest_user_home/Applications/ZManager Migration Baseline/ZManager.app"
-readonly finder_bundle_id="com.frankmanzhu.zmanager.finder-extension"
-readonly quicklook_bundle_id="com.frankmanzhu.zmanager.quicklook-preview"
+readonly finder_bundle_id="org.tzap-org.zmanager.finder-extension"
+readonly quicklook_bundle_id="org.tzap-org.zmanager.quicklook-preview"
 readonly lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 readonly baseline_report="$kit_root/phase-0-installed-evidence.md"
 readonly runtime_report="$kit_root/phase-0-runtime-evidence.md"
@@ -62,7 +62,7 @@ prepare_old_release() {
   fi
 
   [[ -f "$old_zip" ]] || fail "The native v1.0.0 ZIP is missing."
-  [[ ! -e "$guest_user_home/Library/Preferences/com.frankmanzhu.zmanager.plist" ]] || fail \
+  [[ ! -e "$guest_user_home/Library/Preferences/org.tzap-org.zmanager.plist" ]] || fail \
     "The VM contains pre-existing native preferences. Restore the clean snapshot."
   [[ ! -e "$guest_user_home/Library/Application Support/ZManager" ]] || fail \
     "The VM contains pre-existing native Application Support. Restore the clean snapshot."
@@ -148,17 +148,17 @@ baseline() {
 }
 
 seed_non_secret_upgrade_state() {
-  aqua defaults write com.frankmanzhu.zmanager defaultArchiveFormat -string zip
-  aqua defaults write com.frankmanzhu.zmanager defaultCleanSourceEnabled -bool false
-  aqua defaults write com.frankmanzhu.zmanager quickOpenExtractionEnabled -bool true
-  aqua defaults write com.frankmanzhu.zmanager previewCleanupPolicy -string whenAppCloses
+  aqua defaults write org.tzap-org.zmanager defaultArchiveFormat -string zip
+  aqua defaults write org.tzap-org.zmanager defaultCleanSourceEnabled -bool false
+  aqua defaults write org.tzap-org.zmanager quickOpenExtractionEnabled -bool true
+  aqua defaults write org.tzap-org.zmanager previewCleanupPolicy -string whenAppCloses
 }
 
 assert_seed_state_present() {
-  aqua defaults read com.frankmanzhu.zmanager defaultArchiveFormat >/dev/null
-  aqua defaults read com.frankmanzhu.zmanager defaultCleanSourceEnabled >/dev/null
-  aqua defaults read com.frankmanzhu.zmanager quickOpenExtractionEnabled >/dev/null
-  aqua defaults read com.frankmanzhu.zmanager previewCleanupPolicy >/dev/null
+  aqua defaults read org.tzap-org.zmanager defaultArchiveFormat >/dev/null
+  aqua defaults read org.tzap-org.zmanager defaultCleanSourceEnabled >/dev/null
+  aqua defaults read org.tzap-org.zmanager quickOpenExtractionEnabled >/dev/null
+  aqua defaults read org.tzap-org.zmanager previewCleanupPolicy >/dev/null
 }
 
 upgrade() {
@@ -217,7 +217,7 @@ upgrade() {
   } | while IFS= read -r -d '' candidate; do
     if [[ -f "$candidate/Contents/Info.plist" ]] && \
       [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$candidate/Contents/Info.plist" 2>/dev/null || true)" == \
-        'com.frankmanzhu.zmanager' ]]; then
+        'org.tzap-org.zmanager' ]]; then
       echo "$candidate"
     fi
   done | wc -l | tr -d ' ')"
@@ -228,7 +228,7 @@ upgrade() {
     echo "- Timestamp (UTC): $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     echo '- Source state: native v1.0.0 installed; launch result captured separately'
     echo '- Upgrade state: current native reference build installed; launch result captured below'
-    echo '- Bundle identifier continuity: PASS (`com.frankmanzhu.zmanager`)'
+    echo '- Bundle identifier continuity: PASS (`org.tzap-org.zmanager`)'
     echo '- Non-secret preference key continuity: PASS'
     echo '- Nested code-signature verification: PASS'
     echo "- Current native launch: $current_launch_result"

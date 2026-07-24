@@ -122,50 +122,7 @@ fn restore_state_path(app: &tauri::AppHandle) -> Result<PathBuf, CommandErrorDto
         .map_err(|error| operation_error(error.to_string()))
 }
 
-pub(crate) fn migrate_legacy_restore_state(
-    app: &tauri::AppHandle,
-    legacy_handlers_by_content_type: &HashMap<String, String>,
-) -> Result<bool, CommandErrorDto> {
-    let state_path = restore_state_path(app)?;
-    if state_path.exists() || legacy_handlers_by_content_type.is_empty() {
-        return Ok(false);
-    }
-    let status =
-        crate::platform::default_handlers(&request(app, DefaultHandlerAction::Status, None))
-            .map_err(operation_error)?;
-    let handlers = map_legacy_handlers_to_extensions(
-        &status,
-        legacy_handlers_by_content_type,
-        &app.config().identifier,
-    );
-    if handlers.is_empty() {
-        return Ok(false);
-    }
-    write_restore_state(
-        &state_path,
-        &RestoreState {
-            version: STATE_VERSION,
-            bundle_id: app.config().identifier.clone(),
-            handlers,
-        },
-    )?;
-    Ok(true)
-}
 
-fn map_legacy_handlers_to_extensions(
-    entries: &[DefaultHandlerEntry],
-    legacy_handlers_by_content_type: &HashMap<String, String>,
-    current_bundle_id: &str,
-) -> HashMap<String, String> {
-    entries
-        .iter()
-        .filter_map(|entry| {
-            let content_type = entry.content_type.as_ref()?;
-            let handler = legacy_handlers_by_content_type.get(content_type)?;
-            (handler != current_bundle_id).then(|| (entry.file_extension.clone(), handler.clone()))
-        })
-        .collect()
-}
 
 fn ensure_no_handler_errors(entries: &[DefaultHandlerEntry]) -> Result<(), CommandErrorDto> {
     let failures = entries
@@ -260,42 +217,5 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    #[test]
-    fn legacy_content_type_restore_state_maps_only_known_extensions() {
-        let entries = vec![
-            DefaultHandlerEntry {
-                file_extension: "zip".to_string(),
-                content_type: Some("public.zip-archive".to_string()),
-                handler_bundle_id: Some("com.frankmanzhu.zmanager".to_string()),
-                is_current_application: true,
-                error_code: None,
-            },
-            DefaultHandlerEntry {
-                file_extension: "tzap".to_string(),
-                content_type: Some("com.frankmanzhu.zmanager.tzap".to_string()),
-                handler_bundle_id: Some("com.frankmanzhu.zmanager".to_string()),
-                is_current_application: true,
-                error_code: None,
-            },
-        ];
-        let legacy = HashMap::from([
-            (
-                "public.zip-archive".to_string(),
-                "com.apple.ArchiveUtility".to_string(),
-            ),
-            (
-                "com.frankmanzhu.zmanager.tzap".to_string(),
-                "com.frankmanzhu.zmanager".to_string(),
-            ),
-            (
-                "public.unknown".to_string(),
-                "com.example.Other".to_string(),
-            ),
-        ]);
 
-        assert_eq!(
-            map_legacy_handlers_to_extensions(&entries, &legacy, "com.frankmanzhu.zmanager"),
-            HashMap::from([("zip".to_string(), "com.apple.ArchiveUtility".to_string())])
-        );
-    }
 }

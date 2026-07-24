@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly expected_bundle_id="com.frankmanzhu.zmanager"
+readonly expected_bundle_id="org.tzap-org.zmanager"
 readonly expected_version="1.0.0"
-readonly finder_bundle_id="com.frankmanzhu.zmanager.finder-extension"
-readonly quicklook_bundle_id="com.frankmanzhu.zmanager.quicklook-preview"
+readonly finder_bundle_id="org.tzap-org.zmanager.finder-extension"
+readonly quicklook_bundle_id="org.tzap-org.zmanager.quicklook-preview"
 readonly install_root="$HOME/Applications/ZManager Migration Baseline"
 readonly installed_app="$install_root/ZManager.app"
 readonly lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"

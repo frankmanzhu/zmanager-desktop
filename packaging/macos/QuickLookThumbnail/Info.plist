@@ -4,7 +4,7 @@
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleDisplayName</key><string>ZManager Thumbnails</string>
   <key>CFBundleExecutable</key><string>ZManagerQuickLookThumbnail</string>
-  <key>CFBundleIdentifier</key><string>com.frankmanzhu.zmanager.quicklook-thumbnail</string>
+  <key>CFBundleIdentifier</key><string>org.tzap-org.zmanager.quicklook-thumbnail</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>ZManagerQuickLookThumbnail</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
@@ -16,7 +16,7 @@
     <key>NSExtensionPointIdentifier</key><string>com.apple.quicklook.thumbnail</string>
     <key>NSExtensionPrincipalClass</key><string>ZManagerQuickLookThumbnail.TzapThumbnailProvider</string>
     <key>NSExtensionAttributes</key><dict>
-      <key>QLSupportedContentTypes</key><array><string>com.frankmanzhu.zmanager.tzap</string></array>
+      <key>QLSupportedContentTypes</key><array><string>org.tzap-org.zmanager.tzap</string></array>
       <key>QLThumbnailMinimumDimension</key><integer>0</integer>
     </dict>
   </dict>

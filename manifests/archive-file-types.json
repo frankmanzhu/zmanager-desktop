@@ -29,7 +29,7 @@
     "macos": {"extensions":"all","mimeTypes":[]}
   },
   "exportedTypes": [
-    {"identifier":"com.frankmanzhu.zmanager.tzap","descriptionKey":"archiveType.tzap","macOSDescription":"TZAP archive","macOSDescriptionZhHans":"TZAP 归档","conformsTo":["public.data"],"extensions":["tzap"],"mimeTypes":["application/x-zmanager-tzap"],"role":"Viewer","rank":"Owner"}
+    {"identifier":"org.tzap-org.zmanager.tzap","descriptionKey":"archiveType.tzap","macOSDescription":"TZAP archive","macOSDescriptionZhHans":"TZAP 归档","conformsTo":["public.data"],"extensions":["tzap"],"mimeTypes":["application/x-zmanager-tzap"],"role":"Viewer","rank":"Owner"}
   ],
   "documentGroups": [
     {"id":"tzap","displayKey":"archiveType.tzap","macOSDisplayName":"TZAP archive","macOSDisplayNameZhHans":"TZAP 归档","extensions":["tzap"],"role":"Viewer","rank":"Owner"},

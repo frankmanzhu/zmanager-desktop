@@ -195,17 +195,7 @@ pub fn baseline_capability_snapshots(
     capability_snapshots(platform, package_kind, &HashMap::new())
 }
 
-pub fn capability_applicability(
-    platform: &str,
-    id: NativeCapabilityId,
-) -> NativeCapabilityApplicability {
-    let definition = manifest()
-        .capabilities
-        .iter()
-        .find(|definition| definition.id == id)
-        .expect("every generated capability id must have a definition");
-    *required_platform_value(&definition.applicability, platform)
-}
+
 
 fn snapshot_for_definition(
     definition: &NativeCapabilityDefinition,

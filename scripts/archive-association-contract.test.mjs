@@ -47,7 +47,7 @@ test("Linux association consumers use the generated MIME profile", async () => {
     assert.ok((await text(relative)).includes(`MimeType=${expected}`));
   }
   const appstream = await text(
-    "packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml",
+    "packaging/linux/org.tzap-org.zmanager.desktop.metainfo.xml",
   );
   for (const mimeType of manifest.packageAssociationProfiles.linux.mimeTypes) {
     assert.ok(appstream.includes(`<mediatype>${mimeType}</mediatype>`));

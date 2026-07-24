@@ -7,7 +7,7 @@
     <attribute name="com_frankmanzhu_zmanager_tzapEncryption" multivalued="false" type="CFString"/>
     <attribute name="com_frankmanzhu_zmanager_tzapVolumeCount" multivalued="false" type="CFNumber"/>
   </attributes>
-  <types><type name="com.frankmanzhu.zmanager.tzap"><allattrs>
+  <types><type name="org.tzap-org.zmanager.tzap"><allattrs>
     com_frankmanzhu_zmanager_tzapSignatureStatus
     com_frankmanzhu_zmanager_tzapSigner
     com_frankmanzhu_zmanager_tzapIssuer

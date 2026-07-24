@@ -5,7 +5,7 @@
   <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleDisplayName</key><string>ZManager Finder Extension</string>
   <key>CFBundleExecutable</key><string>ZManagerFinderExtension</string>
-  <key>CFBundleIdentifier</key><string>com.frankmanzhu.zmanager.finder-extension</string>
+  <key>CFBundleIdentifier</key><string>org.tzap-org.zmanager.finder-extension</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>ZManagerFinderExtension</string>
   <key>CFBundlePackageType</key><string>XPC!</string>

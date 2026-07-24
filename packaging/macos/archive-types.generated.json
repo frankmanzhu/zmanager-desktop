@@ -120,7 +120,7 @@
   ],
   "exportedTypes": [
     {
-      "identifier": "com.frankmanzhu.zmanager.tzap",
+      "identifier": "org.tzap-org.zmanager.tzap",
       "descriptionKey": "archiveType.tzap",
       "macOSDescription": "TZAP archive",
       "macOSDescriptionZhHans": "TZAP 归档",

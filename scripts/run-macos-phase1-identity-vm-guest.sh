@@ -19,7 +19,7 @@ trap 'rm -rf "$stage"' EXIT
 ditto -x -k "$zip" "$stage"
 candidate="$stage/ZManager.app"
 [[ -d "$candidate" ]]
-[[ $(defaults read "$candidate/Contents/Info" CFBundleIdentifier) == com.frankmanzhu.zmanager ]]
+[[ $(defaults read "$candidate/Contents/Info" CFBundleIdentifier) == org.tzap-org.zmanager ]]
 [[ $(defaults read "$candidate/Contents/Info" CFBundleShortVersionString) == 1.1.0 ]]
 codesign --verify --deep --strict "$candidate"
 
@@ -30,13 +30,13 @@ launchctl asuser "$uid" sudo -H -u "$console_user" /System/Library/Frameworks/Co
 
 finder_id=$(defaults read "$app/Contents/PlugIns/ZManagerFinderExtension.appex/Contents/Info" CFBundleIdentifier)
 quicklook_id=$(defaults read "$app/Contents/PlugIns/ZManagerQuickLookPreview.appex/Contents/Info" CFBundleIdentifier)
-[[ $finder_id == com.frankmanzhu.zmanager.finder-extension ]]
-[[ $quicklook_id == com.frankmanzhu.zmanager.quicklook-preview ]]
+[[ $finder_id == org.tzap-org.zmanager.finder-extension ]]
+[[ $quicklook_id == org.tzap-org.zmanager.quicklook-preview ]]
 
 count=0
 while IFS= read -r -d '' candidate_app; do
   id=$(defaults read "$candidate_app/Contents/Info" CFBundleIdentifier 2>/dev/null || true)
-  [[ $id == com.frankmanzhu.zmanager ]] && count=$((count + 1))
+  [[ $id == org.tzap-org.zmanager ]] && count=$((count + 1))
 done < <(find "$home/Applications" -type d -name '*.app' -print0)
 [[ $count -eq 1 ]]
 
@@ -46,7 +46,7 @@ cat > "$report" <<EOF
 - Timestamp (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)
 - Console user: $console_user
 - Replacement path: $app
-- Bundle identifier: com.frankmanzhu.zmanager
+- Bundle identifier: org.tzap-org.zmanager
 - Product version: 1.1.0
 - Canonical user-local application count: $count
 - Finder extension identifier: $finder_id

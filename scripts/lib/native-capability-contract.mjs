@@ -11,7 +11,6 @@ const REQUIRED_CAPABILITY_IDS = [
   "nativeFileDrag",
   "finderTokenTransport",
   "nativeHostLifecycle",
-  "replacementMigration",
   "quickLook",
   "spotlight",
   "diagnosticLog",

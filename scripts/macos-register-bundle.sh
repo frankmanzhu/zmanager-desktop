@@ -27,11 +27,11 @@ assert_id() {
   actual=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$bundle/Contents/Info.plist")
   [[ $actual == "$expected" ]] || { echo "refusing to operate on unexpected bundle identifier $actual at $bundle" >&2; exit 1; }
 }
-assert_id "$app" com.frankmanzhu.zmanager
-assert_id "$finder" com.frankmanzhu.zmanager.finder-extension
-assert_id "$preview" com.frankmanzhu.zmanager.quicklook-preview
-assert_id "$thumbnail" com.frankmanzhu.zmanager.quicklook-thumbnail
-assert_id "$spotlight" com.frankmanzhu.zmanager.spotlight-importer
+assert_id "$app" org.tzap-org.zmanager
+assert_id "$finder" org.tzap-org.zmanager.finder-extension
+assert_id "$preview" org.tzap-org.zmanager.quicklook-preview
+assert_id "$thumbnail" org.tzap-org.zmanager.quicklook-thumbnail
+assert_id "$spotlight" org.tzap-org.zmanager.spotlight-importer
 
 run() {
   if ((dry_run)); then printf '%q ' "$@"; printf '\n'; else "$@"; fi
@@ -46,9 +46,9 @@ optional() {
 # from accumulated stale builds at different paths (staged, versioned, etc.).
 remove_all_registrations() {
   for bundle_id in \
-    com.frankmanzhu.zmanager.finder-extension \
-    com.frankmanzhu.zmanager.quicklook-preview \
-    com.frankmanzhu.zmanager.quicklook-thumbnail; do
+    org.tzap-org.zmanager.finder-extension \
+    org.tzap-org.zmanager.quicklook-preview \
+    org.tzap-org.zmanager.quicklook-thumbnail; do
     while IFS= read -r registered_path; do
       [[ -n "$registered_path" ]] || continue
       optional "$pluginkit" -r "$registered_path"
@@ -71,15 +71,15 @@ if [[ $action == register ]]; then
   for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
   run "$lsregister" -f "$app"
   for extension in "$finder" "$preview" "$thumbnail"; do run "$pluginkit" -a "$extension"; done
-  run "$pluginkit" -e use -i com.frankmanzhu.zmanager.finder-extension
-  run "$pluginkit" -e use -i com.frankmanzhu.zmanager.quicklook-preview
-  run "$pluginkit" -e use -i com.frankmanzhu.zmanager.quicklook-thumbnail
+  run "$pluginkit" -e use -i org.tzap-org.zmanager.finder-extension
+  run "$pluginkit" -e use -i org.tzap-org.zmanager.quicklook-preview
+  run "$pluginkit" -e use -i org.tzap-org.zmanager.quicklook-thumbnail
   run "$qlmanage" -r cache
   run "$mdimport" -r "$spotlight"
 else
-  run "$pluginkit" -e ignore -i com.frankmanzhu.zmanager.finder-extension
-  run "$pluginkit" -e ignore -i com.frankmanzhu.zmanager.quicklook-preview
-  run "$pluginkit" -e ignore -i com.frankmanzhu.zmanager.quicklook-thumbnail
+  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.finder-extension
+  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.quicklook-preview
+  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.quicklook-thumbnail
   for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
   optional "$lsregister" -u "$app"
   run "$qlmanage" -r cache

@@ -75,7 +75,7 @@ with open(sys.argv[1], "rb") as source:
 with open(sys.argv[2], encoding="utf-8") as source:
     generated = json.load(source)
 expected = {
-    "CFBundleIdentifier": "com.frankmanzhu.zmanager",
+    "CFBundleIdentifier": "org.tzap-org.zmanager",
     "CFBundleName": "ZManager",
     "CFBundleShortVersionString": sys.argv[3],
     "LSMinimumSystemVersion": "14.0",
@@ -83,7 +83,7 @@ expected = {
 errors = [f"{key}={info.get(key)!r}, expected {value!r}" for key, value in expected.items() if info.get(key) != value]
 if info.get("CFBundleURLTypes") != [{
     "CFBundleTypeRole": "Viewer",
-    "CFBundleURLName": "com.frankmanzhu.zmanager.shell-request",
+    "CFBundleURLName": "org.tzap-org.zmanager.shell-request",
     "CFBundleURLSchemes": ["zmanager"],
 }]:
     errors.append("URL scheme declarations differ from the canonical identity")
@@ -92,7 +92,7 @@ expected_documents = [{
     "CFBundleTypeExtensions": group["extensions"],
     "CFBundleTypeRole": group["role"],
     "LSHandlerRank": group["rank"],
-    **({"LSItemContentTypes": ["com.frankmanzhu.zmanager.tzap"]} if group["id"] == "tzap" else {}),
+    **({"LSItemContentTypes": ["org.tzap-org.zmanager.tzap"]} if group["id"] == "tzap" else {}),
 } for group in generated["documentGroups"]]
 if info.get("CFBundleDocumentTypes") != expected_documents:
     errors.append("document type declarations differ from the generated manifest")
@@ -135,10 +135,10 @@ bundle_paths=(
   "Contents/Library/Spotlight/ZManagerSpotlight.mdimporter"
 )
 bundle_identifiers=(
-  "com.frankmanzhu.zmanager.finder-extension"
-  "com.frankmanzhu.zmanager.quicklook-preview"
-  "com.frankmanzhu.zmanager.quicklook-thumbnail"
-  "com.frankmanzhu.zmanager.spotlight-importer"
+  "org.tzap-org.zmanager.finder-extension"
+  "org.tzap-org.zmanager.quicklook-preview"
+  "org.tzap-org.zmanager.quicklook-thumbnail"
+  "org.tzap-org.zmanager.spotlight-importer"
 )
 for index in "${!bundle_paths[@]}"; do
   relative=${bundle_paths[$index]}
@@ -207,10 +207,10 @@ from pathlib import Path
 app = Path(sys.argv[1])
 require_developer_id = sys.argv[2] == "1"
 targets = {
-    ".": {"com.apple.security.application-groups": ["group.com.frankmanzhu.zmanager"]},
+    ".": {"com.apple.security.application-groups": ["group.org.tzap-org.zmanager"]},
     "Contents/PlugIns/ZManagerFinderExtension.appex": {
         "com.apple.security.app-sandbox": True,
-        "com.apple.security.application-groups": ["group.com.frankmanzhu.zmanager"],
+        "com.apple.security.application-groups": ["group.org.tzap-org.zmanager"],
         "com.apple.security.files.user-selected.read-only": True,
     },
     "Contents/PlugIns/ZManagerQuickLookPreview.appex": {
@@ -229,7 +229,7 @@ for relative, expected in targets.items():
     data = result.stdout.strip()
     actual = plistlib.loads(data) if data else {}
     if require_developer_id and relative in {".", "Contents/PlugIns/ZManagerFinderExtension.appex"}:
-        bundle_id = "com.frankmanzhu.zmanager" if relative == "." else "com.frankmanzhu.zmanager.finder-extension"
+        bundle_id = "org.tzap-org.zmanager" if relative == "." else "org.tzap-org.zmanager.finder-extension"
         expected = {**expected,
             "com.apple.application-identifier": "9PMA523YY4." + bundle_id,
             "com.apple.developer.team-identifier": "9PMA523YY4",
@@ -315,8 +315,8 @@ from pathlib import Path
 
 app = Path(sys.argv[1])
 profiles = {
-    "Contents/embedded.provisionprofile": "com.frankmanzhu.zmanager",
-    "Contents/PlugIns/ZManagerFinderExtension.appex/Contents/embedded.provisionprofile": "com.frankmanzhu.zmanager.finder-extension",
+    "Contents/embedded.provisionprofile": "org.tzap-org.zmanager",
+    "Contents/PlugIns/ZManagerFinderExtension.appex/Contents/embedded.provisionprofile": "org.tzap-org.zmanager.finder-extension",
 }
 errors = []
 now = datetime.datetime.now(datetime.timezone.utc)
@@ -339,7 +339,7 @@ for relative, bundle_id in profiles.items():
     entitlements = profile.get("Entitlements", {})
     if entitlements.get("com.apple.application-identifier") != "9PMA523YY4." + bundle_id:
         errors.append(f"application identifier mismatch in {relative}")
-    if entitlements.get("com.apple.security.application-groups") != ["group.com.frankmanzhu.zmanager"]:
+    if entitlements.get("com.apple.security.application-groups") != ["group.org.tzap-org.zmanager"]:
         errors.append(f"App Group mismatch in {relative}")
 print("; ".join(errors))
 PY

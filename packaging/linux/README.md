@@ -12,7 +12,7 @@ Packaged materials:
   extensions.
 - `src-tauri/icons/icon-256.png`, `icon-512.png`, and `icon.png`: installed as
   the `zmanager-desktop` hicolor app icon in indexed sizes for desktop shells.
-- `com.frankmanzhu.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
+- `org.tzap-org.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
   package managers and software centers.
 - `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon
   caches, then reload running Nautilus instances so Python extension changes
@@ -175,7 +175,7 @@ show create actions.
 GNOME install checks:
 
 ```sh
-dpkg -s zmanager python3-nautilus
+dpkg -s zmanager-desktop python3-nautilus
 ls -l /usr/share/nautilus-python/extensions/zmanager_nautilus.py
 PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 import importlib.util

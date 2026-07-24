@@ -168,7 +168,7 @@ private func runInstalledDefaultHandlerSelfTest() -> Bool {
     let input = try? JSONSerialization.data(withJSONObject: [
         "action": "status",
         "extensions": ["zip"],
-        "bundleId": "com.frankmanzhu.zmanager",
+        "bundleId": ZManagerConstants.mainBundleIdentifier,
     ])
     guard let input else { return false }
     let state = InstalledOperationSelfTestState()

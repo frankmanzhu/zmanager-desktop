@@ -156,6 +156,18 @@ describe("shell workspace state", () => {
     ).toBe("jobOnly");
   });
 
+  it("selects no Main Window for a pending macOS quick action", () => {
+    const workspace = createShellWorkspace();
+
+    expect(
+      workspace.selectQuickActionStartupRevealTarget({
+        launchedForQuickAction: true,
+        windowDisposition: null,
+        quickAction: null,
+      }),
+    ).toBe("jobOnly");
+  });
+
   it("selects normal window for non-job startup, errors, or review quick actions", () => {
     const workspace = createShellWorkspace();
 

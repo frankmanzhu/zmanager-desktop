@@ -6,7 +6,7 @@
 
 #import "zmanager_public_metadata_ffi.h"
 
-static NSString *const ZMTzapUTI = @"com.frankmanzhu.zmanager.tzap";
+static NSString *const ZMTzapUTI = @"org.tzap-org.zmanager.tzap";
 static NSString *const ZMSignatureStatus = @"com_frankmanzhu_zmanager_tzapSignatureStatus";
 static NSString *const ZMSigner = @"com_frankmanzhu_zmanager_tzapSigner";
 static NSString *const ZMIssuer = @"com_frankmanzhu_zmanager_tzapIssuer";

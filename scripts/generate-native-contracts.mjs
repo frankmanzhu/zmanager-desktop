@@ -560,9 +560,9 @@ ${[...type.primaryExtensions, ...type.compoundExtensions].map((extension) => `  
   </mime-type>`).join("\n")}
 </mime-info>
 `);
-put("packaging/linux/com.frankmanzhu.zmanager.desktop.metainfo.xml", `<?xml version="1.0" encoding="UTF-8"?>
+put("packaging/linux/org.tzap-org.zmanager.desktop.metainfo.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.frankmanzhu.zmanager.desktop</id>
+  <id>org.tzap-org.zmanager.desktop</id>
   <name>ZManager</name>
   <summary>Safe cross-platform archive manager</summary>
   <metadata_license>MIT</metadata_license>

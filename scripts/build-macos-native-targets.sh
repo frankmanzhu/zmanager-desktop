@@ -120,7 +120,7 @@ xcrun clang -arch "$architecture" -fobjc-arc -mmacosx-version-min=14.0 -bundle \
 chmod 0755 "$spotlight/Contents/MacOS/ZManagerSpotlight"
 
 [[ $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$appex/Contents/Info.plist") == \
-  com.frankmanzhu.zmanager.finder-extension ]]
+  org.tzap-org.zmanager.finder-extension ]]
 file "$appex/Contents/MacOS/ZManagerFinderExtension" | grep -q 'Mach-O 64-bit executable'
 "$repo_root/scripts/check-macos-core-revision-and-symbols.sh" \
   "$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.dylib"

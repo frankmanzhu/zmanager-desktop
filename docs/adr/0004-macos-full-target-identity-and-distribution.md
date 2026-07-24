@@ -7,7 +7,7 @@
 ## Context
 
 The native product shipped as `ZManager.app` with identifier
-`com.frankmanzhu.zmanager`. A differently named application with the same
+`org.tzap-org.zmanager`. A differently named application with the same
 identifier leaves duplicate Launch Services registrations. The Desktop Shell
 must replace that product without downgrading version or splitting ownership.
 
@@ -16,7 +16,7 @@ must replace that product without downgrading version or splitting ownership.
 This repository owns the macOS product, Native Host, Extension Suite,
 Replacement Migration, and Release Bundle. Identity values are frozen in
 `docs/migration/macos-identity-decision.json`: Team `9PMA523YY4`, App Group
-`group.com.frankmanzhu.zmanager`, macOS 14, separate arm64/x86_64 artifacts,
+`group.org.tzap-org.zmanager`, macOS 14, separate arm64/x86_64 artifacts,
 unsandboxed hardened main app, sandboxed extensions, and direct Developer ID
 distribution. `package.json` is the product version source. Application GUI is
 React; Swift/AppKit is limited to operating-system-mandated surfaces.

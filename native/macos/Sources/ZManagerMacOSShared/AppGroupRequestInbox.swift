@@ -14,7 +14,7 @@ public enum AppGroupRequestInboxError: Error, Equatable {
 }
 
 public struct AppGroupRequestInbox: Sendable {
-    public static let applicationGroupIdentifier = "group.com.frankmanzhu.zmanager"
+    public static let applicationGroupIdentifier = ZManagerConstants.appGroupIdentifier
     public static let maximumBytes = 1_048_576
     public static let maximumAge: TimeInterval = 300
     public static let maximumFutureSkew: TimeInterval = 60

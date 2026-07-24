@@ -12,7 +12,6 @@ export const NATIVE_CAPABILITY_IDS = [
   "nativeFileDrag",
   "finderTokenTransport",
   "nativeHostLifecycle",
-  "replacementMigration",
   "quickLook",
   "spotlight",
   "diagnosticLog",
@@ -806,63 +805,6 @@ export const NATIVE_CAPABILITY_CATALOG = [
     "evidence": {
       "source": [
         "source.macos.nativeHost"
-      ],
-      "package": [
-        "package.macos.nativeHost"
-      ],
-      "installed": []
-    }
-  },
-  {
-    "id": "replacementMigration",
-    "firstClass": true,
-    "applicability": {
-      "windows": "notApplicable",
-      "linux": "notApplicable",
-      "macos": "required"
-    },
-    "sourceExpectation": {
-      "windows": "notApplicable",
-      "linux": "notApplicable",
-      "macos": "implemented"
-    },
-    "packageKinds": {
-      "windows": [],
-      "linux": [],
-      "macos": [
-        "development",
-        "macosApp",
-        "macosDmg"
-      ]
-    },
-    "installedProbe": {
-      "windows": null,
-      "linux": null,
-      "macos": null
-    },
-    "installedRegistrationRequired": {
-      "windows": false,
-      "linux": false,
-      "macos": false
-    },
-    "userEnabledState": {
-      "windows": false,
-      "linux": false,
-      "macos": false
-    },
-    "runtimeProbeRequired": {
-      "windows": false,
-      "linux": false,
-      "macos": false
-    },
-    "failureCategories": [
-      "sourceMissing",
-      "runtimeUnavailable",
-      "invalidConfiguration"
-    ],
-    "evidence": {
-      "source": [
-        "source.macos.replacementMigration"
       ],
       "package": [
         "package.macos.nativeHost"

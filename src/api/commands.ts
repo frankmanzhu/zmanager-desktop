@@ -33,7 +33,6 @@ import type {
   QuickActionRequestDto,
   QuickActionStartupStateDto,
   ResumeJobRequest,
-  ReplacementMigrationPrepareResponseDto,
   StartCreateRequest,
   StartArchiveIndexRequest,
   StartExtractRequest,
@@ -109,19 +108,6 @@ export async function setDefaultHandlers(): Promise<DefaultHandlerSnapshotDto> {
 
 export async function restoreDefaultHandlers(): Promise<DefaultHandlerSnapshotDto> {
   return invoke<DefaultHandlerSnapshotDto>("default_handler_restore");
-}
-
-export async function prepareReplacementMigration(): Promise<ReplacementMigrationPrepareResponseDto> {
-  return invoke<ReplacementMigrationPrepareResponseDto>("replacement_migration_prepare");
-}
-
-export async function completeReplacementMigration(
-  schemaVersion: number,
-  appliedPreferenceKeys: string[],
-): Promise<void> {
-  return invoke<void>("replacement_migration_complete", {
-    request: { schemaVersion, appliedPreferenceKeys },
-  });
 }
 
 export async function validateDirectory(

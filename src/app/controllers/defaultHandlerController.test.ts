@@ -15,7 +15,7 @@ describe("default handler controller", () => {
     const set = vi.fn().mockResolvedValue({
       entries: [{
         fileExtension: "zip", contentType: "public.zip-archive",
-        handlerBundleId: "com.frankmanzhu.zmanager", isCurrentApplication: true, errorCode: null,
+        handlerBundleId: "org.tzap-org.zmanager", isCurrentApplication: true, errorCode: null,
       }],
       canRestore: true,
     });

@@ -52,81 +52,6 @@ pub struct DefaultHandlerEntry {
     pub error_code: Option<i32>,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyReplacementMigrationRequest {
-    pub schema_version: u32,
-    pub legacy_bundle_id: String,
-    pub current_application_path: String,
-    pub legacy_account_state_directory: String,
-    pub temporary_directory: String,
-    pub legacy_application_candidates: Vec<String>,
-}
-
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyReplacementPreferences {
-    pub default_archive_format: Option<String>,
-    pub default_clean_source_enabled: Option<bool>,
-    pub legacy_default_create_profile: Option<String>,
-    pub default_output_location: Option<String>,
-    pub custom_output_folder_path: Option<String>,
-    pub quick_open_extraction_enabled: Option<bool>,
-    pub quick_extraction_location: Option<String>,
-    pub quick_extraction_folder_path: Option<String>,
-    pub preview_cleanup_policy: Option<String>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReplacementMigrationDiagnostic {
-    pub key: String,
-    pub code: String,
-}
-
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyReplacementMigrationSnapshot {
-    pub schema_version: u32,
-    pub preferences: LegacyReplacementPreferences,
-    pub default_handler_restore: HashMap<String, String>,
-    pub legacy_account_state_directory: Option<String>,
-    pub stale_preview_roots: Vec<String>,
-    pub legacy_registration_paths: Vec<String>,
-    pub registration_owners: HashMap<String, String>,
-    pub diagnostics: Vec<ReplacementMigrationDiagnostic>,
-}
-
-impl LegacyReplacementMigrationSnapshot {
-    pub fn empty() -> Self {
-        Self {
-            schema_version: 1,
-            preferences: LegacyReplacementPreferences::default(),
-            default_handler_restore: HashMap::new(),
-            legacy_account_state_directory: None,
-            stale_preview_roots: Vec::new(),
-            legacy_registration_paths: Vec::new(),
-            registration_owners: HashMap::new(),
-            diagnostics: Vec::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyRegistrationReconcileRequest {
-    pub schema_version: u32,
-    pub legacy_bundle_id: String,
-    pub current_application_path: String,
-    pub legacy_application_paths: Vec<String>,
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-#[serde(rename_all = "camelCase")]
-pub struct LegacyRegistrationReconcileResult {
-    pub diagnostics: Vec<ReplacementMigrationDiagnostic>,
-}
 
 #[derive(Clone, Debug)]
 pub struct NativeFileDragCandidate {
@@ -292,15 +217,6 @@ pub(crate) trait DefaultHandlerController {
     ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError>;
 }
 
-pub(crate) trait ReplacementMigrationAdapter {
-    fn read_replacement_migration(
-        request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError>;
-    fn reconcile_legacy_registrations(
-        request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<ReplacementMigrationDiagnostic>, NativeCapabilityOperationError>;
-}
-
 pub(crate) trait SecureFileProtector {
     fn set_owner_only_file_permissions(file: &File) -> Result<(), NativeCapabilityOperationError>;
 }
@@ -372,18 +288,6 @@ pub fn default_handlers(
     ActivePlatform::default_handlers(request)
 }
 
-pub fn read_replacement_migration(
-    request: &LegacyReplacementMigrationRequest,
-) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
-    ActivePlatform::read_replacement_migration(request)
-}
-
-pub fn reconcile_legacy_registrations(
-    request: &LegacyRegistrationReconcileRequest,
-) -> Result<Vec<ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
-    ActivePlatform::reconcile_legacy_registrations(request)
-}
-
 pub fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()> {
     ActivePlatform::set_owner_only_file_permissions(file)
         .map_err(|error| std::io::Error::other(format!("{}:{}", error.capability, error.code)))
@@ -434,7 +338,6 @@ mod tests {
                 + MainWindowConfigurator
                 + SystemFileIconProvider
                 + DefaultHandlerController
-                + ReplacementMigrationAdapter
                 + SecureFileProtector
                 + NativeFileDragAdapter,
         {
@@ -466,25 +369,6 @@ mod tests {
             & 0o777;
         assert_eq!(mode, 0o600);
         let _ = std::fs::remove_file(path);
-    }
-
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
-    #[test]
-    fn replacement_migration_is_explicitly_not_applicable() {
-        let request = LegacyReplacementMigrationRequest {
-            schema_version: 1,
-            legacy_bundle_id: "legacy".to_string(),
-            current_application_path: "current".to_string(),
-            legacy_account_state_directory: "state".to_string(),
-            temporary_directory: "temporary".to_string(),
-            legacy_application_candidates: Vec::new(),
-        };
-        let error = read_replacement_migration(&request)
-            .expect_err("replacement migration must not return an empty success");
-        assert_eq!(
-            error.kind,
-            NativeCapabilityOperationErrorKind::NotApplicable
-        );
     }
 
     #[cfg(target_os = "windows")]

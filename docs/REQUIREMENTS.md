@@ -75,7 +75,7 @@
 
 ### macOS
 
-- Replace the last native Swift release in place under `com.frankmanzhu.zmanager`.
+- Replace the last native Swift release in place under `org.tzap-org.zmanager`.
 - Build and embed the macOS Native Host and Finder, Quick Look, thumbnail, and Spotlight targets.
 - Deliver cold and warm lifecycle, URL, document, Services, and reopen events through the Native Launch Inbox.
 - Stream archive drag-out through asynchronous file promises and a Native Drag Session.

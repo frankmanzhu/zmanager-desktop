@@ -3,8 +3,8 @@ set -euo pipefail
 
 app_path="${1:-/Applications/ZManager.app}"
 lookback="${2:-2h}"
-bundle_id="com.frankmanzhu.zmanager.finder-extension"
-app_group_id="group.com.frankmanzhu.zmanager"
+bundle_id="org.tzap-org.zmanager.finder-extension"
+app_group_id="group.org.tzap-org.zmanager"
 
 if [[ ! -d "$app_path" ]]; then
   printf 'error=installed_app_missing\n' >&2

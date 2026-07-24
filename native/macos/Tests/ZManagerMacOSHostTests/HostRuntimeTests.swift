@@ -133,7 +133,7 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     let request = try JSONSerialization.data(withJSONObject: [
         "action": "status",
         "extensions": ["zip"],
-        "bundleId": "com.frankmanzhu.zmanager",
+        "bundleId": ZManagerConstants.mainBundleIdentifier,
     ])
     let state = CallbackState()
     let context = Unmanaged.passUnretained(state).toOpaque()

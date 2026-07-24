@@ -39,13 +39,13 @@ cat >"$fake_pluginkit" <<'SH'
 set -euo pipefail
 bundle_id=${!#}
 case "$bundle_id" in
-  com.frankmanzhu.zmanager.finder-extension)
+  org.tzap-org.zmanager.finder-extension)
     path=$ZMANAGER_TEST_STALE_FINDER
     ;;
-  com.frankmanzhu.zmanager.quicklook-preview)
+  org.tzap-org.zmanager.quicklook-preview)
     path=$ZMANAGER_TEST_STALE_PREVIEW
     ;;
-  com.frankmanzhu.zmanager.quicklook-thumbnail)
+  org.tzap-org.zmanager.quicklook-thumbnail)
     path=$ZMANAGER_TEST_STALE_THUMBNAIL
     ;;
   *)

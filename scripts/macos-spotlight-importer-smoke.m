@@ -35,7 +35,7 @@ int main(int argc, const char *argv[]) {
         Boolean imported = (*interface)->ImporterImportData(
             instance,
             (__bridge CFMutableDictionaryRef)attributes,
-            CFSTR("com.frankmanzhu.zmanager.tzap"),
+            CFSTR("org.tzap-org.zmanager.tzap"),
             (__bridge CFStringRef)@(argv[2])
         );
         (*interface)->Release(instance);

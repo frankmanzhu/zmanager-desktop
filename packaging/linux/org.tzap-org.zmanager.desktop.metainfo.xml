@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.frankmanzhu.zmanager.desktop</id>
+  <id>org.tzap-org.zmanager.desktop</id>
   <name>ZManager</name>
   <summary>Safe cross-platform archive manager</summary>
   <metadata_license>MIT</metadata_license>

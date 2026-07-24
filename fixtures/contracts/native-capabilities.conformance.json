@@ -264,27 +264,6 @@
         }
       },
       {
-        "id": "replacementMigration",
-        "applicability": "notApplicable",
-        "firstClass": true,
-        "sourceState": "notApplicable",
-        "packageState": "notApplicable",
-        "installedState": "notApplicable",
-        "userEnabledState": "notApplicable",
-        "runtimeState": "notApplicable",
-        "availability": "notApplicable",
-        "failureCategory": null,
-        "evidence": {
-          "source": [
-            "source.macos.replacementMigration"
-          ],
-          "package": [
-            "package.macos.nativeHost"
-          ],
-          "installed": []
-        }
-      },
-      {
         "id": "quickLook",
         "applicability": "notApplicable",
         "firstClass": true,
@@ -637,27 +616,6 @@
         }
       },
       {
-        "id": "replacementMigration",
-        "applicability": "notApplicable",
-        "firstClass": true,
-        "sourceState": "notApplicable",
-        "packageState": "notApplicable",
-        "installedState": "notApplicable",
-        "userEnabledState": "notApplicable",
-        "runtimeState": "notApplicable",
-        "availability": "notApplicable",
-        "failureCategory": null,
-        "evidence": {
-          "source": [
-            "source.macos.replacementMigration"
-          ],
-          "package": [
-            "package.macos.nativeHost"
-          ],
-          "installed": []
-        }
-      },
-      {
         "id": "quickLook",
         "applicability": "notApplicable",
         "firstClass": true,
@@ -1002,27 +960,6 @@
         "evidence": {
           "source": [
             "source.macos.nativeHost"
-          ],
-          "package": [
-            "package.macos.nativeHost"
-          ],
-          "installed": []
-        }
-      },
-      {
-        "id": "replacementMigration",
-        "applicability": "required",
-        "firstClass": true,
-        "sourceState": "supported",
-        "packageState": "notInspected",
-        "installedState": "notApplicable",
-        "userEnabledState": "notApplicable",
-        "runtimeState": "ready",
-        "availability": "available",
-        "failureCategory": null,
-        "evidence": {
-          "source": [
-            "source.macos.replacementMigration"
           ],
           "package": [
             "package.macos.nativeHost"

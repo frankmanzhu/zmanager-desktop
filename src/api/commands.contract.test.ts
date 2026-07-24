@@ -20,12 +20,7 @@ const COMMAND_WRAPPERS = [
   { command: "default_handler_status", call: () => api.fetchDefaultHandlerStatus() },
   { command: "default_handler_set", call: () => api.setDefaultHandlers() },
   { command: "default_handler_restore", call: () => api.restoreDefaultHandlers() },
-  { command: "replacement_migration_prepare", call: () => api.prepareReplacementMigration() },
-  {
-    command: "replacement_migration_complete",
-    request: { schemaVersion: 1, appliedPreferenceKeys: ["defaultArchiveFormat"] },
-    call: () => api.completeReplacementMigration(1, ["defaultArchiveFormat"]),
-  },
+
   {
     command: "validate_directory",
     request: { path: "C:/output" },
@@ -286,5 +281,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|replacement_migration)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }

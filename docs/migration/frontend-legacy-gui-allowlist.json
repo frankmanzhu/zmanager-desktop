@@ -1,7 +1,0 @@
-{
-  "schemaVersion": 1,
-  "policy": "Exact legacy surfaces may not gain violations. If a listed file changes, every listed violation count for that file must shrink; remove the entry when it reaches zero.",
-  "legacyCss": null,
-  "tailwindEntrypoints": ["src/styles.tailwind.css"],
-  "entries": []
-}

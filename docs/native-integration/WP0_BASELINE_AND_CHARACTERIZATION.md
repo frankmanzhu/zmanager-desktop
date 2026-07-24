@@ -9,14 +9,14 @@
 
 The installed application at `/Applications/ZManager.app` was version `1.1.0`
 build `1`. Finder exposed the ZManager contextual submenu and PluginKit reported
-exactly one enabled `com.frankmanzhu.zmanager.finder-extension`.
+exactly one enabled `org.tzap-org.zmanager.finder-extension`.
 
 The first failing delivery stage is **App Group available**:
 
 | Stage | Result | Secret-free evidence |
 | --- | --- | --- |
 | Menu action invoked | Passed | Finder displayed the generated action submenu and accepted the action |
-| App Group available | Failed | `containermanagerd` rejected `group.com.frankmanzhu.zmanager` for the Finder extension because the installed signature cannot access the protected group container |
+| App Group available | Failed | `containermanagerd` rejected `group.org.tzap-org.zmanager` for the Finder extension because the installed signature cannot access the protected group container |
 | Request written | Not reached | No request file was present after the rejected access |
 | Callback URL accepted | Not reached | No request existed to deliver |
 | Token received | Not reached | No callback was opened |

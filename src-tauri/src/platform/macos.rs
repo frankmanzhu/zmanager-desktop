@@ -10,12 +10,10 @@ use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
     CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    LegacyRegistrationReconcileRequest, LegacyRegistrationReconcileResult,
-    LegacyReplacementMigrationRequest, LegacyReplacementMigrationSnapshot, MainWindowConfigurator,
+    MainWindowConfigurator,
     NativeCapabilityOperationError, NativeFileDragAdapter, NativeFileDragCandidate,
     NativeFileDragError, NativeFileDragItem, NativeFileDragStart, NativeFileDragStreamProvider,
-    ReplacementMigrationAdapter, ReplacementMigrationDiagnostic, SecureFileProtector,
-    SystemFileIconProvider,
+    SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -212,30 +210,7 @@ impl DefaultHandlerController for MacOsPlatform {
     }
 }
 
-impl ReplacementMigrationAdapter for MacOsPlatform {
-    fn read_replacement_migration(
-        request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
-        call_json_operation(request, zmanager_macos_read_replacement_migration).map_err(|_| {
-            NativeCapabilityOperationError::failed("replacementMigration", "nativeReadFailed")
-        })
-    }
 
-    fn reconcile_legacy_registrations(
-        request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
-        let result: LegacyRegistrationReconcileResult =
-            call_json_operation(request, zmanager_macos_reconcile_legacy_registrations).map_err(
-                |_| {
-                    NativeCapabilityOperationError::failed(
-                        "replacementMigration",
-                        "registrationReconcileFailed",
-                    )
-                },
-            )?;
-        Ok(result.diagnostics)
-    }
-}
 
 impl SecureFileProtector for MacOsPlatform {
     fn set_owner_only_file_permissions(
@@ -528,30 +503,7 @@ fn menu_command(
 
 include!("../generated/macos_menu.generated.rs");
 
-fn call_json_operation<Input: Serialize, Output: serde::de::DeserializeOwned>(
-    input: &Input,
-    operation: unsafe extern "C" fn(
-        *const u8,
-        usize,
-        Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        *mut c_void,
-    ) -> i32,
-) -> Result<Output, String> {
-    let input = serde_json::to_vec(input).map_err(|error| error.to_string())?;
-    let mut output = Vec::<u8>::new();
-    let result = unsafe {
-        operation(
-            input.as_ptr(),
-            input.len(),
-            Some(icon_operation_callback),
-            (&mut output as *mut Vec<u8>).cast(),
-        )
-    };
-    if result != 0 {
-        return Err(format!("native operation returned {result}"));
-    }
-    serde_json::from_slice(&output).map_err(|error| error.to_string())
-}
+
 
 extern "C" fn icon_operation_callback(bytes: *const u8, length: usize, context: *mut c_void) {
     if bytes.is_null() || context.is_null() || length > MAX_RESPONSE_BYTES {

@@ -8,12 +8,10 @@ use gtk::prelude::*;
 use tauri::Wry;
 
 use super::{
-    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
-    LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
+    MainWindowConfigurator, NativeCapabilityOperationError,
     NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
     NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    ReplacementMigrationAdapter, SecureFileProtector, SystemFileIconProvider,
+    SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -83,23 +81,7 @@ impl DefaultHandlerController for LinuxPlatform {
     }
 }
 
-impl ReplacementMigrationAdapter for LinuxPlatform {
-    fn read_replacement_migration(
-        _request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
-        Err(NativeCapabilityOperationError::not_applicable(
-            "replacementMigration",
-        ))
-    }
 
-    fn reconcile_legacy_registrations(
-        _request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
-        Err(NativeCapabilityOperationError::not_applicable(
-            "replacementMigration",
-        ))
-    }
-}
 
 impl SecureFileProtector for LinuxPlatform {
     fn set_owner_only_file_permissions(

@@ -352,36 +352,6 @@ export type DefaultHandlerSnapshotDto = {
   canRestore: boolean;
 };
 
-export type LegacyReplacementPreferencesDto = {
-  defaultArchiveFormat: string | null;
-  defaultCleanSourceEnabled: boolean | null;
-  legacyDefaultCreateProfile: string | null;
-  defaultOutputLocation: string | null;
-  customOutputFolderPath: string | null;
-  quickOpenExtractionEnabled: boolean | null;
-  quickExtractionLocation: string | null;
-  quickExtractionFolderPath: string | null;
-  previewCleanupPolicy: string | null;
-};
-
-export type ReplacementMigrationDiagnosticDto = {
-  key: string;
-  code: string;
-};
-
-export type ReplacementMigrationPrepareResponseDto = {
-  schemaVersion: number;
-  completed: boolean;
-  requiresCompletion: boolean;
-  preferences: LegacyReplacementPreferencesDto;
-  diagnostics: ReplacementMigrationDiagnosticDto[];
-  rollback: {
-    legacyStateRetained: boolean;
-    reversibleKeys: string[];
-    irreversibleOperations: string[];
-  };
-};
-
 export type TestArchiveRequest = {
   archivePath: string;
   entryPaths?: string[];

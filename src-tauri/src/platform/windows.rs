@@ -22,12 +22,8 @@ use windows_sys::Win32::{
 
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
-    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    LegacyRegistrationReconcileRequest, LegacyReplacementMigrationRequest,
-    LegacyReplacementMigrationSnapshot, MainWindowConfigurator, NativeCapabilityOperationError,
-    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
     NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider,
-    ReplacementMigrationAdapter, SecureFileProtector, SystemFileIconProvider,
+    SecureFileProtector, SystemFileIconProvider,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
@@ -87,23 +83,7 @@ impl DefaultHandlerController for WindowsPlatform {
     }
 }
 
-impl ReplacementMigrationAdapter for WindowsPlatform {
-    fn read_replacement_migration(
-        _request: &LegacyReplacementMigrationRequest,
-    ) -> Result<LegacyReplacementMigrationSnapshot, NativeCapabilityOperationError> {
-        Err(NativeCapabilityOperationError::not_applicable(
-            "replacementMigration",
-        ))
-    }
 
-    fn reconcile_legacy_registrations(
-        _request: &LegacyRegistrationReconcileRequest,
-    ) -> Result<Vec<super::ReplacementMigrationDiagnostic>, NativeCapabilityOperationError> {
-        Err(NativeCapabilityOperationError::not_applicable(
-            "replacementMigration",
-        ))
-    }
-}
 
 impl SecureFileProtector for WindowsPlatform {
     fn set_owner_only_file_permissions(

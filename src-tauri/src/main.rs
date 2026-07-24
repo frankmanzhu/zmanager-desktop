@@ -16,7 +16,6 @@ mod native_integration;
 mod native_launch_inbox;
 mod platform;
 mod quick_action;
-mod replacement_migration;
 
 use tauri::{Emitter, Manager};
 
@@ -121,8 +120,6 @@ fn main() {
             default_handlers::default_handler_status,
             default_handlers::default_handler_set,
             default_handlers::default_handler_restore,
-            replacement_migration::replacement_migration_prepare,
-            replacement_migration::replacement_migration_complete,
             commands::validate_directory,
             diagnostics::record_diagnostic_event,
             diagnostics::diagnostic_log_info,

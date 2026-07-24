@@ -8,7 +8,7 @@ import ZManagerMacOSShared
 @objc(ZManagerFinderSync)
 public final class ZManagerFinderSync: FIFinderSync {
     private let logger = Logger(
-        subsystem: "com.frankmanzhu.zmanager.finder-extension",
+        subsystem: "org.tzap-org.zmanager.finder-extension",
         category: "shellAction"
     )
     private lazy var transportState: FinderRequestTransportState = {
@@ -109,7 +109,7 @@ public final class ZManagerFinderSync: FIFinderSync {
                 selectionCount: urls.count,
                 errorCode: error.code
             )
-            if case .available(_) = transportState, let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.frankmanzhu.zmanager") {
+            if case .available(_) = transportState, let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ZManagerConstants.appGroupIdentifier) {
                 try? "\(error)\n".write(to: groupURL.appendingPathComponent("debug_zmanager.txt"), atomically: true, encoding: .utf8)
             }
 

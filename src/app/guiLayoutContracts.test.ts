@@ -607,11 +607,7 @@ describe("GUI layout contracts", () => {
     );
     expect(styles.trim()).toBe('@import "tailwindcss";');
     expect(existsSync(join(process.cwd(), "src", "styles.css"))).toBe(false);
-    expect(
-      runtimeBridgeSource.indexOf("runReplacementMigrationBeforeRuntime()"),
-    ).toBeLessThan(
-      runtimeBridgeSource.indexOf('import("./runtime/zmanagerRuntimeAdapter")'),
-    );
+
     expect(runtimeBridgeSource).toContain(
       "export const getZManagerRuntimeAdapter",
     );
@@ -890,17 +886,7 @@ describe("GUI layout contracts", () => {
   });
 
   it("keeps application GUI styling fully Tailwind-owned", () => {
-    const legacyInventory = JSON.parse(
-      normalizedWorkspaceFile(
-        "docs",
-        "migration",
-        "frontend-legacy-gui-allowlist.json",
-      ),
-    ) as { legacyCss: null; entries: unknown[] };
-
     expect(styles.trim()).toBe('@import "tailwindcss";');
-    expect(legacyInventory.legacyCss).toBeNull();
-    expect(legacyInventory.entries).toEqual([]);
     expect(appShellSource).toContain("[&_input:not([type=checkbox])");
     expect(appFrameSource).toContain("flex h-screen min-h-screen");
     expect(commandToolbarSource).toContain("h-12 min-h-12");

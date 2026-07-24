@@ -20,18 +20,6 @@ unsafe extern "C" {
         callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
         context: *mut c_void,
     ) -> i32;
-    pub fn zmanager_macos_read_replacement_migration(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
-    pub fn zmanager_macos_reconcile_legacy_registrations(
-        bytes: *const u8,
-        length: usize,
-        callback: Option<extern "C" fn(*const u8, usize, *mut c_void)>,
-        context: *mut c_void,
-    ) -> i32;
     pub fn zmanager_macos_consume_shell_action_request(
         bytes: *const u8,
         length: usize,

@@ -205,8 +205,8 @@ export function createShellWorkspace(): ShellWorkspace {
         state.launchedForQuickAction &&
         !state.error &&
         (state.windowDisposition === "disposableTask"
-          || (state.windowDisposition === undefined
-            && (hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))))
+          || (state.windowDisposition == null
+            && (!state.quickAction || hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))))
       ) {
         return "jobOnly";
       }
