@@ -929,12 +929,12 @@ const startupController = createStartupController({
     
     if (state.contract) {
       const hasNativeMenu = state.contract.platformIntegration.capabilities.some(
-        c => c.id === "nativeApplicationMenu" && c.status === "available"
+        c => c.id === "nativeApplicationMenu" && c.availability === "available"
       );
       browserDocument.setNativeMenuBar(hasNativeMenu);
     }
     
-    if (isDesktopRuntime) {
+    if (isDesktopRuntime()) {
       import("@tauri-apps/api/webviewWindow").then((module) => {
         module.getCurrentWebviewWindow().isDecorated().then((decorated) => {
           browserDocument.setCustomWindowChrome(!decorated);
