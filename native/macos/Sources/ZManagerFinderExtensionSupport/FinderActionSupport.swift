@@ -1,7 +1,9 @@
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 import ZManagerGenerated
 import ZManagerMacOSShared
-
 public struct FinderSelectionItem: Equatable, Sendable {
     public let url: URL
     public let isDirectory: Bool
