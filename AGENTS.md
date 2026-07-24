@@ -141,3 +141,12 @@ remain available.
 Passwords must never be logged, persisted in frontend storage, passed through command-line arguments, or included in diagnostics. Extraction safety must remain core-owned; do not bypass path normalization, collision handling, overwrite policy, symlink/hardlink checks, or zip-bomb guards. Keep command contracts small: plan, list, extract, create, test, cancel, and poll events.
 
 Do not reimplement archive planning, listing, extraction, creation, or safety behavior in TypeScript. The frontend may assemble command DTOs and derive presentation state, but Rust and `zmanager-core` own archive semantics.
+
+## Diagnosing Issues via Logs
+
+When investigating a reported bug or failure, always attempt to diagnose the issue using the application's diagnostic logs before resorting to blind searching or trial-and-error.
+
+- **Windows:** Logs are located in the `logs` directory next to the `.exe` file in the installation directory.
+- **macOS:** Logs are located in the `logs` directory inside the `.app` bundle, specifically at `Contents/MacOS/logs/zmanager-diagnostics.log`. If that directory is not writable (e.g., standard non-owned installation), it falls back to the user directory `~/Library/Logs/com.frankmanzhu.zmanager/zmanager-diagnostics.log`.
+
+If the existing logs do not provide enough data to identify the cause of the failure, your immediate next step should be to enhance the code by printing or logging additional diagnostic data to capture the missing context.

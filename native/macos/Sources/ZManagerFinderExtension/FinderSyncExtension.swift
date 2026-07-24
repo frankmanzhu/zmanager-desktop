@@ -107,8 +107,14 @@ public final class ZManagerFinderSync: FIFinderSync {
         selectionCount: Int,
         errorCode: String? = nil
     ) {
-        logger.info(
-            "stage=\(stage, privacy: .public) action=\(action ?? "none", privacy: .public) selectionCount=\(selectionCount, privacy: .public) errorCode=\(errorCode ?? "none", privacy: .public)"
-        )
+        if let errorCode {
+            logger.error(
+                "stage=\(stage, privacy: .public) action=\(action ?? "none", privacy: .public) selectionCount=\(selectionCount, privacy: .public) errorCode=\(errorCode, privacy: .public)"
+            )
+        } else {
+            logger.notice(
+                "stage=\(stage, privacy: .public) action=\(action ?? "none", privacy: .public) selectionCount=\(selectionCount, privacy: .public) errorCode=none"
+            )
+        }
     }
 }
