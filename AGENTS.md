@@ -127,6 +127,8 @@ Recent history uses short imperative summaries, for example `Fix context menu`. 
 
 Always run `cd src-tauri && cargo fmt` after making any Rust backend code changes to check and apply the correct format. If this is skipped, the CI pipeline will fail.
 
+Before claiming a fix is complete, you must explicitly check and resolve all compilation errors and warnings (including both Rust `cargo check` and Swift `swift build` warnings). Do not leave dead code, unused imports, or unused variables behind.
+
 Use the repository's configured SSH remote for Git pushes. A missing `gh` CLI login
 does not block committing or pushing when SSH authentication is available; require
 `gh` authentication only for GitHub API operations such as creating a pull request.
