@@ -197,6 +197,9 @@ fn record_launch_classification(
             0,
         ),
         quick_action::QuickActionStartupState::Invalid(_) => ("invalid", None, 0),
+        quick_action::QuickActionStartupState::PendingMacOsQuickAction => {
+            ("pendingMacOsQuickAction", None, 0)
+        }
     };
     let _ = diagnostics.record(
         "launch",

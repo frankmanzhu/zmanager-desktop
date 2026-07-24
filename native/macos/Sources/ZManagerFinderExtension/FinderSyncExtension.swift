@@ -21,7 +21,7 @@ public final class ZManagerFinderSync: FIFinderSync {
                 ) { NSWorkspace.shared.open($0) }
             )
         }
-        return FinderRequestTransport.applicationGroup { NSWorkspace.shared.open($0) }
+        return FinderRequestTransport.applicationGroup()
     }()
 
     public override init() {
@@ -30,6 +30,7 @@ public final class ZManagerFinderSync: FIFinderSync {
     }
 
     public override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        ExtensionLogger.shared.log("menu(for: \(menuKind.rawValue)) invoked")
         guard case .available = transportState else {
             record(stage: "menuUnavailable", action: nil, selectionCount: 0, errorCode: "appGroupUnavailable")
             return nil
@@ -56,10 +57,10 @@ public final class ZManagerFinderSync: FIFinderSync {
         for action in actions {
             let item = NSMenuItem(title: action.title, action: #selector(runAction(_:)), keyEquivalent: "")
             item.target = self
-            item.representedObject = [
-                "action": action.id.rawValue,
-                "paths": urls.map(\.path),
-            ]
+            if let index = ShellActionPolicy.all.firstIndex(where: { $0.id == action.id }) {
+                item.tag = index
+            }
+            item.representedObject = ["paths": urls.map(\.path)]
             submenu.addItem(item)
         }
         let menu = NSMenu(title: "")
@@ -70,14 +71,24 @@ public final class ZManagerFinderSync: FIFinderSync {
     }
 
     @objc private func runAction(_ sender: NSMenuItem) {
-        guard let payload = sender.representedObject as? [String: Any],
-              let raw = payload["action"] as? String,
-              let action = ShellActionID(rawValue: raw),
-              let paths = payload["paths"] as? [String],
-              !paths.isEmpty
-        else { return }
-        let urls = paths.map { URL(filePath: $0) }
-        guard !urls.isEmpty else { return }
+        ExtensionLogger.shared.log("runAction invoked")
+        let index = sender.tag
+        guard index >= 0 && index < ShellActionPolicy.all.count else {
+            ExtensionLogger.shared.log("early return: invalid tag \(index)")
+            return
+        }
+        let action = ShellActionPolicy.all[index].id
+        
+        let controller = FIFinderSyncController.default()
+        var urls = controller.selectedItemURLs() ?? []
+        if urls.isEmpty, let target = controller.targetedURL() {
+            urls = [target]
+        }
+        
+        guard !urls.isEmpty else {
+            ExtensionLogger.shared.log("early return: urls empty in runAction")
+            return
+        }
         guard case let .available(transport) = transportState else {
             record(
                 stage: "transportUnavailable",
@@ -98,6 +109,10 @@ public final class ZManagerFinderSync: FIFinderSync {
                 selectionCount: urls.count,
                 errorCode: error.code
             )
+            if case .available(_) = transportState, let groupURL = try? FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.frankmanzhu.zmanager") {
+                try? "\(error)\n".write(to: groupURL.appendingPathComponent("debug_zmanager.txt"), atomically: true, encoding: .utf8)
+            }
+
         }
     }
 
@@ -107,14 +122,18 @@ public final class ZManagerFinderSync: FIFinderSync {
         selectionCount: Int,
         errorCode: String? = nil
     ) {
+        let msg: String
         if let errorCode {
+            msg = "stage=\(stage) action=\(action ?? "none") selectionCount=\(selectionCount) errorCode=\(errorCode)"
             logger.error(
                 "stage=\(stage, privacy: .public) action=\(action ?? "none", privacy: .public) selectionCount=\(selectionCount, privacy: .public) errorCode=\(errorCode, privacy: .public)"
             )
         } else {
+            msg = "stage=\(stage) action=\(action ?? "none") selectionCount=\(selectionCount) errorCode=none"
             logger.notice(
                 "stage=\(stage, privacy: .public) action=\(action ?? "none", privacy: .public) selectionCount=\(selectionCount, privacy: .public) errorCode=none"
             )
         }
+        ExtensionLogger.shared.log(msg)
     }
 }

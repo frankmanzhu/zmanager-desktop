@@ -28,11 +28,16 @@ pub enum QuickActionStartupState {
     NotRequested,
     Requested(QuickActionRequestDto),
     ForwardedToNativeInbox(QuickActionKindDto),
+    PendingMacOsQuickAction,
     Invalid(QuickActionError),
 }
 
 impl QuickActionStartupState {
     pub fn from_startup_env() -> Self {
+        if std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok() {
+            return Self::PendingMacOsQuickAction;
+        }
+
         let args = std::env::args_os().skip(1).collect::<Vec<_>>();
         Self::from_args(args)
     }
@@ -92,6 +97,13 @@ impl QuickActionStartupState {
             Self::ForwardedToNativeInbox(kind) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 window_disposition: Some(kind.window_disposition()),
+                quick_action: None,
+                quick_action_jobs: Vec::new(),
+                error: None,
+            },
+            Self::PendingMacOsQuickAction => QuickActionStartupStateDto {
+                launched_for_quick_action: true,
+                window_disposition: None,
                 quick_action: None,
                 quick_action_jobs: Vec::new(),
                 error: None,

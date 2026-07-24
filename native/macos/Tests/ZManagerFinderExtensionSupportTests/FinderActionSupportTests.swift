@@ -70,7 +70,7 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
 @Test func finderTransportReportsUnavailableApplicationGroup() {
     let state = FinderRequestTransport.applicationGroup(
         resolveInbox: { _ in throw AppGroupRequestInboxError.unavailableAppGroup }
-    ) { _ in true }
+    )
     switch state {
     case .available:
         Issue.record("invalid App Group must not create an actionable transport")

@@ -128,13 +128,27 @@ public struct FinderRequestTransport: Sendable {
         identifier: String = AppGroupRequestInbox.applicationGroupIdentifier,
         resolveInbox: @Sendable (String) throws -> AppGroupRequestInbox = {
             try AppGroupRequestInbox.applicationGroup(identifier: $0)
-        },
-        openURL: @escaping OpenURL
+        }
     ) -> FinderRequestTransportState {
         do {
+            let inbox = try resolveInbox(identifier)
+            let openURL: OpenURL = { url in
+                let config = NSWorkspace.OpenConfiguration()
+                config.environment = ["ZMANAGER_MACOS_QUICK_ACTION": "1"]
+                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.frankmanzhu.zmanager") {
+                    NSWorkspace.shared.open(
+                        [url],
+                        withApplicationAt: appURL,
+                        configuration: config,
+                        completionHandler: nil
+                    )
+                    return true
+                }
+                return NSWorkspace.shared.open(url)
+            }
             return .available(
                 FinderRequestTransport(
-                    inbox: try resolveInbox(identifier),
+                    inbox: inbox,
                     openURL: openURL
                 )
             )
