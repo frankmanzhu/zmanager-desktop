@@ -151,8 +151,7 @@ impl CapabilityInspector for MacOsPlatform {
 }
 
 impl MainWindowConfigurator for MacOsPlatform {
-    fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
-        window.set_decorations(true)?;
+    fn configure_main_window(_window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
         if HOST_CALLBACK_RECEIVED.load(Ordering::Acquire) {
             eprintln!("ZMANAGER_MACOS_HOST_CALLBACK_OK");
         }

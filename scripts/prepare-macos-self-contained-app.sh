@@ -41,6 +41,7 @@ with open(sys.argv[2], "r", encoding="utf-8") as source:
     generated = json.load(source)
 with open(path, "rb") as source:
     info = plistlib.load(source)
+info["NSRequiresAquaSystemAppearance"] = False
 info["CFBundleURLTypes"] = [{
     "CFBundleTypeRole": "Viewer",
     "CFBundleURLName": "org.tzap-org.zmanager.shell-request",

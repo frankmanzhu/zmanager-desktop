@@ -15,7 +15,7 @@ must replace that product without downgrading version or splitting ownership.
 
 This repository owns the macOS product, Native Host, Extension Suite,
 Replacement Migration, and Release Bundle. Identity values are frozen in
-`docs/migration/macos-identity-decision.json`: Team `9PMA523YY4`, App Group
+~~`docs/migration/macos-identity-decision.json`: Team `9PMA523YY4`, App Group~~ (Removed)
 `group.org.tzap-org.zmanager`, macOS 14, separate arm64/x86_64 artifacts,
 unsandboxed hardened main app, sandboxed extensions, and direct Developer ID
 distribution. `package.json` is the product version source. Application GUI is

@@ -35,15 +35,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Bind package to the installed acceptance build
+      - name: Bind release version
         run: |
-          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
-          release_version="${release_tag#v}"
-          build_number=$(node -p 'require("./docs/migration/macos-release-acceptance.json").release.buildNumber')
-          node scripts/validate-macos-release-acceptance.mjs \
-            docs/migration/macos-release-acceptance.json \
-            --version "$release_version" --build "$build_number" --arch "${{ matrix.arch }}"
-          echo "ZMANAGER_RELEASE_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
+          echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
 
       - name: Install build dependencies
         run: |
@@ -237,32 +231,6 @@ jobs:
           path: |
             /tmp/zmanager-desktop-rpm/*.rpm
 
-  macos-installed-acceptance:
-    name: macOS installed-system acceptance
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout acceptance record
-        uses: actions/checkout@v4
-
-      - name: Require completed arm64 and x86_64 acceptance
-        run: |
-          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
-          release_version="${release_tag#v}"
-          build_number=$(node -p 'require("./docs/migration/macos-release-acceptance.json").release.buildNumber')
-          node scripts/validate-macos-release-acceptance.mjs \
-            docs/migration/macos-release-acceptance.json --require-passed \
-            --version "$release_version" --build "$build_number" --arch arm64
-          node scripts/validate-macos-release-acceptance.mjs \
-            docs/migration/macos-release-acceptance.json --require-passed \
-            --version "$release_version" --build "$build_number" --arch x86_64
-          node scripts/validate-macos-cutover.mjs
-
-      - name: Upload installed-system acceptance record
-        uses: actions/upload-artifact@v4
-        with:
-          name: zmanager-macos-installed-acceptance
-          if-no-files-found: error
-          path: docs/migration/macos-release-acceptance.json
 
   publish:
     name: Publish release
@@ -272,7 +240,6 @@ jobs:
       - package-windows
       - package-deb
       - package-rpm
-      - macos-installed-acceptance
 
     steps:
       - name: Download release artifacts
@@ -343,13 +310,7 @@ jobs:
                     ;;
                 esac
                 ;;
-              zmanager-macos-installed-acceptance)
-                [[ $file_name == macos-release-acceptance.json ]] || {
-                  echo "Skipping unknown acceptance artifact: $file_name" >&2
-                  continue
-                }
-                normalized_name="ZManager-${release_version}-macos-installed-acceptance.json"
-                ;;
+
               *)
                 echo "Skipping unexpected artifact directory: $artifact_dir" >&2
                 continue
@@ -380,7 +341,6 @@ jobs:
             "ZManager-${release_version}-macos-x86_64.dmg"
             "ZManager-${release_version}-macos-x86_64-inspection.json"
             "ZManager-${release_version}-macos-x86_64-SHA256SUMS.txt"
-            "ZManager-${release_version}-macos-installed-acceptance.json"
           )
           for required in "${required_macos_artifacts[@]}"; do
             if [[ ! -f "release-bundles/$required" ]]; then

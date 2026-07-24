@@ -18,8 +18,7 @@
         "height": 900,
         "minWidth": 720,
         "minHeight": 480,
-        "visible": false,
-        "theme": "System"
+        "visible": false
       }
     ],
     "security": {
