@@ -234,9 +234,6 @@ for relative, expected in targets.items():
             "com.apple.application-identifier": "9PMA523YY4." + bundle_id,
             "com.apple.developer.team-identifier": "9PMA523YY4",
         }
-    elif not require_developer_id and relative == "Contents/PlugIns/ZManagerFinderExtension.appex":
-        if "com.apple.security.app-sandbox" in expected:
-            del expected["com.apple.security.app-sandbox"]
     if actual != expected:
         errors.append(f"{relative}: {actual!r}, expected {expected!r}")
 print("; ".join(errors))
