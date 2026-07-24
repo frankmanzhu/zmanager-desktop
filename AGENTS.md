@@ -125,7 +125,8 @@ For every bug fix, include the test that proves the fix whenever feasible. For e
 
 Recent history uses short imperative summaries, for example `Fix context menu`. Keep commits focused. Pull requests should include a description, test commands run, linked issue or requirement, and screenshots for UI changes.
 
-Always run `cd src-tauri && cargo fmt` after making any Rust backend code changes to check and apply the correct format. If this is skipped, the CI pipeline will fail.
+> **CRITICAL: Always run `cd src-tauri && cargo fmt` after making ANY Rust backend code changes.** 
+> This checks and applies the correct format. If this is skipped, the CI pipeline will fail immediately. DO NOT claim a task is complete until you have formatted the code.
 
 Before claiming a fix is complete, you must explicitly check and resolve all compilation errors and warnings by running the complete build verification matrix:
 1. `npm run build` for the frontend (to catch strict TypeScript errors that `npm run test:frontend` misses).
