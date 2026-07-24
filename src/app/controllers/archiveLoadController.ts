@@ -9,6 +9,9 @@ import type {
   ListArchiveRequest,
 } from "../../api/types";
 import type {
+  ArchiveTableColumnSettings,
+} from "../archiveTable";
+import type {
   ArchiveWorkspace,
   ArchiveWorkspacePasswordRetry,
   ArchiveWorkspacePasswordRetryOperation,
@@ -37,6 +40,7 @@ export type ArchiveLoadControllerOptions = Readonly<{
   failedListMessage(): string;
   loadErrorMessage(error: CommandErrorDto, options: { includeHint: boolean }): string;
   promptForPasswordRetry(retry: ArchiveWorkspacePasswordRetry): string | null;
+  resolveDefaultTableColumns(archivePath: string): ArchiveTableColumnSettings;
 }>;
 
 export type ArchiveLoadController = Readonly<{
@@ -146,6 +150,7 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
       options.renderLoading(options.workspace.beginLoading({
         archivePath: request.archivePath,
         preserveListing: preserveState,
+        tableColumns: options.resolveDefaultTableColumns(request.archivePath),
       }));
 
       try {

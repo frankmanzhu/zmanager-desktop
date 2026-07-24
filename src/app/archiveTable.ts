@@ -11,6 +11,7 @@ import {
   buildHierarchicalRows,
   type HierarchicalTableRow,
 } from "./hierarchicalTable";
+import { getKnownArchiveSuffix } from "./archiveFileTypes";
 
 export type ArchiveTableColumnId =
   | "name"
@@ -123,6 +124,29 @@ export function normalizeColumnSettings(
     columnOrderIds,
     columnWidths: normalizeColumnWidths(settings?.columnWidths, availableColumns),
   };
+}
+
+export type ResolveColumnPreferences = {
+  tableColumnsByFormat: Record<string, ArchiveTableColumnSettings>;
+  tableVisibleColumnIds: ArchiveTableColumnId[];
+  tableColumnOrderIds: ArchiveTableColumnId[];
+  tableColumnWidths: ArchiveTableColumnWidthMap;
+};
+
+export function resolvePreferredColumnSettings(
+  prefs: ResolveColumnPreferences,
+  archivePath?: string,
+): ArchiveTableColumnSettings {
+  const formatKey = archivePath
+    ? (getKnownArchiveSuffix(archivePath) ?? "default")
+    : "default";
+  return normalizeColumnSettings(
+    prefs.tableColumnsByFormat[formatKey] ?? {
+      visibleColumnIds: prefs.tableVisibleColumnIds,
+      columnOrderIds: prefs.tableColumnOrderIds,
+      columnWidths: prefs.tableColumnWidths,
+    },
+  );
 }
 
 export function resetColumnSettings(): ArchiveTableColumnSettings {

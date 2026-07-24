@@ -1560,18 +1560,24 @@ function ColumnsPage({
     const newVisible = isVisible
       ? currentColumns.visibleColumnIds.filter((id: string) => id !== columnId)
       : [...currentColumns.visibleColumnIds, columnId];
-    
-    actions.handleDialogIntent({
-      type: "preferencesPatch",
-      patch: {
-        tableColumnsByFormat: {
-          ...draft.tableColumnsByFormat,
-          [selectedFormat]: {
-            ...currentColumns,
-            visibleColumnIds: newVisible as any,
-          },
+
+    const patch: Record<string, unknown> = {
+      tableColumnsByFormat: {
+        ...draft.tableColumnsByFormat,
+        [selectedFormat]: {
+          ...currentColumns,
+          visibleColumnIds: newVisible,
         },
       },
+    };
+    if (selectedFormat === "default") {
+      patch.tableVisibleColumnIds = newVisible;
+      patch.tableColumnOrderIds = currentColumns.columnOrderIds;
+    }
+
+    actions.handleDialogIntent({
+      type: "preferencesPatch",
+      patch: patch as any,
     });
   };
 

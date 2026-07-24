@@ -72,11 +72,10 @@ import {
 } from "../app/controllers/nativeInboundController";
 import {
   ARCHIVE_TABLE_COLUMNS,
-  DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   buildArchiveBrowserRows,
   moveColumn,
-  normalizeColumnSettings,
   resetColumnSettings,
+  resolvePreferredColumnSettings,
   setColumnWidth,
   toggleColumnVisibility,
   visibleColumns,
@@ -372,6 +371,7 @@ const archiveWorkspace = createArchiveWorkspace({
   showParentFolderItem: appPreferences.showParentFolderItem,
   sortKey: appPreferences.tableSortKey,
   sortAscending: appPreferences.tableSortAscending,
+  tableColumns: resolvePreferredColumnSettings(appPreferences),
 });
 const createWorkspace = createCreateWorkspace();
 const extractWorkspace = createExtractWorkspace();
@@ -715,6 +715,8 @@ const archiveLoadController = createArchiveLoadController({
     ? `${error.message}\n${error.hint}`
     : error.message,
   promptForPasswordRetry: promptForArchivePasswordRetry,
+  resolveDefaultTableColumns: (archivePath) =>
+    resolvePreferredColumnSettings(appPreferences, archivePath),
 });
 const archiveOpenController = createArchiveOpenController({
   pathHistoryStore,
@@ -2990,8 +2992,11 @@ function tableColumnById(columnId: ArchiveTableColumnId): ArchiveTableColumn | u
     ?? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === columnId);
 }
 
-function setTableColumnWidth(columnId: ArchiveTableColumnId, width: number) {
+function setTableColumnWidth(columnId: ArchiveTableColumnId, width: number, persist = false) {
   archiveWorkspace.setColumnWidth(columnId, width);
+  if (persist) {
+    updateCurrentTableColumnSettings((s) => s);
+  }
   publishReactSnapshot();
 }
 
@@ -3172,40 +3177,41 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
   }
   if (action === "toggle-column" && columnId) {
     archiveWorkspace.toggleColumnVisibility(columnId);
+    updateCurrentTableColumnSettings((s) => s);
     publishReactSnapshot();
     return;
   }
   if (action === "move-column-left" && columnId) {
     archiveWorkspace.moveColumn(columnId, "left");
+    updateCurrentTableColumnSettings((s) => s);
     publishReactSnapshot();
     return;
   }
   if (action === "move-column-right" && columnId) {
     archiveWorkspace.moveColumn(columnId, "right");
+    updateCurrentTableColumnSettings((s) => s);
     publishReactSnapshot();
     return;
   }
   if (action === "narrow-column" && columnId) {
     adjustTableColumnWidth(columnId, -24);
+    updateCurrentTableColumnSettings((s) => s);
     return;
   }
   if (action === "widen-column" && columnId) {
     adjustTableColumnWidth(columnId, 24);
+    updateCurrentTableColumnSettings((s) => s);
     return;
   }
   if (action === "reset-column-width" && columnId) {
     resetTableColumnWidth(columnId);
+    updateCurrentTableColumnSettings((s) => s);
     return;
   }
   if (action === "reset-columns") {
-    const currentPath = archiveCurrentPath();
-    const currentFormat = (currentPath ? getKnownArchiveSuffix(currentPath) : null) ?? "default";
-    const defaultTableColumns = appPreferences.tableColumnsByFormat?.[currentFormat] ?? {
-      visibleColumnIds: appPreferences.tableVisibleColumnIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
-      columnOrderIds: appPreferences.tableColumnOrderIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
-      columnWidths: appPreferences.tableColumnWidths ?? {},
-    };
+    const defaultTableColumns = resolvePreferredColumnSettings(appPreferences, archiveCurrentPath());
     archiveWorkspace.resetColumns(defaultTableColumns);
+    updateCurrentTableColumnSettings((s) => s);
     publishReactSnapshot();
     return;
   }
@@ -3484,6 +3490,9 @@ async function savePreferencesFromDialog() {
     showParentFolderItem: appPreferences.showParentFolderItem,
   }));
   publishArchiveSnapshot(archiveWorkspace.setFlatView(appPreferences.flatViewDefault));
+  publishArchiveSnapshot(archiveWorkspace.resetColumns(
+    resolvePreferredColumnSettings(appPreferences, archiveCurrentPath()),
+  ));
   applyCreatePreferenceDefaults();
   applyPreferenceClasses();
   refreshDisplayFromPreferences();
@@ -3621,12 +3630,10 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
   clearTrackedPreviewState();
   contextMenuRuntime.hide();
   shellWorkspace.setWorkspaceMode("extract");
-  const currentFormat = getKnownArchiveSuffix(archiveListingFromFixture(listing).archivePath) || "default";
-  const defaultTableColumns = appPreferences.tableColumnsByFormat?.[currentFormat] ?? {
-    visibleColumnIds: appPreferences.tableVisibleColumnIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
-    columnOrderIds: appPreferences.tableColumnOrderIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
-    columnWidths: appPreferences.tableColumnWidths ?? {},
-  };
+  const defaultTableColumns = resolvePreferredColumnSettings(
+    appPreferences,
+    archiveListingFromFixture(listing).archivePath,
+  );
   const snapshot = archiveWorkspace.loadSucceeded(archiveListingFromFixture(listing), {
     preserveState: preservedState,
     defaultTableColumns,

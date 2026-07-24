@@ -69,6 +69,7 @@ function createHarness(overrides: Partial<ArchiveLoadControllerOptions> = {}) {
       calls.prompts.push(retry.promptKey);
       return "secret";
     },
+    resolveDefaultTableColumns: () => ({ visibleColumnIds: ["name", "size", "compressedSize", "modified"], columnOrderIds: ["name", "size", "compressedSize", "modified", "mode", "created", "accessed", "attributes", "encrypted", "method", "crc", "block", "comment", "kind", "ratio", "solid", "linkTarget", "metadataDiagnostics"], columnWidths: {} }),
     ...overrides,
   });
   return { calls, close, controller, get, start, wait, workspace };

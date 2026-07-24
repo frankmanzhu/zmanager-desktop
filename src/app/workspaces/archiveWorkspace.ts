@@ -273,6 +273,7 @@ export type ArchiveWorkspaceSnapshot = ArchiveWorkspaceListingMetadata & {
 export type BeginArchiveLoadInput = {
   archivePath: string;
   preserveListing?: boolean;
+  tableColumns?: ArchiveTableColumnSettings;
 };
 
 export type ArchiveWorkspaceUnknownLoadFailure = {
@@ -415,7 +416,7 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
               view: resetViewState({
                 flatView: state.view.flatView,
                 sort: state.view.sort,
-                tableColumns: state.view.tableColumns,
+                tableColumns: input.tableColumns ?? state.view.tableColumns,
                 rowOptions: state.view.rowOptions,
               }),
             }),
