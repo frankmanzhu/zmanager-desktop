@@ -70,6 +70,30 @@ public enum FinderMenuBuilder {
         return ArchiveFileTypes.singleExtensions.contains(url.pathExtension.lowercased())
     }
 
+    /// Determine whether a URL is likely a directory using only path properties.
+    ///
+    /// This MUST NOT access the filesystem. FIFinderSync-selected URLs are not
+    /// treated as user-selected by the sandbox (rdar://42874694), so any I/O
+    /// operation — even `resourceValues(forKeys: [.isDirectoryKey])` — triggers
+    /// a TCC permission prompt on every right-click.
+    ///
+    /// Heuristic (ordered, first match wins):
+    /// 1. Known archive extension (`.zip`, `.tzap`, `.7z`, …) → regular file
+    /// 2. Has a path extension (e.g. `.txt`, `.app`, `.png`) → regular file
+    /// 3. No path extension → directory
+    ///
+    /// Edge cases:
+    /// - `.app` / `.bundle` / `.xcplugin` → classified as files (they have
+    ///   extensions). These are rare targets for archive operations; the main
+    ///   app handles any mismatch gracefully.
+    /// - Extensionless files (`README`, `Makefile`) → classified as directories.
+    ///   The main app shows a descriptive error if an action is inapplicable.
+    public static func isDirectoryByPath(_ url: URL) -> Bool {
+        if isSupportedArchive(url) { return false }
+        if !url.pathExtension.isEmpty { return false }
+        return true
+    }
+
     private static func selectionShapes(_ items: [FinderSelectionItem]) -> [String] {
         if items.allSatisfy({ !$0.isDirectory && isSupportedArchive($0.url) }) {
             return [items.count == 1 ? "single-archive" : "multiple-archives"]

@@ -26,7 +26,29 @@ public final class ZManagerFinderSync: FIFinderSync {
 
     public override init() {
         super.init()
-        FIFinderSyncController.default().directoryURLs = [URL(filePath: "/", directoryHint: .isDirectory)]
+        FIFinderSyncController.default().directoryURLs = Self.homeDirectoryURLs
+    }
+
+    /// The set of directories the Finder Sync extension monitors for context
+    /// menus. Scoping to the user's real home directory (resolved via
+    /// `getpwuid` to avoid sandbox container redirection) ensures FIFinderSync
+    /// grants implicit access to selected items within these directories,
+    /// eliminating TCC permission prompts.
+    ///
+    /// Matches the approach used by zmanager-gui.
+    private static var homeDirectoryURLs: Set<URL> {
+        let home: URL
+        if let passwd = getpwuid(getuid()),
+           let dir = passwd.pointee.pw_dir {
+            let path = FileManager.default.string(
+                withFileSystemRepresentation: dir,
+                length: strlen(dir)
+            )
+            home = URL(fileURLWithPath: path, isDirectory: true)
+        } else {
+            home = FileManager.default.homeDirectoryForCurrentUser
+        }
+        return [home]
     }
 
     public override func menu(for menuKind: FIMenuKind) -> NSMenu? {
@@ -37,14 +59,27 @@ public final class ZManagerFinderSync: FIFinderSync {
         }
         let controller = FIFinderSyncController.default()
         var urls = controller.selectedItemURLs() ?? []
+        let usingTargetedURL: Bool
         if urls.isEmpty, let target = controller.targetedURL(), menuKind == .contextualMenuForContainer {
             urls = [target]
+            usingTargetedURL = true
+        } else {
+            usingTargetedURL = false
         }
         let items = urls.compactMap { url -> FinderSelectionItem? in
-            guard url.isFileURL,
-                  let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
-            else { return nil }
-            return FinderSelectionItem(url: url, isDirectory: values.isDirectory == true)
+            guard url.isFileURL else { return nil }
+            // Determine isDirectory without touching the filesystem.
+            // FIFinderSync URLs are not treated as user-selected by the
+            // sandbox (rdar://42874694), so resourceValues(forKeys:)
+            // triggers a TCC permission prompt on every right-click.
+            let isDir: Bool
+            if usingTargetedURL {
+                // targetedURL() always returns a directory
+                isDir = true
+            } else {
+                isDir = FinderMenuBuilder.isDirectoryByPath(url)
+            }
+            return FinderSelectionItem(url: url, isDirectory: isDir)
         }
         let context: FinderMenuContext = menuKind == .contextualMenuForContainer
             ? .container

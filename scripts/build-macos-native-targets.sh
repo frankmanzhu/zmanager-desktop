@@ -119,8 +119,9 @@ xcrun clang -arch "$architecture" -fobjc-arc -mmacosx-version-min=14.0 -bundle \
   -o "$spotlight/Contents/MacOS/ZManagerSpotlight"
 chmod 0755 "$spotlight/Contents/MacOS/ZManagerSpotlight"
 
+expected_finder_id=$(/usr/bin/python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['finderExtensionBundleIdentifier'])" "$repo_root/packaging/macos/product-identity.json")
 [[ $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$appex/Contents/Info.plist") == \
-  org.tzap-org.zmanager.finder-extension ]]
+  "$expected_finder_id" ]]
 file "$appex/Contents/MacOS/ZManagerFinderExtension" | grep -q 'Mach-O 64-bit executable'
 "$repo_root/scripts/check-macos-core-revision-and-symbols.sh" \
   "$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.dylib"

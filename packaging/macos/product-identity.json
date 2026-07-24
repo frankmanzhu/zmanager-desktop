@@ -1,0 +1,13 @@
+{
+  "mainBundleIdentifier": "org.tzap-org.zmanager",
+  "finderExtensionBundleIdentifier": "org.tzap-org.zmanager.finder-extension",
+  "quickLookPreviewBundleIdentifier": "org.tzap-org.zmanager.quicklook-preview",
+  "quickLookThumbnailBundleIdentifier": "org.tzap-org.zmanager.quicklook-thumbnail",
+  "spotlightImporterBundleIdentifier": "org.tzap-org.zmanager.spotlight-importer",
+  "appGroupIdentifier": "group.org.tzap-org.zmanager",
+  "teamIdentifier": "9PMA523YY4",
+  "urlScheme": "zmanager",
+  "urlTypeIdentifier": "org.tzap-org.zmanager.shell-request",
+  "exportedUTTypeTzap": "org.tzap-org.zmanager.tzap",
+  "minimumMacOSVersion": "14.0"
+}

@@ -53,6 +53,15 @@ impl ShellActionKind {
     }
 }
 
+impl ShellActionWindowDisposition {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MainWindow => "mainWindow",
+            Self::DisposableTask => "disposableTask",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellActionContractError {
     InvalidJson(String),

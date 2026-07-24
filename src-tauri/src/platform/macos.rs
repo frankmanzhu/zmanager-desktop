@@ -341,13 +341,21 @@ fn ingest_macos_native_event(
         }
     };
     let (action, path_count) = shell_action_diagnostic_fields(&event);
+    let disposition = shell_action_disposition(&event);
     match inbox.ingest(event) {
-        Ok(()) => record_shell_action_stage("inboxAccepted", action.as_deref(), path_count, None),
-        Err(error) => record_shell_action_stage(
+        Ok(()) => record_shell_action_stage_with_disposition(
+            "inboxAccepted",
+            action.as_deref(),
+            path_count,
+            None,
+            disposition,
+        ),
+        Err(error) => record_shell_action_stage_with_disposition(
             "inboxRejected",
             action.as_deref(),
             path_count,
             Some(inbox_error_code(&error)),
+            disposition,
         ),
     }
 }
@@ -374,11 +382,12 @@ fn normalize_macos_inbound_event(
         }
         _ => return Err("payloadKindMismatch"),
     };
-    record_shell_action_stage(
+    record_shell_action_stage_with_disposition(
         "requestValidated",
         shell_action_name(request.kind).as_deref(),
         Some(request.paths.len()),
         None,
+        Some(request.kind.window_disposition().as_str()),
     );
     event.idempotency_key = None;
     event.payload = crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(
@@ -399,6 +408,17 @@ fn shell_action_diagnostic_fields(
             (Some("open".to_string()), Some(payload.paths.len()))
         }
         _ => (None, None),
+    }
+}
+
+fn shell_action_disposition(
+    event: &crate::native_launch_inbox::NativeInboundEvent,
+) -> Option<&'static str> {
+    match &event.payload {
+        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => {
+            Some(payload.request.kind.window_disposition().as_str())
+        }
+        _ => None,
     }
 }
 
@@ -428,6 +448,16 @@ fn record_shell_action_stage(
     path_count: Option<usize>,
     error_code: Option<&str>,
 ) {
+    record_shell_action_stage_with_disposition(name, action, path_count, error_code, None);
+}
+
+fn record_shell_action_stage_with_disposition(
+    name: &str,
+    action: Option<&str>,
+    path_count: Option<usize>,
+    error_code: Option<&str>,
+    window_disposition: Option<&str>,
+) {
     let Some(diagnostics) = NATIVE_DIAGNOSTICS.get() else {
         return;
     };
@@ -448,6 +478,12 @@ fn record_shell_action_stage(
         fields.insert(
             "errorCode".to_string(),
             serde_json::Value::String(error_code.to_string()),
+        );
+    }
+    if let Some(disposition) = window_disposition {
+        fields.insert(
+            "windowDisposition".to_string(),
+            serde_json::Value::String(disposition.to_string()),
         );
     }
     let _ = diagnostics.record("shellActionIngress", name, fields);

@@ -12,6 +12,10 @@ dry_run=0
 case "$action" in register|unregister) ;; *) echo "expected register or unregister" >&2; exit 2 ;; esac
 [[ -d $app && -f $app/Contents/Info.plist ]] || { echo "invalid application bundle: $app" >&2; exit 1; }
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+identity_config="$repo_root/packaging/macos/product-identity.json"
+product_id() { /usr/bin/python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$identity_config" "$1"; }
+
 readonly lsregister=${ZMANAGER_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}
 readonly pluginkit=${ZMANAGER_PLUGINKIT:-/usr/bin/pluginkit}
 readonly qlmanage=${ZMANAGER_QLMANAGE:-/usr/bin/qlmanage}
@@ -21,17 +25,23 @@ readonly preview="$app/Contents/PlugIns/ZManagerQuickLookPreview.appex"
 readonly thumbnail="$app/Contents/PlugIns/ZManagerQuickLookThumbnail.appex"
 readonly spotlight="$app/Contents/Library/Spotlight/ZManagerSpotlight.mdimporter"
 
+main_id=$(product_id mainBundleIdentifier)
+finder_id=$(product_id finderExtensionBundleIdentifier)
+preview_id=$(product_id quickLookPreviewBundleIdentifier)
+thumbnail_id=$(product_id quickLookThumbnailBundleIdentifier)
+spotlight_id=$(product_id spotlightImporterBundleIdentifier)
+
 assert_id() {
   local bundle=$1 expected=$2 actual
   [[ -f $bundle/Contents/Info.plist ]] || { echo "missing required bundle: $bundle" >&2; exit 1; }
   actual=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$bundle/Contents/Info.plist")
   [[ $actual == "$expected" ]] || { echo "refusing to operate on unexpected bundle identifier $actual at $bundle" >&2; exit 1; }
 }
-assert_id "$app" org.tzap-org.zmanager
-assert_id "$finder" org.tzap-org.zmanager.finder-extension
-assert_id "$preview" org.tzap-org.zmanager.quicklook-preview
-assert_id "$thumbnail" org.tzap-org.zmanager.quicklook-thumbnail
-assert_id "$spotlight" org.tzap-org.zmanager.spotlight-importer
+assert_id "$app" "$main_id"
+assert_id "$finder" "$finder_id"
+assert_id "$preview" "$preview_id"
+assert_id "$thumbnail" "$thumbnail_id"
+assert_id "$spotlight" "$spotlight_id"
 
 run() {
   if ((dry_run)); then printf '%q ' "$@"; printf '\n'; else "$@"; fi
@@ -45,10 +55,7 @@ optional() {
 # This is the self-healing step that prevents duplicate context menu entries
 # from accumulated stale builds at different paths (staged, versioned, etc.).
 remove_all_registrations() {
-  for bundle_id in \
-    org.tzap-org.zmanager.finder-extension \
-    org.tzap-org.zmanager.quicklook-preview \
-    org.tzap-org.zmanager.quicklook-thumbnail; do
+  for bundle_id in "$finder_id" "$preview_id" "$thumbnail_id"; do
     while IFS= read -r registered_path; do
       [[ -n "$registered_path" ]] || continue
       optional "$pluginkit" -r "$registered_path"
@@ -71,15 +78,15 @@ if [[ $action == register ]]; then
   for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
   run "$lsregister" -f "$app"
   for extension in "$finder" "$preview" "$thumbnail"; do run "$pluginkit" -a "$extension"; done
-  run "$pluginkit" -e use -i org.tzap-org.zmanager.finder-extension
-  run "$pluginkit" -e use -i org.tzap-org.zmanager.quicklook-preview
-  run "$pluginkit" -e use -i org.tzap-org.zmanager.quicklook-thumbnail
+  run "$pluginkit" -e use -i "$finder_id"
+  run "$pluginkit" -e use -i "$preview_id"
+  run "$pluginkit" -e use -i "$thumbnail_id"
   run "$qlmanage" -r cache
   run "$mdimport" -r "$spotlight"
 else
-  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.finder-extension
-  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.quicklook-preview
-  run "$pluginkit" -e ignore -i org.tzap-org.zmanager.quicklook-thumbnail
+  run "$pluginkit" -e ignore -i "$finder_id"
+  run "$pluginkit" -e ignore -i "$preview_id"
+  run "$pluginkit" -e ignore -i "$thumbnail_id"
   for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
   optional "$lsregister" -u "$app"
   run "$qlmanage" -r cache

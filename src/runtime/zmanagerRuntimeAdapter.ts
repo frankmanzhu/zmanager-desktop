@@ -1243,6 +1243,23 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
     return;
   }
 
+  // The ZMANAGER_MACOS_QUICK_ACTION env var set via
+  // NSWorkspace.OpenConfiguration.environment does not propagate through
+  // URL scheme launches on modern macOS. If a quick action was already
+  // ingested via the native inbound path, skip the main window reveal.
+  if (disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator) {
+    diagnostics.record({
+      scope: "startup",
+      name: "revealSuppressedByPendingQuickAction",
+      fields: {
+        pendingQuickActionRequests:
+          disposableTaskLifecycle.getSnapshot().pendingQuickActionRequests,
+      },
+    });
+    disposableTaskLifecycle.observeQuickActionLaunch();
+    return;
+  }
+
   await revealNormalAppWindow();
 }
 
@@ -3723,6 +3740,15 @@ async function executeQuickActionRequest(request: QuickActionRequestDto) {
 }
 
 async function routeQuickActionRequest(request: QuickActionRequestDto) {
+  diagnostics.record({
+    scope: "quickActionRouting",
+    name: "requestArrived",
+    fields: {
+      action: request.kind,
+      pathCount: request.paths.length,
+      quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
+    },
+  });
   await runInboundQuickAction(request, {
     observeDisposableTaskLaunch: disposableTaskLifecycle.observeQuickActionLaunch,
     beginDisposableTaskRequest: disposableTaskLifecycle.beginQuickActionRequest,
