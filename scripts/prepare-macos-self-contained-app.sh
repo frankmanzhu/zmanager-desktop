@@ -15,7 +15,6 @@ frameworks="$app/Contents/Frameworks"
 finder_appex="$app/Contents/PlugIns/ZManagerFinderExtension.appex"
 mkdir -p "$frameworks"
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-identity_file="$repo_root/docs/migration/macos-identity-decision.json"
 canonical_version=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$repo_root/package.json")
 build_number=${ZMANAGER_BUILD_NUMBER:-1}
 [[ $build_number =~ ^[1-9][0-9]*$ ]] || { echo "ZMANAGER_BUILD_NUMBER must be a positive integer" >&2; exit 2; }
@@ -24,7 +23,7 @@ build_number=${ZMANAGER_BUILD_NUMBER:-1}
 
 "$repo_root/scripts/build-macos-native-targets.sh" "$app" "$architecture"
 
-minimum_macos=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["product"]["minimumMacOSVersion"])' "$identity_file")
+minimum_macos="14.0"
 /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $minimum_macos" "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Delete :LSRequiresCarbon' "$app/Contents/Info.plist" 2>/dev/null || true
 mkdir -p "$app/Contents/Resources"
@@ -32,7 +31,7 @@ for localization in "$repo_root/packaging/macos/Main"/*.lproj; do
   ditto "$localization" "$app/Contents/Resources/$(basename "$localization")"
 done
 /usr/bin/python3 - "$app/Contents/Info.plist" \
-  "$repo_root/packaging/macos/main-info.generated.json" "$identity_file" <<'PY'
+  "$repo_root/packaging/macos/main-info.generated.json" <<'PY'
 import json
 import plistlib
 import sys
@@ -40,14 +39,12 @@ import sys
 path = sys.argv[1]
 with open(sys.argv[2], "r", encoding="utf-8") as source:
     generated = json.load(source)
-with open(sys.argv[3], "r", encoding="utf-8") as source:
-    identity = json.load(source)["product"]
 with open(path, "rb") as source:
     info = plistlib.load(source)
 info["CFBundleURLTypes"] = [{
     "CFBundleTypeRole": "Viewer",
     "CFBundleURLName": "org.tzap-org.zmanager.shell-request",
-    "CFBundleURLSchemes": identity["urlSchemes"],
+    "CFBundleURLSchemes": ["zmanager"],
 }]
 info["CFBundleDocumentTypes"] = [{
     "CFBundleTypeName": group["displayKey"],
