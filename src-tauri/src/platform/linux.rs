@@ -22,7 +22,6 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 ///
 /// This module is intentionally isolated so MIME and desktop packaging concerns
 /// stay platform-owned and out of command payload handling.
-pub const PLATFORM_NAME: &str = "linux";
 
 pub struct LinuxPlatform;
 

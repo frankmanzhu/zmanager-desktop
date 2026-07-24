@@ -195,16 +195,6 @@ pub fn baseline_capability_snapshots(
     capability_snapshots(platform, package_kind, &HashMap::new())
 }
 
-pub fn is_capability_available(
-    snapshots: &[NativeCapabilitySnapshot],
-    id: NativeCapabilityId,
-) -> bool {
-    snapshots
-        .iter()
-        .find(|snapshot| snapshot.id == id)
-        .is_some_and(|snapshot| snapshot.availability == NativeCapabilityAvailability::Available)
-}
-
 pub fn capability_applicability(
     platform: &str,
     id: NativeCapabilityId,

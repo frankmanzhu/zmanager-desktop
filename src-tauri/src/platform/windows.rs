@@ -31,9 +31,6 @@ use super::{
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
-/// Windows-specific shell integration profile values.
-pub const PLATFORM_NAME: &str = "windows";
-
 pub struct WindowsPlatform;
 
 impl CapabilityInspector for WindowsPlatform {

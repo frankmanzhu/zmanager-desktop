@@ -21,8 +21,6 @@ use super::{
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 use crate::native_drag_session::NativeDragSessionRegistry;
 
-pub const PLATFORM_NAME: &str = "macos";
-
 pub struct MacOsPlatform;
 
 static HOST_CALLBACK_RECEIVED: AtomicBool = AtomicBool::new(false);
