@@ -1561,18 +1561,22 @@ function ColumnsPage({
       ? currentColumns.visibleColumnIds.filter((id: string) => id !== columnId)
       : [...currentColumns.visibleColumnIds, columnId];
 
-    const patch: Record<string, unknown> = {
-      tableColumnsByFormat: {
+    const patch: Record<string, unknown> = {};
+    if (selectedFormat === "default") {
+      patch.tableVisibleColumnIds = newVisible;
+      patch.tableColumnOrderIds = currentColumns.columnOrderIds;
+      
+      const nextFormats = { ...draft.tableColumnsByFormat };
+      delete nextFormats["default"];
+      patch.tableColumnsByFormat = nextFormats;
+    } else {
+      patch.tableColumnsByFormat = {
         ...draft.tableColumnsByFormat,
         [selectedFormat]: {
           ...currentColumns,
           visibleColumnIds: newVisible,
         },
-      },
-    };
-    if (selectedFormat === "default") {
-      patch.tableVisibleColumnIds = newVisible;
-      patch.tableColumnOrderIds = currentColumns.columnOrderIds;
+      };
     }
 
     actions.handleDialogIntent({
@@ -1580,6 +1584,20 @@ function ColumnsPage({
       patch: patch as any,
     });
   };
+
+  const handleReset = () => {
+    if (selectedFormat === "default") return;
+    const nextFormats = { ...draft.tableColumnsByFormat };
+    delete nextFormats[selectedFormat];
+    actions.handleDialogIntent({
+      type: "preferencesPatch",
+      patch: {
+        tableColumnsByFormat: nextFormats,
+      },
+    });
+  };
+
+  const hasLocalOverride = selectedFormat !== "default" && draft.tableColumnsByFormat[selectedFormat] !== undefined;
 
   return (
     <section
@@ -1604,17 +1622,32 @@ function ColumnsPage({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default">Global Defaults</SelectItem>
-              <SelectItem value="zip">ZIP</SelectItem>
-              <SelectItem value="tarZst">TZST</SelectItem>
-              <SelectItem value="tarGz">TGZ</SelectItem>
-              <SelectItem value="tzap">TZAP</SelectItem>
-              <SelectItem value="sevenZ">7Z</SelectItem>
+              <SelectItem value=".zip">ZIP</SelectItem>
+              <SelectItem value=".tar.zst">TZST</SelectItem>
+              <SelectItem value=".tar.gz">TGZ</SelectItem>
+              <SelectItem value=".tzap">TZAP</SelectItem>
+              <SelectItem value=".7z">7Z</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 flex items-center justify-between">
+        <h4 className="text-sm font-semibold">Visible Columns</h4>
+        {hasLocalOverride && (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            className="!px-2 !py-1 !text-xs"
+            onClick={handleReset}
+          >
+            Reset to Global Defaults
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-2 grid gap-2">
         {ARCHIVE_TABLE_COLUMNS.map((column) => (
           <label key={column.id} className="flex items-center gap-2 text-sm font-medium">
             <Checkbox

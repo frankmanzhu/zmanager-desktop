@@ -1039,14 +1039,27 @@ function updateCurrentTableColumnSettings(updater: (settings: ArchiveTableColumn
   const formatKey = (currentPath ? getKnownArchiveSuffix(currentPath) : null) ?? "default";
   const currentSettings = snapshot.view.tableColumns;
   const nextSettings = updater(currentSettings);
-  const nextTableColumnsByFormat = { ...appPreferences.tableColumnsByFormat };
-  nextTableColumnsByFormat[formatKey] = nextSettings;
   const sort = archiveWorkspace.getSnapshot().view.sort;
-  persistPreferencePatch({
-    tableColumnsByFormat: nextTableColumnsByFormat,
-    tableSortKey: sort.key,
-    tableSortAscending: sort.ascending,
-  });
+
+  const hasLocalOverride = formatKey !== "default" && appPreferences.tableColumnsByFormat[formatKey] !== undefined;
+
+  if (hasLocalOverride) {
+    const nextTableColumnsByFormat = { ...appPreferences.tableColumnsByFormat };
+    nextTableColumnsByFormat[formatKey] = nextSettings;
+    persistPreferencePatch({
+      tableColumnsByFormat: nextTableColumnsByFormat,
+      tableSortKey: sort.key,
+      tableSortAscending: sort.ascending,
+    });
+  } else {
+    persistPreferencePatch({
+      tableVisibleColumnIds: nextSettings.visibleColumnIds,
+      tableColumnOrderIds: nextSettings.columnOrderIds,
+      tableColumnWidths: nextSettings.columnWidths,
+      tableSortKey: sort.key,
+      tableSortAscending: sort.ascending,
+    });
+  }
 }
 
 function savePreferencePatch(patch: AppPreferencePatch) {
