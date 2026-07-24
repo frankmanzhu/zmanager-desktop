@@ -333,10 +333,32 @@ pub(super) fn handle_run_event(
         .unwrap_or_default()
         .as_millis()
         .min(u128::from(u64::MAX)) as u64;
+
+    let mut file_paths = Vec::new();
     for (index, url) in urls.iter().enumerate() {
-        if let Some(event) = shell_action_event_from_url(url, pid, timestamp_ms, index) {
+        if url.scheme() == "file" {
+            if let Ok(path) = url.to_file_path() {
+                if let Some(path_str) = path.to_str() {
+                    file_paths.push(path_str.to_string());
+                }
+            }
+        } else if let Some(event) = shell_action_event_from_url(url, pid, timestamp_ms, index) {
             ingest_macos_native_event(event, inbox);
         }
+    }
+
+    if !file_paths.is_empty() {
+        let event = crate::native_launch_inbox::NativeInboundEvent {
+            version: crate::native_launch_inbox::NATIVE_INBOUND_EVENT_VERSION,
+            event_id: format!("tauri-url-{pid}-{timestamp_ms}-openpaths"),
+            kind: crate::native_launch_inbox::NativeInboundEventKind::OpenPaths,
+            timestamp_unix_ms: timestamp_ms,
+            idempotency_key: None,
+            payload: crate::native_launch_inbox::NativeInboundPayload::OpenPaths(
+                crate::native_launch_inbox::OpenPathsPayload { paths: file_paths },
+            ),
+        };
+        ingest_macos_native_event(event, inbox);
     }
 }
 
@@ -408,15 +430,16 @@ fn normalize_macos_inbound_event(
 fn shell_action_diagnostic_fields(
     event: &crate::native_launch_inbox::NativeInboundEvent,
 ) -> (Option<String>, Option<usize>) {
-    let crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) =
-        &event.payload
-    else {
-        return (None, None);
-    };
-    (
-        shell_action_name(payload.request.kind),
-        Some(payload.request.paths.len()),
-    )
+    match &event.payload {
+        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => (
+            shell_action_name(payload.request.kind),
+            Some(payload.request.paths.len()),
+        ),
+        crate::native_launch_inbox::NativeInboundPayload::OpenPaths(payload) => {
+            (Some("open".to_string()), Some(payload.paths.len()))
+        }
+        _ => (None, None),
+    }
 }
 
 fn shell_action_name(kind: crate::dto::QuickActionKindDto) -> Option<String> {
