@@ -99,7 +99,24 @@ main_entitlements="$repo_root/packaging/macos/ZManager.entitlements"
 finder_entitlements="$repo_root/packaging/macos/FinderExtension/ZManagerFinderExtension.entitlements"
 signing_work=""
 if [[ $identity != - ]]; then options=(--options runtime --timestamp); fi
-if [[ $identity == Developer\ ID\ Application:* ]]; then
+if [[ $identity == - ]]; then
+  signing_work=$(mktemp -d "${TMPDIR:-/tmp}/zmanager-signing-entitlements.XXXXXX")
+  trap '[[ -z ${signing_work:-} ]] || rm -rf "$signing_work"' EXIT
+  
+  cp "$main_entitlements" "$signing_work/main.plist"
+  
+  /usr/bin/python3 - "$finder_entitlements" "$signing_work/finder.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], "rb") as source:
+    entitlements = plistlib.load(source)
+if "com.apple.security.app-sandbox" in entitlements:
+    del entitlements["com.apple.security.app-sandbox"]
+with open(sys.argv[2], "wb") as destination:
+    plistlib.dump(entitlements, destination)
+PY
+  main_entitlements="$signing_work/main.plist"
+  finder_entitlements="$signing_work/finder.plist"
+elif [[ $identity == Developer\ ID\ Application:* ]]; then
   main_profile=${ZMANAGER_MAIN_PROVISIONING_PROFILE:-}
   finder_profile=${ZMANAGER_FINDER_PROVISIONING_PROFILE:-}
   [[ -f $main_profile ]] || { echo "Developer ID signing requires ZMANAGER_MAIN_PROVISIONING_PROFILE" >&2; exit 1; }
