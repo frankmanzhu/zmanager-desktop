@@ -8,6 +8,7 @@ use gtk::prelude::*;
 use tauri::Wry;
 
 use super::{
+    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
     MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
     NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
     NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
