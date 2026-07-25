@@ -11,6 +11,8 @@ export type HealthcheckResponse = {
   summary: string;
   shell: string;
   status: string;
+  appVersion: string;
+  buildId: string;
 };
 
 export type ProjectContract = {

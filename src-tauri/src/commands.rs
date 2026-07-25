@@ -84,6 +84,8 @@ pub fn healthcheck() -> crate::dto::HealthcheckResponse {
         summary: report.summary(),
         shell: constants::DESKTOP_SHELL_NAME,
         status: if report.ready { "ready" } else { "not-ready" },
+        app_version: env!("CARGO_PKG_VERSION"),
+        build_id: option_env!("ZMANAGER_BUILD_ID").unwrap_or("dev"),
     }
 }
 

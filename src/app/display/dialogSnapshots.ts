@@ -229,6 +229,8 @@ export function buildAboutDialogSnapshot(
       ? message(display, "about.diagnostics.logLocationFallback")
       : message(display, "about.diagnostics.unavailable");
 
+  const isMacOs = contract?.platformIntegration.platform === "macos";
+
   return {
     kind: "about",
     title: message(display, "about.title"),
@@ -237,7 +239,14 @@ export function buildAboutDialogSnapshot(
         title: message(display, "about.group.product"),
         rows: [
           [message(display, "about.diagnostics.appName"), input.appTitle ?? APP_TITLE],
-          [message(display, "about.diagnostics.appVersion"), input.appVersion ?? APP_VERSION],
+          [
+            message(display, "about.diagnostics.appVersion"),
+            healthcheck?.appVersion ?? input.appVersion ?? APP_VERSION,
+          ],
+          [
+            message(display, "about.diagnostics.buildId"),
+            healthcheck?.buildId ?? message(display, "about.diagnostics.unavailable"),
+          ],
         ],
       },
       {
@@ -279,6 +288,22 @@ export function buildAboutDialogSnapshot(
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
+          ...(isMacOs
+            ? [
+                [
+                  message(display, "about.diagnostics.quickLook"),
+                  capabilityAvailable("quickLook")
+                    ? message(display, "about.diagnostics.enabled")
+                    : message(display, "about.diagnostics.disabled"),
+                ] as const,
+                [
+                  message(display, "about.diagnostics.spotlight"),
+                  capabilityAvailable("spotlight")
+                    ? message(display, "about.diagnostics.enabled")
+                    : message(display, "about.diagnostics.disabled"),
+                ] as const,
+              ]
+            : []),
         ],
       },
       {

@@ -142,6 +142,8 @@ describe("dialog snapshots", () => {
       summary: "ready",
       shell: "tauri",
       status: "ready",
+      appVersion: "9.9.9",
+      buildId: "Windows-x86_64-42",
     };
     const contract: ProjectContract = {
       commands: ["list", "extract"],
@@ -172,6 +174,7 @@ describe("dialog snapshots", () => {
       "Product",
       "App name: Test Manager",
       "Version: 9.9.9",
+      "Build: Windows-x86_64-42",
       "",
       "Shell and Runtime",
       "Shell: tauri",

@@ -219,13 +219,6 @@ impl ArchiveIndexRegistry {
             .sessions
             .get(&request.session_id)
             .ok_or_else(|| archive_session_not_found(&request.session_id))?;
-        if let Some(expected) = request.expected_revision.as_deref()
-            && expected != record.snapshot.revision
-        {
-            return Err(CommandErrorDto::invalid_request(
-                "Archive page revision is stale; request the current page again.",
-            ));
-        }
         if record.snapshot.status == ArchiveIndexStatusDto::Failed {
             return Err(record
                 .snapshot
@@ -323,13 +316,6 @@ impl ArchiveIndexRegistry {
         if record.snapshot.status == ArchiveIndexStatusDto::Indexing {
             return Err(CommandErrorDto::operation_failed(
                 "Archive search becomes available when indexing is complete.",
-            ));
-        }
-        if let Some(expected) = request.expected_revision.as_deref()
-            && expected != record.snapshot.revision
-        {
-            return Err(CommandErrorDto::invalid_request(
-                "Archive search revision is stale; request it again.",
             ));
         }
         let index = record
@@ -992,7 +978,9 @@ mod tests {
             "invalid_request"
         );
 
-        let stale_revision = registry.children(ArchiveChildrenRequest {
+        // expectedRevision mismatches are tolerated: the index data is valid
+        // regardless of revision, and cursors carry their own revision signature.
+        let older_revision = registry.children(ArchiveChildrenRequest {
             session_id: "archive-test".to_string(),
             parent_path: String::new(),
             cursor: None,
@@ -1001,9 +989,9 @@ mod tests {
             sort_key: None,
             sort_ascending: None,
         });
-        assert_eq!(
-            stale_revision.expect_err("revision must be current").code,
-            "invalid_request"
+        assert!(
+            older_revision.is_ok(),
+            "mismatched revision should be tolerated"
         );
 
         registry

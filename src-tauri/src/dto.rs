@@ -11,6 +11,8 @@ pub struct HealthcheckResponse {
     pub summary: String,
     pub shell: &'static str,
     pub status: &'static str,
+    pub app_version: &'static str,
+    pub build_id: &'static str,
 }
 
 #[derive(Debug, Serialize)]

@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::path::Path;
+use std::process::Command;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
@@ -25,6 +26,79 @@ static APP_GROUP_AVAILABLE: AtomicBool = AtomicBool::new(false);
 static NATIVE_LAUNCH_INBOX: OnceLock<crate::native_launch_inbox::NativeLaunchInbox> =
     OnceLock::new();
 static NATIVE_DIAGNOSTICS: OnceLock<crate::diagnostics::DiagnosticLog> = OnceLock::new();
+
+const FINDER_EXTENSION_BUNDLE_ID: &str = "org.tzap-org.zmanager.finder-extension";
+const QUICKLOOK_PREVIEW_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-preview";
+const QUICKLOOK_THUMBNAIL_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-thumbnail";
+const SPOTLIGHT_IMPORTER_BUNDLE_ID: &str = "org.tzap-org.zmanager.spotlight-importer";
+
+#[derive(Clone, Debug)]
+struct MacOsExtensionProbe {
+    is_installed: bool,
+    is_enabled: bool,
+}
+
+static EXTENSION_PROBES: OnceLock<MacOsExtensionProbes> = OnceLock::new();
+
+#[derive(Clone, Debug)]
+struct MacOsExtensionProbes {
+    finder: MacOsExtensionProbe,
+    quicklook: MacOsExtensionProbe,
+    spotlight: MacOsExtensionProbe,
+}
+
+fn probe_extension_status() -> &'static MacOsExtensionProbes {
+    EXTENSION_PROBES.get_or_init(|| {
+        let finder = probe_plugin_kit(FINDER_EXTENSION_BUNDLE_ID);
+        let quicklook_preview = probe_plugin_kit(QUICKLOOK_PREVIEW_BUNDLE_ID);
+        let quicklook_thumbnail = probe_plugin_kit(QUICKLOOK_THUMBNAIL_BUNDLE_ID);
+        let spotlight = probe_spotlight();
+
+        MacOsExtensionProbes {
+            finder,
+            quicklook: MacOsExtensionProbe {
+                is_installed: quicklook_preview.is_installed || quicklook_thumbnail.is_installed,
+                is_enabled: quicklook_preview.is_enabled || quicklook_thumbnail.is_enabled,
+            },
+            spotlight,
+        }
+    })
+}
+
+fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
+    // Check if registered (use -A to include disabled extensions)
+    let installed = Command::new("pluginkit")
+        .args(["-m", "-A", "-i", bundle_id])
+        .output()
+        .map(|output| !output.stdout.is_empty())
+        .unwrap_or(false);
+
+    // Check if user-enabled (without -A, only shows enabled extensions)
+    let enabled = if installed {
+        Command::new("pluginkit")
+            .args(["-m", "-i", bundle_id])
+            .output()
+            .map(|output| !output.stdout.is_empty())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    MacOsExtensionProbe { is_installed: installed, is_enabled: enabled }
+}
+
+fn probe_spotlight() -> MacOsExtensionProbe {
+    let installed = Command::new("mdimport")
+        .args(["-L"])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .contains(SPOTLIGHT_IMPORTER_BUNDLE_ID)
+        })
+        .unwrap_or(false);
+
+    MacOsExtensionProbe { is_installed: installed, is_enabled: true }
+}
 
 include!("../generated/macos_ffi.generated.rs");
 
@@ -102,13 +176,32 @@ impl CapabilityInspector for MacOsPlatform {
     > {
         use crate::native_integration::{
             NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityObservation,
-            NativeCapabilityRuntimeState,
+            NativeCapabilityInstalledState, NativeCapabilityRuntimeState,
+            NativeCapabilityUserEnabledState,
         };
         let app_group_runtime = if APP_GROUP_AVAILABLE.load(Ordering::Acquire) {
             NativeCapabilityRuntimeState::Ready
         } else {
             NativeCapabilityRuntimeState::Unavailable
         };
+
+        let probes = probe_extension_status();
+
+        let finder_installed = if probes.finder.is_installed {
+            NativeCapabilityInstalledState::Registered
+        } else {
+            NativeCapabilityInstalledState::Unregistered
+        };
+        let finder_enabled = if !probes.finder.is_installed {
+            NativeCapabilityUserEnabledState::NotInspected
+        } else if probes.finder.is_enabled {
+            NativeCapabilityUserEnabledState::Enabled
+        } else {
+            NativeCapabilityUserEnabledState::Disabled
+        };
+        let finder_failure = (!probes.finder.is_installed)
+            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+
         let mut observations = [
             NativeCapabilityId::ShellSelectedItemActions,
             NativeCapabilityId::ShellBackgroundActions,
@@ -119,15 +212,16 @@ impl CapabilityInspector for MacOsPlatform {
             (
                 id,
                 NativeCapabilityObservation {
+                    installed_state: Some(finder_installed),
+                    user_enabled_state: Some(finder_enabled),
                     runtime_state: Some(app_group_runtime),
-                    failure_category: (app_group_runtime
-                        == NativeCapabilityRuntimeState::Unavailable)
-                        .then_some(NativeCapabilityFailureCategory::RuntimeUnavailable),
+                    failure_category: finder_failure,
                     ..NativeCapabilityObservation::default()
                 },
             )
         })
         .collect::<std::collections::HashMap<_, _>>();
+
         observations.insert(
             NativeCapabilityId::NativeHostLifecycle,
             NativeCapabilityObservation {
@@ -146,6 +240,53 @@ impl CapabilityInspector for MacOsPlatform {
                 ..NativeCapabilityObservation::default()
             },
         );
+
+        let ql_installed = if probes.quicklook.is_installed {
+            NativeCapabilityInstalledState::Registered
+        } else {
+            NativeCapabilityInstalledState::Unregistered
+        };
+        let ql_runtime = if probes.quicklook.is_installed {
+            NativeCapabilityRuntimeState::Ready
+        } else {
+            NativeCapabilityRuntimeState::Unavailable
+        };
+        let ql_failure = (!probes.quicklook.is_installed)
+            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+
+        observations.insert(
+            NativeCapabilityId::QuickLook,
+            NativeCapabilityObservation {
+                installed_state: Some(ql_installed),
+                runtime_state: Some(ql_runtime),
+                failure_category: ql_failure,
+                ..NativeCapabilityObservation::default()
+            },
+        );
+
+        let sp_installed = if probes.spotlight.is_installed {
+            NativeCapabilityInstalledState::Registered
+        } else {
+            NativeCapabilityInstalledState::Unregistered
+        };
+        let sp_runtime = if probes.spotlight.is_installed {
+            NativeCapabilityRuntimeState::Ready
+        } else {
+            NativeCapabilityRuntimeState::Unavailable
+        };
+        let sp_failure = (!probes.spotlight.is_installed)
+            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+
+        observations.insert(
+            NativeCapabilityId::Spotlight,
+            NativeCapabilityObservation {
+                installed_state: Some(sp_installed),
+                runtime_state: Some(sp_runtime),
+                failure_category: sp_failure,
+                ..NativeCapabilityObservation::default()
+            },
+        );
+
         observations
     }
 }
