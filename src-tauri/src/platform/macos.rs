@@ -30,7 +30,6 @@ static NATIVE_DIAGNOSTICS: OnceLock<crate::diagnostics::DiagnosticLog> = OnceLoc
 const FINDER_EXTENSION_BUNDLE_ID: &str = "org.tzap-org.zmanager.finder-extension";
 const QUICKLOOK_PREVIEW_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-preview";
 const QUICKLOOK_THUMBNAIL_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-thumbnail";
-const SPOTLIGHT_IMPORTER_BUNDLE_ID: &str = "org.tzap-org.zmanager.spotlight-importer";
 
 #[derive(Clone, Debug)]
 struct MacOsExtensionProbe {
@@ -75,7 +74,7 @@ fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
 
     // Check if user-enabled (without -A, only shows enabled extensions)
     let enabled = if installed {
-        Command::new("pluginkit")
+        Command::new("/usr/bin/pluginkit")
             .args(["-m", "-i", bundle_id])
             .output()
             .map(|output| !output.stdout.is_empty())
@@ -88,12 +87,13 @@ fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
 }
 
 fn probe_spotlight() -> MacOsExtensionProbe {
+    // mdimport -L lists paths, not bundle IDs. Grep for the importer name instead.
     let installed = Command::new("/usr/bin/mdimport")
         .args(["-L"])
         .output()
         .map(|output| {
             String::from_utf8_lossy(&output.stdout)
-                .contains(SPOTLIGHT_IMPORTER_BUNDLE_ID)
+                .contains("ZManagerSpotlight")
         })
         .unwrap_or(false);
 
@@ -190,8 +190,8 @@ impl CapabilityInspector for MacOsPlatform {
     > {
         use crate::native_integration::{
             NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityObservation,
-            NativeCapabilityInstalledState, NativeCapabilityRuntimeState,
-            NativeCapabilityUserEnabledState,
+            NativeCapabilityInstalledState, NativeCapabilityPackageState,
+            NativeCapabilityRuntimeState, NativeCapabilityUserEnabledState,
         };
         let app_group_runtime = if APP_GROUP_AVAILABLE.load(Ordering::Acquire) {
             NativeCapabilityRuntimeState::Ready
@@ -200,6 +200,36 @@ impl CapabilityInspector for MacOsPlatform {
         };
 
         let probes = probe_extension_status();
+        let file_assoc_installed = probe_file_associations();
+        let host_cb = HOST_CALLBACK_RECEIVED.load(Ordering::Acquire);
+        let finder_installed = if probes.finder.is_installed {
+            NativeCapabilityInstalledState::Registered
+        } else {
+            NativeCapabilityInstalledState::Unregistered
+        };
+        let finder_enabled = if !probes.finder.is_installed {
+            NativeCapabilityUserEnabledState::NotInspected
+        } else if probes.finder.is_enabled {
+            NativeCapabilityUserEnabledState::Enabled
+        } else {
+            NativeCapabilityUserEnabledState::Disabled
+        };
+        let finder_failure = (!probes.finder.is_installed)
+            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+
+        // Write complete diagnostics
+        let pkg = crate::native_integration::current_package_kind();
+        let _ = std::fs::write(
+            "/tmp/zmanager-probe-diagnostics.txt",
+            format!(
+                "PACKAGE_KIND={pkg:?}\n\
+                 finder_installed={} finder_enabled={} ql_installed={} spotlight_installed={} file_assoc={} app_group={app_group_runtime:?} host_callback={host_cb}\n\
+                 finder_obs: installed={finder_installed:?} user={finder_enabled:?} runtime={app_group_runtime:?} failure={finder_failure:?}\n",
+                probes.finder.is_installed, probes.finder.is_enabled,
+                probes.quicklook.is_installed, probes.spotlight.is_installed,
+                file_assoc_installed,
+            ),
+        );
 
         let finder_installed = if probes.finder.is_installed {
             NativeCapabilityInstalledState::Registered
@@ -226,6 +256,7 @@ impl CapabilityInspector for MacOsPlatform {
             (
                 id,
                 NativeCapabilityObservation {
+                    package_state: Some(NativeCapabilityPackageState::Included),
                     installed_state: Some(finder_installed),
                     user_enabled_state: Some(finder_enabled),
                     runtime_state: Some(app_group_runtime),
@@ -257,12 +288,12 @@ impl CapabilityInspector for MacOsPlatform {
 
         // File associations are registered together with the app bundle
         // via lsregister, not pluginkit. Probe Launch Services directly.
-        let file_assoc_installed = probe_file_associations();
         let fa_failure = (!file_assoc_installed)
             .then_some(NativeCapabilityFailureCategory::NotRegistered);
         observations.insert(
             NativeCapabilityId::FileAssociations,
             NativeCapabilityObservation {
+                package_state: Some(NativeCapabilityPackageState::Included),
                 installed_state: Some(if file_assoc_installed {
                     NativeCapabilityInstalledState::Registered
                 } else {
@@ -289,6 +320,7 @@ impl CapabilityInspector for MacOsPlatform {
         observations.insert(
             NativeCapabilityId::QuickLook,
             NativeCapabilityObservation {
+                package_state: Some(NativeCapabilityPackageState::Included),
                 installed_state: Some(ql_installed),
                 runtime_state: Some(ql_runtime),
                 failure_category: ql_failure,
@@ -312,6 +344,7 @@ impl CapabilityInspector for MacOsPlatform {
         observations.insert(
             NativeCapabilityId::Spotlight,
             NativeCapabilityObservation {
+                package_state: Some(NativeCapabilityPackageState::Included),
                 installed_state: Some(sp_installed),
                 runtime_state: Some(sp_runtime),
                 failure_category: sp_failure,
