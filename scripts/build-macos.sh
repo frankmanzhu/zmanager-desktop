@@ -241,6 +241,13 @@ cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 bundle_root="$cargo_target_dir/$rust_triple/release/bundle"
 rm -rf "$bundle_root/macos"
 
+build_number=$(git rev-list --count HEAD)
+os_label="MacOS"
+build_id="${os_label}-${architecture}-${build_number}"
+export ZMANAGER_BUILD_NUMBER="$build_number"
+export ZMANAGER_BUILD_ID="$build_id"
+echo "Build: ${build_id}"
+
 tauri_args=(build --bundles app --no-sign --target "$rust_triple")
 npm run tauri -- "${tauri_args[@]}"
 
@@ -253,14 +260,6 @@ if ((${#applications[@]} != 1)); then
   exit 1
 fi
 application="${applications[0]}"
-
-build_number=$(git rev-list --count HEAD)
-os_label="MacOS"
-build_id="${os_label}-${architecture}-${build_number}"
-export ZMANAGER_BUILD_NUMBER="$build_number"
-export ZMANAGER_BUILD_ID="$build_id"
-echo "Build: ${build_id}"
-
 scripts/prepare-macos-self-contained-app.sh "$application" "$architecture"
 
 version=$(node -p 'require("./package.json").version')

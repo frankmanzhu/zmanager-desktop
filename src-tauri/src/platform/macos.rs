@@ -66,8 +66,8 @@ fn probe_extension_status() -> &'static MacOsExtensionProbes {
 }
 
 fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
-    // Check if registered (use -A to include disabled extensions)
-    let installed = Command::new("pluginkit")
+    // Use absolute path — GUI app PATH may not include /usr/bin.
+    let installed = Command::new("/usr/bin/pluginkit")
         .args(["-m", "-A", "-i", bundle_id])
         .output()
         .map(|output| !output.stdout.is_empty())
@@ -88,7 +88,7 @@ fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
 }
 
 fn probe_spotlight() -> MacOsExtensionProbe {
-    let installed = Command::new("mdimport")
+    let installed = Command::new("/usr/bin/mdimport")
         .args(["-L"])
         .output()
         .map(|output| {
@@ -98,6 +98,20 @@ fn probe_spotlight() -> MacOsExtensionProbe {
         .unwrap_or(false);
 
     MacOsExtensionProbe { is_installed: installed, is_enabled: true }
+}
+
+fn probe_file_associations() -> bool {
+    // File associations are registered via lsregister -f, not pluginkit.
+    // Check if the app bundle ID appears in the Launch Services database.
+    let lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+    Command::new(lsregister)
+        .args(["-dump"])
+        .output()
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .contains("org.tzap-org.zmanager")
+        })
+        .unwrap_or(false)
 }
 
 include!("../generated/macos_ffi.generated.rs");
@@ -237,6 +251,24 @@ impl CapabilityInspector for MacOsPlatform {
             NativeCapabilityId::SecureLocalFileProtection,
             NativeCapabilityObservation {
                 runtime_state: Some(NativeCapabilityRuntimeState::Ready),
+                ..NativeCapabilityObservation::default()
+            },
+        );
+
+        // File associations are registered together with the app bundle
+        // via lsregister, not pluginkit. Probe Launch Services directly.
+        let file_assoc_installed = probe_file_associations();
+        let fa_failure = (!file_assoc_installed)
+            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        observations.insert(
+            NativeCapabilityId::FileAssociations,
+            NativeCapabilityObservation {
+                installed_state: Some(if file_assoc_installed {
+                    NativeCapabilityInstalledState::Registered
+                } else {
+                    NativeCapabilityInstalledState::Unregistered
+                }),
+                failure_category: fa_failure,
                 ..NativeCapabilityObservation::default()
             },
         );
