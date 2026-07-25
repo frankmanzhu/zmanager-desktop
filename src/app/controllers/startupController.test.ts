@@ -22,6 +22,8 @@ function healthcheck(overrides: Partial<HealthcheckResponse> = {}): HealthcheckR
     summary: "Ready",
     shell: "desktop",
     status: "ready",
+    appVersion: "1.0.0",
+    buildId: "test",
     ...overrides,
   };
 }
