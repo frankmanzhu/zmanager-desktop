@@ -13,6 +13,9 @@ export default defineConfig({
     },
   },
   envPrefix: ["VITE_", "TAURI_"],
+  build: {
+    chunkSizeWarningLimit: 1000,
+  },
   test: {
     exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**", "scripts/**"]
   }

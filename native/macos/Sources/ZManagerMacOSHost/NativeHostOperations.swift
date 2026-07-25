@@ -197,3 +197,4 @@ public func zmanagerMacOSConsumeShellActionRequest(
         return MacOSFFIErrorMapping.systemError
     }
 }
+

@@ -22,6 +22,7 @@ export type BrowserDocumentAdapter = Readonly<{
   initializeLayout(): void;
   setCustomWindowChrome(active: boolean): void;
   setNativeMenuBar(active: boolean): void;
+  setMacOsOverlayTitleBar(active: boolean): void;
   setQuickActionJobMode(active: boolean): void;
   applyDisplayMetadata(context: DisplayContextSnapshot): void;
   usesCustomWindowChrome(): boolean;
@@ -69,6 +70,9 @@ export function createBrowserDocumentAdapter(
     },
     setNativeMenuBar(active) {
       documentRef.body.classList.toggle("native-menu-bar", active);
+    },
+    setMacOsOverlayTitleBar(active) {
+      documentRef.body.classList.toggle("macos-overlay-titlebar", active);
     },
     setQuickActionJobMode(active) {
       documentRef.body.classList.toggle("quick-action-job-mode", active);

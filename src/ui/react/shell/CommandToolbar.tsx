@@ -54,7 +54,6 @@ export function CommandToolbar() {
           <ExtractToolbarGroups groups={toolbarGroups} />
         )}
       </div>
-      <div className="flex-1" />
       <Button
         variant="ghost"
         size="icon"

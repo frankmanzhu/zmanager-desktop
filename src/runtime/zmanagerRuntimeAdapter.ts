@@ -934,6 +934,7 @@ const startupController = createStartupController({
         c => c.id === "nativeApplicationMenu" && c.availability === "available"
       );
       browserDocument.setNativeMenuBar(hasNativeMenu);
+      browserDocument.setMacOsOverlayTitleBar(state.contract.platformIntegration.platform === "macos");
     }
     
     if (isDesktopRuntime()) {

@@ -8,19 +8,19 @@ export function TitleBar() {
 
   return (
     <header
-      className="hidden h-[34px] min-h-[34px] shrink-0 select-none items-center justify-between border-b border-slate-300 bg-slate-100 text-slate-950 [body.custom-window-chrome_&]:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+      className="hidden relative h-[28px] min-h-[28px] shrink-0 select-none items-center justify-between border-b border-slate-300 bg-slate-100 text-slate-950 [body.custom-window-chrome_&]:flex [body.macos-overlay-titlebar_&]:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
       data-shell-chrome="title"
       data-tauri-drag-region
     >
       <div
-        className="flex h-full min-w-0 flex-1 items-center px-3"
+        className="flex h-full min-w-0 flex-1 items-center px-3 [body.macos-overlay-titlebar_&]:absolute [body.macos-overlay-titlebar_&]:inset-0 [body.macos-overlay-titlebar_&]:justify-center [body.macos-overlay-titlebar_&]:pointer-events-none"
         data-tauri-drag-region
       >
         <span className="min-w-0 truncate font-semibold" data-tauri-drag-region>
           {APP_TITLE}
         </span>
       </div>
-      <div className="flex h-full shrink-0 items-stretch">
+      <div className="flex h-full shrink-0 items-stretch [body.macos-overlay-titlebar_&]:hidden">
         <button
           id="window-minimize"
           className="flex h-full w-11 items-center justify-center border-0 bg-transparent p-0 hover:bg-slate-200 active:bg-slate-300 dark:hover:bg-slate-800 dark:active:bg-slate-700"
