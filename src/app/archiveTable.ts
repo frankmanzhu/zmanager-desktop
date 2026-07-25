@@ -378,9 +378,9 @@ export function formatArchiveTableValue(
     case "gid":
       return typeof entry.gid === "number" ? String(entry.gid) : EMPTY_VALUE;
     case "owner":
-      return entry.owner ?? EMPTY_VALUE;
+      return entry.owner ?? (typeof entry.uid === "number" ? String(entry.uid) : EMPTY_VALUE);
     case "group":
-      return entry.group ?? EMPTY_VALUE;
+      return entry.group ?? (typeof entry.gid === "number" ? String(entry.gid) : EMPTY_VALUE);
   }
 }
 
