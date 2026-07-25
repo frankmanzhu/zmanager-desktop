@@ -3094,6 +3094,7 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
     translator: displayContext.translator,
     tableColumnSettings: snapshot.view.tableColumns,
     selectedColumnId,
+    archivePath: snapshot.currentArchivePath,
   }));
 }
 

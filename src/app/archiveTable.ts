@@ -25,13 +25,16 @@ export type ArchiveTableColumnId =
   | "encrypted"
   | "method"
   | "crc"
-  | "block"
   | "comment"
   | "kind"
   | "ratio"
   | "solid"
   | "linkTarget"
-  | "metadataDiagnostics";
+  | "metadataDiagnostics"
+  | "uid"
+  | "gid"
+  | "owner"
+  | "group";
 
 export type ArchiveSortKey = ArchiveTableColumnId;
 
@@ -85,30 +88,81 @@ export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
   { id: "encrypted", label: "Encrypted", labelKey: "table.encrypted", width: 80, align: "center", defaultVisible: false },
   { id: "method", label: "Method", labelKey: "table.method", width: 120, align: "left", defaultVisible: false },
   { id: "crc", label: "CRC", labelKey: "table.crc", width: 90, align: "right", defaultVisible: false },
-  { id: "block", label: "Block", labelKey: "table.block", width: 70, align: "right", defaultVisible: false },
   { id: "comment", label: "Comment", labelKey: "table.comment", width: 120, align: "left", defaultVisible: false },
   { id: "kind", label: "Type", labelKey: "table.type", width: 90, align: "left", defaultVisible: false },
   { id: "ratio", label: "Ratio", labelKey: "table.ratio", width: 70, align: "right", defaultVisible: false },
-  { id: "solid", label: "Solid", labelKey: "table.solid" as any, width: 60, align: "center", defaultVisible: false },
-  { id: "linkTarget", label: "Link Target", labelKey: "table.linkTarget" as any, width: 160, align: "left", defaultVisible: false },
-  { id: "metadataDiagnostics", label: "Diagnostics", labelKey: "table.metadataDiagnostics" as any, width: 100, align: "right", defaultVisible: false },
+  { id: "solid", label: "Solid", labelKey: "table.solid", width: 60, align: "center", defaultVisible: false },
+  { id: "linkTarget", label: "Link Target", labelKey: "table.linkTarget", width: 160, align: "left", defaultVisible: false },
+  { id: "metadataDiagnostics", label: "Diagnostics", labelKey: "table.metadataDiagnostics", width: 100, align: "right", defaultVisible: false },
+  { id: "uid", label: "UID", labelKey: "table.uid", width: 70, align: "right", defaultVisible: false },
+  { id: "gid", label: "GID", labelKey: "table.gid", width: 70, align: "right", defaultVisible: false },
+  { id: "owner", label: "Owner", labelKey: "table.owner", width: 100, align: "left", defaultVisible: false },
+  { id: "group", label: "Group", labelKey: "table.group", width: 100, align: "left", defaultVisible: false },
 ];
+
+export const ARCHIVE_COLUMNS_BY_FORMAT: Record<string, ArchiveTableColumnId[]> = {
+  zip: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  jar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  war: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  ipa: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  apk: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  xpi: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
+  "7z": ["name", "size", "compressedSize", "modified", "mode", "crc", "created", "accessed", "solid", "attributes", "kind", "ratio"],
+  tzap: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "solid", "kind", "ratio", "metadataDiagnostics", "linkTarget", "created", "accessed", "attributes", "uid", "gid", "owner", "group"],
+  "tar.zst": ["name", "size", "compressedSize", "modified", "mode", "solid", "linkTarget", "uid", "gid", "owner", "group", "kind", "ratio"],
+  tzst: ["name", "size", "compressedSize", "modified", "mode", "solid", "linkTarget", "uid", "gid", "owner", "group", "kind", "ratio"],
+  "tar.gz": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  tgz: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  "tar.bz2": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  "tar.xz": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  "tar.br": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  tar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
+  aar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "created", "linkTarget", "attributes", "uid", "gid", "kind", "ratio"],
+  aea: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "created", "linkTarget", "attributes", "uid", "gid", "kind", "ratio"],
+  gz: ["name", "compressedSize", "kind"],
+  bz2: ["name", "compressedSize", "kind"],
+  xz: ["name", "compressedSize", "kind"],
+  zst: ["name", "compressedSize", "kind"],
+};
 
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
   .filter((column) => column.defaultVisible)
   .map((column) => column.id);
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS = ARCHIVE_TABLE_COLUMNS.map((column) => column.id);
 
+export const DEFAULT_AVAILABLE_COLUMN_IDS: ArchiveTableColumnId[] = [
+  "name", "size", "compressedSize", "modified", "mode",
+  "encrypted", "method", "crc", "comment", "kind", "ratio",
+  "created", "accessed", "solid", "linkTarget", "attributes",
+  "metadataDiagnostics", "uid", "gid", "owner", "group",
+];
+
+export function getAvailableColumnsForFormat(archivePath?: string): ArchiveTableColumnId[] {
+  if (!archivePath) return DEFAULT_AVAILABLE_COLUMN_IDS;
+  const suffix = getKnownArchiveSuffix(archivePath);
+  if (!suffix) return DEFAULT_AVAILABLE_COLUMN_IDS;
+  const key = suffix.toLowerCase();
+  if (key in ARCHIVE_COLUMNS_BY_FORMAT) {
+    return ARCHIVE_COLUMNS_BY_FORMAT[key];
+  }
+  for (const [fmtKey, columns] of Object.entries(ARCHIVE_COLUMNS_BY_FORMAT)) {
+    if (key.endsWith(fmtKey)) return columns;
+  }
+  return DEFAULT_AVAILABLE_COLUMN_IDS;
+}
+
 export function normalizeColumnSettings(
   settings?: Partial<ArchiveTableColumnSettings> | null,
+  archivePath?: string,
 ): ArchiveTableColumnSettings {
+  const formatAvailable = archivePath ? getAvailableColumnsForFormat(archivePath) : null;
   const availableColumns = new Map(ARCHIVE_TABLE_COLUMNS.map((column) => [column.id, column]));
-  const available = new Set(availableColumns.keys());
+  const available = formatAvailable ? new Set(formatAvailable) : new Set(availableColumns.keys());
   const incoming = settings?.visibleColumnIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS;
   const visibleColumnIds = incoming.filter((id) => available.has(id));
   const incomingOrder = settings?.columnOrderIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS;
   const orderedIds = uniqueColumnIds(incomingOrder.filter((id) => available.has(id)));
-  const missingOrderedIds = DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS.filter((id) => !orderedIds.includes(id));
+  const missingOrderedIds = DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS.filter((id) => available.has(id) && !orderedIds.includes(id));
   const columnOrderIds: ArchiveTableColumnId[] = [
     "name",
     ...orderedIds.filter((id) => id !== "name"),
@@ -146,6 +200,7 @@ export function resolvePreferredColumnSettings(
       columnOrderIds: prefs.tableColumnOrderIds,
       columnWidths: prefs.tableColumnWidths,
     },
+    archivePath,
   );
 }
 
@@ -300,8 +355,6 @@ export function formatArchiveTableValue(
       return entry.method ?? EMPTY_VALUE;
     case "crc":
       return entry.crc?.toUpperCase() ?? EMPTY_VALUE;
-    case "block":
-      return typeof entry.block === "number" ? String(entry.block) : EMPTY_VALUE;
     case "comment":
       return entry.comment ?? EMPTY_VALUE;
     case "kind":
@@ -320,6 +373,14 @@ export function formatArchiveTableValue(
       return entry.metadataDiagnostics && entry.metadataDiagnostics.length > 0
         ? String(entry.metadataDiagnostics.length)
         : EMPTY_VALUE;
+    case "uid":
+      return typeof entry.uid === "number" ? String(entry.uid) : EMPTY_VALUE;
+    case "gid":
+      return typeof entry.gid === "number" ? String(entry.gid) : EMPTY_VALUE;
+    case "owner":
+      return entry.owner ?? EMPTY_VALUE;
+    case "group":
+      return entry.group ?? EMPTY_VALUE;
   }
 }
 
@@ -407,7 +468,8 @@ export function compareArchiveRows(
   switch (sortKey) {
     case "size":
     case "compressedSize":
-    case "block":
+    case "uid":
+    case "gid":
       result = compareOptionalNumbers(leftEntry[sortKey], rightEntry[sortKey]);
       break;
     case "modified":

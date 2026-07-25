@@ -151,10 +151,13 @@ export type ArchiveEntryDto = {
   encrypted?: boolean;
   method?: string;
   crc?: string;
-  block?: number;
   comment?: string;
   solid?: boolean;
   linkTarget?: string;
+  uid?: number;
+  gid?: number;
+  owner?: string;
+  group?: string;
 };
 
 export type ArchiveListingDto = {

@@ -1,6 +1,53 @@
 # Column Support — Implementation Plan
 
-Last updated: 2026-07-25
+Last updated: 2026-07-25 (Status: **COMPLETED & VERIFIED**)
+
+## Implementation Summary & Status
+
+All 8 phases of the Column Support Matrix plan have been fully implemented, tested, and verified across all supported platforms.
+
+### Key Accomplishments
+1. **Extended Data Flow (Phase 1):** Extended `BrowserEntry` (13 new fields), `ArchiveEntryDto` (Rust & TS), added `uid`, `gid`, `owner`, and `group` column definitions, and removed the obsolete `block` column.
+2. **Format-Specific Column Wiring (Phases 2-6 & 7.5):**
+   - **ZIP / JAR / APK / IPA:** Wired `encrypted`, `method`, `crc`, `comment`, and `mode`.
+   - **7z:** Wired `modified`, `created`, `accessed`, `mode`, `crc`, `attributes`, and `solid`.
+   - **libarchive (TAR / TGZ / BZ2 / XZ / BR):** Wired `uid`, `gid`, `owner`, `group`, FFI bindings in `zmanager-libarchive-sys`, and `encrypted`.
+   - **TAR.ZST / TZST:** Wired `linkTarget`, `uid`, `gid`, `owner`, and `group`.
+   - **Apple Archive (AAR / AEA):** Extended `zmanager-apple-archive` to parse `CTM` (created), `FLG` (flags/attributes), `CKS` (crc), `UID`, `GID`, and `linkTarget`.
+   - **TZAP (zmanager-core & tzap-core):** Extended `ArchiveEntry` in `tzap-core` to parse PAX records (`LIBARCHIVE.creationtime`, `atime`), `link_target`, `attributes`, `uid`, `gid`, `owner`, and `group`.
+3. **Proportional Stream Ratio & Compressed Size:** Implemented `apply_stream_proportional_sizes()` in `archive_browser.rs` to compute proportional entry `compressedSize` and `ratio` for solid stream archives (`.tar.zst`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.br`, `.tzap`, `.aar`, `.aea`).
+4. **Solid Compression Stream Mapping:** Set `solid = Some(true)` for 7z solid archives, `.tzap`, and all compressed TAR streams (`.tar.zst`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.br`), and `solid = Some(false)` for uncompressed `.tar`.
+5. **Per-Format Column Availability UI Filtering (Phase 8):** Added `ARCHIVE_COLUMNS_BY_FORMAT` and `getAvailableColumnsForFormat()` in `archiveTable.ts`. Context menus and Preferences dialog filter column options dynamically based on the active archive format.
+
+---
+
+## Final Column × Format Support Matrix (Implemented)
+
+| Column | ZIP / JAR / APK / IPA | 7z | TZAP | TAR.ZST / TZST | libarchive (TAR / TGZ / BZ2 / XZ) | Apple Archive (AAR / AEA) | Raw Stream (gz / bz2 / xz / zst) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **name** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **size** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **compressedSize** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **modified** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **mode** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **kind** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **ratio** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **metadataDiagnostics** | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **encrypted** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **method** | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **crc** | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ |
+| **comment** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **created** | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **accessed** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **linkTarget** | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **solid** | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **attributes** | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **uid** | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **gid** | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **owner** | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **group** | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+
+---
 
 ## Overview
 

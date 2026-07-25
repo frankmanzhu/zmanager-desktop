@@ -7,6 +7,7 @@ import {
   compareOptionalDates,
   DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
   formatArchiveTableValue,
+  getAvailableColumnsForFormat,
   moveColumn,
   normalizeColumnSettings,
   resetColumnSettings,
@@ -253,5 +254,27 @@ describe("archive browser rows", () => {
 
     expect(rows.map((row) => row.path)).toEqual(["docs/readme.txt", "src/readme.txt"]);
     expect(visibleSelectedRows).toEqual([]);
+  });
+
+  it("resolves per-format available columns correctly", () => {
+    expect(getAvailableColumnsForFormat("archive.zip")).toContain("comment");
+    expect(getAvailableColumnsForFormat("archive.zip")).not.toContain("uid");
+
+    expect(getAvailableColumnsForFormat("data.tar.zst")).toContain("uid");
+    expect(getAvailableColumnsForFormat("data.tar.zst")).toContain("linkTarget");
+    expect(getAvailableColumnsForFormat("data.tar.zst")).not.toContain("comment");
+
+    expect(getAvailableColumnsForFormat("bundle.aar")).toContain("crc");
+    expect(getAvailableColumnsForFormat("bundle.aar")).toContain("linkTarget");
+    expect(getAvailableColumnsForFormat("bundle.aar")).not.toContain("comment");
+  });
+
+  it("filters visible columns in normalizeColumnSettings when archivePath is provided", () => {
+    const settings = normalizeColumnSettings(
+      { visibleColumnIds: ["name", "size", "comment", "uid"] },
+      "archive.zip",
+    );
+    expect(settings.visibleColumnIds).toEqual(["name", "size", "comment"]);
+    expect(settings.visibleColumnIds).not.toContain("uid");
   });
 });

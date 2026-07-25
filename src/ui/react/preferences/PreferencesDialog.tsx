@@ -26,7 +26,11 @@ import {
   formatVolumeSizePresetList,
   parseVolumeSizePresetList,
 } from "../../../app/volumeSizePresets";
-import { ARCHIVE_TABLE_COLUMNS } from "../../../app/archiveTable";
+import {
+  ARCHIVE_TABLE_COLUMNS,
+  DEFAULT_AVAILABLE_COLUMN_IDS,
+  getAvailableColumnsForFormat,
+} from "../../../app/archiveTable";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import {
@@ -1612,6 +1616,11 @@ function ColumnsPage({
 
   const hasLocalOverride = selectedFormat !== "default" && draft.tableColumnsByFormat[selectedFormat] !== undefined;
 
+  const availableColumns = selectedFormat === "default"
+    ? DEFAULT_AVAILABLE_COLUMN_IDS
+    : getAvailableColumnsForFormat("dummy." + selectedFormat.replace(/^\./, ""));
+  const availableSet = new Set(availableColumns);
+
   return (
     <section
       className={PREFERENCE_PAGE_CLASS}
@@ -1635,11 +1644,20 @@ function ColumnsPage({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default">Global Defaults</SelectItem>
-              <SelectItem value=".zip">ZIP</SelectItem>
-              <SelectItem value=".tar.zst">TZST</SelectItem>
-              <SelectItem value=".tar.gz">TGZ</SelectItem>
-              <SelectItem value=".tzap">TZAP</SelectItem>
-              <SelectItem value=".7z">7Z</SelectItem>
+              <SelectItem value="zip">ZIP (.zip, .jar, .war, .ipa, .apk)</SelectItem>
+              <SelectItem value="7z">7z (.7z)</SelectItem>
+              <SelectItem value="tzap">TZAP (.tzap)</SelectItem>
+              <SelectItem value="tar.zst">Tar.Zstd (.tar.zst, .tzst)</SelectItem>
+              <SelectItem value="tar.gz">Tar.Gzip (.tar.gz, .tgz)</SelectItem>
+              <SelectItem value="tar.bz2">Tar.Bzip2 (.tar.bz2)</SelectItem>
+              <SelectItem value="tar.xz">Tar.XZ (.tar.xz)</SelectItem>
+              <SelectItem value="tar.br">Tar.Brotli (.tar.br)</SelectItem>
+              <SelectItem value="tar">Tar (.tar)</SelectItem>
+              <SelectItem value="aar">Apple Archive (.aar)</SelectItem>
+              <SelectItem value="gz">Gzip (.gz)</SelectItem>
+              <SelectItem value="bz2">Bzip2 (.bz2)</SelectItem>
+              <SelectItem value="xz">XZ (.xz)</SelectItem>
+              <SelectItem value="zst">Zstd (.zst)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1661,16 +1679,18 @@ function ColumnsPage({
       </div>
 
       <div className="mt-2 grid gap-2">
-        {ARCHIVE_TABLE_COLUMNS.map((column) => (
-          <label key={column.id} className="flex items-center gap-2 text-sm font-medium">
-            <Checkbox
-              checked={currentColumns.visibleColumnIds.includes(column.id as any)}
-              disabled={column.alwaysVisible}
-              onCheckedChange={() => handleToggleColumn(column.id)}
-            />
-            {i18n.t(column.labelKey as any) || column.labelKey}
-          </label>
-        ))}
+        {ARCHIVE_TABLE_COLUMNS
+          .filter((column) => availableSet.has(column.id))
+          .map((column) => (
+            <label key={column.id} className="flex items-center gap-2 text-sm font-medium">
+              <Checkbox
+                checked={currentColumns.visibleColumnIds.includes(column.id as any)}
+                disabled={column.alwaysVisible}
+                onCheckedChange={() => handleToggleColumn(column.id)}
+              />
+              {i18n.t(column.labelKey as any) || column.labelKey}
+            </label>
+          ))}
       </div>
     </section>
   );

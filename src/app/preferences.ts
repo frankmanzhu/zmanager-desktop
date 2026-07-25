@@ -222,10 +222,16 @@ const TABLE_SORT_KEYS = [
   "encrypted",
   "method",
   "crc",
-  "block",
   "comment",
   "kind",
   "ratio",
+  "solid",
+  "linkTarget",
+  "metadataDiagnostics",
+  "uid",
+  "gid",
+  "owner",
+  "group",
 ] as const;
 
 function isOneOf<T extends readonly string[]>(values: T, value: string | null): value is T[number] {

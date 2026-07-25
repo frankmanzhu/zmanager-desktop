@@ -1,6 +1,7 @@
 import {
   ARCHIVE_TABLE_COLUMNS,
   archiveTableColumnLabel,
+  getAvailableColumnsForFormat,
   normalizeColumnSettings,
   type ArchiveTableColumnId,
   type ArchiveTableColumnSettings,
@@ -114,6 +115,7 @@ export type ArchiveHeaderContextMenuInput = Readonly<{
   translator: Translator;
   tableColumnSettings: ArchiveTableColumnSettings;
   selectedColumnId?: ArchiveTableColumnId;
+  archivePath?: string;
 }>;
 
 export type CompressRowContextMenuInput = Readonly<{
@@ -217,12 +219,16 @@ export function buildArchiveEntryContextMenuItems(input: ArchiveEntryContextMenu
 }
 
 export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMenuInput): ContextMenuItem[] {
-  const selectedColumn = ARCHIVE_TABLE_COLUMNS.find((column) => column.id === input.selectedColumnId);
-  const normalizedSettings = normalizeColumnSettings(input.tableColumnSettings);
+  const availableColumns = getAvailableColumnsForFormat(input.archivePath);
+  const availableSet = new Set(availableColumns);
+  const selectedColumn = availableSet.has(input.selectedColumnId as any)
+    ? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === input.selectedColumnId)
+    : undefined;
+  const normalizedSettings = normalizeColumnSettings(input.tableColumnSettings, input.archivePath);
   const visibleColumnOrder = normalizedSettings.columnOrderIds.filter((id) =>
     normalizedSettings.visibleColumnIds.includes(id),
   );
-  const selectedColumnIndex = input.selectedColumnId
+  const selectedColumnIndex = selectedColumn && input.selectedColumnId
     ? visibleColumnOrder.indexOf(input.selectedColumnId)
     : -1;
   const items: ContextMenuItem[] = [];
@@ -273,16 +279,18 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
     actionItem(input.translator.t("command.resetColumns"), { action: "reset-columns" }),
     separatorItem(),
     captionItem(input.translator.t("command.chooseColumns")),
-    ...ARCHIVE_TABLE_COLUMNS.map((column) => {
-      const isNameColumn = column.id === "name";
-      return checkboxItem(archiveTableColumnLabel(column, input.translator), {
-        action: "toggle-column",
-        columnId: column.id,
-      }, {
-        checked: isNameColumn || normalizedSettings.visibleColumnIds.includes(column.id),
-        disabled: isNameColumn,
-      });
-    }),
+    ...ARCHIVE_TABLE_COLUMNS
+      .filter((column) => availableSet.has(column.id))
+      .map((column) => {
+        const isNameColumn = column.id === "name";
+        return checkboxItem(archiveTableColumnLabel(column, input.translator), {
+          action: "toggle-column",
+          columnId: column.id,
+        }, {
+          checked: isNameColumn || normalizedSettings.visibleColumnIds.includes(column.id),
+          disabled: isNameColumn,
+        });
+      }),
   );
 
   return items;

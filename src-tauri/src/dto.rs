@@ -124,6 +124,19 @@ pub struct ArchiveEntryDto {
     pub modified: Option<String>,
     pub mode: Option<u32>,
     pub metadata_diagnostics: Vec<String>,
+    pub encrypted: Option<bool>,
+    pub method: Option<String>,
+    pub crc: Option<String>,
+    pub comment: Option<String>,
+    pub created: Option<String>,
+    pub accessed: Option<String>,
+    pub solid: Option<bool>,
+    pub link_target: Option<String>,
+    pub attributes: Option<String>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

@@ -632,6 +632,19 @@ fn ensure_ancestors(
                     modified: None,
                     mode: None,
                     metadata_diagnostics: Vec::new(),
+                    encrypted: None,
+                    method: None,
+                    crc: None,
+                    comment: None,
+                    created: None,
+                    accessed: None,
+                    solid: None,
+                    link_target: None,
+                    attributes: None,
+                    uid: None,
+                    gid: None,
+                    owner: None,
+                    group: None,
                 });
         }
         parent = current;
@@ -647,6 +660,19 @@ fn browser_entry_to_dto(entry: BrowserEntry, path: String) -> ArchiveEntryDto {
         modified: entry.modified,
         mode: entry.mode,
         metadata_diagnostics: entry.metadata_diagnostics,
+        encrypted: entry.encrypted,
+        method: entry.method,
+        crc: entry.crc.map(|c| format!("{:08X}", c)),
+        comment: entry.comment,
+        created: entry.created,
+        accessed: entry.accessed,
+        solid: entry.solid,
+        link_target: entry.link_target,
+        attributes: entry.attributes,
+        uid: entry.uid,
+        gid: entry.gid,
+        owner: entry.owner,
+        group: entry.group,
     }
 }
 
@@ -858,6 +884,19 @@ mod tests {
             modified: None,
             mode: None,
             metadata_diagnostics: Vec::new(),
+            encrypted: None,
+            method: None,
+            crc: None,
+            comment: None,
+            created: None,
+            accessed: None,
+            solid: None,
+            link_target: None,
+            attributes: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
         }
     }
 
