@@ -103,7 +103,6 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
       parentPath,
       ...(cursor ? { cursor } : {}),
       limit: VISIBLE_PAGE_LIMIT,
-      expectedRevision: session.revision,
       sortKey: sort.key,
       sortAscending: sort.ascending,
     }) : options.searchArchiveIndex({
@@ -111,7 +110,6 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
       query,
       ...(cursor ? { cursor } : {}),
       limit: VISIBLE_PAGE_LIMIT,
-      expectedRevision: session.revision,
       sortKey: sort.key,
       sortAscending: sort.ascending,
     }));
@@ -271,7 +269,6 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
           parentPath,
           ...(cursor ? { cursor } : {}),
           limit: VISIBLE_PAGE_LIMIT,
-          expectedRevision: session.revision,
         });
         if (expectedGeneration !== generation || active?.sessionId !== page.sessionId) return;
         options.renderPage(options.workspace.acceptTreePage(page.entries));
