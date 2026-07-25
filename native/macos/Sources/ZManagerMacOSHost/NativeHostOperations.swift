@@ -21,14 +21,46 @@ private final class OperationResult: @unchecked Sendable {
 }
 
 private func pngDataURL(for path: String, isDirectory: Bool) -> String? {
-    let lookupPath = path.isEmpty && isDirectory ? "/" : path
-    guard !lookupPath.isEmpty else { return nil }
-    let image = NSWorkspace.shared.icon(forFile: lookupPath)
-    image.size = NSSize(width: 32, height: 32)
-    guard let tiff = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiff),
-          let png = bitmap.representation(using: .png, properties: [:])
-    else { return nil }
+    let icon: NSImage
+    if isDirectory {
+        icon = NSWorkspace.shared.icon(for: .folder)
+    } else {
+        guard !path.isEmpty else { return nil }
+        // The frontend sends the extension with a leading dot (e.g. ".pdf").
+        // NSString.pathExtension is empty for such paths, so strip the dot.
+        let ext: String
+        if path.hasPrefix(".") {
+            ext = String(path.dropFirst())
+        } else {
+            ext = (path as NSString).pathExtension
+        }
+        if !ext.isEmpty, let type = UTType(filenameExtension: ext.lowercased()) {
+            icon = NSWorkspace.shared.icon(for: type)
+        } else {
+            icon = NSWorkspace.shared.icon(for: .data)
+        }
+    }
+    let size = NSSize(width: 32, height: 32)
+    guard let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil,
+        pixelsWide: Int(size.width),
+        pixelsHigh: Int(size.height),
+        bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bytesPerRow: 0,
+        bitsPerPixel: 0
+    ) else { return nil }
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    icon.draw(in: NSRect(origin: .zero, size: size),
+              from: .zero,
+              operation: .sourceOver,
+              fraction: 1.0)
+    NSGraphicsContext.restoreGraphicsState()
+    guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
     return "data:image/png;base64,\(png.base64EncodedString())"
 }
 

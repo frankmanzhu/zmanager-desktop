@@ -877,7 +877,7 @@ function navigateStateToFolder(
   folderPath: string,
   options: { pushHistory: boolean; clearSearch: boolean },
 ): MutableArchiveWorkspaceState {
-  const nextFolder = normalizeExistingFolderPath(state.entries, folderPath);
+  const nextFolder = resolveFolderForNavigation(state, folderPath);
   if (nextFolder === state.view.currentFolder) {
     return state;
   }
@@ -1038,7 +1038,23 @@ function normalizeExistingFolderPath(
   folderPath: string | null | undefined,
 ): string {
   const normalized = normalizeArchivePath(folderPath);
+  if (!normalized) return "";
   return archiveFolderExists(entries, normalized) ? normalized : "";
+}
+
+function resolveFolderForNavigation(
+  state: MutableArchiveWorkspaceState,
+  folderPath: string | null | undefined,
+): string {
+  const normalized = normalizeArchivePath(folderPath);
+  if (!normalized) return "";
+  // Check both current page entries (immediate children) and treeEntries
+  // (all loaded directories). Sibling folders may only be in treeEntries
+  // after navigating away from the parent.
+  return archiveFolderExists(state.entries, normalized) ||
+    archiveFolderExists(state.treeEntries, normalized)
+    ? normalized
+    : "";
 }
 
 function expandedFolderAndAncestors(

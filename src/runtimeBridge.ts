@@ -1,3 +1,5 @@
-
-const runtime = await import("./runtime/zmanagerRuntimeAdapter");
-export const getZManagerRuntimeAdapter = runtime.getZManagerRuntimeAdapter;
+const runtimePromise = import("./runtime/zmanagerRuntimeAdapter");
+export async function getZManagerRuntimeAdapter() {
+  const runtime = await runtimePromise;
+  return runtime.getZManagerRuntimeAdapter;
+}

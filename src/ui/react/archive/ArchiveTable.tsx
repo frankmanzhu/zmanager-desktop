@@ -652,22 +652,21 @@ function NameCell({ row }: Readonly<{ row: ArchiveTableRow }>) {
     <>
       <span className="flex min-w-0 items-center gap-2" data-row-primary>
         <span
-          className={`flex size-[18px] shrink-0 items-center justify-center ${descriptor.kind === "folder" ? "text-amber-600" : descriptor.kind === "archive" ? "text-blue-600" : "text-slate-500"}`}
+          className={`relative flex size-[18px] shrink-0 items-center justify-center ${descriptor.kind === "folder" ? "text-amber-600" : descriptor.kind === "archive" ? "text-blue-600" : "text-slate-500"}`}
           data-row-icon
           title={descriptor.label}
           aria-hidden="true"
           draggable={false}
         >
+          <Icon className="size-4" aria-hidden="true" />
           {iconDataUrl ? (
             <img
-              className="size-[18px] object-contain"
+              className="absolute inset-0 size-[18px] object-contain"
               src={iconDataUrl}
               alt=""
               draggable={false}
             />
-          ) : (
-            <Icon className="size-4" aria-hidden="true" />
-          )}
+          ) : null}
         </span>
         <span className="sr-only">{descriptor.label}:</span>
         <span className="min-w-0 truncate" data-row-name>

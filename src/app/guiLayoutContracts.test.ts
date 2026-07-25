@@ -609,7 +609,7 @@ describe("GUI layout contracts", () => {
     expect(existsSync(join(process.cwd(), "src", "styles.css"))).toBe(false);
 
     expect(runtimeBridgeSource).toContain(
-      "export const getZManagerRuntimeAdapter",
+      "export async function getZManagerRuntimeAdapter",
     );
     expect(runtimeBridgeSource).not.toContain("createCommandRouter");
     expect(runtimeBridgeSource).not.toContain("createArchiveWorkspace");

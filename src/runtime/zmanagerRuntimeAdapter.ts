@@ -2912,6 +2912,14 @@ function navigateToFolder(folderPath: string) {
   }
 
   publishArchiveSnapshot(snapshot);
+
+  const beforeExpanded = new Set(before.expandedTreeFolders);
+  for (const folder of snapshot.view.expandedTreeFolders) {
+    if (!beforeExpanded.has(folder)) {
+      void archiveLoadController.loadTreeFolder(folder);
+    }
+  }
+
   void archiveLoadController.loadFolder(snapshot.view.currentFolder);
 }
 

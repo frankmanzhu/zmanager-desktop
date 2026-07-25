@@ -64,12 +64,21 @@ export function ArchiveTree() {
                 data-tree-path={folder.path}
                 aria-selected={folder.isActive}
                 key={folder.path || "__root__"}
-                onClick={() =>
+                onClick={(event) => {
+                  // WKWebView may not honour stopPropagation; skip if
+                  // the click landed on the inner toggle span.
+                  if (
+                    (event.target as HTMLElement).closest(
+                      "[data-tree-toggle]",
+                    )
+                  ) {
+                    return;
+                  }
                   actions.handleArchiveIntent({
                     type: "navigateToFolder",
                     folderPath: folder.path,
-                  })
-                }
+                  });
+                }}
               >
                 {folder.canToggle ? (
                   <span
@@ -95,20 +104,19 @@ export function ArchiveTree() {
                   <span className="size-5 shrink-0" aria-hidden="true" />
                 )}
                 <span
-                  className={`flex size-4 shrink-0 items-center justify-center ${iconKind === "archive" ? "text-blue-600" : "text-amber-600"}`}
+                  className={`relative flex size-4 shrink-0 items-center justify-center ${iconKind === "archive" ? "text-blue-600" : "text-amber-600"}`}
                   aria-hidden="true"
                   draggable={false}
                 >
+                  <Icon className="size-4" aria-hidden="true" />
                   {iconDataUrl ? (
                     <img
-                      className="size-4 object-contain"
+                      className="absolute inset-0 size-4 object-contain"
                       src={iconDataUrl}
                       alt=""
                       draggable={false}
                     />
-                  ) : (
-                    <Icon className="size-4" aria-hidden="true" />
-                  )}
+                  ) : null}
                 </span>
                 <span className="min-w-0 truncate">{folder.label}</span>
               </button>

@@ -32,7 +32,7 @@ import { AccountWorkspace } from "./account/AccountWorkspace";
 type RuntimeBridgeState = "loading" | "ready" | "failed";
 
 type RuntimeBridgeModule = {
-  getZManagerRuntimeAdapter?: () => ZManagerReactRuntimeAdapter;
+  getZManagerRuntimeAdapter?: () => Promise<() => ZManagerReactRuntimeAdapter>;
 };
 
 export function AppShell() {
@@ -46,12 +46,13 @@ export function AppShell() {
     let unsubscribeRuntimeBridge: (() => void) | null = null;
 
     import("../../runtimeBridge")
-      .then((runtimeModule: RuntimeBridgeModule) => {
+      .then(async (runtimeModule: RuntimeBridgeModule) => {
         if (!cancelled) {
-          const runtime = runtimeModule.getZManagerRuntimeAdapter?.();
-          if (!runtime) {
+          const getAdapter = await runtimeModule.getZManagerRuntimeAdapter?.();
+          if (!getAdapter) {
             throw new Error("ZManager React runtime adapter is unavailable");
           }
+          const runtime = getAdapter();
 
           store.setActions(runtime.actions);
           store.publish(runtime.getSnapshot());
