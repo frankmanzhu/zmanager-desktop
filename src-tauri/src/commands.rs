@@ -41,7 +41,6 @@ use crate::{
     native_launch_inbox::NativeLaunchInbox,
     quick_action::QuickActionLaunchCoordinator,
 };
-use zmanager_core::apple_archive_backend::AppleArchiveError;
 use zmanager_core::archive_browser::{
     self, ArchiveBrowserError, BrowserExtractOptions, BrowserListOptions,
 };
@@ -1732,7 +1731,10 @@ pub(crate) fn map_archive_browser_error(error: ArchiveBrowserError) -> CommandEr
         ArchiveBrowserError::TarZst(source) => map_tar_zst_error(source),
         ArchiveBrowserError::SevenZ(source) => map_7z_error(source),
         ArchiveBrowserError::Tzap(source) => map_tzap_error(source),
-        ArchiveBrowserError::AppleArchive(source) => map_apple_archive_error(source),
+        #[cfg(target_os = "macos")]
+        ArchiveBrowserError::AppleArchive(source) => {
+            crate::platform::apple_archive::map_apple_archive_error(source)
+        }
         ArchiveBrowserError::Libarchive(source) => map_libarchive_error(source),
         ArchiveBrowserError::RawStream(source) => map_raw_stream_error(source),
         ArchiveBrowserError::Io { path, source } => {
@@ -1875,41 +1877,6 @@ fn map_tzap_error(error: TzapError) -> CommandErrorDto {
             "This TZAP archive requires a recipient private key.".to_string(),
         ),
         TzapError::Cancelled => CommandErrorDto::cancelled("TZAP job was cancelled."),
-    }
-}
-
-fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
-    match error {
-        AppleArchiveError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("AppleArchive plan error: {source}"))
-        }
-        AppleArchiveError::Native(source) => {
-            CommandErrorDto::operation_failed(format!("AppleArchive native error: {source}"))
-        }
-        AppleArchiveError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        AppleArchiveError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        AppleArchiveError::MissingLinkTarget { path } => CommandErrorDto::unsupported_format(
-            format!("AppleArchive link entry has no target: {path}"),
-        ),
-        AppleArchiveError::MissingFileData { path } => CommandErrorDto::unsupported_format(
-            format!("AppleArchive file entry has no data blob: {path}"),
-        ),
-        AppleArchiveError::EntryNotFound { path } => CommandErrorDto::not_found(
-            format!("archive entry not found: {path}"),
-            Some("Open a different archive or confirm the selected entry path.".to_string()),
-        ),
-        AppleArchiveError::StdoutSelectionNotSingleFile { selected_files } => {
-            CommandErrorDto::unsupported_format(format!(
-                "AppleArchive stdout extraction requires exactly one selected regular file; selected {selected_files}"
-            ))
-        }
-        AppleArchiveError::Cancelled => {
-            CommandErrorDto::cancelled("AppleArchive job was cancelled.")
-        }
     }
 }
 
@@ -2308,8 +2275,7 @@ fn stream_native_drag_entry(
                 |name| archive_entry_key(name) == archive_entry_key(entry_path),
                 &mut writer,
                 password,
-            )
-            .map_err(map_apple_archive_error)?;
+            )?;
             one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
         }
         ArchiveFamily::Rar | ArchiveFamily::Archive => {
