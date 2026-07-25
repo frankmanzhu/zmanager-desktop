@@ -90,6 +90,7 @@ pub(crate) fn extract_apple_archive(
     archive_path: &str,
     destination_path: &str,
     policy: ExtractionPolicy,
+    password: Option<&str>,
     token: &CancellationToken,
     sink: &mut dyn zmanager_core::jobs::JobEventSink,
 ) -> Result<JobTerminalSummaryDto, CommandErrorDto> {
@@ -98,6 +99,7 @@ pub(crate) fn extract_apple_archive(
         archive_path,
         destination_path,
         policy,
+        password,
         &mut context,
     )
     .map(|report| JobTerminalSummaryDto {
@@ -150,11 +152,13 @@ pub(crate) fn copy_apple_archive_files_to_writer<W: std::io::Write>(
     archive_path: &Path,
     selected: impl FnMut(&str) -> bool,
     output: &mut W,
+    password: Option<&str>,
 ) -> Result<AppleArchiveExtractReport, AppleArchiveError> {
     zmanager_core::apple_archive_backend::copy_apple_archive_files_to_writer(
         archive_path,
         selected,
         output,
+        password,
     )
 }
 
@@ -182,6 +186,7 @@ pub(crate) fn extract_apple_archive(
     _archive_path: &str,
     _destination_path: &str,
     _policy: ExtractionPolicy,
+    _password: Option<&str>,
     _token: &CancellationToken,
     _sink: &mut dyn zmanager_core::jobs::JobEventSink,
 ) -> Result<JobTerminalSummaryDto, CommandErrorDto> {
@@ -195,6 +200,7 @@ pub(crate) fn copy_apple_archive_files_to_writer<W: std::io::Write>(
     _archive_path: &Path,
     _selected: impl FnMut(&str) -> bool,
     _output: &mut W,
+    _password: Option<&str>,
 ) -> Result<AppleArchiveExtractReport, AppleArchiveError> {
     // This code path is unreachable on non-macOS: browsing/extraction always fails
     // before any drag-stream operation can begin (ArchiveReader::open returns

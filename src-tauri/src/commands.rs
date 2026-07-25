@@ -1068,6 +1068,7 @@ fn start_extract_internal_with_spawner(
                         &archive_path,
                         &destination_path,
                         policy,
+                        password.as_deref(),
                         &token,
                         &mut sink,
                     )
@@ -2293,6 +2294,7 @@ fn stream_native_drag_entry(
                 archive_path,
                 |name| archive_entry_key(name) == archive_entry_key(entry_path),
                 &mut writer,
+                password,
             )
             .map_err(map_apple_archive_error)?;
             one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
