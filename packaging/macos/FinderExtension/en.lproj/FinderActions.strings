@@ -6,6 +6,7 @@
 "shellAction.compressSevenZ" = "Add to .7z";
 "shellAction.compressTarZst" = "Add to .tzst";
 "shellAction.compressTarGz" = "Add to .tgz";
+"shellAction.compressAppleArchive" = "Add to .aar";
 "shellAction.compressCleanSource" = "Compress and remove source";
 "shellAction.extractHere" = "Extract Here";
 "shellAction.extractToFolder" = "Extract to Archive Folder";

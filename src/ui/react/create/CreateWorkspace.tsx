@@ -22,9 +22,10 @@ import {
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import {
   sourcePathForCreatePlanRow,
+  withCreateArchiveExtension,
   type CreatePlanRow,
 } from "../../../app/createFlow";
-import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
+import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
 import { HelpTooltip } from "../../components/ui/tooltip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
@@ -79,6 +80,15 @@ type CompressSourceColumnId = (typeof COMPRESS_SOURCE_COLUMN_IDS)[number];
 
 const useBrowserLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+const FORMAT_LABELS: Record<string, string> = {
+  zip: "ZIP",
+  tarZst: "TZST",
+  tarGz: "TGZ",
+  tzap: "TZAP",
+  sevenZ: "7Z",
+  appleArchive: "AAR",
+};
 
 const ADVANCED_FIELD_CLASS =
   "grid !grid-cols-1 !items-stretch !gap-1.5 text-[11px] font-semibold leading-4 text-slate-600 dark:text-slate-300 [&>input]:!h-9 [&>input]:!min-h-9 [&>input]:!w-full [&>input]:!text-xs [&>input]:font-normal [&>select]:!h-9 [&>select]:!min-h-9 [&>select]:!w-full [&>select]:!text-xs [&>select]:font-normal";
@@ -871,6 +881,23 @@ function CreateOptions() {
   } = useCreatePasswordState();
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
+
+  // Sync .aar ↔ .aea extension when format or password changes for Apple Archive
+  useEffect(() => {
+    if (options.format !== "appleArchive") return;
+    const desiredPath = withCreateArchiveExtension(
+      options.destinationPath,
+      "appleArchive",
+      Boolean(password),
+    );
+    if (desiredPath !== options.destinationPath) {
+      actions.handleCreateIntent({
+        type: "setOptions",
+        patch: { destinationPath: desiredPath },
+      });
+    }
+  }, [options.format, password]);
+
   const capabilities = createFormatCapabilities(options.format);
   const volumeSizeChoices =
     options.volumeSize !== null &&
@@ -945,11 +972,11 @@ function CreateOptions() {
                 })
               }
             >
-              <option value="zip">ZIP</option>
-              <option value="tarZst">TZST</option>
-              <option value="tarGz">TGZ</option>
-              <option value="tzap">TZAP</option>
-              <option value="sevenZ">7Z</option>
+              {supportedCreateFormats(snapshot.runtime.isMacOs).map((format) => (
+                <option key={format} value={format}>
+                  {FORMAT_LABELS[format] ?? format}
+                </option>
+              ))}
             </select>
           </label>
           <label className="!grid-cols-1 !items-stretch !gap-1.5">

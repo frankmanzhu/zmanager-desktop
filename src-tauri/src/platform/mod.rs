@@ -7,6 +7,8 @@ mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 
+pub(crate) mod apple_archive;
+
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod staged_file_drag;
 

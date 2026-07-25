@@ -9,6 +9,7 @@ export const SHELL_ACTION_IDS = [
   "compressSevenZ",
   "compressTarZst",
   "compressTarGz",
+  "compressAppleArchive",
   "compressCleanSource",
   "extractHere",
   "extractToFolder"
@@ -271,6 +272,38 @@ export const SHELL_ACTION_POLICIES = [
       "compress-tar-gz",
       "add-to-tar-gz",
       "add-to-tgz"
+    ],
+    "windowDisposition": "disposableTask"
+  },
+  {
+    "id": "compressAppleArchive",
+    "canonicalLabel": "Add to .aar",
+    "displayKey": "shellAction.compressAppleArchive",
+    "nativeVerb": "AddToAar",
+    "order": 77,
+    "contextMenuOrder": 95,
+    "contextMenuContexts": [
+      "archiveSingle",
+      "archiveMultiple",
+      "creation",
+      "container"
+    ],
+    "selectionShapes": [
+      "single-archive",
+      "multiple-archives",
+      "files",
+      "folders",
+      "mixed"
+    ],
+    "multiplicity": "one-or-more",
+    "nativeSurfaces": [
+      "macosFinder"
+    ],
+    "compatibilityAliases": [
+      "compress-aar",
+      "compress-apple-archive",
+      "add-to-aar",
+      "add-to-apple-archive"
     ],
     "windowDisposition": "disposableTask"
   },

@@ -183,6 +183,16 @@ describe("context menu model", () => {
       { action: "clear-sources" },
     ]);
   });
+
+  it("keeps the in-app context menu free of macOS-only shell action identifiers", () => {
+    // OS-level context menu actions (like compressAppleArchive) are generated
+    // from the shell-actions manifest and handled by platform-specific packaging.
+    // They must never leak into the in-app context menu action set.
+    const macOsOnlyActions = ["compressAppleArchive", "AddToAar", "compress-aar"];
+    for (const action of macOsOnlyActions) {
+      expect(CONTEXT_MENU_ACTIONS as readonly string[]).not.toContain(action);
+    }
+  });
 });
 
 function actionItems(items: readonly ContextMenuItem[]): ContextMenuActionItem[] {

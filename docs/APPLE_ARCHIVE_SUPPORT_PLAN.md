@@ -71,10 +71,11 @@ Stage 0 (reconcile audit)
     → Stage 5 (quick actions, context menus)
       → Stage 6 (Rust backend)
         → Stage 7 (verify generated contracts)
-          → Stage 8 (final verification)
+          → Stage 8 (column support — browsing must work first)
+            → Stage 9 (final verification)
 ```
 
-**Key**: Stages 2 and 3 are parallel — both only need Stage 1. Contract regeneration runs as the LAST step of Stage 1, so all generated types (`compressAppleArchive` in `GeneratedShellActionKind`) are available for Stages 2–5.
+**Key**: Stages 2 and 3 are parallel — both only need Stage 1. Contract regeneration runs as the LAST step of Stage 1, so all generated types (`compressAppleArchive` in `GeneratedShellActionKind`) are available for Stages 2–5. Stage 8 column work requires the Stage 6 Rust backend to have working archive browsing first.
 
 ---
 
@@ -895,7 +896,111 @@ Stage 0 (reconcile audit)
 
 ---
 
-## Stage 8: Final Verification & Testing
+## Stage 8: Apple Archive Column Support (Table View)
+
+**Goal:** Once Apple Archive browsing is wired (Stage 6), enhance the table columns
+to show all available per-entry metadata from the format.
+
+**Reference:** `docs/IMPROVE_COLUMN_SUPPORT_MATRIX_IMPLEMNTATION_PLAN.md` — the
+master column implementation plan. Apple Archive column tasks are Phase 5B of that
+plan and are **zmanager-core only** (no upstream changes needed).
+
+### Verified Apple Archive field keys (from `aa` tool + SDK headers)
+
+Apple's native `aa archive` command writes **11 field keys by default**. Every entry
+header in an `.aar`/`.aea` file can carry any combination of these keys. The
+field key set is controlled by `-include-field` / `-exclude-field` flags.
+
+| Key | Type | Default? | Our `EntryMetadata` | Column |
+|---|---|---|---|---|
+| TYP | uint | Always | ✅ (via `kind()`) | kind |
+| PAT | string | Always | ✅ (via `path()`) | name |
+| LNK | string | For symlinks | ✅ (via `link_target()`) | linkTarget |
+| SIZ | uint | Opt-in (`-include-field siz`) | ✅ (via `size()`) | size |
+| MOD | uint | **Always** | ✅ | mode |
+| UID | uint | **Always** | ❌ not read | uid |
+| GID | uint | **Always** | ❌ not read | gid |
+| MTM | timespec | **Always** | ✅ | modified |
+| CTM | timespec | **Always** | **❌ not read** | **created** |
+| FLG | uint | **Always** | **❌ not read** | **attributes** |
+| CKS | uint | Opt-in (`-include-field cks`) | **❌ not read** | **crc** |
+| DAT | blob | For files | ✅ (internal) | — |
+| DEV | uint | For devices | ❌ not read | — |
+| XAT | blob | **Always** | ❌ not read | — (binary key-value blobs) |
+| SH1/SH2/SH3/SH5 | blob | Opt-in | ❌ not read | — (too heavy for listing) |
+| BTM | timespec | Opt-in | ❌ not read | — (backup time) |
+| ACL | blob | Opt-in | ❌ not read | — (access control list) |
+
+**Key findings from real archive inspection:**
+
+- **CTM (creation time)** is **always written by default** by `aa archive`.
+  There is NO access time (ATM) field — Apple deliberately excludes atime.
+- **FLG (BSD/macOS file flags)** is always written — maps to `attributes` column.
+- **CKS (CRC32)** is opt-in, but trivially available if the archive includes it.
+- **XAT (extended attributes)** is always written but stores binary key-value
+  blobs (quarantine flags, Finder info, resource forks) — not suitable for a
+  single table cell value. Skip for columns.
+
+### Apple Archive column availability (after Phase 5B)
+
+| Column | Status | Notes |
+|---|---|---|
+| name | ✅ | PAT — always present |
+| size | ✅ | SIZ — opt-in; reads `data_size()` as fallback |
+| modified | ✅ | MTM — timespec, sub-second precision, always present |
+| mode | 🔧 | MOD — always present, `EntryMetadata.mode`, not wired |
+| encrypted | 🔧 | Archive-level: `.aea` path or native stream check |
+| method | 🔧 | Archive-level: `CompressionAlgorithm` enum |
+| crc | 🔧 | CKS — opt-in 32-bit POSIX CRC, not wired |
+| created | 🔧 | CTM — **always present**, timespec, not wired |
+| attributes | 🔧 | FLG — **always present**, BSD flags uint, not wired |
+| linkTarget | 🔧 | LNK — present for symlinks, `Entry.link_target()`, not wired |
+| uid | 🔧 | UID — **always present**, uint, not wired |
+| gid | 🔧 | GID — **always present**, uint, not wired |
+| kind | ✅ | TYP — always present |
+| compressedSize | ❌ | Not exposed |
+| accessed | ❌ | **No ATM field in Apple Archive format** |
+| owner | ❌ | No user name field (numeric UID only) |
+| group | ❌ | No group name field (numeric GID only) |
+
+### Implementation tasks (Phase 5B of column plan)
+
+**Step 1 — Extend `EntryMetadata`** (`zmanager-apple-archive/src/lib.rs`):
+```rust
+pub struct EntryMetadata {
+    pub mode: Option<u32>,
+    pub modified: Option<SystemTime>,
+    pub created: Option<SystemTime>,   // CTM field
+    pub flags: Option<u32>,            // FLG field
+    pub crc: Option<u32>,              // CKS field
+    pub uid: Option<u32>,              // UID field
+    pub gid: Option<u32>,              // GID field
+}
+```
+
+**Step 2 — Read in `Header::to_entry()`** (same file):
+Add `timespec_for_key(b"CTM")`, `uint_for_key(b"FLG")`, `uint_for_key(b"CKS")`,
+`uint_for_key(b"UID")`, `uint_for_key(b"GID")`.
+
+**Step 3 — Thread through `AppleArchiveListEntry`** (`apple_archive_backend.rs`):
+Add `mode`, `created`, `flags`, `crc`, `uid`, `gid`, `link_target` fields.
+
+**Step 4 — Thread through `BrowserEntry`** (`archive_browser.rs`):
+Map new fields + `encrypted` (from path) + `method` (from compression algo).
+
+**Effort:** ~35 lines across 3 crates.
+
+### Per-format column filtering
+
+Once wired, Apple Archive's format keys (`aar` and `aea`) show:
+```
+aar: ["name","size","modified","mode","encrypted","method","crc","created","linkTarget","attributes","uid","gid","kind"]
+aea: ["name","size","modified","mode","encrypted","method","crc","created","linkTarget","attributes","uid","gid","kind"]
+```
+
+---
+
+## Stage 9: Final Verification & Testing
 
 **Goal:** Prove all changes are correct via automated and manual testing.
 
@@ -936,7 +1041,7 @@ Stage 0 (reconcile audit)
 
 ### Cross-Platform Verification (Windows/Linux)
 
-8. On a non-macOS build:
+9. On a non-macOS build:
    - Apple Archive does NOT appear in Create Workspace format dropdown.
    - Apple Archive does NOT appear in Preferences default format dropdown.
    - Context menus do NOT include "Add to .aar".

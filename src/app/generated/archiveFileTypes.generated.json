@@ -1,6 +1,8 @@
 {
   "singleExtensions": [
     "7z",
+    "aar",
+    "aea",
     "apk",
     "appx",
     "br",
@@ -332,6 +334,20 @@
       "mimeType": null,
       "mimeAliases": [],
       "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "appleArchive",
+      "primaryExtensions": [
+        "aar",
+        "aea"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/x-apple-archive",
+      "mimeAliases": [],
+      "windows": false,
       "linux": false,
       "macos": true
     }

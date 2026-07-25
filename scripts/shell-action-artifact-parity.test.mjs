@@ -51,6 +51,7 @@ test("canonical context matrices have one stable generated order", () => {
     "compressSevenZ",
     "compressTarZst",
     "compressTarGz",
+    "compressAppleArchive",
   ]);
   assert.deepEqual(ordered("archiveMultiple"), [
     "extractHere",
@@ -60,6 +61,7 @@ test("canonical context matrices have one stable generated order", () => {
     "compressSevenZ",
     "compressTarZst",
     "compressTarGz",
+    "compressAppleArchive",
   ]);
   assert.deepEqual(ordered("creation"), [
     "compress",
@@ -68,6 +70,7 @@ test("canonical context matrices have one stable generated order", () => {
     "compressSevenZ",
     "compressTarZst",
     "compressTarGz",
+    "compressAppleArchive",
   ]);
   assert.deepEqual(ordered("container"), ordered("creation"));
 });

@@ -153,4 +153,12 @@ describe("Linux context menu packaging", () => {
         .toBe("../packaging/linux/nautilus/zmanager_nautilus.py");
     }
   });
+
+  it("does not include macOS-only compressAppleArchive action", () => {
+    const file = readWorkspaceFile("packaging", "linux", "zmanager-desktop.desktop");
+    expect(listedActions(file)).not.toContain("AddToAar");
+    expect(file).not.toContain("compressAppleArchive");
+    expect(file).not.toContain("compress-aar");
+    expect(file).not.toContain("add-to-aar");
+  });
 });

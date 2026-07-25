@@ -933,8 +933,11 @@ const startupController = createStartupController({
       const hasNativeMenu = state.contract.platformIntegration.capabilities.some(
         c => c.id === "nativeApplicationMenu" && c.availability === "available"
       );
+      const isMacOs = state.contract.platformIntegration.capabilities.some(
+        c => c.id === "nativeHostLifecycle" && c.availability === "available"
+      );
       browserDocument.setNativeMenuBar(hasNativeMenu);
-      browserDocument.setMacOsOverlayTitleBar(state.contract.platformIntegration.platform === "macos");
+      browserDocument.setMacOsOverlayTitleBar(isMacOs);
     }
     
     if (isDesktopRuntime()) {
@@ -1980,6 +1983,14 @@ function runRoutedCommand(commandId: CommandId, payload: CommandRouterPayload = 
   commandRouter.run(commandId, { ...commandPayload(commandId), ...payload });
 }
 
+function isMacOsFromContract(): boolean {
+  return (
+    latestContract?.platformIntegration.capabilities.some(
+      (c) => c.id === "nativeHostLifecycle" && c.availability === "available",
+    ) ?? false
+  );
+}
+
 function createCurrentReactSnapshot(): ZManagerReactSnapshot {
   const archive = archiveWorkspace.getSnapshot();
   const nowMs = Date.now();
@@ -2009,7 +2020,10 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
       secondaryCommandIds: commandIdsWithClass(commandClassState, "secondary"),
     },
     contextMenu: contextMenuRuntime.getSnapshot(),
-    runtime: { isDesktop: isDesktopRuntime() },
+    runtime: {
+      isDesktop: isDesktopRuntime(),
+      isMacOs: isMacOsFromContract(),
+    },
     dialog: reactDialogSnapshot,
   });
 }

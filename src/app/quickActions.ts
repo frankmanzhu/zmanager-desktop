@@ -223,6 +223,13 @@ export async function runQuickActionRequest(
         createDefaultsForFormat(preferences, "tarGz").cleanSource,
       );
       break;
+    case "compressAppleArchive":
+      await handlers.startCreate(
+        request.paths,
+        "appleArchive",
+        createDefaultsForFormat(preferences, "appleArchive").cleanSource,
+      );
+      break;
     case "compressCleanSource":
       await handlers.startCreate(request.paths, "tarZst", true);
       break;

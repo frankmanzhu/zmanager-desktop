@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "singleExtensions": ["7z","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzap","tzst","war","xar","xpi","xz","z","zip","zipx","zst"],
+  "singleExtensions": ["7z","aar","aea","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzap","tzst","war","xar","xpi","xz","z","zip","zipx","zst"],
   "compoundExtensions": ["tar.br","tar.bz2","tar.gz","tar.lz","tar.lz4","tar.lzma","tar.lzo","tar.lrz","tar.xz","tar.z","tar.zst"],
   "splitArchiveSuffixes": [".7z.001",".vol000.tzap"],
   "associationTypes": [
@@ -21,7 +21,8 @@
     {"id":"lzo","primaryExtensions":["lzo"],"compoundExtensions":["tar.lzo"],"splitSuffixes":[],"mimeType":"application/x-lzop","mimeAliases":[],"windows":true,"linux":false,"macos":true},
     {"id":"lrz","primaryExtensions":["lrz"],"compoundExtensions":["tar.lrz"],"splitSuffixes":[],"mimeType":"application/x-lrzip","mimeAliases":[],"windows":true,"linux":false,"macos":true},
     {"id":"compressZ","primaryExtensions":["z"],"compoundExtensions":["tar.z"],"splitSuffixes":[],"mimeType":"application/x-compress","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"genericPackages","primaryExtensions":["cab","cpio","deb","iso","rpm","xar"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":null,"mimeAliases":[],"windows":true,"linux":false,"macos":true}
+    {"id":"genericPackages","primaryExtensions":["cab","cpio","deb","iso","rpm","xar"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":null,"mimeAliases":[],"windows":true,"linux":false,"macos":true},
+    {"id":"appleArchive","primaryExtensions":["aar","aea"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/x-apple-archive","mimeAliases":[],"windows":false,"linux":false,"macos":true}
   ],
   "packageAssociationProfiles": {
     "windows": {"extensions":"all","mimeTypes":[]},
@@ -33,6 +34,6 @@
   ],
   "documentGroups": [
     {"id":"tzap","displayKey":"archiveType.tzap","macOSDisplayName":"TZAP archive","macOSDisplayNameZhHans":"TZAP 归档","extensions":["tzap"],"role":"Viewer","rank":"Owner"},
-    {"id":"archives","displayKey":"archiveType.archive","macOSDisplayName":"Archive","macOSDisplayNameZhHans":"归档","extensions":["7z","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzst","war","xar","xpi","xz","z","zip","zipx","zst","tar.br","tar.bz2","tar.gz","tar.lz","tar.lz4","tar.lzma","tar.lzo","tar.lrz","tar.xz","tar.z","tar.zst","7z.001","vol000.tzap"],"role":"Viewer","rank":"Alternate"}
+    {"id":"archives","displayKey":"archiveType.archive","macOSDisplayName":"Archive","macOSDisplayNameZhHans":"归档","extensions":["7z","aar","aea","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzst","war","xar","xpi","xz","z","zip","zipx","zst","tar.br","tar.bz2","tar.gz","tar.lz","tar.lz4","tar.lzma","tar.lzo","tar.lrz","tar.xz","tar.z","tar.zst","7z.001","vol000.tzap"],"role":"Viewer","rank":"Alternate"}
   ]
 }

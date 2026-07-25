@@ -5,6 +5,7 @@ import {
   createInitialJobState,
   deriveJobProgress,
   getLatestPasswordFailureEvent,
+  isCreateJobKind,
   replaceLegacyJobStateFixture,
   selectQuickActionJobCompletionDecision,
 } from "./jobs";
@@ -358,5 +359,13 @@ describe("job state helpers", () => {
 
     expect(deriveJobProgress(failed).progressPercent).toBe(0);
     expect(deriveJobProgress(cancelled).progressPercent).toBe(0);
+  });
+
+  it("isCreateJobKind returns true for appleArchiveCreate", () => {
+    expect(isCreateJobKind("appleArchiveCreate")).toBe(true);
+  });
+
+  it("isCreateJobKind returns false for appleArchiveExtract", () => {
+    expect(isCreateJobKind("appleArchiveExtract")).toBe(false);
   });
 });

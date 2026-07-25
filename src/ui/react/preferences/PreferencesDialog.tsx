@@ -20,7 +20,7 @@ import {
   type AppPreferences,
   type FormatCreateDefaults,
 } from "../../../app/preferences";
-import { createFormatCapabilities } from "../../../app/createFormatCapabilities";
+import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import {
   formatVolumeSize,
   formatVolumeSizePresetList,
@@ -44,6 +44,15 @@ import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
 type PreferencePage =
   "folders" | "archive" | "columns" | "extraction" | "interface" | "safety";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
+
+const FORMAT_LABELS: Record<CreateFormat, string> = {
+  zip: "ZIP",
+  tarZst: "TZST",
+  tarGz: "TGZ",
+  tzap: "TZAP",
+  sevenZ: "7Z",
+  appleArchive: "AAR",
+};
 
 const PAGE_ICONS: Record<PreferencePage, typeof FolderOpen> = {
   folders: FolderOpen,
@@ -475,6 +484,7 @@ function ArchiveDefaultsPage({
             <FormatSelect
               id="pref-default-format"
               value={draft.defaultArchiveFormat}
+              isMacOs={snapshot.runtime.isMacOs}
               onChange={(format) => {
                 setSelectedCreateFormat(format);
                 actions.handleDialogIntent({
@@ -507,6 +517,7 @@ function ArchiveDefaultsPage({
             <FormatSelect
               id="pref-create-format"
               value={selectedCreateFormat}
+              isMacOs={snapshot.runtime.isMacOs}
               onChange={setSelectedCreateFormat}
             />
           </div>
@@ -1481,10 +1492,12 @@ function FormatSelect({
   id,
   value,
   onChange,
+  isMacOs,
 }: Readonly<{
   id: string;
   value: CreateFormat;
   onChange(format: CreateFormat): void;
+  isMacOs: boolean;
 }>) {
   return (
     <select
@@ -1492,11 +1505,11 @@ function FormatSelect({
       value={value}
       onChange={(event) => onChange(event.currentTarget.value as CreateFormat)}
     >
-      <option value="zip">ZIP</option>
-      <option value="tarZst">TZST</option>
-      <option value="tarGz">TGZ</option>
-      <option value="tzap">TZAP</option>
-      <option value="sevenZ">7Z</option>
+      {supportedCreateFormats(isMacOs).map((format) => (
+        <option key={format} value={format}>
+          {FORMAT_LABELS[format]}
+        </option>
+      ))}
     </select>
   );
 }

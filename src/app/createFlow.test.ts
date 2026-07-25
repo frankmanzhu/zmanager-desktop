@@ -11,6 +11,7 @@ import {
   createStateAfterDestinationEdit,
   filterCreatePlanByIncludedPaths,
   getCreateArchiveExtension,
+  getCreateFormatExtension,
   isCreatePlanRevisionCurrent,
   normalizeCreateVolumeSize,
   normalizeTzapRecoveryPercentage,
@@ -388,5 +389,110 @@ describe("create plan rows", () => {
     expect(filtered.excludedBytes).toBe(3);
     expect(filtered.entries).not.toContain("assets/logo.png");
     expect(filtered.excludedEntries).toEqual(["assets/logo.png"]);
+  });
+});
+
+describe("withCreateArchiveExtension - appleArchive", () => {
+  it("uses .aar when no password", () => {
+    expect(withCreateArchiveExtension("test", "appleArchive", false)).toBe("test.aar");
+  });
+
+  it("uses .aea when hasPassword is true", () => {
+    expect(withCreateArchiveExtension("test", "appleArchive", true)).toBe("test.aea");
+  });
+
+  it("keeps .aar when no password and extension already matches", () => {
+    expect(withCreateArchiveExtension("test.aar", "appleArchive", false)).toBe("test.aar");
+  });
+
+  it("swaps .aar to .aea when password added", () => {
+    expect(withCreateArchiveExtension("test.aar", "appleArchive", true)).toBe("test.aea");
+  });
+
+  it("swaps .aea to .aar when password removed", () => {
+    expect(withCreateArchiveExtension("test.aea", "appleArchive", false)).toBe("test.aar");
+  });
+
+  it("keeps .aea when password present and extension already matches", () => {
+    expect(withCreateArchiveExtension("test.aea", "appleArchive", true)).toBe("test.aea");
+  });
+
+  it("does not produce double extension (.aea.aea)", () => {
+    expect(withCreateArchiveExtension("test.aea", "appleArchive", true)).toBe("test.aea");
+  });
+
+  it("defaults hasPassword to false", () => {
+    expect(withCreateArchiveExtension("test", "appleArchive")).toBe("test.aar");
+  });
+});
+
+describe("getCreateFormatExtension - appleArchive", () => {
+  it("returns aar when hasPassword is false", () => {
+    expect(getCreateFormatExtension("appleArchive", false)).toBe("aar");
+  });
+
+  it("returns aea when hasPassword is true", () => {
+    expect(getCreateFormatExtension("appleArchive", true)).toBe("aea");
+  });
+
+  it("defaults to aar when hasPassword is omitted", () => {
+    expect(getCreateFormatExtension("appleArchive")).toBe("aar");
+  });
+});
+
+describe("suggestedCreateArchiveName - appleArchive", () => {
+  it("suggests .aar extension by default", () => {
+    expect(suggestedCreateArchiveName(["/tmp/src"], "appleArchive")).toBe("src.aar");
+  });
+
+  it("suggests .aea extension with password", () => {
+    expect(suggestedCreateArchiveName(["/tmp/src"], "appleArchive", "archive", true)).toBe("src.aea");
+  });
+});
+
+describe("createFormatSupportsPassword - appleArchive", () => {
+  it("appleArchive supports password", () => {
+    expect(createFormatSupportsPassword("appleArchive")).toBe(true);
+  });
+});
+
+describe("buildStartCreateRequest - appleArchive", () => {
+  it("uses .aea extension when password is present", () => {
+    const req = buildStartCreateRequest({
+      sources: ["/tmp/src"],
+      destinationPath: "output.aar",
+      format: "appleArchive",
+      cleanSource: true,
+      replaceExisting: false,
+      preserveMetadata: true,
+      password: "secret",
+    });
+    expect(req.destinationPath).toBe("output.aea");
+    expect(req.format).toBe("appleArchive");
+  });
+
+  it("uses .aar extension when no password", () => {
+    const req = buildStartCreateRequest({
+      sources: ["/tmp/src"],
+      destinationPath: "output",
+      format: "appleArchive",
+      cleanSource: true,
+      replaceExisting: false,
+      preserveMetadata: true,
+    });
+    expect(req.destinationPath).toBe("output.aar");
+  });
+
+  it("omits volumeSize for appleArchive format", () => {
+    const req = buildStartCreateRequest({
+      sources: ["/tmp/src"],
+      destinationPath: "output",
+      format: "appleArchive",
+      cleanSource: true,
+      replaceExisting: false,
+      preserveMetadata: true,
+      volumeSize: 1000000,
+    });
+    expect(req.volumeSize).toBeUndefined();
   });
 });

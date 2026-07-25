@@ -20,6 +20,8 @@ ARCHIVE_SUFFIXES = (
     ".tzap",
     ".tzst",
     ".zipx",
+    ".aar",
+    ".aea",
     ".apk",
     ".bz2",
     ".cab",

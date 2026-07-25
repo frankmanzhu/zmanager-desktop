@@ -162,6 +162,17 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       replaceExisting: false,
       promptForPassword: false,
     },
+    appleArchive: {
+      cleanSource: true,
+      respectGitignore: false,
+      followSymlinks: false,
+      compressionLevel: null,
+      volumeSize: null,
+      tzapRecoveryPercentage: null,
+      preserveMetadata: true,
+      replaceExisting: false,
+      promptForPassword: false,
+    },
   },
   volumeSizePresets: [...DEFAULT_VOLUME_SIZE_PRESETS],
   defaultOutputLocation: "sourceFolder",
@@ -193,7 +204,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   tableSortAscending: true,
 };
 
-const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ", "tarGz"] as const;
+const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ", "tarGz", "appleArchive"] as const;
 const OUTPUT_LOCATIONS = ["sourceFolder", "customFolder"] as const;
 const EXTRACTION_BEHAVIORS = ["askEveryTime", "extractHere", "extractToFolder"] as const;
 const EXTRACT_PATH_MODES = ["full", "current", "none"] as const;

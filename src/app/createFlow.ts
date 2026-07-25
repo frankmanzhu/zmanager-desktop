@@ -18,6 +18,7 @@ const CREATE_FORMAT_EXTENSIONS = {
   tzap: "tzap",
   sevenZ: "7z",
   tarGz: "tgz",
+  appleArchive: "aar",
 } satisfies Record<CreateArchiveFormat, string>;
 
 const CREATE_FORMAT_ALLOWED_EXTENSIONS = {
@@ -26,10 +27,11 @@ const CREATE_FORMAT_ALLOWED_EXTENSIONS = {
   tzap: ["tzap"],
   sevenZ: ["7z"],
   tarGz: ["tgz", "tar.gz"],
+  appleArchive: ["aar", "aea"],
 } satisfies Record<CreateArchiveFormat, string[]>;
 
-const RECOGNIZED_CREATE_EXTENSIONS = ["tar.gz", "tar.zst", "zip", "tgz", "tzst", "tzap", "7z"];
-const CREATE_PASSWORD_FORMATS = new Set<CreateArchiveFormat>(["zip", "tzap", "sevenZ"]);
+const RECOGNIZED_CREATE_EXTENSIONS = ["tar.gz", "tar.zst", "zip", "tgz", "tzst", "tzap", "7z", "aar", "aea"];
+const CREATE_PASSWORD_FORMATS = new Set<CreateArchiveFormat>(["zip", "tzap", "sevenZ", "appleArchive"]);
 
 export const TZAP_RECOVERY_PERCENTAGE_DEFAULT = 5;
 export const TZAP_RECOVERY_PERCENTAGE_MIN = 0;
@@ -87,7 +89,8 @@ export function getArchiveName(path: string, fallback: string): string {
   return parts.at(-1) ?? fallback;
 }
 
-export function getCreateFormatExtension(format: CreateArchiveFormat): string {
+export function getCreateFormatExtension(format: CreateArchiveFormat, hasPassword = false): string {
+  if (format === "appleArchive" && hasPassword) return "aea";
   return CREATE_FORMAT_EXTENSIONS[format];
 }
 
@@ -96,34 +99,49 @@ export function getCreateArchiveExtension(path: string): string | null {
   return RECOGNIZED_CREATE_EXTENSIONS.find((extension) => normalized.endsWith(`.${extension}`)) ?? null;
 }
 
-export function withCreateArchiveExtension(path: string, format: CreateArchiveFormat): string {
+export function withCreateArchiveExtension(path: string, format: CreateArchiveFormat, hasPassword = false): string {
   const trimmed = path.trim();
   if (!trimmed) {
     return trimmed;
   }
 
+  const allowedExtensions = CREATE_FORMAT_ALLOWED_EXTENSIONS[format];
   const existingExtension = getCreateArchiveExtension(trimmed);
-  if (existingExtension && CREATE_FORMAT_ALLOWED_EXTENSIONS[format].includes(existingExtension)) {
+
+  // If the existing extension is already recognized for this format
+  if (existingExtension && allowedExtensions.includes(existingExtension)) {
+    // For appleArchive, check if extension matches password state
+    if (format === "appleArchive") {
+      const isCurrentlyAea = existingExtension === "aea";
+      const wantsAea = hasPassword;
+      if (isCurrentlyAea === wantsAea) return trimmed;
+      // Swap: strip existing extension, append the correct one
+      const basePath = trimmed.slice(0, -(existingExtension.length + 1));
+      return `${basePath}.${getCreateFormatExtension(format, hasPassword)}`;
+    }
     return trimmed;
   }
 
+  // Has an unrecognized extension → replace it
   if (existingExtension) {
     const basePath = trimmed.slice(0, -(existingExtension.length + 1));
-    return `${basePath}.${getCreateFormatExtension(format)}`;
+    return `${basePath}.${getCreateFormatExtension(format, hasPassword)}`;
   }
 
-  return `${trimmed}.${getCreateFormatExtension(format)}`;
+  // No recognized extension → append
+  return `${trimmed}.${getCreateFormatExtension(format, hasPassword)}`;
 }
 
 export function suggestedCreateArchiveName(
   sources: string[],
   format: CreateArchiveFormat,
   fallback = "archive",
+  hasPassword = false,
 ): string {
   const firstSource = sources[0];
   const sourceName = firstSource ? getArchiveName(firstSource, fallback) : fallback;
   const safeName = sourceName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").trim() || fallback;
-  return `${safeName}.${getCreateFormatExtension(format)}`;
+  return `${safeName}.${getCreateFormatExtension(format, hasPassword)}`;
 }
 
 export function createFormatSupportsPassword(format: CreateArchiveFormat): boolean {
@@ -485,7 +503,7 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
 
   return {
     sources: [...input.sources],
-    destinationPath: withCreateArchiveExtension(input.destinationPath, input.format),
+    destinationPath: withCreateArchiveExtension(input.destinationPath, input.format, Boolean(input.password)),
     format: input.format,
     cleanSource: input.cleanSource,
     ...(input.excludeNames?.length ? { excludeNames: [...input.excludeNames] } : {}),
@@ -500,7 +518,7 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
     preserveMetadata: input.preserveMetadata,
     ...(input.password && createFormatSupportsPassword(input.format) ? { password: input.password } : {}),
     ...(input.compressionLevel !== undefined ? { compressionLevel: input.compressionLevel } : {}),
-    ...(volumeSize !== undefined && input.format !== "tarZst" && input.format !== "tarGz" ? { volumeSize } : {}),
+    ...(volumeSize !== undefined && input.format !== "tarZst" && input.format !== "tarGz" && input.format !== "appleArchive" ? { volumeSize } : {}),
     ...(input.format === "zip" ? { zipCompression: input.zipCompression ?? "deflate" } : {}),
     ...(input.format === "tzap"
       ? {

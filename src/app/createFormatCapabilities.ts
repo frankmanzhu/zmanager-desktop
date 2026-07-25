@@ -56,8 +56,24 @@ const CAPABILITIES: Record<CreateArchiveFormat, CreateFormatCapabilities> = {
     tzapVolumeLossTolerance: false,
     sevenZAdvanced: false,
   }),
+  appleArchive: Object.freeze({
+    password: true,
+    splitVolumes: false,
+    compressionLevel: true,
+    zipCompression: false,
+    tzapRecovery: false,
+    tzapVolumeLossTolerance: false,
+    sevenZAdvanced: false,
+  }),
 };
 
 export function createFormatCapabilities(format: CreateArchiveFormat): CreateFormatCapabilities {
   return CAPABILITIES[format];
+}
+
+const ALL_CREATE_FORMATS: CreateArchiveFormat[] = ["zip", "tarZst", "tzap", "sevenZ", "tarGz", "appleArchive"];
+
+export function supportedCreateFormats(appleArchiveAvailable: boolean): CreateArchiveFormat[] {
+  if (appleArchiveAvailable) return ALL_CREATE_FORMATS;
+  return ALL_CREATE_FORMATS.filter((f) => f !== "appleArchive");
 }

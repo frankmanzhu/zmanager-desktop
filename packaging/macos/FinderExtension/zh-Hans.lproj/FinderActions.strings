@@ -6,6 +6,7 @@
 "shellAction.compressSevenZ" = "添加到 .7z";
 "shellAction.compressTarZst" = "添加到 .tzst";
 "shellAction.compressTarGz" = "添加到 .tgz";
+"shellAction.compressAppleArchive" = "添加到 .aar";
 "shellAction.compressCleanSource" = "压缩并移除源文件";
 "shellAction.extractHere" = "解压到此处";
 "shellAction.extractToFolder" = "解压到同名文件夹";

@@ -82,6 +82,7 @@ export type ZManagerReactCommandSnapshot = Readonly<{
 
 export type ZManagerRuntimeSnapshot = Readonly<{
   isDesktop: boolean;
+  isMacOs: boolean;
 }>;
 
 export type ZManagerContextMenuSnapshot =
@@ -503,7 +504,10 @@ export function createZManagerReactSnapshot(
     contextMenu: cloneContextMenuSnapshot(
       input.contextMenu ?? { visible: false, id: 0 },
     ),
-    runtime: { isDesktop: Boolean(input.runtime?.isDesktop) },
+    runtime: {
+      isDesktop: Boolean(input.runtime?.isDesktop),
+      isMacOs: Boolean(input.runtime?.isMacOs),
+    },
     dialog: cloneDialogSnapshot(input.dialog ?? { kind: "none" }),
   });
 }
@@ -548,7 +552,7 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       secondaryCommandIds: ["refresh"],
     },
     contextMenu: { visible: false, id: 0 },
-    runtime: { isDesktop: false },
+    runtime: { isDesktop: false, isMacOs: false },
     dialog: { kind: "none" },
   });
 }

@@ -487,6 +487,7 @@ fn validate_request(
         | QuickActionKindDto::CompressSevenZ
         | QuickActionKindDto::CompressTarZst
         | QuickActionKindDto::CompressTarGz
+        | QuickActionKindDto::CompressAppleArchive
         | QuickActionKindDto::CompressCleanSource => {
             if paths.is_empty() {
                 return Err(QuickActionError::invalid(

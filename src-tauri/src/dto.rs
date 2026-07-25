@@ -273,6 +273,7 @@ pub enum ArchiveFormatDto {
     TarGz,
     Tzap,
     SevenZ,
+    AppleArchive,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

@@ -279,6 +279,7 @@ describe("quick action controller", () => {
     { format: "tarGz", kind: "compressTarGz" },
     { format: "tzap", kind: "compressTzap" },
     { format: "sevenZ", kind: "compressSevenZ" },
+    { format: "appleArchive", kind: "compressAppleArchive" },
   ] as const)("applies all persisted $format flags to its fixed-format quick action", async ({ format, kind }) => {
     const harness = createHarness();
     harness.setPreferences({

@@ -79,6 +79,16 @@ describe("Windows context menu installer hook", () => {
     expect(script).not.toContain('!insertmacro ZM_WRITE_FILTERED_CREATE_CASCADE_MENU "Software\\Classes\\*\\shell"');
   });
 
+  it("does not include macOS-only AddToAar action", () => {
+    const generatedScript = readFileSync(
+      join(process.cwd(), "packaging", "windows", "nsis-shell-actions.generated.nsh"),
+      "utf8",
+    );
+    expect(generatedScript).not.toContain("AddToAar");
+    expect(generatedScript).not.toContain("compressAppleArchive");
+    expect(generatedScript).not.toContain("compress-aar");
+  });
+
   it("keeps Windows archive extension registration aligned with frontend archive support", () => {
     expect(registeredArchiveExtensions("ZM_REGISTER_ARCHIVE_EXTENSIONS")).toEqual(
       expectedWindowsArchiveExtensions,

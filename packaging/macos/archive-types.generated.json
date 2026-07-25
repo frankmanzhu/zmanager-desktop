@@ -3,6 +3,8 @@
   "associatedExtensions": [
     "7z",
     "7z.001",
+    "aar",
+    "aea",
     "apk",
     "appx",
     "br",
@@ -68,6 +70,8 @@
       "macOSDisplayNameZhHans": "归档",
       "extensions": [
         "7z",
+        "aar",
+        "aea",
         "apk",
         "appx",
         "br",

@@ -154,6 +154,23 @@
       "windowDisposition": "disposableTask"
     },
     {
+      "id": "compressAppleArchive",
+      "rustCase": "CompressAppleArchive",
+      "canonicalLabel": "Add to .aar",
+      "canonicalLabelZhHans": "添加到 .aar",
+      "displayKey": "shellAction.compressAppleArchive",
+      "nativeVerb": "AddToAar",
+      "order": 77,
+      "contextMenuOrder": 95,
+      "contextMenuContexts": ["archiveSingle", "archiveMultiple", "creation", "container"],
+      "selectionShapes": ["single-archive", "multiple-archives", "files", "folders", "mixed"],
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": ["macosFinder"],
+      "compatibilityAliases": ["compress-aar", "compress-apple-archive", "add-to-aar", "add-to-apple-archive"],
+      "windowsClsid": null,
+      "windowDisposition": "disposableTask"
+    },
+    {
       "id": "compressCleanSource",
       "rustCase": "CompressCleanSource",
       "canonicalLabel": "Compress and remove source",

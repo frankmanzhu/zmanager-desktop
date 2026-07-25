@@ -282,6 +282,20 @@
       "windows": true,
       "linux": false,
       "macos": true
+    },
+    {
+      "id": "appleArchive",
+      "primaryExtensions": [
+        "aar",
+        "aea"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/x-apple-archive",
+      "mimeAliases": [],
+      "windows": false,
+      "linux": false,
+      "macos": true
     }
   ],
   "expectedPackages": {
@@ -293,6 +307,8 @@
       "extensions": [
         "7z",
         "7z.001",
+        "aar",
+        "aea",
         "apk",
         "appx",
         "br",
@@ -396,6 +412,8 @@
       "extensions": [
         "7z",
         "7z.001",
+        "aar",
+        "aea",
         "apk",
         "appx",
         "br",
@@ -448,6 +466,8 @@
       "extensions": [
         "7z",
         "7z.001",
+        "aar",
+        "aea",
         "apk",
         "appx",
         "br",

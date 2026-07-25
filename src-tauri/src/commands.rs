@@ -374,7 +374,8 @@ fn create_progress_estimate_for_format(
         crate::dto::ArchiveFormatDto::Zip
         | crate::dto::ArchiveFormatDto::TarZst
         | crate::dto::ArchiveFormatDto::TarGz
-        | crate::dto::ArchiveFormatDto::SevenZ => manifest.included_count(),
+        | crate::dto::ArchiveFormatDto::SevenZ
+        | crate::dto::ArchiveFormatDto::AppleArchive => manifest.included_count(),
     };
 
     (total_entries, manifest.total_bytes)
@@ -435,9 +436,12 @@ pub(crate) fn start_create_internal(
     plan_options.include_archive_paths = request.include_archive_paths.unwrap_or_default();
     plan_options.respect_gitignore = request.respect_gitignore;
     plan_options.follow_symlinks = request.follow_symlinks;
-    let create_progress_estimate = plan_archives(sources.clone(), &plan_options)
+    let plan_result = plan_archives(sources.clone(), &plan_options);
+    let create_progress_estimate = plan_result
+        .as_ref()
         .ok()
-        .map(|manifest| create_progress_estimate_for_format(&manifest, request.format));
+        .map(|manifest| create_progress_estimate_for_format(manifest, request.format));
+    let plan_for_thread = plan_result.ok();
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -446,6 +450,7 @@ pub(crate) fn start_create_internal(
         crate::dto::ArchiveFormatDto::TarGz => JobKindDto::TarGzCreate,
         crate::dto::ArchiveFormatDto::Tzap => JobKindDto::TzapCreate,
         crate::dto::ArchiveFormatDto::SevenZ => JobKindDto::SevenZCreate,
+        crate::dto::ArchiveFormatDto::AppleArchive => JobKindDto::AppleArchiveCreate,
     };
 
     let password = request
@@ -538,6 +543,7 @@ pub(crate) fn start_create_internal(
     let destination = destination_path;
     let kind_for_thread = kind;
     let plan_options = plan_options_for_thread;
+    let plan = plan_for_thread;
 
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
@@ -706,6 +712,20 @@ pub(crate) fn start_create_internal(
                 .map(to_terminal_summary_for_seven_create)
                 .map_err(map_7z_error)
             }
+            crate::dto::ArchiveFormatDto::AppleArchive => match plan.as_ref() {
+                Some(manifest) => crate::platform::apple_archive::create_apple_archive(
+                    manifest,
+                    &destination,
+                    preserve_metadata,
+                    replace_existing,
+                    password.as_deref(),
+                    &token,
+                    &mut sink,
+                ),
+                None => Err(CommandErrorDto::operation_failed(
+                    "AppleArchive create requires a valid source plan".to_string(),
+                )),
+            },
         };
 
         match result {
@@ -928,6 +948,7 @@ fn start_extract_internal_with_spawner(
         ArchiveFamily::SevenZ => JobKindDto::SevenZExtract,
         ArchiveFamily::Rar => JobKindDto::RarExtract,
         ArchiveFamily::Tzap => JobKindDto::TzapExtract,
+        ArchiveFamily::AppleArchive => JobKindDto::AppleArchiveExtract,
         ArchiveFamily::Archive => JobKindDto::ArchiveExtract,
     };
 
@@ -1042,6 +1063,15 @@ fn start_extract_internal_with_spawner(
                 )
                 .map(to_terminal_summary_for_extract)
                 .map_err(map_libarchive_error),
+                ArchiveFamily::AppleArchive => {
+                    crate::platform::apple_archive::extract_apple_archive(
+                        &archive_path,
+                        &destination_path,
+                        policy,
+                        &token,
+                        &mut sink,
+                    )
+                }
             }
         } else {
             run_selected_extract_job(
@@ -1839,6 +1869,9 @@ fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
         AppleArchiveError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("AppleArchive plan error: {source}"))
         }
+        AppleArchiveError::Native(source) => {
+            CommandErrorDto::operation_failed(format!("AppleArchive native error: {source}"))
+        }
         AppleArchiveError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
         }
@@ -1863,7 +1896,6 @@ fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
         AppleArchiveError::Cancelled => {
             CommandErrorDto::cancelled("AppleArchive job was cancelled.")
         }
-        other => CommandErrorDto::operation_failed(other.to_string()),
     }
 }
 
@@ -2255,6 +2287,16 @@ fn stream_native_drag_entry(
                 .map_err(map_tzap_error)?;
             one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
         }
+        ArchiveFamily::AppleArchive => {
+            let mut writer = DynWriteAdapter { inner: output };
+            let report = crate::platform::apple_archive::copy_apple_archive_files_to_writer(
+                archive_path,
+                |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                &mut writer,
+            )
+            .map_err(map_apple_archive_error)?;
+            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
+        }
         ArchiveFamily::Rar | ArchiveFamily::Archive => {
             let mut writer = DynWriteAdapter { inner: output };
             let report = zmanager_core::libarchive_backend::copy_archive_files_to_writer(
@@ -2644,6 +2686,7 @@ enum ArchiveFamily {
     SevenZ,
     Rar,
     Tzap,
+    AppleArchive,
     Archive,
 }
 
@@ -2653,6 +2696,13 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
         .extension()
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase());
+
+    // Apple Archive detection (macOS-only format)
+    // Check BEFORE stem extraction to avoid unused-variable warning on early return
+    if matches!(extension.as_deref(), Some("aar") | Some("aea")) {
+        return ArchiveFamily::AppleArchive;
+    }
+
     let stem = path
         .file_stem()
         .and_then(|value| value.to_str())
@@ -3116,6 +3166,29 @@ mod tests {
             detect_archive_family(r"D:\\WORK\\report.TAR.ZST"),
             ArchiveFamily::TarZst
         );
+    }
+
+    #[test]
+    fn detect_archive_family_recognizes_aar() {
+        assert_eq!(
+            detect_archive_family("test.aar"),
+            ArchiveFamily::AppleArchive
+        );
+    }
+
+    #[test]
+    fn detect_archive_family_recognizes_aea() {
+        assert_eq!(
+            detect_archive_family("test.aea"),
+            ArchiveFamily::AppleArchive
+        );
+    }
+
+    #[test]
+    fn apple_archive_format_serializes_correctly() {
+        let format = crate::dto::ArchiveFormatDto::AppleArchive;
+        let json = serde_json::to_string(&format).unwrap();
+        assert_eq!(json, "\"appleArchive\"");
     }
 
     fn create_temp_workspace(name: &str) -> PathBuf {

@@ -68,7 +68,8 @@ export function isCreateJobKind(kind: JobKind): boolean {
     kind === "sevenZCreate" ||
     kind === "tarZstdCreate" ||
     kind === "tarGzCreate" ||
-    kind === "tzapCreate"
+    kind === "tzapCreate" ||
+    kind === "appleArchiveCreate"
   );
 }
 
