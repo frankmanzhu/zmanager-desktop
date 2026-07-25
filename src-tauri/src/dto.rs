@@ -212,6 +212,7 @@ pub struct ArchiveChildrenRequest {
     pub parent_path: String,
     pub cursor: Option<String>,
     pub limit: Option<usize>,
+    #[allow(dead_code)]
     pub expected_revision: Option<String>,
     pub sort_key: Option<String>,
     pub sort_ascending: Option<bool>,
@@ -225,6 +226,7 @@ pub struct ArchiveSearchRequest {
     pub query: String,
     pub cursor: Option<String>,
     pub limit: Option<usize>,
+    #[allow(dead_code)]
     pub expected_revision: Option<String>,
     pub sort_key: Option<String>,
     pub sort_ascending: Option<bool>,
