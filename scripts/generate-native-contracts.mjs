@@ -688,6 +688,7 @@ pub(crate) enum ExplorerAction {
 ${windowsActions.map(({ rustCase }) => `    ${rustCase},`).join("\n")}
 }
 
+#[cfg(test)]
 pub(crate) const ALL_EXPLORER_ACTIONS: &[ExplorerAction] = &[
 ${windowsActions.map(({ rustCase }) => `    ExplorerAction::${rustCase},`).join("\n")}
 ];

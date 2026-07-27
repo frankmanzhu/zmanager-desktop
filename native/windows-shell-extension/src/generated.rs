@@ -25,6 +25,7 @@ pub(crate) enum ExplorerAction {
     ExtractToFolder,
 }
 
+#[cfg(test)]
 pub(crate) const ALL_EXPLORER_ACTIONS: &[ExplorerAction] = &[
     ExplorerAction::Open,
     ExplorerAction::Compress,

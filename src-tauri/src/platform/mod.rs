@@ -138,6 +138,7 @@ pub enum NativeCapabilityOperationErrorKind {
     NotApplicable,
     #[allow(dead_code)]
     Unavailable,
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     Failed,
 }
 
@@ -167,6 +168,7 @@ impl NativeCapabilityOperationError {
         }
     }
 
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     pub const fn failed(capability: &'static str, code: &'static str) -> Self {
         Self {
             capability,
