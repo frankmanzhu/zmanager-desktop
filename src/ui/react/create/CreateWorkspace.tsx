@@ -2,6 +2,7 @@ import {
   ChevronDown,
   File,
   Folder,
+  GripVertical,
   KeyRound,
   LoaderCircle,
   Plus,
@@ -58,6 +59,11 @@ import {
 } from "../workspace/tableMarqueeSelection";
 import { MarqueeSelectionOverlay } from "../workspace/MarqueeSelectionOverlay";
 import { treeDepthClass } from "../workspace/treeDepthClass";
+import {
+  tableColumnReorderClassName,
+  useTableColumnReorder,
+  type TableColumnReorderController,
+} from "../workspace/useTableColumnReorder";
 
 const COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX = 28;
 const COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX = 520;
@@ -264,6 +270,18 @@ function CreateTable() {
   const columnSettings =
     snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
   const visibleCols = visibleCreateColumns(columnSettings);
+  const columnReorder = useTableColumnReorder(
+    visibleCols
+      .filter((column) => column.id !== "name")
+      .map((column) => column.id),
+    (sourceColumnId, targetColumnId) => {
+      actions.handleCreateIntent({
+        type: "reorderColumn",
+        sourceColumnId,
+        targetColumnId,
+      });
+    },
+  );
   const columnWidths = Object.fromEntries(
     visibleCols.map((col) => [col.id, col.width]),
   );
@@ -398,6 +416,7 @@ function CreateTable() {
                       columnId={col.id}
                       label={createTableColumnLabel(col, i18n)}
                       width={columnWidths[col.id] ?? col.width}
+                      columnReorder={columnReorder}
                       onWidthChange={(width) =>
                         actions.handleCreateIntent({
                           type: "setColumnWidth",
@@ -488,7 +507,7 @@ function canStartCreateMarqueeSelection(
 
   if (
     event.target.closest(
-      "button, a, input, select, textarea, [data-column-resizer]",
+      "button, a, input, select, textarea, [data-column-resizer], [data-table-column-header]",
     )
   ) {
     return false;
@@ -514,14 +533,22 @@ function CompressSourceHeader({
   label,
   onWidthChange,
   width,
+  columnReorder,
 }: Readonly<{
   columnId: CreateSourceColumnId;
   label: string;
   onWidthChange(width: number): void;
   width: number;
+  columnReorder: TableColumnReorderController<CreateSourceColumnId>;
 }>) {
   const actions = useZManagerActions();
-  const [isDragOver, setIsDragOver] = useState(false);
+  const movable = columnId !== "name";
+  const isDragSource =
+    columnReorder.dragState?.sourceColumnId === columnId;
+  const dropPosition =
+    columnReorder.dragState?.targetColumnId === columnId
+      ? columnReorder.dragState.dropPosition
+      : null;
   const resizeRef = useRef<{
     pointerId: number;
     startWidth: number;
@@ -529,9 +556,13 @@ function CompressSourceHeader({
   } | null>(null);
   return (
     <th
-      className={`sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${isDragOver ? "border-l-2 border-l-blue-500 bg-blue-50/80 dark:bg-blue-950/80" : ""}`}
+      className={`group sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-[background-color,color,box-shadow,opacity,transform] duration-150 ease-out dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${tableColumnReorderClassName({ movable, isSource: isDragSource, dropPosition })}`}
+      data-table-column-header
+      data-table-column-id={columnId}
+      data-column-drag-source={isDragSource || undefined}
+      data-column-drop-position={dropPosition ?? undefined}
       data-compress-column-id={columnId}
-      draggable={columnId !== "name"}
+      {...columnReorder.headerPointerHandlers(columnId, movable)}
       tabIndex={0}
       title={label}
       onContextMenu={(event) => {
@@ -543,39 +574,6 @@ function CompressSourceHeader({
           x: event.clientX,
           y: event.clientY,
         });
-      }}
-      onDragStart={(event) => {
-        if (columnId === "name") return;
-        event.dataTransfer.setData("text/plain", columnId);
-        event.dataTransfer.effectAllowed = "move";
-      }}
-      onDragEnter={(event) => {
-        if (columnId !== "name") {
-          event.preventDefault();
-          setIsDragOver(true);
-        }
-      }}
-      onDragOver={(event) => {
-        if (columnId !== "name") {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-        }
-      }}
-      onDragLeave={() => {
-        setIsDragOver(false);
-      }}
-      onDrop={(event) => {
-        setIsDragOver(false);
-        if (columnId === "name") return;
-        event.preventDefault();
-        const sourceId = event.dataTransfer.getData("text/plain") as CreateSourceColumnId;
-        if (sourceId && sourceId !== columnId && sourceId !== "name") {
-          actions.handleCreateIntent({
-            type: "reorderColumn",
-            sourceColumnId: sourceId,
-            targetColumnId: columnId,
-          });
-        }
       }}
       onKeyDown={(event) => {
         if (
@@ -593,7 +591,16 @@ function CompressSourceHeader({
         }
       }}
     >
-      <span className="block truncate pr-2">{label}</span>
+      <span className="flex min-w-0 items-center gap-1 pr-2">
+        {movable ? (
+          <GripVertical
+            className="size-3 shrink-0 opacity-35 transition-opacity group-hover:opacity-80"
+            data-column-drag-grip
+            aria-hidden="true"
+          />
+        ) : null}
+        <span className="min-w-0 truncate">{label}</span>
+      </span>
       <span
         className="absolute inset-y-0 right-0 z-20 w-1.5 cursor-col-resize hover:bg-blue-500/30"
         data-column-resizer={columnId}

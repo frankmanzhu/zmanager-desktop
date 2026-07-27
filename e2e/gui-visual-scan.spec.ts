@@ -221,9 +221,11 @@ test("table views suppress the WebView context menu", async ({ page }) => {
 });
 
 test("compress table header context menu toggles visible columns and keeps colgroup aligned", async ({ page }) => {
+  await dropFiles(page, ["column-menu-source.txt"]);
+
   await page.locator("th[data-compress-column-id='size']").click({ button: "right" });
   await expect(page.locator("#context-menu")).toBeVisible();
-  await expect(page.locator("#context-menu")).toContainText("Reset Columns");
+  await expect(page.locator("#context-menu")).toContainText("Reset columns");
 
   await page.locator("#context-menu button").filter({ hasText: "Source Path" }).click();
   await expect(page.locator("th[data-compress-column-id='sourcePath']")).toBeVisible();
@@ -247,15 +249,35 @@ test("compress table columns reorder by dragging left and right", async ({ page 
     );
 
   await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
+  await expect(page.locator("[data-column-drag-grip]")).toHaveCount(3);
 
-  await page.locator("th[data-compress-column-id='kind']").dragTo(
+  await startTableColumnDrag(
+    page,
+    "th[data-compress-column-id='kind']",
+    "th[data-compress-column-id='size']",
+  );
+  await expect(
+    page.locator("th[data-compress-column-id='kind']"),
+  ).toHaveAttribute("data-column-drag-source", "true");
+  await expect(
     page.locator("th[data-compress-column-id='size']"),
-  );
+  ).toHaveAttribute("data-column-drop-position", "before");
+  await page.mouse.up();
   await expect.poll(columnOrder).toEqual(["name", "kind", "size", "modified"]);
-
-  await page.locator("th[data-compress-column-id='kind']").dragTo(
-    page.locator("th[data-compress-column-id='modified']"),
+  await expect(page.locator("#drop-overlay")).toHaveAttribute(
+    "aria-hidden",
+    "true",
   );
+
+  await startTableColumnDrag(
+    page,
+    "th[data-compress-column-id='kind']",
+    "th[data-compress-column-id='modified']",
+  );
+  await expect(
+    page.locator("th[data-compress-column-id='modified']"),
+  ).toHaveAttribute("data-column-drop-position", "after");
+  await page.mouse.up();
   await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
 });
 
@@ -289,8 +311,10 @@ test("extract table columns reorder by dragging left and right", async ({ page }
     "modified",
   ]);
 
-  await page.locator("th[data-column-id='modified']").dragTo(
-    page.locator("th[data-column-id='size']"),
+  await dragTableColumn(
+    page,
+    "th[data-column-id='modified']",
+    "th[data-column-id='size']",
   );
   await expect.poll(columnOrder).toEqual([
     "name",
@@ -299,8 +323,10 @@ test("extract table columns reorder by dragging left and right", async ({ page }
     "compressedSize",
   ]);
 
-  await page.locator("th[data-column-id='modified']").dragTo(
-    page.locator("th[data-column-id='compressedSize']"),
+  await dragTableColumn(
+    page,
+    "th[data-column-id='modified']",
+    "th[data-column-id='compressedSize']",
   );
   await expect.poll(columnOrder).toEqual([
     "name",
@@ -645,14 +671,12 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await page.locator("th[data-column-id='modified']").focus();
   await page.keyboard.press("Shift+F10");
   await expect(page.locator("#context-menu")).toBeVisible();
-  await page.locator("#context-menu [data-context-action='toggle-column'][data-column-id='created']").focus();
+  await page.locator("#context-menu [data-context-action='toggle-column'][data-column-id='kind']").focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("th[data-column-id='created']")).toBeVisible();
-  await page.locator("th[data-column-id='created']").focus();
-  await page.keyboard.press("Shift+F10");
-  await page.locator("#context-menu [data-context-action='reset-columns']").focus();
-  await page.keyboard.press("Enter");
-  await expect(page.locator("th[data-column-id='created']")).toBeHidden();
+  await expect(page.locator("th[data-column-id='kind']")).toBeVisible();
+  await page.locator("th[data-column-id='kind']").click({ button: "right" });
+  await page.locator("#context-menu [data-context-action='reset-columns']").click();
+  await expect(page.locator("#context-menu")).toBeHidden();
 
   await page.locator('tr[data-entry-path="documents"] [data-row-primary]').click();
   await page.locator('tr[data-entry-path="images"] [data-row-primary]').click({ modifiers: ["ControlOrMeta"] });
@@ -891,6 +915,40 @@ async function dragFiles(page: Page, names: string[]) {
     });
     document.querySelector("[data-runtime-bridge-state]")?.dispatchEvent(event);
   }, names);
+}
+
+async function dragTableColumn(
+  page: Page,
+  sourceSelector: string,
+  targetSelector: string,
+) {
+  await startTableColumnDrag(page, sourceSelector, targetSelector);
+  await page.mouse.up();
+}
+
+async function startTableColumnDrag(
+  page: Page,
+  sourceSelector: string,
+  targetSelector: string,
+) {
+  const source = await page.locator(sourceSelector).boundingBox();
+  const target = await page.locator(targetSelector).boundingBox();
+  if (!source || !target) {
+    throw new Error(
+      `Unable to locate column drag geometry: ${sourceSelector} -> ${targetSelector}`,
+    );
+  }
+
+  await page.mouse.move(
+    source.x + source.width / 2,
+    source.y + source.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    target.x + target.width / 2,
+    target.y + target.height / 2,
+    { steps: 8 },
+  );
 }
 
 async function dragLeave(page: Page) {

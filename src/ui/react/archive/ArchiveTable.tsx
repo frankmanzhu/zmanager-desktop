@@ -1,4 +1,4 @@
-import { Archive, File, Folder, Search } from "lucide-react";
+import { Archive, File, Folder, GripVertical, Search } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -31,6 +31,11 @@ import {
   type ViewportRect,
 } from "../workspace/tableMarqueeSelection";
 import { MarqueeSelectionOverlay } from "../workspace/MarqueeSelectionOverlay";
+import {
+  tableColumnReorderClassName,
+  useTableColumnReorder,
+  type TableColumnReorderController,
+} from "../workspace/useTableColumnReorder";
 import { nativeIconDataUrlForRow } from "./archiveNativeIcons";
 
 const NATIVE_DRAG_THRESHOLD_PX = 6;
@@ -47,6 +52,18 @@ export function ArchiveTable() {
   const archive = snapshot.archive;
   const openCommandState = snapshot.commands.states.open;
   const columns = visibleColumns(archive.view.tableColumns);
+  const columnReorder = useTableColumnReorder(
+    columns
+      .filter((column) => column.id !== "name")
+      .map((column) => column.id),
+    (sourceColumnId, targetColumnId) => {
+      actions.handleArchiveIntent({
+        type: "reorderColumn",
+        sourceColumnId,
+        targetColumnId,
+      });
+    },
+  );
   const showStartEmpty = !archive.currentArchivePath;
   const rows = archive.view.rows;
 
@@ -210,6 +227,7 @@ export function ArchiveTable() {
                   column={column}
                   activeSortKey={archive.view.sort.key}
                   sortAscending={archive.view.sort.ascending}
+                  columnReorder={columnReorder}
                   key={column.id}
                 />
               ))}
@@ -319,10 +337,12 @@ function HeaderCell({
   column,
   activeSortKey,
   sortAscending,
+  columnReorder,
 }: Readonly<{
   column: ArchiveTableColumn;
   activeSortKey: ArchiveTableColumnId;
   sortAscending: boolean;
+  columnReorder: TableColumnReorderController<ArchiveTableColumnId>;
 }>) {
   const actions = useZManagerActions();
   const snapshot = useZManagerSnapshot();
@@ -336,14 +356,24 @@ function HeaderCell({
     startX: number;
   } | null>(null);
 
-  const [isDragOver, setIsDragOver] = useState(false);
+  const movable = column.id !== "name";
+  const isDragSource =
+    columnReorder.dragState?.sourceColumnId === column.id;
+  const dropPosition =
+    columnReorder.dragState?.targetColumnId === column.id
+      ? columnReorder.dragState.dropPosition
+      : null;
 
   return (
     <th
+      data-table-column-header
+      data-table-column-id={column.id}
+      data-column-drag-source={isDragSource || undefined}
+      data-column-drop-position={dropPosition ?? undefined}
       data-column-id={column.id}
       data-sort-key={column.id}
-      draggable={column.id !== "name"}
-      className={`sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""} ${isDragOver ? "border-l-2 border-l-blue-500 bg-blue-50/80 dark:bg-blue-950/80" : ""}`}
+      {...columnReorder.headerPointerHandlers(column.id, movable)}
+      className={`group sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-[background-color,color,box-shadow,opacity,transform] duration-150 ease-out dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""} ${tableColumnReorderClassName({ movable, isSource: isDragSource, dropPosition })}`}
       aria-sort={active ? (sortAscending ? "ascending" : "descending") : "none"}
       aria-keyshortcuts="Enter Space ContextMenu Shift+F10"
       tabIndex={0}
@@ -362,39 +392,6 @@ function HeaderCell({
           x: event.clientX,
           y: event.clientY,
         });
-      }}
-      onDragStart={(event) => {
-        if (column.id === "name") return;
-        event.dataTransfer.setData("text/plain", column.id);
-        event.dataTransfer.effectAllowed = "move";
-      }}
-      onDragEnter={(event) => {
-        if (column.id !== "name") {
-          event.preventDefault();
-          setIsDragOver(true);
-        }
-      }}
-      onDragOver={(event) => {
-        if (column.id !== "name") {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "move";
-        }
-      }}
-      onDragLeave={() => {
-        setIsDragOver(false);
-      }}
-      onDrop={(event) => {
-        setIsDragOver(false);
-        if (column.id === "name") return;
-        event.preventDefault();
-        const sourceId = event.dataTransfer.getData("text/plain") as ArchiveTableColumnId;
-        if (sourceId && sourceId !== column.id && sourceId !== "name") {
-          actions.handleArchiveIntent({
-            type: "reorderColumn",
-            sourceColumnId: sourceId,
-            targetColumnId: column.id,
-          });
-        }
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -420,12 +417,21 @@ function HeaderCell({
         }
       }}
     >
-      <span className="block truncate pr-2">{label}</span>
-      {active ? (
-        <span className="ml-1 text-[10px] text-slate-500" aria-hidden="true">
-          {sortAscending ? "^" : "v"}
-        </span>
-      ) : null}
+      <span className="flex min-w-0 items-center gap-1 pr-2">
+        {movable ? (
+          <GripVertical
+            className="size-3 shrink-0 opacity-35 transition-opacity group-hover:opacity-80"
+            data-column-drag-grip
+            aria-hidden="true"
+          />
+        ) : null}
+        <span className="min-w-0 truncate">{label}</span>
+        {active ? (
+          <span className="shrink-0 text-[10px] text-slate-500" aria-hidden="true">
+            {sortAscending ? "^" : "v"}
+          </span>
+        ) : null}
+      </span>
       <span
         className="absolute inset-y-0 right-0 z-20 w-1.5 cursor-col-resize hover:bg-blue-500/30"
         data-column-resizer={column.id}
@@ -908,7 +914,9 @@ function canStartMarqueeSelection(
   }
 
   if (
-    event.target.closest("button, a, input, select, textarea, [data-column-resizer]")
+    event.target.closest(
+      "button, a, input, select, textarea, [data-column-resizer], [data-table-column-header]",
+    )
   ) {
     return false;
   }

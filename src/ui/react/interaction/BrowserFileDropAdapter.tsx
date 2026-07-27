@@ -14,6 +14,7 @@ export function useBrowserFileDropHandlers(): Pick<
   }
 
   const enter: DragEventHandler<HTMLDivElement> = (event) => {
+    if (!dataTransferContainsFiles(event.dataTransfer)) return;
     event.preventDefault();
     actions.handleDesktopIntent({
       type: "dropEntered",
@@ -30,6 +31,7 @@ export function useBrowserFileDropHandlers(): Pick<
       actions.handleDesktopIntent({ type: "dropLeft" });
     },
     onDrop: (event) => {
+      if (!dataTransferContainsFiles(event.dataTransfer)) return;
       event.preventDefault();
       actions.handleDesktopIntent({
         type: "droppedPaths",
@@ -37,6 +39,12 @@ export function useBrowserFileDropHandlers(): Pick<
       });
     },
   };
+}
+
+export function dataTransferContainsFiles(
+  dataTransfer: DataTransfer | null,
+): boolean {
+  return Array.from(dataTransfer?.types ?? []).includes("Files");
 }
 
 export function droppedPathsFromDataTransfer(

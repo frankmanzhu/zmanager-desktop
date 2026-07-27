@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { droppedPathsFromDataTransfer } from "./BrowserFileDropAdapter";
+import {
+  dataTransferContainsFiles,
+  droppedPathsFromDataTransfer,
+} from "./BrowserFileDropAdapter";
 
 describe("React browser file drop adapter", () => {
   it("normalizes dropped browser files into unknown paths", () => {
@@ -23,5 +26,19 @@ describe("React browser file drop adapter", () => {
 
   it("returns no paths for an empty transfer", () => {
     expect(droppedPathsFromDataTransfer(null)).toEqual([]);
+  });
+
+  it("distinguishes external file drops from internal text drags", () => {
+    expect(
+      dataTransferContainsFiles({
+        types: ["Files"],
+      } as unknown as DataTransfer),
+    ).toBe(true);
+    expect(
+      dataTransferContainsFiles({
+        types: ["text/plain"],
+      } as unknown as DataTransfer),
+    ).toBe(false);
+    expect(dataTransferContainsFiles(null)).toBe(false);
   });
 });
