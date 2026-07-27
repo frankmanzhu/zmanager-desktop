@@ -509,7 +509,7 @@ export function buildQuickCreateStartRequest(
   });
 }
 
-export function createCreateWorkspace(): CreateWorkspace {
+export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumnSettings): CreateWorkspace {
   let state: MutableCreateWorkspaceState = {
     sources: [],
     planState: "idle",
@@ -522,7 +522,9 @@ export function createCreateWorkspace(): CreateWorkspace {
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
     selection: emptyCreateSelection(),
     options: cloneDefaultCreateOptions(),
-    columnSettings: resetCreateColumnSettings(),
+    columnSettings: initialColumnSettings
+      ? normalizeCreateColumnSettings(initialColumnSettings)
+      : resetCreateColumnSettings(),
   };
 
   return {

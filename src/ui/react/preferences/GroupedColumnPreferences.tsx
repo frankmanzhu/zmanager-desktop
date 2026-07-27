@@ -46,7 +46,14 @@ export function GroupedColumnPreferences({ visibility, onChange }: Props) {
 
   const handleFamilyToggle = (columnId: string) => {
     if (!selectedFamily) return;
-    const current = familyOverride ? [...familyOverride] : [...visibility.visibleColumnIds];
+    // Seed from existing override, otherwise from intersection of global visibility
+    // and extract-only columns — common columns stay global, only extract-only
+    // columns are configurable per format family.
+    const current = familyOverride
+      ? [...familyOverride]
+      : visibility.visibleColumnIds.filter((id) =>
+          EXTRACT_ONLY_COLUMNS.some((col) => col.id === id),
+        );
     const idx = current.indexOf(columnId);
     if (idx >= 0) {
       current.splice(idx, 1);

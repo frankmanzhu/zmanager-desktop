@@ -287,6 +287,6 @@ describe("WP1 — Preferred suffix", () => {
   });
 
   it("returns .zip for zip", () => {
-    expect(preferredSuffixForFamily("zip")).toBe(".zipx");
+    expect(preferredSuffixForFamily("zip")).toBe(".zip");
   });
 });

@@ -21,6 +21,7 @@ import type {
 } from "../../app/extractFlow";
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
 import type { CreateSourceColumnId } from "../../app/createTableColumns";
+import type { TableColumnVisibilityPreferences } from "../../app/tableColumnPreferences";
 import {
   DEFAULT_APP_PREFERENCES,
   preferencesWithPatch,
@@ -111,6 +112,7 @@ export type ZManagerReactSnapshot = Readonly<{
   systemIcons: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft: AppPreferences | null;
+  columnVisibilityDraft: TableColumnVisibilityPreferences | null;
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
@@ -364,6 +366,10 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "defaultHandlersRestore" }>
   | Readonly<{ type: "preferencesSave" }>
   | Readonly<{ type: "preferencesCancel" }>
+  | Readonly<{
+      type: "columnVisibilityPatch";
+      visibility: TableColumnVisibilityPreferences;
+    }>
   | Readonly<{ type: "closeCurrent" }>;
 
 export type ZManagerWindowResizeDirection =
@@ -445,6 +451,7 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   systemIcons?: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft?: AppPreferences | null;
+  columnVisibilityDraft?: TableColumnVisibilityPreferences | null;
   pathHistory: PathHistorySnapshot;
   display: ZManagerReactDisplaySnapshot;
   commands: ZManagerReactCommandSnapshot;
@@ -509,6 +516,7 @@ export function createZManagerReactSnapshot(
     preferencesDraft: input.preferencesDraft
       ? cloneAppPreferencesSnapshot(input.preferencesDraft)
       : null,
+    columnVisibilityDraft: input.columnVisibilityDraft ?? null,
     pathHistory: {
       extractDestinationHistory: [
         ...input.pathHistory.extractDestinationHistory,

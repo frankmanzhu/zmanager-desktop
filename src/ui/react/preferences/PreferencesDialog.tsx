@@ -26,11 +26,7 @@ import {
   formatVolumeSizePresetList,
   parseVolumeSizePresetList,
 } from "../../../app/volumeSizePresets";
-import {
-  ARCHIVE_TABLE_COLUMNS,
-  DEFAULT_AVAILABLE_COLUMN_IDS,
-  getAvailableColumnsForFormat,
-} from "../../../app/archiveTable";
+import { GroupedColumnPreferences } from "./GroupedColumnPreferences";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import {
@@ -1555,7 +1551,6 @@ function middleTruncatePath(value: string): string {
 }
 
 function ColumnsPage({
-  draft,
   active,
 }: Readonly<{
   draft: AppPreferences;
@@ -1563,63 +1558,20 @@ function ColumnsPage({
 }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
-  const i18n = translatorForSnapshot(snapshot);
-  const [selectedFormat, setSelectedFormat] = useState<string>("default");
+  const visibility = snapshot.columnVisibilityDraft;
 
-  const currentColumns = draft.tableColumnsByFormat[selectedFormat] ?? {
-    visibleColumnIds: draft.tableVisibleColumnIds ?? [],
-    columnOrderIds: draft.tableColumnOrderIds ?? [],
-    columnWidths: draft.tableColumnWidths ?? {},
-  };
-
-  const handleToggleColumn = (columnId: string) => {
-    const isVisible = currentColumns.visibleColumnIds.includes(columnId as any);
-    const newVisible = isVisible
-      ? currentColumns.visibleColumnIds.filter((id: string) => id !== columnId)
-      : [...currentColumns.visibleColumnIds, columnId];
-
-    const patch: Record<string, unknown> = {};
-    if (selectedFormat === "default") {
-      patch.tableVisibleColumnIds = newVisible;
-      patch.tableColumnOrderIds = currentColumns.columnOrderIds;
-      
-      const nextFormats = { ...draft.tableColumnsByFormat };
-      delete nextFormats["default"];
-      patch.tableColumnsByFormat = nextFormats;
-    } else {
-      patch.tableColumnsByFormat = {
-        ...draft.tableColumnsByFormat,
-        [selectedFormat]: {
-          ...currentColumns,
-          visibleColumnIds: newVisible,
-        },
-      };
-    }
-
-    actions.handleDialogIntent({
-      type: "preferencesPatch",
-      patch: patch as any,
-    });
-  };
-
-  const handleReset = () => {
-    if (selectedFormat === "default") return;
-    const nextFormats = { ...draft.tableColumnsByFormat };
-    delete nextFormats[selectedFormat];
-    actions.handleDialogIntent({
-      type: "preferencesPatch",
-      patch: {
-        tableColumnsByFormat: nextFormats,
-      },
-    });
-  };
-
-  const hasLocalOverride = selectedFormat !== "default" && draft.tableColumnsByFormat[selectedFormat] !== undefined;
-
-  const availableColumns = selectedFormat === "default"
-    ? DEFAULT_AVAILABLE_COLUMN_IDS
-    : getAvailableColumnsForFormat("dummy." + selectedFormat.replace(/^\./, ""));
-  const availableSet = new Set(availableColumns);
+  if (!visibility) {
+    return (
+      <section
+        className={PREFERENCE_PAGE_CLASS}
+        data-pref-page="columns"
+        hidden={!active}
+      >
+        <h3>Columns</h3>
+        <p className={DESCRIPTION_CLASS}>Loading column preferences...</p>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -1629,69 +1581,18 @@ function ColumnsPage({
     >
       <h3>Columns</h3>
       <p className={DESCRIPTION_CLASS}>
-        Configure the default table columns for each archive format.
+        Choose which columns are visible in Compress and Extract tables.
+        Per-format overrides apply only to Extract tables for that archive type.
       </p>
-      
-      <div className={SETTING_ROW_CLASS}>
-        <label htmlFor="pref-columns-format">Archive Format</label>
-        <div className={SETTING_CONTROL_CLASS}>
-          <Select
-            value={selectedFormat}
-            onValueChange={setSelectedFormat}
-          >
-            <SelectTrigger id="pref-columns-format">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="default">Global Defaults</SelectItem>
-              <SelectItem value="zip">ZIP (.zip, .jar, .war, .ipa, .apk)</SelectItem>
-              <SelectItem value="7z">7z (.7z)</SelectItem>
-              <SelectItem value="tzap">TZAP (.tzap)</SelectItem>
-              <SelectItem value="tar.zst">Tar.Zstd (.tar.zst, .tzst)</SelectItem>
-              <SelectItem value="tar.gz">Tar.Gzip (.tar.gz, .tgz)</SelectItem>
-              <SelectItem value="tar.bz2">Tar.Bzip2 (.tar.bz2)</SelectItem>
-              <SelectItem value="tar.xz">Tar.XZ (.tar.xz)</SelectItem>
-              <SelectItem value="tar.br">Tar.Brotli (.tar.br)</SelectItem>
-              <SelectItem value="tar">Tar (.tar)</SelectItem>
-              <SelectItem value="aar">Apple Archive (.aar)</SelectItem>
-              <SelectItem value="gz">Gzip (.gz)</SelectItem>
-              <SelectItem value="bz2">Bzip2 (.bz2)</SelectItem>
-              <SelectItem value="xz">XZ (.xz)</SelectItem>
-              <SelectItem value="zst">Zstd (.zst)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <h4 className="text-sm font-semibold">Visible Columns</h4>
-        {hasLocalOverride && (
-          <Button
-            type="button"
-            variant="dialog"
-            size="unset"
-            className="!px-2 !py-1 !text-xs"
-            onClick={handleReset}
-          >
-            Reset to Global Defaults
-          </Button>
-        )}
-      </div>
-
-      <div className="mt-2 grid gap-2">
-        {ARCHIVE_TABLE_COLUMNS
-          .filter((column) => availableSet.has(column.id))
-          .map((column) => (
-            <label key={column.id} className="flex items-center gap-2 text-sm font-medium">
-              <Checkbox
-                checked={currentColumns.visibleColumnIds.includes(column.id as any)}
-                disabled={column.alwaysVisible}
-                onCheckedChange={() => handleToggleColumn(column.id)}
-              />
-              {i18n.t(column.labelKey as any) || column.labelKey}
-            </label>
-          ))}
-      </div>
+      <GroupedColumnPreferences
+        visibility={visibility}
+        onChange={(newVisibility) => {
+          actions.handleDialogIntent({
+            type: "columnVisibilityPatch",
+            visibility: newVisibility,
+          });
+        }}
+      />
     </section>
   );
 }

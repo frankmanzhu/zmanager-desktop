@@ -165,7 +165,7 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   // -- Container / multi-file formats --
   {
     family: "zip",
-    physicalSuffixes: [".zipx", ".zip", ".jar", ".war", ".ipa", ".apk", ".appx", ".xpi"],
+    physicalSuffixes: [".zip", ".zipx", ".jar", ".war", ".ipa", ".apk", ".appx", ".xpi"],
     displayLabelKey: "format.family.zip",
   },
   {
