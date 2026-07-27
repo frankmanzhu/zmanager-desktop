@@ -348,6 +348,7 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         kind: map_manifest_file_type(entry.file_type),
         size: matches!(entry.file_type, ManifestFileType::File).then_some(entry.size),
         modified: entry.modified.and_then(system_time_to_epoch_seconds_string),
+        mode: entry.permissions.unix_mode,
         source_path: entry.source_path.to_string_lossy().to_string(),
     }
 }
@@ -2741,8 +2742,30 @@ mod tests {
     use std::io::Error;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use zmanager_core::manifest::{ManifestEntry, ManifestFileType, PermissionSnapshot};
     use zmanager_core::safety::ExtractionSafetyError;
+
+    #[test]
+    fn create_plan_entry_dto_preserves_core_permission_mode() {
+        let entry = ManifestEntry {
+            archive_path: "bin/tool".to_string(),
+            source_path: PathBuf::from("C:/work/bin/tool"),
+            file_type: ManifestFileType::File,
+            size: 42,
+            modified: None,
+            permissions: PermissionSnapshot {
+                readonly: false,
+                unix_mode: Some(0o755),
+            },
+            symlink_target: None,
+        };
+
+        let dto = create_plan_entry_to_dto(&entry);
+
+        assert_eq!(dto.mode, Some(0o755));
+    }
 
     #[test]
     fn completion_fallback_marks_successful_job_terminal_without_core_completed_event() {

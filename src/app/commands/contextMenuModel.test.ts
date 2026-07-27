@@ -148,10 +148,12 @@ describe("context menu model", () => {
     const items = buildCreateHeaderContextMenuItems({
       translator,
       tableColumnSettings: resetCreateColumnSettings(),
+      selectedColumnId: "size",
     });
     const actions = actionItems(items);
     const checkboxes = checkboxItems(items);
 
+    expect(items[0]).toEqual({ type: "caption", label: "Column: Size" });
     expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-columns" });
 
     expect(checkboxes.find((item) => item.payload.columnId === "name")).toEqual(expect.objectContaining({
@@ -162,6 +164,8 @@ describe("context menu model", () => {
       checked: false,
       payload: { action: "toggle-column", columnId: "sourcePath" },
     }));
+    expect(checkboxes.map((item) => item.payload.columnId)).not.toContain("created");
+    expect(checkboxes.map((item) => item.payload.columnId)).not.toContain("accessed");
   });
 
   it("builds create row and source menus for reveal, include, exclude, remove, and clear actions", () => {

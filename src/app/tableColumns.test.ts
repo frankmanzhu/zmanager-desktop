@@ -79,7 +79,18 @@ describe("unified table columns", () => {
       expect(settings.visibleColumnIds).toContain("name");
     });
 
-    it("toggles optional create table columns like sourcePath, mode, created, accessed", () => {
+    it("offers only metadata supplied by the create-plan contract", () => {
+      expect(CREATE_SOURCE_TABLE_COLUMNS.map((column) => column.id)).toEqual([
+        "name",
+        "size",
+        "modified",
+        "kind",
+        "sourcePath",
+        "mode",
+      ]);
+    });
+
+    it("toggles optional create table columns", () => {
       const initial = resetCreateColumnSettings();
       expect(initial.visibleColumnIds).not.toContain("sourcePath");
 

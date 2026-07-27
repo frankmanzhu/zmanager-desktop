@@ -123,6 +123,7 @@ export type ArchiveHeaderContextMenuInput = Readonly<{
 export type CreateHeaderContextMenuInput = Readonly<{
   translator: Translator;
   tableColumnSettings: CreateSourceColumnSettings;
+  selectedColumnId?: CreateSourceColumnId;
 }>;
 
 export type CompressRowContextMenuInput = Readonly<{
@@ -280,7 +281,19 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
 
 export function buildCreateHeaderContextMenuItems(input: CreateHeaderContextMenuInput): ContextMenuItem[] {
   const normalizedSettings = normalizeCreateColumnSettings(input.tableColumnSettings);
+  const selectedColumn = CREATE_SOURCE_TABLE_COLUMNS.find(
+    (column) => column.id === input.selectedColumnId,
+  );
   const items: ContextMenuItem[] = [];
+
+  if (selectedColumn) {
+    items.push(
+      captionItem(input.translator.t("detail.columnCaption", {
+        label: createTableColumnLabel(selectedColumn, input.translator),
+      })),
+      separatorItem(),
+    );
+  }
 
   items.push(
     actionItem(input.translator.t("command.resetColumns"), { action: "reset-columns" }),

@@ -594,7 +594,7 @@ const createRuntimeActions = createCreateRuntimeActions({
     publishReactSnapshot();
   },
   showColumnContextMenu: (columnId, x, y) => {
-    showCreateTableHeaderContextMenu(x, y);
+    showCreateTableHeaderContextMenu(x, y, columnId);
   },
   setColumnWidth: (columnId, width) => {
     publishCreateWorkspaceSnapshot(createWorkspace.setColumnWidth(columnId, width));
@@ -3124,11 +3124,16 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
   }));
 }
 
-function showCreateTableHeaderContextMenu(x: number, y: number) {
+function showCreateTableHeaderContextMenu(
+  x: number,
+  y: number,
+  selectedColumnId?: CreateSourceColumnId,
+) {
   const snapshot = createWorkspace.getSnapshot();
   contextMenuRuntime.show(x, y, buildCreateHeaderContextMenuItems({
     translator: displayContext.translator,
     tableColumnSettings: snapshot.view.columnSettings,
+    selectedColumnId,
   }));
 }
 

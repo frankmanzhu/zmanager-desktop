@@ -264,6 +264,7 @@ pub struct CreatePlanEntryDto {
     pub kind: ArchiveEntryKindDto,
     pub size: Option<u64>,
     pub modified: Option<String>,
+    pub mode: Option<u32>,
     pub source_path: String,
 }
 

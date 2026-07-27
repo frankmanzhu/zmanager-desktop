@@ -59,34 +59,8 @@ import {
 import { MarqueeSelectionOverlay } from "../workspace/MarqueeSelectionOverlay";
 import { treeDepthClass } from "../workspace/treeDepthClass";
 
-const COMPRESS_SOURCE_COLUMN_IDS = [
-  "name",
-  "size",
-  "modified",
-  "kind",
-] as const;
 const COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX = 28;
 const COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX = 520;
-const COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS: Record<
-  CompressSourceColumnId,
-  number
-> = {
-  name: 320,
-  size: 120,
-  modified: 170,
-  kind: 120,
-};
-const COMPRESS_SOURCE_MIN_COLUMN_WIDTHS: Record<
-  CompressSourceColumnId,
-  number
-> = {
-  name: 140,
-  size: 72,
-  modified: 110,
-  kind: 80,
-};
-
-type CompressSourceColumnId = (typeof COMPRESS_SOURCE_COLUMN_IDS)[number];
 
 const useBrowserLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -290,7 +264,6 @@ function CreateTable() {
   const columnSettings =
     snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
   const visibleCols = visibleCreateColumns(columnSettings);
-  const COMPRESS_SOURCE_COLUMN_IDS = visibleCols.map((col) => col.id);
   const columnWidths = Object.fromEntries(
     visibleCols.map((col) => [col.id, col.width]),
   );
@@ -678,12 +651,11 @@ function finishCompressSourceColumnResize(
 
 function compressSourceTableWidth(
   widths: Record<string, number>,
-  columnIds?: readonly string[],
+  columnIds: readonly string[],
 ): number {
-  const activeIds = columnIds ?? COMPRESS_SOURCE_COLUMN_IDS;
   return (
     COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX +
-    activeIds.reduce(
+    columnIds.reduce(
       (total, columnId) => total + (widths[columnId] ?? 120),
       0,
     )
@@ -904,7 +876,7 @@ function CreateTableCell({
   nativeIconDataUrl: string | null;
   sourcePath: string | null;
 }>) {
-  const data = row.rowType === "entry" ? row.entry : undefined;
+  const data = row.rowType === "parent" ? undefined : row.entry;
 
   switch (columnId) {
     case "name":
@@ -963,8 +935,14 @@ function CreateTableCell({
           {sourcePath ?? ""}
         </td>
       );
-    default:
-      return <td className="truncate px-2 py-1.5 text-xs" />;
+    case "mode":
+      return (
+        <td className="truncate px-2 py-1.5 text-right text-xs tabular-nums">
+          {typeof data?.mode === "number"
+            ? data.mode.toString(8).padStart(4, "0")
+            : ""}
+        </td>
+      );
   }
 }
 

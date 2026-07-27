@@ -1148,7 +1148,11 @@ describe("archive workspace load state", () => {
 
   it("reorders columns by dragging source to target position", () => {
     const workspace = createArchiveWorkspace();
-    workspace.loadEntries({ entries, archivePath: "test.zip", archiveLabel: "test" });
+    workspace.loadSucceeded({
+      entries,
+      archivePath: "test.zip",
+      entryCount: entries.length,
+    });
     const before = workspace.getSnapshot().view.tableColumns;
     const visibleBefore = before.columnOrderIds.filter((id) =>
       before.visibleColumnIds.includes(id),

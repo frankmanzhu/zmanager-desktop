@@ -251,6 +251,7 @@ export type CreatePlanEntryDto = {
   kind: ArchiveEntryKind;
   size?: number;
   modified?: string;
+  mode?: number;
   sourcePath: string;
 };
 

@@ -18,9 +18,7 @@ export type CreateSourceColumnId =
   | "modified"
   | "kind"
   | "sourcePath"
-  | "mode"
-  | "created"
-  | "accessed";
+  | "mode";
 
 export type CreateSourceColumn = BaseTableColumn<CreateSourceColumnId>;
 
@@ -35,8 +33,6 @@ export const CREATE_SOURCE_TABLE_COLUMNS: CreateSourceColumn[] = [
   { id: "kind", label: "Type", labelKey: "table.type", width: 120, minWidth: 80, align: "left", defaultVisible: true },
   { id: "sourcePath", label: "Source Path", labelKey: "table.sourcePath", width: 220, minWidth: 120, align: "left", defaultVisible: false },
   { id: "mode", label: "Mode", labelKey: "detail.mode", width: 82, minWidth: 64, align: "right", defaultVisible: false },
-  { id: "created", label: "Created", labelKey: "table.created", width: 140, minWidth: 110, align: "left", defaultVisible: false },
-  { id: "accessed", label: "Accessed", labelKey: "table.accessed", width: 140, minWidth: 110, align: "left", defaultVisible: false },
 ];
 
 export const DEFAULT_CREATE_SOURCE_TABLE_COLUMN_IDS = CREATE_SOURCE_TABLE_COLUMNS

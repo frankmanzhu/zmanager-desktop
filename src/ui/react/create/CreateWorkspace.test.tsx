@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_APP_PREFERENCES } from "../../../app/preferences";
+import { toggleCreateColumnVisibility } from "../../../app/createTableColumns";
 import {
   createCreateWorkspace,
   type CreateWorkspaceSnapshot,
@@ -165,6 +166,26 @@ describe("React create workspace", () => {
     expect(html).toContain('class="lucide lucide-folder size-4"');
     expect(html).toContain('class="lucide lucide-file size-4"');
   });
+
+  it("renders the core-owned mode metadata when the optional column is visible", () => {
+    const snapshot = createSnapshot();
+    const html = renderCreateWorkspace({
+      ...snapshot,
+      create: {
+        ...snapshot.create,
+        view: {
+          ...snapshot.create.view,
+          columnSettings: toggleCreateColumnVisibility(
+            snapshot.create.view.columnSettings,
+            "mode",
+          ),
+        },
+      },
+    });
+
+    expect(html).toContain('data-compress-column-id="mode"');
+    expect(html).toContain(">0755</td>");
+  });
 });
 
 function renderCreateWorkspace(snapshot: ZManagerReactSnapshot): string {
@@ -261,6 +282,7 @@ function createPlan(): CreatePlan {
     {
       path: "photos-folder",
       kind: "directory",
+      mode: 0o755,
       sourcePath: "C:/work/photos-folder",
     },
     {
