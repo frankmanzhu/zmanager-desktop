@@ -237,6 +237,28 @@ test("compress table header context menu toggles visible columns and keeps colgr
   await expect(page.locator("th[data-compress-column-id='sourcePath']")).toBeHidden();
 });
 
+test("compress table columns reorder by dragging left and right", async ({ page }) => {
+  await dropFiles(page, ["one.txt", "two.txt"]);
+
+  const headers = page.locator("th[data-compress-column-id]");
+  const columnOrder = () =>
+    headers.evaluateAll((cells) =>
+      cells.map((cell) => cell.getAttribute("data-compress-column-id")),
+    );
+
+  await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
+
+  await page.locator("th[data-compress-column-id='kind']").dragTo(
+    page.locator("th[data-compress-column-id='size']"),
+  );
+  await expect.poll(columnOrder).toEqual(["name", "kind", "size", "modified"]);
+
+  await page.locator("th[data-compress-column-id='kind']").dragTo(
+    page.locator("th[data-compress-column-id='modified']"),
+  );
+  await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
+});
+
 test("extract table header context menu toggles visible columns and supports keyboard shortcut", async ({ page }) => {
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);
@@ -248,6 +270,44 @@ test("extract table header context menu toggles visible columns and supports key
 
   await page.keyboard.press("Escape");
   await expect(page.locator("#context-menu")).toBeHidden();
+});
+
+test("extract table columns reorder by dragging left and right", async ({ page }) => {
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+
+  const headers = page.locator("th[data-column-id]");
+  const columnOrder = () =>
+    headers.evaluateAll((cells) =>
+      cells.map((cell) => cell.getAttribute("data-column-id")),
+    );
+
+  await expect.poll(columnOrder).toEqual([
+    "name",
+    "size",
+    "compressedSize",
+    "modified",
+  ]);
+
+  await page.locator("th[data-column-id='modified']").dragTo(
+    page.locator("th[data-column-id='size']"),
+  );
+  await expect.poll(columnOrder).toEqual([
+    "name",
+    "modified",
+    "size",
+    "compressedSize",
+  ]);
+
+  await page.locator("th[data-column-id='modified']").dragTo(
+    page.locator("th[data-column-id='compressedSize']"),
+  );
+  await expect.poll(columnOrder).toEqual([
+    "name",
+    "size",
+    "compressedSize",
+    "modified",
+  ]);
 });
 
 test("Close Archive resets Extract to its empty state", async ({ page }) => {
