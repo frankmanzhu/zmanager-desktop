@@ -386,9 +386,9 @@ describe("WP1 — Extract per-family availability", () => {
     expect(columns).toEqual(["name", "kind", "compressedSize"]);
   });
 
-  it("unknown availability has no extra columns beyond name/kind", () => {
+  it("unknown availability returns the conservative name+kind set", () => {
     const columns = getUnknownExtractAvailableColumns();
-    expect(columns).toEqual([]);
+    expect(columns).toEqual(["name", "kind"]);
   });
 
   it("getAllExtractColumnIds returns all 21 extract-applicable IDs", () => {
