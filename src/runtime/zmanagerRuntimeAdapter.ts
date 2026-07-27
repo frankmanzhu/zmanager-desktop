@@ -29,6 +29,7 @@ import {
   buildArchiveFolderContextMenuItems,
   buildArchiveHeaderContextMenuItems,
   buildCompressRowContextMenuItems,
+  buildCreateHeaderContextMenuItems,
   buildSourceContextMenuItems,
   buildStartupContextMenuItems,
   type ContextMenuActionPayload,
@@ -97,6 +98,10 @@ import {
   type CreateWorkspacePlanStatus,
   type CreateWorkspaceSnapshot,
 } from "../app/workspaces/createWorkspace";
+import {
+  CREATE_SOURCE_TABLE_COLUMNS,
+  type CreateSourceColumnId,
+} from "../app/createTableColumns";
 import {
   createExtractWorkspace,
   type ExtractWorkspaceDefaults,
@@ -423,6 +428,10 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
   clearSearch,
   setFlatView,
   setColumnWidth: setTableColumnWidth,
+  reorderColumn: (sourceColumnId, targetColumnId) => {
+    publishArchiveSnapshot(archiveWorkspace.reorderColumn(sourceColumnId, targetColumnId));
+    updateCurrentTableColumnSettings((s) => s);
+  },
   toggleTreeFolder: (folderPath) => {
     const snapshot = archiveWorkspace.toggleTreeFolder(folderPath);
     publishArchiveSnapshot(snapshot);
@@ -583,6 +592,15 @@ const createRuntimeActions = createCreateRuntimeActions({
       showSourceContextMenu(sourcePath, x, y);
     }
     publishReactSnapshot();
+  },
+  showColumnContextMenu: (columnId, x, y) => {
+    showCreateTableHeaderContextMenu(x, y);
+  },
+  setColumnWidth: (columnId, width) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.setColumnWidth(columnId, width));
+  },
+  reorderColumn: (sourceColumnId, targetColumnId) => {
+    publishCreateWorkspaceSnapshot(createWorkspace.reorderColumn(sourceColumnId, targetColumnId));
   },
   runCreate: (password, passwordConfirm, signingIdentityPassword) => runCreate({
     passwordInput: {
@@ -3106,6 +3124,14 @@ function showTableHeaderContextMenu(x: number, y: number, selectedColumnId?: Arc
   }));
 }
 
+function showCreateTableHeaderContextMenu(x: number, y: number) {
+  const snapshot = createWorkspace.getSnapshot();
+  contextMenuRuntime.show(x, y, buildCreateHeaderContextMenuItems({
+    translator: displayContext.translator,
+    tableColumnSettings: snapshot.view.columnSettings,
+  }));
+}
+
 function showCompressRowContextMenuForPath(
   rowPath: string,
   rowSourcePath: string,
@@ -3204,54 +3230,41 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
     }
     return;
   }
-  if (action === "sort-ascending" && columnId) {
-    applySortDirection(columnId, true);
-    return;
+  const archiveColId = columnId as ArchiveTableColumnId | undefined;
+  if (currentWorkspaceMode() === "compress") {
+    const createColId = columnId as CreateSourceColumnId | undefined;
+    if (action === "toggle-column" && createColId) {
+      publishCreateWorkspaceSnapshot(createWorkspace.toggleColumnVisibility(createColId));
+      return;
+    }
+    if (action === "reset-columns") {
+      publishCreateWorkspaceSnapshot(createWorkspace.resetColumns());
+      return;
+    }
+  } else {
+    if (action === "sort-ascending" && archiveColId) {
+      applySortDirection(archiveColId, true);
+      return;
+    }
+    if (action === "sort-descending" && archiveColId) {
+      applySortDirection(archiveColId, false);
+      return;
+    }
+    if (action === "toggle-column" && archiveColId) {
+      archiveWorkspace.toggleColumnVisibility(archiveColId);
+      updateCurrentTableColumnSettings((s) => s);
+      publishReactSnapshot();
+      return;
+    }
+    if (action === "reset-columns") {
+      const defaultTableColumns = resolvePreferredColumnSettings(appPreferences, archiveCurrentPath());
+      archiveWorkspace.resetColumns(defaultTableColumns);
+      updateCurrentTableColumnSettings((s) => s);
+      publishReactSnapshot();
+      return;
+    }
   }
-  if (action === "sort-descending" && columnId) {
-    applySortDirection(columnId, false);
-    return;
-  }
-  if (action === "toggle-column" && columnId) {
-    archiveWorkspace.toggleColumnVisibility(columnId);
-    updateCurrentTableColumnSettings((s) => s);
-    publishReactSnapshot();
-    return;
-  }
-  if (action === "move-column-left" && columnId) {
-    archiveWorkspace.moveColumn(columnId, "left");
-    updateCurrentTableColumnSettings((s) => s);
-    publishReactSnapshot();
-    return;
-  }
-  if (action === "move-column-right" && columnId) {
-    archiveWorkspace.moveColumn(columnId, "right");
-    updateCurrentTableColumnSettings((s) => s);
-    publishReactSnapshot();
-    return;
-  }
-  if (action === "narrow-column" && columnId) {
-    adjustTableColumnWidth(columnId, -24);
-    updateCurrentTableColumnSettings((s) => s);
-    return;
-  }
-  if (action === "widen-column" && columnId) {
-    adjustTableColumnWidth(columnId, 24);
-    updateCurrentTableColumnSettings((s) => s);
-    return;
-  }
-  if (action === "reset-column-width" && columnId) {
-    resetTableColumnWidth(columnId);
-    updateCurrentTableColumnSettings((s) => s);
-    return;
-  }
-  if (action === "reset-columns") {
-    const defaultTableColumns = resolvePreferredColumnSettings(appPreferences, archiveCurrentPath());
-    archiveWorkspace.resetColumns(defaultTableColumns);
-    updateCurrentTableColumnSettings((s) => s);
-    publishReactSnapshot();
-    return;
-  }
+
   if (action === "reveal-source" && sourcePath) {
     void revealInFileManager(sourcePath).catch((error) => {
       setOperationalStatus(unknownErrorMessage(error, message("preview.unableRevealSource")));

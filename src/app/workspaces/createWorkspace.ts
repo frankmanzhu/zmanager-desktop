@@ -42,6 +42,16 @@ import {
   type HierarchicalTableSelectionResult,
 } from "../hierarchicalTable";
 import type { FormatCreateDefaults } from "../preferences";
+import {
+  moveCreateColumn,
+  normalizeCreateColumnSettings,
+  reorderCreateColumn,
+  resetCreateColumnSettings,
+  setCreateColumnWidth,
+  toggleCreateColumnVisibility,
+  type CreateSourceColumnId,
+  type CreateSourceColumnSettings,
+} from "../createTableColumns";
 
 export type CreateWorkspacePlanMessageKey =
   | "create.plan.noSources"
@@ -87,6 +97,7 @@ export type CreateWorkspacePlanViewSnapshot = Readonly<{
   expandedTreeFolders: readonly string[];
   rows: readonly CreatePlanRow[];
   treeFolders: readonly CreateWorkspaceTreeFolder[];
+  columnSettings: CreateSourceColumnSettings;
 }>;
 
 export type CreateWorkspaceSelectionSnapshot = Readonly<{
@@ -372,6 +383,11 @@ export type CreateWorkspace = {
   getPathInclusionState(path: string): CreatePlanInclusionState;
   getRowInclusionState(row: CreatePlanRow): CreatePlanInclusionState;
   getIncludeAllControlState(path: string | null | undefined): CreateWorkspaceIncludeAllControlState;
+  setColumnWidth(columnId: CreateSourceColumnId, width: number): CreateWorkspaceSnapshot;
+  toggleColumnVisibility(columnId: CreateSourceColumnId): CreateWorkspaceSnapshot;
+  moveColumn(columnId: CreateSourceColumnId, direction: "left" | "right"): CreateWorkspaceSnapshot;
+  reorderColumn(sourceColumnId: CreateSourceColumnId, targetColumnId: CreateSourceColumnId): CreateWorkspaceSnapshot;
+  resetColumns(settings?: CreateSourceColumnSettings): CreateWorkspaceSnapshot;
 };
 
 type MutableCreateWorkspaceState = {
@@ -386,6 +402,7 @@ type MutableCreateWorkspaceState = {
   expandedTreeFolders: Set<string>;
   selection: MutableCreateWorkspaceSelection;
   options: MutableCreateWorkspaceOptions;
+  columnSettings: CreateSourceColumnSettings;
 };
 
 type MutableCreateWorkspaceSelection = {
@@ -505,6 +522,7 @@ export function createCreateWorkspace(): CreateWorkspace {
     expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
     selection: emptyCreateSelection(),
     options: cloneDefaultCreateOptions(),
+    columnSettings: resetCreateColumnSettings(),
   };
 
   return {
@@ -610,6 +628,7 @@ export function createCreateWorkspace(): CreateWorkspace {
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
         selection: emptyCreateSelection(),
         options: cloneDefaultCreateOptions(),
+        columnSettings: state.columnSettings,
       };
       return mutationResult(state, true, [], removedSources);
     },
@@ -1227,6 +1246,46 @@ export function createCreateWorkspace(): CreateWorkspace {
 
     getIncludeAllControlState(path) {
       return includeAllControlState(state, path);
+    },
+
+    setColumnWidth(columnId, width) {
+      state = {
+        ...state,
+        columnSettings: setCreateColumnWidth(state.columnSettings, columnId, width),
+      };
+      return snapshotFromState(state);
+    },
+
+    toggleColumnVisibility(columnId) {
+      state = {
+        ...state,
+        columnSettings: toggleCreateColumnVisibility(state.columnSettings, columnId),
+      };
+      return snapshotFromState(state);
+    },
+
+    moveColumn(columnId, direction) {
+      state = {
+        ...state,
+        columnSettings: moveCreateColumn(state.columnSettings, columnId, direction),
+      };
+      return snapshotFromState(state);
+    },
+
+    reorderColumn(sourceColumnId, targetColumnId) {
+      state = {
+        ...state,
+        columnSettings: reorderCreateColumn(state.columnSettings, sourceColumnId, targetColumnId),
+      };
+      return snapshotFromState(state);
+    },
+
+    resetColumns(settings) {
+      state = {
+        ...state,
+        columnSettings: settings ? normalizeCreateColumnSettings(settings) : resetCreateColumnSettings(),
+      };
+      return snapshotFromState(state);
     },
   };
 
@@ -2139,6 +2198,7 @@ function snapshotFromState(state: MutableCreateWorkspaceState): CreateWorkspaceS
       currentFolder,
       expandedTreeFolders,
     ),
+    columnSettings: state.columnSettings,
   });
   const options = createOptionsSnapshot(state, includedEntries.length);
   return Object.freeze({

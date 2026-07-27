@@ -51,6 +51,19 @@ describe("create runtime actions", () => {
 
     expect(effects.runCreate).toHaveBeenCalledWith("one", "two", "identity");
   });
+
+  it("routes column context menu, width, and reorder intents to their effects", () => {
+    const effects = createEffects();
+    const actions = createCreateRuntimeActions(effects);
+
+    actions.handleIntent({ type: "showColumnContextMenu", columnId: "size", x: 10, y: 20 });
+    actions.handleIntent({ type: "setColumnWidth", columnId: "modified", width: 180 });
+    actions.handleIntent({ type: "reorderColumn", sourceColumnId: "kind", targetColumnId: "size" });
+
+    expect(effects.showColumnContextMenu).toHaveBeenCalledWith("size", 10, 20);
+    expect(effects.setColumnWidth).toHaveBeenCalledWith("modified", 180);
+    expect(effects.reorderColumn).toHaveBeenCalledWith("kind", "size");
+  });
 });
 
 function createEffects(
@@ -80,6 +93,9 @@ function createEffects(
     focusRow: vi.fn(),
     removeSelectedSources: vi.fn(),
     showCompressRowContextMenu: vi.fn(),
+    showColumnContextMenu: vi.fn(),
+    setColumnWidth: vi.fn(),
+    reorderColumn: vi.fn(),
     runCreate: vi.fn(),
     generateTzapIdentity: vi.fn(),
     ...overrides,

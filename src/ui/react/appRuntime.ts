@@ -20,6 +20,7 @@ import type {
   TzapRestorePolicy,
 } from "../../app/extractFlow";
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
+import type { CreateSourceColumnId } from "../../app/createTableColumns";
 import {
   DEFAULT_APP_PREFERENCES,
   preferencesWithPatch,
@@ -137,6 +138,11 @@ export type ZManagerArchiveIntent =
       width: number;
       persist: boolean;
     }>
+  | Readonly<{
+      type: "reorderColumn";
+      sourceColumnId: ArchiveTableColumnId;
+      targetColumnId: ArchiveTableColumnId;
+    }>
   | Readonly<{ type: "toggleTreeFolder"; folderPath: string }>
   | Readonly<{ type: "sortByColumn"; columnId: ArchiveTableColumnId }>
   | Readonly<{ type: "selectAllVisible" }>
@@ -246,6 +252,22 @@ export type ZManagerCreateIntent =
       sourcePath?: string;
       x: number;
       y: number;
+    }>
+  | Readonly<{
+      type: "showColumnContextMenu";
+      columnId?: CreateSourceColumnId;
+      x: number;
+      y: number;
+    }>
+  | Readonly<{
+      type: "setColumnWidth";
+      columnId: CreateSourceColumnId;
+      width: number;
+    }>
+  | Readonly<{
+      type: "reorderColumn";
+      sourceColumnId: CreateSourceColumnId;
+      targetColumnId: CreateSourceColumnId;
     }>
   | Readonly<{
       type: "runCreate";

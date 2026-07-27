@@ -20,6 +20,7 @@ import {
   buildArchiveBrowserRows,
   normalizeColumnSettings,
   moveColumn,
+  reorderColumn,
   resetColumnSettings,
   setColumnWidth,
   toggleColumnVisibility,
@@ -356,6 +357,7 @@ export type ArchiveWorkspace = {
   setColumnWidth(columnId: ArchiveTableColumnId, width: number): ArchiveWorkspaceSnapshot;
   toggleColumnVisibility(columnId: ArchiveTableColumnId): ArchiveWorkspaceSnapshot;
   moveColumn(columnId: ArchiveTableColumnId, direction: "left" | "right"): ArchiveWorkspaceSnapshot;
+  reorderColumn(sourceColumnId: ArchiveTableColumnId, targetColumnId: ArchiveTableColumnId): ArchiveWorkspaceSnapshot;
   resetColumns(defaults?: ArchiveTableColumnSettings): ArchiveWorkspaceSnapshot;
   reset(): ArchiveWorkspaceSnapshot;
 };
@@ -844,6 +846,17 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
         view: {
           ...state.view,
           tableColumns: moveColumn(state.view.tableColumns, columnId, direction),
+        },
+      };
+      return snapshotFromState(state);
+    },
+
+    reorderColumn(sourceColumnId, targetColumnId) {
+      state = {
+        ...state,
+        view: {
+          ...state.view,
+          tableColumns: reorderColumn(state.view.tableColumns, sourceColumnId, targetColumnId),
         },
       };
       return snapshotFromState(state);

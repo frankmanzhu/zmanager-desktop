@@ -6,6 +6,13 @@ import {
   type ArchiveTableColumnId,
   type ArchiveTableColumnSettings,
 } from "../archiveTable";
+import {
+  CREATE_SOURCE_TABLE_COLUMNS,
+  createTableColumnLabel,
+  normalizeCreateColumnSettings,
+  type CreateSourceColumnId,
+  type CreateSourceColumnSettings,
+} from "../createTableColumns";
 import type { Translator } from "../i18n/translator";
 
 export const CONTEXT_MENU_ACTIONS = [
@@ -19,9 +26,6 @@ export const CONTEXT_MENU_ACTIONS = [
   "extract-here",
   "include-compress-path",
   "info",
-  "move-column-left",
-  "move-column-right",
-  "narrow-column",
   "open-archive",
   "open-entry",
   "open-folder",
@@ -29,7 +33,6 @@ export const CONTEXT_MENU_ACTIONS = [
   "open-recent-archive",
   "paste-archive-path",
   "remove-source",
-  "reset-column-width",
   "reset-columns",
   "reveal-source",
   "select-by-type",
@@ -37,7 +40,6 @@ export const CONTEXT_MENU_ACTIONS = [
   "sort-descending",
   "test",
   "toggle-column",
-  "widen-column",
 ] as const;
 
 export type ContextMenuAction = typeof CONTEXT_MENU_ACTIONS[number];
@@ -45,7 +47,7 @@ export type ContextMenuAction = typeof CONTEXT_MENU_ACTIONS[number];
 export type ContextMenuActionPayload = Readonly<{
   action: ContextMenuAction;
   archivePath?: string;
-  columnId?: ArchiveTableColumnId;
+  columnId?: ArchiveTableColumnId | CreateSourceColumnId;
   compressMenuPath?: string;
   entryPath?: string;
   folderPath?: string;
@@ -116,6 +118,11 @@ export type ArchiveHeaderContextMenuInput = Readonly<{
   tableColumnSettings: ArchiveTableColumnSettings;
   selectedColumnId?: ArchiveTableColumnId;
   archivePath?: string;
+}>;
+
+export type CreateHeaderContextMenuInput = Readonly<{
+  translator: Translator;
+  tableColumnSettings: CreateSourceColumnSettings;
 }>;
 
 export type CompressRowContextMenuInput = Readonly<{
@@ -247,31 +254,6 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
         columnId: selectedColumn.id,
       }),
       separatorItem(),
-      actionItem(input.translator.t("command.moveLeft"), {
-        action: "move-column-left",
-        columnId: selectedColumn.id,
-      }, {
-        disabled: selectedColumn.id === "name" || selectedColumnIndex <= 1,
-      }),
-      actionItem(input.translator.t("command.moveRight"), {
-        action: "move-column-right",
-        columnId: selectedColumn.id,
-      }, {
-        disabled: selectedColumn.id === "name" || selectedColumnIndex < 1 || selectedColumnIndex >= visibleColumnOrder.length - 1,
-      }),
-      actionItem(input.translator.t("command.narrower"), {
-        action: "narrow-column",
-        columnId: selectedColumn.id,
-      }),
-      actionItem(input.translator.t("command.wider"), {
-        action: "widen-column",
-        columnId: selectedColumn.id,
-      }),
-      actionItem(input.translator.t("command.resetWidth"), {
-        action: "reset-column-width",
-        columnId: selectedColumn.id,
-      }),
-      separatorItem(),
     );
   }
 
@@ -284,6 +266,30 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
       .map((column) => {
         const isNameColumn = column.id === "name";
         return checkboxItem(archiveTableColumnLabel(column, input.translator), {
+          action: "toggle-column",
+          columnId: column.id,
+        }, {
+          checked: isNameColumn || normalizedSettings.visibleColumnIds.includes(column.id),
+          disabled: isNameColumn,
+        });
+      }),
+  );
+
+  return items;
+}
+
+export function buildCreateHeaderContextMenuItems(input: CreateHeaderContextMenuInput): ContextMenuItem[] {
+  const normalizedSettings = normalizeCreateColumnSettings(input.tableColumnSettings);
+  const items: ContextMenuItem[] = [];
+
+  items.push(
+    actionItem(input.translator.t("command.resetColumns"), { action: "reset-columns" }),
+    separatorItem(),
+    captionItem(input.translator.t("command.chooseColumns")),
+    ...CREATE_SOURCE_TABLE_COLUMNS
+      .map((column) => {
+        const isNameColumn = column.id === "name";
+        return checkboxItem(createTableColumnLabel(column, input.translator), {
           action: "toggle-column",
           columnId: column.id,
         }, {

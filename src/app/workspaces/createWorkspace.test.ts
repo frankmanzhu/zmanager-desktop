@@ -123,6 +123,8 @@ const pathHelpers = {
   },
 };
 
+import { resetCreateColumnSettings } from "../createTableColumns";
+
 describe("create workspace source state", () => {
   it("starts with an empty immutable source snapshot", () => {
     const workspace = createCreateWorkspace();
@@ -161,6 +163,7 @@ describe("create workspace source state", () => {
           hasChildren: false,
           isExpanded: true,
         }],
+        columnSettings: resetCreateColumnSettings(),
       },
       selection: {
         selectedPaths: [],
@@ -1712,6 +1715,32 @@ describe("create workspace start request", () => {
     })).toEqual({
       ok: false,
       reason: "needsDestination",
+    });
+  });
+
+  describe("create workspace column settings", () => {
+    it("modifies column width, visibility, position, and resets settings", () => {
+      const workspace = createCreateWorkspace();
+      let snapshot = workspace.getSnapshot();
+
+      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "size", "modified", "kind"]);
+
+      snapshot = workspace.toggleColumnVisibility("sourcePath");
+      expect(snapshot.view.columnSettings.visibleColumnIds).toContain("sourcePath");
+
+      snapshot = workspace.setColumnWidth("size", 200);
+      expect(snapshot.view.columnSettings.columnWidths["size"]).toBe(200);
+
+      snapshot = workspace.moveColumn("kind", "left");
+      expect(snapshot.view.columnSettings.columnOrderIds.indexOf("kind")).toBeLessThan(
+        snapshot.view.columnSettings.columnOrderIds.indexOf("modified"),
+      );
+
+      snapshot = workspace.reorderColumn("kind", "size");
+      expect(snapshot.view.columnSettings.columnOrderIds.indexOf("kind")).toBe(1);
+
+      snapshot = workspace.resetColumns();
+      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "size", "modified", "kind"]);
     });
   });
 });

@@ -17,6 +17,7 @@ export type ArchiveRuntimeActionEffects = Readonly<{
   clearSearch(): void;
   setFlatView(flatView: boolean, persistPreference: boolean): void;
   setColumnWidth(columnId: ArchiveTableColumnId, width: number, persist: boolean): void;
+  reorderColumn(sourceColumnId: ArchiveTableColumnId, targetColumnId: ArchiveTableColumnId): void;
   toggleTreeFolder(folderPath: string): void;
   sortByColumn(columnId: ArchiveTableColumnId): void;
   selectAllVisible(): void;
@@ -88,6 +89,9 @@ export function createArchiveRuntimeActions(
           break;
         case "setColumnWidth":
           effects.setColumnWidth(intent.columnId, intent.width, intent.persist);
+          break;
+        case "reorderColumn":
+          effects.reorderColumn(intent.sourceColumnId, intent.targetColumnId);
           break;
         case "toggleTreeFolder":
           effects.toggleTreeFolder(intent.folderPath);

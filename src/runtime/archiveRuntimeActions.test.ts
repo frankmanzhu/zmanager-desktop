@@ -66,6 +66,17 @@ describe("archive runtime actions", () => {
     expect(effects.resetExtractDefaults).toHaveBeenCalled();
     expect(effects.runExtract).toHaveBeenCalledWith("archive", "secret");
   });
+
+  it("routes column width and reorder intents to their respective effects", () => {
+    const effects = createEffects();
+    const actions = createArchiveRuntimeActions(effects);
+
+    actions.handleIntent({ type: "setColumnWidth", columnId: "size", width: 200, persist: true });
+    actions.handleIntent({ type: "reorderColumn", sourceColumnId: "size", targetColumnId: "modified" });
+
+    expect(effects.setColumnWidth).toHaveBeenCalledWith("size", 200, true);
+    expect(effects.reorderColumn).toHaveBeenCalledWith("size", "modified");
+  });
 });
 
 function createEffects(
@@ -81,6 +92,7 @@ function createEffects(
     clearSearch: vi.fn(),
     setFlatView: vi.fn(),
     setColumnWidth: vi.fn(),
+    reorderColumn: vi.fn(),
     toggleTreeFolder: vi.fn(),
     sortByColumn: vi.fn(),
     selectAllVisible: vi.fn(),

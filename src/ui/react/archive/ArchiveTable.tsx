@@ -120,6 +120,15 @@ export function ArchiveTable() {
             event.stopPropagation();
           }
         }}
+        onContextMenu={(event) => {
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          actions.handleArchiveIntent({
+            type: "showEmptyContextMenu",
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
       >
         <div
           id="marquee-hit-surface"
@@ -327,11 +336,14 @@ function HeaderCell({
     startX: number;
   } | null>(null);
 
+  const [isDragOver, setIsDragOver] = useState(false);
+
   return (
     <th
       data-column-id={column.id}
       data-sort-key={column.id}
-      className={`sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""}`}
+      draggable={column.id !== "name"}
+      className={`sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""} ${isDragOver ? "border-l-2 border-l-blue-500 bg-blue-50/80 dark:bg-blue-950/80" : ""}`}
       aria-sort={active ? (sortAscending ? "ascending" : "descending") : "none"}
       aria-keyshortcuts="Enter Space ContextMenu Shift+F10"
       tabIndex={0}
@@ -350,6 +362,39 @@ function HeaderCell({
           x: event.clientX,
           y: event.clientY,
         });
+      }}
+      onDragStart={(event) => {
+        if (column.id === "name") return;
+        event.dataTransfer.setData("text/plain", column.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnter={(event) => {
+        if (column.id !== "name") {
+          event.preventDefault();
+          setIsDragOver(true);
+        }
+      }}
+      onDragOver={(event) => {
+        if (column.id !== "name") {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDragLeave={() => {
+        setIsDragOver(false);
+      }}
+      onDrop={(event) => {
+        setIsDragOver(false);
+        if (column.id === "name") return;
+        event.preventDefault();
+        const sourceId = event.dataTransfer.getData("text/plain") as ArchiveTableColumnId;
+        if (sourceId && sourceId !== column.id && sourceId !== "name") {
+          actions.handleArchiveIntent({
+            type: "reorderColumn",
+            sourceColumnId: sourceId,
+            targetColumnId: column.id,
+          });
+        }
       }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {

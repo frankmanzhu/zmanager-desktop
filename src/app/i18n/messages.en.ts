@@ -134,6 +134,7 @@ export const enMessages = {
   "pane.details": "Details",
   "table.selectVisibleEntries": "Select visible entries",
   "table.name": "Name",
+  "table.sourcePath": "Source Path",
   "table.location": "Location",
   "table.kind": "Kind",
   "table.action": "Action",

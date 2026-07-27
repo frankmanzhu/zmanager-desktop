@@ -107,6 +107,7 @@ export const zhCnMessages = {
   "pane.details": "详细信息",
   "table.selectVisibleEntries": "选择可见条目",
   "table.name": "名称",
+  "table.sourcePath": "源路径",
   "table.location": "位置",
   "table.kind": "类型",
   "table.action": "操作",

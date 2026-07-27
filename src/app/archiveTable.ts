@@ -12,6 +12,15 @@ import {
   type HierarchicalTableRow,
 } from "./hierarchicalTable";
 import { getKnownArchiveSuffix } from "./archiveFileTypes";
+import {
+  moveGenericColumn,
+  normalizeGenericColumnSettings,
+  reorderGenericColumn,
+  setGenericColumnWidth,
+  tableColumnLabel,
+  toggleGenericColumnVisibility,
+  visibleGenericColumns,
+} from "./tableColumns";
 
 export type ArchiveTableColumnId =
   | "name"
@@ -155,29 +164,14 @@ export function normalizeColumnSettings(
   settings?: Partial<ArchiveTableColumnSettings> | null,
   archivePath?: string,
 ): ArchiveTableColumnSettings {
-  const formatAvailable = archivePath ? getAvailableColumnsForFormat(archivePath) : null;
-  const availableColumns = new Map(ARCHIVE_TABLE_COLUMNS.map((column) => [column.id, column]));
-  const available = formatAvailable ? new Set(formatAvailable) : new Set(availableColumns.keys());
-  const incoming = settings?.visibleColumnIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_IDS;
-  const visibleColumnIds = incoming.filter((id) => available.has(id));
-  const incomingOrder = settings?.columnOrderIds ?? DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS;
-  const orderedIds = uniqueColumnIds(incomingOrder.filter((id) => available.has(id)));
-  const missingOrderedIds = DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS.filter((id) => available.has(id) && !orderedIds.includes(id));
-  const columnOrderIds: ArchiveTableColumnId[] = [
-    "name",
-    ...orderedIds.filter((id) => id !== "name"),
-    ...missingOrderedIds.filter((id) => id !== "name"),
-  ];
-
-  if (!visibleColumnIds.includes("name")) {
-    visibleColumnIds.unshift("name");
-  }
-
-  return {
-    visibleColumnIds: uniqueColumnIds(visibleColumnIds),
-    columnOrderIds,
-    columnWidths: normalizeColumnWidths(settings?.columnWidths, availableColumns),
-  };
+  const availableColumnIds = archivePath ? getAvailableColumnsForFormat(archivePath) : null;
+  return normalizeGenericColumnSettings(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+    availableColumnIds,
+  );
 }
 
 export type ResolveColumnPreferences = {
@@ -216,36 +210,22 @@ export function toggleColumnVisibility(
   settings: ArchiveTableColumnSettings,
   columnId: ArchiveTableColumnId,
 ): ArchiveTableColumnSettings {
-  if (columnId === "name") {
-    return normalizeColumnSettings(settings);
-  }
-
-  const visible = new Set(settings.visibleColumnIds);
-  if (visible.has(columnId)) {
-    visible.delete(columnId);
-  } else {
-    visible.add(columnId);
-  }
-
-  return normalizeColumnSettings({
-    ...settings,
-    visibleColumnIds: Array.from(visible),
-  });
+  return toggleGenericColumnVisibility(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+    columnId,
+  );
 }
 
 export function visibleColumns(settings: ArchiveTableColumnSettings): ArchiveTableColumn[] {
-  const normalized = normalizeColumnSettings(settings);
-  const visible = new Set(normalized.visibleColumnIds);
-  const columnsById = new Map(ARCHIVE_TABLE_COLUMNS.map((column) => [column.id, column]));
-  return normalized.columnOrderIds
-    .filter((id) => visible.has(id))
-    .map((id) => {
-      const column = columnsById.get(id)!;
-      return {
-        ...column,
-        width: normalized.columnWidths[id] ?? column.width,
-      };
-    });
+  return visibleGenericColumns(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+  );
 }
 
 export function setColumnWidth(
@@ -253,18 +233,14 @@ export function setColumnWidth(
   columnId: ArchiveTableColumnId,
   width: number,
 ): ArchiveTableColumnSettings {
-  const column = ARCHIVE_TABLE_COLUMNS.find((item) => item.id === columnId);
-  if (!column) {
-    return normalizeColumnSettings(settings);
-  }
-
-  return normalizeColumnSettings({
-    ...settings,
-    columnWidths: {
-      ...settings.columnWidths,
-      [columnId]: clampColumnWidth(width, column),
-    },
-  });
+  return setGenericColumnWidth(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+    columnId,
+    width,
+  );
 }
 
 export function moveColumn(
@@ -272,29 +248,29 @@ export function moveColumn(
   columnId: ArchiveTableColumnId,
   direction: "left" | "right",
 ): ArchiveTableColumnSettings {
-  if (columnId === "name") {
-    return normalizeColumnSettings(settings);
-  }
+  return moveGenericColumn(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+    columnId,
+    direction,
+  );
+}
 
-  const normalized = normalizeColumnSettings(settings);
-  const order = [...normalized.columnOrderIds];
-  const visible = new Set(normalized.visibleColumnIds);
-  const visibleOrder = order.filter((id) => visible.has(id));
-  const currentVisibleIndex = visibleOrder.indexOf(columnId);
-  const nextVisibleIndex = direction === "left" ? currentVisibleIndex - 1 : currentVisibleIndex + 1;
-
-  if (currentVisibleIndex <= 0 || nextVisibleIndex <= 0 || nextVisibleIndex >= visibleOrder.length) {
-    return normalized;
-  }
-
-  const targetColumnId = visibleOrder[nextVisibleIndex];
-  const currentIndex = order.indexOf(columnId);
-  const nextIndex = order.indexOf(targetColumnId);
-  [order[currentIndex], order[nextIndex]] = [order[nextIndex], order[currentIndex]];
-  return normalizeColumnSettings({
-    ...normalized,
-    columnOrderIds: order,
-  });
+export function reorderColumn(
+  settings: ArchiveTableColumnSettings,
+  sourceColumnId: ArchiveTableColumnId,
+  targetColumnId: ArchiveTableColumnId,
+): ArchiveTableColumnSettings {
+  return reorderGenericColumn(
+    ARCHIVE_TABLE_COLUMNS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
+    DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
+    settings,
+    sourceColumnId,
+    targetColumnId,
+  );
 }
 
 function uniqueColumnIds(ids: ArchiveTableColumnId[]): ArchiveTableColumnId[] {
@@ -385,7 +361,8 @@ export function formatArchiveTableValue(
 }
 
 export function archiveTableColumnLabel(column: ArchiveTableColumn, i18n?: Translator): string {
-  return i18n?.t(column.labelKey) ?? column.label;
+  if (i18n) return tableColumnLabel(column, i18n);
+  return column.label;
 }
 
 export function buildArchiveBrowserRows(options: BuildArchiveBrowserRowsOptions): ArchiveTableRow[] {

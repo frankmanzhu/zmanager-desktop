@@ -207,6 +207,49 @@ test("folder panes suppress the WebView context menu", async ({ page }) => {
   expect(extractContextMenuNotCancelled).toBe(false);
 });
 
+test("table views suppress the WebView context menu", async ({ page }) => {
+  const compressTableContextMenuNotCancelled = await page.locator("[data-create-table-shell]").evaluate((element) =>
+    element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  expect(compressTableContextMenuNotCancelled).toBe(false);
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  const extractTableContextMenuNotCancelled = await page.locator("[data-archive-table-shell]").evaluate((element) =>
+    element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  expect(extractTableContextMenuNotCancelled).toBe(false);
+});
+
+test("compress table header context menu toggles visible columns and keeps colgroup aligned", async ({ page }) => {
+  await page.locator("th[data-compress-column-id='size']").click({ button: "right" });
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu")).toContainText("Reset Columns");
+
+  await page.locator("#context-menu button").filter({ hasText: "Source Path" }).click();
+  await expect(page.locator("th[data-compress-column-id='sourcePath']")).toBeVisible();
+
+  const colCount = await page.locator("#compress-source-table colgroup col").count();
+  const thCount = await page.locator("#compress-source-table th").count();
+  expect(colCount).toBe(thCount);
+
+  await page.locator("th[data-compress-column-id='size']").click({ button: "right" });
+  await page.locator("#context-menu button").filter({ hasText: "Reset Columns" }).click();
+  await expect(page.locator("th[data-compress-column-id='sourcePath']")).toBeHidden();
+});
+
+test("extract table header context menu toggles visible columns and supports keyboard shortcut", async ({ page }) => {
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+
+  await page.locator("th[data-column-id='size']").focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(page.locator("#context-menu")).toBeVisible();
+  await expect(page.locator("#context-menu")).toContainText("Sort Ascending");
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#context-menu")).toBeHidden();
+});
+
 test("Close Archive resets Extract to its empty state", async ({ page }) => {
   await page.getByRole("tab", { name: "Extract" }).click();
   await loadArchiveWithIcons(page);

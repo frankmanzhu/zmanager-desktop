@@ -855,7 +855,7 @@ describe("GUI layout contracts", () => {
     expect(mainSource).not.toContain(
       '<th class="inclusion-column" data-i18n-text="table.include">Include</th>',
     );
-    expect(createWorkspaceSource).toContain("COMPRESS_SOURCE_COLUMN_IDS.map");
+    expect(createWorkspaceSource).toContain("visibleCols.map");
     expect(createWorkspaceSource).toContain("<CompressSourceHeader");
     expect(createWorkspaceSource).toContain(
       "data-compress-column-id={columnId}",
@@ -867,7 +867,7 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain('type: "setCurrentFolderIncluded"');
     expect(createWorkspaceSource).toContain("<colgroup>");
     expect(createWorkspaceSource).toContain(
-      "<col width={columnWidths[columnId]} key={columnId} />",
+      "<col width={columnWidths[col.id] ?? col.width} key={col.id} />",
     );
   });
 

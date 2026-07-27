@@ -10,6 +10,7 @@ import {
   getAvailableColumnsForFormat,
   moveColumn,
   normalizeColumnSettings,
+  reorderColumn,
   resetColumnSettings,
   setColumnWidth,
   sortArchiveRows,
@@ -139,6 +140,26 @@ describe("archive table columns and formatters", () => {
       "name",
       260,
     ]);
+  });
+
+  it("reorders columns by inserting source before target", () => {
+    const initial = resetColumnSettings();
+    const visibleBefore = visibleColumns(initial).map((col) => col.id);
+    const reordered = reorderColumn(initial, visibleBefore[3], visibleBefore[1]);
+    const visibleAfter = visibleColumns(reordered).map((col) => col.id);
+
+    expect(visibleAfter[0]).toBe("name");
+    expect(visibleAfter[1]).toBe(visibleBefore[3]);
+    expect(visibleAfter[2]).toBe(visibleBefore[1]);
+  });
+
+  it("prevents reordering the name column", () => {
+    const initial = resetColumnSettings();
+    const reordered = reorderColumn(initial, "name", "size");
+    expect(visibleColumns(reordered)[0].id).toBe("name");
+
+    const reorderedToName = reorderColumn(initial, "size", "name");
+    expect(visibleColumns(reorderedToName)[0].id).toBe("name");
   });
 });
 

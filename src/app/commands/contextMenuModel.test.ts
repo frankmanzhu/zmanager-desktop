@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { resetColumnSettings } from "../archiveTable";
+import { resetCreateColumnSettings } from "../createTableColumns";
 import { createTranslator } from "../i18n/translator";
 import {
   buildArchiveEntryContextMenuItems,
@@ -8,6 +9,7 @@ import {
   buildArchiveHeaderContextMenuItems,
   buildAddSourcesContextMenuItems,
   buildCompressRowContextMenuItems,
+  buildCreateHeaderContextMenuItems,
   buildSourceContextMenuItems,
   buildStartupContextMenuItems,
   CONTEXT_MENU_ACTIONS,
@@ -118,7 +120,7 @@ describe("context menu model", () => {
     expect(selectedItems.find((item) => item.payload.action === "test")?.label).toBe("Test");
   });
 
-  it("builds archive header sort, movement, visibility, width, and reset actions", () => {
+  it("builds archive header sort, visibility, and reset actions", () => {
     const items = buildArchiveHeaderContextMenuItems({
       translator,
       tableColumnSettings: resetColumnSettings(),
@@ -130,14 +132,7 @@ describe("context menu model", () => {
     expect(items[0]).toEqual({ type: "caption", label: "Column: Size" });
     expect(actions.map((item) => item.payload)).toContainEqual({ action: "sort-ascending", columnId: "size" });
     expect(actions.map((item) => item.payload)).toContainEqual({ action: "sort-descending", columnId: "size" });
-    expect(actions.map((item) => item.payload)).toContainEqual({ action: "move-column-left", columnId: "size" });
-    expect(actions.map((item) => item.payload)).toContainEqual({ action: "move-column-right", columnId: "size" });
-    expect(actions.map((item) => item.payload)).toContainEqual({ action: "narrow-column", columnId: "size" });
-    expect(actions.map((item) => item.payload)).toContainEqual({ action: "widen-column", columnId: "size" });
-    expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-column-width", columnId: "size" });
     expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-columns" });
-    expect(actions.find((item) => item.payload.action === "move-column-left")?.disabled).toBe(true);
-    expect(actions.find((item) => item.payload.action === "move-column-right")?.disabled).not.toBe(true);
     expect(checkboxes.find((item) => item.payload.columnId === "name")).toEqual(expect.objectContaining({
       checked: true,
       disabled: true,
@@ -146,6 +141,26 @@ describe("context menu model", () => {
     expect(checkboxes.find((item) => item.payload.columnId === "kind")).toEqual(expect.objectContaining({
       checked: false,
       payload: { action: "toggle-column", columnId: "kind" },
+    }));
+  });
+
+  it("builds create workspace header context menu with reset and column toggle actions", () => {
+    const items = buildCreateHeaderContextMenuItems({
+      translator,
+      tableColumnSettings: resetCreateColumnSettings(),
+    });
+    const actions = actionItems(items);
+    const checkboxes = checkboxItems(items);
+
+    expect(actions.map((item) => item.payload)).toContainEqual({ action: "reset-columns" });
+
+    expect(checkboxes.find((item) => item.payload.columnId === "name")).toEqual(expect.objectContaining({
+      checked: true,
+      disabled: true,
+    }));
+    expect(checkboxes.find((item) => item.payload.columnId === "sourcePath")).toEqual(expect.objectContaining({
+      checked: false,
+      payload: { action: "toggle-column", columnId: "sourcePath" },
     }));
   });
 

@@ -23,8 +23,10 @@ import { formatBytes, getPathBasename } from "../../../app/formatting";
 import {
   sourcePathForCreatePlanRow,
   withCreateArchiveExtension,
+  type CreatePlanInclusionState,
   type CreatePlanRow,
 } from "../../../app/createFlow";
+import type { Translator } from "../../../app/i18n/translator";
 import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
 import { HelpTooltip } from "../../components/ui/tooltip";
@@ -37,6 +39,14 @@ import type {
 import { useCreatePasswordState } from "./CreatePasswordContext";
 import { CompressionLevelSelect } from "./CompressionLevelSelect";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+import {
+  CREATE_SOURCE_TABLE_COLUMNS,
+  createTableColumnLabel,
+  resetCreateColumnSettings,
+  visibleCreateColumns,
+  type CreateSourceColumn,
+  type CreateSourceColumnId,
+} from "../../../app/createTableColumns";
 import { WorkspaceBrowserShell } from "../workspace/WorkspaceBrowserShell";
 import { WorkspacePathBar } from "../workspace/WorkspacePathBar";
 import {
@@ -277,8 +287,12 @@ function CreateTable() {
   const marqueeGestureRef = useRef<TableMarqueeSelectionGesture | null>(null);
   const suppressMarqueeClickRef = useRef(false);
   const [marqueeRect, setMarqueeRect] = useState<ViewportRect | null>(null);
-  const [columnWidths, setColumnWidths] = useState(
-    COMPRESS_SOURCE_DEFAULT_COLUMN_WIDTHS,
+  const columnSettings =
+    snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
+  const visibleCols = visibleCreateColumns(columnSettings);
+  const COMPRESS_SOURCE_COLUMN_IDS = visibleCols.map((col) => col.id);
+  const columnWidths = Object.fromEntries(
+    visibleCols.map((col) => [col.id, col.width]),
   );
   const i18n = translatorForSnapshot(snapshot);
   const rows = snapshot.create.view.rows;
@@ -363,6 +377,10 @@ function CreateTable() {
               event.stopPropagation();
             }
           }}
+          onContextMenu={(event) => {
+            if (event.defaultPrevented) return;
+            event.preventDefault();
+          }}
         >
           <div
             id="compress-marquee-hit-surface"
@@ -373,12 +391,12 @@ function CreateTable() {
           <table
             id="compress-source-table"
             className={createTableClassName(snapshot)}
-            width={compressSourceTableWidth(columnWidths)}
+            width={compressSourceTableWidth(columnWidths, visibleCols.map((col) => col.id))}
           >
             <colgroup>
               <col width={COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX} />
-              {COMPRESS_SOURCE_COLUMN_IDS.map((columnId) => (
-                <col width={columnWidths[columnId]} key={columnId} />
+              {visibleCols.map((col) => (
+                <col width={columnWidths[col.id] ?? col.width} key={col.id} />
               ))}
             </colgroup>
             {rows.length ? (
@@ -402,18 +420,19 @@ function CreateTable() {
                       }
                     />
                   </th>
-                  {COMPRESS_SOURCE_COLUMN_IDS.map((columnId) => (
+                  {visibleCols.map((col) => (
                     <CompressSourceHeader
-                      columnId={columnId}
-                      label={i18n.t(`table.${columnId}`)}
-                      width={columnWidths[columnId]}
+                      columnId={col.id}
+                      label={createTableColumnLabel(col, i18n)}
+                      width={columnWidths[col.id] ?? col.width}
                       onWidthChange={(width) =>
-                        setColumnWidths((current) => ({
-                          ...current,
-                          [columnId]: width,
-                        }))
+                        actions.handleCreateIntent({
+                          type: "setColumnWidth",
+                          columnId: col.id,
+                          width,
+                        })
                       }
-                      key={columnId}
+                      key={col.id}
                     />
                   ))}
                 </tr>
@@ -425,7 +444,7 @@ function CreateTable() {
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={1 + visibleCols.length}
                     className="h-32 p-6 text-center text-sm text-slate-500 dark:text-slate-400"
                   >
                     <div className="grid gap-1">
@@ -523,11 +542,13 @@ function CompressSourceHeader({
   onWidthChange,
   width,
 }: Readonly<{
-  columnId: CompressSourceColumnId;
+  columnId: CreateSourceColumnId;
   label: string;
   onWidthChange(width: number): void;
   width: number;
 }>) {
+  const actions = useZManagerActions();
+  const [isDragOver, setIsDragOver] = useState(false);
   const resizeRef = useRef<{
     pointerId: number;
     startWidth: number;
@@ -535,8 +556,69 @@ function CompressSourceHeader({
   } | null>(null);
   return (
     <th
-      className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+      className={`sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-semibold text-slate-600 transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 ${isDragOver ? "border-l-2 border-l-blue-500 bg-blue-50/80 dark:bg-blue-950/80" : ""}`}
       data-compress-column-id={columnId}
+      draggable={columnId !== "name"}
+      tabIndex={0}
+      title={label}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        actions.handleCreateIntent({
+          type: "showColumnContextMenu",
+          columnId,
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }}
+      onDragStart={(event) => {
+        if (columnId === "name") return;
+        event.dataTransfer.setData("text/plain", columnId);
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnter={(event) => {
+        if (columnId !== "name") {
+          event.preventDefault();
+          setIsDragOver(true);
+        }
+      }}
+      onDragOver={(event) => {
+        if (columnId !== "name") {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDragLeave={() => {
+        setIsDragOver(false);
+      }}
+      onDrop={(event) => {
+        setIsDragOver(false);
+        if (columnId === "name") return;
+        event.preventDefault();
+        const sourceId = event.dataTransfer.getData("text/plain") as CreateSourceColumnId;
+        if (sourceId && sourceId !== columnId && sourceId !== "name") {
+          actions.handleCreateIntent({
+            type: "reorderColumn",
+            sourceColumnId: sourceId,
+            targetColumnId: columnId,
+          });
+        }
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "ContextMenu" ||
+          (event.key === "F10" && event.shiftKey)
+        ) {
+          event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          actions.handleCreateIntent({
+            type: "showColumnContextMenu",
+            columnId,
+            x: Math.round(rect.left + rect.width / 2),
+            y: Math.round(rect.top + rect.height / 2),
+          });
+        }
+      }}
     >
       <span className="block truncate pr-2">{label}</span>
       <span
@@ -595,24 +677,28 @@ function finishCompressSourceColumnResize(
 }
 
 function compressSourceTableWidth(
-  widths: Record<CompressSourceColumnId, number>,
+  widths: Record<string, number>,
+  columnIds?: readonly string[],
 ): number {
+  const activeIds = columnIds ?? COMPRESS_SOURCE_COLUMN_IDS;
   return (
     COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX +
-    COMPRESS_SOURCE_COLUMN_IDS.reduce(
-      (total, columnId) => total + widths[columnId],
+    activeIds.reduce(
+      (total, columnId) => total + (widths[columnId] ?? 120),
       0,
     )
   );
 }
 
 function clampCompressSourceColumnWidth(
-  columnId: CompressSourceColumnId,
+  columnId: CreateSourceColumnId,
   width: number,
 ): number {
+  const colDef = CREATE_SOURCE_TABLE_COLUMNS.find((col) => col.id === columnId);
+  const minWidth = colDef?.minWidth ?? 64;
   return Math.min(
     COMPRESS_SOURCE_MAX_COLUMN_WIDTH_PX,
-    Math.max(COMPRESS_SOURCE_MIN_COLUMN_WIDTHS[columnId], Math.round(width)),
+    Math.max(minWidth, Math.round(width)),
   );
 }
 
@@ -620,6 +706,9 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
+  const columnSettings =
+    snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
+  const visibleCols = visibleCreateColumns(columnSettings);
   const sourcePath = sourcePathForCreatePlanRow(
     row,
     snapshot.create.plan.current?.planEntries ?? [],
@@ -633,7 +722,6 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
   const nativeIconDataUrl = sourcePath
     ? nativeIconDataUrlForPath(snapshot, sourcePath, isFolder)
     : null;
-  const data = row.rowType === "entry" ? row.entry : undefined;
   const path = row.path;
   const selectable = row.rowType !== "parent";
   const selected =
@@ -777,46 +865,107 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
           />
         )}
       </td>
-      <td className="min-w-[140px] px-2 py-1.5 text-xs">
-        <span className="flex min-w-0 items-center gap-2" data-row-primary>
-          <span
-            className={`flex size-[18px] shrink-0 items-center justify-center ${isFolder ? "text-amber-600" : "text-slate-500"}`}
-            data-row-icon
-            aria-hidden="true"
-          >
-            {nativeIconDataUrl ? (
-              <img
-                className="size-[18px] object-contain"
-                src={nativeIconDataUrl}
-                alt=""
-              />
-            ) : isFolder ? (
-              <Folder className="size-4" />
-            ) : (
-              <File className="size-4" />
-            )}
-          </span>
-          <span className="min-w-0 flex-1 truncate">{row.name}</span>
-          {selectable ? (
-            <span
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${inclusion === "excluded" ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : inclusion === "partial" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
-            >
-              {compressInclusionText(inclusion, snapshot)}
-            </span>
-          ) : null}
-        </span>
-      </td>
-      <td className="truncate px-2 py-1.5 text-right text-xs tabular-nums">
-        {data?.size === undefined
-          ? ""
-          : formatBytes(data.size, { locale: snapshot.display.resolvedLocale })}
-      </td>
-      <td className="truncate px-2 py-1.5 text-xs">{data?.modified ?? ""}</td>
-      <td className="truncate px-2 py-1.5 text-xs">
-        {isFolder ? i18n.t("entryKind.directory") : i18n.t("entryKind.file")}
-      </td>
+      {visibleCols.map((col) => (
+        <CreateTableCell
+          key={col.id}
+          columnId={col.id}
+          row={row}
+          snapshot={snapshot}
+          i18n={i18n}
+          selectable={selectable}
+          inclusion={inclusion}
+          isFolder={isFolder}
+          nativeIconDataUrl={nativeIconDataUrl}
+          sourcePath={sourcePath}
+        />
+      ))}
     </tr>
   );
+}
+
+function CreateTableCell({
+  columnId,
+  row,
+  snapshot,
+  i18n,
+  selectable,
+  inclusion,
+  isFolder,
+  nativeIconDataUrl,
+  sourcePath,
+}: Readonly<{
+  columnId: CreateSourceColumnId;
+  row: CreatePlanRow;
+  snapshot: ZManagerReactSnapshot;
+  i18n: Translator;
+  selectable: boolean;
+  inclusion: CreatePlanInclusionState;
+  isFolder: boolean;
+  nativeIconDataUrl: string | null;
+  sourcePath: string | null;
+}>) {
+  const data = row.rowType === "entry" ? row.entry : undefined;
+
+  switch (columnId) {
+    case "name":
+      return (
+        <td className="min-w-[140px] px-2 py-1.5 text-xs">
+          <span className="flex min-w-0 items-center gap-2" data-row-primary>
+            <span
+              className={`flex size-[18px] shrink-0 items-center justify-center ${isFolder ? "text-amber-600" : "text-slate-500"}`}
+              data-row-icon
+              aria-hidden="true"
+            >
+              {nativeIconDataUrl ? (
+                <img
+                  className="size-[18px] object-contain"
+                  src={nativeIconDataUrl}
+                  alt=""
+                />
+              ) : isFolder ? (
+                <Folder className="size-4" />
+              ) : (
+                <File className="size-4" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{row.name}</span>
+            {selectable ? (
+              <span
+                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${inclusion === "excluded" ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : inclusion === "partial" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
+              >
+                {compressInclusionText(inclusion, snapshot)}
+              </span>
+            ) : null}
+          </span>
+        </td>
+      );
+    case "size":
+      return (
+        <td className="truncate px-2 py-1.5 text-right text-xs tabular-nums">
+          {data?.size === undefined
+            ? ""
+            : formatBytes(data.size, { locale: snapshot.display.resolvedLocale })}
+        </td>
+      );
+    case "modified":
+      return (
+        <td className="truncate px-2 py-1.5 text-xs">{data?.modified ?? ""}</td>
+      );
+    case "kind":
+      return (
+        <td className="truncate px-2 py-1.5 text-xs">
+          {isFolder ? i18n.t("entryKind.directory") : i18n.t("entryKind.file")}
+        </td>
+      );
+    case "sourcePath":
+      return (
+        <td className="truncate px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {sourcePath ?? ""}
+        </td>
+      );
+    default:
+      return <td className="truncate px-2 py-1.5 text-xs" />;
+  }
 }
 
 function focusRelativeCreateRow(

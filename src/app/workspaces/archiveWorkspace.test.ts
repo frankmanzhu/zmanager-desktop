@@ -1145,6 +1145,24 @@ describe("archive workspace load state", () => {
     });
     expect(snapshotJson).not.toContain(secret);
   });
+
+  it("reorders columns by dragging source to target position", () => {
+    const workspace = createArchiveWorkspace();
+    workspace.loadEntries({ entries, archivePath: "test.zip", archiveLabel: "test" });
+    const before = workspace.getSnapshot().view.tableColumns;
+    const visibleBefore = before.columnOrderIds.filter((id) =>
+      before.visibleColumnIds.includes(id),
+    );
+
+    const snapshot = workspace.reorderColumn(visibleBefore[3], visibleBefore[1]);
+    const after = snapshot.view.tableColumns;
+    const visibleAfter = after.columnOrderIds.filter((id) =>
+      after.visibleColumnIds.includes(id),
+    );
+
+    expect(visibleAfter[1]).toBe(visibleBefore[3]);
+    expect(visibleAfter[0]).toBe("name");
+  });
 });
 
 function commandError(code: string): CommandErrorDto {

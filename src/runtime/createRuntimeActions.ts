@@ -1,3 +1,4 @@
+import type { CreateSourceColumnId } from "../app/createTableColumns";
 import type { ZManagerCreateIntent } from "../ui/react/appRuntime";
 
 export type CreateRuntimeActions = Readonly<{
@@ -28,6 +29,9 @@ export type CreateRuntimeActionEffects = Readonly<{
   focusRow(path: string): void;
   removeSelectedSources(fallbackSourcePath?: string): void;
   showCompressRowContextMenu(path: string, sourcePath: string | undefined, x: number, y: number): void;
+  showColumnContextMenu(columnId: CreateSourceColumnId | undefined, x: number, y: number): void;
+  setColumnWidth(columnId: CreateSourceColumnId, width: number): void;
+  reorderColumn(sourceColumnId: CreateSourceColumnId, targetColumnId: CreateSourceColumnId): void;
   runCreate(password: string, passwordConfirm: string, signingIdentityPassword: string): void | Promise<void>;
   generateTzapIdentity(commonName: string, password: string): void | Promise<void>;
 }>;
@@ -106,6 +110,15 @@ export function createCreateRuntimeActions(
           break;
         case "showCompressRowContextMenu":
           effects.showCompressRowContextMenu(intent.path, intent.sourcePath, intent.x, intent.y);
+          break;
+        case "showColumnContextMenu":
+          effects.showColumnContextMenu(intent.columnId, intent.x, intent.y);
+          break;
+        case "setColumnWidth":
+          effects.setColumnWidth(intent.columnId, intent.width);
+          break;
+        case "reorderColumn":
+          effects.reorderColumn(intent.sourceColumnId, intent.targetColumnId);
           break;
         case "runCreate":
           void effects.runCreate(intent.password, intent.passwordConfirm, intent.signingIdentityPassword);
