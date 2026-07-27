@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot "windows-package-artifact.ps1")
 $cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
 $logDir = Join-Path $repoRoot "target/release-gate"
 $installDir = Join-Path $logDir "installed-app"
@@ -33,11 +34,15 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $logDir "release-gate-windows-static-$resolvedArchitecture-$timestamp.log"
-$packageJsonPath = Join-Path $repoRoot "package.json"
-$packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
-$productVersion = $packageJson.version
-$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_$productVersion`_$resolvedArchitecture-setup.exe"
-$artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
+$tauriConfig = Get-Content (Join-Path $repoRoot "src-tauri\tauri.conf.json") | ConvertFrom-Json
+$installerPath = Get-ZManagerNsisInstallerPath `
+    -CargoTargetDir $cargoTargetDir `
+    -Architecture $resolvedArchitecture `
+    -ProductName $tauriConfig.productName `
+    -ProductVersion $tauriConfig.version
+$artifactPath = Get-ZManagerReleaseExecutablePath `
+    -CargoTargetDir $cargoTargetDir `
+    -Architecture $resolvedArchitecture
 $gateResult = "Pass"
 $gateNotes = "Release gate passed. Log: $transcriptPath"
 
@@ -61,16 +66,25 @@ Start-Transcript -Path $transcriptPath -Force | Out-Null
 try {
     Invoke-GateStep "Frontend tests" {
         & "C:\Program Files\nodejs\npm.cmd" run test:frontend
+        if ($LASTEXITCODE -ne 0) {
+            throw "Frontend tests failed with exit code $LASTEXITCODE."
+        }
     }
 
     Invoke-GateStep "Rust command tests in Windows static environment" {
         $setupScript = Join-Path $repoRoot "scripts/setup-windows-static-env.ps1"
         & powershell -ExecutionPolicy Bypass -File $setupScript -Architecture $resolvedArchitecture -Run "Set-Location src-tauri; cargo test"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Rust command tests failed with exit code $LASTEXITCODE."
+        }
     }
 
     Invoke-GateStep "Windows static package build" {
         $buildScript = Join-Path $repoRoot "scripts/build-windows-static.ps1"
         & powershell -ExecutionPolicy Bypass -File $buildScript -Architecture $resolvedArchitecture
+        if ($LASTEXITCODE -ne 0) {
+            throw "Windows static package build failed with exit code $LASTEXITCODE."
+        }
     }
 
     Invoke-GateStep "Recovery smoke" {
@@ -90,6 +104,9 @@ try {
             $smokeArgs += "-SkipAppLaunch"
         }
         & powershell @smokeArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "Recovery smoke failed with exit code $LASTEXITCODE."
+        }
     }
 
     if (-not $SkipInstallerInstall) {

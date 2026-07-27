@@ -14,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $repoRoot
 . (Join-Path $PSScriptRoot "windows-install-location.ps1")
+. (Join-Path $PSScriptRoot "windows-package-artifact.ps1")
 
 # Respect CARGO_TARGET_DIR so build artifacts land in a short path
 # (avoids Windows MAX_PATH issues with deeply nested build outputs).
@@ -136,25 +137,6 @@ function Assert-ReleaseExecutableIsNotRunning {
     }
 }
 
-function Resolve-LatestNsisInstaller {
-    $nsisBundleDir = Join-Path $cargoTargetDir "$targetTriple\release\bundle\nsis"
-    if (-not (Test-Path $nsisBundleDir)) {
-        $nsisBundleDir = Join-Path $cargoTargetDir "release\bundle\nsis"
-        if (-not (Test-Path $nsisBundleDir)) {
-            throw "NSIS bundle directory was not found after build: $nsisBundleDir"
-        }
-    }
-
-    $installer = Get-ChildItem -Path $nsisBundleDir -Filter "ZManager_*-setup.exe" |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
-    if ($null -eq $installer) {
-        throw "NSIS installer was not found after build under: $nsisBundleDir"
-    }
-
-    return $installer.FullName
-}
-
 function Install-NsisBuild {
     param(
         [string]$InstallerPath,
@@ -210,6 +192,11 @@ $installLocationTest = Join-Path $PSScriptRoot "test-windows-install-location.ps
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+$packageArtifactTest = Join-Path $PSScriptRoot "test-windows-package-artifact.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $packageArtifactTest
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
 
 if ($npmCommand) {
     $runCommand = "& '$resolvedNodePath' '$tauriCli' build --target $targetTriple"
@@ -258,7 +245,12 @@ if ($buildExitCode -ne 0) {
 }
 
 if ($Install) {
-    $installerPath = Resolve-LatestNsisInstaller
+    $tauriConfig = Get-Content (Join-Path $repoRoot "src-tauri\tauri.conf.json") | ConvertFrom-Json
+    $installerPath = Resolve-ZManagerNsisInstaller `
+        -CargoTargetDir $cargoTargetDir `
+        -Architecture $resolvedArch `
+        -ProductName $tauriConfig.productName `
+        -ProductVersion $tauriConfig.version
     Install-NsisBuild -InstallerPath $installerPath -RequestedInstallDir $InstallDir
 }
 

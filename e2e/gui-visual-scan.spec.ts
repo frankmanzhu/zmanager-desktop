@@ -311,11 +311,18 @@ test("extract table columns reorder by dragging left and right", async ({ page }
     "modified",
   ]);
 
-  await dragTableColumn(
+  await startTableColumnDrag(
     page,
     "th[data-column-id='modified']",
     "th[data-column-id='size']",
   );
+  await expect(
+    page.locator("th[data-column-id='modified']"),
+  ).toHaveAttribute("data-column-drag-source", "true");
+  await expect(
+    page.locator("th[data-column-id='size']"),
+  ).toHaveAttribute("data-column-drop-position", "before");
+  await page.mouse.up();
   await expect.poll(columnOrder).toEqual([
     "name",
     "modified",
@@ -323,17 +330,85 @@ test("extract table columns reorder by dragging left and right", async ({ page }
     "compressedSize",
   ]);
 
-  await dragTableColumn(
+  await startTableColumnDrag(
     page,
     "th[data-column-id='modified']",
     "th[data-column-id='compressedSize']",
   );
+  await expect(
+    page.locator("th[data-column-id='modified']"),
+  ).toHaveAttribute("data-column-drag-source", "true");
+  await expect(
+    page.locator("th[data-column-id='compressedSize']"),
+  ).toHaveAttribute("data-column-drop-position", "after");
+  await page.mouse.up();
   await expect.poll(columnOrder).toEqual([
     "name",
     "size",
     "compressedSize",
     "modified",
   ]);
+});
+
+test("column gestures preserve resizing and Extract sorting", async ({ page }) => {
+  await dropFiles(page, ["resize-source.txt"]);
+
+  const compressSizeHeader = page.locator(
+    "th[data-compress-column-id='size']",
+  );
+  const compressOrder = () =>
+    page.locator("th[data-compress-column-id]").evaluateAll((cells) =>
+      cells.map((cell) => cell.getAttribute("data-compress-column-id")),
+    );
+  const compressWidthBefore = (await compressSizeHeader.boundingBox())?.width;
+  expect(compressWidthBefore).toBeTruthy();
+
+  await resizeTableColumn(
+    page,
+    "[data-column-resizer='size']",
+    36,
+  );
+  await expect
+    .poll(async () => (await compressSizeHeader.boundingBox())?.width)
+    .toBeGreaterThan(compressWidthBefore ?? 0);
+  await expect.poll(compressOrder).toEqual([
+    "name",
+    "size",
+    "modified",
+    "kind",
+  ]);
+
+  await page.getByRole("tab", { name: "Extract" }).click();
+  await loadArchiveWithIcons(page);
+
+  const extractSizeHeader = page.locator("th[data-column-id='size']");
+  await extractSizeHeader.click({ position: { x: 24, y: 12 } });
+  await expect(extractSizeHeader).toHaveAttribute("aria-sort", "ascending");
+  await extractSizeHeader.click({ position: { x: 24, y: 12 } });
+  await expect(extractSizeHeader).toHaveAttribute("aria-sort", "descending");
+
+  const compressedSizeHeader = page.locator(
+    "th[data-column-id='compressedSize']",
+  );
+  const extractWidthBefore = (await compressedSizeHeader.boundingBox())?.width;
+  expect(extractWidthBefore).toBeTruthy();
+
+  await resizeTableColumn(
+    page,
+    "[data-column-resizer='compressedSize']",
+    36,
+  );
+  await expect
+    .poll(async () => (await compressedSizeHeader.boundingBox())?.width)
+    .toBeGreaterThan(extractWidthBefore ?? 0);
+  await expect(extractSizeHeader).toHaveAttribute("aria-sort", "descending");
+  await expect
+    .poll(() =>
+      page.locator("th[data-column-id]").evaluateAll((cells) =>
+        cells.map((cell) => cell.getAttribute("data-column-id")),
+      ),
+    )
+    .toEqual(["name", "size", "compressedSize", "modified"]);
 });
 
 test("Close Archive resets Extract to its empty state", async ({ page }) => {
@@ -917,15 +992,6 @@ async function dragFiles(page: Page, names: string[]) {
   }, names);
 }
 
-async function dragTableColumn(
-  page: Page,
-  sourceSelector: string,
-  targetSelector: string,
-) {
-  await startTableColumnDrag(page, sourceSelector, targetSelector);
-  await page.mouse.up();
-}
-
 async function startTableColumnDrag(
   page: Page,
   sourceSelector: string,
@@ -949,6 +1015,24 @@ async function startTableColumnDrag(
     target.y + target.height / 2,
     { steps: 8 },
   );
+}
+
+async function resizeTableColumn(
+  page: Page,
+  resizerSelector: string,
+  deltaX: number,
+) {
+  const resizer = await page.locator(resizerSelector).boundingBox();
+  if (!resizer) {
+    throw new Error(`Unable to locate column resizer: ${resizerSelector}`);
+  }
+
+  const startX = resizer.x + resizer.width / 2;
+  const startY = resizer.y + resizer.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX, startY, { steps: 5 });
+  await page.mouse.up();
 }
 
 async function dragLeave(page: Page) {

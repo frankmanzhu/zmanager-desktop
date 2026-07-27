@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot "windows-package-artifact.ps1")
 $cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
 
 if ([string]::IsNullOrWhiteSpace($LogDir)) {
@@ -38,11 +39,15 @@ function Resolve-WindowsStaticArchitecture {
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $platformLabel = if ($resolvedArchitecture -eq "arm64") { "Windows ARM64" } else { "Windows x64" }
 $transcriptPath = Join-Path $LogDir "smoke-windows-static-$resolvedArchitecture-$timestamp.log"
-$packageJsonPath = Join-Path $repoRoot "package.json"
-$packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
-$productVersion = $packageJson.version
-$artifactPath = Join-Path $cargoTargetDir "release\zmanager-desktop.exe"
-$installerPath = Join-Path $cargoTargetDir "release\bundle\nsis\ZManager_$productVersion`_$resolvedArchitecture-setup.exe"
+$tauriConfig = Get-Content (Join-Path $repoRoot "src-tauri\tauri.conf.json") | ConvertFrom-Json
+$artifactPath = Get-ZManagerReleaseExecutablePath `
+    -CargoTargetDir $cargoTargetDir `
+    -Architecture $resolvedArchitecture
+$installerPath = Get-ZManagerNsisInstallerPath `
+    -CargoTargetDir $cargoTargetDir `
+    -Architecture $resolvedArchitecture `
+    -ProductName $tauriConfig.productName `
+    -ProductVersion $tauriConfig.version
 
 function Invoke-SmokeStep([string]$Name, [scriptblock]$Script) {
     Write-Host ""
