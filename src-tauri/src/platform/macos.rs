@@ -83,7 +83,10 @@ fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
         false
     };
 
-    MacOsExtensionProbe { is_installed: installed, is_enabled: enabled }
+    MacOsExtensionProbe {
+        is_installed: installed,
+        is_enabled: enabled,
+    }
 }
 
 fn probe_spotlight() -> MacOsExtensionProbe {
@@ -91,13 +94,13 @@ fn probe_spotlight() -> MacOsExtensionProbe {
     let installed = Command::new("/usr/bin/mdimport")
         .args(["-L"])
         .output()
-        .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .contains("ZManagerSpotlight")
-        })
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains("ZManagerSpotlight"))
         .unwrap_or(false);
 
-    MacOsExtensionProbe { is_installed: installed, is_enabled: true }
+    MacOsExtensionProbe {
+        is_installed: installed,
+        is_enabled: true,
+    }
 }
 
 fn probe_file_associations() -> bool {
@@ -107,10 +110,7 @@ fn probe_file_associations() -> bool {
     Command::new(lsregister)
         .args(["-dump"])
         .output()
-        .map(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .contains("org.tzap-org.zmanager")
-        })
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains("org.tzap-org.zmanager"))
         .unwrap_or(false)
 }
 
@@ -189,8 +189,8 @@ impl CapabilityInspector for MacOsPlatform {
         crate::native_integration::NativeCapabilityObservation,
     > {
         use crate::native_integration::{
-            NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityObservation,
-            NativeCapabilityInstalledState, NativeCapabilityPackageState,
+            NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityInstalledState,
+            NativeCapabilityObservation, NativeCapabilityPackageState,
             NativeCapabilityRuntimeState, NativeCapabilityUserEnabledState,
         };
         let app_group_runtime = if APP_GROUP_AVAILABLE.load(Ordering::Acquire) {
@@ -214,8 +214,8 @@ impl CapabilityInspector for MacOsPlatform {
         } else {
             NativeCapabilityUserEnabledState::Disabled
         };
-        let finder_failure = (!probes.finder.is_installed)
-            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let finder_failure =
+            (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
         // Write complete diagnostics
         let pkg = crate::native_integration::current_package_kind();
@@ -225,8 +225,10 @@ impl CapabilityInspector for MacOsPlatform {
                 "PACKAGE_KIND={pkg:?}\n\
                  finder_installed={} finder_enabled={} ql_installed={} spotlight_installed={} file_assoc={} app_group={app_group_runtime:?} host_callback={host_cb}\n\
                  finder_obs: installed={finder_installed:?} user={finder_enabled:?} runtime={app_group_runtime:?} failure={finder_failure:?}\n",
-                probes.finder.is_installed, probes.finder.is_enabled,
-                probes.quicklook.is_installed, probes.spotlight.is_installed,
+                probes.finder.is_installed,
+                probes.finder.is_enabled,
+                probes.quicklook.is_installed,
+                probes.spotlight.is_installed,
                 file_assoc_installed,
             ),
         );
@@ -243,8 +245,8 @@ impl CapabilityInspector for MacOsPlatform {
         } else {
             NativeCapabilityUserEnabledState::Disabled
         };
-        let finder_failure = (!probes.finder.is_installed)
-            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let finder_failure =
+            (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
         let mut observations = [
             NativeCapabilityId::ShellSelectedItemActions,
@@ -288,8 +290,8 @@ impl CapabilityInspector for MacOsPlatform {
 
         // File associations are registered together with the app bundle
         // via lsregister, not pluginkit. Probe Launch Services directly.
-        let fa_failure = (!file_assoc_installed)
-            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let fa_failure =
+            (!file_assoc_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
         observations.insert(
             NativeCapabilityId::FileAssociations,
             NativeCapabilityObservation {

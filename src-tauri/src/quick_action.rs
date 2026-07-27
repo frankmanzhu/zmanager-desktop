@@ -19,6 +19,7 @@ const SHELL_ACTION_REQUEST_ARG: &str = "--shell-action-request";
 const PATH_ARG: &str = "--path";
 const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret"];
 const MAX_SHELL_ACTION_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+#[allow(dead_code)]
 const MAX_APP_GROUP_SHELL_ACTION_REQUEST_BYTES: usize = 1_048_576;
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
@@ -432,6 +433,7 @@ fn read_quick_action_request_file(
     validate_request(request.kind, request.paths)
 }
 
+#[allow(dead_code)]
 pub fn parse_app_group_shell_action_request(
     content: &[u8],
 ) -> Result<QuickActionRequestDto, String> {
@@ -445,6 +447,7 @@ pub fn parse_app_group_shell_action_request(
     validate_request(request.action, request.paths).map_err(|error| error.message)
 }
 
+#[allow(dead_code)]
 pub fn validate_ingested_shell_action_request(
     request: QuickActionRequestDto,
 ) -> Result<QuickActionRequestDto, String> {

@@ -59,6 +59,10 @@ EOF
 write_stub node <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "-p" || "${1:-}" == "-e" ]]; then
+  echo "1.1.0"
+  exit 0
+fi
 echo "v20.19.0"
 EOF
 
@@ -72,6 +76,7 @@ fi
 if [[ "$*" == "run tauri -- build --bundles deb" ]]; then
   mkdir -p src-tauri/target/release/bundle/deb
   printf 'test deb\n' >src-tauri/target/release/bundle/deb/ZManager_test_amd64.deb
+  printf 'stale deb\n' >src-tauri/target/release/bundle/deb/ZManager_0.1.0_amd64.deb
 fi
 if [[ "$*" == *"run tauri -- build --bundles rpm"* ]]; then
   mkdir -p "${CARGO_TARGET_DIR:?}/release/bundle/rpm"
@@ -109,6 +114,14 @@ EOF
 write_stub dpkg-deb <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${1:-}" == "-f" ]]; then
+  if [[ "${2:-}" == *"0.1.0"* ]]; then
+    echo "0.1.0"
+  else
+    echo "1.1.0"
+  fi
+  exit 0
+fi
 echo "Debian dpkg-deb test stub"
 EOF
 
@@ -164,6 +177,11 @@ if [[ ! -f "$stage_dir/ZManager_test_amd64.deb" ]]; then
   exit 1
 fi
 
+if [[ -f "$stage_dir/ZManager_0.1.0_amd64.deb" ]]; then
+  echo "Expected the mismatched version .deb (0.1.0) to be skipped from staging." >&2
+  exit 1
+fi
+
 : >"$log_file"
 
 write_stub dnf <<'EOF'
@@ -177,6 +195,10 @@ write_stub rpm <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'rpm %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
+if [[ "${1:-}" == "-qp" ]]; then
+  echo "1.1.0"
+  exit 0
+fi
 if [[ "${1:-}" == "-q" ]]; then
   exit 1
 fi

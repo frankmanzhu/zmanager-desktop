@@ -289,24 +289,37 @@ if ((!skip_tests)); then
   (cd src-tauri && cargo test)
 fi
 
+cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
+rm -rf "$cargo_target_dir/release/bundle/rpm"
+
 # Use Vite's runner config loader for Fedora packaging so a root-owned
 # node_modules/.vite-temp cache from a previous sudo build does not break Tauri's
 # beforeBuildCommand.
 npm run tauri -- build --bundles rpm --config '{"build":{"beforeBuildCommand":"npm run build -- --configLoader runner"}}'
 
-dnf_stage_dir="/tmp/zmanager-desktop-rpm"
+product_version=$(node -p 'require("./package.json").version')
+dnf_stage_dir="${ZMANAGER_RPM_STAGE_DIR:-/tmp/zmanager-desktop-rpm}"
+rm -rf "$dnf_stage_dir"
 install -d -m 0755 "$dnf_stage_dir"
 
 rpm_count=0
 staged_artifacts=()
 while IFS= read -r artifact; do
+  pkg_ver=""
+  if command -v rpm >/dev/null 2>&1; then
+    pkg_ver=$(rpm -qp --queryformat '%{VERSION}' "$artifact" 2>/dev/null || true)
+  fi
+  if [[ -n "$pkg_ver" && "$pkg_ver" != "$product_version" ]]; then
+    echo "Warning: skipping artifact $artifact with mismatched package version '$pkg_ver' (expected '$product_version')." >&2
+    continue
+  fi
+
   rpm_count=$((rpm_count + 1))
   staged_artifact="$dnf_stage_dir/$(basename "$artifact")"
   install -m 0644 "$artifact" "$staged_artifact"
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Dnf-readable package: $staged_artifact"
-  product_version=$(node -e "console.log(require('./package.json').version)")
   scripts/inspect-linux-package.sh "$staged_artifact" "x86_64" "$product_version" > "$dnf_stage_dir/evidence-$(basename "$staged_artifact").json"
   echo "Evidence generated for $staged_artifact."
 done < <(find "$cargo_target_dir/release/bundle/rpm" -maxdepth 1 -type f -name '*.rpm' -print 2>/dev/null | sort)

@@ -132,6 +132,8 @@ describe("Linux context menu packaging", () => {
     expect(extension).toContain("def get_background_items(self, *args)");
     expect(extension).toContain("class ZManagerMenuProvider");
     expect(extension).toContain('label="ZManager"');
+    expect(extension).toContain("added_actions = set()");
+    expect(extension).toContain("if action_name in added_actions:");
 
     const generatedExtension = readWorkspaceFile(
       "packaging",

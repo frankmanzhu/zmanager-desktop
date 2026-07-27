@@ -83,13 +83,10 @@ pub enum NativeFileDragOutcome {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeFileDragStart {
-    Pending {
-        session_id: String,
-    },
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    Settled {
-        outcome: NativeFileDragOutcome,
-    },
+    #[allow(dead_code)]
+    Pending { session_id: String },
+    #[allow(dead_code)]
+    Settled { outcome: NativeFileDragOutcome },
 }
 
 pub type NativeFileDragStreamProvider =
@@ -137,9 +134,9 @@ impl NativeFileDragError {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeCapabilityOperationErrorKind {
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     NotApplicable,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     Unavailable,
     Failed,
 }
@@ -152,7 +149,7 @@ pub struct NativeCapabilityOperationError {
 }
 
 impl NativeCapabilityOperationError {
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     pub const fn not_applicable(capability: &'static str) -> Self {
         Self {
             capability,
@@ -161,7 +158,7 @@ impl NativeCapabilityOperationError {
         }
     }
 
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     pub const fn unavailable(capability: &'static str, code: &'static str) -> Self {
         Self {
             capability,

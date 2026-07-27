@@ -56,15 +56,23 @@ def build_zmanager_menu(
     submenu = Nautilus.Menu()
     menu_item.set_submenu(submenu)
 
+    added_actions = set()
+
     if include_archive_actions:
         for action_name, label, quick_action, accepts_multiple in ARCHIVE_ACTIONS:
+            if action_name in added_actions:
+                continue
             item = action_item(identity, action_name, label, quick_action, paths)
             if not accepts_multiple and len(paths) != 1:
                 item.set_sensitive(False)
             submenu.append_item(item)
+            added_actions.add(action_name)
 
     for action_name, label, quick_action in CREATE_ACTIONS:
+        if action_name in added_actions:
+            continue
         submenu.append_item(action_item(identity, action_name, label, quick_action, paths))
+        added_actions.add(action_name)
 
     return menu_item
 

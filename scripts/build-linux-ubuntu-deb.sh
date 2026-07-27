@@ -309,23 +309,34 @@ if ((!skip_tests)); then
   (cd src-tauri && cargo test)
 fi
 
+cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
+rm -rf "$cargo_target_dir/release/bundle/deb"
+
 npm run tauri -- build --bundles deb
 
-cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
-
+product_version=$(node -p 'require("./package.json").version')
 apt_stage_dir="${ZMANAGER_DEB_STAGE_DIR:-/tmp/zmanager-desktop-deb}"
+rm -rf "$apt_stage_dir"
 install -d -m 0755 "$apt_stage_dir"
 
 deb_count=0
 staged_artifacts=()
 while IFS= read -r artifact; do
+  pkg_ver=""
+  if command -v dpkg-deb >/dev/null 2>&1; then
+    pkg_ver=$(dpkg-deb -f "$artifact" Version 2>/dev/null || true)
+  fi
+  if [[ -n "$pkg_ver" && "$pkg_ver" != "$product_version" ]]; then
+    echo "Warning: skipping artifact $artifact with mismatched package version '$pkg_ver' (expected '$product_version')." >&2
+    continue
+  fi
+
   deb_count=$((deb_count + 1))
   staged_artifact="$apt_stage_dir/$(basename "$artifact")"
   install -m 0644 "$artifact" "$staged_artifact"
   staged_artifacts+=("$staged_artifact")
   echo "Built package: $artifact"
   echo "Apt-readable package: $staged_artifact"
-  product_version=$(node -e "console.log(require('./package.json').version)")
   scripts/inspect-linux-package.sh "$staged_artifact" "amd64" "$product_version" > "$apt_stage_dir/evidence-$(basename "$staged_artifact").json"
   echo "Evidence generated for $staged_artifact."
 done < <(find "$cargo_target_dir/release/bundle/deb" -maxdepth 1 -type f -name '*.deb' -print 2>/dev/null | sort)
