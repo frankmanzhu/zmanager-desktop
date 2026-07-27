@@ -158,6 +158,7 @@ describe("dialog snapshots", () => {
           fileAssociations: "available",
         }),
       },
+      sourceTableCapabilities: { availableColumnIds: ["name", "kind", "size", "modified", "sourcePath"] },
     };
 
     const snapshot = buildAboutDialogSnapshot({

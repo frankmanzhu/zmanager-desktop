@@ -25,6 +25,9 @@ export type ProjectContract = {
     capabilities: NativeCapabilitySnapshot[];
 
   };
+  sourceTableCapabilities: {
+    availableColumnIds: string[];
+  };
 };
 
 export type SystemFileIconRequestEntry = {
@@ -246,6 +249,11 @@ export type CreatePlanResponse = {
   warnings: string[];
 };
 
+export type SourceAttributeDto = Readonly<{
+  namespace: "windows" | "bsd" | "portable";
+  code: string;
+}>;
+
 export type CreatePlanEntryDto = {
   path: string;
   kind: ArchiveEntryKind;
@@ -253,6 +261,22 @@ export type CreatePlanEntryDto = {
   modified?: string;
   mode?: number;
   sourcePath: string;
+  /** Source birth/creation time (ISO 8601), reported when Rust advertises "created" */
+  created?: string;
+  /** Source access time (ISO 8601), reported when Rust advertises "accessed" */
+  accessed?: string;
+  /** Source filesystem attributes, reported when Rust advertises "attributes" */
+  attributes?: readonly SourceAttributeDto[];
+  /** Source symbolic-link target, reported when Rust advertises "linkTarget" */
+  linkTarget?: string;
+  /** Source Unix user ID, reported when Rust advertises "uid" */
+  uid?: number;
+  /** Source Unix group ID, reported when Rust advertises "gid" */
+  gid?: number;
+  /** Source owner name, reported when Rust advertises "owner" */
+  owner?: string;
+  /** Source group name, reported when Rust advertises "group" */
+  group?: string;
 };
 
 export type StartCreateRequest = {

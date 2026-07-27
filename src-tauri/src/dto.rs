@@ -25,11 +25,29 @@ pub struct ProjectIntegrationContract {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SourceTableCapabilitiesDto {
+    /// CompressTableColumnId values the running implementation can populate.
+    /// Must contain the safe base: name, kind, size, modified, sourcePath.
+    pub available_column_ids: Vec<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceAttributeDto {
+    /// Namespace: "windows", "bsd", or "portable"
+    pub namespace: String,
+    /// Language-neutral allowlisted attribute code
+    pub code: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectContract {
     pub commands: &'static [&'static str],
     pub platform_strategy: &'static str,
     pub core_dependency: &'static str,
     pub platform_integration: ProjectIntegrationContract,
+    pub source_table_capabilities: SourceTableCapabilitiesDto,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -266,6 +284,15 @@ pub struct CreatePlanEntryDto {
     pub modified: Option<String>,
     pub mode: Option<u32>,
     pub source_path: String,
+    // WP6 incremental metadata — optional fields populated when available
+    pub created: Option<String>,
+    pub accessed: Option<String>,
+    pub attributes: Option<Vec<crate::dto::SourceAttributeDto>>,
+    pub link_target: Option<String>,
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
+    pub owner: Option<String>,
+    pub group: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

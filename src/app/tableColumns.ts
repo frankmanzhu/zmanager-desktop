@@ -283,3 +283,113 @@ function uniqueColumnIds<TColumnId extends string>(ids: TColumnId[]): TColumnId[
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Shared visibility resolver — used by both Compress and Extract workspaces
+// ---------------------------------------------------------------------------
+
+/**
+ * Filter a list of column IDs to canonical catalogue order.
+ * Inapplicable IDs are removed; remaining IDs keep their relative catalogue order.
+ */
+export function filterToCanonicalOrder<TColumnId extends string>(
+  canonicalOrder: readonly TColumnId[],
+  ids: readonly TColumnId[],
+): TColumnId[] {
+  const idSet = new Set(ids);
+  return canonicalOrder.filter((id) => idSet.has(id));
+}
+
+/**
+ * Intersect candidate IDs with an allowed set, preserving candidate order.
+ */
+export function intersectVisibleColumns<TColumnId extends string>(
+  candidates: readonly TColumnId[],
+  allowed: ReadonlySet<TColumnId>,
+): TColumnId[] {
+  return candidates.filter((id) => allowed.has(id));
+}
+
+/**
+ * Resolve workspace-current visible columns: start from configured defaults,
+ * apply any local visibility additions/removals within the available set,
+ * ensure Name is always visible.
+ */
+export function resolveWorkspaceVisibility<TColumnId extends string>(
+  configuredDefaults: readonly TColumnId[],
+  localOverrides: readonly TColumnId[] | undefined,
+  availableSet: ReadonlySet<TColumnId>,
+  nameId: TColumnId,
+): TColumnId[] {
+  const source = localOverrides ?? configuredDefaults;
+  const visible = new Set<TColumnId>();
+
+  // Name always visible if available
+  if (availableSet.has(nameId)) {
+    visible.add(nameId);
+  }
+
+  for (const id of source) {
+    if (availableSet.has(id)) {
+      visible.add(id);
+    }
+  }
+
+  return Array.from(visible);
+}
+
+/**
+ * Validate a Compress capability set. Returns the safe base if the set is
+ * invalid (missing, unknown IDs, duplicates, omitting required safe-base IDs).
+ * Returns the validated set unchanged otherwise.
+ */
+export function validateCompressCapabilitySet<TColumnId extends string>(
+  capabilitySet: readonly TColumnId[] | undefined | null,
+  safeBaseIds: readonly TColumnId[],
+  allKnownCompressIds: readonly TColumnId[],
+): readonly TColumnId[] {
+  // Missing or empty → fallback to safe base
+  if (!capabilitySet || capabilitySet.length === 0) {
+    return safeBaseIds;
+  }
+
+  const knownSet = new Set(allKnownCompressIds);
+  const deduped: TColumnId[] = [];
+
+  for (const id of capabilitySet) {
+    // Unknown ID → invalid
+    if (!knownSet.has(id)) return safeBaseIds;
+    // Duplicate → invalid
+    if (deduped.includes(id)) return safeBaseIds;
+    deduped.push(id);
+  }
+
+  // Must contain every required safe-base ID
+  for (const requiredId of safeBaseIds) {
+    if (!deduped.includes(requiredId)) return safeBaseIds;
+  }
+
+  return deduped;
+}
+
+/**
+ * Clamp workspace column settings to an updated available set.
+ * Removes IDs no longer available, preserves remaining layout, does NOT add
+ * newly available optional columns.
+ */
+export function clampColumnSettingsToAvailableSet<TColumnId extends string>(
+  visibleIds: readonly TColumnId[],
+  orderIds: readonly TColumnId[],
+  widthKeys: readonly TColumnId[],
+  availableSet: ReadonlySet<TColumnId>,
+): {
+  visibleColumnIds: TColumnId[];
+  columnOrderIds: TColumnId[];
+  widthKeysToKeep: TColumnId[];
+} {
+  return {
+    visibleColumnIds: visibleIds.filter((id) => availableSet.has(id)),
+    columnOrderIds: orderIds.filter((id) => availableSet.has(id)),
+    widthKeysToKeep: widthKeys.filter((id) => availableSet.has(id)),
+  };
+}

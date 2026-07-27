@@ -38,6 +38,7 @@ function contract(overrides: Partial<ProjectContract> = {}): ProjectContract {
       packageKind: "development",
       capabilities: nativeCapabilitySnapshots(),
     },
+    sourceTableCapabilities: { availableColumnIds: ["name", "kind", "size", "modified", "sourcePath"] },
     ...overrides,
   };
 }

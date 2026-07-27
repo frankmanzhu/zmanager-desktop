@@ -17,6 +17,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
   test: {
-    exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**", "scripts/**"]
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**", "scripts/**"],
   }
 });

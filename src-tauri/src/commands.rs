@@ -91,12 +91,25 @@ pub fn healthcheck() -> crate::dto::HealthcheckResponse {
 
 #[tauri::command]
 pub fn project_contract() -> crate::dto::ProjectContract {
+    use crate::dto::SourceTableCapabilitiesDto;
+
     let package_kind = crate::native_integration::current_package_kind();
     let capabilities = crate::native_integration::capability_snapshots(
         std::env::consts::OS,
         package_kind,
         &crate::platform::capability_observations(),
     );
+
+    // Build the Compress source-table capability set for the running platform.
+    // Safe base (always available): name, kind, size, modified, sourcePath
+    let mut available_column_ids = vec!["name", "kind", "size", "modified", "sourcePath"];
+
+    // Unix platforms support additional source metadata
+    #[cfg(unix)]
+    {
+        available_column_ids.push("mode");
+        available_column_ids.push("linkTarget");
+    }
 
     ProjectContract {
         commands: constants::PLANNED_COMMANDS,
@@ -106,6 +119,9 @@ pub fn project_contract() -> crate::dto::ProjectContract {
             platform: std::env::consts::OS,
             package_kind,
             capabilities,
+        },
+        source_table_capabilities: SourceTableCapabilitiesDto {
+            available_column_ids,
         },
     }
 }
@@ -343,6 +359,11 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
 }
 
 fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> CreatePlanEntryDto {
+    let link_target = entry
+        .symlink_target
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+
     CreatePlanEntryDto {
         path: entry.archive_path.clone(),
         kind: map_manifest_file_type(entry.file_type),
@@ -350,6 +371,15 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         modified: entry.modified.and_then(system_time_to_epoch_seconds_string),
         mode: entry.permissions.unix_mode,
         source_path: entry.source_path.to_string_lossy().to_string(),
+        // WP6 incremental metadata — populated when core provides them
+        created: None,
+        accessed: None,
+        attributes: None,
+        link_target,
+        uid: None,
+        gid: None,
+        owner: None,
+        group: None,
     }
 }
 
@@ -2765,6 +2795,50 @@ mod tests {
         let dto = create_plan_entry_to_dto(&entry);
 
         assert_eq!(dto.mode, Some(0o755));
+    }
+
+    #[test]
+    fn create_plan_entry_dto_maps_symlink_target_to_link_target() {
+        let entry = ManifestEntry {
+            archive_path: "link.txt".to_string(),
+            source_path: PathBuf::from("/tmp/link.txt"),
+            file_type: ManifestFileType::Symlink,
+            size: 0,
+            modified: None,
+            permissions: PermissionSnapshot {
+                readonly: false,
+                unix_mode: Some(0o777),
+            },
+            symlink_target: Some(PathBuf::from("target.txt")),
+        };
+
+        let dto = create_plan_entry_to_dto(&entry);
+
+        assert_eq!(dto.link_target, Some("target.txt".to_string()));
+        // Optional fields not yet populated remain None
+        assert_eq!(dto.created, None);
+        assert_eq!(dto.uid, None);
+        assert_eq!(dto.owner, None);
+    }
+
+    #[test]
+    fn create_plan_entry_dto_leaves_link_target_none_when_no_symlink_target() {
+        let entry = ManifestEntry {
+            archive_path: "regular.txt".to_string(),
+            source_path: PathBuf::from("/tmp/regular.txt"),
+            file_type: ManifestFileType::File,
+            size: 100,
+            modified: None,
+            permissions: PermissionSnapshot {
+                readonly: false,
+                unix_mode: Some(0o644),
+            },
+            symlink_target: None,
+        };
+
+        let dto = create_plan_entry_to_dto(&entry);
+
+        assert_eq!(dto.link_target, None);
     }
 
     #[test]
