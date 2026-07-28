@@ -15,7 +15,10 @@ All 8 phases of the Column Support Matrix plan have been fully implemented, test
    - **TAR.ZST / TZST:** Wired `linkTarget`, `uid`, `gid`, `owner`, and `group`.
    - **Apple Archive (AAR / AEA):** Extended `zmanager-apple-archive` to parse `CTM` (created), `FLG` (flags/attributes), `CKS` (crc), `UID`, `GID`, and `linkTarget`.
    - **TZAP (zmanager-core & tzap-core):** Extended `ArchiveEntry` in `tzap-core` to parse PAX records (`LIBARCHIVE.creationtime`, `atime`), `link_target`, `attributes`, `uid`, `gid`, `owner`, and `group`.
-3. **Proportional Stream Ratio & Compressed Size:** Implemented `apply_stream_proportional_sizes()` in `archive_browser.rs` to compute proportional entry `compressedSize` and `ratio` for solid stream archives (`.tar.zst`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.br`, `.tzap`, `.aar`, `.aea`).
+3. **Exact Packed Size And Ratio:** Packed Size and Ratio are exposed only when
+   the backend reports an exact per-entry packed size. Solid-stream archive size
+   is not distributed proportionally across entries because that estimate is not
+   stored entry metadata.
 4. **Solid Compression Stream Mapping:** Set `solid = Some(true)` for 7z solid archives, `.tzap`, and all compressed TAR streams (`.tar.zst`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.br`), and `solid = Some(false)` for uncompressed `.tar`.
 5. **Per-Format Column Availability UI Filtering (Phase 8):** Added `ARCHIVE_COLUMNS_BY_FORMAT` and `getAvailableColumnsForFormat()` in `archiveTable.ts`. Context menus and Preferences dialog filter column options dynamically based on the active archive format.
 
@@ -27,11 +30,11 @@ All 8 phases of the Column Support Matrix plan have been fully implemented, test
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **name** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **size** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **compressedSize** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **compressedSize** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **modified** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **mode** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **kind** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **ratio** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **ratio** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **metadataDiagnostics** | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **encrypted** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
 | **method** | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |

@@ -28,76 +28,76 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   ],
 
   tzap: [
-    "size", "compressedSize", "modified", "mode",
-    "encrypted", "method", "solid", "ratio", "metadataDiagnostics",
+    "size", "modified", "mode",
+    "encrypted", "method", "solid", "metadataDiagnostics",
     "linkTarget", "created", "accessed", "attributes",
     "uid", "gid", "owner", "group",
   ],
 
   tarZstd: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarGzip: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarBzip2: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarXz: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarBrotli: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarLzip: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarLz4: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarLzma: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarLzo: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarLrzip: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tarCompressZ: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   tar: [
-    "size", "compressedSize", "modified", "mode",
-    "linkTarget", "uid", "gid", "owner", "group", "ratio",
+    "size", "modified", "mode",
+    "linkTarget", "uid", "gid", "owner", "group",
   ],
 
   appleArchive: [
-    "size", "compressedSize", "modified", "mode",
+    "size", "modified", "mode",
     "encrypted", "method", "crc", "created",
-    "linkTarget", "attributes", "uid", "gid", "ratio",
+    "linkTarget", "attributes", "uid", "gid",
     // Note: Apple Archive stores numeric uid/gid but NOT owner/group names
   ],
 
@@ -147,20 +147,20 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
 
   // These families have limited backend support; availability reflects current capability
   rar: [
-    "size", "compressedSize", "modified", "ratio",
+    "size", "modified",
   ],
 
   cab: [
-    "size", "compressedSize", "modified", "ratio",
+    "size", "modified",
   ],
 
   cpio: [
-    "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "ratio",
+    "size", "modified", "mode",
+    "uid", "gid",
   ],
 
   deb: [
-    "size", "compressedSize", "modified", "ratio",
+    "size", "modified",
   ],
 
   iso: [
@@ -168,11 +168,11 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   ],
 
   rpm: [
-    "size", "compressedSize", "modified", "ratio",
+    "size", "modified",
   ],
 
   xar: [
-    "size", "compressedSize", "modified", "ratio",
+    "size", "modified",
   ],
 };
 

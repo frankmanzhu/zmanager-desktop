@@ -248,22 +248,22 @@ test("compress table columns reorder by dragging left and right", async ({ page 
       cells.map((cell) => cell.getAttribute("data-compress-column-id")),
     );
 
-  await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
+  await expect.poll(columnOrder).toEqual(["name", "kind", "size", "modified"]);
   await expect(page.locator("[data-column-drag-grip]")).toHaveCount(3);
 
   await startTableColumnDrag(
     page,
     "th[data-compress-column-id='kind']",
-    "th[data-compress-column-id='size']",
+    "th[data-compress-column-id='modified']",
   );
   await expect(
     page.locator("th[data-compress-column-id='kind']"),
   ).toHaveAttribute("data-column-drag-source", "true");
   await expect(
-    page.locator("th[data-compress-column-id='size']"),
-  ).toHaveAttribute("data-column-drop-position", "before");
+    page.locator("th[data-compress-column-id='modified']"),
+  ).toHaveAttribute("data-column-drop-position", "after");
   await page.mouse.up();
-  await expect.poll(columnOrder).toEqual(["name", "kind", "size", "modified"]);
+  await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
   await expect(page.locator("#drop-overlay")).toHaveAttribute(
     "aria-hidden",
     "true",
@@ -272,13 +272,13 @@ test("compress table columns reorder by dragging left and right", async ({ page 
   await startTableColumnDrag(
     page,
     "th[data-compress-column-id='kind']",
-    "th[data-compress-column-id='modified']",
+    "th[data-compress-column-id='size']",
   );
   await expect(
-    page.locator("th[data-compress-column-id='modified']"),
-  ).toHaveAttribute("data-column-drop-position", "after");
+    page.locator("th[data-compress-column-id='size']"),
+  ).toHaveAttribute("data-column-drop-position", "before");
   await page.mouse.up();
-  await expect.poll(columnOrder).toEqual(["name", "size", "modified", "kind"]);
+  await expect.poll(columnOrder).toEqual(["name", "kind", "size", "modified"]);
 });
 
 test("extract table header context menu toggles visible columns and supports keyboard shortcut", async ({ page }) => {
@@ -306,37 +306,19 @@ test("extract table columns reorder by dragging left and right", async ({ page }
 
   await expect.poll(columnOrder).toEqual([
     "name",
+    "kind",
     "size",
-    "compressedSize",
     "modified",
-  ]);
-
-  await startTableColumnDrag(
-    page,
-    "th[data-column-id='modified']",
-    "th[data-column-id='size']",
-  );
-  await expect(
-    page.locator("th[data-column-id='modified']"),
-  ).toHaveAttribute("data-column-drag-source", "true");
-  await expect(
-    page.locator("th[data-column-id='size']"),
-  ).toHaveAttribute("data-column-drop-position", "before");
-  await page.mouse.up();
-  await expect.poll(columnOrder).toEqual([
-    "name",
-    "modified",
-    "size",
     "compressedSize",
   ]);
 
   await startTableColumnDrag(
     page,
-    "th[data-column-id='modified']",
+    "th[data-column-id='kind']",
     "th[data-column-id='compressedSize']",
   );
   await expect(
-    page.locator("th[data-column-id='modified']"),
+    page.locator("th[data-column-id='kind']"),
   ).toHaveAttribute("data-column-drag-source", "true");
   await expect(
     page.locator("th[data-column-id='compressedSize']"),
@@ -345,8 +327,29 @@ test("extract table columns reorder by dragging left and right", async ({ page }
   await expect.poll(columnOrder).toEqual([
     "name",
     "size",
-    "compressedSize",
     "modified",
+    "compressedSize",
+    "kind",
+  ]);
+
+  await startTableColumnDrag(
+    page,
+    "th[data-column-id='kind']",
+    "th[data-column-id='size']",
+  );
+  await expect(
+    page.locator("th[data-column-id='kind']"),
+  ).toHaveAttribute("data-column-drag-source", "true");
+  await expect(
+    page.locator("th[data-column-id='size']"),
+  ).toHaveAttribute("data-column-drop-position", "before");
+  await page.mouse.up();
+  await expect.poll(columnOrder).toEqual([
+    "name",
+    "kind",
+    "size",
+    "modified",
+    "compressedSize",
   ]);
 });
 
@@ -373,9 +376,9 @@ test("column gestures preserve resizing and Extract sorting", async ({ page }) =
     .toBeGreaterThan(compressWidthBefore ?? 0);
   await expect.poll(compressOrder).toEqual([
     "name",
+    "kind",
     "size",
     "modified",
-    "kind",
   ]);
 
   await page.getByRole("tab", { name: "Extract" }).click();
@@ -408,7 +411,7 @@ test("column gestures preserve resizing and Extract sorting", async ({ page }) =
         cells.map((cell) => cell.getAttribute("data-column-id")),
       ),
     )
-    .toEqual(["name", "size", "compressedSize", "modified"]);
+    .toEqual(["name", "kind", "size", "modified", "compressedSize"]);
 });
 
 test("Close Archive resets Extract to its empty state", async ({ page }) => {
@@ -746,10 +749,10 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await page.locator("th[data-column-id='modified']").focus();
   await page.keyboard.press("Shift+F10");
   await expect(page.locator("#context-menu")).toBeVisible();
-  await page.locator("#context-menu [data-context-action='toggle-column'][data-column-id='kind']").focus();
+  await page.locator("#context-menu [data-context-action='toggle-column'][data-column-id='mode']").focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("th[data-column-id='kind']")).toBeVisible();
-  await page.locator("th[data-column-id='kind']").click({ button: "right" });
+  await expect(page.locator("th[data-column-id='mode']")).toBeVisible();
+  await page.locator("th[data-column-id='mode']").click({ button: "right" });
   await page.locator("#context-menu [data-context-action='reset-columns']").click();
   await expect(page.locator("#context-menu")).toBeHidden();
 

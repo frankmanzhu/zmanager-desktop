@@ -32,7 +32,7 @@ One semantic column catalogue shared by Compress and Extract tables. Each scenar
 
 | Order | ID | Label | Meaning |
 |---:|---|---|---|
-| 15 | `compressedSize` | Packed Size | Stored compressed size |
+| 15 | `compressedSize` | Packed Size | Exact stored compressed size when reported by the backend |
 | 16 | `encrypted` | Encrypted | Per-entry encryption flag |
 | 17 | `method` | Method | Stored compression method |
 | 18 | `crc` | CRC | Stored checksum |
@@ -91,14 +91,14 @@ TypeScript never adds availability based on OS detection. The selected output fo
 
 | Platform | Columns | Count |
 |---|---|---|
-| **macOS** | name, kind, size, modified, sourcePath, created, accessed, attributes, mode, linkTarget, uid, gid, owner, group | 13 |
-| **Linux** | name, kind, size, modified, sourcePath, created, accessed, mode, linkTarget, uid, gid, owner, group | 12 |
-| **Windows** | name, kind, size, modified, sourcePath, created, accessed | 7 |
+| **macOS** | name, kind, size, modified, sourcePath, created, accessed, attributes, mode, linkTarget, uid, gid, owner, group | 14 |
+| **Linux** | name, kind, size, modified, sourcePath, created, accessed, mode, linkTarget, uid, gid, owner, group | 13 |
+| **Windows** | name, kind, size, modified, sourcePath, created, accessed, attributes, linkTarget | 9 |
 
-**Metadata sources** (collected from `source_path` via `std::fs::metadata` during DTO mapping, no core changes required):
+**Metadata sources** (collected from `source_path` via `std::fs::symlink_metadata` during DTO mapping):
 - `created` — `Metadata::created()` (all platforms)
 - `accessed` — `Metadata::accessed()` (all platforms)
-- `attributes` — BSD `st_flags` formatted as hex, same format Apple Archive preserves (macOS only)
+- `attributes` — human-readable BSD `st_flags` on macOS and `FILE_ATTRIBUTE_*` values on Windows
 - `mode` — `PermissionSnapshot.unix_mode` from core planner (Unix)
 - `linkTarget` — `ManifestEntry.symlink_target` from core planner (Unix)
 - `uid`, `gid` — `MetadataExt::uid()`/`gid()` (Unix)

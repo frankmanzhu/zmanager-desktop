@@ -686,10 +686,31 @@ fn compare_paths_by_sort(
             "compressedSize" => {
                 compare_optional(&left_entry.compressed_size, &right_entry.compressed_size)
             }
-            "modified" => compare_optional(&left_entry.modified, &right_entry.modified),
+            "modified" => compare_optional_timestamps(&left_entry.modified, &right_entry.modified),
+            "created" => compare_optional_timestamps(&left_entry.created, &right_entry.created),
+            "accessed" => compare_optional_timestamps(&left_entry.accessed, &right_entry.accessed),
             "mode" => compare_optional(&left_entry.mode, &right_entry.mode),
+            "uid" => compare_optional(&left_entry.uid, &right_entry.uid),
+            "gid" => compare_optional(&left_entry.gid, &right_entry.gid),
             "kind" => archive_kind_rank(left_entry.kind).cmp(&archive_kind_rank(right_entry.kind)),
             "ratio" => compression_ratio_order(left_entry, right_entry),
+            "encrypted" => compare_optional(&left_entry.encrypted, &right_entry.encrypted),
+            "solid" => compare_optional(&left_entry.solid, &right_entry.solid),
+            "method" => compare_optional_text(&left_entry.method, &right_entry.method),
+            "crc" => compare_optional_text(&left_entry.crc, &right_entry.crc),
+            "comment" => compare_optional_text(&left_entry.comment, &right_entry.comment),
+            "linkTarget" => {
+                compare_optional_text(&left_entry.link_target, &right_entry.link_target)
+            }
+            "attributes" => compare_optional_text(&left_entry.attributes, &right_entry.attributes),
+            "owner" => compare_optional_text(&left_entry.owner, &right_entry.owner),
+            "group" => compare_optional_text(&left_entry.group, &right_entry.group),
+            "metadataDiagnostics" => compare_optional(
+                &(!left_entry.metadata_diagnostics.is_empty())
+                    .then_some(left_entry.metadata_diagnostics.len()),
+                &(!right_entry.metadata_diagnostics.is_empty())
+                    .then_some(right_entry.metadata_diagnostics.len()),
+            ),
             _ => natural_cmp(archive_name(left), archive_name(right)),
         },
         _ => Ordering::Equal,
@@ -737,6 +758,47 @@ fn compare_optional<T: Ord>(left: &Option<T>, right: &Option<T>) -> Ordering {
         (None, Some(_)) => Ordering::Greater,
         (Some(_), None) => Ordering::Less,
     }
+}
+
+fn compare_optional_text(left: &Option<String>, right: &Option<String>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => natural_cmp(left, right),
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+    }
+}
+
+fn compare_optional_timestamps(left: &Option<String>, right: &Option<String>) -> Ordering {
+    match (left, right) {
+        (Some(left), Some(right)) => compare_timestamp_text(left, right),
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+    }
+}
+
+fn compare_timestamp_text(left: &str, right: &str) -> Ordering {
+    match (parse_epoch_timestamp(left), parse_epoch_timestamp(right)) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        _ => left.cmp(right),
+    }
+}
+
+fn parse_epoch_timestamp(value: &str) -> Option<i128> {
+    let (seconds, fraction) = value.split_once('.').unwrap_or((value, ""));
+    let negative = seconds.starts_with('-');
+    let seconds = seconds.parse::<i128>().ok()?;
+    if fraction.len() > 9 || !fraction.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    let mut nanoseconds = fraction.parse::<i128>().ok().unwrap_or_default();
+    for _ in fraction.len()..9 {
+        nanoseconds = nanoseconds.checked_mul(10)?;
+    }
+    seconds
+        .checked_mul(1_000_000_000)?
+        .checked_add(if negative { -nanoseconds } else { nanoseconds })
 }
 
 fn natural_cmp(left: &str, right: &str) -> Ordering {
@@ -884,6 +946,232 @@ mod tests {
             owner: None,
             group: None,
         }
+    }
+
+    fn dto_entry(path: &str) -> ArchiveEntryDto {
+        ArchiveEntryDto {
+            path: path.to_string(),
+            kind: ArchiveEntryKindDto::File,
+            size: None,
+            compressed_size: None,
+            modified: None,
+            mode: None,
+            metadata_diagnostics: Vec::new(),
+            encrypted: None,
+            method: None,
+            crc: None,
+            comment: None,
+            created: None,
+            accessed: None,
+            solid: None,
+            link_target: None,
+            attributes: None,
+            uid: None,
+            gid: None,
+            owner: None,
+            group: None,
+        }
+    }
+
+    #[test]
+    fn every_extract_column_has_backend_sort_semantics() {
+        macro_rules! assert_field_sort {
+            ($key:literal, $field:ident, $low:expr, $high:expr) => {{
+                let mut low = dto_entry("z-low");
+                let mut high = dto_entry("a-high");
+                low.$field = $low;
+                high.$field = $high;
+                let entries = HashMap::from([(low.path.clone(), low), (high.path.clone(), high)]);
+                assert_eq!(
+                    compare_paths_by_sort("z-low", "a-high", &entries, $key, true),
+                    Ordering::Less,
+                    "{} must sort by its value instead of falling back to name",
+                    $key,
+                );
+            }};
+        }
+
+        assert_field_sort!("size", size, Some(1), Some(2));
+        assert_field_sort!("compressedSize", compressed_size, Some(1), Some(2));
+        assert_field_sort!("modified", modified, Some("9".into()), Some("10".into()));
+        assert_field_sort!("created", created, Some("-1.5".into()), Some("-0.5".into()));
+        assert_field_sort!("accessed", accessed, Some("9".into()), Some("10".into()));
+        assert_field_sort!("mode", mode, Some(0o600), Some(0o700));
+        assert_field_sort!(
+            "kind",
+            kind,
+            ArchiveEntryKindDto::File,
+            ArchiveEntryKindDto::Symlink
+        );
+        assert_field_sort!("uid", uid, Some(1), Some(2));
+        assert_field_sort!("gid", gid, Some(1), Some(2));
+        assert_field_sort!("encrypted", encrypted, Some(false), Some(true));
+        assert_field_sort!("solid", solid, Some(false), Some(true));
+        assert_field_sort!(
+            "method",
+            method,
+            Some("Deflate2".into()),
+            Some("Deflate10".into())
+        );
+        assert_field_sort!("crc", crc, Some("00000001".into()), Some("00000002".into()));
+        assert_field_sort!(
+            "comment",
+            comment,
+            Some("Alpha2".into()),
+            Some("Alpha10".into())
+        );
+        assert_field_sort!(
+            "linkTarget",
+            link_target,
+            Some("target2".into()),
+            Some("target10".into())
+        );
+        assert_field_sort!(
+            "attributes",
+            attributes,
+            Some("0x1".into()),
+            Some("0x2".into())
+        );
+        assert_field_sort!(
+            "owner",
+            owner,
+            Some("owner2".into()),
+            Some("owner10".into())
+        );
+        assert_field_sort!(
+            "group",
+            group,
+            Some("group2".into()),
+            Some("group10".into())
+        );
+
+        let mut low = dto_entry("z-low");
+        let mut high = dto_entry("a-high");
+        low.metadata_diagnostics = vec!["one".into()];
+        high.metadata_diagnostics = vec!["one".into(), "two".into()];
+        let entries = HashMap::from([(low.path.clone(), low), (high.path.clone(), high)]);
+        assert_eq!(
+            compare_paths_by_sort("z-low", "a-high", &entries, "metadataDiagnostics", true,),
+            Ordering::Less,
+        );
+
+        let mut low = dto_entry("z-low");
+        let mut high = dto_entry("a-high");
+        low.size = Some(100);
+        low.compressed_size = Some(10);
+        high.size = Some(100);
+        high.compressed_size = Some(20);
+        let entries = HashMap::from([(low.path.clone(), low), (high.path.clone(), high)]);
+        assert_eq!(
+            compare_paths_by_sort("z-low", "a-high", &entries, "ratio", true),
+            Ordering::Less,
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn real_tzap_listing_populates_desktop_dto_metadata() {
+        use std::fs;
+        use std::os::macos::fs::MetadataExt as _;
+        use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        use zmanager_core::jobs::{CancellationToken, JobContext};
+        use zmanager_core::manifest::{
+            ArchiveManifest, ManifestEntry, ManifestFileType, PermissionSnapshot,
+        };
+        use zmanager_core::tzap_backend::{
+            TzapCreateOptions, TzapKeySource, create_tzap_from_manifest_with_context,
+        };
+
+        let root = std::env::temp_dir().join(format!(
+            "zmanager-desktop-real-tzap-dto-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("metadata.txt");
+        let archive = root.join("metadata.tzap");
+        fs::write(&source, b"desktop metadata").unwrap();
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(
+            std::process::Command::new("/usr/bin/chflags")
+                .arg("hidden")
+                .arg(&source)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let source_metadata = fs::symlink_metadata(&source).unwrap();
+        let manifest = ArchiveManifest {
+            root: root.clone(),
+            entries: vec![ManifestEntry {
+                archive_path: "metadata.txt".into(),
+                source_path: source,
+                file_type: ManifestFileType::File,
+                size: b"desktop metadata".len() as u64,
+                modified: source_metadata.modified().ok(),
+                permissions: PermissionSnapshot {
+                    readonly: false,
+                    unix_mode: Some(source_metadata.permissions().mode() & 0o7777),
+                },
+                symlink_target: None,
+            }],
+            total_bytes: b"desktop metadata".len() as u64,
+            excluded_entries: Vec::new(),
+            excluded_bytes: 0,
+            warnings: Vec::new(),
+        };
+        let token = CancellationToken::new();
+        let mut events = |_| {};
+        let mut context = JobContext::new(&token, &mut events);
+        create_tzap_from_manifest_with_context(
+            &manifest,
+            &archive,
+            &TzapCreateOptions {
+                level: 1,
+                volume_size: None,
+                recovery_percentage: 0,
+                volume_loss_tolerance: 0,
+                preserve_metadata: true,
+                replace_existing: true,
+                key_source: TzapKeySource::NoPassword,
+                x509_signing: None,
+            },
+            &mut context,
+        )
+        .unwrap();
+
+        let build =
+            build_index(zmanager_core::archive_browser::list_entries(&archive).unwrap()).unwrap();
+        let dto = build.index.entries.get("metadata.txt").unwrap();
+        assert_eq!(dto.kind, ArchiveEntryKindDto::File);
+        assert_eq!(dto.size, Some(b"desktop metadata".len() as u64));
+        assert_eq!(dto.mode, Some(0o640));
+        assert!(dto.modified.is_some());
+        assert!(dto.created.is_some());
+        assert!(dto.accessed.is_some());
+        assert_eq!(dto.encrypted, Some(false));
+        assert_eq!(dto.method.as_deref(), Some("Zstd"));
+        assert_eq!(dto.solid, Some(true));
+        assert_eq!(dto.uid, Some(source_metadata.uid()));
+        assert_eq!(dto.gid, Some(source_metadata.gid()));
+        assert!(dto.owner.is_some());
+        assert!(dto.group.is_some());
+        let expected_attributes = format!("{:#010X}", source_metadata.st_flags());
+        assert_eq!(
+            dto.attributes.as_deref(),
+            Some(expected_attributes.as_str())
+        );
+        assert_eq!(dto.compressed_size, None);
+        assert_eq!(dto.crc, None);
+        assert_eq!(dto.comment, None);
+        assert_eq!(dto.link_target, None);
+        assert!(dto.metadata_diagnostics.is_empty());
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

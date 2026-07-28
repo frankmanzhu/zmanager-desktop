@@ -197,7 +197,7 @@ export function GroupedColumnPreferences({ visibility, onChange }: Props) {
             ))}
             <p className="text-xs text-muted-foreground mt-1">
               Only checked columns will be visible for {selectedFamily} archives.
-              Unchecked columns use global defaults.
+              Common columns continue to use global defaults.
             </p>
           </div>
         )}

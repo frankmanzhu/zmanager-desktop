@@ -454,7 +454,6 @@ pub fn validate_ingested_shell_action_request(
     validate_request(request.kind, request.paths).map_err(|error| error.message)
 }
 
-
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
     let normalized = value
         .trim()

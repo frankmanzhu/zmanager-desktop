@@ -259,9 +259,9 @@ export type CreatePlanEntryDto = {
   modified?: string;
   mode?: number;
   sourcePath: string;
-  /** Source birth/creation time (ISO 8601), reported when Rust advertises "created" */
+  /** Source birth/creation time as signed Unix seconds, reported when available */
   created?: string;
-  /** Source access time (ISO 8601), reported when Rust advertises "accessed" */
+  /** Source access time as signed Unix seconds, reported when available */
   accessed?: string;
   /** Source filesystem attributes, reported when Rust advertises "attributes" */
   attributes?: readonly SourceAttributeDto[];

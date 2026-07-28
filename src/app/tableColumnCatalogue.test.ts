@@ -24,6 +24,7 @@ import {
 } from "./tableColumns";
 
 import {
+  ALL_ARCHIVE_FORMAT_FAMILIES,
   resolveArchiveFormatFamily,
   type ArchiveFormatFamily,
 } from "./archiveFormatFamily";
@@ -377,6 +378,30 @@ describe("WP1 — Extract per-family availability", () => {
   it("raw stream families only have name, kind, compressedSize", () => {
     const columns = getExtractAvailableColumns("gzipStream");
     expect(columns).toEqual(["name", "kind", "compressedSize"]);
+  });
+
+  it("offers Packed Size only when a backend reports an exact value", () => {
+    const expected = new Set([
+      "zip",
+      "sevenZ",
+      "gzipStream",
+      "bzip2Stream",
+      "xzStream",
+      "zstdStream",
+      "brotliStream",
+      "lzipStream",
+      "lz4Stream",
+      "lzmaStream",
+      "lzoStream",
+      "lrzipStream",
+      "compressZStream",
+    ]);
+    const actual = new Set(
+      ALL_ARCHIVE_FORMAT_FAMILIES.filter((family) =>
+        getExtractAvailableColumns(family).includes("compressedSize"),
+      ),
+    );
+    expect(actual).toEqual(expected);
   });
 
   it("unknown availability returns the conservative name+kind set", () => {

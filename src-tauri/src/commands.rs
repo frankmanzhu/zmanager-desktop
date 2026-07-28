@@ -122,8 +122,8 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         available_column_ids.push("mode");
         available_column_ids.push("uid");
         available_column_ids.push("gid");
-        available_column_ids.push("owner");   // Available on macOS/Linux
-        available_column_ids.push("group");   // Available on macOS/Linux
+        available_column_ids.push("owner"); // Available on macOS/Linux
+        available_column_ids.push("group"); // Available on macOS/Linux
     }
 
     // Windows: owner is "Available when implemented" — defer to core integration
@@ -383,8 +383,8 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         .map(|p| p.to_string_lossy().to_string());
 
     // Collect platform metadata from the source path.
-    // This is a stat call per entry — acceptable for typical source trees.
-    let source_meta = std::fs::metadata(&entry.source_path).ok();
+    // Do not follow symlinks: table metadata describes the archived object.
+    let source_meta = std::fs::symlink_metadata(&entry.source_path).ok();
 
     let created = source_meta
         .as_ref()
@@ -404,7 +404,12 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         if let Some(ref meta) = source_meta {
             let u = meta.uid();
             let g = meta.gid();
-            (Some(u), Some(g), resolve_user_name(u), resolve_group_name(g))
+            (
+                Some(u),
+                Some(g),
+                resolve_user_name(u),
+                resolve_group_name(g),
+            )
         } else {
             (None, None, None, None)
         }
@@ -449,16 +454,16 @@ const MACOS_BSD_FLAGS: &[(u32, &str)] = &[
 // which are set on almost every file.
 #[cfg(windows)]
 const WINDOWS_FILE_ATTRIBUTES: &[(u32, &str)] = &[
-    (0x0000_0001, "readonly"),     // FILE_ATTRIBUTE_READONLY
-    (0x0000_0002, "hidden"),       // FILE_ATTRIBUTE_HIDDEN
-    (0x0000_0004, "system"),       // FILE_ATTRIBUTE_SYSTEM
-    (0x0000_0040, "device"),       // FILE_ATTRIBUTE_DEVICE
-    (0x0000_0100, "temporary"),    // FILE_ATTRIBUTE_TEMPORARY
-    (0x0000_0200, "sparse"),       // FILE_ATTRIBUTE_SPARSE_FILE
-    (0x0000_0400, "reparse"),      // FILE_ATTRIBUTE_REPARSE_POINT
-    (0x0000_0800, "compressed"),   // FILE_ATTRIBUTE_COMPRESSED
-    (0x0000_1000, "offline"),      // FILE_ATTRIBUTE_OFFLINE
-    (0x0000_4000, "encrypted"),    // FILE_ATTRIBUTE_ENCRYPTED
+    (0x0000_0001, "readonly"),   // FILE_ATTRIBUTE_READONLY
+    (0x0000_0002, "hidden"),     // FILE_ATTRIBUTE_HIDDEN
+    (0x0000_0004, "system"),     // FILE_ATTRIBUTE_SYSTEM
+    (0x0000_0040, "device"),     // FILE_ATTRIBUTE_DEVICE
+    (0x0000_0100, "temporary"),  // FILE_ATTRIBUTE_TEMPORARY
+    (0x0000_0200, "sparse"),     // FILE_ATTRIBUTE_SPARSE_FILE
+    (0x0000_0400, "reparse"),    // FILE_ATTRIBUTE_REPARSE_POINT
+    (0x0000_0800, "compressed"), // FILE_ATTRIBUTE_COMPRESSED
+    (0x0000_1000, "offline"),    // FILE_ATTRIBUTE_OFFLINE
+    (0x0000_4000, "encrypted"),  // FILE_ATTRIBUTE_ENCRYPTED
 ];
 
 /// Build source attributes from permission flags and platform metadata.
@@ -478,7 +483,7 @@ fn build_source_attributes(
     #[cfg(target_os = "macos")]
     {
         use std::os::darwin::fs::MetadataExt;
-        if let Ok(meta) = std::fs::metadata(source_path) {
+        if let Ok(meta) = std::fs::symlink_metadata(source_path) {
             let flags = meta.st_flags();
             for (mask, name) in MACOS_BSD_FLAGS {
                 if flags & mask != 0 {
@@ -494,7 +499,7 @@ fn build_source_attributes(
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
-        if let Ok(meta) = std::fs::metadata(source_path) {
+        if let Ok(meta) = std::fs::symlink_metadata(source_path) {
             let attrs_val = meta.file_attributes();
             for (mask, name) in WINDOWS_FILE_ATTRIBUTES {
                 if attrs_val & mask != 0 {
@@ -507,11 +512,7 @@ fn build_source_attributes(
         }
     }
 
-    if attrs.is_empty() {
-        None
-    } else {
-        Some(attrs)
-    }
+    if attrs.is_empty() { None } else { Some(attrs) }
 }
 
 /// Resolve a Unix UID to a user name using a bounded thread-safe buffer.
@@ -3021,6 +3022,82 @@ mod tests {
         let dto = create_plan_entry_to_dto(&entry);
 
         assert_eq!(dto.link_target, None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn create_plan_entry_dto_reports_exact_object_metadata_without_following_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = env::temp_dir().join(format!(
+            "zmanager-source-columns-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("target.txt");
+        let link = root.join("link.txt");
+        fs::write(&target, b"target").unwrap();
+        symlink("target.txt", &link).unwrap();
+        assert!(
+            std::process::Command::new("/usr/bin/chflags")
+                .arg("hidden")
+                .arg(&target)
+                .status()
+                .unwrap()
+                .success()
+        );
+
+        let target_dto = create_plan_entry_to_dto(&ManifestEntry {
+            archive_path: "target.txt".into(),
+            source_path: target.clone(),
+            file_type: ManifestFileType::File,
+            size: 6,
+            modified: None,
+            permissions: PermissionSnapshot {
+                readonly: false,
+                unix_mode: Some(0o644),
+            },
+            symlink_target: None,
+        });
+        let link_dto = create_plan_entry_to_dto(&ManifestEntry {
+            archive_path: "link.txt".into(),
+            source_path: link,
+            file_type: ManifestFileType::Symlink,
+            size: 0,
+            modified: None,
+            permissions: PermissionSnapshot {
+                readonly: false,
+                unix_mode: Some(0o777),
+            },
+            symlink_target: Some(PathBuf::from("target.txt")),
+        });
+
+        assert!(target_dto.created.is_some());
+        assert!(target_dto.accessed.is_some());
+        assert!(target_dto.uid.is_some());
+        assert!(target_dto.owner.is_some());
+        assert!(
+            target_dto
+                .attributes
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .any(|attribute| attribute.code == "hidden")
+        );
+        assert!(
+            !link_dto
+                .attributes
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .any(|attribute| attribute.code == "hidden")
+        );
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

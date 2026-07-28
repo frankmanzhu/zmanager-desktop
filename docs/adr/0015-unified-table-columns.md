@@ -32,10 +32,10 @@ not own one shared intrinsic pixel width.
 
 ### 2. Visibility-only persistence
 
-Global Column Options persists only a schema version and global visible column
-IDs with optional per-format-family Extract overrides. Column order and widths
-are workspace-local transient state and are not persisted. `tableColumnOrder`
-and `tableColumnWidths` preference keys are retired after successful migration.
+Global Column Options persists global visible column IDs with optional
+per-format-family Extract overrides. Column order and widths are
+workspace-local transient state and are not persisted. Existing preferences
+are left untouched.
 
 ### 3. Rust-authored Compress capability contract
 
@@ -68,18 +68,15 @@ A typed `ArchiveFormatFamily` normalizer replaces direct use of physical
 archive suffixes for table-column preferences. `.tgz` and `.tar.gz` share one
 `tarGzip` family; `.tzst` and `.tar.zst` share one `tarZstd` family. The
 normalizer is exhaustive for the generated archive suffix manifest and owns
-aliases, localized display-label keys, Extract availability, and migration
-precedence. A table-driven test compares the registry with the generated
-manifest.
+aliases, localized display-label keys, and Extract availability. A table-driven
+test compares the registry with the generated manifest.
 
 ### 7. Preference save semantics
 
 Saving changed Global Column Options immediately re-resolves both workspace
 configured defaults. Only a workspace whose resolved defaults changed is reset;
 the other workspace's local layout is preserved. An unrelated save, cancellation,
-or save failure leaves local layouts unchanged. Saving is failure-safe:
-write-then-read-back-then-retire-legacy pattern with toast notification on
-failure.
+or save failure leaves local layouts unchanged.
 
 ### 8. Sort fallback
 
@@ -91,8 +88,8 @@ configured sort preference. An explicit user header click always persists.
 
 - One catalogue owns column identity, scope, and canonical order. New columns
   must be added to the catalogue; a guardrail test enforces this.
-- One preference seam persists visibility only, under a new versioned key
-  `zmanager.tableColumnVisibility.v2`.
+- One preference seam persists visibility only under
+  `zmanager.tableColumnVisibility`.
 - One Rust contract owns Compress availability. The selected output format
   never changes Compress source columns.
 - One canonical family normalizer owns Extract preference keys. Physical
@@ -100,6 +97,5 @@ configured sort preference. An explicit user header click always persists.
 - Workspace-local column order and widths do not survive application restart.
 - Header-triggered preference writes are removed. Reset Columns restores
   configured visibility without writing preferences.
-- The old Compress catalogue and legacy order/width persistence are deleted
-  after the shared visibility path is proven through the Migration Activation
-  Gate.
+- The unversioned preference key is used directly; there is no migration or
+  activation gate.

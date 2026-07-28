@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { GroupedColumnPreferences } from "./GroupedColumnPreferences";
 import { cleanInstallVisibilityPreferences, type TableColumnVisibilityPreferences } from "../../../app/tableColumnPreferences";
 
@@ -40,18 +40,14 @@ describe("GroupedColumnPreferences", () => {
   });
 
   it("renders checkboxes for column visibility", () => {
-    renderWithDefaults();
-    const checkboxes = screen.getAllByRole("checkbox");
-    // Should have at least all 22 columns worth of checkboxes
-    expect(checkboxes.length).toBeGreaterThan(5);
+    const { container } = renderWithDefaults();
+    const checkboxes = within(container).getAllByRole("checkbox");
+    expect(checkboxes).toHaveLength(22);
   });
 
   it("renders Name as a disabled checkbox (always visible)", () => {
-    renderWithDefaults();
-    const disabledCheckboxes = screen.getAllByRole("checkbox").filter(
-      (cb) => (cb as HTMLInputElement).disabled,
-    );
-    expect(disabledCheckboxes.length).toBeGreaterThan(0);
+    const { container } = renderWithDefaults();
+    expect(within(container).getByRole("checkbox", { name: "Name" })).toBeDisabled();
   });
 
   it("has a format family selector combobox", () => {
@@ -61,23 +57,12 @@ describe("GroupedColumnPreferences", () => {
   });
 
   it("calls onChange when a non-disabled checkbox is toggled", () => {
-    const { onChange } = renderWithDefaults();
-    const checkboxes = screen.getAllByRole("checkbox");
-    const toggleable = checkboxes.find(
-      (cb) => !(cb as HTMLInputElement).disabled && !cb.getAttribute("data-state"),
-    );
+    const { container, onChange } = renderWithDefaults();
+    fireEvent.click(within(container).getByRole("checkbox", { name: "Kind" }));
 
-    if (toggleable) {
-      fireEvent.click(toggleable);
-      // onChange should be called with a valid patch
-      expect(onChange).toHaveBeenCalled();
-      if (onChange.mock.calls.length > 0) {
-        const patch = onChange.mock.calls[0][0];
-        expect(patch.visibleColumnIds).toBeDefined();
-      }
-    }
-    // If no toggleable found, that's also OK — all non-disabled checkboxes
-    // might already be in a checked state that wraps correctly
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const patch = onChange.mock.calls[0][0];
+    expect(patch.visibleColumnIds).not.toContain("kind");
   });
 
   it("renders Source Path in the UI", () => {

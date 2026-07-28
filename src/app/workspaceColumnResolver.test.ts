@@ -160,14 +160,15 @@ describe("WP4/WP5 — Extract column resolution", () => {
     };
     const result = resolveExtractColumns(input);
 
-    // Family override: name, size, crc, comment (intersected with ZIP availability)
+    // Global common columns remain visible; the family override controls only
+    // Extract-only columns.
     expect(result.configuredDefaultIds).toContain("name");
     expect(result.configuredDefaultIds).toContain("size");
+    expect(result.configuredDefaultIds).toContain("kind");
+    expect(result.configuredDefaultIds).toContain("modified");
     expect(result.configuredDefaultIds).toContain("crc");
     expect(result.configuredDefaultIds).toContain("comment");
-    // Not in override
-    expect(result.configuredDefaultIds).not.toContain("kind");
-    expect(result.configuredDefaultIds).not.toContain("modified");
+    expect(result.configuredDefaultIds).not.toContain("compressedSize");
   });
 
   it("resolves unknown format conservatively (name and kind only)", () => {

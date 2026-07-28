@@ -139,7 +139,7 @@ export function getColumnDefinition(id: TableColumnId): TableColumnDefinition | 
 
 // -- Scope filters -----------------------------------------------------------
 
-const COMMON_COLUMN_IDS: readonly TableColumnId[] = TABLE_COLUMN_CATALOGUE
+export const COMMON_COLUMN_IDS: readonly TableColumnId[] = TABLE_COLUMN_CATALOGUE
   .filter((c) => c.scope === "common")
   .map((c) => c.id);
 
@@ -147,7 +147,7 @@ const COMPRESS_ONLY_COLUMN_IDS: readonly TableColumnId[] = TABLE_COLUMN_CATALOGU
   .filter((c) => c.scope === "compress")
   .map((c) => c.id);
 
-const EXTRACT_ONLY_COLUMN_IDS: readonly TableColumnId[] = TABLE_COLUMN_CATALOGUE
+export const EXTRACT_ONLY_COLUMN_IDS: readonly TableColumnId[] = TABLE_COLUMN_CATALOGUE
   .filter((c) => c.scope === "extract")
   .map((c) => c.id);
 

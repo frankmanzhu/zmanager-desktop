@@ -21,6 +21,7 @@ import type { ArchiveEntryDto } from "../api/types";
 import { entryHierarchicalRowId } from "./hierarchicalTable";
 import { createTranslatorFromCatalog } from "./i18n/translator";
 import { zhCnMessages } from "./i18n/messages.zh-CN";
+import { EXTRACT_APPLICABLE_IDS } from "./tableColumnCatalogue";
 
 describe("archive table columns and formatters", () => {
   it("uses the required default details columns", () => {
@@ -124,6 +125,38 @@ describe("archive table columns and formatters", () => {
 
     expect(formatArchiveTableValue(entry, "crc")).toBe("DEADBEEF");
     expect(formatArchiveTableValue(entry, "encrypted")).toBe("+");
+  });
+
+  it("renders every Extract column from a fully populated backend entry", () => {
+    const entry: ArchiveEntryDto = {
+      path: "docs/readme.txt",
+      kind: "file",
+      size: 100,
+      compressedSize: 50,
+      modified: "1700000000",
+      created: "1600000000",
+      accessed: "1800000000",
+      mode: 0o640,
+      metadataDiagnostics: ["native metadata restored"],
+      encrypted: true,
+      method: "Zstd",
+      crc: "deadbeef",
+      comment: "comment",
+      solid: true,
+      linkTarget: "target.txt",
+      attributes: "0x00008000",
+      uid: 501,
+      gid: 20,
+      owner: "owner",
+      group: "staff",
+    };
+
+    for (const columnId of EXTRACT_APPLICABLE_IDS) {
+      expect(
+        formatArchiveTableValue(entry, columnId),
+        `${columnId} should be exposed`,
+      ).not.toBe("");
+    }
   });
 
   it("does not allow the Name column to be hidden", () => {

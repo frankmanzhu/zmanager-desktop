@@ -13,6 +13,8 @@ import {
   COMPRESS_APPLICABLE_IDS,
   EXTRACT_APPLICABLE_IDS,
   COMPRESS_SAFE_BASE_IDS,
+  COMMON_COLUMN_IDS,
+  EXTRACT_ONLY_COLUMN_IDS,
   isExtractColumn,
 } from "./tableColumnCatalogue";
 import {
@@ -145,12 +147,20 @@ function resolveKnownExtractColumns(
   const familyOverride = input.visibilityPrefs.visibleColumnIdsByFormatFamily[
     family as keyof typeof input.visibilityPrefs.visibleColumnIdsByFormatFamily
   ];
-  const globalOrFamilyVisible = familyOverride ?? input.visibilityPrefs.visibleColumnIds;
+  const configuredVisible = familyOverride
+    ? new Set<TableColumnId>([
+        ...input.visibilityPrefs.visibleColumnIds.filter((id) =>
+          COMMON_COLUMN_IDS.includes(id),
+        ),
+        ...familyOverride.filter((id) => EXTRACT_ONLY_COLUMN_IDS.includes(id)),
+      ])
+    : new Set(input.visibilityPrefs.visibleColumnIds);
 
-  // Configured default = available ∩ (family override ?? global visible)
+  // Common columns remain global. A family override replaces only the
+  // Extract-only portion of the global selection.
   const configuredDefaults = intersectVisibleColumns(
     availableIds,
-    new Set(globalOrFamilyVisible),
+    configuredVisible,
   );
 
   // Current = configured defaults + local overrides
@@ -231,8 +241,7 @@ export type ColumnDefaultComparison = Readonly<{
 
 /**
  * Compare before/after configured defaults for both scenarios.
- * Used by the Migration Activation Gate to determine which workspaces
- * need a reset after Global Column Options save.
+ * Determines which workspaces need a reset after Global Column Options save.
  */
 export function compareResolvedDefaults(
   compressBefore: ResolvedWorkspaceColumns,
