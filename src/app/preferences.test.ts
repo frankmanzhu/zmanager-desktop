@@ -70,9 +70,6 @@ describe("preferences helpers", () => {
       "zmanager.largeToolbarButtons": "true",
       "zmanager.showToolbarLabels": "false",
       "zmanager.flatViewDefault": "true",
-      "zmanager.tableVisibleColumns": "name,size,crc",
-      "zmanager.tableColumnOrder": "name,crc,size",
-      "zmanager.tableColumnWidths": "{\"name\":240,\"size\":130}",
       "zmanager.tableSortKey": "size",
       "zmanager.tableSortAscending": "false",
     });
@@ -182,32 +179,6 @@ describe("preferences helpers", () => {
       alternativeSelectionMode: true,
       showToolbarLabels: false,
       flatViewDefault: true,
-      tableVisibleColumnIds: ["name", "size", "crc"],
-      tableColumnOrderIds: [
-        "name",
-        "crc",
-        "size",
-        "compressedSize",
-        "modified",
-        "mode",
-        "created",
-        "accessed",
-        "attributes",
-        "encrypted",
-        "method",
-        "comment",
-        "kind",
-        "ratio",
-        "solid",
-        "linkTarget",
-        "metadataDiagnostics",
-        "uid",
-        "gid",
-        "owner",
-        "group",
-      ],
-      tableColumnWidths: { name: 240, size: 130 },
-      tableColumnsByFormat: {},
       tableSortKey: "size",
       tableSortAscending: false,
     });
@@ -268,10 +239,6 @@ describe("preferences helpers", () => {
         alternativeSelectionMode: false,
         showToolbarLabels: false,
         flatViewDefault: true,
-        tableVisibleColumnIds: ["size"],
-        tableColumnOrderIds: DEFAULT_APP_PREFERENCES.tableColumnOrderIds,
-        tableColumnWidths: { name: 240 },
-        tableColumnsByFormat: {},
         tableSortKey: "size",
         tableSortAscending: false,
         locale: "en",
@@ -355,28 +322,15 @@ describe("preferences helpers", () => {
     expect(defaultCreateDirectory(DEFAULT_APP_PREFERENCES)).toBeNull();
   });
 
-  it("normalizes full preference-shaped patches from dialog saves", () => {
+  it("normalizes patches from dialog saves", () => {
     const dialogPreferences: AppPreferences = {
       ...DEFAULT_APP_PREFERENCES,
       customOutputFolderPath: " /tmp/dialog-output ",
-      tableVisibleColumnIds: ["size", "name", "size"],
-      tableColumnOrderIds: ["size", "name", "size"],
-      tableColumnWidths: {
-        name: 12,
-        size: 1200,
-        unknown: 200,
-      } as AppPreferences["tableColumnWidths"],
     };
 
     const preferences = preferencesWithPatch(DEFAULT_APP_PREFERENCES, dialogPreferences);
 
     expect(preferences.customOutputFolderPath).toBe("/tmp/dialog-output");
-    expect(preferences.tableVisibleColumnIds).toEqual(["size", "name"]);
-    expect(preferences.tableColumnOrderIds.slice(0, 3)).toEqual(["name", "size", "compressedSize"]);
-    expect(preferences.tableColumnWidths).toEqual({
-      name: 140,
-      size: 520,
-    });
   });
 
   it("treats zero volume defaults as no split", () => {

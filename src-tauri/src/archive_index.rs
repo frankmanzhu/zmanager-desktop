@@ -956,7 +956,6 @@ mod tests {
                 parent_path: String::new(),
                 cursor: None,
                 limit: Some(10_000),
-                expected_revision: Some("2".to_string()),
                 sort_key: None,
                 sort_ascending: None,
             })
@@ -969,7 +968,6 @@ mod tests {
             parent_path: "different".to_string(),
             cursor: first.next_cursor,
             limit: Some(1),
-            expected_revision: Some("2".to_string()),
             sort_key: None,
             sort_ascending: None,
         });
@@ -978,14 +976,13 @@ mod tests {
             "invalid_request"
         );
 
-        // expectedRevision mismatches are tolerated: the index data is valid
-        // regardless of revision, and cursors carry their own revision signature.
+        // Cursors carry their own revision signature so stale-revision
+        // mismatches are tolerated without an explicit expected_revision field.
         let older_revision = registry.children(ArchiveChildrenRequest {
             session_id: "archive-test".to_string(),
             parent_path: String::new(),
             cursor: None,
             limit: Some(1),
-            expected_revision: Some("1".to_string()),
             sort_key: None,
             sort_ascending: None,
         });
@@ -1002,7 +999,6 @@ mod tests {
             parent_path: String::new(),
             cursor: None,
             limit: Some(1),
-            expected_revision: None,
             sort_key: None,
             sort_ascending: None,
         });

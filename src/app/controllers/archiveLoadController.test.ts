@@ -92,7 +92,6 @@ describe("archive load controller", () => {
       sessionId: "archive-1",
       parentPath: "",
       limit: 512,
-      expectedRevision: "2",
       sortKey: "name",
       sortAscending: true,
     });

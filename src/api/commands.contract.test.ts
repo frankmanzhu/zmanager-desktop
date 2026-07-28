@@ -90,22 +90,20 @@ const COMMAND_WRAPPERS = [
   },
   {
     command: "get_archive_children",
-    request: { sessionId: "archive-1", parentPath: "folder", limit: 200, expectedRevision: "2" },
+    request: { sessionId: "archive-1", parentPath: "folder", limit: 200 },
     call: () => api.getArchiveChildren({
       sessionId: "archive-1",
       parentPath: "folder",
       limit: 200,
-      expectedRevision: "2",
     }),
   },
   {
     command: "search_archive_index",
-    request: { sessionId: "archive-1", query: "readme", limit: 200, expectedRevision: "2" },
+    request: { sessionId: "archive-1", query: "readme", limit: 200 },
     call: () => api.searchArchiveIndex({
       sessionId: "archive-1",
       query: "readme",
       limit: 200,
-      expectedRevision: "2",
     }),
   },
   {

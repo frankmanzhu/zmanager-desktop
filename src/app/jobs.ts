@@ -7,7 +7,7 @@ import type {
   JobPhase,
   JobStatus,
   JobState,
-  LegacyJobSnapshotDto,
+  BaseJobSnapshotDto,
   StartExtractRequest,
   StartJobResponseDto,
 } from "../api/types";
@@ -104,9 +104,9 @@ export function createInitialJobState(response: StartJobResponseDto): JobState {
   };
 }
 
-export function replaceLegacyJobStateFixture(
+export function applyJobSnapshot(
   previous: JobState | undefined,
-  snapshot: LegacyJobSnapshotDto,
+  snapshot: BaseJobSnapshotDto,
 ): JobState {
   return {
     snapshot: {

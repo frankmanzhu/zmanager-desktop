@@ -3,7 +3,7 @@ import type {
   DesktopJobSnapshotDto,
   JobState,
   JobStatus,
-  LegacyJobSnapshotDto,
+  BaseJobSnapshotDto,
   StartCreateRequest,
   StartExtractRequest,
   StartJobResponseDto,
@@ -16,7 +16,7 @@ import {
   isCreateJobKind,
   isLiveJobStatus,
   isTerminalJobStatus,
-  replaceLegacyJobStateFixture,
+  applyJobSnapshot,
   selectQuickActionJobCompletionDecision,
   type JobProgressSnapshot,
   type JobRetryContext,
@@ -159,7 +159,7 @@ export type JobsWorkspace = {
   getPasswordRetryDetails(jobId: string): JobPasswordRetryDetails | null;
   markPasswordRetryPromptedIfEligible(jobId: string): boolean;
   addJob(response: StartJobResponseDto, options?: AddJobStateOptions): JobState;
-  replaceLegacySnapshotFixture(snapshot: LegacyJobSnapshotDto): JobState;
+  applyJobSnapshot(snapshot: BaseJobSnapshotDto): JobState;
   acceptRetainedSnapshot(snapshot: DesktopJobSnapshotDto): JobState;
   markJobFailed(jobId: string, event: JobEventDto): JobState | null;
   updateJobStatus(jobId: string, status: JobStatus): JobState | null;
@@ -564,8 +564,8 @@ export function createJobsWorkspace(): JobsWorkspace {
       return cloneJobState(state);
     },
 
-    replaceLegacySnapshotFixture(snapshot) {
-      const state = replaceLegacyJobStateFixture(jobs.get(snapshot.jobId), snapshot);
+    applyJobSnapshot(snapshot) {
+      const state = applyJobSnapshot(jobs.get(snapshot.jobId), snapshot);
       const stored = cloneJobState(state);
       jobs.set(snapshot.jobId, stored);
       return cloneJobState(stored);

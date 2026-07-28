@@ -27,7 +27,7 @@ describe("context menu model", () => {
       buildAddSourcesContextMenuItems(translator),
       buildArchiveFolderContextMenuItems({ translator, folderPath: "docs", entryPath: "docs", selectedCount: 1, hasArchive: true }),
       buildArchiveEntryContextMenuItems({ translator, entryPath: "docs/readme.txt", canOpenInside: false, canOpenOutside: true, selectedCount: 1, selectedEntryCount: 1, hasArchive: true }),
-      buildArchiveHeaderContextMenuItems({ translator, tableColumnSettings: resetColumnSettings(), selectedColumnId: "size" }),
+      buildArchiveHeaderContextMenuItems({ translator, tableColumnSettings: resetColumnSettings(), selectedColumnId: "size", archivePath: "archive.zip" }),
       buildCompressRowContextMenuItems({ translator, rowPath: "src/app", folderPath: "src", sourcePath: "C:/work/source", contextRowCount: 1, removableSourceCount: 1, canInclude: true, canExclude: true, hasSources: true }),
       buildSourceContextMenuItems({ translator, sourcePath: "C:/work/source" }),
     ];
@@ -125,6 +125,7 @@ describe("context menu model", () => {
       translator,
       tableColumnSettings: resetColumnSettings(),
       selectedColumnId: "size",
+      archivePath: "archive.zip",
     });
     const actions = actionItems(items);
     const checkboxes = checkboxItems(items);

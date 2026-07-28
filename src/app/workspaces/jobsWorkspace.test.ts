@@ -4,7 +4,7 @@ import type {
   DesktopJobSnapshotDto,
   JobEventDto,
   JobState,
-  LegacyJobSnapshotDto,
+  BaseJobSnapshotDto,
   StartJobResponseDto,
 } from "../../api/types";
 import {
@@ -26,7 +26,7 @@ function startJobResponse(overrides: Partial<StartJobResponseDto> = {}): StartJo
   };
 }
 
-function legacySnapshot(overrides: Partial<LegacyJobSnapshotDto> = {}): LegacyJobSnapshotDto {
+function baseSnapshot(overrides: Partial<BaseJobSnapshotDto> = {}): BaseJobSnapshotDto {
   return {
     jobId: "job-1",
     kind: "zipExtract",
@@ -126,7 +126,7 @@ describe("jobs workspace", () => {
     expect(workspace.getOutputActions("job-1")).toEqual([{ kind: "open", path: "C:/out/source" }]);
     expect(workspace.getReadyOutputActions("job-1")).toEqual([]);
 
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       status: "completed",
       canDismiss: true,
     }));
@@ -177,10 +177,10 @@ describe("jobs workspace", () => {
     expect(workspace.getOutputActions("job-1")).toEqual([{ kind: "open", path: "C:/out/source" }]);
   });
 
-  it("replaces legacy fixture snapshots and preserves previous terminal summaries", () => {
+  it("applies fixture snapshots and preserves previous terminal summaries", () => {
     const workspace = createJobsWorkspace();
     workspace.addJob(startJobResponse());
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       status: "completed",
       canDismiss: true,
       events: [{ eventType: "completed", jobKind: "zipExtract" }],
@@ -192,13 +192,13 @@ describe("jobs workspace", () => {
       },
     }));
 
-    const latePoll = legacySnapshot({
+    const latePoll = baseSnapshot({
       status: "completed",
       canDismiss: true,
       events: [{ eventType: "warning", message: "late warning" }],
       terminalSummary: null,
     });
-    const merged = workspace.replaceLegacySnapshotFixture(latePoll);
+    const merged = workspace.applyJobSnapshot(latePoll);
     latePoll.events[0].message = "mutated after merge";
 
     expect(merged.snapshot.terminalSummary?.writtenEntries).toBe(2);
@@ -229,7 +229,7 @@ describe("jobs workspace", () => {
   it("tracks password retry eligibility and only marks a job prompted once", () => {
     const workspace = createJobsWorkspace();
     workspace.addJob(startJobResponse(), { retryContext: extractRetryContext });
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       status: "failed",
       canDismiss: true,
       events: [{ eventType: "failed", code: "password_required" }],
@@ -247,7 +247,7 @@ describe("jobs workspace", () => {
       retryContext: extractRetryContext,
       outputActions: [{ kind: "open", path: "C:/out/source" }],
     });
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       status: "failed",
       canDismiss: true,
       events: [{ eventType: "failed", code: "password_required" }],
@@ -263,7 +263,7 @@ describe("jobs workspace", () => {
 
     workspace.replaceJobs([
       {
-        snapshot: legacySnapshot({
+        snapshot: baseSnapshot({
           jobId: "fixture-job",
           status: "completed",
           canDismiss: true,
@@ -312,7 +312,7 @@ describe("jobs workspace", () => {
     }), {
       outputActions: [{ kind: "open", path: "C:/out/newer" }],
     });
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "newer-job",
       status: "running",
       events: [{
@@ -336,7 +336,7 @@ describe("jobs workspace", () => {
     expect(snapshot.jobs[0].progress.progressPercent).toBe(25);
     expect(snapshot.jobs[0].readyOutputActions).toEqual([]);
 
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "newer-job",
       status: "completed",
       canDismiss: true,
@@ -360,7 +360,7 @@ describe("jobs workspace", () => {
       action: "unavailable",
     });
 
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       status: "completed",
       canDismiss: true,
     }));
@@ -429,7 +429,7 @@ describe("jobs workspace", () => {
     const nowMs = Date.parse(startedAt) + 5_000;
     workspace.addJob(startJobResponse({ jobId: "job-a", status: "running" }));
     workspace.addJob(startJobResponse({ jobId: "job-b", status: "running" }));
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "job-a",
       status: "running",
       events: [{
@@ -439,7 +439,7 @@ describe("jobs workspace", () => {
         totalBytesProcessed: 25,
       }],
     }));
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "job-b",
       status: "running",
       events: [{
@@ -537,7 +537,7 @@ describe("jobs workspace", () => {
       autoClosePending: false,
     })).toEqual({ action: "wait" });
 
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "job-1",
       status: "completed",
       canDismiss: true,
@@ -562,12 +562,12 @@ describe("jobs workspace", () => {
     workspace.addJob(startJobResponse({ jobId: "failed-job" }));
     workspace.trackFocusedQuickActionJob("completed-job");
     workspace.trackFocusedQuickActionJob("failed-job");
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "completed-job",
       status: "completed",
       canDismiss: true,
     }));
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId: "failed-job",
       status: "failed",
       canDismiss: true,

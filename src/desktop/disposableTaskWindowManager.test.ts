@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createDisposableTaskWindowManager, type DisposableTaskWindowHandle } from "./disposableTaskWindowManager";
-import type { LegacyJobSnapshotDto, StartJobResponseDto } from "../api/types";
+import type { BaseJobSnapshotDto, StartJobResponseDto } from "../api/types";
 
 function job(jobId = "job-1"): StartJobResponseDto {
   return { jobId, kind: "zipCreate", status: "queued", createdAt: "2026-07-11T00:00:00Z" };
 }
 
-function update(jobId = "job-1"): LegacyJobSnapshotDto {
+function update(jobId = "job-1"): BaseJobSnapshotDto {
   return { ...job(jobId), status: "running", canDismiss: false, events: [] };
 }
 

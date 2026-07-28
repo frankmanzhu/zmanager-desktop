@@ -204,7 +204,6 @@ export type ArchiveChildrenRequest = ArchiveIndexSessionRequest & {
   parentPath?: string;
   cursor?: string;
   limit?: number;
-  expectedRevision?: string;
   sortKey?: string;
   sortAscending?: boolean;
 };
@@ -213,7 +212,6 @@ export type ArchiveSearchRequest = ArchiveIndexSessionRequest & {
   query: string;
   cursor?: string;
   limit?: number;
-  expectedRevision?: string;
   sortKey?: string;
   sortAscending?: boolean;
 };
@@ -431,7 +429,7 @@ export type StartJobResponseDto = {
   createdAt: string;
 };
 
-export type LegacyJobSnapshotDto = {
+export type BaseJobSnapshotDto = {
   jobId: string;
   kind: JobKind;
   status: JobStatus;
@@ -593,7 +591,7 @@ export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";
 
 export type JobState = {
-  snapshot: LegacyJobSnapshotDto;
+  snapshot: BaseJobSnapshotDto;
   events: JobEventDto[];
   retainedSnapshot?: DesktopJobSnapshotDto;
 };

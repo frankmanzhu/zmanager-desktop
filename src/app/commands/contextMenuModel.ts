@@ -1,11 +1,17 @@
 import {
   ARCHIVE_TABLE_COLUMNS,
   archiveTableColumnLabel,
-  getAvailableColumnsForFormat,
   normalizeColumnSettings,
   type ArchiveTableColumnId,
   type ArchiveTableColumnSettings,
 } from "../archiveTable";
+import {
+  resolveArchiveFormatFamily,
+} from "../archiveFormatFamily";
+import {
+  getExtractAvailableColumns,
+  getUnknownExtractAvailableColumns,
+} from "../extractColumnAvailability";
 import {
   CREATE_SOURCE_TABLE_COLUMNS,
   createTableColumnLabel,
@@ -227,12 +233,17 @@ export function buildArchiveEntryContextMenuItems(input: ArchiveEntryContextMenu
 }
 
 export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMenuInput): ContextMenuItem[] {
-  const availableColumns = getAvailableColumnsForFormat(input.archivePath);
+  const familyRes = input.archivePath
+    ? resolveArchiveFormatFamily(input.archivePath)
+    : { kind: "unknown" as const };
+  const availableColumns = familyRes.kind === "known"
+    ? getExtractAvailableColumns(familyRes.family)
+    : getUnknownExtractAvailableColumns();
   const availableSet = new Set(availableColumns);
   const selectedColumn = availableSet.has(input.selectedColumnId as any)
     ? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === input.selectedColumnId)
     : undefined;
-  const normalizedSettings = normalizeColumnSettings(input.tableColumnSettings, input.archivePath);
+  const normalizedSettings = normalizeColumnSettings(input.tableColumnSettings);
   const visibleColumnOrder = normalizedSettings.columnOrderIds.filter((id) =>
     normalizedSettings.visibleColumnIds.includes(id),
   );

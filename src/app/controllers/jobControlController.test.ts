@@ -4,7 +4,7 @@ import type {
   CommandErrorDto,
   JobEventDto,
   JobStatus,
-  LegacyJobSnapshotDto,
+  BaseJobSnapshotDto,
   StartJobResponseDto,
 } from "../../api/types";
 import type { JobRetryContext } from "../jobs";
@@ -23,7 +23,7 @@ function startJobResponse(overrides: Partial<StartJobResponseDto> = {}): StartJo
   };
 }
 
-function legacySnapshot(overrides: Partial<LegacyJobSnapshotDto> = {}): LegacyJobSnapshotDto {
+function baseSnapshot(overrides: Partial<BaseJobSnapshotDto> = {}): BaseJobSnapshotDto {
   return {
     jobId: "job-1",
     kind: "zipExtract",
@@ -169,7 +169,7 @@ function createHarness(overrides: Partial<JobControlControllerOptions> = {}) {
 
   function markJobFailedForRetry(jobId: string, context: JobRetryContext, failure = passwordFailure()) {
     workspace.addJob(startJobResponse({ jobId }), { retryContext: context });
-    workspace.replaceLegacySnapshotFixture(legacySnapshot({
+    workspace.applyJobSnapshot(baseSnapshot({
       jobId,
       status: "failed",
       canDismiss: true,

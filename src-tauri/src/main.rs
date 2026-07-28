@@ -24,7 +24,7 @@ fn main() {
     let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
     record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
-    let legacy_startup_state =
+    let forwarded_startup_state =
         startup_window_state.forward_requested_to_native_inbox(&native_launch_inbox);
     platform::initialize_native_host(native_launch_inbox.clone(), diagnostics.clone())
         .expect("failed to initialize native host before Tauri startup");
@@ -33,7 +33,7 @@ fn main() {
     let account_runtime = account::AccountRuntime::new();
     let native_drag_sessions = native_drag_session::NativeDragSessionRegistry::new();
     let quick_action_launch_coordinator =
-        quick_action::QuickActionLaunchCoordinator::from_startup_state(legacy_startup_state);
+        quick_action::QuickActionLaunchCoordinator::from_startup_state(forwarded_startup_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
     let single_instance_inbox = native_launch_inbox.clone();
     let setup_inbox = native_launch_inbox.clone();

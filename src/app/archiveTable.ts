@@ -11,7 +11,6 @@ import {
   buildHierarchicalRows,
   type HierarchicalTableRow,
 } from "./hierarchicalTable";
-import { getKnownArchiveSuffix } from "./archiveFileTypes";
 import {
   moveGenericColumn,
   normalizeGenericColumnSettings,
@@ -109,92 +108,20 @@ export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
   { id: "group", label: "Group", labelKey: "table.group", width: 100, align: "left", defaultVisible: false },
 ];
 
-export const ARCHIVE_COLUMNS_BY_FORMAT: Record<string, ArchiveTableColumnId[]> = {
-  zip: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  jar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  war: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  ipa: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  apk: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  xpi: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "comment", "kind", "ratio"],
-  "7z": ["name", "size", "compressedSize", "modified", "mode", "crc", "created", "accessed", "solid", "attributes", "kind", "ratio"],
-  tzap: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "solid", "kind", "ratio", "metadataDiagnostics", "linkTarget", "created", "accessed", "attributes", "uid", "gid", "owner", "group"],
-  "tar.zst": ["name", "size", "compressedSize", "modified", "mode", "solid", "linkTarget", "uid", "gid", "owner", "group", "kind", "ratio"],
-  tzst: ["name", "size", "compressedSize", "modified", "mode", "solid", "linkTarget", "uid", "gid", "owner", "group", "kind", "ratio"],
-  "tar.gz": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  tgz: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  "tar.bz2": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  "tar.xz": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  "tar.br": ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  tar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "solid", "uid", "gid", "owner", "group", "kind", "ratio"],
-  aar: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "created", "linkTarget", "attributes", "uid", "gid", "kind", "ratio"],
-  aea: ["name", "size", "compressedSize", "modified", "mode", "encrypted", "method", "crc", "created", "linkTarget", "attributes", "uid", "gid", "kind", "ratio"],
-  gz: ["name", "compressedSize", "kind"],
-  bz2: ["name", "compressedSize", "kind"],
-  xz: ["name", "compressedSize", "kind"],
-  zst: ["name", "compressedSize", "kind"],
-};
-
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
   .filter((column) => column.defaultVisible)
   .map((column) => column.id);
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS = ARCHIVE_TABLE_COLUMNS.map((column) => column.id);
 
-export const DEFAULT_AVAILABLE_COLUMN_IDS: ArchiveTableColumnId[] = [
-  "name", "size", "compressedSize", "modified", "mode",
-  "encrypted", "method", "crc", "comment", "kind", "ratio",
-  "created", "accessed", "solid", "linkTarget", "attributes",
-  "metadataDiagnostics", "uid", "gid", "owner", "group",
-];
-
-export function getAvailableColumnsForFormat(archivePath?: string): ArchiveTableColumnId[] {
-  if (!archivePath) return DEFAULT_AVAILABLE_COLUMN_IDS;
-  const suffix = getKnownArchiveSuffix(archivePath);
-  if (!suffix) return DEFAULT_AVAILABLE_COLUMN_IDS;
-  const key = suffix.toLowerCase();
-  if (key in ARCHIVE_COLUMNS_BY_FORMAT) {
-    return ARCHIVE_COLUMNS_BY_FORMAT[key];
-  }
-  for (const [fmtKey, columns] of Object.entries(ARCHIVE_COLUMNS_BY_FORMAT)) {
-    if (key.endsWith(fmtKey)) return columns;
-  }
-  return DEFAULT_AVAILABLE_COLUMN_IDS;
-}
-
 export function normalizeColumnSettings(
   settings?: Partial<ArchiveTableColumnSettings> | null,
-  archivePath?: string,
 ): ArchiveTableColumnSettings {
-  const availableColumnIds = archivePath ? getAvailableColumnsForFormat(archivePath) : null;
   return normalizeGenericColumnSettings(
     ARCHIVE_TABLE_COLUMNS,
     DEFAULT_ARCHIVE_TABLE_COLUMN_IDS,
     DEFAULT_ARCHIVE_TABLE_COLUMN_ORDER_IDS,
     settings,
-    availableColumnIds,
-  );
-}
-
-export type ResolveColumnPreferences = {
-  tableColumnsByFormat: Record<string, ArchiveTableColumnSettings>;
-  tableVisibleColumnIds: ArchiveTableColumnId[];
-  tableColumnOrderIds: ArchiveTableColumnId[];
-  tableColumnWidths: ArchiveTableColumnWidthMap;
-};
-
-export function resolvePreferredColumnSettings(
-  prefs: ResolveColumnPreferences,
-  archivePath?: string,
-): ArchiveTableColumnSettings {
-  const formatKey = archivePath
-    ? (getKnownArchiveSuffix(archivePath) ?? "default")
-    : "default";
-  return normalizeColumnSettings(
-    prefs.tableColumnsByFormat[formatKey] ?? {
-      visibleColumnIds: prefs.tableVisibleColumnIds,
-      columnOrderIds: prefs.tableColumnOrderIds,
-      columnWidths: prefs.tableColumnWidths,
-    },
-    archivePath,
+    null,
   );
 }
 

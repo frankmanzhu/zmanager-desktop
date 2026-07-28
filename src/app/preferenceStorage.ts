@@ -31,10 +31,6 @@ export type PreferenceStorageKey =
   | "alternativeSelectionMode"
   | "showToolbarLabels"
   | "flatViewDefault"
-  | "tableVisibleColumns"
-  | "tableColumnOrder"
-  | "tableColumnWidths"
-  | "tableColumnsByFormat"
   | "tableColumnVisibility"
   | "tableSortKey"
   | "tableSortAscending";
@@ -66,10 +62,6 @@ export const PREFERENCE_KEYS = {
   alternativeSelectionMode: "zmanager.alternativeSelectionMode",
   showToolbarLabels: "zmanager.showToolbarLabels",
   flatViewDefault: "zmanager.flatViewDefault",
-  tableVisibleColumns: "zmanager.tableVisibleColumns",
-  tableColumnOrder: "zmanager.tableColumnOrder",
-  tableColumnWidths: "zmanager.tableColumnWidths",
-  tableColumnsByFormat: "zmanager.tableColumnsByFormat",
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
   tableColumnVisibility: "zmanager.tableColumnVisibility",
