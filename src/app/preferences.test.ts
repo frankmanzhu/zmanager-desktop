@@ -315,10 +315,6 @@ describe("preferences helpers", () => {
       "zmanager.alternativeSelectionMode": "false",
       "zmanager.showToolbarLabels": "false",
       "zmanager.flatViewDefault": "true",
-      "zmanager.tableVisibleColumns": "name,size",
-      "zmanager.tableColumnOrder": "name,size,compressedSize,modified,mode,created,accessed,attributes,encrypted,method,crc,comment,kind,ratio,solid,linkTarget,metadataDiagnostics,uid,gid,owner,group",
-      "zmanager.tableColumnWidths": '{"name":240}',
-      "zmanager.tableColumnsByFormat": "{}",
       "zmanager.tableSortKey": "size",
       "zmanager.tableSortAscending": "false",
     });

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   resolveArchiveFormatFamily,
   resolveSuffixToFamily,
-  migrationPrecedenceKeys,
   preferredSuffixForFamily,
   allRegisteredSuffixes,
   type ArchiveFormatFamily,
@@ -178,47 +177,6 @@ describe("WP1 — Archive format family normalization", () => {
       // and we get unknown
       expect(result.kind).toBe("unknown");
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// WP1 — Migration precedence keys
-// ---------------------------------------------------------------------------
-
-describe("WP1 — Migration precedence keys", () => {
-  it("produces canonical family ID first for tarGzip", () => {
-    const keys = migrationPrecedenceKeys("tarGzip");
-    expect(keys[0]).toBe("tarGzip");
-  });
-
-  it("includes preferred undotted before dotted for tarGzip", () => {
-    const keys = migrationPrecedenceKeys("tarGzip");
-    expect(keys).toContain("tar.gz");    // undotted preferred
-    expect(keys).toContain(".tar.gz");   // dotted preferred
-    const undottedIdx = keys.indexOf("tar.gz");
-    const dottedIdx = keys.indexOf(".tar.gz");
-    expect(undottedIdx).toBeLessThan(dottedIdx);
-  });
-
-  it("includes alias tgz after preferred forms", () => {
-    const keys = migrationPrecedenceKeys("tarGzip");
-    expect(keys).toContain("tgz");       // undotted alias
-    expect(keys).toContain(".tgz");      // dotted alias
-  });
-
-  it("includes both .tbz2 and .tbz aliases for tarBzip2", () => {
-    const keys = migrationPrecedenceKeys("tarBzip2");
-    expect(keys).toContain("tbz2");
-    expect(keys).toContain(".tbz2");
-    expect(keys).toContain("tbz");
-    expect(keys).toContain(".tbz");
-  });
-
-  it("has no duplicate keys in migration precedence", () => {
-    for (const family of ALL_ARCHIVE_FORMAT_FAMILIES) {
-      const keys = migrationPrecedenceKeys(family);
-      expect(keys.length).toBe(new Set(keys).size);
-    }
   });
 });
 

@@ -196,7 +196,7 @@ function resolveUnknownExtractColumns(
     configuredDefaultIds: configuredDefaults,
     currentVisibleIds: currentVisible,
     canonicalOrder: availableIds,
-    menuColumnIds: [],
+    menuColumnIds: availableIds.filter((id) => id !== "name"),
   };
 }
 

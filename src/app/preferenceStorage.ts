@@ -35,9 +35,9 @@ export type PreferenceStorageKey =
   | "tableColumnOrder"
   | "tableColumnWidths"
   | "tableColumnsByFormat"
+  | "tableColumnVisibility"
   | "tableSortKey"
-  | "tableSortAscending"
-  | "tableColumnVisibilityV2";
+  | "tableSortAscending";
 
 export const PREFERENCE_KEYS = {
   locale: "zmanager.locale",
@@ -72,7 +72,7 @@ export const PREFERENCE_KEYS = {
   tableColumnsByFormat: "zmanager.tableColumnsByFormat",
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
-  tableColumnVisibilityV2: "zmanager.tableColumnVisibility.v2",
+  tableColumnVisibility: "zmanager.tableColumnVisibility",
 } satisfies Record<PreferenceStorageKey, string>;
 
 export function resolvePreferenceStorage(): PreferenceStorage | null {

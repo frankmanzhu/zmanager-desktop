@@ -399,20 +399,21 @@ browserDocument.initializeLayout();
 
 let appPreferences: AppPreferences = loadAppPreferences();
 
-// -- v2 unified column preferences (clean install, no legacy migration) --
-function loadV2ColumnPrefs(): TableColumnVisibilityPreferences {
+// -- unified column preferences --
+function loadColumnPrefs(): TableColumnVisibilityPreferences {
   try {
     const raw = localStorage.getItem(TABLE_COLUMN_VISIBILITY_PREFERENCE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.version === 2 && Array.isArray(parsed.visibleColumnIds)) {
+      if (Array.isArray(parsed.visibleColumnIds)) {
         return normalizeTableColumnVisibilityPreferences(parsed);
       }
     }
   } catch { /* fall through to clean install */ }
   return cleanInstallVisibilityPreferences();
 }
-function saveV2ColumnPrefs(prefs: TableColumnVisibilityPreferences): boolean {
+
+function saveColumnPrefs(prefs: TableColumnVisibilityPreferences): boolean {
   try {
     const normalized = normalizeTableColumnVisibilityPreferences(prefs);
     localStorage.setItem(TABLE_COLUMN_VISIBILITY_PREFERENCE_KEY, JSON.stringify(normalized));
@@ -422,7 +423,7 @@ function saveV2ColumnPrefs(prefs: TableColumnVisibilityPreferences): boolean {
   } catch { return false; }
 }
 
-let columnVisibilityPrefs: TableColumnVisibilityPreferences = loadV2ColumnPrefs();
+let columnVisibilityPrefs: TableColumnVisibilityPreferences = loadColumnPrefs();
 let columnVisibilityDraft: TableColumnVisibilityPreferences | null = null;
 
 // Compress capability set — starts as safe base; updated when contract arrives
@@ -430,7 +431,7 @@ let compressCapabilitySet: readonly CompressTableColumnId[] = COMPRESS_SAFE_BASE
 // Track whether user has made local column changes (to decide clamp vs reset on contract arrival)
 let createWorkspaceHadLocalColumnMutation = false;
 
-/** Convert v2 workspace resolver output to generic workspace column settings.
+/** Convert workspace resolver output to generic workspace column settings.
  *  Returns `any` to bridge the value-compatible but nominally-distinct column ID types
  *  (ArchiveTableColumnId / CreateSourceColumnId vs the unified TableColumnId). */
 function settingsFromResolvedColumns(
@@ -444,7 +445,7 @@ function settingsFromResolvedColumns(
 }
 const shellWorkspace = createShellWorkspace();
 const pathHistoryStore = createPathHistoryStore();
-// Resolve initial archive table columns from v2 prefs (conservative: no archive open yet)
+// Resolve initial archive table columns from prefs (conservative: no archive open yet)
 const initialExtractResolved = resolveExtractColumns({
   familyResolution: { kind: "unknown" as const },
   visibilityPrefs: columnVisibilityPrefs,
@@ -458,7 +459,7 @@ const archiveWorkspace = createArchiveWorkspace({
   tableColumns: initialArchiveColumns as ArchiveTableColumnSettings,
 });
 
-// Resolve initial create table columns from v2 prefs + safe-base capability set
+// Resolve initial create table columns from prefs + safe-base capability set
 const initialCompressResolved = resolveCompressColumns({
   capabilitySet: compressCapabilitySet,
   visibilityPrefs: columnVisibilityPrefs,
@@ -3674,7 +3675,7 @@ async function savePreferencesFromDialog() {
   persistPreferencePatch(draft);
   preferencesDialogDraft = null;
 
-  // Save v2 column visibility preferences if changed
+  // Save column visibility preferences if changed
   if (columnVisibilityDraft) {
     // Resolve before/after for selective workspace reset
     const archivePath = archiveCurrentPath();
@@ -3692,7 +3693,7 @@ async function savePreferencesFromDialog() {
     });
 
     columnVisibilityPrefs = columnVisibilityDraft;
-    saveV2ColumnPrefs(columnVisibilityPrefs);
+    saveColumnPrefs(columnVisibilityPrefs);
     columnVisibilityDraft = null;
 
     const extractAfter = resolveExtractColumns({

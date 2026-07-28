@@ -588,15 +588,8 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.alternativeSelectionMode, String(preferences.alternativeSelectionMode));
   storage.setItem(PREFERENCE_KEYS.showToolbarLabels, String(preferences.showToolbarLabels));
   storage.setItem(PREFERENCE_KEYS.flatViewDefault, String(preferences.flatViewDefault));
-  const tableSettings = normalizeColumnSettings({
-    visibleColumnIds: preferences.tableVisibleColumnIds,
-    columnOrderIds: preferences.tableColumnOrderIds,
-    columnWidths: preferences.tableColumnWidths,
-  });
-  storage.setItem(PREFERENCE_KEYS.tableVisibleColumns, tableSettings.visibleColumnIds.join(","));
-  storage.setItem(PREFERENCE_KEYS.tableColumnOrder, tableSettings.columnOrderIds.join(","));
-  storage.setItem(PREFERENCE_KEYS.tableColumnWidths, JSON.stringify(tableSettings.columnWidths));
-  storage.setItem(PREFERENCE_KEYS.tableColumnsByFormat, JSON.stringify(preferences.tableColumnsByFormat));
+  // Column visibility, order, and width persistence is handled by the
+  // unified column preferences path (tableColumnVisibility).
   storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
   storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
 

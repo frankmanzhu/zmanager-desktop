@@ -183,13 +183,6 @@ export const CLEAN_INSTALL_VISIBLE_IDS: readonly TableColumnId[] = [
   "compressedSize",
 ];
 
-// -- Legacy defaults (for migration: matches old behavior) -------------------
-
-/** Legacy default visible Extract column IDs (matches current DEFAULT_ARCHIVE_TABLE_COLUMN_IDS). */
-export const LEGACY_DEFAULT_VISIBLE_COLUMN_IDS: readonly ExtractTableColumnId[] = [
-  "name", "size", "compressedSize", "modified",
-];
-
 // -- Scenario applicability helpers ------------------------------------------
 
 export function isCompressColumn(id: TableColumnId): id is CompressTableColumnId {

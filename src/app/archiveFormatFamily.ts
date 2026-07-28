@@ -294,7 +294,7 @@ const suffixToFamily: ReadonlyMap<string, ArchiveFormatFamily> = (() => {
 })();
 
 // ---------------------------------------------------------------------------
-// Family → preferred dotted suffix (for display / migration precedence)
+// Family → preferred dotted suffix (for display)
 // ---------------------------------------------------------------------------
 
 const familyPreferredSuffix: ReadonlyMap<ArchiveFormatFamily, string> = (() => {
@@ -348,7 +348,7 @@ export function resolveSuffixToFamily(suffix: string): ArchiveFormatFamilyResolu
   return { kind: "known", family };
 }
 
-/** Get the preferred physical suffix for a family (for display / migration). */
+/** Get the preferred physical suffix for a family (for display). */
 export function preferredSuffixForFamily(family: ArchiveFormatFamily): string {
   return familyPreferredSuffix.get(family) ?? `.${family}`;
 }
@@ -356,43 +356,6 @@ export function preferredSuffixForFamily(family: ArchiveFormatFamily): string {
 /** Get the display label key for a family. */
 export function displayLabelKeyForFamily(family: ArchiveFormatFamily): string {
   return familyDisplayLabelKey.get(family) ?? "format.family.unknown";
-}
-
-/**
- * Build the migration precedence list for a family: all physical suffixes that
- * could appear as legacy preference keys, in precedence order.
- *
- * Order: canonical family ID string, preferred undotted suffix, dotted suffix,
- * then remaining aliases (undotted then dotted).
- */
-export function migrationPrecedenceKeys(family: ArchiveFormatFamily): readonly string[] {
-  const entry = FAMILY_REGISTRY.find((e) => e.family === family);
-  if (!entry) return [family];
-
-  const keys: string[] = [];
-  const seen = new Set<string>();
-
-  function add(key: string): void {
-    if (!seen.has(key)) {
-      seen.add(key);
-      keys.push(key);
-    }
-  }
-
-  // 1. Canonical family ID (e.g. "tarGzip")
-  add(family);
-  // 2. Preferred undotted (e.g. ".tar.gz" → "tar.gz")
-  const preferred = entry.physicalSuffixes[0];
-  add(preferred.startsWith(".") ? preferred.slice(1) : preferred);
-  // 3. Preferred dotted (e.g. ".tar.gz")
-  add(preferred.startsWith(".") ? preferred : `.${preferred}`);
-  // 4. Remaining aliases: undotted before dotted
-  for (let i = 1; i < entry.physicalSuffixes.length; i++) {
-    const alias = entry.physicalSuffixes[i];
-    add(alias.startsWith(".") ? alias.slice(1) : alias);
-    add(alias.startsWith(".") ? alias : `.${alias}`);
-  }
-  return keys;
 }
 
 /** All physical suffixes known to the registry (for coverage testing). */

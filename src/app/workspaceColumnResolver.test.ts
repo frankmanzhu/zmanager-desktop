@@ -178,7 +178,7 @@ describe("WP4/WP5 — Extract column resolution", () => {
     const result = resolveExtractColumns(input);
 
     expect(result.availableColumnIds).toEqual(["name", "kind"]);
-    expect(result.menuColumnIds).toEqual([]);
+    expect(result.menuColumnIds).toEqual(["kind"]);
   });
 
   it("name is always visible in Extract", () => {

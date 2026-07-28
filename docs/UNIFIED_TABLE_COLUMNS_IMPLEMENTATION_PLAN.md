@@ -152,7 +152,7 @@ Preferences exposes logical groups. A single typed normalizer must replace
 direct use of raw suffix strings for table-column preferences.
 
 The family registry is exhaustive for the archive suffix manifest. It owns
-aliases, a localized display-label key, Extract availability, migration
+aliases, a localized display-label key, Extract availability, alias
 precedence, and whether a family can have a per-format visibility override.
 Preferences and menus render the label through the display context; they do not
 hard-code English family names.
@@ -390,7 +390,7 @@ Note: the canonical order places `kind` (Type) immediately after `name` at
 position 2. In the current Extract table `kind` appears after `comment` at
 position ~13. This is an intentional semantic reordering — Type is a fundamental
 entry property that belongs near Name — and takes effect for both Compress and
-Extract after migration, replacing any stored legacy order.
+Extract, replacing any stored legacy order.
 
 Name is always visible and is the first configurable data column. The fixed
 Compress inclusion checkbox remains before Name and is not part of the
@@ -539,27 +539,10 @@ string owner or group names. The audited registry must reflect that `uid` and
 Similarly, `.aea` (encrypted Apple Archive) and `.aar` share the same
 availability set — encryption does not change which metadata fields are present.
 
-Format-family migration must:
-
-- map dotted and undotted legacy keys;
-- map aliases to one canonical family;
-- remove unknown IDs;
-- remove Compress-only IDs;
-- resolve collisions deterministically;
-- be idempotent.
-
-Migration uses a total precedence order. For each family, the first present
-legacy key wins:
-
-1. the canonical family ID;
-2. the preferred undotted legacy selector key;
-3. the dotted form of that preferred key;
-4. each remaining physical alias in registry order, undotted before dotted; and
-5. matching split or volume patterns in lexical order.
-
-For example, `tarGzip`, `tar.gz`, `.tar.gz`, `tgz`, then `.tgz` is the complete
-precedence for `tarGzip`. Lower-precedence values are ignored rather than
-merged. Tests cover conflicting values at every precedence level.
+The family registry owns alias resolution. Every physical suffix maps to exactly
+one canonical family. Aliases such as `.tgz` and `.tar.gz` resolve to `tarGzip`;
+`.tzst` and `.tar.zst` resolve to `tarZstd`. The normalizer is the only module
+allowed to translate a physical archive path or suffix into a family key.
 
 ## Visibility Preferences
 
@@ -583,48 +566,18 @@ Use typed keys in `src/app/preferenceStorage.ts`. Do not add direct
 
 Order and width fields are deliberately absent.
 
-Persist the complete object as JSON under the new typed key
-`zmanager.tableColumnVisibility.v2`. Do not reuse a legacy key for the versioned
-object. Loading follows these rules:
+Persist the complete object as JSON under the typed key
+`zmanager.tableColumnVisibility`. Loading follows these rules:
 
-1. A valid version-2 object is normalized and used without consulting legacy
-   column keys.
-2. If version 2 is absent or invalid and any legacy global or per-format
-   visibility key exists, migrate legacy visibility.
-3. If neither version 2 nor a legacy visibility key exists, treat the profile as
-   a clean installation.
+1. A valid object is normalized and used.
+2. If absent or invalid, treat the profile as a clean installation.
 
-Saving is failure-safe: a typed column-preference writer returns success or a
-normalized failure. Write the normalized version-2 object first and read it back
-through the version-2 parser. Retire the legacy order, width, global visibility,
-and per-format keys only after the read-back equals the normalized value. If
-storage throws or verification fails, keep the legacy keys, leave both
-workspace layouts unchanged, and report a bounded preference-save failure as a
-toast notification with a localized message. The diagnostic log records the
-failure kind (storage, verification, or parse) without including column IDs or
-preference values. The user may retry by saving again; no automatic retry is
-attempted.
-
-### Migration
-
-The loader must distinguish a clean installation from stored legacy settings:
-
-- With neither version-2 nor legacy global/per-format visible-column settings,
-  use clean-install visibility.
-- Preserve every recognized legacy visible ID.
-- Remove unknown and duplicate IDs.
-- Reinsert Name as visible.
-- Keep newly introduced IDs hidden for migrated users.
-- Migrate per-format visibility to canonical format-family keys.
-- Ignore legacy persisted order and widths.
-- Remove or retire `tableColumnOrder` and `tableColumnWidths` writes after the
-  new model is saved successfully.
-- Produce the same normalized value when migration runs repeatedly.
-
-When only legacy per-format visibility exists, initialize global visibility from
-an explicit `LEGACY_DEFAULT_VISIBLE_COLUMN_IDS` constant before migrating the
-overrides. Do not use the new clean-install defaults for this case, because that
-would make newly introduced IDs visible for a migrated user.
+Saving is failure-safe: write the normalized object, read it back, and verify
+equality. If storage throws or verification fails, leave both workspace layouts
+unchanged and report a bounded preference-save failure as a toast notification
+with a localized message. The diagnostic log records the failure kind (storage,
+verification, or parse) without including column IDs or preference values. The
+user may retry by saving again; no automatic retry is attempted.
 
 Do not persist a capability-filtered active result back into Global Options.
 Unavailable IDs must survive globally for use on another system.
@@ -650,9 +603,7 @@ Source Path remains hidden by default.
 Note: the clean-install defaults add Type (kind) to the visible set. The current
 Extract defaults show Name, Size, Packed Size, and Modified — Type is hidden by
 default. This is a deliberate change because Type is a fundamental entry property
-and filtering becomes the primary mechanism to remove unwanted columns. Migrated
-users retain their legacy visibility selections and Type is not automatically
-added for them.
+and filtering becomes the primary mechanism to remove unwanted columns.
 
 ## Workspace-Local Column State
 
@@ -849,10 +800,10 @@ identities.
 
 ## Work Packages
 
-WP2 through WP5 are a coordinated migration sequence. Their new storage and UI
+WP2 through WP5 are a coordinated sequence. Their new storage and UI
 paths may be developed and tested incrementally, but the production preference
-loader/writer and grouped Global Column Options must not switch to version 2
-until both tables consume the shared resolver at the Migration Activation Gate
+loader/writer and grouped Global Column Options must not switch to the new path
+until both tables consume the shared resolver at the Activation step
 after WP5. Do not ship or release the intermediate asymmetric state.
 
 ### WP0 — Characterization
@@ -905,29 +856,24 @@ Exit criteria:
 - Every advertised Extract column is backed by an actual value or valid derived
   calculation for that family.
 
-### WP2 — Visibility-only preferences and migration
+### WP2 — Visibility-only preferences
 
-1. Add the version-2 visibility object and new typed storage key.
-2. Migrate global and per-format visible IDs.
-3. Build and test Common, Compress only, and Extract only sections in the React
+1. Add the visibility preferences object and new typed storage key.
+2. Build and test Common, Compress only, and Extract only sections in the React
    Preferences dialog for activation after WP5.
-4. Keep the Extract format selector, backed by canonical family IDs and
+3. Keep the Extract format selector, backed by canonical family IDs and
    display-context label keys rather than hard-coded English labels.
-5. Preserve unavailable global selections without presenting them as active on
+4. Preserve unavailable global selections without presenting them as active on
    the current system.
-6. Apply the documented total alias precedence and failure-safe legacy-key
-   retirement.
-7. Prepare the typed save result and before/after default comparison used by the
-   Migration Activation Gate.
+5. Prepare the typed save result and before/after default comparison used at
+   activation.
 
 Exit criteria:
 
-- The version-2 normalizer produces the new clean-install visible defaults.
-- Migration tests preserve legacy visible selections.
-- The version-2 writer never writes legacy order or width fields.
-- Migration is idempotent.
-- A failed version-2 write leaves legacy data recoverable.
-- The version-2 loader, writer, migration, and grouped UI pass isolated tests
+- The normalizer produces the correct clean-install visible defaults.
+- The writer does not write legacy order or width fields.
+- A failed write is reported cleanly without data loss.
+- The loader, writer, and grouped UI pass isolated tests
   without switching the production preference path early.
 
 ### WP3 — Rust Compress capability contract
@@ -952,7 +898,7 @@ Exit criteria:
 - Late contract arrival either resets an untouched layout or clamps a locally
   changed layout without adding newly available optional columns.
 
-### WP4 — Extract migration
+### WP4 — Extract implementation
 
 1. Resolve Extract visibility from the shared catalogue.
 2. Resolve availability through canonical format families.
@@ -972,9 +918,9 @@ Exit criteria:
 - Hidden or unavailable configured sort columns cannot leave an unexplained
   active sort.
 
-### WP5 — Compress tracer-bullet migration
+### WP5 — Compress implementation
 
-Migrate fields already present in `CreatePlanEntryDto` first:
+Wire fields already present in `CreatePlanEntryDto`:
 
 1. Name
 2. Type
@@ -1000,14 +946,13 @@ Exit criteria:
 - Source Path remains Compress-only.
 - Local changes do not write preferences.
 
-### Migration Activation Gate
+### Activation
 
-After WP2 through WP5 pass their package tests, activate the migration in one
-production change:
+After WP2 through WP5 pass their package tests, activate in one production change:
 
-1. switch the production preference loader and writer to the version-2 object;
+1. switch the production preference loader and writer to the new object;
 2. activate the grouped Global Column Options and canonical family selector;
-3. inject resolved configured defaults into both migrated workspaces;
+3. inject resolved configured defaults into both workspaces;
 4. remove header-triggered visibility, order, and width persistence;
 5. on successful changed-column save, re-resolve both workspace defaults and
    reset only a workspace whose resolved defaults changed;
@@ -1016,9 +961,9 @@ production change:
 7. remove any temporary activation wiring introduced solely to stage WP2
    through WP5.
 
-Gate exit criteria:
+Exit criteria:
 
-- No runtime path mixes version-2 visibility with a legacy table catalogue or
+- No runtime path mixes the new visibility model with the old table catalogue or
   legacy order/width persistence.
 - Saved Global Column Options take effect immediately in every affected
   workspace without resetting unaffected layouts.
@@ -1090,7 +1035,6 @@ Exit criteria:
 - catalogue ID uniqueness, scopes, labels, and canonical order;
 - global visibility normalization;
 - clean-install defaults;
-- visibility-only legacy migration and idempotence;
 - unknown and duplicate ID removal;
 - Name always visible;
 - stable relative order after filtering;
@@ -1104,9 +1048,6 @@ Exit criteria:
 - canonical family alias equivalence;
 - compound suffixes resolving before raw-stream suffixes;
 - case-insensitive family normalization;
-- dotted/undotted legacy family migration;
-- total canonical/alias collision precedence;
-- version-2-first loading and failed-write legacy recovery;
 - Extract filtering independent of host OS;
 - audited per-family values matching actual DTO mapping;
 - local workspace changes not writing preferences;
@@ -1237,10 +1178,8 @@ validation workflow and the Windows ARM64 release gate where applicable.
     key becomes visible.
 21. Enabled Compress metadata contains Rust/core-provided values or empty
     optional values, never frontend guesses.
-22. Existing visible-column preferences migrate without silent loss using the
-    documented total alias precedence.
-23. A failed version-2 preference write leaves legacy values recoverable.
-24. Legacy order/width persistence and the old Compress catalogue are deleted.
+22. A failed preference write is reported cleanly without data loss.
+23. Legacy order/width persistence and the old Compress catalogue are deleted.
 25. Advertised source metadata meets the documented 100,000-entry performance
     and bounded identity-resolution budget.
 26. Frontend, core Rust, desktop Rust, Swift, and relevant end-to-end
@@ -1257,12 +1196,6 @@ the same slice that completes DTO mapping and formatting.
 
 Keep stored global visibility separate from the resolved active projection.
 Never save the filtered active result as Global Options.
-
-### Alias migration chooses the wrong override
-
-Use the registry's complete precedence order, a distinct version-2 storage key,
-and conflict fixtures for every alias position. Once version 2 is valid, never
-consult legacy keys.
 
 ### Metadata collection slows large plans
 

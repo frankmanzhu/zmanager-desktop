@@ -41,57 +41,57 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
 
   tarGzip: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarBzip2: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarXz: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarBrotli: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarLzip: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarLz4: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarLzma: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarLzo: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarLrzip: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tarCompressZ: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   tar: [
     "size", "compressedSize", "modified", "mode",
-    "uid", "gid", "owner", "group", "ratio",
+    "linkTarget", "uid", "gid", "owner", "group", "ratio",
   ],
 
   appleArchive: [

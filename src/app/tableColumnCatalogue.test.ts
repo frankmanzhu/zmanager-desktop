@@ -7,7 +7,6 @@ import {
   EXTRACT_APPLICABLE_IDS,
   COMPRESS_SAFE_BASE_IDS,
   CLEAN_INSTALL_VISIBLE_IDS,
-  LEGACY_DEFAULT_VISIBLE_COLUMN_IDS,
   isCompressColumn,
   isExtractColumn,
   getColumnDefinition,
@@ -146,12 +145,6 @@ describe("WP1 — Derived ID sets", () => {
   it("CLEAN_INSTALL_VISIBLE_IDS includes name, kind, size, modified, compressedSize", () => {
     expect(CLEAN_INSTALL_VISIBLE_IDS).toEqual([
       "name", "kind", "size", "modified", "compressedSize",
-    ]);
-  });
-
-  it("LEGACY_DEFAULT_VISIBLE_COLUMN_IDS matches current extract defaults", () => {
-    expect(LEGACY_DEFAULT_VISIBLE_COLUMN_IDS).toEqual([
-      "name", "size", "compressedSize", "modified",
     ]);
   });
 
