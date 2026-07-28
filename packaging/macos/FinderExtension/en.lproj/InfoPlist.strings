@@ -1,5 +1,1 @@
-"CFBundleDisplayName" = "ZManager";
-"CFBundleName" = "ZManager";
 "NSAppDataUsageDescription" = "ZManager uses its private shared container to receive Finder actions without exposing selected file paths in URLs.";
-"archiveType.tzap" = "TZAP archive";
-"archiveType.archive" = "Archive";

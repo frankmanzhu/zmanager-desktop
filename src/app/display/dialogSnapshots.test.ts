@@ -196,6 +196,18 @@ describe("dialog snapshots", () => {
     ].join("\n"));
   });
 
+  it("describes the macOS per-user diagnostic log location", () => {
+    const snapshot = buildAboutDialogSnapshot({
+      display: createDisplayContext("en"),
+      diagnosticLogPath: "/Users/test/Library/Logs/org.tzap-org.zmanager/zmanager-diagnostics.log",
+      diagnosticLogLocation: "user",
+    });
+
+    expect(serializeAboutDiagnostics(snapshot)).toContain(
+      "Log location: per-user log folder",
+    );
+  });
+
   it("uses display context labels instead of persisted workflow labels", () => {
     const display = createDisplayContext("zh-CN");
     const workspace = createArchiveWorkspace();

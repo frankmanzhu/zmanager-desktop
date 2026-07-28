@@ -41,6 +41,20 @@ case_app=$(copy_case version)
 resign_app "$case_app"
 expect_failure "version mismatch" "version mismatch" "$case_app" --expected-arch "$architecture"
 
+case_app=$(copy_case app-data-usage)
+/usr/libexec/PlistBuddy -c 'Delete :NSAppDataUsageDescription' "$case_app/Contents/Info.plist" 2>/dev/null || true
+resign_app "$case_app"
+expect_failure "missing app-data usage description" "NSAppDataUsageDescription" "$case_app" --expected-arch "$architecture"
+
+case_app=$(copy_case finder-app-data-usage)
+/usr/libexec/PlistBuddy -c 'Delete :NSAppDataUsageDescription' \
+  "$case_app/Contents/PlugIns/ZManagerFinderExtension.appex/Contents/Info.plist" 2>/dev/null || true
+codesign --force --sign - \
+  "$case_app/Contents/PlugIns/ZManagerFinderExtension.appex" >/dev/null
+resign_app "$case_app"
+expect_failure "missing Finder app-data usage description" "Finder extension NSAppDataUsageDescription" \
+  "$case_app" --expected-arch "$architecture"
+
 case_app=$(copy_case unsigned)
 codesign --remove-signature "$case_app/Contents/PlugIns/ZManagerFinderExtension.appex/Contents/MacOS/ZManagerFinderExtension"
 expect_failure "unsigned nested executable" "unsigned" "$case_app" --expected-arch "$architecture"
@@ -71,6 +85,13 @@ install_name_tool -add_rpath /tmp/zmanager-invalid-rpath "$case_app/Contents/Mac
 codesign --force --sign - "$case_app/Contents/MacOS/zmanager-desktop" >/dev/null
 resign_app "$case_app"
 expect_failure "bad rpath" "bad rpath" "$case_app" --expected-arch "$architecture"
+
+case_app=$(copy_case profiles)
+rm -f "$case_app/Contents/embedded.provisionprofile"
+rm -f "$case_app/Contents/PlugIns/ZManagerFinderExtension.appex/Contents/embedded.provisionprofile"
+resign_app "$case_app"
+expect_failure "missing App Group profiles" "invalid App Group provisioning profile" "$case_app" \
+  --expected-arch "$architecture" --require-provisioned-app-group
 
 notary_output=$work/notary-output.txt
 if "$repo_root/scripts/release-gate-macos.sh" "$source_app" --expected-arch "$architecture" \

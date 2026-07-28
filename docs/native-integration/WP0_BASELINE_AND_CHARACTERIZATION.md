@@ -59,7 +59,7 @@ the historical fixture itself remains evidence of the starting state.
 | `main.rs` Apple URL-open routing | Architecture violation | Moved behind `NativePlatform::handle_run_event`; shared `main.rs` delegates unconditionally |
 | `commands.rs` target-selected AppleArchive error arm | Architecture violation | Replaced with target-neutral display mapping after common semantic mappings |
 | Installed Finder App Group rejection | Product regression | Localized here; WP2 owns the transport/readiness correction |
-| Installed app signature invalid after launch | Product regression | Runtime diagnostics are written inside the signed bundle; WP7 owns release-layout correction |
+| Installed app signature invalid after launch | Product regression | Resolved after the baseline: macOS diagnostics now always use Tauri's per-user log directory, and a Rust regression test keeps writable signed bundles immutable |
 | Swift Replacement Migration test using identical current/legacy path | Unrelated pre-existing test-fixture failure | Recorded; no production migration behavior changed in WP0 |
 
 The architecture guard now has its own fixture suite covering lint-only
@@ -89,8 +89,9 @@ Known gaps and pre-existing failures:
   environment; source/build proof is not treated as installed proof.
 - Linux installed Nautilus/KDE and DEB/RPM proof require supported Linux hosts;
   source/build proof is not treated as installed proof.
-- `scripts/release-gate-macos.sh` fails strict signature verification after the
-  installed runtime adds `Contents/MacOS/logs/zmanager-diagnostics.log`.
+- The baseline signature failure was resolved after this snapshot: the installed
+  runtime no longer writes `Contents/MacOS/logs/zmanager-diagnostics.log`, and
+  strict signature verification remains valid after launch.
 
 No selected path, opaque request token, password, request payload, or private
 diagnostic value is recorded in this document or its probe output.

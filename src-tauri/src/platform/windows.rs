@@ -23,13 +23,20 @@ use windows_sys::Win32::{
 use super::windows_drag_path::prepare_windows_drag_items;
 use super::{
     CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
+    DiagnosticLogPolicy, MainWindowConfigurator, NativeCapabilityOperationError,
+    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector,
+    SystemFileIconProvider,
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 
 pub struct WindowsPlatform;
+
+impl DiagnosticLogPolicy for WindowsPlatform {
+    fn prefer_user_log_directory() -> bool {
+        false
+    }
+}
 
 impl CapabilityInspector for WindowsPlatform {
     fn capability_observations() -> std::collections::HashMap<

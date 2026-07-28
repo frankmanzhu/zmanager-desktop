@@ -224,6 +224,7 @@ export const enMessages = {
   "about.diagnostics.logPath": "Diagnostic log",
   "about.diagnostics.logLocation": "Log location",
   "about.diagnostics.logLocationInstallation": "installation folder",
+  "about.diagnostics.logLocationUser": "per-user log folder",
   "about.diagnostics.logLocationFallback": "per-user fallback",
   "icon.parentFolder": "Parent folder",
   "icon.folder": "Folder",

@@ -10,15 +10,19 @@ coordination, job presentation, Disposable Task Windows, and coordinator
 shutdown. A failure can therefore disappear when a short-lived window closes,
 and console output is not available in normal packaged launches.
 
-The diagnostic trail must be easy for a user to locate and share deliberately,
-but an installed application cannot assume its executable directory is writable
-on macOS, system-wide Linux installations, or protected Windows installations.
+The diagnostic trail must be easy for a user to locate and share deliberately.
+Runtime writes inside a signed macOS application also invalidate its sealed
+code signature, even when the installation happens to be user-writable.
+System-wide Linux and protected Windows installations likewise cannot assume
+their executable directory is writable.
 
 ## Decision
 
-The Rust desktop boundary owns an append-only JSON-lines Diagnostic Log. Its
-primary location is `logs/zmanager-diagnostics.log` under the directory that
-contains the running executable. If that directory cannot be created or
+The Rust desktop boundary owns an append-only JSON-lines Diagnostic Log. On
+macOS it always uses Tauri's per-user application log directory so the signed
+application bundle remains immutable after installation. On Windows and Linux,
+its primary location remains `logs/zmanager-diagnostics.log` under the directory
+that contains the running executable; if that location cannot be created or
 written, the logger uses Tauri's per-user application log directory and records
 that fallback. The About dialog reports the actual active path and location.
 
@@ -38,9 +42,9 @@ active path is initialized.
 
 - Packaged launches retain enough evidence to reconstruct quick-action window
   lifecycle decisions after a Disposable Task Window closes.
-- The requested installation-folder location is used whenever permissions allow
-  it, while read-only installations retain diagnostics through an explicit
-  fallback instead of silently losing them.
+- macOS diagnostics never mutate the signed application bundle. Windows and
+  Linux retain the installation-folder location whenever permissions allow it,
+  while read-only installations use an explicit per-user fallback.
 - Logs are bounded but remain local until the user intentionally shares them.
 - New diagnostic events must use structured, non-secret fields and prefer counts,
   kinds, state names, and decisions over paths or free-form messages.
@@ -48,7 +52,8 @@ active path is initialized.
 ## Verification
 
 - Rust tests prove early buffering, JSON-lines output, secret-field redaction,
-  and rejection of nested frontend payloads.
+  rejection of nested frontend payloads, and the signed-bundle policy that keeps
+  a writable installation directory untouched.
 - Frontend tests prove desktop-only forwarding through the diagnostic adapter.
 - Command contract tests keep the TypeScript wrappers aligned with the Rust
   invoke handler.

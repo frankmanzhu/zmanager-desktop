@@ -12,6 +12,8 @@
   <key>CFBundleShortVersionString</key><string>1.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSAppDataUsageDescription</key>
+  <string>ZManager uses its private shared container to receive Finder actions without exposing selected file paths in URLs.</string>
   <key>NSExtension</key>
   <dict>
     <key>NSExtensionPointIdentifier</key><string>com.apple.FinderSync</string>

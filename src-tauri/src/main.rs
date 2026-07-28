@@ -69,7 +69,10 @@ fn main() {
             },
         ))
         .setup(move |app| {
-            let _ = setup_diagnostics.initialize(app.path().app_log_dir().ok());
+            let _ = setup_diagnostics.initialize(
+                app.path().app_log_dir().ok(),
+                platform::prefer_user_diagnostic_log_directory(),
+            );
             let emitter_app = app.handle().clone();
             setup_inbox
                 .attach_emitter(std::sync::Arc::new(move |window, event| {

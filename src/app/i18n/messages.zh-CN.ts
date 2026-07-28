@@ -578,6 +578,7 @@ export const zhCnMessages = {
   "about.diagnostics.logPath": "诊断日志",
   "about.diagnostics.logLocation": "日志位置",
   "about.diagnostics.logLocationInstallation": "安装文件夹",
+  "about.diagnostics.logLocationUser": "每用户日志文件夹",
   "about.diagnostics.logLocationFallback": "每用户备用位置",
   "workspace.mode.compressStatus": "压缩模式。",
   "workspace.mode.extractStatus": "解压模式。",

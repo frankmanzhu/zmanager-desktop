@@ -10,6 +10,7 @@ install_application=1
 bundle_kind="all"
 install_dir="${ZMANAGER_MACOS_INSTALL_DIR:-/Applications}"
 architecture="$(uname -m)"
+local_development_codesign_identity="8014C7D557DE28E3C52971362BA18A3CCC28A723"
 
 usage() {
   cat <<'EOF'
@@ -20,9 +21,13 @@ Builds and stages the unified macOS Tauri Release Bundle under
 
 By default the script builds the host architecture and produces both a .app
 bundle and a .dmg, then installs ZManager.app into /Applications. Local builds
-embed build-machine codec libraries, rewrite their load paths, and use ad-hoc
-inside-out signing. Set ZMANAGER_CODESIGN_IDENTITY to a Developer ID
-Application identity and ZMANAGER_NOTARY_PROFILE to a validated notarytool
+embed build-machine codec libraries and rewrite their load paths. When the
+preferred local Apple Development identity is available in Keychain, the script
+uses it with matching Xcode-managed main/Finder provisioning profiles for
+inside-out signing. Missing or expired Personal Team profiles are refreshed
+through Xcode automatic signing. Otherwise the script uses ad-hoc signing. Set
+ZMANAGER_CODESIGN_IDENTITY to "-" to force ad-hoc signing, or to a Developer ID
+Application identity and set ZMANAGER_NOTARY_PROFILE to a validated notarytool
 keychain profile to sign, notarize, staple, and Gatekeeper-check the same output.
 
 macOS prerequisites:
@@ -117,6 +122,33 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+codesign_identity="${ZMANAGER_CODESIGN_IDENTITY:-}"
+codesign_identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+if [[ -z "$codesign_identity" ]]; then
+  if grep -F "$local_development_codesign_identity" <<<"$codesign_identities" >/dev/null; then
+    codesign_identity="$local_development_codesign_identity"
+  else
+    codesign_identity="-"
+  fi
+fi
+if [[ "$codesign_identity" != "-" ]] &&
+  ! grep -F "$codesign_identity" <<<"$codesign_identities" >/dev/null; then
+  echo "The requested macOS code-signing identity is not available: $codesign_identity" >&2
+  exit 1
+fi
+export ZMANAGER_CODESIGN_IDENTITY="$codesign_identity"
+if [[ "$codesign_identity" == "-" ]]; then
+  codesign_identity_label="ad-hoc"
+  codesign_identity_sha1=""
+  echo "Code signing: ad-hoc"
+else
+  identity_record=$(grep -F "$codesign_identity" <<<"$codesign_identities" | sed -n '1p')
+  codesign_identity_sha1=$(awk '{print $2}' <<<"$identity_record")
+  codesign_identity_label=$(sed -E 's/^[^"]*"([^"]+)".*/\1/' <<<"$identity_record")
+  export ZMANAGER_CODESIGN_IDENTITY_LABEL="$codesign_identity_label"
+  echo "Code signing identity: $codesign_identity"
+fi
+
 source_cargo_env() {
   if [[ -f "$HOME/.cargo/env" ]]; then
     # shellcheck disable=SC1091
@@ -188,11 +220,15 @@ if ((install_deps)); then
 fi
 
 missing_commands=()
-for command_name in node npm cargo rustc cmake xcrun ditto; do
+for command_name in node npm cargo rustc cmake xcrun security codesign ditto; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     missing_commands+=("$command_name")
   fi
 done
+if [[ $codesign_identity_label == Apple\ Development:* ]] &&
+  ! command -v xcodebuild >/dev/null 2>&1; then
+  missing_commands+=("xcodebuild")
+fi
 if ((${#missing_commands[@]})); then
   echo "Missing required command(s): ${missing_commands[*]}" >&2
   echo "Install the macOS prerequisites, or rerun with --install-deps." >&2
@@ -203,6 +239,44 @@ if ! xcrun --find clang >/dev/null 2>&1; then
   echo "The active Xcode toolchain does not provide clang." >&2
   echo "Select a valid toolchain with xcode-select, then rerun." >&2
   exit 1
+fi
+
+if [[ $codesign_identity_label == Apple\ Development:* ]]; then
+  team_id=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["teamIdentifier"])' \
+    "$repo_root/packaging/macos/product-identity.json")
+  app_group_id=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["appGroupIdentifier"])' \
+    "$repo_root/packaging/macos/product-identity.json")
+  main_bundle_id=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mainBundleIdentifier"])' \
+    "$repo_root/packaging/macos/product-identity.json")
+  finder_bundle_id=$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["finderExtensionBundleIdentifier"])' \
+    "$repo_root/packaging/macos/product-identity.json")
+  main_profile="${ZMANAGER_MAIN_PROVISIONING_PROFILE:-}"
+  finder_profile="${ZMANAGER_FINDER_PROVISIONING_PROFILE:-}"
+
+  select_development_profile() {
+    python3 "$repo_root/scripts/macos_provisioning_profile.py" \
+      --bundle-id "$1" \
+      --team-id "$team_id" \
+      --app-group "$app_group_id" \
+      --identity-sha1 "$codesign_identity_sha1"
+  }
+
+  if [[ -z $main_profile ]]; then
+    main_profile=$(select_development_profile "$main_bundle_id" 2>/dev/null || true)
+  fi
+  if [[ -z $finder_profile ]]; then
+    finder_profile=$(select_development_profile "$finder_bundle_id" 2>/dev/null || true)
+  fi
+  if [[ ! -f $main_profile || ! -f $finder_profile ]]; then
+    echo "Refreshing the Personal Team macOS development profiles."
+    "$repo_root/scripts/refresh-macos-development-profiles.sh"
+    main_profile=$(select_development_profile "$main_bundle_id")
+    finder_profile=$(select_development_profile "$finder_bundle_id")
+  fi
+  export ZMANAGER_MAIN_PROVISIONING_PROFILE="$main_profile"
+  export ZMANAGER_FINDER_PROVISIONING_PROFILE="$finder_profile"
+  echo "Main provisioning profile: $main_profile"
+  echo "Finder provisioning profile: $finder_profile"
 fi
 
 if [[ ! -f src-tauri/icons/icon.icns ]]; then
@@ -315,6 +389,9 @@ fi
 gate_args=("$staged_app" --expected-arch "$architecture")
 gate_args+=(--zip "$zip_artifact")
 [[ ! -f $dmg_artifact ]] || gate_args+=(--dmg "$dmg_artifact")
+if [[ $codesign_identity_label == Apple\ Development:* ]]; then
+  gate_args+=(--require-provisioned-app-group)
+fi
 if [[ -n "$notary_profile" ]]; then
   gate_args+=(--require-developer-id --require-notarization)
 fi

@@ -107,8 +107,16 @@ scripts/build-linux-fedora-rpm.sh
 scripts/build-macos.sh
 ```
 
-- Builds the complete Release Bundle. Local builds may use ad-hoc signing;
-  protected release builds use Developer ID signing, notarization, and stapling.
+- Builds the complete Release Bundle. Local builds use the preferred Apple
+  Development identity `8014C7D557DE28E3C52971362BA18A3CCC28A723` when it is
+  available in Keychain. Matching main-app and Finder-extension provisioning
+  profiles are selected from Xcode and refreshed through Personal Team
+  automatic signing when missing or expired. Free Personal Team profiles expire
+  after seven days; `scripts/refresh-macos-development-profiles.sh` refreshes
+  them explicitly. Xcode must have the signing Apple Account configured. The
+  build falls back to ad-hoc signing when the preferred identity is unavailable.
+  Set `ZMANAGER_CODESIGN_IDENTITY=-` to force ad-hoc signing. Protected release
+  builds use Developer ID signing, notarization, and stapling.
 - `--bundle app|dmg|all` selects the artifact type; the default is `all`.
 - `--install-deps` installs missing CMake/Node dependencies with Homebrew and
   installs or updates Rust through rustup.

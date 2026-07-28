@@ -221,6 +221,10 @@ pub(crate) trait SecureFileProtector {
     fn set_owner_only_file_permissions(file: &File) -> Result<(), NativeCapabilityOperationError>;
 }
 
+pub(crate) trait DiagnosticLogPolicy {
+    fn prefer_user_log_directory() -> bool;
+}
+
 pub(crate) trait NativeFileDragAdapter {
     fn prepare_native_file_drag(
         candidates: &[NativeFileDragCandidate],
@@ -293,6 +297,10 @@ pub fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()> {
         .map_err(|error| std::io::Error::other(format!("{}:{}", error.capability, error.code)))
 }
 
+pub fn prefer_user_diagnostic_log_directory() -> bool {
+    ActivePlatform::prefer_user_log_directory()
+}
+
 pub fn prepare_native_file_drag(
     candidates: &[NativeFileDragCandidate],
     strip_components: usize,
@@ -339,6 +347,7 @@ mod tests {
                 + SystemFileIconProvider
                 + DefaultHandlerController
                 + SecureFileProtector
+                + DiagnosticLogPolicy
                 + NativeFileDragAdapter,
         {
         }

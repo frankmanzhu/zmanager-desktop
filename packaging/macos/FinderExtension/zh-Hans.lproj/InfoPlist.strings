@@ -1,5 +1,1 @@
-"CFBundleDisplayName" = "ZManager";
-"CFBundleName" = "ZManager";
 "NSAppDataUsageDescription" = "ZManager 使用其专用共享容器接收访达操作，避免在 URL 中暴露所选文件的路径。";
-"archiveType.tzap" = "TZAP 归档";
-"archiveType.archive" = "归档";

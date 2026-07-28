@@ -155,6 +155,6 @@ Do not reimplement archive planning, listing, extraction, creation, or safety be
 When investigating a reported bug or failure, always attempt to diagnose the issue using the application's diagnostic logs before resorting to blind searching or trial-and-error.
 
 - **Windows:** Logs are located in the `logs` directory next to the `.exe` file in the installation directory.
-- **macOS:** Logs are located in the `logs` directory inside the `.app` bundle, specifically at `Contents/MacOS/logs/zmanager-diagnostics.log`. If that directory is not writable (e.g., standard non-owned installation), it falls back to the user directory `~/Library/Logs/org.tzap-org.zmanager.desktop/zmanager-diagnostics.log`.
+- **macOS:** Logs are always located at `~/Library/Logs/org.tzap-org.zmanager/zmanager-diagnostics.log`. Never write runtime data inside the signed `.app` bundle because doing so invalidates its code-signature seal.
 
 If the existing logs do not provide enough data to identify the cause of the failure, your immediate next step should be to enhance the code by printing or logging additional diagnostic data to capture the missing context.

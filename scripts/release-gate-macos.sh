@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 app=""
 expected_arch="$(uname -m)"
 require_developer_id=0
+require_provisioned_app_group=0
 require_notarization=0
 report=""
 dmg=""
@@ -17,6 +18,8 @@ Usage: scripts/release-gate-macos.sh APPLICATION [options]
 Options:
   --expected-arch arm64|x86_64  Require an exact, thin architecture slice.
   --require-developer-id        Require the frozen Developer ID team and hardened runtime.
+  --require-provisioned-app-group
+                                Require valid main/Finder profiles and authorized App Group entitlements.
   --require-notarization        Require Gatekeeper acceptance and a stapled ticket.
   --report PATH                 Write a machine-readable JSON inspection report.
   --dmg PATH                    Inspect the matching DMG signature and ticket.
@@ -31,6 +34,7 @@ while (($#)); do
   case "$1" in
     --expected-arch) [[ $# -ge 2 ]] || { echo "--expected-arch requires a value" >&2; exit 2; }; expected_arch=$2; shift ;;
     --require-developer-id) require_developer_id=1 ;;
+    --require-provisioned-app-group) require_provisioned_app_group=1 ;;
     --require-notarization) require_notarization=1 ;;
     --report) [[ $# -ge 2 ]] || { echo "--report requires a path" >&2; exit 2; }; report=$2; shift ;;
     --dmg) [[ $# -ge 2 ]] || { echo "--dmg requires a path" >&2; exit 2; }; dmg=$2; shift ;;
@@ -81,6 +85,8 @@ expected = {
     "LSMinimumSystemVersion": "14.0",
 }
 errors = [f"{key}={info.get(key)!r}, expected {value!r}" for key, value in expected.items() if info.get(key) != value]
+if not str(info.get("NSAppDataUsageDescription", "")).strip():
+    errors.append("NSAppDataUsageDescription is missing")
 if info.get("CFBundleURLTypes") != [{
     "CFBundleTypeRole": "Viewer",
     "CFBundleURLName": "org.tzap-org.zmanager.shell-request",
@@ -127,6 +133,14 @@ for locale in en zh-Hans; do
     check "missing or stale main localization: $locale.lproj/$resource" cmp -s "$expected_resource" "$packaged_resource"
   done
 done
+for locale in en zh-Hans; do
+  for resource in FinderActions.strings InfoPlist.strings; do
+    expected_resource="$repo_root/packaging/macos/FinderExtension/$locale.lproj/$resource"
+    packaged_resource="$app/Contents/PlugIns/ZManagerFinderExtension.appex/Contents/Resources/$locale.lproj/$resource"
+    check "missing or stale Finder localization: $locale.lproj/$resource" \
+      cmp -s "$expected_resource" "$packaged_resource"
+  done
+done
 
 bundle_paths=(
   "Contents/PlugIns/ZManagerFinderExtension.appex"
@@ -151,6 +165,10 @@ for index in "${!bundle_paths[@]}"; do
   [[ $actual_id == "${bundle_identifiers[$index]}" ]] && pass || fail "identifier mismatch for $relative: $actual_id"
   [[ $nested_version == "$version" && $nested_build == "$build" && $nested_min == 14.0 ]] && pass || \
     fail "version mismatch for $relative (version=$nested_version build=$nested_build minimum=$nested_min)"
+  if [[ $relative == "Contents/PlugIns/ZManagerFinderExtension.appex" ]]; then
+    app_data_usage=$(/usr/libexec/PlistBuddy -c 'Print :NSAppDataUsageDescription' "$nested/Contents/Info.plist" 2>/dev/null || true)
+    [[ -n $app_data_usage ]] && pass || fail "Finder extension NSAppDataUsageDescription is missing"
+  fi
 done
 
 main_executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist" 2>/dev/null || true)
@@ -200,12 +218,13 @@ done
 
 entitlements_dir=$(mktemp -d "${TMPDIR:-/tmp}/zmanager-entitlements.XXXXXX")
 trap 'rm -rf "$entitlements_dir"' EXIT
-entitlement_error=$(/usr/bin/python3 - "$app" "$require_developer_id" <<'PY'
+entitlement_error=$(/usr/bin/python3 - "$app" "$require_developer_id" "$require_provisioned_app_group" <<'PY'
 import plistlib, subprocess, sys
 from pathlib import Path
 
 app = Path(sys.argv[1])
 require_developer_id = sys.argv[2] == "1"
+require_provisioned_app_group = sys.argv[3] == "1"
 targets = {
     ".": {"com.apple.security.application-groups": ["group.org.tzap-org.zmanager"]},
     "Contents/PlugIns/ZManagerFinderExtension.appex": {
@@ -228,12 +247,16 @@ for relative, expected in targets.items():
     result = subprocess.run(["codesign", "-d", "--entitlements", ":-", str(app / relative)], capture_output=True)
     data = result.stdout.strip()
     actual = plistlib.loads(data) if data else {}
-    if require_developer_id and relative in {".", "Contents/PlugIns/ZManagerFinderExtension.appex"}:
+    if (require_developer_id or require_provisioned_app_group) and relative in {
+        ".", "Contents/PlugIns/ZManagerFinderExtension.appex"
+    }:
         bundle_id = "org.tzap-org.zmanager" if relative == "." else "org.tzap-org.zmanager.finder-extension"
         expected = {**expected,
             "com.apple.application-identifier": "9PMA523YY4." + bundle_id,
             "com.apple.developer.team-identifier": "9PMA523YY4",
         }
+        if require_provisioned_app_group and not require_developer_id:
+            expected["com.apple.security.get-task-allow"] = True
     if actual != expected:
         errors.append(f"{relative}: {actual!r}, expected {expected!r}")
 print("; ".join(errors))
@@ -308,7 +331,7 @@ if [[ -n $zip ]]; then
   fi
 fi
 
-if ((require_developer_id)); then
+if ((require_developer_id || require_provisioned_app_group)); then
   profile_error=$(/usr/bin/python3 - "$app" "$entitlements_dir" <<'PY'
 import datetime, plistlib, subprocess, sys
 from pathlib import Path
@@ -337,14 +360,21 @@ for relative, bundle_id in profiles.items():
     if "9PMA523YY4" not in profile.get("TeamIdentifier", []):
         errors.append(f"TeamIdentifier mismatch in {relative}")
     entitlements = profile.get("Entitlements", {})
-    if entitlements.get("com.apple.application-identifier") != "9PMA523YY4." + bundle_id:
+    application_identifier = (
+        entitlements.get("com.apple.application-identifier")
+        or entitlements.get("application-identifier")
+    )
+    if application_identifier != "9PMA523YY4." + bundle_id:
         errors.append(f"application identifier mismatch in {relative}")
-    if entitlements.get("com.apple.security.application-groups") != ["group.org.tzap-org.zmanager"]:
+    if "group.org.tzap-org.zmanager" not in entitlements.get("com.apple.security.application-groups", []):
         errors.append(f"App Group mismatch in {relative}")
 print("; ".join(errors))
 PY
 )
-  [[ -z $profile_error ]] && pass || fail "invalid Developer ID provisioning profile: $profile_error"
+  [[ -z $profile_error ]] && pass || fail "invalid App Group provisioning profile: $profile_error"
+fi
+
+if ((require_developer_id)); then
   developer_id_targets=("$app")
   for relative in "${expected_macho[@]}"; do developer_id_targets+=("$app/$relative"); done
   for target in "${developer_id_targets[@]}"; do

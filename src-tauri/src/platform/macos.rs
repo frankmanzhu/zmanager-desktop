@@ -11,15 +11,21 @@ use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
     CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStart,
-    NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
+    DiagnosticLogPolicy, MainWindowConfigurator, NativeCapabilityOperationError,
+    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
+    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 use crate::native_drag_session::NativeDragSessionRegistry;
 
 pub struct MacOsPlatform;
+
+impl DiagnosticLogPolicy for MacOsPlatform {
+    fn prefer_user_log_directory() -> bool {
+        true
+    }
+}
 
 static HOST_CALLBACK_RECEIVED: AtomicBool = AtomicBool::new(false);
 static APP_GROUP_AVAILABLE: AtomicBool = AtomicBool::new(false);

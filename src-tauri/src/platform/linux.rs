@@ -9,9 +9,10 @@ use tauri::Wry;
 
 use super::{
     CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    MainWindowConfigurator, NativeCapabilityOperationError, NativeFileDragAdapter,
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
-    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
+    DiagnosticLogPolicy, MainWindowConfigurator, NativeCapabilityOperationError,
+    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
+    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector,
+    SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -22,6 +23,12 @@ use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 /// stay platform-owned and out of command payload handling.
 
 pub struct LinuxPlatform;
+
+impl DiagnosticLogPolicy for LinuxPlatform {
+    fn prefer_user_log_directory() -> bool {
+        false
+    }
+}
 
 impl CapabilityInspector for LinuxPlatform {
     fn capability_observations() -> std::collections::HashMap<

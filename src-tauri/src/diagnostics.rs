@@ -77,7 +77,11 @@ impl DiagnosticLog {
         }
     }
 
-    pub fn initialize(&self, user_log_directory: Option<PathBuf>) -> io::Result<()> {
+    pub fn initialize(
+        &self,
+        user_log_directory: Option<PathBuf>,
+        prefer_user_log_directory: bool,
+    ) -> io::Result<()> {
         let install_log_directory = std::env::current_exe()
             .ok()
             .and_then(|path| path.parent().map(|parent| parent.join(LOG_DIRECTORY_NAME)));
@@ -85,6 +89,7 @@ impl DiagnosticLog {
         self.initialize_with_directories(
             install_log_directory.as_deref(),
             user_log_directory.as_deref(),
+            prefer_user_log_directory,
         )
     }
 
@@ -92,7 +97,24 @@ impl DiagnosticLog {
         &self,
         install_log_directory: Option<&Path>,
         user_log_directory: Option<&Path>,
+        prefer_user_log_directory: bool,
     ) -> io::Result<()> {
+        if prefer_user_log_directory {
+            let directory = user_log_directory.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, "user log directory unavailable")
+            })?;
+            self.activate(directory, "user")?;
+            self.record(
+                "diagnostics",
+                "initialized",
+                fields([
+                    ("location", Value::String("user".to_string())),
+                    ("installationLocationAllowed", Value::Bool(false)),
+                ]),
+            )?;
+            return Ok(());
+        }
+
         let primary_result = install_log_directory
             .ok_or_else(|| {
                 io::Error::new(
@@ -397,6 +419,7 @@ mod tests {
         log.initialize_with_directories(
             Some(&blocked_install_directory),
             Some(&fallback_directory),
+            false,
         )
         .unwrap();
 
@@ -412,6 +435,32 @@ mod tests {
                     .to_string()
             )
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn signed_bundle_policy_uses_user_directory_even_when_install_directory_is_writable() {
+        let root = unique_temp_directory("signed-bundle");
+        let install_directory = root.join("application-bundle");
+        let user_directory = root.join("user-logs");
+        let log = DiagnosticLog::new();
+
+        log.initialize_with_directories(Some(&install_directory), Some(&user_directory), true)
+            .unwrap();
+
+        let info = log.info();
+        assert!(info.enabled);
+        assert_eq!(info.location, "user");
+        assert_eq!(
+            info.path,
+            Some(
+                user_directory
+                    .join(LOG_FILE_NAME)
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+        assert!(!install_directory.exists());
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -225,9 +225,11 @@ export function buildAboutDialogSnapshot(
     : false;
   const diagnosticLogLocation = input.diagnosticLogLocation === "installation"
     ? message(display, "about.diagnostics.logLocationInstallation")
-    : input.diagnosticLogLocation === "userFallback"
-      ? message(display, "about.diagnostics.logLocationFallback")
-      : message(display, "about.diagnostics.unavailable");
+    : input.diagnosticLogLocation === "user"
+      ? message(display, "about.diagnostics.logLocationUser")
+      : input.diagnosticLogLocation === "userFallback"
+        ? message(display, "about.diagnostics.logLocationFallback")
+        : message(display, "about.diagnostics.unavailable");
 
   const isMacOs = contract?.platformIntegration.platform === "macos";
 
