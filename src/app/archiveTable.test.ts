@@ -24,11 +24,13 @@ import { zhCnMessages } from "./i18n/messages.zh-CN";
 
 describe("archive table columns and formatters", () => {
   it("uses the required default details columns", () => {
+    // Clean-install defaults include kind (Type) as a fundamental property
     expect(DEFAULT_ARCHIVE_TABLE_COLUMN_IDS).toEqual([
       "name",
+      "kind",
       "size",
-      "compressedSize",
       "modified",
+      "compressedSize",
     ]);
   });
 
@@ -65,14 +67,24 @@ describe("archive table columns and formatters", () => {
     expect(formatArchiveTableValue(entry, "modified")).not.toBe("");
   });
 
-  it("formats portable archive modes as four-digit octal", () => {
-    const entry = {
+  it("formats portable archive modes as rwx string", () => {
+    const fileEntry = {
       path: "docs/readme.txt",
       kind: "file" as const,
-      mode: 0o640,
+      mode: 0o644,
     };
 
-    expect(formatArchiveTableValue(entry, "mode")).toBe("0640");
+    expect(formatArchiveTableValue(fileEntry, "mode")).toBe("-rw-r--r--");
+  });
+
+  it("formats directory modes with d prefix", () => {
+    const dirEntry = {
+      path: "docs",
+      kind: "directory" as const,
+      mode: 0o755,
+    };
+
+    expect(formatArchiveTableValue(dirEntry, "mode")).toBe("drwxr-xr-x");
   });
 
   it("localizes labels and kind display without changing sort order", () => {
@@ -131,9 +143,9 @@ describe("archive table columns and formatters", () => {
 
     expect(settings.columnOrderIds.slice(0, 4)).toEqual([
       "name",
-      "compressedSize",
+      "kind",
       "size",
-      "modified",
+      "compressedSize",
     ]);
     expect(visibleColumns(settings).map((column) => [column.id, column.width])).toContainEqual([
       "name",

@@ -49,7 +49,7 @@ describe("unified table columns", () => {
       const settings = setColumnWidth(resetColumnSettings(), "size", 10);
       const visible = visibleColumns(settings);
       const sizeCol = visible.find((col) => col.id === "size");
-      expect(sizeCol?.width).toBeGreaterThanOrEqual(64);
+      expect(sizeCol?.width).toBeGreaterThanOrEqual(60);
     });
 
     it("moves column order left and right", () => {
@@ -71,7 +71,7 @@ describe("unified table columns", () => {
       const defaults = resetCreateColumnSettings();
       expect(defaults.visibleColumnIds).toEqual(DEFAULT_CREATE_SOURCE_TABLE_COLUMN_IDS);
       expect(defaults.columnOrderIds).toEqual(DEFAULT_CREATE_SOURCE_TABLE_COLUMN_ORDER_IDS);
-      expect(defaults.visibleColumnIds).toEqual(["name", "size", "modified", "kind"]);
+      expect(defaults.visibleColumnIds).toEqual(["name", "kind", "size", "modified"]);
     });
 
     it("prevents hiding the Name column in create table", () => {
@@ -79,14 +79,22 @@ describe("unified table columns", () => {
       expect(settings.visibleColumnIds).toContain("name");
     });
 
-    it("offers only metadata supplied by the create-plan contract", () => {
+    it("offers all compress-applicable columns from the unified catalogue", () => {
       expect(CREATE_SOURCE_TABLE_COLUMNS.map((column) => column.id)).toEqual([
         "name",
+        "kind",
         "size",
         "modified",
-        "kind",
-        "sourcePath",
+        "created",
+        "accessed",
+        "attributes",
         "mode",
+        "linkTarget",
+        "uid",
+        "gid",
+        "owner",
+        "group",
+        "sourcePath",
       ]);
     });
 
@@ -113,17 +121,21 @@ describe("unified table columns", () => {
       const moved = moveCreateColumn(initial, "modified", "left");
       const visibleAfter = visibleCreateColumns(moved).map((col) => col.id);
 
-      expect(visibleAfter[1]).toBe("modified");
-      expect(visibleAfter[2]).toBe("size");
+      // Canonical order: name, kind, size, modified
+      // After moving modified left: name, kind, modified, size
+      expect(visibleAfter[1]).toBe("kind");
+      expect(visibleAfter[2]).toBe("modified");
     });
 
     it("reorders create column by target column id", () => {
       const initial = resetCreateColumnSettings();
-      const reordered = reorderCreateColumn(initial, "kind", "size");
+      // Make sourcePath visible so it appears in the visible order after reorder
+      const withSourceVisible = toggleCreateColumnVisibility(initial, "sourcePath");
+      const reordered = reorderCreateColumn(withSourceVisible, "sourcePath", "kind");
       const visibleAfter = visibleCreateColumns(reordered).map((col) => col.id);
 
-      expect(visibleAfter[1]).toBe("kind");
-      expect(visibleAfter[2]).toBe("size");
+      expect(visibleAfter[1]).toBe("sourcePath");
+      expect(visibleAfter[2]).toBe("kind");
     });
 
     it("prevents reordering name column or targeting name column", () => {

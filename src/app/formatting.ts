@@ -231,3 +231,52 @@ export function getPathDirectory(value?: string | null): string {
 
   return parent;
 }
+
+// ---------------------------------------------------------------------------
+// Unix mode → -rwxrwxrwx string
+// ---------------------------------------------------------------------------
+
+const MODE_R = 4;
+const MODE_W = 2;
+const MODE_X = 1;
+
+/**
+ * Format a Unix mode value (permission bits) as a human-readable string like
+ * `-rw-r--r--`.  The file-type character is derived from the entry kind:
+ * `-` for regular files, `d` for directories, `l` for symlinks.
+ */
+export function formatUnixMode(
+  mode: number | undefined | null,
+  kind?: string | null,
+): string {
+  if (typeof mode !== "number" || !Number.isFinite(mode)) return "";
+
+  const typeChar = kind === "directory" ? "d" : kind === "symlink" ? "l" : "-";
+
+  const ur = (mode & 0o400) ? "r" : "-";
+  const uw = (mode & 0o200) ? "w" : "-";
+  const ux = specialExecChar(mode, 0o4000, 0o100, "s", "S");
+
+  const gr = (mode & 0o040) ? "r" : "-";
+  const gw = (mode & 0o020) ? "w" : "-";
+  const gx = specialExecChar(mode, 0o2000, 0o010, "s", "S");
+
+  const or_ = (mode & 0o004) ? "r" : "-";
+  const ow = (mode & 0o002) ? "w" : "-";
+  const ox = specialExecChar(mode, 0o1000, 0o001, "t", "T");
+
+  return `${typeChar}${ur}${uw}${ux}${gr}${gw}${gx}${or_}${ow}${ox}`;
+}
+
+function specialExecChar(
+  mode: number,
+  specialBit: number,
+  execBit: number,
+  onExec: string,
+  offExec: string,
+): string {
+  const hasExec = (mode & execBit) !== 0;
+  const hasSpecial = (mode & specialBit) !== 0;
+  if (hasSpecial) return hasExec ? onExec : offExec;
+  return hasExec ? "x" : "-";
+}

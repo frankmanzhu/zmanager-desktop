@@ -3245,6 +3245,7 @@ function showCreateTableHeaderContextMenu(
     translator: displayContext.translator,
     tableColumnSettings: snapshot.view.columnSettings,
     selectedColumnId,
+    availableColumnIds: compressCapabilitySet,
   }));
 }
 

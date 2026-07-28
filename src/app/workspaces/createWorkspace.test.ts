@@ -1723,7 +1723,7 @@ describe("create workspace start request", () => {
       const workspace = createCreateWorkspace();
       let snapshot = workspace.getSnapshot();
 
-      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "size", "modified", "kind"]);
+      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "kind", "size", "modified"]);
 
       snapshot = workspace.toggleColumnVisibility("sourcePath");
       expect(snapshot.view.columnSettings.visibleColumnIds).toContain("sourcePath");
@@ -1736,11 +1736,11 @@ describe("create workspace start request", () => {
         snapshot.view.columnSettings.columnOrderIds.indexOf("modified"),
       );
 
-      snapshot = workspace.reorderColumn("kind", "size");
-      expect(snapshot.view.columnSettings.columnOrderIds.indexOf("kind")).toBe(1);
+      snapshot = workspace.reorderColumn("mode", "size");
+      expect(snapshot.view.columnSettings.columnOrderIds.indexOf("mode")).toBe(2);
 
       snapshot = workspace.resetColumns();
-      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "size", "modified", "kind"]);
+      expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "kind", "size", "modified"]);
     });
   });
 });

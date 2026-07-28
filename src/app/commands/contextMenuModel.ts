@@ -130,6 +130,8 @@ export type CreateHeaderContextMenuInput = Readonly<{
   translator: Translator;
   tableColumnSettings: CreateSourceColumnSettings;
   selectedColumnId?: CreateSourceColumnId;
+  /** Columns the running backend can populate (capability-filtered). Omitting shows all. */
+  availableColumnIds?: readonly CreateSourceColumnId[];
 }>;
 
 export type CompressRowContextMenuInput = Readonly<{
@@ -292,8 +294,12 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
 
 export function buildCreateHeaderContextMenuItems(input: CreateHeaderContextMenuInput): ContextMenuItem[] {
   const normalizedSettings = normalizeCreateColumnSettings(input.tableColumnSettings);
+  const availableSet = input.availableColumnIds
+    ? new Set(input.availableColumnIds)
+    : new Set(CREATE_SOURCE_TABLE_COLUMNS.map((c) => c.id));
+
   const selectedColumn = CREATE_SOURCE_TABLE_COLUMNS.find(
-    (column) => column.id === input.selectedColumnId,
+    (column) => column.id === input.selectedColumnId && availableSet.has(column.id),
   );
   const items: ContextMenuItem[] = [];
 
@@ -311,6 +317,7 @@ export function buildCreateHeaderContextMenuItems(input: CreateHeaderContextMenu
     separatorItem(),
     captionItem(input.translator.t("command.chooseColumns")),
     ...CREATE_SOURCE_TABLE_COLUMNS
+      .filter((column) => availableSet.has(column.id))
       .map((column) => {
         const isNameColumn = column.id === "name";
         return checkboxItem(createTableColumnLabel(column, input.translator), {

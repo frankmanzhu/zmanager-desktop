@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use libc;
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -101,15 +103,31 @@ pub fn project_contract() -> crate::dto::ProjectContract {
     );
 
     // Build the Compress source-table capability set for the running platform.
+    // Follows the expected platform outcomes table in the implementation plan.
     // Safe base (always available): name, kind, size, modified, sourcePath
     let mut available_column_ids = vec!["name", "kind", "size", "modified", "sourcePath"];
 
-    // Unix platforms support additional source metadata
+    // All platforms: created, accessed, linkTarget (core planner captures these)
+    available_column_ids.push("created");
+    available_column_ids.push("accessed");
+    available_column_ids.push("linkTarget");
+
+    // Platform-specific filesystem attributes (Available when implemented)
+    #[cfg(any(target_os = "macos", windows))]
+    available_column_ids.push("attributes");
+
+    // Unix-specific source metadata
     #[cfg(unix)]
     {
         available_column_ids.push("mode");
-        available_column_ids.push("linkTarget");
+        available_column_ids.push("uid");
+        available_column_ids.push("gid");
+        available_column_ids.push("owner");   // Available on macOS/Linux
+        available_column_ids.push("group");   // Available on macOS/Linux
     }
+
+    // Windows: owner is "Available when implemented" — defer to core integration
+    // Windows: group is "Unavailable in the Unix sense"
 
     ProjectContract {
         commands: constants::PLANNED_COMMANDS,
@@ -364,6 +382,36 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
 
+    // Collect platform metadata from the source path.
+    // This is a stat call per entry — acceptable for typical source trees.
+    let source_meta = std::fs::metadata(&entry.source_path).ok();
+
+    let created = source_meta
+        .as_ref()
+        .and_then(|m| m.created().ok())
+        .and_then(system_time_to_epoch_seconds_string);
+
+    let accessed = source_meta
+        .as_ref()
+        .and_then(|m| m.accessed().ok())
+        .and_then(system_time_to_epoch_seconds_string);
+
+    let attributes = build_source_attributes(&entry.source_path, &entry.permissions);
+
+    #[cfg(unix)]
+    let (uid, gid, owner, group) = {
+        use std::os::unix::fs::MetadataExt;
+        if let Some(ref meta) = source_meta {
+            let u = meta.uid();
+            let g = meta.gid();
+            (Some(u), Some(g), resolve_user_name(u), resolve_group_name(g))
+        } else {
+            (None, None, None, None)
+        }
+    };
+    #[cfg(not(unix))]
+    let (uid, gid, owner, group) = (None, None, None, None);
+
     CreatePlanEntryDto {
         path: entry.archive_path.clone(),
         kind: map_manifest_file_type(entry.file_type),
@@ -371,15 +419,149 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         modified: entry.modified.and_then(system_time_to_epoch_seconds_string),
         mode: entry.permissions.unix_mode,
         source_path: entry.source_path.to_string_lossy().to_string(),
-        // WP6 incremental metadata — populated when core provides them
-        created: None,
-        accessed: None,
-        attributes: None,
+        created,
+        accessed,
+        attributes,
         link_target,
-        uid: None,
-        gid: None,
-        owner: None,
-        group: None,
+        uid,
+        gid,
+        owner,
+        group,
+    }
+}
+
+// Human-readable names for macOS BSD file flags (st_flags).
+// See man chflags(2). SF_ flags require root; UF_ flags are user-settable.
+#[cfg(target_os = "macos")]
+const MACOS_BSD_FLAGS: &[(u32, &str)] = &[
+    (libc::UF_NODUMP, "nodump"),
+    (libc::UF_IMMUTABLE, "immutable"),
+    (libc::UF_APPEND, "append-only"),
+    (libc::UF_OPAQUE, "opaque"),
+    (libc::UF_HIDDEN, "hidden"),
+    (libc::SF_ARCHIVED, "archived"),
+    (libc::SF_IMMUTABLE, "system-immutable"),
+    (libc::SF_APPEND, "system-append"),
+];
+
+// Human-readable names for Windows FILE_ATTRIBUTE_* flags.
+// Only includes user-visible flags; skips ARCHIVE / NOT_CONTENT_INDEXED
+// which are set on almost every file.
+#[cfg(windows)]
+const WINDOWS_FILE_ATTRIBUTES: &[(u32, &str)] = &[
+    (0x0000_0001, "readonly"),     // FILE_ATTRIBUTE_READONLY
+    (0x0000_0002, "hidden"),       // FILE_ATTRIBUTE_HIDDEN
+    (0x0000_0004, "system"),       // FILE_ATTRIBUTE_SYSTEM
+    (0x0000_0040, "device"),       // FILE_ATTRIBUTE_DEVICE
+    (0x0000_0100, "temporary"),    // FILE_ATTRIBUTE_TEMPORARY
+    (0x0000_0200, "sparse"),       // FILE_ATTRIBUTE_SPARSE_FILE
+    (0x0000_0400, "reparse"),      // FILE_ATTRIBUTE_REPARSE_POINT
+    (0x0000_0800, "compressed"),   // FILE_ATTRIBUTE_COMPRESSED
+    (0x0000_1000, "offline"),      // FILE_ATTRIBUTE_OFFLINE
+    (0x0000_4000, "encrypted"),    // FILE_ATTRIBUTE_ENCRYPTED
+];
+
+/// Build source attributes from permission flags and platform metadata.
+fn build_source_attributes(
+    source_path: &Path,
+    perms: &zmanager_core::manifest::PermissionSnapshot,
+) -> Option<Vec<crate::dto::SourceAttributeDto>> {
+    let mut attrs = Vec::new();
+
+    if perms.readonly {
+        attrs.push(crate::dto::SourceAttributeDto {
+            namespace: "portable".into(),
+            code: "readonly".into(),
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::darwin::fs::MetadataExt;
+        if let Ok(meta) = std::fs::metadata(source_path) {
+            let flags = meta.st_flags();
+            for (mask, name) in MACOS_BSD_FLAGS {
+                if flags & mask != 0 {
+                    attrs.push(crate::dto::SourceAttributeDto {
+                        namespace: "bsd".into(),
+                        code: (*name).into(),
+                    });
+                }
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if let Ok(meta) = std::fs::metadata(source_path) {
+            let attrs_val = meta.file_attributes();
+            for (mask, name) in WINDOWS_FILE_ATTRIBUTES {
+                if attrs_val & mask != 0 {
+                    attrs.push(crate::dto::SourceAttributeDto {
+                        namespace: "windows".into(),
+                        code: (*name).into(),
+                    });
+                }
+            }
+        }
+    }
+
+    if attrs.is_empty() {
+        None
+    } else {
+        Some(attrs)
+    }
+}
+
+/// Resolve a Unix UID to a user name using a bounded thread-safe buffer.
+#[cfg(unix)]
+fn resolve_user_name(uid: u32) -> Option<String> {
+    // getpwuid_r requires a buffer; 16 KiB is generous for any Unix.
+    let mut buf = vec![0u8; 16384];
+    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    let ret = unsafe {
+        libc::getpwuid_r(
+            uid,
+            &mut pwd,
+            buf.as_mut_ptr() as *mut libc::c_char,
+            buf.len(),
+            &mut result,
+        )
+    };
+    if ret == 0 && !result.is_null() {
+        unsafe { std::ffi::CStr::from_ptr(pwd.pw_name) }
+            .to_str()
+            .ok()
+            .map(|s| s.to_string())
+    } else {
+        None
+    }
+}
+
+/// Resolve a Unix GID to a group name using a bounded thread-safe buffer.
+#[cfg(unix)]
+fn resolve_group_name(gid: u32) -> Option<String> {
+    let mut buf = vec![0u8; 16384];
+    let mut grp: libc::group = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::group = std::ptr::null_mut();
+    let ret = unsafe {
+        libc::getgrgid_r(
+            gid,
+            &mut grp,
+            buf.as_mut_ptr() as *mut libc::c_char,
+            buf.len(),
+            &mut result,
+        )
+    };
+    if ret == 0 && !result.is_null() {
+        unsafe { std::ffi::CStr::from_ptr(grp.gr_name) }
+            .to_str()
+            .ok()
+            .map(|s| s.to_string())
+    } else {
+        None
     }
 }
 

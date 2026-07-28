@@ -4,6 +4,7 @@ import {
   formatBytes,
   formatCompressionRatio,
   formatDate,
+  formatUnixMode,
   getPathBasename,
   parseDateValue,
 } from "./formatting";
@@ -19,43 +20,24 @@ import {
   tableColumnLabel,
   toggleGenericColumnVisibility,
   visibleGenericColumns,
+  type BaseTableColumn,
 } from "./tableColumns";
+import {
+  CLEAN_INSTALL_VISIBLE_IDS,
+  EXTRACT_APPLICABLE_IDS,
+  getColumnDefinition,
+  type ExtractTableColumnId,
+  type TableColumnId,
+} from "./tableColumnCatalogue";
+import { getExtractLayout } from "./scenarioColumnLayout";
 
-export type ArchiveTableColumnId =
-  | "name"
-  | "size"
-  | "compressedSize"
-  | "modified"
-  | "mode"
-  | "created"
-  | "accessed"
-  | "attributes"
-  | "encrypted"
-  | "method"
-  | "crc"
-  | "comment"
-  | "kind"
-  | "ratio"
-  | "solid"
-  | "linkTarget"
-  | "metadataDiagnostics"
-  | "uid"
-  | "gid"
-  | "owner"
-  | "group";
+// -- Types (backward-compatible re-exports from the unified catalogue) ----------
+
+export type ArchiveTableColumnId = ExtractTableColumnId;
 
 export type ArchiveSortKey = ArchiveTableColumnId;
 
-export type ArchiveTableColumn = {
-  id: ArchiveTableColumnId;
-  label: string;
-  labelKey: MessageKey;
-  width: number;
-  minWidth?: number;
-  align: "left" | "right" | "center";
-  defaultVisible: boolean;
-  alwaysVisible?: boolean;
-};
+export type ArchiveTableColumn = BaseTableColumn<ArchiveTableColumnId>;
 
 export type ArchiveTableRow = HierarchicalTableRow<ArchiveEntryDto>;
 
@@ -75,6 +57,54 @@ export type BuildArchiveBrowserRowsOptions = {
   showParentFolderItem?: boolean;
 };
 
+// -- English fallback labels (keyed by catalogue labelKey) ---------------------
+
+const LABEL: Record<string, string> = {
+  "table.name": "Name",
+  "table.type": "Type",
+  "table.size": "Size",
+  "table.modified": "Modified",
+  "table.created": "Created",
+  "table.accessed": "Accessed",
+  "table.attributes": "Attributes",
+  "detail.mode": "Mode",
+  "table.linkTarget": "Link Target",
+  "table.uid": "UID",
+  "table.gid": "GID",
+  "table.owner": "Owner",
+  "table.group": "Group",
+  "table.packedSize": "Packed Size",
+  "table.encrypted": "Encrypted",
+  "table.method": "Method",
+  "table.crc": "CRC",
+  "table.comment": "Comment",
+  "table.ratio": "Ratio",
+  "table.solid": "Solid",
+  "table.metadataDiagnostics": "Diagnostics",
+};
+
+// -- Column catalogue ---------------------------------------------------------
+// Built from the unified catalogue + Extract-specific intrinsic widths.
+
+function buildColumn(id: ExtractTableColumnId): ArchiveTableColumn {
+  const def = getColumnDefinition(id as TableColumnId);
+  const layout = getExtractLayout(id as TableColumnId);
+  const labelKey = (def?.labelKey ?? "table.name") as MessageKey;
+  return {
+    id,
+    label: LABEL[labelKey] ?? id,
+    labelKey,
+    width: layout.width,
+    minWidth: layout.minWidth,
+    align: def?.align ?? "left",
+    defaultVisible: CLEAN_INSTALL_VISIBLE_IDS.includes(id as TableColumnId),
+    alwaysVisible: def?.alwaysVisible,
+  };
+}
+
+export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] =
+  EXTRACT_APPLICABLE_IDS.map(buildColumn);
+
 const EMPTY_VALUE = "";
 const TABLE_DATE_FORMAT = {
   emptyValue: EMPTY_VALUE,
@@ -83,30 +113,6 @@ const TABLE_DATE_FORMAT = {
 } as const;
 const DEFAULT_MIN_COLUMN_WIDTH = 64;
 const MAX_COLUMN_WIDTH = 520;
-
-export const ARCHIVE_TABLE_COLUMNS: ArchiveTableColumn[] = [
-  { id: "name", label: "Name", labelKey: "table.name", width: 190, minWidth: 140, align: "left", defaultVisible: true, alwaysVisible: true },
-  { id: "size", label: "Size", labelKey: "table.size", width: 100, align: "right", defaultVisible: true },
-  { id: "compressedSize", label: "Packed Size", labelKey: "table.packedSize", width: 110, align: "right", defaultVisible: true },
-  { id: "modified", label: "Modified", labelKey: "table.modified", width: 150, align: "left", defaultVisible: true },
-  { id: "mode", label: "Mode", labelKey: "detail.mode", width: 82, align: "right", defaultVisible: false },
-  { id: "created", label: "Created", labelKey: "table.created", width: 140, align: "left", defaultVisible: false },
-  { id: "accessed", label: "Accessed", labelKey: "table.accessed", width: 140, align: "left", defaultVisible: false },
-  { id: "attributes", label: "Attributes", labelKey: "table.attributes", width: 90, align: "left", defaultVisible: false },
-  { id: "encrypted", label: "Encrypted", labelKey: "table.encrypted", width: 80, align: "center", defaultVisible: false },
-  { id: "method", label: "Method", labelKey: "table.method", width: 120, align: "left", defaultVisible: false },
-  { id: "crc", label: "CRC", labelKey: "table.crc", width: 90, align: "right", defaultVisible: false },
-  { id: "comment", label: "Comment", labelKey: "table.comment", width: 120, align: "left", defaultVisible: false },
-  { id: "kind", label: "Type", labelKey: "table.type", width: 90, align: "left", defaultVisible: false },
-  { id: "ratio", label: "Ratio", labelKey: "table.ratio", width: 70, align: "right", defaultVisible: false },
-  { id: "solid", label: "Solid", labelKey: "table.solid", width: 60, align: "center", defaultVisible: false },
-  { id: "linkTarget", label: "Link Target", labelKey: "table.linkTarget", width: 160, align: "left", defaultVisible: false },
-  { id: "metadataDiagnostics", label: "Diagnostics", labelKey: "table.metadataDiagnostics", width: 100, align: "right", defaultVisible: false },
-  { id: "uid", label: "UID", labelKey: "table.uid", width: 70, align: "right", defaultVisible: false },
-  { id: "gid", label: "GID", labelKey: "table.gid", width: 70, align: "right", defaultVisible: false },
-  { id: "owner", label: "Owner", labelKey: "table.owner", width: 100, align: "left", defaultVisible: false },
-  { id: "group", label: "Group", labelKey: "table.group", width: 100, align: "left", defaultVisible: false },
-];
 
 export const DEFAULT_ARCHIVE_TABLE_COLUMN_IDS = ARCHIVE_TABLE_COLUMNS
   .filter((column) => column.defaultVisible)
@@ -245,7 +251,7 @@ export function formatArchiveTableValue(
     case "modified":
       return formatDate(entry.modified, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "mode":
-      return typeof entry.mode === "number" ? entry.mode.toString(8).padStart(4, "0") : EMPTY_VALUE;
+      return formatUnixMode(entry.mode, entry.kind);
     case "created":
       return formatDate(entry.created, { ...TABLE_DATE_FORMAT, locale: i18n?.locale });
     case "accessed":

@@ -184,7 +184,7 @@ describe("React create workspace", () => {
     });
 
     expect(html).toContain('data-compress-column-id="mode"');
-    expect(html).toContain(">0755</td>");
+    expect(html).toContain(">drwxr-xr-x</td>");
   });
 });
 

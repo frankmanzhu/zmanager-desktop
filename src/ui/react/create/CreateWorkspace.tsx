@@ -43,6 +43,7 @@ import { translatorForSnapshot } from "../shell/shellHelpers";
 import {
   CREATE_SOURCE_TABLE_COLUMNS,
   createTableColumnLabel,
+  formatCreateTableValue,
   resetCreateColumnSettings,
   visibleCreateColumns,
   type CreateSourceColumn,
@@ -885,72 +886,52 @@ function CreateTableCell({
 }>) {
   const data = row.rowType === "parent" ? undefined : row.entry;
 
-  switch (columnId) {
-    case "name":
-      return (
-        <td className="min-w-[140px] px-2 py-1.5 text-xs">
-          <span className="flex min-w-0 items-center gap-2" data-row-primary>
-            <span
-              className={`flex size-[18px] shrink-0 items-center justify-center ${isFolder ? "text-amber-600" : "text-slate-500"}`}
-              data-row-icon
-              aria-hidden="true"
-            >
-              {nativeIconDataUrl ? (
-                <img
-                  className="size-[18px] object-contain"
-                  src={nativeIconDataUrl}
-                  alt=""
-                />
-              ) : isFolder ? (
-                <Folder className="size-4" />
-              ) : (
-                <File className="size-4" />
-              )}
-            </span>
-            <span className="min-w-0 flex-1 truncate">{row.name}</span>
-            {selectable ? (
-              <span
-                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${inclusion === "excluded" ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : inclusion === "partial" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
-              >
-                {compressInclusionText(inclusion, snapshot)}
-              </span>
-            ) : null}
+  // Name column has visual structure (icons, badges) — keep inline
+  if (columnId === "name") {
+    return (
+      <td className="min-w-[140px] px-2 py-1.5 text-xs">
+        <span className="flex min-w-0 items-center gap-2" data-row-primary>
+          <span
+            className={`flex size-[18px] shrink-0 items-center justify-center ${isFolder ? "text-amber-600" : "text-slate-500"}`}
+            data-row-icon
+            aria-hidden="true"
+          >
+            {nativeIconDataUrl ? (
+              <img
+                className="size-[18px] object-contain"
+                src={nativeIconDataUrl}
+                alt=""
+              />
+            ) : isFolder ? (
+              <Folder className="size-4" />
+            ) : (
+              <File className="size-4" />
+            )}
           </span>
-        </td>
-      );
-    case "size":
-      return (
-        <td className="truncate px-2 py-1.5 text-right text-xs tabular-nums">
-          {data?.size === undefined
-            ? ""
-            : formatBytes(data.size, { locale: snapshot.display.resolvedLocale })}
-        </td>
-      );
-    case "modified":
-      return (
-        <td className="truncate px-2 py-1.5 text-xs">{data?.modified ?? ""}</td>
-      );
-    case "kind":
-      return (
-        <td className="truncate px-2 py-1.5 text-xs">
-          {isFolder ? i18n.t("entryKind.directory") : i18n.t("entryKind.file")}
-        </td>
-      );
-    case "sourcePath":
-      return (
-        <td className="truncate px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400">
-          {sourcePath ?? ""}
-        </td>
-      );
-    case "mode":
-      return (
-        <td className="truncate px-2 py-1.5 text-right text-xs tabular-nums">
-          {typeof data?.mode === "number"
-            ? data.mode.toString(8).padStart(4, "0")
-            : ""}
-        </td>
-      );
+          <span className="min-w-0 flex-1 truncate">{row.name}</span>
+          {selectable ? (
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${inclusion === "excluded" ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : inclusion === "partial" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
+            >
+              {compressInclusionText(inclusion, snapshot)}
+            </span>
+          ) : null}
+        </span>
+      </td>
+    );
   }
+
+  // All other columns: delegate value formatting to the app layer
+  const value = formatCreateTableValue(data, columnId, i18n);
+  const colDef = CREATE_SOURCE_TABLE_COLUMNS.find((c) => c.id === columnId);
+  const alignClass = colDef?.align === "right" ? "text-right tabular-nums" : colDef?.align === "center" ? "text-center" : "";
+  const mutedClass = columnId === "sourcePath" || columnId === "linkTarget" ? "text-slate-500 dark:text-slate-400" : "";
+
+  return (
+    <td className={`truncate px-2 py-1.5 text-xs ${alignClass} ${mutedClass}`}>
+      {value}
+    </td>
+  );
 }
 
 function focusRelativeCreateRow(

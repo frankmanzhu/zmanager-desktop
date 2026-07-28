@@ -140,7 +140,7 @@ describe("context menu model", () => {
       payload: { action: "toggle-column", columnId: "name" },
     }));
     expect(checkboxes.find((item) => item.payload.columnId === "kind")).toEqual(expect.objectContaining({
-      checked: false,
+      checked: true,
       payload: { action: "toggle-column", columnId: "kind" },
     }));
   });
@@ -165,8 +165,27 @@ describe("context menu model", () => {
       checked: false,
       payload: { action: "toggle-column", columnId: "sourcePath" },
     }));
-    expect(checkboxes.map((item) => item.payload.columnId)).not.toContain("created");
-    expect(checkboxes.map((item) => item.payload.columnId)).not.toContain("accessed");
+    // All compress-applicable columns appear in the header menu when unfiltered
+    expect(checkboxes.map((item) => item.payload.columnId)).toContain("created");
+    expect(checkboxes.map((item) => item.payload.columnId)).toContain("accessed");
+  });
+
+  it("filters create header menu columns to the backend capability set", () => {
+    const items = buildCreateHeaderContextMenuItems({
+      translator,
+      tableColumnSettings: resetCreateColumnSettings(),
+      selectedColumnId: "size",
+      availableColumnIds: ["name", "kind", "size", "modified", "sourcePath"],
+    });
+    const checkboxes = checkboxItems(items);
+    const ids = checkboxes.map((item) => item.payload.columnId);
+
+    expect(ids).toContain("name");
+    expect(ids).toContain("size");
+    expect(ids).toContain("sourcePath");
+    // Not in the capability set — must be absent from the menu
+    expect(ids).not.toContain("created");
+    expect(ids).not.toContain("mode");
   });
 
   it("builds create row and source menus for reveal, include, exclude, remove, and clear actions", () => {
