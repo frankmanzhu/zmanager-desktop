@@ -15,11 +15,6 @@ import { isDesktopRuntime as defaultIsDesktopRuntime } from "./runtime";
 
 export const WINDOW_GEOMETRY_KEY = "zmanager.windowGeometry";
 
-const QUICK_ACTION_WINDOW_WIDTH_PX = 620;
-const QUICK_ACTION_WINDOW_HEIGHT_PX = 420;
-const QUICK_ACTION_WINDOW_MIN_WIDTH_PX = 540;
-const QUICK_ACTION_WINDOW_MIN_HEIGHT_PX = 360;
-
 export const WINDOW_RESIZE_DIRECTIONS = [
   "North",
   "East",
@@ -80,7 +75,6 @@ export type WindowControllerDependencies = {
   createLogicalPosition: (x: number, y: number) => unknown;
   storage: WindowControllerStorage | null;
   isDesktopRuntime: () => boolean;
-  isQuickActionJobMode: () => boolean;
 };
 
 export type WindowControllerOptions = Partial<WindowControllerDependencies>;
@@ -150,7 +144,6 @@ function createWindowControllerDependencies(
     createLogicalPosition: options.createLogicalPosition ?? ((x, y) => new LogicalPosition(x, y)),
     storage: options.storage === undefined ? browserStorage() : options.storage,
     isDesktopRuntime: options.isDesktopRuntime ?? defaultIsDesktopRuntime,
-    isQuickActionJobMode: options.isQuickActionJobMode ?? (() => false),
   };
 }
 
@@ -221,31 +214,10 @@ export function createWindowController(options: WindowControllerOptions = {}) {
         await dependencies.getCurrentWindow().show();
       }
     },
-    async revealProgressWindow(): Promise<void> {
-      if (!dependencies.isDesktopRuntime()) {
-        return;
-      }
-
-      const currentWindow = dependencies.getCurrentWindow();
-      await currentWindow.unminimize();
-      await currentWindow.setMinSize(dependencies.createLogicalSize(
-        QUICK_ACTION_WINDOW_MIN_WIDTH_PX,
-        QUICK_ACTION_WINDOW_MIN_HEIGHT_PX,
-      ));
-      await currentWindow.setSize(dependencies.createLogicalSize(
-        QUICK_ACTION_WINDOW_WIDTH_PX,
-        QUICK_ACTION_WINDOW_HEIGHT_PX,
-      ));
-      await currentWindow.center();
-      await currentWindow.show();
-    },
-    minimizeProgressWindow(): Promise<void> {
-      return dependencies.getCurrentWindow().minimize();
-    },
     restoreNormalWindowGeometry,
     restoreNormalWindowGeometryOrCenter,
     async persistCurrentWindowGeometry(): Promise<void> {
-      if (!dependencies.isDesktopRuntime() || dependencies.isQuickActionJobMode()) {
+      if (!dependencies.isDesktopRuntime()) {
         return;
       }
 

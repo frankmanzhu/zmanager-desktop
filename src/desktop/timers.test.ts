@@ -63,7 +63,6 @@ function createTimersWithFakeClock(fakeClock = createFakeClock()) {
   return {
     fakeClock,
     timers: createAppTimers({
-      quickActionAutoCloseDelayMs: 650,
       createPlanDebounceMs: 350,
       clock: fakeClock.clock,
     }),
@@ -71,57 +70,6 @@ function createTimersWithFakeClock(fakeClock = createFakeClock()) {
 }
 
 describe("desktop timer adapter", () => {
-  it("starts the progress clock as a singleton 1000ms interval", () => {
-    const { fakeClock, timers } = createTimersWithFakeClock();
-    const firstCallback = vi.fn();
-    const duplicateCallback = vi.fn();
-
-    timers.jobs.startProgressClock(firstCallback);
-    timers.jobs.startProgressClock(duplicateCallback);
-
-    expect(fakeClock.activeIntervals()).toHaveLength(1);
-    expect(fakeClock.activeIntervals()[0][1].delayMs).toBe(1000);
-
-    fakeClock.activeIntervals()[0][1].callback();
-    expect(firstCallback).toHaveBeenCalledTimes(1);
-    expect(duplicateCallback).not.toHaveBeenCalled();
-
-    timers.jobs.stopProgressClock();
-    expect(fakeClock.activeIntervals()).toHaveLength(0);
-  });
-
-  it("tracks and clears quick-action auto-close timeouts", () => {
-    const { fakeClock, timers } = createTimersWithFakeClock();
-    const callback = vi.fn();
-
-    expect(timers.jobs.hasQuickActionAutoClosePending()).toBe(false);
-    timers.jobs.scheduleQuickActionAutoClose(callback);
-
-    expect(timers.jobs.hasQuickActionAutoClosePending()).toBe(true);
-    expect(fakeClock.activeTimeouts()).toHaveLength(1);
-    expect(fakeClock.activeTimeouts()[0][1].delayMs).toBe(650);
-
-    timers.jobs.clearQuickActionAutoClose();
-
-    expect(timers.jobs.hasQuickActionAutoClosePending()).toBe(false);
-    expect(fakeClock.activeTimeouts()).toHaveLength(0);
-    fakeClock.fireTimeout(1);
-    expect(callback).not.toHaveBeenCalled();
-  });
-
-  it("clears quick-action auto-close pending state when it fires", () => {
-    const { fakeClock, timers } = createTimersWithFakeClock();
-    const callback = vi.fn();
-
-    timers.jobs.scheduleQuickActionAutoClose(callback);
-    const handle = fakeClock.activeTimeouts()[0][0];
-    fakeClock.fireTimeout(handle);
-
-    expect(callback).toHaveBeenCalledTimes(1);
-    expect(timers.jobs.hasQuickActionAutoClosePending()).toBe(false);
-    expect(fakeClock.activeTimeouts()).toHaveLength(0);
-  });
-
   it("cancels an existing create-plan debounce before scheduling another", () => {
     const { fakeClock, timers } = createTimersWithFakeClock();
     const firstCallback = vi.fn();

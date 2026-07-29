@@ -1,8 +1,12 @@
 # Job progress contract
 
-The desktop job DTO supports generic byte progress and phase-native progress.
-TZAP creation uses the phase-native path because its file-backed writer may
-read the same source payload during planning and final emission.
+All job progress is displayed in a **Disposable Task Window** — a separate OS
+window (620×460) created per job via `disposableTaskWindowManager`. The window
+subscribes to the job feed independently, renders `DisposableTaskRuntimeApp`,
+and auto-closes on completion.
+
+The main window does not show job progress. It stays fully functional during
+operations. See [`adr/0016-pure-7z-job-architecture.md`](adr/0016-pure-7z-job-architecture.md).
 
 ## TZAP create phases
 

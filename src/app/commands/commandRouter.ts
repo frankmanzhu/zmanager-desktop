@@ -77,7 +77,6 @@ export type CommandRouterEffects = {
   about: () => void | Promise<void>;
   toggleFlatView: () => void | Promise<void>;
   deleteTempFiles: () => void | Promise<void>;
-  jobs: () => void | Promise<void>;
   reportDisabled: (commandId: CommandId, reason?: string) => void | Promise<void>;
   reportUnsupported: (commandId: CommandId, reason: string) => void | Promise<void>;
 };
@@ -318,9 +317,6 @@ export function createCommandRouter(options: CommandRouterOptions): CommandRoute
           return executed(commandId);
         case "deleteTempFiles":
           void effects.deleteTempFiles();
-          return executed(commandId);
-        case "jobs":
-          void effects.jobs();
           return executed(commandId);
         case "copyTo":
         case "standardToolbar":

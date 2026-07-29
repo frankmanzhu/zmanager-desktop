@@ -25,7 +25,6 @@ import { DialogRoot } from "./dialogs/DialogRoot";
 import { useBrowserFileDropHandlers } from "./interaction/BrowserFileDropAdapter";
 import { ShellInteractionProvider } from "./interaction/ShellInteractionContext";
 import { useShellKeyboardShortcutHandler } from "./interaction/ShellKeyboardShortcuts";
-import { JobsDrawer, QuickActionProgress } from "./jobs/JobsSurfaces";
 import { AppFrame } from "./shell/AppFrame";
 import { AccountWorkspace } from "./account/AccountWorkspace";
 
@@ -139,9 +138,7 @@ function AppShellSurface({
       <CreatePasswordProvider>
         <ExtractPasswordProvider>
           <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
-            <QuickActionProgress />
             <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
-            <JobsDrawer />
             <ContextMenuRoot />
             <DialogRoot />
             <AccountWorkspace />

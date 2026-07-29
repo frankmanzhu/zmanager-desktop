@@ -5,7 +5,7 @@ import {
   type ExtractStartInput,
   type ResolvedExtractStartInput,
 } from "../extractFlow";
-import type { JobOutputAction, FocusedJobProgressContext } from "../workspaces/jobsWorkspace";
+import type { JobOutputAction } from "../workspaces/jobsWorkspace";
 import type {
   ArchiveWorkspace,
   ArchiveWorkspacePasswordRetry,
@@ -39,12 +39,9 @@ export type ExtractStartControllerOptions = Readonly<{
     options: {
       retryContext: JobRetryContext;
       focusProgress: true;
-      autoCloseAction: "returnToWorkspace";
-      progressContext: FocusedJobProgressContext;
       outputActions: JobOutputAction[];
     },
   ): void;
-  progressContext(request: StartExtractRequest, mode: ExtractMode): FocusedJobProgressContext;
   outputActions(request: StartExtractRequest): JobOutputAction[];
   unableStartMessage(mode: ExtractMode): string;
   setBrowseError(message: string): void;
@@ -130,8 +127,6 @@ export function createExtractStartController(
       options.addJob(response, {
         retryContext: retryContextForRequest(request, resolvedInput, mode),
         focusProgress: true,
-        autoCloseAction: "returnToWorkspace",
-        progressContext: options.progressContext(request, mode),
         outputActions: options.outputActions(request),
       });
     } catch (error) {

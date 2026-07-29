@@ -248,13 +248,6 @@ const modalControllerSource = normalizedWorkspaceFile(
   "ui",
   "modalController.ts",
 );
-const jobsSurfacesSource = normalizedWorkspaceFile(
-  "src",
-  "ui",
-  "react",
-  "jobs",
-  "JobsSurfaces.tsx",
-);
 const constantsSource = normalizedWorkspaceFile("src", "app", "constants.ts");
 
 type FutureForbiddenTargetId = never;
@@ -825,8 +818,6 @@ describe("GUI layout contracts", () => {
         /archiveWorkspace\.|createWorkspace\.|shellWorkspace\.|commandRouter|runRoutedCommand|invoke|Tauri|openNativeDialog|localStorage|sessionStorage|passwordInput|passwordConfirm|\.value.*password|password.*\.value|fetch\(|listen\(/,
       );
     }
-    expect(jobsSurfacesSource).toContain('id="job-drawer"');
-    expect(jobsSurfacesSource).toContain('id="quick-progress"');
     expect(mainSource).not.toContain("renderJobsListHtml");
     expect(mainSource).not.toContain("jobsListElement");
   });

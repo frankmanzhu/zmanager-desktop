@@ -10,7 +10,6 @@ describe("shell workspace state", () => {
     expect(snapshot).toEqual({
       activeMode: "compress",
       operationalStatus: "",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -22,7 +21,6 @@ describe("shell workspace state", () => {
         entryPath: "",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });
@@ -39,7 +37,6 @@ describe("shell workspace state", () => {
     expect(workspace.setWorkspaceMode("extract")).toEqual({
       activeMode: "extract",
       operationalStatus: "",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -51,7 +48,6 @@ describe("shell workspace state", () => {
         entryPath: "",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });
@@ -59,7 +55,6 @@ describe("shell workspace state", () => {
     expect(workspace.setOperationalStatus("Ready")).toEqual({
       activeMode: "extract",
       operationalStatus: "Ready",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -71,140 +66,9 @@ describe("shell workspace state", () => {
         entryPath: "",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });
-  });
-
-  it("tracks job drawer visibility as shell state", () => {
-    const workspace = createShellWorkspace();
-
-    expect(workspace.getSnapshot().jobDrawerOpen).toBe(false);
-    expect(workspace.setJobDrawerOpen(true).jobDrawerOpen).toBe(true);
-    expect(workspace.setJobDrawerOpen(false).jobDrawerOpen).toBe(false);
-  });
-
-  it("tracks quick-action shell window mode and shown state", () => {
-    const workspace = createShellWorkspace();
-
-    expect(workspace.isQuickActionJobMode()).toBe(false);
-    expect(workspace.isQuickActionWindowBackgrounded()).toBe(false);
-
-    let snapshot = workspace.setQuickActionWindowMode("jobOnly");
-    expect(snapshot.quickActionWindow).toEqual({
-      mode: "jobOnly",
-      shown: false,
-    });
-    expect(workspace.isQuickActionJobMode()).toBe(true);
-
-    snapshot = workspace.setQuickActionWindowShown(true);
-    expect(snapshot.quickActionWindow).toEqual({
-      mode: "jobOnly",
-      shown: true,
-    });
-
-    snapshot = workspace.setQuickActionWindowMode("background");
-    expect(snapshot.quickActionWindow).toEqual({
-      mode: "background",
-      shown: true,
-    });
-    expect(workspace.isQuickActionWindowBackgrounded()).toBe(true);
-
-    snapshot = workspace.setQuickActionWindowMode("normal");
-    expect(snapshot.quickActionWindow).toEqual({
-      mode: "normal",
-      shown: true,
-    });
-    expect(workspace.isQuickActionJobMode()).toBe(false);
-  });
-
-  it("selects compact job window for startup quick actions that immediately track jobs", () => {
-    const workspace = createShellWorkspace();
-
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        quickActionJobs: [{ jobId: "job-1", kind: "zipExtract", status: "queued", createdAt: "2026-07-08T00:00:00Z" }],
-      }),
-    ).toBe("jobOnly");
-  });
-
-  it("selects compact job window for startup quick actions that launch job-only requests", () => {
-    const workspace = createShellWorkspace();
-
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        quickAction: {
-          kind: "extractHere",
-          paths: ["C:/archives/app.zip"],
-        },
-      }),
-    ).toBe("jobOnly");
-  });
-
-  it("selects no Main Window for a quick action forwarded through the Native Launch Inbox", () => {
-    const workspace = createShellWorkspace();
-
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        windowDisposition: "disposableTask",
-        quickAction: null,
-      }),
-    ).toBe("jobOnly");
-  });
-
-  it("selects no Main Window for a pending macOS quick action", () => {
-    const workspace = createShellWorkspace();
-
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        windowDisposition: null,
-        quickAction: null,
-      }),
-    ).toBe("jobOnly");
-  });
-
-  it("selects normal window for non-job startup, errors, or review quick actions", () => {
-    const workspace = createShellWorkspace();
-
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: false,
-      }),
-    ).toBe("normal");
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        error: {
-          code: "startup_failed",
-          message: "Could not read startup state.",
-        },
-        quickActionJobs: [{ jobId: "job-1", kind: "zipExtract", status: "queued", createdAt: "2026-07-08T00:00:00Z" }],
-      }),
-    ).toBe("normal");
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        windowDisposition: "mainWindow",
-        quickAction: {
-          kind: "compressTzap",
-          paths: ["C:/source"],
-        },
-      }),
-    ).toBe("normal");
-    expect(
-      workspace.selectQuickActionStartupRevealTarget({
-        launchedForQuickAction: true,
-        quickAction: {
-          kind: "open",
-          paths: ["C:/archives/app.zip"],
-        },
-      }),
-    ).toBe("normal");
   });
 
   it("tracks and clears preview result metadata", () => {
@@ -219,7 +83,6 @@ describe("shell workspace state", () => {
     expect(workspace.getSnapshot()).toEqual({
       activeMode: "compress",
       operationalStatus: "",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -231,7 +94,6 @@ describe("shell workspace state", () => {
         entryPath: "docs/readme.txt",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });
@@ -241,7 +103,6 @@ describe("shell workspace state", () => {
     expect(workspace.getSnapshot()).toEqual({
       activeMode: "compress",
       operationalStatus: "",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -253,7 +114,6 @@ describe("shell workspace state", () => {
         entryPath: "",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });
@@ -518,7 +378,6 @@ describe("shell workspace state", () => {
     expect(snapshot).toEqual({
       activeMode: "extract",
       operationalStatus: "Ready",
-      jobDrawerOpen: false,
       dropOverlay: {
         mode: "idle",
         copy: null,
@@ -530,7 +389,6 @@ describe("shell workspace state", () => {
         entryPath: "docs/readme.txt",
       },
       quickActionWindow: {
-        mode: "normal",
         shown: false,
       },
     });

@@ -93,13 +93,11 @@ function createController({
   storage = createStorage(),
   monitors = [primaryMonitor],
   isDesktopRuntime = () => true,
-  isQuickActionJobMode = () => false,
 }: {
   fakeWindow?: AppWindowHandle;
   storage?: WindowControllerStorage | null;
   monitors?: WindowMonitorGeometry[];
   isDesktopRuntime?: () => boolean;
-  isQuickActionJobMode?: () => boolean;
 } = {}) {
   return {
     fakeWindow,
@@ -111,7 +109,6 @@ function createController({
       createLogicalPosition: (x, y) => ({ kind: "position", x, y }),
       storage,
       isDesktopRuntime,
-      isQuickActionJobMode,
     }),
   };
 }
@@ -175,32 +172,6 @@ describe("desktop window controller", () => {
       y: 90,
       unit: "logical",
     });
-  });
-
-  it("does not persist quick-action job geometry", async () => {
-    const storage = createStorage();
-    const fakeWindow = createFakeWindow();
-    const { controller } = createController({
-      fakeWindow,
-      storage,
-      isQuickActionJobMode: () => true,
-    });
-
-    await controller.persistCurrentWindowGeometry();
-
-    expect(fakeWindow.innerSize).not.toHaveBeenCalled();
-    expect(storage.values.has(WINDOW_GEOMETRY_KEY)).toBe(false);
-  });
-
-  it("sizes, centers, and shows the focused progress window", async () => {
-    const fakeWindow = createFakeWindow();
-    const { controller } = createController({ fakeWindow });
-
-    await controller.revealProgressWindow();
-
-    expect(fakeWindow.setMinSize).toHaveBeenCalledWith({ kind: "size", width: 540, height: 360 });
-    expect(fakeWindow.setSize).toHaveBeenCalledWith({ kind: "size", width: 620, height: 420 });
-    expect(fakeWindow.calls).toEqual(["unminimize", "setMinSize", "setSize", "center", "show"]);
   });
 
   it("delegates Linux resize dragging to the current window", async () => {

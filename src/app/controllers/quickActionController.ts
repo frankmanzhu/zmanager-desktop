@@ -26,8 +26,6 @@ import {
   type QuickActionPathHelpers,
 } from "../quickActions";
 import type {
-  FocusedJobAutoCloseAction,
-  FocusedJobProgressContext,
   JobOutputAction,
 } from "../workspaces/jobsWorkspace";
 import {
@@ -39,8 +37,6 @@ import {
 export type QuickActionControllerAddJobOptions = Readonly<{
   retryContext?: JobRetryContext;
   focusProgress?: boolean;
-  autoCloseAction?: FocusedJobAutoCloseAction;
-  progressContext?: FocusedJobProgressContext;
   outputActions?: JobOutputAction[];
 }>;
 
@@ -60,9 +56,7 @@ export type QuickActionControllerOptions = Readonly<{
   recordCreateDestination(destination: string): void;
   recordExtractDestination(destination: string): void;
   addJob(response: StartJobResponseDto, options?: QuickActionControllerAddJobOptions): void;
-  createProgressContext(request: StartCreateRequest): FocusedJobProgressContext;
   createOutputActions(request: StartCreateRequest): JobOutputAction[];
-  extractProgressContext(request: StartExtractRequest): FocusedJobProgressContext;
   extractOutputActions(request: StartExtractRequest): JobOutputAction[];
   showCreateWorkspace(): void;
   readCreateSnapshot(): CreateWorkspaceSnapshot;
@@ -171,8 +165,6 @@ export function createQuickActionController(
       options.recordCreateDestination(request.destinationPath);
       options.addJob(response, {
         focusProgress: true,
-        autoCloseAction: "closeWindow",
-        progressContext: options.createProgressContext(request),
         outputActions: options.createOutputActions(request),
       });
       options.setOperationalMessage("quickCreate.started");
@@ -312,8 +304,6 @@ export function createQuickActionController(
               ignoreSymlinks: request.ignoreSymlinks,
             },
             focusProgress: true,
-            autoCloseAction: "closeWindow",
-            progressContext: options.extractProgressContext(request),
             outputActions: options.extractOutputActions(request),
           });
           break;

@@ -51,11 +51,6 @@ import {
   type ExtractWorkspaceOptionPatch,
   type ExtractWorkspaceSnapshot,
 } from "../../app/workspaces/extractWorkspace";
-import {
-  createJobsWorkspace,
-  type FocusedQuickActionProgressSnapshot,
-  type JobListSnapshot,
-} from "../../app/workspaces/jobsWorkspace";
 import type { ZManagerDialogSnapshot } from "../../app/display/dialogSnapshots";
 import {
   createAccountWorkspace,
@@ -107,8 +102,6 @@ export type ZManagerReactSnapshot = Readonly<{
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
   extract: ExtractWorkspaceSnapshot;
-  jobs: JobListSnapshot;
-  quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft: AppPreferences | null;
@@ -283,25 +276,6 @@ export type ZManagerCreateIntent =
       password: string;
     }>;
 
-export type ZManagerJobsIntent =
-  | Readonly<{ type: "openDrawer" }>
-  | Readonly<{ type: "closeDrawer" }>
-  | Readonly<{ type: "poll" }>
-  | Readonly<{ type: "cancel"; jobId: string }>
-  | Readonly<{ type: "pause"; jobId: string }>
-  | Readonly<{ type: "resume"; jobId: string }>
-  | Readonly<{ type: "dismiss"; jobId: string }>
-  | Readonly<{ type: "retryPassword"; jobId: string }>
-  | Readonly<{
-      type: "runOutputAction";
-      jobId: string;
-      actionIndex: number;
-      kind: "open" | "reveal";
-    }>
-  | Readonly<{ type: "backgroundFocused" }>
-  | Readonly<{ type: "toggleQuickActionPause" }>
-  | Readonly<{ type: "cancelFocusedQuickActionJobs" }>;
-
 export type ZManagerDialogIntent =
   | Readonly<{ type: "extract"; mode: ExtractMode }>
   | Readonly<{ type: "extractHere"; mode: ExtractMode }>
@@ -421,7 +395,6 @@ export type ZManagerReactActions = Readonly<{
   setWorkspaceMode(mode: WorkspaceDropMode): void;
   handleArchiveIntent(intent: ZManagerArchiveIntent): void;
   handleCreateIntent(intent: ZManagerCreateIntent): void;
-  handleJobsIntent(intent: ZManagerJobsIntent): void;
   handleAccountIntent(intent: ZManagerAccountIntent): void;
   handleDialogIntent(intent: ZManagerDialogIntent): void;
   handleDesktopIntent(intent: ZManagerDesktopIntent): void;
@@ -446,8 +419,6 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
   extract?: ExtractWorkspaceSnapshot;
-  jobs: JobListSnapshot;
-  quickActionProgress: FocusedQuickActionProgressSnapshot;
   systemIcons?: Readonly<Record<string, string | null>>;
   preferences: AppPreferences;
   preferencesDraft?: AppPreferences | null;
@@ -467,7 +438,6 @@ export const noopZManagerReactActions: ZManagerReactActions = Object.freeze({
   setWorkspaceMode() {},
   handleArchiveIntent() {},
   handleCreateIntent() {},
-  handleJobsIntent() {},
   handleAccountIntent() {},
   handleDialogIntent() {},
   handleDesktopIntent() {},
@@ -509,8 +479,6 @@ export function createZManagerReactSnapshot(
     archive: input.archive,
     create: input.create,
     extract: { ...(input.extract ?? createExtractWorkspace().getSnapshot()) },
-    jobs: input.jobs,
-    quickActionProgress: input.quickActionProgress,
     systemIcons: { ...(input.systemIcons ?? {}) },
     preferences: cloneAppPreferencesSnapshot(input.preferences),
     preferencesDraft: input.preferencesDraft
@@ -552,19 +520,14 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
   });
   const createWorkspace = createCreateWorkspace();
   const extractWorkspace = createExtractWorkspace();
-  const jobsWorkspace = createJobsWorkspace();
   const archive = archiveWorkspace.getSnapshot();
   const display = createDisplayContext(DEFAULT_APP_PREFERENCES.locale);
-  const nowMs = 0;
 
   return createZManagerReactSnapshot({
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
     extract: extractWorkspace.getSnapshot(),
-    jobs: jobsWorkspace.getJobListSnapshot(nowMs),
-    quickActionProgress:
-      jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     preferences: DEFAULT_APP_PREFERENCES,
     pathHistory: createPathHistoryStore(null).getSnapshot(),
     display: displaySnapshotFromContext(display),

@@ -51,7 +51,6 @@ function recordingEffects(log: string[]): CommandRouterEffects {
     about: () => record("about"),
     toggleFlatView: () => record("toggleFlatView"),
     deleteTempFiles: () => record("deleteTempFiles"),
-    jobs: () => record("jobs"),
     reportDisabled: (commandId, reason) => record(`disabled:${commandId}:${reason ?? ""}`),
     reportUnsupported: (commandId, reason) => record(`unsupported:${commandId}:${reason}`),
   };

@@ -3,7 +3,7 @@ import type { JobOutputAction } from "../app/workspaces/jobsWorkspace";
 import type { ArchiveFixture } from "./runtimeArchiveFixtures";
 import { localDevArchiveFixture } from "./runtimeArchiveFixtures";
 
-export type RuntimeDevDialogName = "about" | "preferences" | "info" | "jobs";
+export type RuntimeDevDialogName = "about" | "preferences" | "info";
 export type RuntimeDevJobFixture = JobState & {
   outputActions?: JobOutputAction[];
 };
@@ -24,7 +24,6 @@ export type RuntimeDevToolsOptions = Readonly<{
   isDev: boolean;
   windowRef: RuntimeDevWindow;
   normalWorkspaceRendered(): boolean;
-  isQuickActionJobMode(): boolean;
   api: RuntimeDevApi;
 }>;
 
@@ -50,8 +49,7 @@ export function installRuntimeDevTools(options: RuntimeDevToolsOptions): boolean
 export function loadLocalDevFixtureFromUrl(options: RuntimeDevToolsOptions): boolean {
   if (
     !isLocalDevHost(options.isDev, options.windowRef.location.hostname) ||
-    !options.normalWorkspaceRendered() ||
-    options.isQuickActionJobMode()
+    !options.normalWorkspaceRendered()
   ) {
     return false;
   }

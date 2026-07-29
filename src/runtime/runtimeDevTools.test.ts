@@ -67,7 +67,6 @@ function createOptions(
     isDev: true,
     windowRef,
     normalWorkspaceRendered: () => input.normalWorkspaceRendered ?? true,
-    isQuickActionJobMode: () => false,
     api: {
       loadArchiveFixture: vi.fn(),
       setSystemIconFixtures: vi.fn(),

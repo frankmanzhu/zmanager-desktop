@@ -8,18 +8,8 @@ export interface TimerClock {
 }
 
 export interface AppTimerOptions {
-  quickActionAutoCloseDelayMs: number;
   createPlanDebounceMs: number;
-  progressClockIntervalMs?: number;
   clock?: TimerClock;
-}
-
-export interface JobTimerAdapter {
-  hasQuickActionAutoClosePending(): boolean;
-  clearQuickActionAutoClose(): void;
-  scheduleQuickActionAutoClose(callback: () => void): void;
-  startProgressClock(callback: () => void): void;
-  stopProgressClock(): void;
 }
 
 export interface DebounceTimerAdapter {
@@ -34,7 +24,6 @@ export interface OneShotTimerAdapter {
 }
 
 export interface AppTimers {
-  jobs: JobTimerAdapter;
   createPlanDebounce: DebounceTimerAdapter;
   uiDeferrals: OneShotTimerAdapter;
 }
@@ -54,7 +43,6 @@ function createDebounceTimer(clock: TimerClock, delayMs: number): DebounceTimerA
     if (timer === null) {
       return;
     }
-
     clock.clearTimeout(timer);
     timer = null;
   };
@@ -87,45 +75,8 @@ function createOneShotTimer(clock: TimerClock): OneShotTimerAdapter {
 
 export function createAppTimers(options: AppTimerOptions): AppTimers {
   const clock = options.clock ?? browserTimerClock();
-  const progressClockIntervalMs = options.progressClockIntervalMs ?? 1000;
-  let progressClockTimer: TimerHandle | null = null;
-  let quickActionAutoCloseTimer: TimerHandle | null = null;
 
   return {
-    jobs: {
-      hasQuickActionAutoClosePending(): boolean {
-        return quickActionAutoCloseTimer !== null;
-      },
-      clearQuickActionAutoClose(): void {
-        if (quickActionAutoCloseTimer === null) {
-          return;
-        }
-
-        clock.clearTimeout(quickActionAutoCloseTimer);
-        quickActionAutoCloseTimer = null;
-      },
-      scheduleQuickActionAutoClose(callback: () => void): void {
-        quickActionAutoCloseTimer = clock.setTimeout(() => {
-          quickActionAutoCloseTimer = null;
-          callback();
-        }, options.quickActionAutoCloseDelayMs);
-      },
-      startProgressClock(callback: () => void): void {
-        if (progressClockTimer !== null) {
-          return;
-        }
-
-        progressClockTimer = clock.setInterval(callback, progressClockIntervalMs);
-      },
-      stopProgressClock(): void {
-        if (progressClockTimer === null) {
-          return;
-        }
-
-        clock.clearInterval(progressClockTimer);
-        progressClockTimer = null;
-      },
-    },
     createPlanDebounce: createDebounceTimer(clock, options.createPlanDebounceMs),
     uiDeferrals: createOneShotTimer(clock),
   };

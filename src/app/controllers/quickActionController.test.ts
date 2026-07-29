@@ -136,26 +136,8 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     addJob(response, options) {
       calls.jobs.push({ response, options });
     },
-    createProgressContext(request) {
-      return {
-        kind: "create",
-        sources: request.sources,
-        destinationPath: request.destinationPath,
-        format: request.format,
-        cleanSource: request.cleanSource,
-      };
-    },
     createOutputActions(request) {
       return [{ kind: "reveal", path: request.destinationPath }];
-    },
-    extractProgressContext(request) {
-      return {
-        kind: "extract",
-        title: "archive",
-        archivePath: request.archivePath,
-        destinationPath: request.destinationPath,
-        overwrite: request.overwrite,
-      };
     },
     extractOutputActions(request) {
       return [{ kind: "open", path: request.destinationPath }];
@@ -266,7 +248,6 @@ describe("quick action controller", () => {
     expect(harness.calls.jobs[0]).toMatchObject({
       options: {
         focusProgress: true,
-        autoCloseAction: "closeWindow",
         outputActions: [{ kind: "reveal", path: "C:/work/report.txt.zip" }],
       },
     });
@@ -460,7 +441,6 @@ describe("quick action controller", () => {
           ignoreSymlinks: false,
         },
         focusProgress: true,
-        autoCloseAction: "closeWindow",
         outputActions: [{ kind: "open", path: "C:/archives/demo" }],
       },
     });

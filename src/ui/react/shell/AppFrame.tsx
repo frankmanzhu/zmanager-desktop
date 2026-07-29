@@ -34,12 +34,10 @@ export function AppFrame({
 
   return (
     <main
-      className="flex h-screen min-h-screen min-w-[320px] flex-col overflow-hidden bg-slate-100 text-[13px] leading-[1.35] text-slate-950 [font-family:'Segoe_UI',system-ui,-apple-system,BlinkMacSystemFont,Ubuntu,Cantarell,'Noto_Sans',Arial,sans-serif] dark:bg-slate-950 dark:text-slate-50 data-[quick-action-mode=job-only]:[&>[data-shell-chrome]:not([data-shell-chrome=title])]:hidden"
-      data-job-drawer={snapshot.shell.jobDrawerOpen ? "open" : "closed"}
+      className="flex h-screen min-h-screen min-w-[320px] flex-col overflow-hidden bg-slate-100 text-[13px] leading-[1.35] text-slate-950 [font-family:'Segoe_UI',system-ui,-apple-system,BlinkMacSystemFont,Ubuntu,Cantarell,'Noto_Sans',Arial,sans-serif] dark:bg-slate-950 dark:text-slate-50"
       data-mode={runtimeBridgeReady ? snapshot.shell.activeMode : undefined}
       data-drop-state={snapshot.shell.dropOverlay.mode}
       data-drop-target={snapshot.shell.dropOverlay.copy?.target}
-      data-quick-action-mode={quickActionModeAttribute(snapshot)}
     >
       <TitleBar />
       <WindowResizeHandles />
@@ -49,18 +47,6 @@ export function AppFrame({
       <StatusBar />
     </main>
   );
-}
-
-function quickActionModeAttribute(
-  snapshot: ZManagerReactSnapshot,
-): string | undefined {
-  switch (snapshot.shell.quickActionWindow.mode) {
-    case "jobOnly":
-    case "background":
-      return "job-only";
-    case "normal":
-      return undefined;
-  }
 }
 
 function WindowResizeHandles() {

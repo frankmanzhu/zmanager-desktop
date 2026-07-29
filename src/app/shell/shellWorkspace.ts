@@ -1,11 +1,7 @@
 import type { DropIntentDecision, WorkspaceDropMode } from "../dropIntent";
-import type { QuickActionRequestDto, QuickActionStartupStateDto } from "../../api/types";
-import { quickActionWindowDisposition } from "../quickActions";
 
 export type DropOverlayMode = "idle" | "active" | "choosing";
 export type DropOverlayTarget = "compress" | "extract" | "choose" | "blocked" | "unknown";
-export type QuickActionWindowMode = "normal" | "jobOnly" | "background";
-export type QuickActionStartupRevealTarget = "normal" | "jobOnly";
 export type DropOverlayMessageKey =
   | "drop.addSources.copyMessage"
   | "drop.addSources.title"
@@ -46,14 +42,12 @@ export interface PreviewCleanupMetadata {
 }
 
 export interface QuickActionWindowSnapshot {
-  readonly mode: QuickActionWindowMode;
   readonly shown: boolean;
 }
 
 export interface ShellWorkspaceSnapshot {
   readonly activeMode: WorkspaceDropMode;
   readonly operationalStatus: string;
-  readonly jobDrawerOpen: boolean;
   readonly dropOverlay: DropOverlaySnapshot;
   readonly previewCleanup: PreviewCleanupMetadata;
   readonly quickActionWindow: QuickActionWindowSnapshot;
@@ -63,12 +57,7 @@ export interface ShellWorkspace {
   getSnapshot(): ShellWorkspaceSnapshot;
   setWorkspaceMode(mode: WorkspaceDropMode): ShellWorkspaceSnapshot;
   setOperationalStatus(message: string): ShellWorkspaceSnapshot;
-  setJobDrawerOpen(open: boolean): ShellWorkspaceSnapshot;
-  setQuickActionWindowMode(mode: QuickActionWindowMode): ShellWorkspaceSnapshot;
   setQuickActionWindowShown(shown: boolean): ShellWorkspaceSnapshot;
-  isQuickActionJobMode(): boolean;
-  isQuickActionWindowBackgrounded(): boolean;
-  selectQuickActionStartupRevealTarget(state: QuickActionStartupStateDto): QuickActionStartupRevealTarget;
   setDropOverlay(mode: DropOverlayMode, copy?: DropOverlayCopy): ShellWorkspaceSnapshot;
   setDropOverlayChoice(choice: PendingDropChoice, copy: DropOverlayCopy): ShellWorkspaceSnapshot;
   clearDropOverlay(): ShellWorkspaceSnapshot;
@@ -127,30 +116,19 @@ function freezePendingDropChoice(choice: PendingDropChoice): PendingDropChoice {
   });
 }
 
-function isJobOnlyQuickActionRequest(request?: QuickActionRequestDto | null): boolean {
-  return Boolean(request && quickActionWindowDisposition(request.kind) === "disposableTask");
-}
-
-function hasQuickActionJobs(state: QuickActionStartupStateDto): boolean {
-  return Boolean(state.quickActionJobs?.length);
-}
-
 export function createShellWorkspace(): ShellWorkspace {
   let activeMode: WorkspaceDropMode = "compress";
   let operationalStatus = "";
-  let jobDrawerOpen = false;
   let dropOverlayMode: DropOverlayMode = "idle";
   let dropOverlayCopy: DropOverlayCopy | null = null;
   let pendingDropChoice: PendingDropChoice | null = null;
   let previewCleanup = createEmptyPreviewCleanupMetadata();
-  let quickActionWindowMode: QuickActionWindowMode = "normal";
   let quickActionWindowShown = false;
 
   function getSnapshot(): ShellWorkspaceSnapshot {
     return Object.freeze({
       activeMode,
       operationalStatus,
-      jobDrawerOpen,
       dropOverlay: Object.freeze({
         mode: dropOverlayMode,
         copy: dropOverlayCopy ? freezeDropOverlayCopy(dropOverlayCopy) : null,
@@ -158,7 +136,6 @@ export function createShellWorkspace(): ShellWorkspace {
       }),
       previewCleanup: Object.freeze({ ...previewCleanup }),
       quickActionWindow: Object.freeze({
-        mode: quickActionWindowMode,
         shown: quickActionWindowShown,
       }),
     });
@@ -177,41 +154,9 @@ export function createShellWorkspace(): ShellWorkspace {
       return getSnapshot();
     },
 
-    setJobDrawerOpen(open) {
-      jobDrawerOpen = open;
-      return getSnapshot();
-    },
-
-    setQuickActionWindowMode(mode) {
-      quickActionWindowMode = mode;
-      return getSnapshot();
-    },
-
     setQuickActionWindowShown(shown) {
       quickActionWindowShown = shown;
       return getSnapshot();
-    },
-
-    isQuickActionJobMode() {
-      return quickActionWindowMode === "jobOnly" || quickActionWindowMode === "background";
-    },
-
-    isQuickActionWindowBackgrounded() {
-      return quickActionWindowMode === "background";
-    },
-
-    selectQuickActionStartupRevealTarget(state) {
-      if (
-        state.launchedForQuickAction &&
-        !state.error &&
-        (state.windowDisposition === "disposableTask"
-          || (state.windowDisposition == null
-            && (!state.quickAction || hasQuickActionJobs(state) || isJobOnlyQuickActionRequest(state.quickAction))))
-      ) {
-        return "jobOnly";
-      }
-
-      return "normal";
     },
 
     setDropOverlay(mode, copy) {
@@ -261,7 +206,6 @@ export function createShellWorkspace(): ShellWorkspace {
       if (previewCleanup.entryPath !== entryPath || !previewCleanup.previewPath) {
         return null;
       }
-
       return previewCleanup.previewPath;
     },
   };

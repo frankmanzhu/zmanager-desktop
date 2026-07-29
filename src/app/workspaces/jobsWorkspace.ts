@@ -4,49 +4,21 @@ import type {
   JobState,
   JobStatus,
   BaseJobSnapshotDto,
-  StartCreateRequest,
-  StartExtractRequest,
   StartJobResponseDto,
 } from "../../api/types";
 import {
   canRetryJobWithPassword,
   createInitialJobState,
-  deriveJobProgress,
   getLatestPasswordFailureEvent,
-  isCreateJobKind,
   isLiveJobStatus,
-  isTerminalJobStatus,
   applyJobSnapshot,
-  selectQuickActionJobCompletionDecision,
-  type JobProgressSnapshot,
   type JobRetryContext,
-  type QuickActionJobCompletionDecision,
 } from "../jobs";
 
 export type JobOutputAction = {
   kind: "open" | "reveal";
   path: string;
 };
-
-export type FocusedJobAutoCloseAction = "closeWindow" | "returnToWorkspace";
-
-export type FocusedJobProgressContext =
-  | {
-      kind: "create";
-      sources: readonly string[];
-      destinationPath: string;
-      format: StartCreateRequest["format"];
-      cleanSource: boolean;
-      tzapRecoveryPercentage?: number;
-    }
-  | {
-      kind: "extract";
-      title: "archive" | "selection";
-      archivePath: string;
-      destinationPath: string;
-      overwrite: StartExtractRequest["overwrite"];
-      entryPaths?: readonly string[];
-    };
 
 export type AddJobStateOptions = {
   retryContext?: JobRetryContext;
@@ -59,87 +31,6 @@ export type JobPasswordRetryDetails = {
   failure: JobEventDto;
 };
 
-export type JobOutputActionLookup = {
-  jobId?: string;
-  index?: number;
-  kind?: string;
-};
-
-export type JobOutputActionResolution =
-  | {
-      action: "ready";
-      outputAction: JobOutputAction;
-    }
-  | {
-      action: "unavailable";
-    };
-
-export type QuickActionCompletionOptions = {
-  canEvaluate: boolean;
-  autoClosePending: boolean;
-};
-
-export type ProgressClockSnapshot = {
-  shouldRun: boolean;
-};
-
-export type JobListItemSnapshot = {
-  jobId: string;
-  kind: JobState["snapshot"]["kind"];
-  status: JobState["snapshot"]["status"];
-  canDismiss: boolean;
-  events: readonly JobEventDto[];
-  terminalSummary: JobState["snapshot"]["terminalSummary"];
-  state: JobState;
-  progress: JobProgressSnapshot;
-  isTerminal: boolean;
-  completedSizeLabelKey: "jobs.summary.archiveSize" | "jobs.summary.outputSize";
-  canRetryPassword: boolean;
-  readyOutputActions: readonly JobOutputAction[];
-};
-
-export type JobListSnapshot = {
-  jobs: readonly JobListItemSnapshot[];
-  activeJob:
-    | {
-        kind: JobState["snapshot"]["kind"];
-        status: JobState["snapshot"]["status"];
-      }
-    | null;
-  progressClock: ProgressClockSnapshot;
-};
-
-export type FocusedQuickActionProgressSnapshot =
-  | {
-      state: "empty";
-      progressClock: ProgressClockSnapshot;
-    }
-  | {
-      state: "tracking";
-      jobCount: number;
-      latestJob: {
-        jobId: string;
-        kind: JobState["snapshot"]["kind"];
-        status: JobState["snapshot"]["status"];
-      };
-      latestContext?: FocusedJobProgressContext;
-      allTerminal: boolean;
-      allCompleted: boolean;
-      anyActive: boolean;
-      anyPaused: boolean;
-      elapsedMs: number;
-      remainingMs: number | null;
-      processedFiles: number;
-      totalFiles: number | null;
-      processedBytes: number;
-      totalBytes: number | null;
-      compressedBytes: number | null;
-      speedBytesPerSecond: number | null;
-      progressPercent: number | null;
-      currentFile: string;
-      progressClock: ProgressClockSnapshot;
-    };
-
 export type JobsWorkspace = {
   hasJob(jobId: string): boolean;
   getJob(jobId: string): JobState | undefined;
@@ -147,14 +38,8 @@ export type JobsWorkspace = {
   getJobsMap(): Map<string, JobState>;
   hasJobs(): boolean;
   hasActiveJob(): boolean;
-  getProgressClockSnapshot(): ProgressClockSnapshot;
-  getJobListSnapshot(nowMs: number): JobListSnapshot;
   getRetryContext(jobId: string): JobRetryContext | undefined;
   getOutputActions(jobId: string): readonly JobOutputAction[];
-  getReadyOutputActions(jobId: string): readonly JobOutputAction[];
-  getOutputAction(
-    lookup: JobOutputActionLookup,
-  ): JobOutputActionResolution;
   canRetryJobWithPassword(jobId: string, state?: JobState): boolean;
   getPasswordRetryDetails(jobId: string): JobPasswordRetryDetails | null;
   markPasswordRetryPromptedIfEligible(jobId: string): boolean;
@@ -165,25 +50,6 @@ export type JobsWorkspace = {
   updateJobStatus(jobId: string, status: JobStatus): JobState | null;
   removeJob(jobId: string): boolean;
   clear(): void;
-  setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction): void;
-  getFocusedJobAutoCloseAction(): FocusedJobAutoCloseAction;
-  trackFocusedQuickActionJob(jobId: string, context?: FocusedJobProgressContext): void;
-  clearFocusedQuickActionJobs(): void;
-  resetFocusedQuickActionProgress(): void;
-  getFocusedQuickActionJobIds(): readonly string[];
-  getFocusedQuickActionJobs(): readonly JobState[];
-  getFocusedQuickActionProgressContext(jobId: string): FocusedJobProgressContext | undefined;
-  getFocusedQuickActionProgressSnapshot(nowMs: number): FocusedQuickActionProgressSnapshot;
-  getControllableFocusedQuickActionJobIds(): readonly string[];
-  selectFocusedQuickActionCompletion(
-    options: QuickActionCompletionOptions,
-  ): QuickActionJobCompletionDecision;
-  replaceJobs(fixtures: readonly JobFixtureInput[]): void;
-};
-
-export type JobFixtureInput = JobState & {
-  outputActions?: readonly JobOutputAction[];
-  retryContext?: JobRetryContext;
 };
 
 function cloneJobEvent(event: JobEventDto): JobEventDto {
@@ -223,7 +89,6 @@ function cloneRetryContext(context: JobRetryContext): JobRetryContext {
       entryPaths: context.entryPaths ? [...context.entryPaths] : undefined,
     };
   }
-
   return {
     ...context,
     entryPaths: context.entryPaths ? [...context.entryPaths] : undefined,
@@ -267,138 +132,16 @@ function retainedOutputActions(snapshot: DesktopJobSnapshotDto): JobOutputAction
   });
 }
 
-function cloneFocusedProgressContext(
-  context: FocusedJobProgressContext,
-): FocusedJobProgressContext {
-  if (context.kind === "create") {
-    return {
-      ...context,
-      sources: [...context.sources],
-    };
-  }
-
-  return {
-    ...context,
-    entryPaths: context.entryPaths ? [...context.entryPaths] : undefined,
-  };
-}
-
-function sortedJobStates(jobs: Iterable<JobState>): JobState[] {
-  return Array.from(jobs).sort((a, b) => b.snapshot.createdAt.localeCompare(a.snapshot.createdAt));
-}
-
-function activeJobFrom(jobs: readonly JobState[]): JobListSnapshot["activeJob"] {
-  const active = jobs.find((state) => isLiveJobStatus(state.snapshot.status)) ?? jobs[0];
-
-  if (!active) {
-    return null;
-  }
-
-  return {
-    kind: active.snapshot.kind,
-    status: active.snapshot.status,
-  };
-}
-
-function progressClockSnapshot(jobs: Iterable<JobState>): ProgressClockSnapshot {
-  return {
-    shouldRun: Array.from(jobs).some((state) => isLiveJobStatus(state.snapshot.status)),
-  };
-}
-
-function readyOutputActionsFor(
-  job: JobState | undefined,
-  actions: readonly JobOutputAction[] | undefined,
-): JobOutputAction[] {
-  if (!job || job.snapshot.status !== "completed") {
-    return [];
-  }
-
-  return (actions ?? [])
-    .filter((action) => (action.kind === "open" || action.kind === "reveal") && Boolean(action.path))
-    .map(cloneOutputAction);
-}
-
-function aggregateFocusedQuickActionProgress(
-  trackedJobs: readonly JobState[],
-  progressSnapshots: readonly JobProgressSnapshot[],
-): Omit<Extract<FocusedQuickActionProgressSnapshot, { state: "tracking" }>, "state" | "latestJob" | "latestContext" | "progressClock" | "jobCount"> {
-  const allTerminal = trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status));
-  const allCompleted = trackedJobs.every((job) => job.snapshot.status === "completed");
-  const anyActive = trackedJobs.some((job) => isLiveJobStatus(job.snapshot.status));
-  const anyPaused = trackedJobs.some((job) => job.snapshot.status === "paused");
-  const elapsedMs = Math.max(...progressSnapshots.map((progress) => progress.elapsedMs), 0);
-  const processedBytes = progressSnapshots.reduce((total, progress) => total + progress.processedBytes, 0);
-  const totalBytes = progressSnapshots.every((progress) => progress.totalBytes !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.totalBytes ?? 0), 0)
-    : null;
-  const processedFiles = progressSnapshots.reduce((total, progress) => total + progress.processedFiles, 0);
-  const totalFiles = progressSnapshots.every((progress) => progress.totalFiles !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.totalFiles ?? 0), 0)
-    : null;
-  const compressedBytes = progressSnapshots.every((progress) => progress.compressedBytes !== null)
-    ? progressSnapshots.reduce((total, progress) => total + (progress.compressedBytes ?? 0), 0)
-    : null;
-  const remainingMs = progressSnapshots.every((progress) => progress.remainingMs !== null)
-    ? Math.max(...progressSnapshots.map((progress) => progress.remainingMs ?? 0), 0)
-    : null;
-  const speedBytesPerSecond = elapsedMs > 0 && processedBytes > 0
-    ? processedBytes / (elapsedMs / 1000)
-    : null;
-  const progressPercent = allTerminal && allCompleted
-    ? 100
-    : progressSnapshots.every((progress) => progress.progressPercent !== null)
-      ? weightedProgressPercent(progressSnapshots)
-      : null;
-  const latestProgress = progressSnapshots.at(-1);
-
-  return {
-    allTerminal,
-    allCompleted,
-    anyActive,
-    anyPaused,
-    elapsedMs,
-    remainingMs,
-    processedFiles,
-    totalFiles,
-    processedBytes,
-    totalBytes,
-    compressedBytes,
-    speedBytesPerSecond,
-    progressPercent,
-    currentFile: latestProgress?.currentFile || latestProgress?.latestStatusMessage || "",
-  };
-}
-
-function weightedProgressPercent(progressSnapshots: readonly JobProgressSnapshot[]): number {
-  const totalWeight = progressSnapshots.reduce(
-    (total, progress) => total + (progress.totalBytes && progress.totalBytes > 0 ? progress.totalBytes : 1),
-    0,
-  );
-  if (totalWeight <= 0) {
-    return 0;
-  }
-  return progressSnapshots.reduce((total, progress) => {
-    const weight = progress.totalBytes && progress.totalBytes > 0 ? progress.totalBytes : 1;
-    return total + ((progress.progressPercent ?? 0) * weight);
-  }, 0) / totalWeight;
-}
-
 export function createJobsWorkspace(): JobsWorkspace {
   const jobs = new Map<string, JobState>();
   const retryContexts = new Map<string, JobRetryContext>();
   const outputActions = new Map<string, JobOutputAction[]>();
   const promptedPasswordRetryJobs = new Set<string>();
-  const focusedQuickActionJobIds = new Set<string>();
-  const focusedJobProgressContexts = new Map<string, FocusedJobProgressContext>();
-  let focusedJobAutoCloseAction: FocusedJobAutoCloseAction = "closeWindow";
 
   function clearJobMetadata(jobId: string) {
     retryContexts.delete(jobId);
     outputActions.delete(jobId);
     promptedPasswordRetryJobs.delete(jobId);
-    focusedQuickActionJobIds.delete(jobId);
-    focusedJobProgressContexts.delete(jobId);
   }
 
   function setOutputActions(jobId: string, actions: readonly JobOutputAction[] | undefined) {
@@ -418,9 +161,6 @@ export function createJobsWorkspace(): JobsWorkspace {
     retryContexts.clear();
     outputActions.clear();
     promptedPasswordRetryJobs.clear();
-    focusedQuickActionJobIds.clear();
-    focusedJobProgressContexts.clear();
-    focusedJobAutoCloseAction = "closeWindow";
   }
 
   return {
@@ -451,38 +191,6 @@ export function createJobsWorkspace(): JobsWorkspace {
       return Array.from(jobs.values()).some((state) => isLiveJobStatus(state.snapshot.status));
     },
 
-    getProgressClockSnapshot() {
-      return progressClockSnapshot(jobs.values());
-    },
-
-    getJobListSnapshot(nowMs) {
-      const sortedJobs = sortedJobStates(jobs.values());
-      return {
-        jobs: sortedJobs.map((state) => {
-          const clonedState = cloneJobState(state);
-          const snapshot = clonedState.snapshot;
-          return {
-            jobId: snapshot.jobId,
-            kind: snapshot.kind,
-            status: snapshot.status,
-            canDismiss: snapshot.canDismiss,
-            events: clonedState.events,
-            terminalSummary: snapshot.terminalSummary,
-            state: clonedState,
-            progress: deriveJobProgress(state, nowMs),
-            isTerminal: isTerminalJobStatus(snapshot.status),
-            completedSizeLabelKey: isCreateJobKind(snapshot.kind)
-              ? "jobs.summary.archiveSize"
-              : "jobs.summary.outputSize",
-            canRetryPassword: canRetryJob(snapshot.jobId, state),
-            readyOutputActions: readyOutputActionsFor(state, outputActions.get(snapshot.jobId)),
-          };
-        }),
-        activeJob: activeJobFrom(sortedJobs),
-        progressClock: progressClockSnapshot(sortedJobs),
-      };
-    },
-
     getRetryContext(jobId) {
       const context = retryContexts.get(jobId);
       return context ? cloneRetryContext(context) : undefined;
@@ -490,31 +198,6 @@ export function createJobsWorkspace(): JobsWorkspace {
 
     getOutputActions(jobId) {
       return (outputActions.get(jobId) ?? []).map(cloneOutputAction);
-    },
-
-    getReadyOutputActions(jobId) {
-      return readyOutputActionsFor(jobs.get(jobId), outputActions.get(jobId));
-    },
-
-    getOutputAction(lookup) {
-      if (
-        !lookup.jobId ||
-        !Number.isInteger(lookup.index) ||
-        (lookup.kind !== "open" && lookup.kind !== "reveal")
-      ) {
-        return { action: "unavailable" };
-      }
-
-      const readyActions = readyOutputActionsFor(jobs.get(lookup.jobId), outputActions.get(lookup.jobId));
-      const outputAction = readyActions[lookup.index ?? -1];
-      if (!outputAction || outputAction.kind !== lookup.kind || !outputAction.path) {
-        return { action: "unavailable" };
-      }
-
-      return {
-        action: "ready",
-        outputAction,
-      };
     },
 
     canRetryJobWithPassword(jobId, state = jobs.get(jobId)) {
@@ -527,12 +210,10 @@ export function createJobsWorkspace(): JobsWorkspace {
       if (!state || !context) {
         return null;
       }
-
       const failure = getLatestPasswordFailureEvent(state);
       if (!failure) {
         return null;
       }
-
       return {
         state: cloneJobState(state),
         context: cloneRetryContext(context),
@@ -544,7 +225,6 @@ export function createJobsWorkspace(): JobsWorkspace {
       if (promptedPasswordRetryJobs.has(jobId) || !canRetryJob(jobId)) {
         return false;
       }
-
       promptedPasswordRetryJobs.add(jobId);
       return true;
     },
@@ -552,7 +232,6 @@ export function createJobsWorkspace(): JobsWorkspace {
     addJob(response, options = {}) {
       const state = createInitialJobState(response);
       jobs.set(response.jobId, state);
-
       if (options.retryContext) {
         retryContexts.set(response.jobId, cloneRetryContext(options.retryContext));
       } else {
@@ -560,7 +239,6 @@ export function createJobsWorkspace(): JobsWorkspace {
       }
       setOutputActions(response.jobId, options.outputActions);
       promptedPasswordRetryJobs.delete(response.jobId);
-
       return cloneJobState(state);
     },
 
@@ -591,18 +269,10 @@ export function createJobsWorkspace(): JobsWorkspace {
 
     markJobFailed(jobId, event) {
       const state = jobs.get(jobId);
-      if (!state) {
-        return null;
-      }
-
+      if (!state) return null;
       const failedEvent = cloneJobEvent(event);
       const failedState: JobState = {
-        snapshot: {
-          ...state.snapshot,
-          status: "failed",
-          canDismiss: true,
-          events: [failedEvent],
-        },
+        snapshot: { ...state.snapshot, status: "failed", canDismiss: true, events: [failedEvent] },
         events: [...state.events, failedEvent],
       };
       jobs.set(jobId, failedState);
@@ -611,17 +281,8 @@ export function createJobsWorkspace(): JobsWorkspace {
 
     updateJobStatus(jobId, status) {
       const state = jobs.get(jobId);
-      if (!state) {
-        return null;
-      }
-
-      const updated = {
-        ...state,
-        snapshot: {
-          ...state.snapshot,
-          status,
-        },
-      };
+      if (!state) return null;
+      const updated = { ...state, snapshot: { ...state.snapshot, status } };
       jobs.set(jobId, updated);
       return cloneJobState(updated);
     },
@@ -634,107 +295,6 @@ export function createJobsWorkspace(): JobsWorkspace {
 
     clear() {
       clear();
-    },
-
-    setFocusedJobAutoCloseAction(action) {
-      focusedJobAutoCloseAction = action;
-    },
-
-    getFocusedJobAutoCloseAction() {
-      return focusedJobAutoCloseAction;
-    },
-
-    trackFocusedQuickActionJob(jobId, context) {
-      focusedQuickActionJobIds.add(jobId);
-      if (context) {
-        focusedJobProgressContexts.set(jobId, cloneFocusedProgressContext(context));
-      } else {
-        focusedJobProgressContexts.delete(jobId);
-      }
-    },
-
-    clearFocusedQuickActionJobs() {
-      focusedQuickActionJobIds.clear();
-      focusedJobProgressContexts.clear();
-    },
-
-    resetFocusedQuickActionProgress() {
-      focusedQuickActionJobIds.clear();
-      focusedJobProgressContexts.clear();
-      focusedJobAutoCloseAction = "closeWindow";
-    },
-
-    getFocusedQuickActionJobIds() {
-      return [...focusedQuickActionJobIds];
-    },
-
-    getFocusedQuickActionJobs() {
-      return Array.from(focusedQuickActionJobIds, (jobId) => jobs.get(jobId)).filter(
-        (job): job is JobState => Boolean(job),
-      ).map(cloneJobState);
-    },
-
-    getFocusedQuickActionProgressContext(jobId) {
-      const context = focusedJobProgressContexts.get(jobId);
-      return context ? cloneFocusedProgressContext(context) : undefined;
-    },
-
-    getFocusedQuickActionProgressSnapshot(nowMs) {
-      const trackedJobs = Array.from(focusedQuickActionJobIds, (jobId) => jobs.get(jobId)).filter(
-        (job): job is JobState => Boolean(job),
-      );
-      const clock = progressClockSnapshot(jobs.values());
-
-      if (!trackedJobs.length) {
-        return {
-          state: "empty",
-          progressClock: clock,
-        };
-      }
-
-      const progressSnapshots = trackedJobs.map((job) => deriveJobProgress(job, nowMs));
-      const latestJob = trackedJobs.at(-1)!;
-      const latestContext = focusedJobProgressContexts.get(latestJob.snapshot.jobId);
-
-      return {
-        state: "tracking",
-        jobCount: trackedJobs.length,
-        latestJob: {
-          jobId: latestJob.snapshot.jobId,
-          kind: latestJob.snapshot.kind,
-          status: latestJob.snapshot.status,
-        },
-        latestContext: latestContext ? cloneFocusedProgressContext(latestContext) : undefined,
-        ...aggregateFocusedQuickActionProgress(trackedJobs, progressSnapshots),
-        progressClock: clock,
-      };
-    },
-
-    getControllableFocusedQuickActionJobIds() {
-      return Array.from(focusedQuickActionJobIds).filter((jobId) => {
-        const state = jobs.get(jobId);
-        return state ? isLiveJobStatus(state.snapshot.status) : false;
-      });
-    },
-
-    selectFocusedQuickActionCompletion(options) {
-      return selectQuickActionJobCompletionDecision({
-        canEvaluate: options.canEvaluate,
-        autoClosePending: options.autoClosePending,
-        trackedJobIds: [...focusedQuickActionJobIds],
-        jobsById: jobs,
-      });
-    },
-
-    replaceJobs(fixtures) {
-      clear();
-      for (const fixture of fixtures) {
-        jobs.set(fixture.snapshot.jobId, cloneJobState(fixture));
-        if (fixture.retryContext) {
-          retryContexts.set(fixture.snapshot.jobId, cloneRetryContext(fixture.retryContext));
-        }
-        setOutputActions(fixture.snapshot.jobId, fixture.outputActions);
-      }
     },
   };
 }

@@ -17,6 +17,7 @@ export type DisposableTaskWindowManagerOptions = Readonly<{
   createWindow?: (label: string, options: Record<string, unknown>) => DisposableTaskWindowHandle;
   onReady(jobId: string): void;
   onAllClosed(): void;
+  onWindowClosed?(jobId: string): void;
   diagnostics?: DiagnosticRecorder;
 }>;
 
@@ -78,6 +79,7 @@ export function createDisposableTaskWindowManager(
       });
       await taskWindow.once<null>("tauri://destroyed", () => {
         windows.delete(job.jobId);
+        options.onWindowClosed?.(job.jobId);
         diagnostics.record({
           scope: "disposableTaskWindow",
           name: "destroyed",
@@ -89,6 +91,7 @@ export function createDisposableTaskWindowManager(
       });
       await taskWindow.once<WindowEvent>("tauri://error", () => {
         windows.delete(job.jobId);
+        options.onWindowClosed?.(job.jobId);
         diagnostics.record({
           scope: "disposableTaskWindow",
           name: "creationFailed",

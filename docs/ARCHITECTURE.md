@@ -47,7 +47,13 @@ Owns long-running job handles, cancellation, event polling, and cleanup. The fro
 
 ### Archive Workspace UI
 
-Owns the main tabs: Browse, Create, Jobs, Settings. It renders state and dispatches Tauri commands.
+Owns the main workspace modes: Browse and Create. It renders state and
+dispatches Tauri commands. Long-running compress and extract operations
+open a Disposable Task Window — a separate OS window (620×460) that shows
+live progress, handles pause/cancel, and auto-closes on completion. There is
+no job drawer, no shared job history, and no in-workspace progress overlay.
+Each operation is an independent fire-and-forget unit, like 7-Zip's 7zG.exe.
+See [`adr/0016-pure-7z-job-architecture.md`](adr/0016-pure-7z-job-architecture.md).
 
 User-visible text belongs at the display boundary. Keep internal state, command DTOs,
 job events, and archive behavior language-neutral, then render labels and messages

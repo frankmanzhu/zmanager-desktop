@@ -46,7 +46,6 @@ describe("React AppFrame shell", () => {
     expect(html).not.toContain('id="create-destination-recent"');
     expect(html).not.toContain('id="open-archive"');
     expect(html).not.toContain('id="extract-toolbar"');
-    expect(html).toContain('id="status-job-button"');
     expect(html).not.toContain('id="drop-overlay"');
   });
 

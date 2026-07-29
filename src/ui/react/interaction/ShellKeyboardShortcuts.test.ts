@@ -47,8 +47,6 @@ describe("React shell keyboard shortcut decoder", () => {
       shell: initial.shell,
       archive: initial.archive,
       create: initial.create,
-      jobs: initial.jobs,
-      quickActionProgress: initial.quickActionProgress,
       preferences: initial.preferences,
       preferencesDraft: initial.preferencesDraft,
       pathHistory: initial.pathHistory,

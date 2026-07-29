@@ -22,33 +22,6 @@ describe("browser document adapter", () => {
     expect(adapter.usesManualWindowResize()).toBe(true);
   });
 
-  it("keeps quick action job mode and display metadata behind the adapter", () => {
-    const fakeDocument = createFakeDocument();
-    const adapter = createBrowserDocumentAdapter({
-      documentRef: fakeDocument.documentRef,
-    });
-
-    adapter.setCustomWindowChrome(false);
-    adapter.setNativeMenuBar(false);
-    adapter.setQuickActionJobMode(true);
-    adapter.applyDisplayMetadata({
-      documentLanguage: "zh-CN",
-      documentDirection: "ltr",
-    } as Parameters<typeof adapter.applyDisplayMetadata>[0]);
-    adapter.setQuickActionJobMode(false);
-
-    expect(fakeDocument.toggledClasses).toEqual([
-      ["custom-window-chrome", false],
-      ["manual-window-resize", false],
-      ["native-menu-bar", false],
-      ["quick-action-job-mode", true],
-      ["quick-action-job-mode", false],
-    ]);
-    expect(fakeDocument.documentElement.lang).toBe("zh-CN");
-    expect(fakeDocument.documentElement.dir).toBe("ltr");
-    expect(adapter.usesCustomWindowChrome()).toBe(false);
-    expect(adapter.usesManualWindowResize()).toBe(false);
-  });
 });
 
 function createFakeDocument() {

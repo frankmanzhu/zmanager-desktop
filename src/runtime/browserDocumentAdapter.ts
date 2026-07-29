@@ -23,7 +23,6 @@ export type BrowserDocumentAdapter = Readonly<{
   setCustomWindowChrome(active: boolean): void;
   setNativeMenuBar(active: boolean): void;
   setMacOsOverlayTitleBar(active: boolean): void;
-  setQuickActionJobMode(active: boolean): void;
   applyDisplayMetadata(context: DisplayContextSnapshot): void;
   usesCustomWindowChrome(): boolean;
   usesManualWindowResize(): boolean;
@@ -73,9 +72,6 @@ export function createBrowserDocumentAdapter(
     },
     setMacOsOverlayTitleBar(active) {
       documentRef.body.classList.toggle("macos-overlay-titlebar", active);
-    },
-    setQuickActionJobMode(active) {
-      documentRef.body.classList.toggle("quick-action-job-mode", active);
     },
     applyDisplayMetadata(context) {
       applyDisplayDocumentMetadata(documentRef.documentElement, context);

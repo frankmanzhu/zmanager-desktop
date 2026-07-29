@@ -263,8 +263,6 @@ function createSnapshot(
     },
     archive: initial.archive,
     create: workspace.getSnapshot(),
-    jobs: initial.jobs,
-    quickActionProgress: initial.quickActionProgress,
     systemIcons: iconOptions.systemIcons,
     preferences: {
       ...initial.preferences,

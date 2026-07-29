@@ -120,16 +120,6 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     addJob(response, options) {
       calls.jobs.push({ response, options });
     },
-    progressContext(request, mode) {
-      return {
-        kind: "extract",
-        title: mode === "selection" ? "selection" : "archive",
-        archivePath: request.archivePath,
-        destinationPath: request.destinationPath,
-        overwrite: request.overwrite,
-        entryPaths: request.entryPaths,
-      };
-    },
     outputActions(request) {
       return [{ kind: "open", path: request.destinationPath }];
     },
@@ -190,7 +180,6 @@ describe("extract start controller", () => {
           ignoreSymlinks: false,
         },
         focusProgress: true,
-        autoCloseAction: "returnToWorkspace",
       },
     });
   });
@@ -215,10 +204,6 @@ describe("extract start controller", () => {
     expect(harness.calls.jobs[0]).toMatchObject({
       options: {
         retryContext: {
-          entryPaths: ["docs/readme.txt"],
-        },
-        progressContext: {
-          title: "selection",
           entryPaths: ["docs/readme.txt"],
         },
       },

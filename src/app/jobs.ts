@@ -32,24 +32,6 @@ export type JobRetryContext =
       entryPaths?: string[];
     };
 
-export type QuickActionJobCompletionDecision =
-  | {
-      action: "wait";
-    }
-  | {
-      action: "needsAttention";
-    }
-  | {
-      action: "completed";
-    };
-
-export type SelectQuickActionJobCompletionDecisionInput = {
-  canEvaluate: boolean;
-  autoClosePending: boolean;
-  trackedJobIds: readonly string[];
-  jobsById: ReadonlyMap<string, JobState>;
-};
-
 export function isPasswordErrorCode(code?: string | null): boolean {
   return code === COMMAND_PASSWORD_REQUIRED || code === COMMAND_INVALID_PASSWORD;
 }
@@ -115,37 +97,6 @@ export function applyJobSnapshot(
     },
     events: [...snapshot.events],
   };
-}
-
-export function selectQuickActionJobCompletionDecision(
-  input: SelectQuickActionJobCompletionDecisionInput,
-): QuickActionJobCompletionDecision {
-  if (
-    !input.canEvaluate ||
-    input.autoClosePending ||
-    input.trackedJobIds.length === 0
-  ) {
-    return { action: "wait" };
-  }
-
-  const trackedJobs: JobState[] = [];
-  for (const jobId of input.trackedJobIds) {
-    const job = input.jobsById.get(jobId);
-    if (!job) {
-      return { action: "wait" };
-    }
-    trackedJobs.push(job);
-  }
-
-  if (!trackedJobs.every((job) => isTerminalJobStatus(job.snapshot.status))) {
-    return { action: "wait" };
-  }
-
-  if (!trackedJobs.every((job) => job.snapshot.status === "completed")) {
-    return { action: "needsAttention" };
-  }
-
-  return { action: "completed" };
 }
 
 export type JobProgressSnapshot = {

@@ -58,9 +58,6 @@ import {
   createExtractStartController,
 } from "../app/controllers/extractStartController";
 import {
-  createJobControlController,
-} from "../app/controllers/jobControlController";
-import {
   createQuickActionController,
 } from "../app/controllers/quickActionController";
 import {
@@ -168,6 +165,7 @@ import {
   type NativeDialogOpenOptions,
 } from "../app/dialogs";
 import {
+  buildStartExtractRequest,
   type ExtractMode,
   type ExtractOverwritePolicy,
   type ExtractStartInput,
@@ -199,11 +197,7 @@ import { createDisposableTaskLifecycle } from "../app/shell/disposableTaskLifecy
 import { runInboundQuickAction } from "../app/shell/quickActionLaunchDisposition";
 import {
   createJobsWorkspace,
-  type FocusedJobAutoCloseAction,
-  type FocusedJobProgressContext,
-  type JobListSnapshot,
   type JobOutputAction,
-  type ProgressClockSnapshot,
 } from "../app/workspaces/jobsWorkspace";
 import { createAccountWorkspace } from "../app/workspaces/accountWorkspace";
 import {
@@ -249,7 +243,6 @@ import {
   type ZManagerDesktopIntent,
   type ZManagerDialogIntent,
   type ZManagerDialogSnapshot,
-  type ZManagerJobsIntent,
   type ZManagerKeyboardIntent,
   type ZManagerReactRuntimeAdapter,
   type ZManagerReactSnapshot,
@@ -391,8 +384,6 @@ type CommandSurfaceClassState = Partial<Record<CommandId, {
   primary?: boolean;
   secondary?: boolean;
 }>>;
-const QUICK_ACTION_AUTO_CLOSE_DELAY_MS = 650;
-
 const browserDocument = createBrowserDocumentAdapter({});
 const passwordPromptAdapter = createBrowserPasswordPromptAdapter();
 browserDocument.initializeLayout();
@@ -700,10 +691,8 @@ const createRuntimeActions = createCreateRuntimeActions({
 });
 
 const appTimers = createAppTimers({
-  quickActionAutoCloseDelayMs: QUICK_ACTION_AUTO_CLOSE_DELAY_MS,
   createPlanDebounceMs: 350,
 });
-const jobTimers = appTimers.jobs;
 const createPlanDebounce = appTimers.createPlanDebounce;
 
 function archiveSnapshot(): ArchiveWorkspaceSnapshot {
@@ -760,8 +749,6 @@ const createStartController = createCreateStartController({
     recordCreateDestinationHistory(request.destinationPath);
     addJobState(response, {
       focusProgress: true,
-      autoCloseAction: "returnToWorkspace",
-      progressContext: createJobProgressContext(request),
       outputActions: createJobOutputActions(request),
     });
   },
@@ -773,8 +760,6 @@ const jobSubscriptions = createJobSubscriptionSet(
   (jobId, snapshot) => {
     jobsWorkspace.acceptRetainedSnapshot(snapshot);
     void maybePromptForJobPasswordRetry(jobId);
-    renderJobs();
-    maybeCloseCompletedQuickActionWindow();
   },
   (jobId) => jobsWorkspace.removeJob(jobId),
 );
@@ -789,7 +774,6 @@ async function subscribeToJobCatalog(): Promise<void> {
   catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
     const retained = new Set(catalog.jobs.map((job) => job.jobId));
     jobSubscriptions.reconcile(retained);
-    renderJobs();
   });
 }
 const archiveLoadController = createArchiveLoadController({
@@ -907,14 +891,11 @@ const extractStartController = createExtractStartController({
   recordDestination: recordExtractDestinationHistory,
   closeExtractDialog: closeReactDialog,
   addJob: addJobState,
-  progressContext: extractJobProgressContext,
   outputActions: extractJobOutputActions,
   unableStartMessage: (mode) => message(mode === "selection" ? "extract.unableSelected" : "extract.unableStart"),
   setBrowseError: (text) => setBrowseState("error", text),
 });
-const appWindowController = createWindowController({
-  isQuickActionJobMode,
-});
+const appWindowController = createWindowController();
 
 const appWindowEffects = {
   close(): void {
@@ -961,21 +942,6 @@ const appWindowEffects = {
   },
 };
 
-const focusedJobWindowEffects = {
-  async revealNormalWindow(): Promise<void> {
-    await appWindowController.revealNormalWindow();
-  },
-  async revealProgressWindow(): Promise<void> {
-    await appWindowController.revealProgressWindow();
-  },
-  async minimizeProgressWindow(): Promise<void> {
-    await appWindowController.minimizeProgressWindow();
-  },
-  async restoreNormalWindow(): Promise<void> {
-    await appWindowController.restoreNormalWindowGeometryOrCenter();
-  },
-};
-
 const jobPasswordPrompts = {
   promptForNewArchivePassword(): string | null {
     return promptForArchivePassword(message("create.prompt.newArchivePassword"));
@@ -1001,9 +967,7 @@ const quickActionController = createQuickActionController({
   recordCreateDestination: recordCreateDestinationHistory,
   recordExtractDestination: recordExtractDestinationHistory,
   addJob: addJobState,
-  createProgressContext: createJobProgressContext,
   createOutputActions: createJobOutputActions,
-  extractProgressContext: (request) => extractJobProgressContext(request),
   extractOutputActions: extractJobOutputActions,
   showCreateWorkspace,
   readCreateSnapshot: () => createWorkspace.getSnapshot(),
@@ -1160,33 +1124,6 @@ const jobOutputEffects = {
   },
 };
 
-const jobControlController = createJobControlController({
-  workspace: jobsWorkspace,
-  quickActionAutoCloseTimer: jobTimers,
-  cancelJob: cancelJobCommand,
-  pauseJob: pauseJobCommand,
-  resumeJob: resumeJobCommand,
-  dismissJob: dismissJobCommand,
-  runTestArchive,
-  runStartExtract,
-  addJob: addJobState,
-  retryOutputActions: retryJobOutputActions,
-  runOutputAction: (outputAction) => jobOutputEffects.run(outputAction),
-  promptForCommandRetry: jobPasswordPrompts.promptForCommandRetry,
-  toCommandError: asCommandError,
-  message,
-  setOperationalMessage,
-  setOperationalStatus,
-  renderJobs,
-  renderQuickProgress,
-  canEvaluateQuickActionCompletion: () => isDesktopRuntime() && isQuickActionJobMode(),
-  isQuickActionWindowBackgrounded: () => shellWorkspace.isQuickActionWindowBackgrounded(),
-  revealQuickActionJobWindow: () => revealQuickActionJobWindow(),
-  closeFocusedJobProgress: () => closeFocusedJobProgress(),
-  closeAppWindow,
-  diagnostics,
-});
-
 function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
   appPreferences = preferencesWithPatch(appPreferences, patch);
   saveAppPreferences(appPreferences);
@@ -1241,18 +1178,6 @@ function toggleAppWindowMaximize() {
   appWindowEffects.toggleMaximize();
 }
 
-function clearQuickActionAutoCloseTimer() {
-  jobTimers.clearQuickActionAutoClose();
-}
-
-function isQuickActionJobMode(): boolean {
-  return shellWorkspace.isQuickActionJobMode();
-}
-
-function setFocusedJobAutoCloseAction(action: FocusedJobAutoCloseAction) {
-  jobsWorkspace.setFocusedJobAutoCloseAction(action);
-}
-
 function renderNormalWorkspaceOnce() {
   if (normalWorkspaceRendered) {
     return;
@@ -1260,7 +1185,6 @@ function renderNormalWorkspaceOnce() {
 
   renderExtractDestinationHistory();
   renderBrowse();
-  renderJobs();
   normalWorkspaceRendered = true;
   publishReactSnapshot();
 }
@@ -1278,113 +1202,15 @@ async function revealNormalAppWindow() {
   }
 
   try {
-    await focusedJobWindowEffects.revealNormalWindow();
+    await appWindowController.revealNormalWindow();
   } catch {
     // Window APIs are best-effort; the app is still usable if the window was already shown.
   }
   shellWorkspace.setQuickActionWindowShown(true);
 }
 
-async function revealQuickActionJobWindow(
-  autoCloseAction: FocusedJobAutoCloseAction = "closeWindow",
-) {
-  const wasInJobMode = isQuickActionJobMode();
-  diagnostics.record({
-    scope: "mainWindow",
-    name: "progressRevealRequested",
-    fields: { wasInJobMode, autoCloseAction },
-  });
-  if (!wasInJobMode || autoCloseAction === "closeWindow") {
-    setFocusedJobAutoCloseAction(autoCloseAction);
-  }
-  if (!wasInJobMode && autoCloseAction === "returnToWorkspace") {
-    void appWindowController.persistCurrentWindowGeometry();
-  }
-  shellWorkspace.setQuickActionWindowMode("jobOnly");
-  browserDocument.setQuickActionJobMode(true);
-  shellWorkspace.setJobDrawerOpen(false);
-  publishReactSnapshot();
-  renderQuickProgress();
-
-  if (!isDesktopRuntime()) {
-    return;
-  }
-
-  try {
-    await focusedJobWindowEffects.revealProgressWindow();
-  } catch {
-    // Do not block job tracking on window-manager or permission failures.
-  }
-  shellWorkspace.setQuickActionWindowShown(true);
-}
-
-async function sendQuickActionJobsToBackground() {
-  clearQuickActionAutoCloseTimer();
-  if (jobsWorkspace.getFocusedJobAutoCloseAction() === "returnToWorkspace") {
-    await closeFocusedJobProgress();
-    setOperationalMessage("jobs.background");
-    openJobDrawer();
-    renderJobs();
-    return;
-  }
-
-  if (isDesktopRuntime()) {
-    shellWorkspace.setQuickActionWindowMode("background");
-    setOperationalMessage("jobs.background");
-    try {
-      await focusedJobWindowEffects.minimizeProgressWindow();
-      shellWorkspace.setQuickActionWindowShown(false);
-      return;
-    } catch {
-      setOperationalMessage("jobs.minimizeFailed");
-      renderQuickProgress();
-      return;
-    }
-  }
-
-  jobsWorkspace.resetFocusedQuickActionProgress();
-  shellWorkspace.setQuickActionWindowMode("normal");
-  browserDocument.setQuickActionJobMode(false);
-  setOperationalMessage("jobs.background");
-  openJobDrawer();
-  renderJobs();
-}
-
-async function closeFocusedJobProgress() {
-  clearQuickActionAutoCloseTimer();
-  jobsWorkspace.resetFocusedQuickActionProgress();
-  shellWorkspace.setQuickActionWindowMode("normal");
-  browserDocument.setQuickActionJobMode(false);
-  shellWorkspace.setJobDrawerOpen(false);
-  renderNormalWorkspaceOnce();
-
-  if (isDesktopRuntime()) {
-    try {
-      await focusedJobWindowEffects.restoreNormalWindow();
-    } catch {
-      // Window restoration is best-effort after a focused job view.
-    }
-  }
-  shellWorkspace.setQuickActionWindowShown(true);
-  renderJobs();
-}
-
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
-  const target = shellWorkspace.selectQuickActionStartupRevealTarget(state);
-  diagnostics.record({
-    scope: "startup",
-    name: "revealTargetSelected",
-    fields: {
-      target,
-      launchedForQuickAction: state.launchedForQuickAction,
-      action: state.quickAction?.kind ?? null,
-      windowDisposition: state.windowDisposition ?? null,
-      jobCount: state.quickActionJobs?.length ?? 0,
-      hasError: Boolean(state.error),
-    },
-  });
-
-  if (target === "jobOnly") {
+  if (state.launchedForQuickAction && state.windowDisposition === "disposableTask") {
     disposableTaskLifecycle.observeQuickActionLaunch();
     return;
   }
@@ -1407,28 +1233,6 @@ async function revealWindowForStartupQuickAction(state: QuickActionStartupStateD
   }
 
   await revealNormalAppWindow();
-}
-
-function trackQuickActionJob(jobId: string, context?: FocusedJobProgressContext) {
-  if (!isQuickActionJobMode()) {
-    return;
-  }
-
-  clearQuickActionAutoCloseTimer();
-  jobsWorkspace.trackFocusedQuickActionJob(jobId, context);
-  renderQuickProgress();
-}
-
-async function toggleQuickActionPause() {
-  await jobControlController.toggleQuickActionPause();
-}
-
-async function cancelFocusedQuickActionJobs() {
-  await jobControlController.cancelFocusedQuickActionJobs();
-}
-
-function maybeCloseCompletedQuickActionWindow() {
-  jobControlController.maybeCloseCompletedQuickActionWindow();
 }
 
 function clearTrackedPreviewState() {
@@ -1457,12 +1261,6 @@ function setOperationalMessage(key: MessageKey, params?: MessageParams): void {
 
 function formatDate(value?: string): string {
   return displayContext.format.date(value, { emptyValue: "" });
-}
-
-function renderQuickProgress() {
-  if (isQuickActionJobMode()) {
-    publishReactSnapshot();
-  }
 }
 
 function infoReturnFocusPath(): string {
@@ -1543,35 +1341,8 @@ function normalizeEntryPath(path: string): string {
   return normalizeArchivePath(path);
 }
 
-function createJobProgressContext(request: StartCreateRequest): FocusedJobProgressContext {
-  return {
-    kind: "create",
-    sources: [...request.sources],
-    destinationPath: request.destinationPath,
-    format: request.format,
-    cleanSource: request.cleanSource,
-    ...(request.tzapRecoveryPercentage !== undefined
-      ? { tzapRecoveryPercentage: request.tzapRecoveryPercentage }
-      : {}),
-  };
-}
-
 function createJobOutputActions(request: StartCreateRequest): JobOutputAction[] {
   return request.destinationPath ? [{ kind: "reveal", path: request.destinationPath }] : [];
-}
-
-function extractJobProgressContext(
-  request: StartExtractRequest,
-  title: "archive" | "selection" = "archive",
-): FocusedJobProgressContext {
-  return {
-    kind: "extract",
-    title,
-    archivePath: request.archivePath,
-    destinationPath: request.destinationPath,
-    overwrite: request.overwrite,
-    ...(request.entryPaths?.length ? { entryPaths: [...request.entryPaths] } : {}),
-  };
 }
 
 function extractJobOutputActions(request: StartExtractRequest): JobOutputAction[] {
@@ -1582,7 +1353,6 @@ function retryJobOutputActions(context: JobRetryContext): JobOutputAction[] {
   if (context.retryKind === "extractArchive") {
     return context.destinationPath ? [{ kind: "open", path: context.destinationPath }] : [];
   }
-
   return [];
 }
 
@@ -2088,7 +1858,6 @@ const commandRouter = createCommandRouter({
     about: openAboutDialog,
     toggleFlatView: () => setFlatView(!archiveSnapshot().view.flatView, true),
     deleteTempFiles: () => void onDeleteTemporaryFiles(),
-    jobs: openJobDrawer,
     reportDisabled: (_commandId, reason) => {
       setOperationalStatus(localizedCommandStateReason(reason) ?? UNSUPPORTED_OPERATION_MESSAGE);
     },
@@ -2120,7 +1889,6 @@ function isMacOsFromContract(): boolean {
 
 function createCurrentReactSnapshot(): ZManagerReactSnapshot {
   const archive = archiveWorkspace.getSnapshot();
-  const nowMs = Date.now();
   const commandClassState = currentCommandClassState(archive.command.hasArchive);
 
   return createZManagerReactSnapshot({
@@ -2130,8 +1898,6 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     archive,
     create: createWorkspace.getSnapshot(),
     extract: extractWorkspace.getSnapshot(),
-    jobs: jobsWorkspace.getJobListSnapshot(nowMs),
-    quickActionProgress: jobsWorkspace.getFocusedQuickActionProgressSnapshot(nowMs),
     systemIcons: Object.fromEntries(systemIconDataUrls),
     preferences: appPreferences,
     preferencesDraft: preferencesDialogDraft,
@@ -2166,46 +1932,6 @@ function commandIdsWithClass(
 
 function publishReactSnapshot() {
   reactRuntimeStore.publishSnapshot();
-}
-
-function handleReactJobsIntent(intent: ZManagerJobsIntent) {
-  switch (intent.type) {
-    case "openDrawer":
-      openJobDrawer();
-      break;
-    case "closeDrawer":
-      closeJobDrawer();
-      break;
-    case "poll":
-      break;
-    case "cancel":
-      void onCancelJob(intent.jobId);
-      break;
-    case "pause":
-      void onPauseJob(intent.jobId);
-      break;
-    case "resume":
-      void onResumeJob(intent.jobId);
-      break;
-    case "dismiss":
-      void onDismissJob(intent.jobId);
-      break;
-    case "retryPassword":
-      void retryJobWithPasswordPrompt(intent.jobId);
-      break;
-    case "runOutputAction":
-      void onJobOutputAction(intent.jobId, String(intent.actionIndex), intent.kind);
-      break;
-    case "backgroundFocused":
-      void sendQuickActionJobsToBackground();
-      break;
-    case "toggleQuickActionPause":
-      void toggleQuickActionPause();
-      break;
-    case "cancelFocusedQuickActionJobs":
-      void cancelFocusedQuickActionJobs();
-      break;
-  }
 }
 
 function handleReactAccountIntent(intent: ZManagerAccountIntent) {
@@ -2369,8 +2095,6 @@ function handleReactKeyboardIntent(intent: ZManagerKeyboardIntent) {
         cancelReactPreferencesDialog();
       } else if (reactDialogSnapshot.kind !== "none") {
         closeReactDialog();
-      } else if (shellWorkspace.getSnapshot().jobDrawerOpen) {
-        closeJobDrawer();
       } else {
         clearBrowseSelection();
       }
@@ -2393,7 +2117,7 @@ export function getZManagerRuntimeAdapter(): ZManagerReactRuntimeAdapter {
       setWorkspaceMode,
       handleArchiveIntent: archiveRuntimeActions.handleIntent,
       handleCreateIntent: createRuntimeActions.handleIntent,
-      handleJobsIntent: handleReactJobsIntent,
+
       handleAccountIntent: handleReactAccountIntent,
       handleDialogIntent: handleReactDialogIntent,
       handleDesktopIntent: handleReactDesktopIntent,
@@ -2547,14 +2271,6 @@ function compressPathsForContextAction(rowPath: string): string[] {
     return selection.selectedPaths.filter((path) => visiblePaths.has(path));
   }
   return [rowPath];
-}
-
-function renderJobs() {
-  const snapshot = jobsWorkspace.getJobListSnapshot(Date.now());
-  renderQuickProgress();
-  syncProgressClock(snapshot.progressClock);
-  publishReactSnapshot();
-  maybeCloseQuickActionOnlyCoordinator();
 }
 
 function maybeCloseQuickActionOnlyCoordinator(): void {
@@ -2744,32 +2460,6 @@ function extractDialogFormFromIntent(
 
 function isCreateSubmissionInFlight(): boolean {
   return createWorkspace.getSnapshot().options.submissionInFlight;
-}
-
-function openJobDrawer() {
-  if (isQuickActionJobMode()) {
-    return;
-  }
-
-  shellWorkspace.setJobDrawerOpen(true);
-  publishReactSnapshot();
-}
-
-function closeJobDrawer() {
-  if (isQuickActionJobMode()) {
-    return;
-  }
-
-  shellWorkspace.setJobDrawerOpen(false);
-  publishReactSnapshot();
-}
-
-function toggleJobDrawer() {
-  if (shellWorkspace.getSnapshot().jobDrawerOpen) {
-    closeJobDrawer();
-  } else {
-    openJobDrawer();
-  }
 }
 
 function hasActiveJob(): boolean {
@@ -3504,7 +3194,7 @@ function refreshAboutDialogSnapshot() {
 
 function publishBootstrapStateSnapshot() {
   refreshAboutDialogSnapshot();
-  if (normalWorkspaceRendered && !isQuickActionJobMode()) {
+  if (normalWorkspaceRendered) {
     renderBrowse();
   }
 }
@@ -3564,7 +3254,6 @@ function activeDisplayWorkspace(): DisplayRefreshWorkspace {
 function refreshDisplayFromPreferences() {
   const refreshSurfaces = selectDisplayRefreshSurfaces({
     activeWorkspace: activeDisplayWorkspace(),
-    jobsVisible: shellWorkspace.getSnapshot().jobDrawerOpen || isQuickActionJobMode(),
     preferencesVisible: Boolean(preferencesDialogDraft),
   });
 
@@ -3583,9 +3272,6 @@ function refreshDisplayFromPreferences() {
       case "create":
       case "preferences":
         publishReactSnapshot();
-        break;
-      case "jobs":
-        renderJobs();
         break;
     }
   }
@@ -3905,8 +3591,6 @@ function addJobState(
   options: {
     retryContext?: JobRetryContext;
     focusProgress?: boolean;
-    autoCloseAction?: FocusedJobAutoCloseAction;
-    progressContext?: FocusedJobProgressContext;
     outputActions?: JobOutputAction[];
   } = {},
 ) {
@@ -3919,28 +3603,18 @@ function addJobState(
       initialStatus: response.status,
       focusProgress: Boolean(options.focusProgress),
       useDisposableWindow,
-      autoCloseAction: options.autoCloseAction ?? null,
       quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
     },
   });
-  if (options.focusProgress && !useDisposableWindow) {
-    void revealQuickActionJobWindow(options.autoCloseAction ?? "returnToWorkspace");
-  }
   jobsWorkspace.addJob(response, {
     retryContext: options.retryContext,
     outputActions: options.outputActions,
   });
   if (useDisposableWindow) {
     void disposableTaskWindows.open(response);
-  } else {
-    trackQuickActionJob(response.jobId, options.progressContext);
   }
 
   void subscribeToRetainedJob(response.jobId);
-  renderJobs();
-  if (!useDisposableWindow) {
-    openJobDrawer();
-  }
 }
 
 async function openQuickActionArchive(paths: string[]) {
@@ -4025,7 +3699,7 @@ async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
   }
 
   for (const response of responses) {
-    addJobState(response, { focusProgress: true, autoCloseAction: "closeWindow" });
+    addJobState(response, { focusProgress: true });
   }
   setOperationalMessage("jobs.quickActionStarted");
 }
@@ -4064,28 +3738,54 @@ async function handleHostedAuthCallback(
   await accountController.handleHostedCallback(payload);
 }
 
-async function startPasswordRetryJob(context: JobRetryContext, password: string) {
-  return jobControlController.startPasswordRetryJob(context, password);
+async function startPasswordRetryJob(context: JobRetryContext, password: string): Promise<StartJobResponseDto> {
+  if (context.retryKind === "testArchive") {
+    return runTestArchive({
+      archivePath: context.archivePath,
+      entryPaths: context.entryPaths,
+      password,
+    });
+  }
+  return runStartExtract(buildStartExtractRequest({
+    archivePath: context.archivePath,
+    destinationPath: context.destinationPath,
+    overwrite: context.overwrite,
+    destinationCollisionStrategy: context.destinationCollisionStrategy,
+    entryPaths: context.entryPaths,
+    stripComponents: context.stripComponents,
+    tzapRestorePolicy: context.tzapRestorePolicy ?? "portable",
+    tzapAllowDegraded: context.tzapAllowDegraded ?? false,
+    tzapAllowAbsoluteSymlinks: context.tzapAllowAbsoluteSymlinks ?? false,
+    ignoreSymlinks: context.ignoreSymlinks ?? false,
+    password,
+  }));
 }
 
-async function retryJobWithPasswordPrompt(jobId: string) {
-  await jobControlController.retryJobWithPasswordPrompt(jobId);
-}
-
-async function maybePromptForJobPasswordRetry(jobId: string) {
-  await jobControlController.maybePromptForJobPasswordRetry(jobId);
-}
-
-function scheduleProgressClock() {
-  jobTimers.startProgressClock(renderJobs);
-}
-
-function stopProgressClock() {
-  jobTimers.stopProgressClock();
-}
-
-function syncProgressClock(snapshot: ProgressClockSnapshot = jobsWorkspace.getProgressClockSnapshot()) {
-  if (snapshot.shouldRun) scheduleProgressClock(); else stopProgressClock();
+async function maybePromptForJobPasswordRetry(jobId: string): Promise<void> {
+  if (!jobsWorkspace.markPasswordRetryPromptedIfEligible(jobId)) {
+    return;
+  }
+  const retryDetails = jobsWorkspace.getPasswordRetryDetails(jobId);
+  if (!retryDetails?.failure.code) {
+    setOperationalMessage("jobs.retryUnavailable");
+    return;
+  }
+  const password = jobPasswordPrompts.promptForCommandRetry(retryDetails.failure.code);
+  if (!password) {
+    setOperationalMessage("jobs.passwordRetryCancelled");
+    return;
+  }
+  try {
+    const response = await startPasswordRetryJob(retryDetails.context, password);
+    addJobState(response, {
+      retryContext: retryDetails.context,
+      outputActions: retryJobOutputActions(retryDetails.context),
+    });
+    setOperationalMessage("jobs.passwordRetryStarted");
+  } catch (error) {
+    const commandError = asCommandError(error);
+    setOperationalStatus(commandError?.message ?? message("jobs.passwordRetryFailed"));
+  }
 }
 
 async function onOpenArchive() {
@@ -4423,26 +4123,6 @@ async function runCreate(
   await createStartController.runCreate(options);
 }
 
-async function onCancelJob(jobId: string) {
-  await jobControlController.onCancelJob(jobId);
-}
-
-async function onPauseJob(jobId: string) {
-  await jobControlController.onPauseJob(jobId);
-}
-
-async function onResumeJob(jobId: string) {
-  await jobControlController.onResumeJob(jobId);
-}
-
-async function onJobOutputAction(jobId?: string, indexValue?: string, kind?: string) {
-  await jobControlController.onJobOutputAction(jobId, indexValue, kind);
-}
-
-async function onDismissJob(jobId: string) {
-  await jobControlController.onDismissJob(jobId);
-}
-
 async function loadBootstrapState() {
   if (isDesktopRuntime()) {
     try {
@@ -4459,26 +4139,22 @@ function runtimeDevToolsOptions() {
     isDev: import.meta.env.DEV,
     windowRef: window,
     normalWorkspaceRendered: () => normalWorkspaceRendered,
-    isQuickActionJobMode,
     api: {
       loadArchiveFixture: loadArchiveListingIntoState,
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
         systemIconDataUrls = new Map(Object.entries(fixtures));
         renderBrowse();
       },
-      setJobFixtures: (fixtures: JobState[]) => {
-        jobsWorkspace.replaceJobs(fixtures);
-        renderJobs();
+      setJobFixtures: (_fixtures: JobState[]) => {
+        // no-op: replaced by job feed
       },
-      openSurface: (surface: "about" | "preferences" | "info" | "jobs") => {
+      openSurface: (surface: "about" | "preferences" | "info") => {
         if (surface === "about") {
           openAboutDialog();
         } else if (surface === "preferences") {
           openPreferencesDialog();
         } else if (surface === "info") {
           showCurrentInfo();
-        } else if (surface === "jobs") {
-          openJobDrawer();
         }
       },
       closeModal: () => {
@@ -4488,7 +4164,6 @@ function runtimeDevToolsOptions() {
         if (preferencesDialogDraft) {
           cancelReactPreferencesDialog();
         }
-        closeJobDrawer();
       },
     },
   };

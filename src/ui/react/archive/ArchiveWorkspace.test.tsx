@@ -124,8 +124,6 @@ function archiveSnapshot(): ZManagerReactSnapshot {
       ...initial.extract,
       destinationPath: "C:/output/demo",
     },
-    jobs: initial.jobs,
-    quickActionProgress: initial.quickActionProgress,
     preferences: initial.preferences,
     preferencesDraft: initial.preferencesDraft,
     pathHistory: initial.pathHistory,

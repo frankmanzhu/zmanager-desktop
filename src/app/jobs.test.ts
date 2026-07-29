@@ -7,7 +7,6 @@ import {
   getLatestPasswordFailureEvent,
   isCreateJobKind,
   applyJobSnapshot,
-  selectQuickActionJobCompletionDecision,
 } from "./jobs";
 import type { JobState, BaseJobSnapshotDto, StartJobResponseDto } from "../api/types";
 
@@ -97,50 +96,6 @@ describe("job state helpers", () => {
     expect(canRetryJobWithPassword(true, state)).toBe(true);
   });
 
-  it("waits, requests attention, or completes focused quick-action jobs", () => {
-    const running = createInitialJobState(startJobResponse({ jobId: "job-running" }));
-    const completed: JobState = {
-      snapshot: baseSnapshot({
-        jobId: "job-completed",
-        status: "completed",
-        canDismiss: true,
-      }),
-      events: [{ eventType: "completed", jobKind: "zipExtract" }],
-    };
-    const failed: JobState = {
-      snapshot: baseSnapshot({
-        jobId: "job-failed",
-        status: "failed",
-        canDismiss: true,
-      }),
-      events: [{ eventType: "failed", message: "Nope" }],
-    };
-
-    expect(selectQuickActionJobCompletionDecision({
-      canEvaluate: false,
-      autoClosePending: false,
-      trackedJobIds: ["job-completed"],
-      jobsById: new Map([["job-completed", completed]]),
-    })).toEqual({ action: "wait" });
-    expect(selectQuickActionJobCompletionDecision({
-      canEvaluate: true,
-      autoClosePending: false,
-      trackedJobIds: ["job-running"],
-      jobsById: new Map([["job-running", running]]),
-    })).toEqual({ action: "wait" });
-    expect(selectQuickActionJobCompletionDecision({
-      canEvaluate: true,
-      autoClosePending: false,
-      trackedJobIds: ["job-failed"],
-      jobsById: new Map([["job-failed", failed]]),
-    })).toEqual({ action: "needsAttention" });
-    expect(selectQuickActionJobCompletionDecision({
-      canEvaluate: true,
-      autoClosePending: false,
-      trackedJobIds: ["job-completed"],
-      jobsById: new Map([["job-completed", completed]]),
-    })).toEqual({ action: "completed" });
-  });
 
   it("derives progress fields from job lifecycle events", () => {
     const state: JobState = {
