@@ -75,8 +75,6 @@ export type QuickActionStartupErrorDto = {
 export type QuickActionStartupStateDto = {
   launchedForQuickAction: boolean;
   windowDisposition?: "mainWindow" | "disposableTask" | null;
-  quickAction?: QuickActionRequestDto | null;
-  quickActionJobs?: StartJobResponseDto[] | null;
   error?: QuickActionStartupErrorDto | null;
 };
 

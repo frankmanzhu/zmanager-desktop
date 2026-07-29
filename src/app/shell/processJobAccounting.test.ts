@@ -79,4 +79,22 @@ describe("process job accounting", () => {
       activeJobCount: 1,
     });
   });
+
+  it("does not resurrect a fast Job accepted after its terminal catalog update", () => {
+    const accounting = createProcessJobAccounting();
+    accounting.reconcileCatalog(catalog([{
+      jobId: "job-1",
+      revision: "2",
+      kind: "zipExtract",
+      status: "completed",
+      terminal: true,
+    }]));
+    accounting.reconcileCatalog(catalog([], "2"));
+
+    expect(accounting.observeAccepted(acceptedJob)).toEqual({
+      activeJobIds: [],
+      activeJobCount: 0,
+    });
+    expect(accounting.hasActiveJobs()).toBe(false);
+  });
 });

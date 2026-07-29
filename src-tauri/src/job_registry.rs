@@ -435,7 +435,7 @@ impl JobRegistry {
         &'static str,
     > {
         self.with_lock(|state| {
-            if owner != "main" && owner != format!("task-{job_id}") {
+            if owner != format!("task-{job_id}") {
                 return Err("job_subscription_forbidden");
             }
             if state.subscriptions.len() >= MAX_PROCESS_SUBSCRIBERS {
@@ -1884,9 +1884,13 @@ mod tests {
             registry.register_job_subscription("task-other", &response.job_id),
             Err("job_subscription_forbidden")
         ));
+        assert!(matches!(
+            registry.register_job_subscription("main", &response.job_id),
+            Err("job_subscription_forbidden")
+        ));
         assert!(
             registry
-                .register_job_subscription("main", &response.job_id)
+                .register_job_subscription(&format!("task-{}", response.job_id), &response.job_id,)
                 .is_ok()
         );
     }
@@ -1932,27 +1936,28 @@ mod tests {
     fn acknowledgement_is_owner_scoped_and_rejects_unsent_revisions() {
         let registry = JobRegistry::new();
         let (response, _) = registry.create_job(JobKindDto::ZipCreate);
+        let owner = format!("task-{}", response.job_id);
         let (id, snapshots, mut commands, flow) = registry
-            .register_job_subscription("main", &response.job_id)
+            .register_job_subscription(&owner, &response.job_id)
             .unwrap();
         let revision = snapshots.borrow().revision.parse::<u64>().unwrap();
         flow.lock().unwrap().in_flight = Some(revision);
         assert_eq!(
-            registry.acknowledge_subscription("task-1", &id, revision),
+            registry.acknowledge_subscription("task-other", &id, revision),
             Err("subscription_forbidden")
         );
         assert_eq!(
-            registry.acknowledge_subscription("main", &id, revision + 1),
+            registry.acknowledge_subscription(&owner, &id, revision + 1),
             Err("ack_revision_newer_than_in_flight")
         );
         assert!(
             registry
-                .acknowledge_subscription("main", &id, revision)
+                .acknowledge_subscription(&owner, &id, revision)
                 .is_ok()
         );
         assert!(
             registry
-                .acknowledge_subscription("main", &id, revision)
+                .acknowledge_subscription(&owner, &id, revision)
                 .is_ok(),
             "duplicate acknowledgement is idempotent"
         );
@@ -2016,11 +2021,12 @@ mod tests {
     fn explicit_unsubscribe_and_window_cleanup_share_idempotent_removal() {
         let registry = JobRegistry::new();
         let (job, _) = registry.create_job(JobKindDto::ZipCreate);
+        let owner = format!("task-{}", job.job_id);
         let (id, _snapshots, _commands, _flow) = registry
-            .register_job_subscription("main", &job.job_id)
+            .register_job_subscription(&owner, &job.job_id)
             .unwrap();
-        registry.unsubscribe("main", &id).unwrap();
-        registry.cleanup_owner_subscriptions("main");
+        registry.unsubscribe(&owner, &id).unwrap();
+        registry.cleanup_owner_subscriptions(&owner);
         registry.cleanup_subscription(&id);
         registry.with_lock(|state| assert!(state.subscriptions.is_empty()));
     }

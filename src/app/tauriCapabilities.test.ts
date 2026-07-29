@@ -42,14 +42,18 @@ function readWorkspaceFile(...parts: string[]): string {
 }
 
 describe("Tauri command capabilities", () => {
-  function mainWindowPermissionIds(): string[] {
+  function capabilityPermissionIds(fileName: string): string[] {
     const capability = JSON.parse(
-      readWorkspaceFile("src-tauri", "capabilities", "default.json"),
+      readWorkspaceFile("src-tauri", "capabilities", fileName),
     ) as { permissions: Array<string | { identifier: string }> };
 
     return capability.permissions.map((permission) =>
       typeof permission === "string" ? permission : permission.identifier,
     );
+  }
+
+  function mainWindowPermissionIds(): string[] {
+    return capabilityPermissionIds("default.json");
   }
 
   it("allows native file drag from the main window capability", () => {
@@ -66,14 +70,31 @@ describe("Tauri command capabilities", () => {
     );
   });
 
-  it("allows every registered product command from the main application window", () => {
+  it("allows registered product commands from the main window except task-owned Job commands", () => {
     const mainSource = readWorkspaceFile("src-tauri", "src", "main.rs");
     const handlerBlock = mainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
     const commands = [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|replacement_migration)::([a-zA-Z0-9_]+)/g)]
       .map((match) => match[1]);
-    const expectedPermissions = commands.map((command) => `allow-${command.replaceAll("_", "-")}`);
+    const taskOwnedCommands = new Set([
+      "subscribe_job",
+      "cancel_job",
+      "pause_job",
+      "resume_job",
+      "dismiss_job",
+    ]);
+    const expectedPermissions = commands
+      .filter((command) => !taskOwnedCommands.has(command))
+      .map((command) => `allow-${command.replaceAll("_", "-")}`);
+    const taskOwnedPermissions = [...taskOwnedCommands]
+      .map((command) => `allow-${command.replaceAll("_", "-")}`);
 
     expect(mainWindowPermissionIds()).toEqual(expect.arrayContaining(expectedPermissions));
+    for (const permission of taskOwnedPermissions) {
+      expect(mainWindowPermissionIds()).not.toContain(permission);
+    }
+    expect(capabilityPermissionIds("disposable-task.json")).toEqual(
+      expect.arrayContaining(taskOwnedPermissions),
+    );
   });
 
   it("generates permissions for every registered product command", () => {

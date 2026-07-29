@@ -2,9 +2,7 @@ import type {
   CommandErrorDto,
   HealthcheckResponse,
   ProjectContract,
-  QuickActionRequestDto,
   QuickActionStartupStateDto,
-  StartJobResponseDto,
 } from "../../api/types";
 import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 import type { MessageKey, MessageParams } from "../i18n/translator";
@@ -21,8 +19,6 @@ export type StartupControllerOptions = Readonly<{
   isDesktopRuntime(): boolean;
   revealWindowForStartupQuickAction(state: QuickActionStartupStateDto): Promise<void>;
   revealNormalWindow(): Promise<void>;
-  activateQuickActionJobs(responses: StartJobResponseDto[]): Promise<void>;
-  handleQuickActionRequest(request: QuickActionRequestDto): Promise<void>;
   setOperationalStatus(message: string): void;
   setOperationalMessage(key: MessageKey, params?: MessageParams): void;
   setBrowseError(message: string): void;
@@ -53,9 +49,6 @@ export function createStartupController(
       fields: {
         launchedForQuickAction: state.launchedForQuickAction,
         windowDisposition: state.windowDisposition ?? null,
-        action: state.quickAction?.kind ?? null,
-        pathCount: state.quickAction?.paths.length ?? 0,
-        jobCount: state.quickActionJobs?.length ?? 0,
         errorCode: state.error?.code ?? null,
       },
     });
@@ -71,19 +64,6 @@ export function createStartupController(
       return;
     }
 
-    if (state.quickActionJobs?.length) {
-      await options.activateQuickActionJobs(state.quickActionJobs);
-      return;
-    }
-
-    if (state.quickAction) {
-      options.setOperationalStatus(options.message(
-        state.quickAction.kind === "open"
-          ? "quickAction.openingArchive"
-          : "quickAction.starting",
-      ));
-      await options.handleQuickActionRequest(state.quickAction);
-    }
   }
 
   async function handleStartupQuickAction(): Promise<void> {

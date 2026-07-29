@@ -85,7 +85,7 @@ export function WorkspacePathBar({
       ) : (
         <div
           id="path-crumbs"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs text-slate-500 dark:text-slate-400"
+          className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs text-slate-500 min-[900px]:flex dark:text-slate-400"
           aria-live="polite"
           hidden={crumbsHidden}
         >

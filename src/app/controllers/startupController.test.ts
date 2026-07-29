@@ -4,9 +4,7 @@ import type {
   CommandErrorDto,
   HealthcheckResponse,
   ProjectContract,
-  QuickActionRequestDto,
   QuickActionStartupStateDto,
-  StartJobResponseDto,
 } from "../../api/types";
 import {
   createStartupController,
@@ -43,29 +41,9 @@ function contract(overrides: Partial<ProjectContract> = {}): ProjectContract {
   };
 }
 
-function quickActionRequest(overrides: Partial<QuickActionRequestDto> = {}): QuickActionRequestDto {
-  return {
-    kind: "extractHere",
-    paths: ["C:/archives/demo.zip"],
-    ...overrides,
-  };
-}
-
-function quickActionJob(overrides: Partial<StartJobResponseDto> = {}): StartJobResponseDto {
-  return {
-    jobId: "job-1",
-    kind: "archiveExtract",
-    status: "running",
-    createdAt: "2026-07-09T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
 function startupState(overrides: Partial<QuickActionStartupStateDto> = {}): QuickActionStartupStateDto {
   return {
     launchedForQuickAction: false,
-    quickAction: null,
-    quickActionJobs: null,
     error: null,
     ...overrides,
   };
@@ -88,8 +66,6 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
   const calls = {
     revealQuickActionStates: [] as QuickActionStartupStateDto[],
     revealNormal: 0,
-    activatedJobs: [] as StartJobResponseDto[][],
-    handledRequests: [] as QuickActionRequestDto[],
     statuses: [] as string[],
     messages: [] as string[],
     browseErrors: [] as string[],
@@ -118,12 +94,6 @@ function createHarness(overrides: Partial<StartupControllerOptions> = {}) {
     },
     async revealNormalWindow() {
       calls.revealNormal += 1;
-    },
-    async activateQuickActionJobs(responses) {
-      calls.activatedJobs.push([...responses]);
-    },
-    async handleQuickActionRequest(request) {
-      calls.handledRequests.push(request);
     },
     setOperationalStatus(message) {
       calls.statuses.push(message);
@@ -174,7 +144,7 @@ describe("startup controller", () => {
     const harness = createHarness();
     const first = startupState({
       launchedForQuickAction: true,
-      quickAction: quickActionRequest({ kind: "extractHere" }),
+      windowDisposition: "disposableTask",
     });
     const second = startupState({ launchedForQuickAction: false });
     harness.queueStartupStates(first, second);
@@ -183,8 +153,7 @@ describe("startup controller", () => {
 
     expect(harness.fetchQuickActionStartupState).toHaveBeenCalledTimes(2);
     expect(harness.calls.revealQuickActionStates).toEqual([first]);
-    expect(harness.calls.statuses).toEqual(["translated:quickAction.starting"]);
-    expect(harness.calls.handledRequests).toEqual([first.quickAction]);
+    expect(harness.calls.statuses).toEqual([]);
     expect(harness.calls.revealNormal).toBe(0);
   });
 
@@ -193,14 +162,12 @@ describe("startup controller", () => {
     const forwarded = startupState({
       launchedForQuickAction: true,
       windowDisposition: "disposableTask",
-      quickAction: null,
     });
     harness.queueStartupStates(forwarded, startupState({ launchedForQuickAction: false }));
 
     await harness.controller.handleStartupQuickAction();
 
     expect(harness.calls.revealQuickActionStates).toEqual([forwarded]);
-    expect(harness.calls.handledRequests).toEqual([]);
     expect(harness.calls.revealNormal).toBe(0);
   });
 
@@ -249,7 +216,7 @@ describe("startup controller", () => {
     const harness = createHarness();
     harness.queueStartupStates(startupState({
       launchedForQuickAction: true,
-      quickAction: quickActionRequest(),
+      windowDisposition: "disposableTask",
     }));
 
     await harness.controller.handleStartupQuickAction();
@@ -257,39 +224,11 @@ describe("startup controller", () => {
     expect(harness.calls.revealQuickActionStates).toHaveLength(1);
     expect(harness.calls.revealNormal).toBe(0);
     expect(harness.calls.statuses).toEqual([
-      "translated:quickAction.starting",
       "translated:jobs.quickActionStartupReadFailed: No startup state queued",
     ]);
   });
 
-  it("activates quick-action jobs before request handling", async () => {
-    const harness = createHarness();
-    const job = quickActionJob();
-
-    await harness.controller.handleQuickActionStartupState(startupState({
-      launchedForQuickAction: true,
-      quickAction: quickActionRequest(),
-      quickActionJobs: [job],
-    }));
-
-    expect(harness.calls.activatedJobs).toEqual([[job]]);
-    expect(harness.calls.handledRequests).toEqual([]);
-  });
-
-  it("uses the opening archive status for open quick actions", async () => {
-    const harness = createHarness();
-    const request = quickActionRequest({ kind: "open" });
-
-    await harness.controller.handleQuickActionStartupState(startupState({
-      launchedForQuickAction: true,
-      quickAction: request,
-    }));
-
-    expect(harness.calls.statuses).toEqual(["translated:quickAction.openingArchive"]);
-    expect(harness.calls.handledRequests).toEqual([request]);
-  });
-
-  it("initializes desktop runtime by handling the legacy startup state", async () => {
+  it("initializes desktop runtime by handling the startup marker", async () => {
     const order: string[] = [];
     const harness = createHarness({
       async fetchQuickActionStartupState() {

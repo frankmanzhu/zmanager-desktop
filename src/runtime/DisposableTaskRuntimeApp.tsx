@@ -42,6 +42,7 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
   const [state, dispatch] = useReducer(reduceDisposableTask, bootstrap, createDisposableTask);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [retrying, setRetrying] = useState(false);
+  const [replacementAccepted, setReplacementAccepted] = useState(false);
   const [surfaceError, setSurfaceError] = useState("");
   const recovery = useMemo(() => createDisposableTaskRecoveryController({
     promptForPassword: (commandCode) => createBrowserPasswordPromptAdapter()
@@ -135,13 +136,15 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
   };
 
   const retry = async () => {
-    if (retrying) return;
+    if (retrying || replacementAccepted) return;
     setRetrying(true);
     setSurfaceError("");
     const result = await recovery.retryWithPassword(state.job);
     setRetrying(false);
     if (result === "started") {
       dispatch({ type: "continueInBackground" });
+    } else if (result === "acceptedWithoutPresentation") {
+      setReplacementAccepted(true);
     }
   };
 
@@ -162,6 +165,7 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
       });
     }}
     retrying={retrying}
+    retryDisabled={replacementAccepted}
     surfaceError={surfaceError}
   />;
 }

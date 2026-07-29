@@ -176,7 +176,7 @@ fn operation_error(error: impl std::fmt::Display) -> CommandErrorDto {
     CommandErrorDto::operation_failed(error.to_string())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 

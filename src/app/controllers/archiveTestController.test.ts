@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ArchiveListingDto, CommandErrorDto, StartJobResponseDto } from "../../api/types";
 import { createArchiveWorkspace } from "../workspaces/archiveWorkspace";
+import { createMainWindowSubmissionGuard } from "../mainWindowSubmissionGuard";
 import { createArchiveTestController, type ArchiveTestControllerOptions } from "./archiveTestController";
 
 const startedAt = "2026-06-11T00:00:00Z";
@@ -52,6 +53,7 @@ function createHarness(overrides: Partial<ArchiveTestControllerOptions> = {}) {
 
   const controller = createArchiveTestController({
     workspace,
+    submissionGuard: createMainWindowSubmissionGuard(),
     hasCurrentArchive() {
       return Boolean(workspace.getSnapshot().currentArchivePath);
     },
@@ -59,8 +61,12 @@ function createHarness(overrides: Partial<ArchiveTestControllerOptions> = {}) {
       return password.trim() || undefined;
     },
     runTestArchive,
-    async handoffAcceptedJob(response) {
+    async handoffAcceptedJob(response, resetSubmittedState) {
       calls.jobs.push(response);
+      resetSubmittedState();
+    },
+    resetSubmittedState() {
+      workspace.resetAfterAcceptedOperation();
     },
     toCommandError(error) {
       return error && typeof error === "object" && "code" in error
@@ -94,6 +100,11 @@ function createHarness(overrides: Partial<ArchiveTestControllerOptions> = {}) {
 describe("archive test controller", () => {
   it("hands an accepted test job to its disposable task", async () => {
     const harness = createHarness();
+    harness.workspace.updateSelection({
+      selectedPaths: new Set(["readme.txt"]),
+      focusedPath: "readme.txt",
+      anchorPath: "readme.txt",
+    });
     harness.setInitialPassword("  initial  ");
     harness.runTestArchive.mockResolvedValueOnce(startJobResponse({ jobId: "test-job" }));
 
@@ -101,12 +112,14 @@ describe("archive test controller", () => {
 
     expect(harness.runTestArchive).toHaveBeenCalledWith({
       archivePath: "C:/archives/demo.zip",
+      entryPaths: ["readme.txt"],
       password: "initial",
     });
     expect(harness.calls.jobs).toEqual([
       startJobResponse({ jobId: "test-job" }),
     ]);
     expect(harness.calls.errors).toEqual([]);
+    expect(harness.workspace.getSnapshot().view.selection.selectedPaths).toEqual([]);
   });
 
   it("retries password errors with a prompted password", async () => {
@@ -178,5 +191,28 @@ describe("archive test controller", () => {
     expect(harness.runTestArchive).not.toHaveBeenCalled();
     expect(harness.calls.jobs).toEqual([]);
     expect(harness.calls.errors).toEqual([]);
+  });
+
+  it("guards only the test request awaiting Rust acceptance", async () => {
+    let acceptFirst: (job: StartJobResponseDto) => void = () => {
+      throw new Error("first test was not started");
+    };
+    const firstAcceptance = new Promise<StartJobResponseDto>((resolve) => {
+      acceptFirst = resolve;
+    });
+    const runTestArchive = vi.fn()
+      .mockImplementationOnce(() => firstAcceptance)
+      .mockResolvedValueOnce(startJobResponse({ jobId: "test-job-2" }));
+    const harness = createHarness({ runTestArchive });
+
+    const first = harness.controller.testArchive();
+    const duplicate = harness.controller.testArchive();
+    expect(runTestArchive).toHaveBeenCalledTimes(1);
+
+    acceptFirst(startJobResponse({ jobId: "test-job-1" }));
+    await Promise.all([first, duplicate]);
+    await harness.controller.testArchive();
+
+    expect(runTestArchive).toHaveBeenCalledTimes(2);
   });
 });

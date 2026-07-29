@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CommandErrorDto, CreatePlanResponse, StartJobResponseDto } from "../../api/types";
 import type { FormatCreateDefaults } from "../preferences";
+import { createMainWindowSubmissionGuard } from "../mainWindowSubmissionGuard";
 import { createCreateWorkspace } from "../workspaces/createWorkspace";
 import { createCreateStartController, type CreateStartControllerOptions } from "./createStartController";
 
@@ -84,12 +85,10 @@ function createHarness(overrides: Partial<CreateStartControllerOptions> = {}) {
 
   const controller = createCreateStartController({
     workspace,
+    submissionGuard: createMainWindowSubmissionGuard(),
     publishSnapshot(snapshot) {
       calls.published += 1;
       return snapshot;
-    },
-    isSubmissionInFlight() {
-      return workspace.getSnapshot().options.submissionInFlight;
     },
     startCreate,
     onCreateStarted(response, request) {
@@ -208,8 +207,9 @@ describe("create start controller", () => {
   });
 
   it("does nothing while a submission is already in flight", async () => {
-    const harness = createHarness();
-    harness.workspace.setSubmissionInFlight(true);
+    const submissionGuard = createMainWindowSubmissionGuard();
+    submissionGuard.tryBegin();
+    const harness = createHarness({ submissionGuard });
 
     await harness.controller.runCreate({
       passwordInput: {
@@ -227,7 +227,7 @@ describe("create start controller", () => {
     const harness = createHarness({
       workspace: emptyWorkspace,
       publishSnapshot: (snapshot) => snapshot,
-      isSubmissionInFlight: () => false,
+      submissionGuard: createMainWindowSubmissionGuard(),
     });
 
     await harness.controller.runCreate({
@@ -239,5 +239,31 @@ describe("create start controller", () => {
 
     expect(harness.startCreate).not.toHaveBeenCalled();
     expect(harness.calls.published).toBe(0);
+  });
+
+  it("allows another create immediately after Rust accepts the first Job", async () => {
+    let acceptFirst: (job: StartJobResponseDto) => void = () => {
+      throw new Error("first create was not started");
+    };
+    const firstAcceptance = new Promise<StartJobResponseDto>((resolve) => {
+      acceptFirst = resolve;
+    });
+    const startCreate = vi.fn()
+      .mockImplementationOnce(() => firstAcceptance)
+      .mockResolvedValueOnce(startJobResponse({ jobId: "job-2" }));
+    const harness = createHarness({ startCreate });
+    const input = {
+      passwordInput: { password: "", passwordConfirm: "" },
+    };
+
+    const first = harness.controller.runCreate(input);
+    const duplicate = harness.controller.runCreate(input);
+    expect(startCreate).toHaveBeenCalledTimes(1);
+
+    acceptFirst(startJobResponse({ jobId: "job-1" }));
+    await Promise.all([first, duplicate]);
+    await harness.controller.runCreate(input);
+
+    expect(startCreate).toHaveBeenCalledTimes(2);
   });
 });

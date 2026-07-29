@@ -24,12 +24,24 @@ export type NativeInboundController = Readonly<{
   process(event: NativeInboundEvent): Promise<void>;
 }>;
 
+const MAX_COMPLETED_NATIVE_EVENT_IDS = 512;
+
 export function createNativeInboundController(
   options: NativeInboundControllerOptions,
 ): NativeInboundController {
   const windowLabel = options.windowLabel ?? "main";
   const diagnostics = options.diagnostics ?? NOOP_DIAGNOSTIC_RECORDER;
   let deliveryChain = Promise.resolve();
+  const completedEventIds = new Set<string>();
+
+  function rememberCompleted(eventId: string): void {
+    completedEventIds.add(eventId);
+    while (completedEventIds.size > MAX_COMPLETED_NATIVE_EVENT_IDS) {
+      const oldest = completedEventIds.values().next().value;
+      if (oldest === undefined) break;
+      completedEventIds.delete(oldest);
+    }
+  }
 
   async function process(event: NativeInboundEvent): Promise<void> {
     diagnostics.record({
@@ -39,6 +51,16 @@ export function createNativeInboundController(
     });
     if (event.version !== NATIVE_INBOUND_EVENT_VERSION) {
       throw new Error(`unsupported native inbound event version: ${event.version}`);
+    }
+
+    if (completedEventIds.has(event.eventId)) {
+      await options.acknowledge(windowLabel, event.eventId);
+      diagnostics.record({
+        scope: "nativeInbound",
+        name: "replayAcknowledged",
+        fields: { kind: event.kind },
+      });
+      return;
     }
 
     switch (event.kind) {
@@ -56,6 +78,7 @@ export function createNativeInboundController(
         break;
     }
 
+    rememberCompleted(event.eventId);
     await options.acknowledge(windowLabel, event.eventId);
     diagnostics.record({
       scope: "nativeInbound",

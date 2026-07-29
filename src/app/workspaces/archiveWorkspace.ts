@@ -352,7 +352,7 @@ export type ArchiveWorkspace = {
     error: CommandErrorDto | null | undefined;
   }): ArchiveWorkspacePasswordRetry | null;
   clearPasswordRetry(): ArchiveWorkspaceSnapshot;
-  resetAfterAcceptedExtraction(): ArchiveWorkspaceSnapshot;
+  resetAfterAcceptedOperation(): ArchiveWorkspaceSnapshot;
   toggleTreeFolder(folderPath: string): ArchiveWorkspaceSnapshot;
   updateSelection(selection: HierarchicalTableSelectionResult): ArchiveWorkspaceSnapshot;
   setColumnWidth(columnId: ArchiveTableColumnId, width: number): ArchiveWorkspaceSnapshot;
@@ -782,7 +782,7 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
       return snapshotFromState(state);
     },
 
-    resetAfterAcceptedExtraction() {
+    resetAfterAcceptedOperation() {
       state = {
         ...state,
         passwordRetry: null,

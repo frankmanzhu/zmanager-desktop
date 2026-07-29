@@ -85,6 +85,7 @@ function createFakeWindow(): AppWindowHandle & {
     startResizeDragging: vi.fn(async () => {
       record("startResizeDragging");
     }),
+    onCloseRequested: vi.fn(async () => () => undefined),
   };
 }
 
@@ -181,5 +182,15 @@ describe("desktop window controller", () => {
     await controller.beginResizeDrag("SouthEast");
 
     expect(fakeWindow.startResizeDragging).toHaveBeenCalledWith("SouthEast");
+  });
+
+  it("binds native close requests through the desktop adapter", async () => {
+    const fakeWindow = createFakeWindow();
+    const { controller } = createController({ fakeWindow });
+    const listener = vi.fn();
+
+    await controller.listenCloseRequested(listener);
+
+    expect(fakeWindow.onCloseRequested).toHaveBeenCalledWith(listener);
   });
 });

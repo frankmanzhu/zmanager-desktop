@@ -291,6 +291,10 @@ internal discovery and cleanup.
   than an unbounded event queue or correctness-critical polling timer.
 - Each Disposable Task Window subscribes directly to exactly its bootstrap Job.
   The Main Window never subscribes to per-Job progress.
+- Per-Job subscription and control commands are owner-scoped twice: Tauri grants
+  them only to `task-*` windows, and Rust accepts them only when the caller's
+  exact label is `task-{jobId}`. The Main Window cannot control or subscribe to
+  an individual Job even if a capability manifest regresses.
 - The process catalog lets the Shell coordinator reconcile bounded active-Job
   accounting for shutdown and Main Window close behavior. It is not permission
   to retain per-Job presentation state or render a job list/shared history.
@@ -324,10 +328,12 @@ defaults, path histories, and reusable manager preferences. Browse context may
 be retained where it helps launch the next operation, but the submitted
 selection must not remain armed for accidental duplicate execution.
 
-While a start request is awaiting Rust acceptance, only that submission is
-guarded against duplicate activation. Once accepted, the manager immediately
-returns to normal command, drop, browse, and selection behavior. It never waits
-for a Job snapshot or terminal event before becoming reusable.
+While any Main Window start request is awaiting Rust acceptance, one shared
+manager guard rejects duplicate Create, Extract, or Test activation. The guard
+ends at acceptance or rejection; accepted Job lifetime is never stored in it.
+Once accepted, the manager immediately returns to normal command, drop, browse,
+selection, and start behavior. It never waits for a Job snapshot or terminal
+event before becoming reusable.
 
 ### Disposable Task Workflow
 
@@ -436,6 +442,13 @@ AppKit/Finder/single-instance callback
        -> disposableTask: keep Main Window hidden and perform Job Handoff
 ```
 
+Startup state carries only the generated window-disposition marker needed to
+decide whether the Main Window may be revealed. Executable quick-action input
+has exactly one ingress: the Native Launch Inbox. The frontend records a
+bounded set of completed event IDs before acknowledgement, so an
+at-least-once replay within the frontend process can repeat the
+acknowledgement but not its operation side effect.
+
 ## Error Model
 
 Errors should include:
@@ -471,6 +484,9 @@ Errors must not include passwords, raw command-line strings, or sensitive path d
   not mutate the Main Window.
 - Prove the manager has no global active-Job permission gate: commands, drops,
   browsing, and selection remain usable while unrelated Jobs run.
+- Prove in-process Native Inbox replay idempotency, fast-terminal coordinator
+  reconciliation, durable Job Feed reconnect, owner-scoped task controls, and
+  native Main Window close routing through coordinator accounting.
 - Prefer direct state and deletion over orchestration. The accepted-start guard,
   one-Job task state, and coordinator shutdown counts are sufficient; do not
   add another lifecycle module unless deleting it would force real complexity

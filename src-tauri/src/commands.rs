@@ -1674,15 +1674,24 @@ fn subscription_error(code: &'static str) -> CommandErrorDto {
     CommandErrorDto::invalid_request(code)
 }
 
+fn ensure_task_job_owner(owner: &str, job_id: &str) -> Result<(), CommandErrorDto> {
+    if owner == format!("task-{job_id}") {
+        return Ok(());
+    }
+    Err(CommandErrorDto::invalid_request("job_control_forbidden"))
+}
+
 #[tauri::command]
 pub fn cancel_job(
     request: crate::dto::CancelJobRequest,
+    window: WebviewWindow,
     registry: State<'_, JobRegistry>,
 ) -> Result<crate::job_dto::CancelJobResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
+    ensure_task_job_owner(window.label(), &job_id)?;
 
     registry.request_cancel(&job_id).ok_or_else(|| {
         CommandErrorDto::not_found(
@@ -1695,12 +1704,14 @@ pub fn cancel_job(
 #[tauri::command]
 pub fn pause_job(
     request: PauseJobRequest,
+    window: WebviewWindow,
     registry: State<'_, JobRegistry>,
 ) -> Result<JobControlResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
+    ensure_task_job_owner(window.label(), &job_id)?;
 
     registry.request_pause(&job_id).ok_or_else(|| {
         CommandErrorDto::not_found(
@@ -1713,12 +1724,14 @@ pub fn pause_job(
 #[tauri::command]
 pub fn resume_job(
     request: ResumeJobRequest,
+    window: WebviewWindow,
     registry: State<'_, JobRegistry>,
 ) -> Result<JobControlResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
+    ensure_task_job_owner(window.label(), &job_id)?;
 
     registry.request_resume(&job_id).ok_or_else(|| {
         CommandErrorDto::not_found(
@@ -1731,12 +1744,14 @@ pub fn resume_job(
 #[tauri::command]
 pub fn dismiss_job(
     request: crate::dto::DismissJobRequest,
+    window: WebviewWindow,
     registry: State<'_, JobRegistry>,
 ) -> Result<(), CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
+    ensure_task_job_owner(window.label(), &job_id)?;
 
     let snapshot = registry.snapshot(&job_id).ok_or_else(|| {
         CommandErrorDto::not_found(
@@ -2752,6 +2767,18 @@ mod tests {
     use crate::dto::OverwritePolicyDto;
     use crate::job_dto::JobStatusDto;
     use crate::quick_action::QuickActionStartupState;
+
+    #[test]
+    fn job_controls_are_scoped_to_the_matching_disposable_task_window() {
+        assert!(ensure_task_job_owner("task-42", "42").is_ok());
+        assert_eq!(
+            ensure_task_job_owner("main", "42")
+                .expect_err("Main Window must not control a Job")
+                .code,
+            constants::COMMAND_ERROR_INVALID_REQUEST,
+        );
+        assert!(ensure_task_job_owner("task-41", "42").is_err());
+    }
     use std::env;
     use std::ffi::OsString;
     use std::fs;
@@ -3180,7 +3207,7 @@ mod tests {
     }
 
     #[test]
-    fn quick_action_startup_state_command_exposes_pending_intent() {
+    fn quick_action_startup_state_command_exposes_only_window_disposition() {
         let state = QuickActionStartupState::from_args(
             ["--quick-action", "open", "--path", "C:/tmp/one.zip"]
                 .into_iter()
@@ -3191,11 +3218,10 @@ mod tests {
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
-        let quick_action = response
-            .quick_action
-            .expect("quick action intent should be present");
-        assert_eq!(quick_action.kind, crate::dto::QuickActionKindDto::Open);
-        assert_eq!(quick_action.paths, ["C:/tmp/one.zip"]);
+        assert_eq!(
+            response.window_disposition,
+            Some(crate::dto::QuickActionWindowDispositionDto::MainWindow),
+        );
     }
 
     #[test]
@@ -3215,7 +3241,6 @@ mod tests {
         let response = quick_action_startup_state_internal(&state);
 
         assert!(response.launched_for_quick_action);
-        assert!(response.quick_action.is_none());
         let error = response
             .error
             .expect("invalid launch should include an error");

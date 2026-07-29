@@ -18,6 +18,7 @@ export type DisposableTaskWindowManagerOptions = Readonly<{
   onReady(jobId: string): void;
   onAllClosed(): void;
   onWindowClosed?(jobId: string): void;
+  onPresentationFailed?(job: StartJobResponseDto, error: unknown): void;
   diagnostics?: DiagnosticRecorder;
 }>;
 
@@ -100,6 +101,10 @@ export function createDisposableTaskWindowManager(
           }),
           taskWindow.once<WindowEvent>("tauri://error", () => {
             removeWindow("creationFailed");
+            options.onPresentationFailed?.(
+              job,
+              new Error("Disposable task window creation failed."),
+            );
           }),
         ]);
       } catch (error) {

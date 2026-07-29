@@ -82,4 +82,35 @@ describe("disposable task window manager", () => {
     expect(manager.hasOpenWindows()).toBe(false);
     expect(onAllClosed).toHaveBeenCalledOnce();
   });
+
+  it("reports asynchronous window creation failure for the accepted Job", async () => {
+    const callbacks = new Map<string, () => void>();
+    const onPresentationFailed = vi.fn();
+    const handle: DisposableTaskWindowHandle = {
+      label: "task-job-1",
+      emit: vi.fn(),
+      once: vi.fn(async (event, callback) => {
+        callbacks.set(event, () => callback({ payload: null }));
+        return () => undefined;
+      }),
+      setFocus: vi.fn(),
+      show: vi.fn(),
+    };
+    const manager = createDisposableTaskWindowManager({
+      createWindow: () => handle,
+      onReady: vi.fn(),
+      onAllClosed: vi.fn(),
+      onPresentationFailed,
+    });
+    const accepted = job();
+
+    await manager.open(accepted);
+    callbacks.get("tauri://error")?.();
+
+    expect(onPresentationFailed).toHaveBeenCalledWith(
+      accepted,
+      expect.any(Error),
+    );
+    expect(manager.hasOpenWindows()).toBe(false);
+  });
 });

@@ -85,6 +85,25 @@ describe("native inbound controller", () => {
     expect(test.options.reportFailure).toHaveBeenCalledOnce();
   });
 
+  it("acknowledges an already handled replay without repeating its effects", async () => {
+    const test = harness();
+    test.options.acknowledge.mockRejectedValueOnce(new Error("ack failed"));
+    await test.controller.initialize();
+    const replayed = event({
+      eventId: "shell-replay-123456",
+      kind: "shellActionRequest",
+      payload: { request: { kind: "compressZip", paths: ["/tmp/source"] } },
+    });
+
+    test.emit(replayed);
+    test.emit(replayed);
+    await test.settle();
+    await test.settle();
+
+    expect(test.options.handleQuickAction).toHaveBeenCalledTimes(1);
+    expect(test.options.acknowledge).toHaveBeenCalledTimes(2);
+  });
+
   it("routes validated shell requests and secret-free hosted authentication results", async () => {
     const test = harness();
     await test.controller.process(event({

@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   cssFileViolation,
+  normalizeWorkspacePath,
   sourceViolations,
 } from "./check-macos-full-target-architecture.mjs";
+
+test("normalizes Windows workspace paths before applying portable policy", () => {
+  assert.equal(
+    normalizeWorkspacePath("native\\macos\\Sources\\Host.swift"),
+    "native/macos/Sources/Host.swift",
+  );
+});
 
 test("rejects navigator-based frontend operating-system selection", () => {
   assert.match(sourceViolations("fixture.ts", "const os = navigator.userAgent;").join("\n"), /frontend OS detection/);

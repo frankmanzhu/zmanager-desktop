@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const count = (text, regex) => [...text.matchAll(regex)].length;
+export const normalizeWorkspacePath = (path) => path.replaceAll("\\", "/");
 
 export function sourceViolations(path, text, allowance = null) {
   const errors = [];
@@ -45,7 +46,7 @@ export function validateWorkspace(workspaceRoot = root) {
   const allowances = new Map(allowlist.entries.map((entry) => [entry.path, entry]));
   const production = walk(join(workspaceRoot, "src")).filter((path) => !/\.(?:test|spec)\.[^.]+$/.test(path));
   for (const path of production) {
-    const rel = relative(workspaceRoot, path);
+    const rel = normalizeWorkspacePath(relative(workspaceRoot, path));
     if ([".ts", ".tsx"].includes(extname(path))) errors.push(...sourceViolations(rel, readFileSync(path, "utf8"), allowances.get(rel)));
     if (extname(path) === ".css") {
       const violation = cssFileViolation(rel, allowlist);
@@ -59,7 +60,7 @@ export function validateWorkspace(workspaceRoot = root) {
 
   const nativeRoots = [join(workspaceRoot, "src-tauri"), join(workspaceRoot, "native")].filter(existsSync);
   for (const file of nativeRoots.flatMap(walk).filter((path) => [".swift", ".m", ".mm"].includes(extname(path)))) {
-    const rel = relative(workspaceRoot, file);
+    const rel = normalizeWorkspacePath(relative(workspaceRoot, file));
     if (!rel.startsWith("native/macos/")) errors.push(`${rel}: macOS native source is outside native/macos`);
   }
 

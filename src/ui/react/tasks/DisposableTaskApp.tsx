@@ -37,6 +37,7 @@ export function DisposableTaskView({
   onResume,
   onRunOutputAction,
   retrying = false,
+  retryDisabled = false,
   surfaceError = "",
 }: Readonly<{
   state: DisposableTaskState;
@@ -51,6 +52,7 @@ export function DisposableTaskView({
   onResume(): void;
   onRunOutputAction(action: "open" | "reveal", path: string): void;
   retrying?: boolean;
+  retryDisabled?: boolean;
   surfaceError?: string;
 }>) {
   const progress = useMemo(
@@ -263,11 +265,15 @@ export function DisposableTaskView({
                   type="button"
                   variant="dialogPrimary"
                   size="unset"
-                  disabled={retrying}
+                  disabled={retrying || retryDisabled}
                   onClick={onRetry}
                 >
                   <RotateCcw className="mr-1 size-3" />
-                  {retrying ? "Retrying…" : "Retry with password"}
+                  {retrying
+                    ? "Retrying…"
+                    : retryDisabled
+                      ? "Replacement Job started"
+                      : "Retry with password"}
                 </Button>
               ) : null}
               <Button

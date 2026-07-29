@@ -9,6 +9,7 @@ import { isPasswordErrorCode } from "../jobs";
 
 export type DisposableTaskRecoveryResult =
   | "started"
+  | "acceptedWithoutPresentation"
   | "cancelled"
   | "unavailable"
   | "failed";
@@ -44,8 +45,9 @@ export function createDisposableTaskRecoveryController(
         return "cancelled";
       }
 
+      let job: StartJobResponseDto;
       try {
-        const job = descriptor.retryKind === "testArchive"
+        job = descriptor.retryKind === "testArchive"
           ? await options.startTest({
               archivePath: descriptor.archivePath,
               ...(descriptor.entryPaths.length
@@ -68,14 +70,23 @@ export function createDisposableTaskRecoveryController(
               ignoreSymlinks: descriptor.ignoreSymlinks ?? false,
               password,
             });
-        await options.handoffAcceptedJob(job);
-        return "started";
       } catch (error) {
         options.reportFailure(
           options.toCommandError(error)?.message
             ?? "Unable to retry this task.",
         );
         return "failed";
+      }
+
+      try {
+        await options.handoffAcceptedJob(job);
+        return "started";
+      } catch (error) {
+        options.reportFailure(
+          options.toCommandError(error)?.message
+            ?? "The replacement Job started, but its task window could not be opened.",
+        );
+        return "acceptedWithoutPresentation";
       }
     },
   });

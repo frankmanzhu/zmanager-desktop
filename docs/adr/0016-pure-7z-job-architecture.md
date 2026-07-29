@@ -177,6 +177,9 @@ The simplified ownership model is implemented:
 - Create and Extract reset submitted transient state exactly once after
   accepted Job Handoff while preserving preferences, histories, columns, and
   reusable archive browse context.
+- Create, Extract, and Test share one Main Window awaiting-acceptance guard.
+  Acceptance releases it immediately, so one accepted Job never gates the next
+  operation.
 - The Main Window has no per-Job subscription, progress store, global
   active-Job command/drop/selection gate, Jobs command, or Job drawer fixture.
 - Shell process accounting retains only active Job IDs/counts and reconciles
@@ -185,8 +188,17 @@ The simplified ownership model is implemented:
 - Each Disposable Task Window subscribes directly to one Job, owns its
   controls, terminal UI, output actions, and password recovery, and hands an
   accepted retry back through Job Handoff for a new task window.
+- Rust requires the exact `task-{jobId}` caller for per-Job subscription and
+  controls in addition to the task-only Tauri capability boundary.
 - Presentation and feed failures are surfaced without resubmitting accepted
   work, and catalog transitions reevaluate coordinator shutdown.
+- Native quick actions execute only through the acknowledged Native Launch
+  Inbox; completed event IDs are deduplicated before acknowledgement so
+  in-process replay does not repeat a Job start. Startup state is
+  disposition-only.
+- Native Main Window close requests use the same active-Job/open-task
+  accounting as application close commands instead of bypassing the
+  coordinator.
 - The obsolete `JobsWorkspace`, shared per-Job subscription set, legacy
   frontend `JobState`, Jobs command, and stale Job drawer end-to-end scenarios
   are deleted.

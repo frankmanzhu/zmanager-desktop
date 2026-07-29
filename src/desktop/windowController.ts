@@ -66,6 +66,9 @@ export type AppWindowHandle = {
   innerSize(): Promise<WindowDimension>;
   innerPosition(): Promise<WindowPosition>;
   startResizeDragging(direction: AppWindowResizeDirection): Promise<void>;
+  onCloseRequested(
+    listener: (event: Readonly<{ preventDefault(): void }>) => void,
+  ): Promise<() => void>;
 };
 
 export type WindowControllerDependencies = {
@@ -197,6 +200,11 @@ export function createWindowController(options: WindowControllerOptions = {}) {
   return {
     closeCurrentWindow(): Promise<void> {
       return dependencies.getCurrentWindow().close();
+    },
+    listenCloseRequested(
+      listener: (event: Readonly<{ preventDefault(): void }>) => void,
+    ): Promise<() => void> {
+      return dependencies.getCurrentWindow().onCloseRequested(listener);
     },
     hideCurrentWindow(): Promise<void> {
       const currentWindow = dependencies.getCurrentWindow();

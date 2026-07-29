@@ -94,4 +94,25 @@ describe("job feed", () => {
     });
     await subscription.unsubscribe();
   });
+
+  it("recovers after the initial catalog subscription fails", async () => {
+    vi.useFakeTimers();
+    const onConnectionError = vi.fn();
+    mocks.subscribeJobCatalog
+      .mockRejectedValueOnce(new Error("catalog unavailable"))
+      .mockResolvedValueOnce("catalog-2");
+
+    const subscription = await createTauriJobFeed({
+      reconnectDelayMs: 10,
+      onConnectionError,
+    }).subscribeCatalog(vi.fn());
+    expect(mocks.subscribeJobCatalog).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(mocks.subscribeJobCatalog).toHaveBeenCalledTimes(2);
+    expect(onConnectionError).toHaveBeenCalledOnce();
+    await subscription.unsubscribe();
+    vi.useRealTimers();
+  });
 });

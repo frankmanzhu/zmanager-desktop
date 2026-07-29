@@ -9,7 +9,7 @@ use tauri::Url;
 
 use crate::dto::{
     QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
-    QuickActionStartupStateDto,
+    QuickActionStartupStateDto, QuickActionWindowDispositionDto,
 };
 
 const QUICK_ACTION_ARG: &str = "--quick-action";
@@ -84,36 +84,26 @@ impl QuickActionStartupState {
             Self::NotRequested => QuickActionStartupStateDto {
                 launched_for_quick_action: false,
                 window_disposition: None,
-                quick_action: None,
-                quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::Requested(request) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 window_disposition: Some(request.kind.window_disposition()),
-                quick_action: Some(request.clone()),
-                quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::ForwardedToNativeInbox(kind) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 window_disposition: Some(kind.window_disposition()),
-                quick_action: None,
-                quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::PendingMacOsQuickAction => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
                 window_disposition: None,
-                quick_action: None,
-                quick_action_jobs: Vec::new(),
                 error: None,
             },
             Self::Invalid(error) => QuickActionStartupStateDto {
                 launched_for_quick_action: true,
-                window_disposition: None,
-                quick_action: None,
-                quick_action_jobs: Vec::new(),
+                window_disposition: error.window_disposition,
                 error: Some(error.to_dto()),
             },
         }
@@ -162,6 +152,7 @@ pub struct QuickActionError {
     code: &'static str,
     message: String,
     hint: Option<String>,
+    window_disposition: Option<QuickActionWindowDispositionDto>,
 }
 
 impl QuickActionError {
@@ -170,11 +161,20 @@ impl QuickActionError {
             code: crate::constants::COMMAND_ERROR_INVALID_REQUEST,
             message: message.into(),
             hint: None,
+            window_disposition: None,
         }
     }
 
     fn with_hint(mut self, hint: impl Into<String>) -> Self {
         self.hint = Some(hint.into());
+        self
+    }
+
+    fn with_window_disposition(
+        mut self,
+        window_disposition: QuickActionWindowDispositionDto,
+    ) -> Self {
+        self.window_disposition = Some(window_disposition);
         self
     }
 
@@ -470,6 +470,15 @@ fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
 }
 
 fn validate_request(
+    kind: QuickActionKindDto,
+    paths: Vec<String>,
+) -> Result<QuickActionRequestDto, QuickActionError> {
+    let window_disposition = kind.window_disposition();
+    validate_request_with_known_kind(kind, paths)
+        .map_err(|error| error.with_window_disposition(window_disposition))
+}
+
+fn validate_request_with_known_kind(
     kind: QuickActionKindDto,
     paths: Vec<String>,
 ) -> Result<QuickActionRequestDto, QuickActionError> {
@@ -917,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn cold_start_multi_select_preserves_one_pending_request_for_frontend_defaults() {
+    fn cold_start_multi_select_exposes_only_the_disposition_marker() {
         let coordinator = QuickActionLaunchCoordinator::from_startup_state(
             QuickActionStartupState::Requested(QuickActionRequestDto {
                 kind: QuickActionKindDto::CompressZip,
@@ -927,12 +936,10 @@ mod tests {
 
         let response = coordinator.startup_state().to_dto();
 
-        assert!(response.quick_action_jobs.is_empty());
-        let request = response
-            .quick_action
-            .expect("frontend should receive the atomic request before starting a job");
-        assert_eq!(request.kind, QuickActionKindDto::CompressZip);
-        assert_eq!(request.paths, ["C:/tmp/folder1", "C:/tmp/folder2"]);
+        assert_eq!(
+            response.window_disposition,
+            Some(QuickActionWindowDispositionDto::DisposableTask),
+        );
     }
 
     #[test]
@@ -961,7 +968,6 @@ mod tests {
             dto.window_disposition,
             Some(crate::dto::QuickActionWindowDispositionDto::DisposableTask)
         );
-        assert!(dto.quick_action.is_none());
 
         assert_eq!(inbox.frontend_ready("main"), Ok(1));
         let delivered = delivered.lock().expect("delivery lock poisoned");
@@ -1128,7 +1134,7 @@ mod tests {
     }
 
     #[test]
-    fn startup_state_exposes_tzap_create_intent_for_preference_aware_routing() {
+    fn startup_state_exposes_tzap_disposition_without_a_second_execution_path() {
         let coordinator = QuickActionLaunchCoordinator::from_startup_state(
             QuickActionStartupState::Requested(QuickActionRequestDto {
                 kind: QuickActionKindDto::CompressTzap,
@@ -1139,11 +1145,20 @@ mod tests {
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
-        assert!(response.quick_action_jobs.is_empty());
-        let request = response
-            .quick_action
-            .expect("TZAP request should be routed through frontend preferences");
-        assert_eq!(request.kind, QuickActionKindDto::CompressTzap);
-        assert_eq!(request.paths, ["C:/tmp/source"]);
+        assert_eq!(
+            response.window_disposition,
+            Some(QuickActionWindowDispositionDto::DisposableTask),
+        );
+    }
+
+    #[test]
+    fn invalid_known_action_preserves_its_window_disposition() {
+        let response = state_from_args(&["--quick-action", "compressZip"]).to_dto();
+
+        assert!(response.error.is_some());
+        assert_eq!(
+            response.window_disposition,
+            Some(QuickActionWindowDispositionDto::DisposableTask),
+        );
     }
 }

@@ -8,6 +8,7 @@
     "allow-cancel-job",
     "allow-pause-job",
     "allow-resume-job",
+    "allow-dismiss-job",
     "allow-start-extract",
     "allow-test-archive",
     "allow-subscribe-job",

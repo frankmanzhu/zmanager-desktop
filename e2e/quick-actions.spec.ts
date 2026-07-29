@@ -7,9 +7,18 @@ type IpcCall = {
 
 type QuickActionStartupState = {
   launchedForQuickAction: boolean;
-  quickAction: { kind: string; paths: string[] } | null;
-  quickActionJobs?: { jobId: string; kind: string; status: string; createdAt: string }[] | null;
+  windowDisposition?: "mainWindow" | "disposableTask" | null;
   error: null;
+};
+
+type NativeInboundEvent = {
+  version: 1;
+  eventId: string;
+  kind: "shellActionRequest";
+  timestampUnixMs: number;
+  payload: {
+    request: { kind: string; paths: string[] };
+  };
 };
 
 type QuickActionStubOptions = {
@@ -17,6 +26,7 @@ type QuickActionStubOptions = {
   completeOnPoll?: boolean;
   startupStateDelayMs?: number;
   catalogJobs?: { jobId: string; kind: string; status: string; createdAt: string }[];
+  nativeInboundEvents?: NativeInboundEvent[];
 };
 
 declare global {
@@ -34,8 +44,6 @@ declare global {
 
 const notRequestedState: QuickActionStartupState = {
   launchedForQuickAction: false,
-  quickAction: null,
-  quickActionJobs: [],
   error: null,
 };
 
@@ -56,108 +64,123 @@ test("restored main window reconciles terminal jobs from the catalog without per
   expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
 });
 
-test("fixed create context actions hand the accepted Job to a disposable task window", async ({ page }) => {
+test("cold fixed create requests use the Native Inbox, keep Main hidden, and hand off once", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
-      quickAction: null,
-      quickActionJobs: [{
-        jobId: "job-1",
-        kind: "tzapCreate",
-        status: "queued",
-        createdAt: epochSecondsAgo(5),
-      }],
+      windowDisposition: "disposableTask",
       error: null,
     },
     notRequestedState,
-  ]);
+  ], {
+    nativeInboundEvents: [shellActionEvent(
+      "create-event-123456",
+      "compressTzap",
+      ["/tmp/source"],
+    )],
+  });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
-  await expect(page.locator("main[data-mode]")).toHaveAttribute("data-mode", "compress");
 
   const calls = await ipcCalls(page);
-  expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
+  expect(calls.filter((call) => call.cmd === "start_create")).toHaveLength(1);
   expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
+  expect(calls.some((call) => call.cmd === "plugin:window|show")).toBe(false);
 });
 
-test("extract-here context actions start extraction without listing the archive", async ({ page }) => {
+test("cold extract-here requests start without listing or revealing Main", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
-      quickAction: null,
-      quickActionJobs: [{
-        jobId: "job-1",
-        kind: "tzapExtract",
-        status: "queued",
-        createdAt: epochSecondsAgo(5),
-      }],
+      windowDisposition: "disposableTask",
       error: null,
     },
     notRequestedState,
-  ]);
+  ], {
+    nativeInboundEvents: [shellActionEvent(
+      "extract-event-123456",
+      "extractHere",
+      ["/tmp/archive.tzap"],
+    )],
+  });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
 
   const calls = await ipcCalls(page);
-  expect(calls.some((call) => call.cmd === "start_extract")).toBe(false);
+  expect(calls.filter((call) => call.cmd === "start_extract")).toHaveLength(1);
   expect(calls.some((call) => call.cmd === "list_archive")).toBe(false);
   expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
+  expect(calls.some((call) => call.cmd === "plugin:window|show")).toBe(false);
 });
 
-test("quick action jobs still activate when window sizing is rejected", async ({ page }) => {
+test("two fixed requests receive two independent task windows", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
-      quickAction: null,
-      quickActionJobs: [{
-        jobId: "job-1",
-        kind: "tzapCreate",
-        status: "queued",
-        createdAt: epochSecondsAgo(5),
-      }],
+      windowDisposition: "disposableTask",
       error: null,
     },
     notRequestedState,
   ], {
-    rejectWindowCommands: ["plugin:window|set_min_size"],
+    nativeInboundEvents: [
+      shellActionEvent("create-event-one-123", "compressZip", ["/tmp/one"]),
+      shellActionEvent("create-event-two-123", "compressZip", ["/tmp/two"]),
+    ],
+  });
+
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await expect.poll(async () => (
+    await ipcCalls(page)
+  ).filter((call) => call.cmd === "plugin:webview|create_webview_window").length).toBe(2);
+  const calls = await ipcCalls(page);
+  expect(calls.filter((call) => call.cmd === "start_create")).toHaveLength(2);
+  expect(calls.some((call) => call.cmd === "plugin:window|show")).toBe(false);
+});
+
+test("replayed Native Inbox delivery does not start a duplicate Job", async ({ page }) => {
+  const replay = shellActionEvent(
+    "replayed-create-event-123",
+    "compressZip",
+    ["/tmp/source"],
+  );
+  await installQuickActionTauriStub(page, [
+    {
+      launchedForQuickAction: true,
+      windowDisposition: "disposableTask",
+      error: null,
+    },
+    notRequestedState,
+  ], {
+    nativeInboundEvents: [replay, replay],
   });
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
-  expect((await ipcCalls(page)).some((call) => call.cmd === "subscribe_job")).toBe(false);
+  await expect.poll(async () => (
+    await ipcCalls(page)
+  ).filter((call) => call.cmd === "acknowledge_native_event").length).toBe(2);
+  const calls = await ipcCalls(page);
+  expect(calls.filter((call) => call.cmd === "start_create")).toHaveLength(1);
 });
 
-test("quick action startup waits for job state before showing the workspace", async ({ page }) => {
-  await installQuickActionTauriStub(page, [
-    {
-      launchedForQuickAction: true,
-      quickAction: null,
-      quickActionJobs: [{
-        jobId: "job-1",
-        kind: "tzapCreate",
-        status: "queued",
-        createdAt: epochSecondsAgo(5),
-      }],
-      error: null,
-    },
-    notRequestedState,
-  ], {
-    completeOnPoll: false,
-    startupStateDelayMs: 750,
-  });
-
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-
-  await expect(page.locator("main")).not.toHaveAttribute("data-mode", /.+/);
-  expect((await ipcCalls(page)).some((call) => call.cmd === "plugin:window|show")).toBe(false);
-
-  await expectWindowCommand(page, "plugin:webview|create_webview_window");
-});
-
+function shellActionEvent(
+  eventId: string,
+  kind: string,
+  paths: string[],
+): NativeInboundEvent {
+  return {
+    version: 1,
+    eventId,
+    kind: "shellActionRequest",
+    timestampUnixMs: 1,
+    payload: { request: { kind, paths } },
+  };
+}
 
 async function installQuickActionTauriStub(
   page: Page,
@@ -181,6 +204,7 @@ async function installQuickActionTauriStub(
     let startedJobCount = 0;
     let startupDelayConsumed = false;
     let subscriptionCount = 0;
+    let nativeInboundHandlerId: number | null = null;
     const jobChannels = new Map<string, { callbackId: number; subscriptionId: string; revision: number }>();
     const catalogJobs = payload.options.catalogJobs ?? [];
     for (const job of catalogJobs) {
@@ -265,20 +289,29 @@ async function installQuickActionTauriStub(
         }
         const state = states.shift() ?? {
           launchedForQuickAction: false,
-          quickAction: null,
-          quickActionJobs: [],
           error: null,
         };
-        for (const job of state.quickActionJobs ?? []) {
-          jobStatuses.set(job.jobId, job.status);
-          jobKinds.set(job.jobId, job.kind);
-          jobCreatedAts.set(job.jobId, job.createdAt);
-        }
         return state;
       }
 
       if (cmd === "native_frontend_ready") {
+        if (nativeInboundHandlerId !== null) {
+          for (const nativeEvent of payload.options.nativeInboundEvents ?? []) {
+            queueMicrotask(() => window.__TAURI_INTERNALS__?.runCallback(
+              nativeInboundHandlerId as number,
+              {
+                event: "zmanager-native-inbound-event",
+                id: nativeEvent.eventId,
+                payload: nativeEvent,
+              },
+            ));
+          }
+        }
         return 0;
+      }
+
+      if (cmd === "acknowledge_native_event") {
+        return undefined;
       }
 
       if (cmd === "replacement_migration_prepare") {
@@ -440,6 +473,9 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "plugin:event|listen") {
+        if (args.event === "zmanager-native-inbound-event") {
+          nativeInboundHandlerId = channelCallbackId(args.handler);
+        }
         return args.handler;
       }
 

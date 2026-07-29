@@ -4,6 +4,8 @@ import type {
 } from "../../api/types";
 import { isLiveJobStatus } from "../jobs";
 
+const MAX_RECENT_TERMINAL_JOB_IDS = 512;
+
 export type ProcessJobAccountingSnapshot = Readonly<{
   activeJobIds: readonly string[];
   activeJobCount: number;
@@ -23,6 +25,7 @@ export type ProcessJobAccounting = Readonly<{
 export function createProcessJobAccounting(): ProcessJobAccounting {
   const activeJobIds = new Set<string>();
   const observedInCatalog = new Set<string>();
+  const recentTerminalJobIds = new Set<string>();
 
   function snapshot(): ProcessJobAccountingSnapshot {
     const ids = Object.freeze([...activeJobIds]);
@@ -35,13 +38,26 @@ export function createProcessJobAccounting(): ProcessJobAccounting {
   return Object.freeze({
     getSnapshot: snapshot,
     observeAccepted(job) {
-      if (isLiveJobStatus(job.status)) {
+      if (
+        isLiveJobStatus(job.status)
+        && !recentTerminalJobIds.has(job.jobId)
+      ) {
         activeJobIds.add(job.jobId);
       }
       return snapshot();
     },
     reconcileCatalog(catalog) {
       const catalogIds = new Set(catalog.jobs.map((job) => job.jobId));
+      for (const job of catalog.jobs) {
+        if (job.terminal) {
+          recentTerminalJobIds.add(job.jobId);
+        }
+      }
+      while (recentTerminalJobIds.size > MAX_RECENT_TERMINAL_JOB_IDS) {
+        const oldest = recentTerminalJobIds.values().next().value;
+        if (oldest === undefined) break;
+        recentTerminalJobIds.delete(oldest);
+      }
       const liveCatalogIds = new Set(
         catalog.jobs
           .filter((job) => !job.terminal && isLiveJobStatus(job.status))

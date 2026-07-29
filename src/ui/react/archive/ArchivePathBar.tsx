@@ -62,7 +62,7 @@ export function ArchivePathBar() {
           >
             <FolderOpen className="size-4" aria-hidden="true" />
           </button>
-          <span className="max-w-28 truncate text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="hidden max-w-28 truncate text-[11px] text-slate-500 min-[900px]:inline dark:text-slate-400">
             {extract.usesGlobalDefaults
               ? i18n.t("extract.globalDefault")
               : i18n.t("extract.customDestination")}

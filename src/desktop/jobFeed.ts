@@ -15,11 +15,20 @@ export type JobFeed = Readonly<{
   subscribeCatalog(accept: (snapshot: JobCatalogSnapshotDto) => void): Promise<JobFeedSubscription>;
 }>;
 
+export type TauriJobFeedOptions = Readonly<{
+  reconnectDelayMs?: number;
+  onConnectionError?(error: unknown): void;
+}>;
+
 function newer(incoming: string, current: string | null): boolean {
   try { return current === null || BigInt(incoming) > BigInt(current); } catch { return false; }
 }
 
-export function createTauriJobFeed(): JobFeed {
+export function createTauriJobFeed(
+  options: TauriJobFeedOptions = {},
+): JobFeed {
+  const reconnectDelayMs = options.reconnectDelayMs ?? 250;
+
   async function subscribeWithReconnect<TEnvelope extends { subscriptionId: string; revision: string }>(
     subscribe: (channel: Channel<TEnvelope>) => Promise<string>,
     acceptEnvelope: (envelope: TEnvelope) => void,
@@ -28,6 +37,7 @@ export function createTauriJobFeed(): JobFeed {
     let reconnecting: Promise<void> | null = null;
     let activeSubscriptionId: string | null = null;
     let connectionGeneration = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async (): Promise<void> => {
       const generation = ++connectionGeneration;
@@ -37,8 +47,7 @@ export function createTauriJobFeed(): JobFeed {
         activeSubscriptionId = envelope.subscriptionId;
         acceptEnvelope(envelope);
         void ackSubscription({ subscriptionId: envelope.subscriptionId, revision: envelope.revision })
-          .catch(() => reconnect())
-          .catch(() => undefined);
+          .catch((error) => reconnect(error));
       };
       const subscriptionId = await subscribe(channel);
       if (disposed || generation !== connectionGeneration) {
@@ -48,23 +57,49 @@ export function createTauriJobFeed(): JobFeed {
       activeSubscriptionId = subscriptionId;
     };
 
-    const reconnect = (): Promise<void> => {
+    const scheduleReconnect = (error: unknown): void => {
+      if (disposed || retryTimer) return;
+      options.onConnectionError?.(error);
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void reconnect();
+      }, reconnectDelayMs);
+    };
+
+    const reconnect = (cause?: unknown): Promise<void> => {
       if (disposed) return Promise.resolve();
       if (reconnecting) return reconnecting;
+      if (cause !== undefined) {
+        options.onConnectionError?.(cause);
+      }
       reconnecting = (async () => {
         const previous = activeSubscriptionId;
         activeSubscriptionId = null;
         connectionGeneration += 1;
         if (previous) await unsubscribeJob({ subscriptionId: previous }).catch(() => undefined);
-        await connect();
-      })().finally(() => { reconnecting = null; });
+        try {
+          await connect();
+        } catch (error) {
+          scheduleReconnect(error);
+        }
+      })().finally(() => {
+        reconnecting = null;
+      });
       return reconnecting;
     };
 
-    await connect();
+    try {
+      await connect();
+    } catch (error) {
+      scheduleReconnect(error);
+    }
     return {
       async unsubscribe() {
         disposed = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = null;
+        }
         await reconnecting?.catch(() => undefined);
         const subscriptionId = activeSubscriptionId;
         activeSubscriptionId = null;

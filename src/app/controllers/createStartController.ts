@@ -3,6 +3,7 @@ import type {
   CreateWorkspace,
   CreateWorkspaceSnapshot,
 } from "../workspaces/createWorkspace";
+import type { MainWindowSubmissionGuard } from "../mainWindowSubmissionGuard";
 
 export type CreateStartOptions = Readonly<{
   destinationCollisionStrategy?: StartCreateRequest["destinationCollisionStrategy"];
@@ -20,8 +21,8 @@ export type CreateStartControllerWorkspace = Pick<
 
 export type CreateStartControllerOptions = Readonly<{
   workspace: CreateStartControllerWorkspace;
+  submissionGuard: MainWindowSubmissionGuard;
   publishSnapshot(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
-  isSubmissionInFlight(): boolean;
   startCreate(request: StartCreateRequest): Promise<StartJobResponseDto>;
   onCreateStarted(
     response: StartJobResponseDto,
@@ -38,7 +39,7 @@ export function createCreateStartController(
   options: CreateStartControllerOptions,
 ): CreateStartController {
   async function runCreate(createOptions: CreateStartOptions): Promise<void> {
-    if (options.isSubmissionInFlight()) {
+    if (options.submissionGuard.isInFlight()) {
       return;
     }
 
@@ -59,11 +60,14 @@ export function createCreateStartController(
     }
 
     const request = requestResult.request;
+    if (!options.submissionGuard.tryBegin()) {
+      return;
+    }
     options.publishSnapshot(options.workspace.setSubmissionInFlight(true).snapshot);
 
+    let response: StartJobResponseDto;
     try {
-      const response = await options.startCreate(request);
-      await options.onCreateStarted(response, request);
+      response = await options.startCreate(request);
     } catch (error) {
       const commandError = options.toCommandError(error);
       options.publishSnapshot(options.workspace.setPlanError(
@@ -71,9 +75,13 @@ export function createCreateStartController(
           ? { fallbackText: commandError.message }
           : { messageKey: "create.error.unableStart" },
       ));
+      return;
     } finally {
+      options.submissionGuard.end();
       options.publishSnapshot(options.workspace.setSubmissionInFlight(false).snapshot);
     }
+
+    await options.onCreateStarted(response, request);
   }
 
   return {

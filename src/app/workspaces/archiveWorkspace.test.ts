@@ -32,7 +32,7 @@ describe("archive workspace load state", () => {
     });
   });
 
-  it("resets only submitted extraction state after an accepted start", () => {
+  it("resets only submitted archive-operation state after an accepted start", () => {
     const workspace = createArchiveWorkspace();
     workspace.loadSucceeded({
       archivePath: "C:/tmp/project.zip",
@@ -47,7 +47,7 @@ describe("archive workspace load state", () => {
       error: commandError("password_required"),
     });
 
-    const snapshot = workspace.resetAfterAcceptedExtraction();
+    const snapshot = workspace.resetAfterAcceptedOperation();
 
     expect(snapshot.currentArchivePath).toBe("C:/tmp/project.zip");
     expect(snapshot.entries).toEqual(entries);

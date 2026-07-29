@@ -68,6 +68,7 @@ import { createDefaultHandlerController } from "../app/controllers/defaultHandle
 import {
   createNativeInboundController,
 } from "../app/controllers/nativeInboundController";
+import { createMainWindowSubmissionGuard } from "../app/mainWindowSubmissionGuard";
 import {
   ARCHIVE_TABLE_COLUMNS,
   buildArchiveBrowserRows,
@@ -247,8 +248,6 @@ import {
   applyAccountHostedCallback,
   beginAccountHostedAuth,
   acknowledgeNativeEvent,
-  cancelJob as cancelJobCommand,
-  dismissJob as dismissJobCommand,
   fetchHealthcheck,
   fetchAccountSnapshot,
   fetchProjectContract,
@@ -263,13 +262,11 @@ import {
   searchArchiveIndex,
   closeArchiveIndex,
   nativeFrontendReady,
-  pauseJob as pauseJobCommand,
   forgetAccount,
   removeAccountContact,
   removeAccountRecipientKey,
   runPlanCreate,
   runPreviewEntry,
-  resumeJob as resumeJobCommand,
   runStartCreate,
   runStartExtract,
   runTestArchive,
@@ -466,12 +463,28 @@ const pendingNativeDragCounts = new Map<string, number>();
 let normalWorkspaceRendered = false;
 const disposableTaskLifecycle = createDisposableTaskLifecycle();
 const processJobs = createProcessJobAccounting();
+const mainWindowSubmissionGuard = createMainWindowSubmissionGuard();
 const diagnostics = createDesktopDiagnosticRecorder();
+function reportJobPresentationFailure(
+  job: StartJobResponseDto,
+  error: unknown,
+): void {
+  diagnostics.record({
+    scope: "jobPresentation",
+    name: "presentationFailed",
+    fields: {
+      jobKind: job.kind,
+      error: unknownErrorMessage(error, "Unable to present task window."),
+    },
+  });
+  setOperationalStatus("The Job started, but its task window could not be opened.");
+}
 const disposableTaskWindows = createDisposableTaskWindowManager({
   onReady: () => {},
   onAllClosed: () => {
     maybeCloseQuickActionOnlyCoordinator();
   },
+  onPresentationFailed: reportJobPresentationFailure,
   diagnostics,
 });
 const jobHandoff = createJobHandoffController({
@@ -483,17 +496,7 @@ const jobHandoff = createJobHandoffController({
       await disposableTaskWindows.open(job);
     }
   },
-  reportPresentationFailure: (job, error) => {
-    diagnostics.record({
-      scope: "jobPresentation",
-      name: "presentationFailed",
-      fields: {
-        jobKind: job.kind,
-        error: unknownErrorMessage(error, "Unable to present task window."),
-      },
-    });
-    setOperationalStatus("The Job started, but its task window could not be opened.");
-  },
+  reportPresentationFailure: reportJobPresentationFailure,
 });
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
@@ -755,11 +758,10 @@ const createPlanController = createCreatePlanController({
 });
 const createStartController = createCreateStartController({
   workspace: createWorkspace,
+  submissionGuard: mainWindowSubmissionGuard,
   publishSnapshot: publishCreateWorkspaceSnapshot,
-  isSubmissionInFlight: isCreateSubmissionInFlight,
   startCreate: runStartCreate,
   onCreateStarted: async (response, request) => {
-    recordCreateDestinationHistory(request.destinationPath);
     await jobHandoff.handoffAcceptedJob(response, {
       resetSubmittedState: () => {
         cancelQueuedPlanRun();
@@ -770,10 +772,22 @@ const createStartController = createCreateStartController({
         ).snapshot);
       },
     });
+    recordCreateDestinationHistory(request.destinationPath);
   },
   toCommandError: asCommandError,
 });
-const jobFeed = createTauriJobFeed();
+const jobFeed = createTauriJobFeed({
+  onConnectionError: (error) => {
+    diagnostics.record({
+      scope: "jobCatalog",
+      name: "connectionFailed",
+      fields: {
+        error: unknownErrorMessage(error, "Unable to subscribe to the Job catalog."),
+      },
+    });
+    setOperationalStatus("Job lifecycle updates are temporarily unavailable; reconnecting.");
+  },
+});
 let catalogSubscription: JobFeedSubscription | null = null;
 
 async function subscribeToJobCatalog(): Promise<void> {
@@ -844,10 +858,17 @@ const archiveOpenController = createArchiveOpenController({
 });
 const archiveTestController = createArchiveTestController({
   workspace: archiveWorkspace,
+  submissionGuard: mainWindowSubmissionGuard,
   hasCurrentArchive: () => Boolean(archiveCurrentPath()),
   initialPassword: () => undefined,
   runTestArchive,
-  handoffAcceptedJob: (response) => jobHandoff.handoffAcceptedJob(response),
+  handoffAcceptedJob: (response, resetSubmittedState) => (
+    jobHandoff.handoffAcceptedJob(response, { resetSubmittedState })
+  ),
+  resetSubmittedState: () => {
+    archiveWorkspace.resetAfterAcceptedOperation();
+    publishReactSnapshot();
+  },
   toCommandError: asCommandError,
   promptForPasswordRetry: promptForArchivePasswordRetry,
   unableStartMessage: () => message("test.unableStart"),
@@ -884,6 +905,7 @@ const archivePreviewController = createArchivePreviewController({
 });
 const extractStartController = createExtractStartController({
   workspace: archiveWorkspace,
+  submissionGuard: mainWindowSubmissionGuard,
   hasCurrentArchive: () => Boolean(archiveCurrentPath()),
   joinNativePath,
   startExtract: runStartExtract,
@@ -901,7 +923,7 @@ const extractStartController = createExtractStartController({
     jobHandoff.handoffAcceptedJob(response, { resetSubmittedState })
   ),
   resetSubmittedState: () => {
-    archiveWorkspace.resetAfterAcceptedExtraction();
+    archiveWorkspace.resetAfterAcceptedOperation();
     extractWorkspace.resetToDefaults();
     publishReactSnapshot();
   },
@@ -1004,8 +1026,6 @@ const startupController = createStartupController({
   isDesktopRuntime,
   revealWindowForStartupQuickAction,
   revealNormalWindow: revealNormalAppWindow,
-  activateQuickActionJobs,
-  handleQuickActionRequest: routeQuickActionRequest,
   setOperationalStatus,
   setOperationalMessage,
   setBrowseError: (text) => setBrowseState("error", text),
@@ -1210,7 +1230,13 @@ async function revealNormalAppWindow() {
 }
 
 async function revealWindowForStartupQuickAction(state: QuickActionStartupStateDto) {
-  if (state.launchedForQuickAction && state.windowDisposition === "disposableTask") {
+  if (
+    state.launchedForQuickAction
+    && (
+      state.windowDisposition === "disposableTask"
+      || (state.windowDisposition == null && !state.error)
+    )
+  ) {
     disposableTaskLifecycle.observeQuickActionLaunch();
     return;
   }
@@ -3571,17 +3597,6 @@ async function routeQuickActionRequest(request: QuickActionRequestDto) {
   });
 }
 
-async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
-  if (!responses.length) {
-    return;
-  }
-
-  for (const response of responses) {
-    await jobHandoff.handoffAcceptedJob(response);
-  }
-  setOperationalMessage("jobs.quickActionStarted");
-}
-
 async function handleStartupQuickAction() {
   await startupController.handleStartupQuickAction();
 }
@@ -3729,6 +3744,26 @@ function applyCleanupOnAppClose(): void {
 
 function bindWindowLifecycleHandlers(): void {
   bindPreviewCleanupOnAppClose(applyCleanupOnAppClose);
+  if (isDesktopRuntime()) {
+    void appWindowController.listenCloseRequested((event) => {
+      if (
+        !disposableTaskWindows.hasOpenWindows()
+        && !processJobs.hasActiveJobs()
+      ) {
+        return;
+      }
+      event.preventDefault();
+      appWindowEffects.close();
+    }).catch((error) => {
+      diagnostics.record({
+        scope: "mainWindow",
+        name: "closeListenerFailed",
+        fields: {
+          error: unknownErrorMessage(error, "Unable to bind the Main Window close policy."),
+        },
+      });
+    });
+  }
 }
 
 function closeCurrentArchive(): void {

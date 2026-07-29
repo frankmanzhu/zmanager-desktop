@@ -11,6 +11,7 @@ import type {
   ArchiveWorkspaceRequestResult,
   ArchiveWorkspaceExtractUnavailableReason,
 } from "../workspaces/archiveWorkspace";
+import type { MainWindowSubmissionGuard } from "../mainWindowSubmissionGuard";
 
 export type ExtractStartControllerWorkspace = Pick<
   ArchiveWorkspace,
@@ -23,6 +24,7 @@ export type ExtractStartControllerWorkspace = Pick<
 
 export type ExtractStartControllerOptions = Readonly<{
   workspace: ExtractStartControllerWorkspace;
+  submissionGuard: MainWindowSubmissionGuard;
   hasCurrentArchive(): boolean;
   joinNativePath(parentPath: string, childName: string): string;
   startExtract(request: StartExtractRequest): Promise<StartJobResponseDto>;
@@ -93,12 +95,13 @@ export function createExtractStartController(
       return;
     }
     const request = requestResult.request;
+    if (!options.submissionGuard.tryBegin()) {
+      return;
+    }
 
+    let response: StartJobResponseDto;
     try {
-      const response = await options.startExtract(request);
-      options.recordDestination(resolvedInput.destination);
-      options.closeExtractDialog();
-      await options.handoffAcceptedJob(response, options.resetSubmittedState);
+      response = await options.startExtract(request);
     } catch (error) {
       const commandError = options.toCommandError(error);
       const retry = options.workspace.requestPasswordRetry({
@@ -110,6 +113,16 @@ export function createExtractStartController(
         return;
       }
       options.setBrowseError(commandError?.message ?? options.unableStartMessage(mode));
+      return;
+    } finally {
+      options.submissionGuard.end();
+    }
+
+    await options.handoffAcceptedJob(response, options.resetSubmittedState);
+    try {
+      options.recordDestination(resolvedInput.destination);
+    } finally {
+      options.closeExtractDialog();
     }
   }
 

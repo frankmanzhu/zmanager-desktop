@@ -8,6 +8,7 @@ import type {
   StartJobResponseDto,
 } from "../../api/types";
 import type { ExtractMode, ExtractStartInput } from "../extractFlow";
+import { createMainWindowSubmissionGuard } from "../mainWindowSubmissionGuard";
 import { createArchiveWorkspace, type ArchiveWorkspace } from "../workspaces/archiveWorkspace";
 import {
   createExtractStartController,
@@ -91,6 +92,7 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
 
   const controller = createExtractStartController({
     workspace,
+    submissionGuard: createMainWindowSubmissionGuard(),
     hasCurrentArchive() {
       return Boolean(workspace.getSnapshot().currentArchivePath);
     },
@@ -238,5 +240,28 @@ describe("extract start controller", () => {
     await unknownHarness.startWithInput("selection");
 
     expect(unknownHarness.calls.errors).toEqual(["Unable to extract selection."]);
+  });
+
+  it("guards only the request awaiting Rust acceptance", async () => {
+    let acceptFirst: (job: StartJobResponseDto) => void = () => {
+      throw new Error("first extraction was not started");
+    };
+    const firstAcceptance = new Promise<StartJobResponseDto>((resolve) => {
+      acceptFirst = resolve;
+    });
+    const startExtract = vi.fn()
+      .mockImplementationOnce(() => firstAcceptance)
+      .mockResolvedValueOnce(startJobResponse({ jobId: "extract-job-2" }));
+    const harness = createHarness({ startExtract });
+
+    const first = harness.startWithInput("archive");
+    const duplicate = harness.startWithInput("archive");
+    expect(startExtract).toHaveBeenCalledTimes(1);
+
+    acceptFirst(startJobResponse({ jobId: "extract-job-1" }));
+    await Promise.all([first, duplicate]);
+    await harness.startWithInput("archive");
+
+    expect(startExtract).toHaveBeenCalledTimes(2);
   });
 });

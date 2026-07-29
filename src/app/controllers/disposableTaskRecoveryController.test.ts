@@ -96,4 +96,29 @@ describe("disposable task recovery controller", () => {
     await expect(controller.retryWithPassword(failedSnapshot())).resolves.toBe("cancelled");
     expect(startExtract).not.toHaveBeenCalled();
   });
+
+  it("keeps an accepted replacement accepted when presentation fails", async () => {
+    const reportFailure = vi.fn();
+    const controller = createDisposableTaskRecoveryController({
+      promptForPassword: () => "secret",
+      startExtract: vi.fn(async () => ({
+        jobId: "accepted-job",
+        kind: "zipExtract" as const,
+        status: "queued" as const,
+        createdAt: "2026-07-29T00:00:02.000Z",
+      })),
+      startTest: vi.fn(),
+      handoffAcceptedJob: vi.fn(async () => {
+        throw new Error("main window event unavailable");
+      }),
+      toCommandError: () => null,
+      reportFailure,
+    });
+
+    await expect(controller.retryWithPassword(failedSnapshot()))
+      .resolves.toBe("acceptedWithoutPresentation");
+    expect(reportFailure).toHaveBeenCalledWith(
+      "The replacement Job started, but its task window could not be opened.",
+    );
+  });
 });
