@@ -2,7 +2,8 @@
 
 - Status: Implemented
 - Scope: `zmanager-core`, including archive backend adapters and reusable CLI/FFI consumers
-- Companion: [`ZMANAGER_DESKTOP_JOB_PROGRESS_ARCHITECTURE_SPEC.md`](ZMANAGER_DESKTOP_JOB_PROGRESS_ARCHITECTURE_SPEC.md)
+- Desktop delivery and window ownership:
+  [`ARCHITECTURE.md`](ARCHITECTURE.md#job-feed)
 
 ## Purpose
 

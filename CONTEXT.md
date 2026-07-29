@@ -19,14 +19,28 @@ integration, and packaging.
 
 The singleton, persistent application window opened by launching the app or by
 an explicit **Add to archive** shell action. It hosts the normal Compress and
-Extract workspaces and remains available after individual jobs finish.
+Extract launch workflows. It is a reusable archive browser and operation
+launcher, not a job-progress surface. After an accepted create or extract
+request crosses **Job Handoff**, it clears the submitted operation's transient
+state and immediately returns to a browse-ready state without waiting for the
+job to finish.
 
 ### Disposable Task Window
 
-A short-lived window dedicated to one quick action, such as **Compress to ZIP**
-or **Extract here**. Multiple task windows may coexist. A task window may close
-after its job completes according to the applicable completion policy; it does
-not replace or duplicate the Main Window.
+A short-lived window dedicated to exactly one create or extract Job, whether
+launched from a Quick Action or the Main Window. Multiple task windows may
+coexist. Successful and cancelled jobs auto-close after brief acknowledgement;
+a failed task remains open so its error and recovery actions are visible. It
+does not replace or duplicate the Main Window.
+
+### Job Handoff
+
+The one-way transition after Rust accepts a create or extract request and
+returns a Job ID. The Desktop Shell registers and subscribes to the Job, opens
+its Disposable Task Window, and resets the submitted operation state in the
+Main Window. The accepted Job is independent of that reset and continues if the
+Main Window is reused, hidden, or closed. A request rejected before Job Handoff
+does not reset the non-secret setup state.
 
 ### Quick Action
 
@@ -203,6 +217,12 @@ guards. Do not reimplement these behaviors in TypeScript.
   command switches.
 - Workspaces are deterministic state machines where practical. Controllers
   coordinate asynchronous effects through injected interfaces.
+- Accepted create and extract requests cross one Job Handoff seam. The handoff
+  opens one Disposable Task Window and resets submitted Main Window setup
+  immediately; job completion never controls Main Window reset.
+- The Main Window never renders job progress or shared job history. Internal
+  job state is limited to lifecycle, subscription, retry, output-action, and
+  close-guard duties.
 - Toolbar, menu, shortcut, context-menu, tree, details-pane, and row actions
   route through shared typed command seams rather than separate behavior.
 - Workflow snapshots are immutable, render-ready plain data. They never contain
@@ -231,8 +251,8 @@ guards. Do not reimplement these behaviors in TypeScript.
 ## Primary documentation
 
 - `AGENTS.md`: repository working rules and maintainability constraints
-- `docs/ARCHITECTURE.md`: high-level runtime layering and command boundary
+- `docs/ARCHITECTURE.md`: authoritative runtime, frontend-module, Job Handoff,
+  window-lifecycle, and command architecture
 - `docs/REQUIREMENTS.md`: functional, platform, security, and acceptance requirements
-- `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`: target frontend module ownership
 - `docs/windows-context-menu-behavior.md`: Windows shell action contract
 - `docs/adr/`: durable architectural decisions

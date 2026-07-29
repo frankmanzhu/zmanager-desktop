@@ -75,7 +75,7 @@ All new frontend UI and all modifications to existing frontend UI must use React
 
 Treat `src/main.ts` as the composition root, not the application architecture. It may query stable DOM roots, instantiate adapters/controllers/workspaces, bind top-level startup, and connect render functions to snapshots. Do not add new durable workflow state, table row derivation, command execution switches, selection/focus logic, job lifecycle state, password retry state, preview cleanup state, drop decision state, path-history normalization, preference patching, locale/display refresh, or desktop request construction to `main.ts`.
 
-Prefer deep modules with small interfaces over shallow helper extraction. The current architecture target is documented in `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`: Shell Workspace, Archive Workspace, Create Workspace, Jobs Workspace, Command Router, shared Hierarchical Table, controllers, display context, path histories, and desktop adapters.
+Prefer deep modules with small interfaces over shallow helper extraction. The current architecture target is documented in `docs/ARCHITECTURE.md`: Main Window Manager, Job Handoff, Disposable Task Workflow, Shell Workspace, Archive Workspace, Create Workspace, internal Jobs Workspace, Command Router, shared Hierarchical Table, controllers, display context, path histories, and desktop adapters.
 
 Keep ownership clear:
 

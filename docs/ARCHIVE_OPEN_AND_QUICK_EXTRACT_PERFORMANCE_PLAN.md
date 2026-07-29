@@ -11,8 +11,6 @@
   - `CONTEXT.md`
   - `docs/ARCHITECTURE.md`
   - `docs/REQUIREMENTS.md`
-  - `docs/FRONTEND_ARCHITECTURE_DEEPENING_PLAN.md`
-  - `docs/ZMANAGER_DESKTOP_JOB_PROGRESS_ARCHITECTURE_SPEC.md`
   - `docs/ZMANAGER_CORE_JOB_PROGRESS_ARCHITECTURE_SPEC.md`
   - `docs/gui-audit/extraction-flow-proposal/PROPOSAL.md`
 

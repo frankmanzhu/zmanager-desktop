@@ -239,8 +239,8 @@ needed instead of translating every attribute generically.
 For dynamic view helpers, pass the translator explicitly:
 
 ```ts
-renderPreferencesDialog(elements, preferences, i18n);
-renderJobsDrawer(elements, jobs, i18n);
+buildPreferencesSnapshot(preferences, displayContext);
+buildDisposableTaskSnapshot(job, displayContext);
 ```
 
 Avoid importing global translation state inside low-level helpers. Passing an

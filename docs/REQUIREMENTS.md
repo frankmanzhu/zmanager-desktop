@@ -43,10 +43,21 @@
 
 ### Jobs
 
-- Maintain a visible job list.
-- Show current entry, bytes processed, total bytes when known, throughput when available, warnings, and terminal status.
-- Keep completed job summaries visible until dismissed.
-- Do not leave the UI stuck when the backend returns an error.
+- Open one Disposable Task Window for every accepted create or extract Job,
+  whether it was launched by the Main Window or a shell Quick Action.
+- Keep the Main Window reusable while Jobs run. After Job Handoff, clear the
+  submitted operation state and return the Main Window to a browse-ready state
+  without waiting for completion.
+- Allow multiple create and extract Jobs to run concurrently, each with an
+  independent task window.
+- Show current entry, bytes processed, total bytes when known, throughput when
+  available, warnings, controls, and terminal status in that Job's task window.
+- Auto-close successful and cancelled task windows after brief acknowledgement.
+  Keep failed task windows visible until the user dismisses them.
+- Do not show a Main Window job drawer, shared job history, focused-progress
+  mode, or in-workspace progress overlay.
+- Do not leave either the manager or a task window stuck when the backend
+  returns an error.
 
 ### Preferences
 

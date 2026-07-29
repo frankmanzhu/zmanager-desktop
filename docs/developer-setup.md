@@ -5,7 +5,7 @@ information that was previously in the repository front page.
 
 ## Release notes workflow
 
-For each release, update [`ReadMe.txt`](../ReadMe.txt) with the notes that should appear in GitHub release assets/description.
+For each release, update [`README.md`](../README.md) with the notes that should appear in GitHub release assets/description.
 
 ## Repository relationship
 
