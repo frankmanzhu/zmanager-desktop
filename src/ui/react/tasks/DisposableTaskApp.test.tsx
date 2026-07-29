@@ -23,7 +23,9 @@ describe("disposable task view", () => {
         onKeepOpen() {},
         onMinimize() {},
         onPause() {},
+        onRetry() {},
         onResume() {},
+        onRunOutputAction() {},
       }),
     );
 
@@ -59,7 +61,9 @@ describe("disposable task view", () => {
         onKeepOpen() {},
         onMinimize() {},
         onPause() {},
+        onRetry() {},
         onResume() {},
+        onRunOutputAction() {},
       }),
     );
 
@@ -68,5 +72,64 @@ describe("disposable task view", () => {
     expect(html).not.toContain('title="C:/Users/example');
     expect(html).toContain("…/reports/quarterly-summary.txt");
     expect(html).not.toContain(`>${fullPath}</p>`);
+  });
+
+  it("shows task-owned recovery and output actions for a recoverable failure", () => {
+    const initial = createDisposableTask({
+      jobId: "failed-job",
+      kind: "zipExtract",
+      status: "queued",
+      createdAt: "2026-07-11T00:00:00Z",
+    });
+    const state = {
+      ...initial,
+      phase: "failed" as const,
+      job: {
+        ...initial.job,
+        status: "failed" as const,
+        latestFailure: {
+          eventType: "failed" as const,
+          code: "password_required",
+          message: "Password required",
+        },
+        retryDescriptor: {
+          retryKind: "extractArchive" as const,
+          actionId: "retry-with-password",
+          archivePath: "C:/source.zip",
+          destinationPath: "C:/out",
+          overwrite: "rename" as const,
+          destinationCollisionStrategy: "rename" as const,
+          entryPaths: [],
+          stripComponents: 0,
+        },
+        outputArtifacts: [{
+          artifactId: "output",
+          kind: "directory" as const,
+          path: "C:/out",
+        }],
+        availableActions: [{
+          actionId: "open-output",
+          kind: "open" as const,
+          artifactId: "output",
+        }],
+      },
+    };
+
+    const html = renderToStaticMarkup(createElement(DisposableTaskView, {
+      state,
+      nowMs: Date.parse("2026-07-11T00:00:01Z"),
+      onCancel() {},
+      onClose() {},
+      onContinueInBackground() {},
+      onKeepOpen() {},
+      onMinimize() {},
+      onPause() {},
+      onRetry() {},
+      onResume() {},
+      onRunOutputAction() {},
+    }));
+
+    expect(html).toContain("Retry with password");
+    expect(html).toContain("Open output");
   });
 });

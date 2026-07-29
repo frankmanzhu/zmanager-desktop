@@ -5,14 +5,12 @@ import {
   type ExtractStartInput,
   type ResolvedExtractStartInput,
 } from "../extractFlow";
-import type { JobOutputAction } from "../workspaces/jobsWorkspace";
 import type {
   ArchiveWorkspace,
   ArchiveWorkspacePasswordRetry,
   ArchiveWorkspaceRequestResult,
   ArchiveWorkspaceExtractUnavailableReason,
 } from "../workspaces/archiveWorkspace";
-import type { JobRetryContext } from "../jobs";
 
 export type ExtractStartControllerWorkspace = Pick<
   ArchiveWorkspace,
@@ -34,15 +32,11 @@ export type ExtractStartControllerOptions = Readonly<{
   selectEntryFirst(): void;
   recordDestination(destination: string): void;
   closeExtractDialog(): void;
-  addJob(
+  handoffAcceptedJob(
     response: StartJobResponseDto,
-    options: {
-      retryContext: JobRetryContext;
-      focusProgress: true;
-      outputActions: JobOutputAction[];
-    },
-  ): void;
-  outputActions(request: StartExtractRequest): JobOutputAction[];
+    resetSubmittedState: () => void,
+  ): Promise<void>;
+  resetSubmittedState(): void;
   unableStartMessage(mode: ExtractMode): string;
   setBrowseError(message: string): void;
 }>;
@@ -50,25 +44,6 @@ export type ExtractStartControllerOptions = Readonly<{
 export type ExtractStartController = Readonly<{
   startExtract(mode: ExtractMode, input: ExtractStartInput): Promise<void>;
 }>;
-
-function retryContextForRequest(
-  request: StartExtractRequest,
-  input: ResolvedExtractStartInput,
-  mode: ExtractMode,
-): JobRetryContext {
-  return {
-    retryKind: "extractArchive",
-    archivePath: request.archivePath,
-    destinationPath: input.destination ?? request.destinationPath,
-    overwrite: input.overwrite,
-    ...(mode === "selection" ? { entryPaths: request.entryPaths } : { entryPaths: undefined }),
-    stripComponents: input.stripComponents,
-    tzapRestorePolicy: input.tzapRestorePolicy,
-    tzapAllowDegraded: input.tzapAllowDegraded,
-    tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks,
-    ignoreSymlinks: input.ignoreSymlinks,
-  };
-}
 
 function passwordRetryOperation(mode: ExtractMode): "extractArchive" | "extractSelection" {
   return mode === "archive" ? "extractArchive" : "extractSelection";
@@ -123,12 +98,7 @@ export function createExtractStartController(
       const response = await options.startExtract(request);
       options.recordDestination(resolvedInput.destination);
       options.closeExtractDialog();
-      options.workspace.clearPasswordRetry();
-      options.addJob(response, {
-        retryContext: retryContextForRequest(request, resolvedInput, mode),
-        focusProgress: true,
-        outputActions: options.outputActions(request),
-      });
+      await options.handoffAcceptedJob(response, options.resetSubmittedState);
     } catch (error) {
       const commandError = options.toCommandError(error);
       const retry = options.workspace.requestPasswordRetry({

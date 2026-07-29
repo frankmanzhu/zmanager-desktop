@@ -9,7 +9,6 @@ import {
   HelpCircle,
   Info,
   List,
-  ListTodo,
   MoveRight,
   Plus,
   RefreshCw,
@@ -83,8 +82,6 @@ export function commandButtonId(commandId: CommandId): string {
       return "close-archive";
     case "options":
       return "preferences-toolbar";
-    case "jobs":
-      return "jobs-drawer-open";
     default:
       return `toolbar-${commandId}`;
   }
@@ -129,8 +126,6 @@ export function commandIcon(commandId: CommandId): LucideIcon {
     case "options":
     case "deleteTempFiles":
       return Settings;
-    case "jobs":
-      return ListTodo;
     case "refresh":
       return RefreshCw;
     case "selectAll":

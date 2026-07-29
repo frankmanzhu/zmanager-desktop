@@ -6,7 +6,6 @@ import {
 import {
   COMMAND_DEFINITIONS,
   ARCHIVE_NOT_READY_MESSAGE,
-  JOB_RUNNING_MESSAGE,
   NO_ARCHIVE_OPEN_MESSAGE,
   NO_ENTRIES_MESSAGE,
   NO_SELECTION_MESSAGE,
@@ -57,6 +56,7 @@ import {
 import {
   createExtractStartController,
 } from "../app/controllers/extractStartController";
+import { createJobHandoffController } from "../app/controllers/jobHandoffController";
 import {
   createQuickActionController,
 } from "../app/controllers/quickActionController";
@@ -147,10 +147,7 @@ import {
   setHierarchicalTablePathSelected,
   type HierarchicalTableSelectionResult,
 } from "../app/hierarchicalTable";
-import {
-  getPathBasename,
-  parseDateValue,
-} from "../app/formatting";
+import { getPathBasename } from "../app/formatting";
 import {
   normalizeArchivePath,
 } from "../app/archiveTree";
@@ -190,15 +187,9 @@ import {
   type DropIntentSurface,
   type WorkspaceDropMode,
 } from "../app/dropIntent";
-import {
-  type JobRetryContext,
-} from "../app/jobs";
 import { createDisposableTaskLifecycle } from "../app/shell/disposableTaskLifecycle";
+import { createProcessJobAccounting } from "../app/shell/processJobAccounting";
 import { runInboundQuickAction } from "../app/shell/quickActionLaunchDisposition";
-import {
-  createJobsWorkspace,
-  type JobOutputAction,
-} from "../app/workspaces/jobsWorkspace";
 import { createAccountWorkspace } from "../app/workspaces/accountWorkspace";
 import {
   createDefaultsForFormat,
@@ -293,7 +284,6 @@ import type {
   CreatePlanResponse,
   DiagnosticLogInfoDto,
   HealthcheckResponse,
-  JobState,
   ListArchiveRequest,
   ProjectContract,
   QuickActionRequestDto,
@@ -329,7 +319,6 @@ import {
   createAppTimers,
 } from "../desktop/timers";
 import { createTauriJobFeed, type JobFeedSubscription } from "../desktop/jobFeed";
-import { createJobSubscriptionSet } from "../desktop/jobSubscriptionSet";
 import {
   bindPreviewCleanupOnAppClose,
   cleanupPreviewRoots,
@@ -346,6 +335,10 @@ import {
   type AppWindowResizeDirection,
 } from "../desktop/windowController";
 import { createDisposableTaskWindowManager } from "../desktop/disposableTaskWindowManager";
+import {
+  listenDisposableTaskJobHandoffs,
+  listenDisposableTaskOutputActions,
+} from "../desktop/disposableTaskWindow";
 import {
   createDesktopDiagnosticRecorder,
   persistDiagnosticEvent,
@@ -470,9 +463,9 @@ let activeExtractDialogMessage = "";
 let dropUnlisten: (() => void) | null = null;
 const pendingNativeDragCounts = new Map<string, number>();
 
-const jobsWorkspace = createJobsWorkspace();
 let normalWorkspaceRendered = false;
 const disposableTaskLifecycle = createDisposableTaskLifecycle();
+const processJobs = createProcessJobAccounting();
 const diagnostics = createDesktopDiagnosticRecorder();
 const disposableTaskWindows = createDisposableTaskWindowManager({
   onReady: () => {},
@@ -480,6 +473,27 @@ const disposableTaskWindows = createDisposableTaskWindowManager({
     maybeCloseQuickActionOnlyCoordinator();
   },
   diagnostics,
+});
+const jobHandoff = createJobHandoffController({
+  recordAccepted: (job) => {
+    processJobs.observeAccepted(job);
+  },
+  presentTaskWindow: async (job) => {
+    if (isDesktopRuntime()) {
+      await disposableTaskWindows.open(job);
+    }
+  },
+  reportPresentationFailure: (job, error) => {
+    diagnostics.record({
+      scope: "jobPresentation",
+      name: "presentationFailed",
+      fields: {
+        jobKind: job.kind,
+        error: unknownErrorMessage(error, "Unable to present task window."),
+      },
+    });
+    setOperationalStatus("The Job started, but its task window could not be opened.");
+  },
 });
 let latestHealthcheck: HealthcheckResponse | null = null;
 let latestContract: ProjectContract | null = null;
@@ -527,7 +541,6 @@ const archiveRuntimeActions = createArchiveRuntimeActions({
       selected,
     }));
   },
-  hasActiveJob,
   applySelection: (input) => {
     applyArchiveTableSelection({
       selectedPaths: new Set(input.selectedPaths),
@@ -745,35 +758,29 @@ const createStartController = createCreateStartController({
   publishSnapshot: publishCreateWorkspaceSnapshot,
   isSubmissionInFlight: isCreateSubmissionInFlight,
   startCreate: runStartCreate,
-  onCreateStarted: (response, request) => {
+  onCreateStarted: async (response, request) => {
     recordCreateDestinationHistory(request.destinationPath);
-    addJobState(response, {
-      focusProgress: true,
-      outputActions: createJobOutputActions(request),
+    await jobHandoff.handoffAcceptedJob(response, {
+      resetSubmittedState: () => {
+        cancelQueuedPlanRun();
+        const format = appPreferences.defaultArchiveFormat;
+        publishCreateWorkspaceSnapshot(createWorkspace.resetAfterAcceptedStart(
+          format,
+          createDefaultsForFormat(appPreferences, format),
+        ).snapshot);
+      },
     });
   },
   toCommandError: asCommandError,
 });
 const jobFeed = createTauriJobFeed();
-const jobSubscriptions = createJobSubscriptionSet(
-  jobFeed,
-  (jobId, snapshot) => {
-    jobsWorkspace.acceptRetainedSnapshot(snapshot);
-    void maybePromptForJobPasswordRetry(jobId);
-  },
-  (jobId) => jobsWorkspace.removeJob(jobId),
-);
 let catalogSubscription: JobFeedSubscription | null = null;
-
-async function subscribeToRetainedJob(jobId: string): Promise<void> {
-  return jobSubscriptions.ensure(jobId);
-}
 
 async function subscribeToJobCatalog(): Promise<void> {
   if (catalogSubscription) return;
   catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
-    const retained = new Set(catalog.jobs.map((job) => job.jobId));
-    jobSubscriptions.reconcile(retained);
+    processJobs.reconcileCatalog(catalog);
+    maybeCloseQuickActionOnlyCoordinator();
   });
 }
 const archiveLoadController = createArchiveLoadController({
@@ -840,7 +847,7 @@ const archiveTestController = createArchiveTestController({
   hasCurrentArchive: () => Boolean(archiveCurrentPath()),
   initialPassword: () => undefined,
   runTestArchive,
-  addJob: addJobState,
+  handoffAcceptedJob: (response) => jobHandoff.handoffAcceptedJob(response),
   toCommandError: asCommandError,
   promptForPasswordRetry: promptForArchivePasswordRetry,
   unableStartMessage: () => message("test.unableStart"),
@@ -890,8 +897,14 @@ const extractStartController = createExtractStartController({
   },
   recordDestination: recordExtractDestinationHistory,
   closeExtractDialog: closeReactDialog,
-  addJob: addJobState,
-  outputActions: extractJobOutputActions,
+  handoffAcceptedJob: (response, resetSubmittedState) => (
+    jobHandoff.handoffAcceptedJob(response, { resetSubmittedState })
+  ),
+  resetSubmittedState: () => {
+    archiveWorkspace.resetAfterAcceptedExtraction();
+    extractWorkspace.resetToDefaults();
+    publishReactSnapshot();
+  },
   unableStartMessage: (mode) => message(mode === "selection" ? "extract.unableSelected" : "extract.unableStart"),
   setBrowseError: (text) => setBrowseState("error", text),
 });
@@ -905,7 +918,7 @@ const appWindowEffects = {
     }
 
     const hasOpenTaskWindows = disposableTaskWindows.hasOpenWindows();
-    const hasActiveJobs = jobsWorkspace.hasActiveJob();
+    const hasActiveJobs = processJobs.hasActiveJobs();
     const closeOrHide = hasOpenTaskWindows || hasActiveJobs
       ? appWindowController.hideCurrentWindow()
       : appWindowController.closeCurrentWindow();
@@ -966,9 +979,7 @@ const quickActionController = createQuickActionController({
   promptForCommandRetry: jobPasswordPrompts.promptForCommandRetry,
   recordCreateDestination: recordCreateDestinationHistory,
   recordExtractDestination: recordExtractDestinationHistory,
-  addJob: addJobState,
-  createOutputActions: createJobOutputActions,
-  extractOutputActions: extractJobOutputActions,
+  handoffAcceptedJob: (response) => jobHandoff.handoffAcceptedJob(response),
   showCreateWorkspace,
   readCreateSnapshot: () => createWorkspace.getSnapshot(),
   addCreateSources: (sources) => createWorkspace.addSources(sources).snapshot,
@@ -1112,17 +1123,6 @@ const defaultHandlerController = createDefaultHandlerController({
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Unable to update macOS default handlers."),
 });
-
-const jobOutputEffects = {
-  async run(outputAction: JobOutputAction): Promise<void> {
-    if (outputAction.kind === "open") {
-      await openDesktopPath(outputAction.path);
-      return;
-    }
-
-    await revealInFileManager(outputAction.path);
-  },
-};
 
 function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
   appPreferences = preferencesWithPatch(appPreferences, patch);
@@ -1271,89 +1271,8 @@ function previewActionHint(): string {
   return message("preview.openTempOutsideHint");
 }
 
-function formatLastTestStatusForCurrentArchive(): string | null {
-  const currentPath = archiveCurrentPath();
-  if (!currentPath) {
-    return null;
-  }
-
-  const testJobs = Array.from(jobsWorkspace.getJobsMap().entries())
-    .map(([jobId, state]) => ({ jobId, state }))
-    .filter((item) => {
-      const context = jobsWorkspace.getRetryContext(item.jobId);
-      return context?.retryKind === "testArchive" && context.archivePath === currentPath;
-    })
-    .sort((lhs, rhs) => {
-      const lhsTime = parseDateValue(lhs.state.snapshot.createdAt)?.getTime();
-      const rhsTime = parseDateValue(rhs.state.snapshot.createdAt)?.getTime();
-      if (typeof lhsTime !== "number" && typeof rhsTime !== "number") {
-        return 0;
-      }
-      if (typeof lhsTime !== "number") {
-        return 1;
-      }
-      if (typeof rhsTime !== "number") {
-        return -1;
-      }
-      return rhsTime - lhsTime;
-    });
-
-  if (!testJobs.length) {
-    return null;
-  }
-
-  const state = testJobs[0].state;
-  const latestEvent = state.events[state.events.length - 1];
-  const status = state.snapshot.status;
-  const statusLabel = message(jobStatusMessageKey(status));
-
-  if (!latestEvent?.message) {
-    return message("detail.lastTest", { status: statusLabel });
-  }
-
-  if (latestEvent.message === status || latestEvent.message.length > 120) {
-    return message("detail.lastTest", { status: statusLabel });
-  }
-
-  return message("detail.lastTestWithMessage", { status: statusLabel, message: latestEvent.message });
-}
-
-function jobStatusMessageKey(status: JobState["snapshot"]["status"]): MessageKey {
-  switch (status) {
-    case "queued":
-      return "jobs.status.queued";
-    case "running":
-      return "jobs.status.running";
-    case "paused":
-      return "jobs.status.paused";
-    case "cancelling":
-      return "jobs.status.running";
-    case "completed":
-      return "jobs.status.completed";
-    case "failed":
-      return "jobs.status.failed";
-    case "cancelled":
-      return "jobs.status.cancelled";
-  }
-}
-
 function normalizeEntryPath(path: string): string {
   return normalizeArchivePath(path);
-}
-
-function createJobOutputActions(request: StartCreateRequest): JobOutputAction[] {
-  return request.destinationPath ? [{ kind: "reveal", path: request.destinationPath }] : [];
-}
-
-function extractJobOutputActions(request: StartExtractRequest): JobOutputAction[] {
-  return request.destinationPath ? [{ kind: "open", path: request.destinationPath }] : [];
-}
-
-function retryJobOutputActions(context: JobRetryContext): JobOutputAction[] {
-  if (context.retryKind === "extractArchive") {
-    return context.destinationPath ? [{ kind: "open", path: context.destinationPath }] : [];
-  }
-  return [];
 }
 
 function getBaseName(path: string): string {
@@ -1755,10 +1674,6 @@ function isPasswordCommandError(commandError: ReturnType<typeof asCommandError>)
   );
 }
 
-function canRetryJobWithPassword(jobId: string, state: JobState): boolean {
-  return jobsWorkspace.canRetryJobWithPassword(jobId, state);
-}
-
 function currentCommandStateMap() {
   const snapshot = archiveWorkspace.getSnapshot();
   const commandContext = snapshot.command;
@@ -1766,7 +1681,6 @@ function currentCommandStateMap() {
   return selectCommandState({
     ...commandContext,
     mutableOperationsSupported: false,
-    jobRunning: hasActiveJob(),
   });
 }
 
@@ -2277,7 +2191,7 @@ function maybeCloseQuickActionOnlyCoordinator(): void {
   const input = {
     desktopRuntime: isDesktopRuntime(),
     hasOpenTaskWindows: disposableTaskWindows.hasOpenWindows(),
-    hasActiveJobs: jobsWorkspace.hasActiveJob(),
+    hasActiveJobs: processJobs.hasActiveJobs(),
     mainWindowShown: shellWorkspace.getSnapshot().quickActionWindow.shown,
   };
   if (!disposableTaskLifecycle.shouldCloseCoordinator(input)) {
@@ -2462,10 +2376,6 @@ function isCreateSubmissionInFlight(): boolean {
   return createWorkspace.getSnapshot().options.submissionInFlight;
 }
 
-function hasActiveJob(): boolean {
-  return jobsWorkspace.hasActiveJob();
-}
-
 function currentDropSurface(): DropIntentSurface {
   return dropSurfaceForWorkspace({ createDialogOpen: false, mode: currentWorkspaceMode() });
 }
@@ -2515,7 +2425,7 @@ function dropCopyForSurface(surface: DropIntentSurface): DropOverlayCopy {
 }
 
 function dropCopyForDecision(decision: DropIntentDecision): DropOverlayCopy {
-  if (hasActiveJob() || isCreateSubmissionInFlight()) {
+  if (isCreateSubmissionInFlight()) {
     return {
       titleKey: "drop.blocked.title",
       messageKey: "drop.blocked.message",
@@ -2646,8 +2556,8 @@ function handleDroppedPaths(paths: readonly DroppedPath[]) {
   const trimmedPaths = paths
     .map((path) => (typeof path === "string" ? path.trim() : path.path.trim()))
     .filter(Boolean);
-  if (hasActiveJob() || isCreateSubmissionInFlight()) {
-    setOperationalMessage("drop.finishCurrentJob");
+  if (isCreateSubmissionInFlight()) {
+    setOperationalMessage("drop.waitForStart");
     setDropOverlay("active", {
       titleKey: "drop.blocked.title",
       messageKey: "drop.blocked.message",
@@ -3123,7 +3033,7 @@ function showArchiveInfo() {
   setReactDialogSnapshot(buildArchiveInfoDialogSnapshot({
     archive: archiveWorkspace.getSnapshot(),
     display: displayContext,
-    lastTestStatus: formatLastTestStatusForCurrentArchive(),
+    lastTestStatus: null,
     returnFocusPath: infoReturnFocusPath(),
   }));
 }
@@ -3291,8 +3201,7 @@ function localizedCommandStateReason(reason?: string): string | undefined {
     reason === NO_ARCHIVE_OPEN_MESSAGE ||
     reason === ARCHIVE_NOT_READY_MESSAGE ||
     reason === NO_SELECTION_MESSAGE ||
-    reason === NO_ENTRIES_MESSAGE ||
-    reason === JOB_RUNNING_MESSAGE
+    reason === NO_ENTRIES_MESSAGE
   ) {
     return reason;
   }
@@ -3586,37 +3495,6 @@ function addSources(paths: string[]) {
   queuePlanRun();
 }
 
-function addJobState(
-  response: StartJobResponseDto,
-  options: {
-    retryContext?: JobRetryContext;
-    focusProgress?: boolean;
-    outputActions?: JobOutputAction[];
-  } = {},
-) {
-  const useDisposableWindow = Boolean(options.focusProgress && isDesktopRuntime());
-  diagnostics.record({
-    scope: "jobPresentation",
-    name: "jobAdded",
-    fields: {
-      jobKind: response.kind,
-      initialStatus: response.status,
-      focusProgress: Boolean(options.focusProgress),
-      useDisposableWindow,
-      quickActionOnlyCoordinator: disposableTaskLifecycle.getSnapshot().quickActionOnlyCoordinator,
-    },
-  });
-  jobsWorkspace.addJob(response, {
-    retryContext: options.retryContext,
-    outputActions: options.outputActions,
-  });
-  if (useDisposableWindow) {
-    void disposableTaskWindows.open(response);
-  }
-
-  void subscribeToRetainedJob(response.jobId);
-}
-
 async function openQuickActionArchive(paths: string[]) {
   const archives = uniqueQuickActionPaths(paths);
   if (archives.length !== 1) {
@@ -3699,7 +3577,7 @@ async function activateQuickActionJobs(responses: StartJobResponseDto[]) {
   }
 
   for (const response of responses) {
-    addJobState(response, { focusProgress: true });
+    await jobHandoff.handoffAcceptedJob(response);
   }
   setOperationalMessage("jobs.quickActionStarted");
 }
@@ -3718,6 +3596,17 @@ async function initializeDesktopRuntime() {
     name: "desktopInitializationStarted",
   }).catch(() => {});
   await nativeInboundController.initialize();
+  await listenDisposableTaskJobHandoffs((job) => {
+    void jobHandoff.handoffAcceptedJob(job);
+  });
+  await listenDisposableTaskOutputActions((request) => {
+    const effect = request.action === "open"
+      ? openDesktopPath(request.path)
+      : revealInFileManager(request.path);
+    void effect.catch((error) => {
+      setOperationalStatus(unknownErrorMessage(error, "Unable to open the task output."));
+    });
+  });
   await listenNativeMenuCommands((commandId) => runRoutedCommand(commandId));
   await listenNativeFileDragOutcomes(({ payload }) => {
     const count = pendingNativeDragCounts.get(payload.sessionId) ?? 0;
@@ -3728,7 +3617,15 @@ async function initializeDesktopRuntime() {
       setOperationalMessage("preview.draggedOut", { count });
     }
   });
-  await subscribeToJobCatalog();
+  await subscribeToJobCatalog().catch((error) => {
+    diagnostics.record({
+      scope: "jobCatalog",
+      name: "subscriptionFailed",
+      fields: {
+        error: unknownErrorMessage(error, "Unable to subscribe to the Job catalog."),
+      },
+    });
+  });
   await startupController.initializeDesktopRuntime();
 }
 
@@ -3736,56 +3633,6 @@ async function handleHostedAuthCallback(
   payload: NativeInboundHostedAuthEvent["payload"],
 ): Promise<void> {
   await accountController.handleHostedCallback(payload);
-}
-
-async function startPasswordRetryJob(context: JobRetryContext, password: string): Promise<StartJobResponseDto> {
-  if (context.retryKind === "testArchive") {
-    return runTestArchive({
-      archivePath: context.archivePath,
-      entryPaths: context.entryPaths,
-      password,
-    });
-  }
-  return runStartExtract(buildStartExtractRequest({
-    archivePath: context.archivePath,
-    destinationPath: context.destinationPath,
-    overwrite: context.overwrite,
-    destinationCollisionStrategy: context.destinationCollisionStrategy,
-    entryPaths: context.entryPaths,
-    stripComponents: context.stripComponents,
-    tzapRestorePolicy: context.tzapRestorePolicy ?? "portable",
-    tzapAllowDegraded: context.tzapAllowDegraded ?? false,
-    tzapAllowAbsoluteSymlinks: context.tzapAllowAbsoluteSymlinks ?? false,
-    ignoreSymlinks: context.ignoreSymlinks ?? false,
-    password,
-  }));
-}
-
-async function maybePromptForJobPasswordRetry(jobId: string): Promise<void> {
-  if (!jobsWorkspace.markPasswordRetryPromptedIfEligible(jobId)) {
-    return;
-  }
-  const retryDetails = jobsWorkspace.getPasswordRetryDetails(jobId);
-  if (!retryDetails?.failure.code) {
-    setOperationalMessage("jobs.retryUnavailable");
-    return;
-  }
-  const password = jobPasswordPrompts.promptForCommandRetry(retryDetails.failure.code);
-  if (!password) {
-    setOperationalMessage("jobs.passwordRetryCancelled");
-    return;
-  }
-  try {
-    const response = await startPasswordRetryJob(retryDetails.context, password);
-    addJobState(response, {
-      retryContext: retryDetails.context,
-      outputActions: retryJobOutputActions(retryDetails.context),
-    });
-    setOperationalMessage("jobs.passwordRetryStarted");
-  } catch (error) {
-    const commandError = asCommandError(error);
-    setOperationalStatus(commandError?.message ?? message("jobs.passwordRetryFailed"));
-  }
 }
 
 async function onOpenArchive() {
@@ -4144,9 +3991,6 @@ function runtimeDevToolsOptions() {
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
         systemIconDataUrls = new Map(Object.entries(fixtures));
         renderBrowse();
-      },
-      setJobFixtures: (_fixtures: JobState[]) => {
-        // no-op: replaced by job feed
       },
       openSurface: (surface: "about" | "preferences" | "info") => {
         if (surface === "about") {

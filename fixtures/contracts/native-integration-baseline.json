@@ -66,12 +66,6 @@
       "minHeight": 480,
       "visible": false
     },
-    "quickActionMain": {
-      "width": 620,
-      "height": 420,
-      "minWidth": 540,
-      "minHeight": 360
-    },
     "disposableTask": {
       "width": 620,
       "height": 460,

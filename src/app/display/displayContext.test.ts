@@ -51,9 +51,8 @@ describe("display context", () => {
 
     expect(selectDisplayRefreshSurfaces({
       activeWorkspace: "create",
-      jobsVisible: true,
       preferencesVisible: true,
-    })).toEqual(["create", "jobs", "preferences"]);
+    })).toEqual(["create", "preferences"]);
   });
 
   it("refreshes display context metadata after committing the new locale", () => {

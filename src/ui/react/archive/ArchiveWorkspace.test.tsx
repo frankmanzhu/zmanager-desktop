@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { JOB_RUNNING_MESSAGE } from "../../../app/classicCommands";
+import { ARCHIVE_NOT_READY_MESSAGE } from "../../../app/classicCommands";
 import { createArchiveWorkspace } from "../../../app/workspaces/archiveWorkspace";
 import { ZManagerAppRuntimeProvider } from "../AppProviders";
 import { createZManagerAppStore } from "../appStore";
@@ -61,7 +61,7 @@ describe("React archive workspace", () => {
           ...initial.commands,
           states: {
             ...initial.commands.states,
-            open: { enabled: false, reason: JOB_RUNNING_MESSAGE },
+            open: { enabled: false, reason: ARCHIVE_NOT_READY_MESSAGE },
           },
         },
       }),
@@ -69,7 +69,7 @@ describe("React archive workspace", () => {
 
     expect(html).toMatch(/data-empty-action="open-archive"[^>]*disabled=""/);
     expect(html).toMatch(/data-details-action="open-archive"[^>]*disabled=""/);
-    expect(html).toContain(JOB_RUNNING_MESSAGE);
+    expect(html).toContain(ARCHIVE_NOT_READY_MESSAGE);
   });
 });
 

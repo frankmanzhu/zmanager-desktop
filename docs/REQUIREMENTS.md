@@ -43,12 +43,12 @@
 
 ### Jobs
 
-- Open one Disposable Task Window for every accepted create or extract Job,
+- Open one Disposable Task Window for every accepted create, extract, or test Job,
   whether it was launched by the Main Window or a shell Quick Action.
 - Keep the Main Window reusable while Jobs run. After Job Handoff, clear the
   submitted operation state and return the Main Window to a browse-ready state
   without waiting for completion.
-- Allow multiple create and extract Jobs to run concurrently, each with an
+- Allow multiple create, extract, and test Jobs to run concurrently, each with an
   independent task window.
 - Show current entry, bytes processed, total bytes when known, throughput when
   available, warnings, controls, and terminal status in that Job's task window.

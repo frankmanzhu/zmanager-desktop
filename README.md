@@ -7,7 +7,8 @@
 [![Downloads](https://img.shields.io/github/downloads/frankmanzhu/zmanager-desktop/total)](https://github.com/frankmanzhu/zmanager-desktop/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
+A fast, open-source archive manager for Windows, Linux, and macOS, built on
+`zmanager-core`.
 
 ![ZManager Desktop first-run Compress workflow](docs/gui-audit/00-readme-hero.png)
 
@@ -24,8 +25,10 @@ A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 2. Download the latest installer for your OS:
    - **Windows:** `zmanager-desktop-<version>-windows-x64-installer.exe` or `...-windows-arm64-installer.exe`
    - **Linux:** `zmanager-desktop-<version>-linux-x64` or `...-linux-arm64` (`.deb` / `.rpm`)
+   - **macOS:** `ZManager-<version>-macos-arm64.dmg` or `...-macos-x86_64.dmg`
 3. Install and open the app.
-4. Open an archive -> extract/create -> watch progress in the job list.
+4. Open or create an archive. Each accepted operation gets its own task window,
+   while the reusable manager stays ready for more work.
 
 ### Package quick lookup
 
@@ -35,12 +38,15 @@ A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 | Windows ARM64 | `zmanager-desktop-<version>-windows-arm64-installer.exe` | `zmanager-desktop-<version>-windows-arm64-portable.exe` |
 | Linux x64 | `zmanager-desktop-<version>-linux-x64.deb` or `.rpm` | - |
 | Linux ARM64 | `zmanager-desktop-<version>-linux-arm64.deb` or `.rpm` | - |
+| macOS ARM64 | `ZManager-<version>-macos-arm64.dmg` | `.zip` |
+| macOS x86_64 | `ZManager-<version>-macos-x86_64.dmg` | `.zip` |
 
 ## Formats and positioning
 
 - ZIP, TZST, TZAP, 7Z
 - 7-Zip is historically Windows-first.
-- `TZAP` is the cross-platform format this project targets for resilient, secure, and fast workflows on Windows and Linux.
+- `TZAP` is the cross-platform format this project targets for resilient,
+  secure, and fast workflows.
 
 ## For users who want to go deeper
 
@@ -53,4 +59,3 @@ A fast, open-source Windows and Linux archive manager built on `zmanager-core`.
 - [Developer setup and build details](./docs/developer-setup.md)
 - [Architecture overview](./docs/ARCHITECTURE.md)
 - [Requirements](./docs/REQUIREMENTS.md)
-- [Roadmap](./docs/ROADMAP.md)

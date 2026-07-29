@@ -6,7 +6,6 @@ import {
   CLASSIC_TOOLBAR_GROUPS,
   CLASSIC_TOOLBAR_ORDER,
   COMMAND_DEFINITIONS,
-  JOB_RUNNING_MESSAGE,
   NO_ARCHIVE_OPEN_MESSAGE,
   NO_ENTRIES_MESSAGE,
   NO_SELECTION_MESSAGE,
@@ -74,7 +73,6 @@ describe("classic command definitions", () => {
       "compress",
       "extract",
       "table",
-      "jobs",
       "settings",
       "help",
     ]);
@@ -90,7 +88,6 @@ describe("classic command definitions", () => {
       "Refresh",
       "Select All",
       "Flat View",
-      "Jobs",
       "Options...",
       "Delete Temporary Files...",
       "Contents...",
@@ -141,7 +138,6 @@ describe("command state selector", () => {
     selectedCount: 0,
     visibleSelectableCount: 0,
     mutableOperationsSupported: false,
-    jobRunning: false,
   };
 
   it("enables open and add-source commands before an archive is open", () => {
@@ -149,7 +145,6 @@ describe("command state selector", () => {
 
     expect(state.open.enabled).toBe(true);
     expect(state.add.enabled).toBe(true);
-    expect(state.jobs.enabled).toBe(true);
     expect(state.extract.enabled).toBe(false);
     expect(state.extract.reason).toBe(NO_ARCHIVE_OPEN_MESSAGE);
     expect(state.test.enabled).toBe(false);
@@ -235,26 +230,22 @@ describe("command state selector", () => {
     expect(emptyLoadedState.copy.reason).toBe(NO_SELECTION_MESSAGE);
   });
 
-  it("blocks job-starting commands while a job is running", () => {
+  it("keeps job-starting commands available for reusable manager workflows", () => {
     const state = selectCommandState({
       ...baseContext,
       browseState: "loaded",
       hasArchive: true,
       selectedCount: 1,
       visibleSelectableCount: 3,
-      jobRunning: true,
     });
 
-    expect(state.jobs.enabled).toBe(true);
     expect(state.info.enabled).toBe(true);
-    expect(state.open.enabled).toBe(false);
-    expect(state.open.reason).toBe(JOB_RUNNING_MESSAGE);
-    expect(state.closeArchive.enabled).toBe(false);
-    expect(state.closeArchive.reason).toBe(JOB_RUNNING_MESSAGE);
-    expect(state.add.enabled).toBe(false);
-    expect(state.extract.enabled).toBe(false);
-    expect(state.test.enabled).toBe(false);
-    expect(state.refresh.enabled).toBe(false);
+    expect(state.open.enabled).toBe(true);
+    expect(state.closeArchive.enabled).toBe(true);
+    expect(state.add.enabled).toBe(true);
+    expect(state.extract.enabled).toBe(true);
+    expect(state.test.enabled).toBe(true);
+    expect(state.refresh.enabled).toBe(true);
   });
 
   it("enables navigation commands only when their target exists", () => {
@@ -287,7 +278,6 @@ describe("command state selector", () => {
     expect(state.add.enabled).toBe(true);
     expect(state.extract.enabled).toBe(true);
     expect(state.test.enabled).toBe(true);
-    expect(state.jobs.enabled).toBe(true);
     expect(state.options.enabled).toBe(true);
     expect(state.properties.enabled).toBe(true);
     expect(state.info.enabled).toBe(true);

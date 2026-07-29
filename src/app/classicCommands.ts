@@ -8,7 +8,6 @@ export const NO_ARCHIVE_OPEN_MESSAGE = "Open an archive first.";
 export const ARCHIVE_NOT_READY_MESSAGE = "Archive contents are not ready.";
 export const NO_SELECTION_MESSAGE = "Select one or more entries first.";
 export const NO_ENTRIES_MESSAGE = "No entries are available.";
-export const JOB_RUNNING_MESSAGE = "Finish the current job before starting another operation.";
 
 import {
   COMMAND_DEFINITIONS,
@@ -47,7 +46,7 @@ export type MenuGroup = {
   items: MenuItem[];
 };
 
-export type CommandBarGroupId = "compress" | "extract" | "table" | "jobs" | "settings" | "help";
+export type CommandBarGroupId = "compress" | "extract" | "table" | "settings" | "help";
 
 export type CommandBarGroup = {
   id: CommandBarGroupId;
@@ -79,7 +78,6 @@ export type CommandContext = {
   selectedCount: number;
   visibleSelectableCount: number;
   mutableOperationsSupported: boolean;
-  jobRunning: boolean;
 };
 
 export type CommandState = {
@@ -138,7 +136,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   const hasFocusedOrSelected = context.focusedRow || hasSelection;
   const canNavigateUp = Boolean(context.canNavigateUp);
   const canOpenInside = Boolean(context.canOpenInside);
-  const mutationsEnabled = context.mutableOperationsSupported && !context.jobRunning;
+  const mutationsEnabled = context.mutableOperationsSupported;
   const archiveReason = context.hasArchive ? ARCHIVE_NOT_READY_MESSAGE : NO_ARCHIVE_OPEN_MESSAGE;
 
   const state = Object.fromEntries(
@@ -151,7 +149,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
     }
   };
 
-  enable(["open", "add", "options", "helpContents", "about", "jobs", "standardToolbar", "showButtonText", "exit"]);
+  enable(["open", "add", "options", "helpContents", "about", "standardToolbar", "showButtonText", "exit"]);
   enable(["closeArchive", "extract", "test", "properties", "info", "refresh"], canOperateArchive, archiveReason);
   enable(["copyTo", "flatView"], canUseArchive, archiveReason);
   enable(["copy"], hasSelection && canListEntries, hasSelection ? archiveReason : NO_SELECTION_MESSAGE);
@@ -167,11 +165,7 @@ export function selectCommandState(context: CommandContext): CommandStateMap {
   enable(["deleteTempFiles"], true);
 
   const mutationIds: CommandId[] = ["edit", "rename", "moveTo", "delete", "comment", "createFolder", "move"];
-  enable(mutationIds, mutationsEnabled && hasSelection, context.jobRunning ? JOB_RUNNING_MESSAGE : NO_SELECTION_MESSAGE);
-
-  if (context.jobRunning) {
-    enable(["open", "closeArchive", "add", "extract", "test", "copyTo", "refresh", "deleteTempFiles"], false, JOB_RUNNING_MESSAGE);
-  }
+  enable(mutationIds, mutationsEnabled && hasSelection, NO_SELECTION_MESSAGE);
 
   for (const id of Object.keys(COMMAND_DEFINITIONS) as CommandId[]) {
     if (COMMAND_DEFINITIONS[id].unsupported) {

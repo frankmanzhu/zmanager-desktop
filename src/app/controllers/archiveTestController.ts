@@ -5,7 +5,6 @@ import type {
   ArchiveWorkspaceRequestResult,
   ArchiveWorkspaceTestUnavailableReason,
 } from "../workspaces/archiveWorkspace";
-import type { JobRetryContext } from "../jobs";
 
 export type ArchiveTestControllerWorkspace = Pick<
   ArchiveWorkspace,
@@ -17,7 +16,7 @@ export type ArchiveTestControllerOptions = Readonly<{
   hasCurrentArchive(): boolean;
   initialPassword(): string | undefined;
   runTestArchive(request: TestArchiveRequest): Promise<StartJobResponseDto>;
-  addJob(response: StartJobResponseDto, options: { retryContext: JobRetryContext }): void;
+  handoffAcceptedJob(response: StartJobResponseDto): Promise<void>;
   toCommandError(error: unknown): CommandErrorDto | null;
   promptForPasswordRetry(retry: ArchiveWorkspacePasswordRetry): string | null;
   unableStartMessage(): string;
@@ -27,14 +26,6 @@ export type ArchiveTestControllerOptions = Readonly<{
 export type ArchiveTestController = Readonly<{
   testArchive(): Promise<void>;
 }>;
-
-function testRetryContext(request: TestArchiveRequest): JobRetryContext {
-  return {
-    retryKind: "testArchive",
-    archivePath: request.archivePath,
-    ...(request.entryPaths?.length ? { entryPaths: request.entryPaths } : {}),
-  };
-}
 
 function commandErrorMessage(error: CommandErrorDto): string {
   return `${error.message}${error.hint ? `\n${error.hint}` : ""}`;
@@ -59,9 +50,7 @@ export function createArchiveTestController(
     while (true) {
       try {
         const response = await options.runTestArchive(request);
-        options.addJob(response, {
-          retryContext: testRetryContext(request),
-        });
+        await options.handoffAcceptedJob(response);
         options.workspace.clearPasswordRetry();
         return;
       } catch (error) {

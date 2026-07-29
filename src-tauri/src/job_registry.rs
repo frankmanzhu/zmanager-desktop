@@ -16,8 +16,10 @@ use crate::job_dto::{
     JobOutputArtifactDto, JobPhaseDto, JobProgressFactsDto, JobRecordSnapshot,
     JobRetryDescriptorDto, JobStatusDto, JobTerminalSummaryDto, StartJobResponseDto,
 };
+#[cfg(test)]
+use zmanager_core::jobs::JobKind;
 use zmanager_core::{
-    jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobKind, jobs::JobPhase,
+    jobs::CancellationToken, jobs::JobEvent, jobs::JobEventSink, jobs::JobPhase,
     jobs::JobProgressState,
 };
 
@@ -1484,29 +1486,6 @@ impl JobEventSink for JobEventCollector {
     fn emit(&mut self, event: JobEvent) {
         self.registry.wait_if_paused(&self.job_id);
         self.registry.emit_job_event(&self.job_id, event);
-    }
-}
-
-impl From<JobKind> for JobKindDto {
-    fn from(kind: JobKind) -> Self {
-        match kind {
-            JobKind::ZipCreate => JobKindDto::ZipCreate,
-            JobKind::ZipExtract => JobKindDto::ZipExtract,
-            JobKind::SevenZCreate => JobKindDto::SevenZCreate,
-            JobKind::SevenZExtract => JobKindDto::SevenZExtract,
-            JobKind::RarExtract => JobKindDto::RarExtract,
-            JobKind::TarGzCreate => JobKindDto::TarGzCreate,
-            JobKind::TarZstdCreate => JobKindDto::TarZstdCreate,
-            JobKind::TarZstdExtract => JobKindDto::TarZstdExtract,
-            JobKind::TzapCreate => JobKindDto::TzapCreate,
-            JobKind::TzapExtract => JobKindDto::TzapExtract,
-            #[cfg(target_os = "macos")]
-            JobKind::AppleArchiveCreate => JobKindDto::AppleArchiveCreate,
-            #[cfg(target_os = "macos")]
-            JobKind::AppleArchiveExtract => JobKindDto::AppleArchiveExtract,
-            JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
-            JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,
-        }
     }
 }
 

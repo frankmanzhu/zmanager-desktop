@@ -41,7 +41,7 @@ const notRequestedState: QuickActionStartupState = {
 
 const epochSecondsAgo = (seconds: number) => String(Math.floor(Date.now() / 1000) - seconds);
 
-test("restored main window discovers terminal jobs through the retained catalog without polling", async ({ page }) => {
+test("restored main window reconciles terminal jobs from the catalog without per-Job subscriptions", async ({ page }) => {
   await installQuickActionTauriStub(page, [notRequestedState], {
     catalogJobs: [{
       jobId: "job-from-task-window",
@@ -51,12 +51,12 @@ test("restored main window discovers terminal jobs through the retained catalog 
     }],
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect.poll(async () => (await ipcCalls(page)).filter((call) => call.cmd === "subscribe_job").length).toBe(1);
+  await expect.poll(async () => (await ipcCalls(page)).some((call) => call.cmd === "subscribe_job_catalog")).toBe(true);
   const calls = await ipcCalls(page);
-  expect(calls.some((call) => call.cmd === "subscribe_job_catalog")).toBe(true);
+  expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
 });
 
-test("fixed create context actions open a directly subscribed disposable task window", async ({ page }) => {
+test("fixed create context actions hand the accepted Job to a disposable task window", async ({ page }) => {
   await installQuickActionTauriStub(page, [
     {
       launchedForQuickAction: true,
@@ -74,11 +74,11 @@ test("fixed create context actions open a directly subscribed disposable task wi
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
-  await expectWindowCommand(page, "subscribe_job");
   await expect(page.locator("main[data-mode]")).toHaveAttribute("data-mode", "compress");
 
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_create")).toBe(false);
+  expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
 });
 
 test("extract-here context actions start extraction without listing the archive", async ({ page }) => {
@@ -100,11 +100,11 @@ test("extract-here context actions start extraction without listing the archive"
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
-  await expectWindowCommand(page, "subscribe_job");
 
   const calls = await ipcCalls(page);
   expect(calls.some((call) => call.cmd === "start_extract")).toBe(false);
   expect(calls.some((call) => call.cmd === "list_archive")).toBe(false);
+  expect(calls.some((call) => call.cmd === "subscribe_job")).toBe(false);
 });
 
 test("quick action jobs still activate when window sizing is rejected", async ({ page }) => {
@@ -128,7 +128,7 @@ test("quick action jobs still activate when window sizing is rejected", async ({
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expectWindowCommand(page, "plugin:webview|create_webview_window");
-  await expectWindowCommand(page, "subscribe_job");
+  expect((await ipcCalls(page)).some((call) => call.cmd === "subscribe_job")).toBe(false);
 });
 
 test("quick action startup waits for job state before showing the workspace", async ({ page }) => {

@@ -693,7 +693,10 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
             "macosRegistration",
             "step",
             crate::diagnostics::fields([
-                ("command", serde_json::Value::String("pluginkitEnable".into())),
+                (
+                    "command",
+                    serde_json::Value::String("pluginkitEnable".into()),
+                ),
                 ("bundleId", serde_json::Value::String(bundle_id.to_string())),
                 ("ok", serde_json::Value::Bool(ok)),
                 ("error", serde_json::Value::String(err)),
@@ -737,7 +740,10 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
         "macosRegistration",
         "complete",
         crate::diagnostics::fields([
-            ("finderInstalled", serde_json::Value::Bool(finder.is_installed)),
+            (
+                "finderInstalled",
+                serde_json::Value::Bool(finder.is_installed),
+            ),
             ("finderEnabled", serde_json::Value::Bool(finder.is_enabled)),
             (
                 "quicklookInstalled",

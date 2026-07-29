@@ -1,17 +1,10 @@
-import type { JobState } from "../api/types";
-import type { JobOutputAction } from "../app/workspaces/jobsWorkspace";
 import type { ArchiveFixture } from "./runtimeArchiveFixtures";
 import { localDevArchiveFixture } from "./runtimeArchiveFixtures";
 
 export type RuntimeDevDialogName = "about" | "preferences" | "info";
-export type RuntimeDevJobFixture = JobState & {
-  outputActions?: JobOutputAction[];
-};
-
 export type RuntimeDevApi = Readonly<{
   loadArchiveFixture: (fixture: ArchiveFixture) => void;
   setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
-  setJobFixtures: (fixtures: RuntimeDevJobFixture[]) => void;
   openSurface: (surface: RuntimeDevDialogName) => void;
   closeModal: () => void;
 }>;

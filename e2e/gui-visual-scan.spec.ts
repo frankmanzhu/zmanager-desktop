@@ -17,32 +17,12 @@ type ArchiveFixture = {
   totalSize: number;
 };
 
-type JobStateFixture = {
-  snapshot: {
-    jobId: string;
-    kind: string;
-    status: string;
-    createdAt: string;
-    canDismiss: boolean;
-    events: unknown[];
-    terminalSummary: {
-      writtenEntries: number;
-      skippedEntries: number | null;
-      writtenBytes: number;
-      warnings: string[];
-    } | null;
-  };
-  events: unknown[];
-  outputActions?: Array<{ kind: "open" | "reveal"; path: string }>;
-};
-
 declare global {
   interface Window {
     __zmanagerDev?: {
       loadArchiveFixture: (fixture: ArchiveFixture) => void;
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
-      setJobFixtures: (fixtures: JobStateFixture[]) => void;
-      openSurface: (surface: "about" | "preferences" | "info" | "jobs") => void;
+      openSurface: (surface: "about" | "preferences" | "info") => void;
       closeModal: () => void;
     };
     __TAURI_EVENT_PLUGIN_INTERNALS__?: {
@@ -104,68 +84,6 @@ const archiveFixture: ArchiveFixture = {
     },
   ],
 };
-
-const visualJobBaseTime = Date.now();
-
-const jobsFixture: JobStateFixture[] = [
-  {
-    snapshot: {
-      jobId: "job-create-complete",
-      kind: "zipCreate",
-      status: "completed",
-      createdAt: new Date(visualJobBaseTime - 6000).toISOString(),
-      canDismiss: true,
-      events: [],
-      terminalSummary: {
-        writtenEntries: 3,
-        skippedEntries: null,
-        writtenBytes: 124_928,
-        warnings: [],
-      },
-    },
-    events: [
-      { eventType: "started", jobKind: "zipCreate", message: "Creating archive." },
-      { eventType: "completed", jobKind: "zipCreate", message: "Archive created." },
-    ],
-    outputActions: [{ kind: "reveal", path: "C:/Users/Frank/Desktop/report-bundle.zip" }],
-  },
-  {
-    snapshot: {
-      jobId: "job-extract-running",
-      kind: "zipExtract",
-      status: "running",
-      createdAt: new Date(visualJobBaseTime - 5000).toISOString(),
-      canDismiss: true,
-      events: [],
-      terminalSummary: null,
-    },
-    events: [
-      { eventType: "started", totalBytes: 200_000, message: "Extracting." },
-      { eventType: "entryStarted", path: "documents/quarterly-review.pdf" },
-      { eventType: "bytesProcessed", totalBytesProcessed: 84_000, totalBytes: 200_000 },
-    ],
-  },
-  {
-    snapshot: {
-      jobId: "job-test-failed",
-      kind: "testArchive",
-      status: "failed",
-      createdAt: new Date(visualJobBaseTime - 4000).toISOString(),
-      canDismiss: true,
-      events: [],
-      terminalSummary: null,
-    },
-    events: [
-      { eventType: "entryStarted", path: "documents/quarterly-review.pdf" },
-      {
-        eventType: "failed",
-        code: "io_error",
-        message: "Unable to read central directory.",
-        path: "documents/quarterly-review.pdf",
-      },
-    ],
-  },
-];
 
 test.beforeEach(async ({ page }) => {
   await installTauriStub(page);
@@ -646,15 +564,6 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
 });
 
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
-  await openDevSurface(page, "jobs");
-  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
-  await expect.poll(async () => page.locator("#job-drawer").evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return rect.left < window.innerWidth - 100;
-  })).toBe(true);
-  await captureAndScan(page, "29-jobs-drawer-empty");
-  await closeDevSurface(page);
-
   await openDevSurface(page, "preferences");
   await expect(page.getByRole("dialog", { name: "Options" })).toBeVisible();
   await expect(page.locator("[data-pref-page='folders']")).toBeVisible();
@@ -712,22 +621,11 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await captureAndScan(page, "11-about-dialog");
   await closeDevSurface(page);
 
-  await page.evaluate((jobs) => window.__zmanagerDev?.setJobFixtures(jobs), jobsFixture);
-  await openDevSurface(page, "jobs");
-  await expect(page.locator("#job-drawer")).toHaveAttribute("aria-hidden", "false");
-  await captureAndScan(page, "12-jobs-drawer-with-terminal-and-running");
-  await closeDevSurface(page);
-
   await page.getByRole("tab", { name: "Extract" }).click();
   await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
   await expect(page.locator("#context-menu")).toBeVisible();
   await expect(page.locator("#context-menu [data-context-action='open-archive']")).toContainText("Open Archive");
   await captureAndScan(page, "13-extract-empty-context-menu");
-  await page.locator("#context-menu [data-context-action='open-archive']").click();
-  await expect(page.locator("#workspace-status")).toContainText("Finish the current job before starting another operation.");
-
-  await page.evaluate(() => window.__zmanagerDev?.setJobFixtures([]));
-  await page.locator("#archive-empty-state").click({ button: "right", position: { x: 20, y: 20 } });
   await page.locator("#context-menu [data-context-action='open-archive']").click();
   await expect(page.locator("#workspace-status")).toContainText("Native dialogs are unavailable in browser preview.");
 
@@ -905,24 +803,12 @@ async function loadArchiveWithIcons(page: Page) {
   });
 }
 
-async function openDevSurface(page: Page, surface: "about" | "preferences" | "info" | "jobs") {
+async function openDevSurface(page: Page, surface: "about" | "preferences" | "info") {
   await page.evaluate((surfaceName) => window.__zmanagerDev?.openSurface(surfaceName), surface);
-  if (surface === "jobs") {
-    const drawer = page.locator("#job-drawer");
-    await expect.poll(async () => drawer.evaluate((element) =>
-      element.getBoundingClientRect().left < window.innerWidth - 100,
-    )).toBe(true);
-  }
 }
 
 async function closeDevSurface(page: Page) {
   await page.evaluate(() => window.__zmanagerDev?.closeModal());
-  const drawer = page.locator("#job-drawer");
-  if ((await drawer.count()) && (await drawer.getAttribute("aria-hidden")) === "true") {
-    await expect.poll(async () => drawer.evaluate((element) =>
-      element.getBoundingClientRect().left >= window.innerWidth - 1,
-    )).toBe(true);
-  }
 }
 
 async function waitForCompressSources(page: Page) {
@@ -1245,17 +1131,6 @@ async function scanVisibleLayout(page: Page): Promise<string[]> {
       const limit = 19;
       if (rect.width > limit || rect.height > limit) {
         problems.push(`oversized ${Array.from(icon.classList).join(".")} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
-      }
-    }
-
-    for (const jobCard of Array.from(document.querySelectorAll<HTMLElement>("[data-job-status]"))) {
-      const subtitle = jobCard.querySelector<HTMLElement>("[data-job-subtitle]")?.textContent ?? "";
-      const progress = jobCard.querySelector<HTMLProgressElement>("progress");
-      if (!progress) {
-        continue;
-      }
-      if (/\b(COMPLETED|FAILED|CANCELLED)\b/.test(subtitle) && !progress.hasAttribute("value")) {
-        problems.push(`terminal job has indeterminate progress "${subtitle.trim()}"`);
       }
     }
 

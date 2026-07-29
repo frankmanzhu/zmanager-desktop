@@ -32,33 +32,66 @@ without waiting for the worker process to finish. ZManager adopts that
 manager/task responsibility split while retaining its own Tauri-window and
 Rust Job Registry implementation.
 
+Concretely, `CPanel::AddToArchive()` calls `CompressFiles(..., waitFinish =
+false)`, while Extract and Test launch `7zG` through the same non-waiting call
+path. `Call7zGui()` waits for either early worker exit or the event confirming
+that the worker consumed shared launch input; it does not generally wait for
+archive work to complete. Progress dialogs own their worker thread, controls,
+questions, terminal message, and closing. The File Manager has no global
+worker-running workflow state and receives no completion transition that
+unlocks it.
+
+The analogy covers concurrency and state ownership. ZManager deliberately
+resets submitted setup after accepted Job start even though 7-Zip's
+`AddToArchive()` currently leaves its `KillSelection()` call commented out.
+
 ## Decision
 
 Follow **7-Zip's architecture**:
 
 | 7-Zip | ZManager |
 |---|---|
-| `7zFM.exe` — persistent file manager that launches work without waiting | Main Window — persistent browser and create/extract launcher |
-| `7zG.exe` — separate GUI worker for an operation | Disposable Task Window — one window per accepted create/extract Job |
+| `7zFM.exe` — persistent file manager that launches work without waiting | Main Window — persistent browser and create/extract/test launcher |
+| `7zG.exe` — separate GUI worker for an operation | Disposable Task Window — one window per accepted create/extract/test Job |
 | No job drawer, no shared job history | No job drawer, no shared job history |
 | Multiple concurrent operations via multiple 7zG instances | Multiple concurrent operations via multiple disposable windows |
 
 The main window is **persistent and reusable**. It never resizes, centers, or
-hides merely because a job is running. Each accepted compress or extract
+hides merely because a job is running. Each accepted create, extract, or test
 operation opens a Disposable Task Window that shows progress and handles
-pause/cancel. Successful and cancelled tasks auto-close after brief
+available controls. Successful and cancelled tasks auto-close after brief
 acknowledgement; failed tasks remain visible for diagnosis and recovery. The
 user can start multiple concurrent operations, each with its own window.
 
+ZManager keeps the same state simplicity even though its windows may share one
+process:
+
+- the Main Window owns browse/setup state and one short-lived
+  `submissionInFlight` guard, not a global `jobRunning` mode;
+- each Disposable Task Window mirrors one Rust Job and owns only its controls,
+  close prompt, terminal acknowledgement, and recovery UI; and
+- a quick-action-only coordinator owns only the pending-request, active-Job,
+  and open-task-window counts required to decide when the hidden process exits.
+
+Job completion never unlocks the Main Window because accepted Job start never
+locks it. Active-Job accounting remains internal and is used only for
+close/shutdown decisions.
+
 ### Job Handoff and manager reset
 
-An accepted create or extract request crosses one **Job Handoff** seam:
+An accepted create, extract, or test request crosses one **Job Handoff** seam:
 
 1. Rust validates the request, starts the Job, and returns its Job ID.
-2. The frontend registers/subscribes to that Job and opens its Disposable Task
-   Window.
+2. The frontend records active process work and opens the Job's Disposable Task
+   Window; that task window subscribes directly to its bootstrap Job.
 3. The Main Window clears the submitted operation's transient setup and becomes
    browse-ready for the next operation immediately.
+
+Job Handoff is a one-way accepted-start action, not another Job lifecycle state
+machine. It ends after recording active process work, presenting the task
+window, resetting submitted state when applicable, and reporting any degraded
+presentation. The task window subscribes directly to its bootstrap Job; later
+progress and completion belong to the Job Registry and Disposable Task Window.
 
 The reset is driven by accepted job start, never by job completion. It clears
 one-shot sources or entry selections, operation-only form state, secrets,
@@ -97,30 +130,38 @@ continues to own Jobs centrally through the Job Registry.
   lived in the drawer or is now inlined (password retry).
 - **Progress clock timer** — `jobTimers.startProgressClock` removed; no
   drawer to refresh.
+- **Global active-Job manager gating** — no `jobRunning` command state and no
+  active-Job checks that block normal commands, drops, browsing, selection, or
+  launching another independent operation.
+- **Completion-driven manager orchestration** — no terminal Job callback resets
+  or unlocks the Main Window.
 
 ### What stays
 
 - **`disposableTaskWindows`** and **`DisposableTaskRuntimeApp`** — the
-  primary progress UI for create and extract operations.
+  primary progress UI for create, extract, and test operations.
 - **`disposableTaskLifecycle`** — process lifecycle for quick-action-only
-  coordinator mode (process exits when all disposable windows close).
-- **`jobsWorkspace`** — an internal, non-presentational store for retained Job
-  snapshots, active-job close guards, retry metadata, and output actions.
-- **`appWindowEffects.close()`** — hide-vs-close logic using
-  `jobsWorkspace.hasActiveJob()`.
+  coordinator mode, limited to the session flag and request/Job/window counts
+  needed for shutdown.
+- **Shell active-Job accounting** — bounded Job IDs/counts reconciled from the
+  Rust catalog for coordinator shutdown and Main Window hide-vs-close behavior.
+- **`appWindowEffects.close()`** — hide-vs-close logic using Shell accounting,
+  without retaining per-Job presentation state in the Main Window.
 
 ## Consequences
 
 - Main window is never resized, centered, or hidden during jobs. It stays
   fully functional and returns to a browse-ready launcher immediately after
-  each accepted create/extract start.
+  each accepted create/extract/test start.
 - Multiple concurrent operations are natural: each gets a disposable window.
 - No redundant progress displays: the disposable window IS the progress.
-- ~2000 lines of dead code removed across ~10 files.
-- Password retry is inlined in the runtime adapter instead of routed through
-  `jobControlController`.
-- `jobsWorkspace` loses its Main Window presentation responsibilities and
-  remains an internal lifecycle/retry store.
+- The dead Main Window progress paths and their duplicate state are removed
+  instead of retained behind compatibility wrappers.
+- Recovery interaction and output actions stay with the one-Job Disposable Task
+  Workflow. A retry accepted by Rust crosses normal Job Handoff and receives a
+  new task window.
+- The internal `jobsWorkspace` is removed; Shell accounting consumes only the
+  Rust catalog information needed for close/shutdown decisions.
 - `shellWorkspace` loses `quickActionWindowMode`, `QuickActionWindowMode`,
   and `jobDrawerOpen`.
 - The React snapshot loses `jobs`, `quickActionProgress`, and
@@ -131,21 +172,26 @@ continues to own Jobs centrally through the Job Registry.
 
 ## Implementation status
 
-The independent Disposable Task Window topology, task-window terminal policy,
-quick-action-only coordinator lifecycle, and removal of the Main Window
-progress surfaces are implemented.
+The simplified ownership model is implemented:
 
-The explicit post-start Main Window reset described by Job Handoff is not yet
-implemented consistently. The current create start path records the destination
-and opens a task window but retains Create Workspace sources and plan state.
-The current extract start path closes its dialog and opens a task window but
-retains the submitted archive/selection state. This ADR defines the target for
-the next implementation change; those retained launch states must not be
-mistaken for the completed architecture.
-
-Task-window creation failure is currently diagnostic-only after an accepted Job;
-the recovery/error surface required by Job Handoff also remains to be
-implemented.
+- Create and Extract reset submitted transient state exactly once after
+  accepted Job Handoff while preserving preferences, histories, columns, and
+  reusable archive browse context.
+- The Main Window has no per-Job subscription, progress store, global
+  active-Job command/drop/selection gate, Jobs command, or Job drawer fixture.
+- Shell process accounting retains only active Job IDs/counts and reconciles
+  them from the authoritative catalog for hide/close and quick-action
+  coordinator shutdown.
+- Each Disposable Task Window subscribes directly to one Job, owns its
+  controls, terminal UI, output actions, and password recovery, and hands an
+  accepted retry back through Job Handoff for a new task window.
+- Presentation and feed failures are surfaced without resubmitting accepted
+  work, and catalog transitions reevaluate coordinator shutdown.
+- The obsolete `JobsWorkspace`, shared per-Job subscription set, legacy
+  frontend `JobState`, Jobs command, and stale Job drawer end-to-end scenarios
+  are deleted.
+- Native source metadata and platform-dependent Job/error mapping are isolated
+  under `src-tauri/src/platform`, restoring the production platform boundary.
 
 ## Verification
 
@@ -158,11 +204,15 @@ implemented.
   window opens.
 - Lifecycle tests must prove Job completion does not trigger or mutate the Main
   Window reset.
+- Command, drop, and selection tests must prove unrelated active Jobs do not
+  block normal Main Window use.
 - Window-manager tests must prove distinct Job IDs create distinct task windows
   and duplicate presentation of one Job ID focuses the existing window.
 - Quick-action tests must prove disposable actions do not reveal the Main
   Window and a quick-action-only coordinator exits only after requests, Jobs,
   and task windows settle.
+- Retry tests must prove an accepted replacement extraction Job receives its
+  own Disposable Task Window without introducing shared progress state.
 - Cross-platform smoke checks must prove the Main Window remains reusable while
   two create/extract task windows run and that the task completion policy is
   consistent on Windows, Linux, and macOS.

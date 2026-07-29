@@ -63,7 +63,7 @@ export function validateWorkspace(workspaceRoot = root) {
     if (!rel.startsWith("native/macos/")) errors.push(`${rel}: macOS native source is outside native/macos`);
   }
 
-  const governingDocs = ["AGENTS.md", "CONTEXT.md", "docs/ARCHITECTURE.md", "docs/REQUIREMENTS.md", "docs/ROADMAP.md", "docs/developer-setup.md"];
+  const governingDocs = ["AGENTS.md", "CONTEXT.md", "docs/ARCHITECTURE.md", "docs/REQUIREMENTS.md", "docs/developer-setup.md"];
   const forbiddenPolicy = /separate SwiftUI|separate native Swift|Do not (?:add|move).*?(?:Finder Sync|Quick Look|notarization)|Windows and Linux are the signed\/release packaging targets/gi;
   for (const doc of governingDocs) if (forbiddenPolicy.test(readFileSync(join(workspaceRoot, doc), "utf8"))) errors.push(`${doc}: contains active separate-product policy`);
   return errors;

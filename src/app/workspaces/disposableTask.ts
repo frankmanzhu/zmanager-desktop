@@ -49,6 +49,7 @@ export function createDisposableTask(response: StartJobResponseDto): DisposableT
       revision: "0", updatedAt: response.createdAt, canPause: true, canResume: false, canCancel: true, canDismiss: false,
       progressFacts: { processedBytes: 0, processedEntries: 0, recentPaths: [], phaseProcessedBytes: 0, warningCount: 0, activeElapsedMillis: 0, phaseElapsedMillis: 0 },
       boundedNotices: [], availableActions: [], outputArtifacts: [],
+      retryDescriptor: null,
       terminalSummary: null,
     },
   });
@@ -70,6 +71,14 @@ export function reduceDisposableTask(
           ...event.snapshot,
           progressFacts: { ...event.snapshot.progressFacts, recentPaths: [...event.snapshot.progressFacts.recentPaths] },
           boundedNotices: [...event.snapshot.boundedNotices],
+          availableActions: event.snapshot.availableActions.map((action) => ({ ...action })),
+          outputArtifacts: event.snapshot.outputArtifacts.map((artifact) => ({ ...artifact })),
+          retryDescriptor: event.snapshot.retryDescriptor
+            ? {
+                ...event.snapshot.retryDescriptor,
+                entryPaths: [...event.snapshot.retryDescriptor.entryPaths],
+              }
+            : null,
           terminalSummary: event.snapshot.terminalSummary ?? null,
         },
       });
@@ -133,6 +142,18 @@ function freezeState(state: {
     ...state.job,
     progressFacts: Object.freeze({ ...state.job.progressFacts, recentPaths: Object.freeze([...state.job.progressFacts.recentPaths]) as unknown as string[] }),
     boundedNotices: Object.freeze([...state.job.boundedNotices]) as unknown as typeof state.job.boundedNotices,
+    availableActions: Object.freeze(
+      state.job.availableActions.map((action) => Object.freeze({ ...action })),
+    ) as unknown as typeof state.job.availableActions,
+    outputArtifacts: Object.freeze(
+      state.job.outputArtifacts.map((artifact) => Object.freeze({ ...artifact })),
+    ) as unknown as typeof state.job.outputArtifacts,
+    retryDescriptor: state.job.retryDescriptor
+      ? Object.freeze({
+          ...state.job.retryDescriptor,
+          entryPaths: Object.freeze([...state.job.retryDescriptor.entryPaths]) as unknown as string[],
+        })
+      : null,
     terminalSummary: state.job.terminalSummary
       ? Object.freeze({
           ...state.job.terminalSummary,

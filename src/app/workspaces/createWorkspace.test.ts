@@ -1743,4 +1743,35 @@ describe("create workspace start request", () => {
       expect(snapshot.view.columnSettings.visibleColumnIds).toEqual(["name", "kind", "size", "modified"]);
     });
   });
+
+  it("resets accepted create state to current preferences without reusing a plan revision", () => {
+    const workspace = readyWorkspace();
+    const previousRevision = workspace.getSnapshot().plan.revision;
+    workspace.setDestinationPath("C:/out/project.zip");
+    workspace.setOptions({ cleanSource: false, compressionLevel: 9 });
+    workspace.selectRow("project/readme.md");
+    workspace.setColumnWidth("size", 222);
+
+    const result = workspace.resetAfterAcceptedStart("zip", formatDefaults({
+      cleanSource: true,
+      compressionLevel: 3,
+      replaceExisting: true,
+    }));
+
+    expect(result.removedSources).toEqual(["C:/work/project"]);
+    expect(result.snapshot.sources).toEqual([]);
+    expect(result.snapshot.plan.state).toBe("idle");
+    expect(result.snapshot.plan.current).toBeNull();
+    expect(result.snapshot.plan.revision).toBeGreaterThan(previousRevision);
+    expect(result.snapshot.selection.selectedPaths).toEqual([]);
+    expect(result.snapshot.options).toMatchObject({
+      destinationPath: "",
+      format: "zip",
+      cleanSource: true,
+      compressionLevel: 3,
+      replaceExisting: true,
+      submissionInFlight: false,
+    });
+    expect(result.snapshot.view.columnSettings.columnWidths.size).toBe(222);
+  });
 });

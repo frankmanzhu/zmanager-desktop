@@ -7,23 +7,31 @@ its executable or process topology:
 
 - one singleton **Main Window** is the persistent archive browser and operation
   launcher, corresponding to the role of `7zFM.exe`;
-- every accepted create or extract job gets one independent **Disposable Task
+- every accepted create, extract, or test job gets one independent **Disposable Task
   Window**, corresponding to the role of `7zG.exe`; and
 - the Main Window never becomes a progress surface and never waits for a job to
   finish before it can launch another one.
 
-The decisive transition is **Job Handoff**. When Rust accepts a create or
-extract request and returns a Job ID, the frontend registers the job, opens its
-Disposable Task Window, clears the submitted operation's transient setup state,
-and returns the Main Window to a browse-ready state. This reset happens after
-job start, not after job completion. A start failure keeps the non-secret setup
-state available for correction and retry.
+The decisive transition is **Job Handoff**. When Rust accepts a create,
+extract, or test request and returns a Job ID, the frontend records process
+activity and opens its Disposable Task Window, clears the submitted operation's
+transient setup state when applicable, and returns the Main Window to a
+browse-ready state. This reset happens after job start, not after job
+completion. A start failure keeps the non-secret setup state available for
+correction and retry.
+
+Keep this transition as simple as the 7-Zip File Manager launch model. The Main
+Window owns browse/setup state and a short-lived `submissionInFlight` guard only.
+It has no global `jobRunning` workflow state: accepted Jobs do not disable
+browsing, selection, drops, or the commands used to launch another operation.
+Job Handoff is a one-way accepted-start action, not a state machine that follows
+the Job to completion.
 
 ```text
 Main Window
   browse/select/configure
        |
-       | accepted create/extract request
+       | accepted create/extract/test request
        v
   Job Handoff -----------------------> Job Registry
        |                                   |
@@ -34,9 +42,22 @@ Main Window
 
 Multiple task windows may run concurrently. Each owns the progress and controls
 for exactly one job. The Main Window has no job drawer, shared job history,
-focused-progress mode, or in-workspace progress overlay. Its internal job state
-exists only for lifecycle duties such as subscriptions, password retry, and
-the active-job close guard; it is not another user-visible progress model.
+focused-progress mode, in-workspace progress overlay, or accepted-Job state.
+Process-level activity accounting belongs to the Shell coordinator; progress,
+controls, recovery, output actions, and terminal state belong to the one-Job
+Disposable Task Window.
+
+The user-visible state model has only three owners:
+
+1. the **Main Window** owns reusable browse/setup state and whether one start
+   request is currently awaiting acceptance;
+2. each **Disposable Task Window** mirrors one Rust Job status and owns only its
+   local controls, close prompt, terminal acknowledgement, and recovery UI; and
+3. a quick-action-only **coordinator** owns only the pending-request, active-Job,
+   and open-task-window counts needed to decide when the hidden process exits.
+
+Do not introduce a shared frontend job-running mode, a manager completion
+transition, cross-task focus state, or another progress model.
 
 Fixed-format shell Quick Actions bypass the visible Main Window and go directly
 through Job Handoff to a Disposable Task Window. A quick-action-only process
@@ -84,7 +105,7 @@ src/app/shell/
   Desktop Shell state and native-launch lifecycle
 
 src/app/workspaces/
-  Archive Workspace, Create Workspace, internal Jobs Workspace
+  Archive Workspace, Create Workspace, Disposable Task Workflow
 
 src/app/controllers/
   asynchronous orchestration and Job Handoff
@@ -117,7 +138,12 @@ responsibilities into another broad bootstrap file does not satisfy this goal.
 
 Owns reusable Main Window mode, app-level status, drop decisions, native-launch
 state, preview cleanup metadata, and history snapshots. Quick-action-only
-coordinator lifecycle is a shell concern; individual job progress is not.
+coordinator lifecycle is a shell concern; individual job progress is not. The
+coordinator remains deliberately small: it observes whether the Main Window
+owns the session and the request, active-Job, and task-window counts needed for
+shutdown. Its catalog accounting may retain bounded Job IDs to deduplicate
+updates, but it does not retain progress snapshots, retry metadata, output
+actions, or task-window presentation state.
 
 ### Archive Workspace
 
@@ -135,18 +161,34 @@ Handoff; rejected requests preserve non-secret setup.
 
 ### Job Handoff Controller
 
-Owns the accepted create/extract transition shared by the Main Window launch
-paths: register and subscribe to the Job, present exactly one Disposable Task
+Owns the accepted create/extract/test transition shared by the Main Window launch
+paths: record accepted process activity, present exactly one Disposable Task
 Window, reset the submitted workspace state once, and report presentation
 failure without duplicating the accepted Job. Quick Actions use the same
 accepted-Job presentation path but have no visible Main Window state to reset.
 
-### Jobs Workspace
+Its interface stays coarse-grained: accept one normalized Job response and an
+optional submitted-state reset. The implementation performs those effects once
+and then stops. It does not own Job progress, subscription, completion, task
+focus, retry/output metadata, a retry state machine, or manager command
+availability. Presentation failure is reported as degraded presentation of an
+already accepted Job; it is never converted back into a start failure and never
+resubmits the operation.
 
-Owns only internal retained Job snapshots, subscription/retry metadata, output
-actions, and active-job close guards needed by the Desktop Shell and
-Disposable Task Windows. It has no Main Window rendering interface, job drawer,
-shared history, focused-progress state, or completion-driven Main Window state.
+Password recovery stays inside the failed task surface. A successful retry
+creates a new Rust Job and sends that accepted response through the same Job
+Handoff seam so it receives a distinct task window. The old failed task closes
+only after emitting the accepted replacement; passwords never enter retained
+frontend state.
+
+### Quick Action Coordinator
+
+Owns process-presence accounting only: whether this is a hidden
+quick-action-only session plus the pending-request, active-Job, and
+open-task-window counts. It consumes the Rust Job catalog to reconcile accepted
+and terminal Jobs without subscribing to per-Job progress. The same active
+count supports Main Window hide-vs-close behavior. When the session is
+coordinator-only, the process exits after all three counts reach zero.
 
 ### Command Router
 
@@ -170,6 +212,29 @@ Views do not import Tauri, build archive requests, hold workflow decisions, or
 communicate through hidden DOM, generated HTML strings, or parallel mutable
 state. `src/runtimeBridge.ts`, while it exists, is a compatibility export only;
 it is not a renderer or workflow owner.
+
+### Desktop Presentation
+
+The shared React product should read as a compact desktop file utility on every
+supported platform. The archive/source table is the primary surface; navigation
+and contextual details are supporting panes, and top chrome is command access
+rather than content. Platform adapters may supply native menus, dialogs, icons,
+drag behavior, and shell integration without creating separate product
+workflows.
+
+Tables use stable row height, full-row selection, sticky headers, predictable
+keyboard behavior, bounded native icons, and truncation in rows with full values
+available in details. Compact layouts collapse supporting panes intentionally
+without hiding the active operation command or introducing horizontal page
+overflow. Dialogs open at the decision being made, keep their primary action
+reachable, and place advanced archive settings behind disclosure when possible.
+Passwords are transient and hidden by default.
+
+Long-running progress never occupies the Main Window status area, a drawer, or a
+workspace overlay. Each Disposable Task Window uses the same product visual
+language while presenting only its own Job, controls, recovery, and output
+actions. Visual audits should cover the reusable manager at full, compact, and
+minimum sizes plus the independent task surface.
 
 ### Display, Storage, API, and Desktop Adapters
 
@@ -221,15 +286,15 @@ internal discovery and cleanup.
 - Every snapshot has a monotonically increasing decimal-string revision.
   TypeScript compares revisions as arbitrary-precision integers, never as
   JavaScript numbers.
-- Main Window lifecycle code and each Disposable Task Window subscribe directly
-  to Rust. The Main Window never republishes progress to a task window.
 - A late or reconnecting subscriber immediately receives the latest retained
   snapshot. Delivery uses latest-value backpressure with acknowledgement rather
   than an unbounded event queue or correctness-critical polling timer.
-- The process catalog lets the Main Window coordinator discover, subscribe to,
-  and clean up retained Jobs. It is internal lifecycle state, not permission to
-  render a job list or shared history. Disposable Task Windows subscribe only
-  to their bootstrap Job and cannot subscribe to the catalog.
+- Each Disposable Task Window subscribes directly to exactly its bootstrap Job.
+  The Main Window never subscribes to per-Job progress.
+- The process catalog lets the Shell coordinator reconcile bounded active-Job
+  accounting for shutdown and Main Window close behavior. It is not permission
+  to retain per-Job presentation state or render a job list/shared history.
+  Disposable Task Windows cannot subscribe to the catalog.
 - Admission, retained terminal Jobs, and per-Job subscribers have named,
   process-wide bounds. Capacity failure is structured; non-terminal Jobs are
   never silently evicted.
@@ -241,8 +306,8 @@ internal discovery and cleanup.
 
 `zmanager-core` remains the owner of format-neutral progress meaning and bounded
 producer aggregation. The Desktop Job Feed owns retention, delivery, revisions,
-controls, output actions, and process lifecycle. Disposable Task Workflow owns
-presentation and completion policy.
+controls, output actions, and process lifecycle. Each Disposable Task Workflow
+owns its one-Job presentation, recovery, and completion policy.
 
 ### Main Window Manager
 
@@ -259,13 +324,24 @@ defaults, path histories, and reusable manager preferences. Browse context may
 be retained where it helps launch the next operation, but the submitted
 selection must not remain armed for accidental duplicate execution.
 
+While a start request is awaiting Rust acceptance, only that submission is
+guarded against duplicate activation. Once accepted, the manager immediately
+returns to normal command, drop, browse, and selection behavior. It never waits
+for a Job snapshot or terminal event before becoming reusable.
+
 ### Disposable Task Workflow
 
-Every accepted create or extract job opens a separate OS window (currently
+Every accepted create, extract, or test job opens a separate OS window (currently
 620×460). The task workflow subscribes to one Job ID, shows live progress,
 handles pause/cancel, and applies its own terminal completion policy. Successful
 and cancelled jobs auto-close after brief acknowledgement; a failed job remains
 open so the error and recovery actions are not lost.
+
+The task state is the authoritative Rust Job status plus minimal local UI state
+such as a close prompt or one in-flight recovery action. It does not need a
+second progress lifecycle layered over the Job Feed. Password questions and
+other recovery actions belong with the failed task experience; a retry that
+Rust accepts is handed off as another Job and receives its own task window.
 
 There is no job drawer, shared job history, or in-workspace progress overlay.
 Each operation is an independent fire-and-forget unit from the Main Window's
@@ -274,8 +350,7 @@ See [`adr/0016-pure-7z-job-architecture.md`](adr/0016-pure-7z-job-architecture.m
 
 User-visible text belongs at the display boundary. Keep internal state, command DTOs,
 job events, and archive behavior language-neutral, then render labels and messages
-through the frontend localization layer. See
-[`I18N_DISPLAY_ISOLATION_PLAN.md`](I18N_DISPLAY_ISOLATION_PLAN.md).
+through the frontend localization layer.
 
 ### Windows Shell Integration
 
@@ -339,10 +414,14 @@ User action
   -> zmanager-core job start
   -> normalized Job ID
   -> Job Handoff
-       -> register/subscribe and open one Disposable Task Window
+       -> record active process work and open one Disposable Task Window
        -> reset submitted setup and make Main Window browse-ready
-  -> task window consumes normalized job snapshots until terminal state
+  -> task window subscribes directly and consumes normalized snapshots
 ```
+
+The Main Window data flow ends at Job Handoff. Later Job snapshots may update
+internal process accounting, but they never disable, reset, resize, replace, or
+otherwise drive the reusable manager workflow.
 
 Shell Quick Actions and native macOS callbacks enter through a second, typed
 ingress:
@@ -390,6 +469,12 @@ Errors must not include passwords, raw command-line strings, or sensitive path d
   register/open/reset once, rejected start preserves non-secret setup, a second
   operation can start before the first completes, and terminal Job events do
   not mutate the Main Window.
+- Prove the manager has no global active-Job permission gate: commands, drops,
+  browsing, and selection remain usable while unrelated Jobs run.
+- Prefer direct state and deletion over orchestration. The accepted-start guard,
+  one-Job task state, and coordinator shutdown counts are sufficient; do not
+  add another lifecycle module unless deleting it would force real complexity
+  back into multiple callers.
 - Use Vitest for deterministic workflow proof and Playwright for cross-surface
   behavior. Cross-platform desktop smoke checks remain required for native
   windows, drag, shell integration, and packaging behavior.

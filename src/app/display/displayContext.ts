@@ -42,11 +42,10 @@ export type CreateDisplayContextOptions = {
 
 export type DisplayRefreshWorkspace = "browse" | "create";
 
-export type DisplayRefreshSurface = DisplayRefreshWorkspace | "jobs" | "preferences";
+export type DisplayRefreshSurface = DisplayRefreshWorkspace | "preferences";
 
 export type DisplayRefreshState = {
   activeWorkspace: DisplayRefreshWorkspace;
-  jobsVisible?: boolean;
   preferencesVisible?: boolean;
 };
 
@@ -109,9 +108,6 @@ export function selectDisplayRefreshSurfaces(
   state: DisplayRefreshState,
 ): readonly DisplayRefreshSurface[] {
   const surfaces: DisplayRefreshSurface[] = [state.activeWorkspace];
-  if (state.jobsVisible) {
-    surfaces.push("jobs");
-  }
   if (state.preferencesVisible) {
     surfaces.push("preferences");
   }

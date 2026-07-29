@@ -8,6 +8,12 @@ mod linux;
 mod macos;
 
 pub(crate) mod apple_archive;
+mod archive_error;
+mod job_kind;
+mod source_metadata;
+
+pub(crate) use archive_error::map_archive_browser_error;
+pub(crate) use source_metadata::{source_platform_metadata, source_table_column_ids};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod staged_file_drag;

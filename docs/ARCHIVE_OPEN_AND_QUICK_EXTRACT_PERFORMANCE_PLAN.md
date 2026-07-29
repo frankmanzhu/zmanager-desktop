@@ -692,8 +692,8 @@ It must not call `archive_extract_progress_estimate` before
 `registry.try_create_job`. Remove that helper when no remaining caller needs it.
 
 The Job Registry should publish a queued or preparing snapshot immediately.
-`addJobState` can then create the Disposable Task Window without waiting for an
-archive scan.
+Job Handoff can then create the Disposable Task Window without waiting for an
+archive scan or introducing Main Window Job state.
 
 ### Core extraction wrappers
 

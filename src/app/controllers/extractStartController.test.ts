@@ -68,6 +68,7 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     selectEntryFirst: 0,
     recordDestination: [] as string[],
     closeDialog: 0,
+    resetSubmittedState: 0,
     jobs: [] as unknown[],
     retries: [] as string[],
     errors: [] as string[],
@@ -117,11 +118,12 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
     closeExtractDialog() {
       calls.closeDialog += 1;
     },
-    addJob(response, options) {
-      calls.jobs.push({ response, options });
+    async handoffAcceptedJob(response, resetSubmittedState) {
+      calls.jobs.push(response);
+      resetSubmittedState();
     },
-    outputActions(request) {
-      return [{ kind: "open", path: request.destinationPath }];
+    resetSubmittedState() {
+      calls.resetSubmittedState += 1;
     },
     unableStartMessage(mode) {
       return mode === "selection" ? "Unable to extract selection." : "Unable to extract archive.";
@@ -147,7 +149,7 @@ function createHarness(overrides: Partial<ExtractStartControllerOptions> = {}) {
 }
 
 describe("extract start controller", () => {
-  it("starts archive extraction and records job metadata", async () => {
+  it("starts archive extraction, hands off the Job, and resets submitted state", async () => {
     const harness = createHarness();
 
     await harness.startWithInput("archive");
@@ -165,23 +167,8 @@ describe("extract start controller", () => {
     expect(harness.calls.recordDestination).toEqual(["C:/out/demo"]);
     expect(harness.calls.closeDialog).toBe(1);
     expect(harness.calls.jobs).toHaveLength(1);
-    expect(harness.calls.jobs[0]).toMatchObject({
-      response: startJobResponse(),
-      options: {
-        retryContext: {
-          retryKind: "extractArchive",
-          archivePath: "C:/archives/demo.zip",
-          destinationPath: "C:/out/demo",
-          overwrite: "ask",
-          stripComponents: 1,
-          tzapRestorePolicy: "portable",
-          tzapAllowDegraded: false,
-          tzapAllowAbsoluteSymlinks: false,
-          ignoreSymlinks: false,
-        },
-        focusProgress: true,
-      },
-    });
+    expect(harness.calls.jobs[0]).toEqual(startJobResponse());
+    expect(harness.calls.resetSubmittedState).toBe(1);
   });
 
   it("starts selection extraction with selected entry paths", async () => {
@@ -201,13 +188,7 @@ describe("extract start controller", () => {
       tzapAllowAbsoluteSymlinks: false,
       ignoreSymlinks: false,
     });
-    expect(harness.calls.jobs[0]).toMatchObject({
-      options: {
-        retryContext: {
-          entryPaths: ["docs/readme.txt"],
-        },
-      },
-    });
+    expect(harness.calls.jobs[0]).toEqual(startJobResponse());
   });
 
   it("prompts for a destination before building requests", async () => {

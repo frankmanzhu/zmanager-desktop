@@ -20,27 +20,46 @@ integration, and packaging.
 The singleton, persistent application window opened by launching the app or by
 an explicit **Add to archive** shell action. It hosts the normal Compress and
 Extract launch workflows. It is a reusable archive browser and operation
-launcher, not a job-progress surface. After an accepted create or extract
+launcher, not a job-progress surface. After an accepted create, extract, or test
 request crosses **Job Handoff**, it clears the submitted operation's transient
 state and immediately returns to a browse-ready state without waiting for the
-job to finish.
+job to finish. Its workflow state has no global `jobRunning` mode: only the
+individual start request awaiting Rust acceptance is guarded against duplicate
+submission, and unrelated active Jobs never disable normal manager use.
 
 ### Disposable Task Window
 
-A short-lived window dedicated to exactly one create or extract Job, whether
+A short-lived window dedicated to exactly one create, extract, or test Job, whether
 launched from a Quick Action or the Main Window. Multiple task windows may
 coexist. Successful and cancelled jobs auto-close after brief acknowledgement;
 a failed task remains open so its error and recovery actions are visible. It
-does not replace or duplicate the Main Window.
+does not replace or duplicate the Main Window. Its state mirrors one
+authoritative Rust Job plus minimal local UI state such as close confirmation
+or one recovery action; it does not participate in a shared frontend progress
+lifecycle.
 
 ### Job Handoff
 
-The one-way transition after Rust accepts a create or extract request and
-returns a Job ID. The Desktop Shell registers and subscribes to the Job, opens
-its Disposable Task Window, and resets the submitted operation state in the
-Main Window. The accepted Job is independent of that reset and continues if the
-Main Window is reused, hidden, or closed. A request rejected before Job Handoff
-does not reset the non-secret setup state.
+The one-way transition after Rust accepts a create, extract, or test request and
+returns a Job ID. The Desktop Shell records active process work, opens the
+Job's Disposable Task Window, and resets the submitted operation state in the
+Main Window. The task window then subscribes directly to that Job. The accepted
+Job is independent of the reset and continues if the Main Window is reused,
+hidden, or closed. A request rejected before Job Handoff does not reset the
+non-secret setup state. Job Handoff ends after these accepted-start effects; it
+does not subscribe to progress or wait for completion. Presentation failure is
+reported as degradation of the already accepted Job and never causes the
+operation to be resubmitted.
+
+### Quick Action Coordinator
+
+The hidden Desktop Shell role used only when fixed-format Quick Actions launch
+Disposable Task Windows without revealing the Main Window. It owns no progress
+workflow. It tracks only whether it is coordinator-only and the
+pending-request, active-Job, and open-task-window counts required to exit after
+all work settles. It may retain bounded Job IDs to reconcile Rust catalog
+updates, but it owns no per-Job progress, retry, output-action, or terminal
+presentation state.
 
 ### Quick Action
 
@@ -220,9 +239,17 @@ guards. Do not reimplement these behaviors in TypeScript.
 - Accepted create and extract requests cross one Job Handoff seam. The handoff
   opens one Disposable Task Window and resets submitted Main Window setup
   immediately; job completion never controls Main Window reset.
+- The Main Window has no global active-Job permission state. Active Jobs do not
+  block commands, drops, browsing, selection, or another accepted start; only
+  an unresolved submission guards its own duplicate activation.
 - The Main Window never renders job progress or shared job history. Internal
-  job state is limited to lifecycle, subscription, retry, output-action, and
-  close-guard duties.
+  process accounting is limited to the Shell coordinator counts needed for
+  shutdown and close guards; the Main Window owns no accepted-Job state.
+- Each Disposable Task Window mirrors one Rust Job plus minimal local UI state.
+  It subscribes directly and owns that Job's controls, recovery, output actions,
+  and terminal presentation. The Quick Action Coordinator owns only the counts
+  needed for process shutdown; neither introduces another shared progress
+  lifecycle.
 - Toolbar, menu, shortcut, context-menu, tree, details-pane, and row actions
   route through shared typed command seams rather than separate behavior.
 - Workflow snapshots are immutable, render-ready plain data. They never contain

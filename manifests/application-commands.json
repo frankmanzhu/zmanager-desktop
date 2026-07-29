@@ -60,7 +60,6 @@
     {"id": "deleteTempFiles", "label": "Delete Temporary Files...", "labelKey": "command.deleteTempFiles"},
     {"id": "helpContents", "label": "Contents...", "labelKey": "command.helpContents", "shortcut": "F1", "unsupported": true, "macOSAccelerator": "F1"},
     {"id": "about", "label": "About ZManager...", "labelKey": "command.about"},
-    {"id": "jobs", "label": "Jobs", "tooltip": "Open Jobs task center"},
     {"id": "add", "label": "Add", "labelKey": "command.add", "shortcut": "Ctrl+N", "macOSAccelerator": "CmdOrCtrl+N", "tooltip": "Add (Ctrl+N)"},
     {"id": "extract", "label": "Extract", "labelKey": "command.extract", "shortcut": "F5", "tooltip": "Extract (F5)"},
     {"id": "test", "label": "Test", "labelKey": "command.test", "tooltip": "Test archive"},
@@ -191,7 +190,6 @@
     {"id": "compress", "label": "Compress", "items": ["add"]},
     {"id": "extract", "label": "Extract", "items": ["open", "closeArchive", "extract", "test"]},
     {"id": "table", "label": "Table actions", "items": ["view", "copy", "info", "refresh", "selectAll", "flatView"]},
-    {"id": "jobs", "label": "Jobs", "items": ["jobs"]},
     {"id": "settings", "label": "Settings", "items": ["options", "deleteTempFiles"]},
     {"id": "help", "label": "Help", "items": ["helpContents", "about"]}
   ]

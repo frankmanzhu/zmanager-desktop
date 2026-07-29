@@ -589,9 +589,3 @@ export type JobStatus = "queued" | "running" | "paused" | "cancelling" | "comple
 
 export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";
-
-export type JobState = {
-  snapshot: BaseJobSnapshotDto;
-  events: JobEventDto[];
-  retainedSnapshot?: DesktopJobSnapshotDto;
-};

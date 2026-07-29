@@ -6,11 +6,15 @@ import {
   LoaderCircle,
   Pause,
   Play,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { useMemo } from "react";
 
-import { deriveRetainedJobProgress } from "../../../app/jobs";
+import {
+  deriveRetainedJobProgress,
+  isPasswordErrorCode,
+} from "../../../app/jobs";
 import {
   isLiveDisposableTask,
   type DisposableTaskJobSnapshot,
@@ -29,7 +33,11 @@ export function DisposableTaskView({
   onKeepOpen,
   onMinimize,
   onPause,
+  onRetry,
   onResume,
+  onRunOutputAction,
+  retrying = false,
+  surfaceError = "",
 }: Readonly<{
   state: DisposableTaskState;
   nowMs: number;
@@ -39,18 +47,34 @@ export function DisposableTaskView({
   onKeepOpen(): void;
   onMinimize(): void;
   onPause(): void;
+  onRetry(): void;
   onResume(): void;
+  onRunOutputAction(action: "open" | "reveal", path: string): void;
+  retrying?: boolean;
+  surfaceError?: string;
 }>) {
   const progress = useMemo(
     () => deriveRetainedJobProgress(state.job),
     [nowMs, state.job],
   );
   const create = isCreateKind(state.job.kind);
-  const title = create
-    ? "Compressing with ZManager"
-    : "Extracting with ZManager";
+  const title = state.job.kind === "testArchive"
+    ? "Testing with ZManager"
+    : create
+      ? "Compressing with ZManager"
+      : "Extracting with ZManager";
   const subtitle = taskKindLabel(state.job.kind);
   const failedEvent = state.job.latestFailure;
+  const artifacts = new Map(
+    state.job.outputArtifacts.map((artifact) => [artifact.artifactId, artifact]),
+  );
+  const outputActions = state.job.availableActions.flatMap((action) => {
+    const artifact = artifacts.get(action.artifactId);
+    return artifact?.path ? [{ ...action, path: artifact.path }] : [];
+  });
+  const canRetry = state.phase === "failed"
+    && Boolean(state.job.retryDescriptor)
+    && isPasswordErrorCode(failedEvent?.code);
 
   return (
     <main className="flex min-h-screen min-w-0 max-w-full flex-col overflow-hidden bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
@@ -80,6 +104,11 @@ export function DisposableTaskView({
       </header>
 
       <section className="grid min-w-0 flex-1 content-start gap-5 overflow-hidden px-5 py-5">
+        {surfaceError ? (
+          <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200">
+            {surfaceError}
+          </p>
+        ) : null}
         <div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <TaskState state={state} />
@@ -173,16 +202,29 @@ export function DisposableTaskView({
       </section>
 
       <footer className="flex items-center justify-between border-t border-black/10 px-5 py-3 dark:border-white/10">
-        <Button
-          type="button"
-          variant="dialog"
-          size="unset"
-          onClick={onMinimize}
-        >
-          Minimize
-        </Button>
         <div className="flex gap-2">
-          {state.phase === "running" ? (
+          <Button
+            type="button"
+            variant="dialog"
+            size="unset"
+            onClick={onMinimize}
+          >
+            Minimize
+          </Button>
+          {outputActions.map((action) => (
+            <Button
+              key={action.actionId}
+              type="button"
+              variant="dialog"
+              size="unset"
+              onClick={() => onRunOutputAction(action.kind, action.path)}
+            >
+              {action.kind === "open" ? "Open output" : "Show output"}
+            </Button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {state.phase === "running" && state.job.canPause ? (
             <Button
               type="button"
               variant="dialog"
@@ -193,7 +235,7 @@ export function DisposableTaskView({
               Pause
             </Button>
           ) : null}
-          {state.phase === "paused" ? (
+          {state.phase === "paused" && state.job.canResume ? (
             <Button
               type="button"
               variant="dialog"
@@ -204,7 +246,7 @@ export function DisposableTaskView({
               Resume
             </Button>
           ) : null}
-          {isLiveDisposableTask(state) ? (
+          {isLiveDisposableTask(state) && state.job.canCancel ? (
             <Button
               type="button"
               variant="dialog"
@@ -215,14 +257,28 @@ export function DisposableTaskView({
             </Button>
           ) : null}
           {state.phase === "failed" ? (
-            <Button
-              type="button"
-              variant="dialogPrimary"
-              size="unset"
-              onClick={onClose}
-            >
-              Close
-            </Button>
+            <>
+              {canRetry ? (
+                <Button
+                  type="button"
+                  variant="dialogPrimary"
+                  size="unset"
+                  disabled={retrying}
+                  onClick={onRetry}
+                >
+                  <RotateCcw className="mr-1 size-3" />
+                  {retrying ? "Retrying…" : "Retry with password"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant={canRetry ? "dialog" : "dialogPrimary"}
+                size="unset"
+                onClick={onClose}
+              >
+                Close
+              </Button>
+            </>
           ) : null}
         </div>
       </footer>

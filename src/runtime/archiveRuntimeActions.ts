@@ -24,7 +24,6 @@ export type ArchiveRuntimeActionEffects = Readonly<{
   clearSelection(): void;
   selectRow(path: string, modifiers?: ArchiveRuntimeSelectionModifiers): void;
   setRowSelected(path: string, selected: boolean): void;
-  hasActiveJob(): boolean;
   applySelection(input: ArchiveRuntimeSelectionInput): void;
   runEntryDefaultAction(path: string): void;
   startNativeDrag(entryPath: string): void | Promise<void>;
@@ -116,9 +115,7 @@ export function createArchiveRuntimeActions(
           effects.setRowSelected(intent.path, intent.selected);
           break;
         case "applySelection":
-          if (!effects.hasActiveJob()) {
-            effects.applySelection(intent);
-          }
+          effects.applySelection(intent);
           break;
         case "activateRow":
           if (intent.rowKind === "folder" || intent.rowKind === "parent") {
@@ -128,9 +125,7 @@ export function createArchiveRuntimeActions(
           }
           break;
         case "startNativeDrag":
-          if (!effects.hasActiveJob()) {
-            void effects.startNativeDrag(intent.entryPath);
-          }
+          void effects.startNativeDrag(intent.entryPath);
           break;
         case "copyDetailsValue":
           void effects.copyDetailsValue(intent.value);

@@ -12,7 +12,6 @@ import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostic
 import { createFormatSupportsPassword, type CreateArchiveFormat } from "../createFlow";
 import { buildStartExtractRequest } from "../extractFlow";
 import type { MessageKey, MessageParams } from "../i18n/translator";
-import type { JobRetryContext } from "../jobs";
 import {
   createDefaultsForFormat,
   type AppPreferences,
@@ -25,20 +24,11 @@ import {
   type QuickActionExtractMode,
   type QuickActionPathHelpers,
 } from "../quickActions";
-import type {
-  JobOutputAction,
-} from "../workspaces/jobsWorkspace";
 import {
   buildQuickCreateStartRequest,
   type CreateWorkspaceOptionPatch,
   type CreateWorkspaceSnapshot,
 } from "../workspaces/createWorkspace";
-
-export type QuickActionControllerAddJobOptions = Readonly<{
-  retryContext?: JobRetryContext;
-  focusProgress?: boolean;
-  outputActions?: JobOutputAction[];
-}>;
 
 export type QuickActionControllerOptions = Readonly<{
   preferences(): AppPreferences;
@@ -55,9 +45,7 @@ export type QuickActionControllerOptions = Readonly<{
   promptForCommandRetry(commandCode: string): string | null;
   recordCreateDestination(destination: string): void;
   recordExtractDestination(destination: string): void;
-  addJob(response: StartJobResponseDto, options?: QuickActionControllerAddJobOptions): void;
-  createOutputActions(request: StartCreateRequest): JobOutputAction[];
-  extractOutputActions(request: StartExtractRequest): JobOutputAction[];
+  handoffAcceptedJob(response: StartJobResponseDto): Promise<void>;
   showCreateWorkspace(): void;
   readCreateSnapshot(): CreateWorkspaceSnapshot;
   addCreateSources(sources: readonly string[]): CreateWorkspaceSnapshot;
@@ -163,10 +151,7 @@ export function createQuickActionController(
         fields: { format, cleanSource, pathCount: sources.length, jobKind: response.kind },
       });
       options.recordCreateDestination(request.destinationPath);
-      options.addJob(response, {
-        focusProgress: true,
-        outputActions: options.createOutputActions(request),
-      });
+      await options.handoffAcceptedJob(response);
       options.setOperationalMessage("quickCreate.started");
     } catch (error) {
       const commandError = options.toCommandError(error);
@@ -290,22 +275,7 @@ export function createQuickActionController(
             fields: { action, jobKind: response.kind },
           });
           options.recordExtractDestination(destinationPlan.destinationPath);
-          options.addJob(response, {
-            retryContext: {
-              retryKind: "extractArchive",
-              archivePath,
-              destinationPath: destinationPlan.destinationPath,
-              overwrite: "rename",
-              destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
-              stripComponents: destinationPlan.stripComponents,
-              tzapRestorePolicy: request.tzapRestorePolicy,
-              tzapAllowDegraded: request.tzapAllowDegraded,
-              tzapAllowAbsoluteSymlinks: request.tzapAllowAbsoluteSymlinks,
-              ignoreSymlinks: request.ignoreSymlinks,
-            },
-            focusProgress: true,
-            outputActions: options.extractOutputActions(request),
-          });
+          await options.handoffAcceptedJob(response);
           break;
         } catch (error) {
           const commandError = options.toCommandError(error);

@@ -133,14 +133,8 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     recordExtractDestination(destination) {
       calls.extractDestinations.push(destination);
     },
-    addJob(response, options) {
-      calls.jobs.push({ response, options });
-    },
-    createOutputActions(request) {
-      return [{ kind: "reveal", path: request.destinationPath }];
-    },
-    extractOutputActions(request) {
-      return [{ kind: "open", path: request.destinationPath }];
+    async handoffAcceptedJob(response) {
+      calls.jobs.push(response);
     },
     showCreateWorkspace() {
       calls.shownCreateWorkspace += 1;
@@ -245,12 +239,7 @@ describe("quick action controller", () => {
     } satisfies StartCreateRequest);
     expect(harness.calls.createDestinations).toEqual(["C:/work/report.txt.zip"]);
     expect(harness.calls.jobs).toHaveLength(1);
-    expect(harness.calls.jobs[0]).toMatchObject({
-      options: {
-        focusProgress: true,
-        outputActions: [{ kind: "reveal", path: "C:/work/report.txt.zip" }],
-      },
-    });
+    expect(harness.calls.jobs[0]).toEqual(startJobResponse({ kind: "zipCreate" }));
     expect(harness.calls.messages.at(-1)).toEqual({ key: "quickCreate.started", params: undefined });
   });
 
@@ -426,24 +415,7 @@ describe("quick action controller", () => {
     } satisfies StartExtractRequest);
     expect(harness.calls.promptedRetryCodes).toEqual(["password_required"]);
     expect(harness.calls.extractDestinations).toEqual(["C:/archives/demo"]);
-    expect(harness.calls.jobs[0]).toMatchObject({
-      options: {
-        retryContext: {
-          retryKind: "extractArchive",
-          archivePath: "C:/archives/demo.zip",
-          destinationPath: "C:/archives/demo",
-          overwrite: "rename",
-          destinationCollisionStrategy: "rename",
-          stripComponents: 0,
-          tzapRestorePolicy: "portable",
-          tzapAllowDegraded: false,
-          tzapAllowAbsoluteSymlinks: false,
-          ignoreSymlinks: false,
-        },
-        focusProgress: true,
-        outputActions: [{ kind: "open", path: "C:/archives/demo" }],
-      },
-    });
+    expect(harness.calls.jobs[0]).toEqual(startJobResponse({ kind: "zipExtract" }));
   });
 
   it("continues past unsupported quick extract paths and reports command hints", async () => {

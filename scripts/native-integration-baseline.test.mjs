@@ -20,12 +20,6 @@ function nativeMenuCommandIds(source) {
   return [...source.matchAll(/menu_command\(app,\s*"([^"]+)"/g)].map((match) => match[1]);
 }
 
-function numericConstant(source, name) {
-  const match = source.match(new RegExp(`const ${name} = (\\d+);`));
-  assert.ok(match, `${name} should exist`);
-  return Number(match[1]);
-}
-
 test("generated association catalog preserves every WP0 Tauri association", async () => {
   const tauriConfig = await readJson("src-tauri/tauri.conf.json");
   const actual = tauriConfig.bundle.fileAssociations.map((entry) => ({
@@ -77,17 +71,6 @@ test("WP0 baseline captures current window creation settings", async () => {
     baseline.windowSettings.main,
   );
 
-  const windowController = await readText("src/desktop/windowController.ts");
-  assert.deepEqual(
-    {
-      width: numericConstant(windowController, "QUICK_ACTION_WINDOW_WIDTH_PX"),
-      height: numericConstant(windowController, "QUICK_ACTION_WINDOW_HEIGHT_PX"),
-      minWidth: numericConstant(windowController, "QUICK_ACTION_WINDOW_MIN_WIDTH_PX"),
-      minHeight: numericConstant(windowController, "QUICK_ACTION_WINDOW_MIN_HEIGHT_PX"),
-    },
-    baseline.windowSettings.quickActionMain,
-  );
-
   const disposable = await readText("src/desktop/disposableTaskWindowManager.ts");
   const optionsMatch = disposable.match(/createWindow\(label, \{([\s\S]*?)\n\s*}\);/);
   assert.ok(optionsMatch, "Disposable Task Window options should exist");
@@ -110,4 +93,3 @@ test("WP0 baseline captures current window creation settings", async () => {
     baseline.windowSettings.disposableTask,
   );
 });
-

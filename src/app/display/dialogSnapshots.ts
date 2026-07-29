@@ -223,6 +223,13 @@ export function buildAboutDialogSnapshot(
   ): boolean => contract
     ? isNativeCapabilityAvailable(contract.platformIntegration.capabilities, id)
     : false;
+  const capabilityApplies = (
+    id: Parameters<typeof isNativeCapabilityAvailable>[1],
+  ): boolean => contract
+    ? contract.platformIntegration.capabilities.find(
+      (capability) => capability.id === id,
+    )?.applicability !== "notApplicable"
+    : false;
   const diagnosticLogLocation = input.diagnosticLogLocation === "installation"
     ? message(display, "about.diagnostics.logLocationInstallation")
     : input.diagnosticLogLocation === "user"
@@ -230,8 +237,6 @@ export function buildAboutDialogSnapshot(
       : input.diagnosticLogLocation === "userFallback"
         ? message(display, "about.diagnostics.logLocationFallback")
         : message(display, "about.diagnostics.unavailable");
-
-  const isMacOs = contract?.platformIntegration.platform === "macos";
 
   return {
     kind: "about",
@@ -290,7 +295,7 @@ export function buildAboutDialogSnapshot(
               ? message(display, "about.diagnostics.enabled")
               : message(display, "about.diagnostics.disabled"),
           ],
-          ...(isMacOs
+          ...(capabilityApplies("quickLook") || capabilityApplies("spotlight")
             ? [
                 [
                   message(display, "about.diagnostics.quickLook"),

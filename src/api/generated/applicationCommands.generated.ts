@@ -59,7 +59,6 @@ export const COMMAND_IDS = [
   "deleteTempFiles",
   "helpContents",
   "about",
-  "jobs",
   "add",
   "extract",
   "test",
@@ -413,11 +412,6 @@ export const COMMAND_DEFINITIONS: Record<string, any> = {
     "label": "About ZManager...",
     "labelKey": "command.about"
   },
-  "jobs": {
-    "id": "jobs",
-    "label": "Jobs",
-    "tooltip": "Open Jobs task center"
-  },
   "add": {
     "id": "add",
     "label": "Add",
@@ -623,13 +617,6 @@ export const CLASSIC_TOOLBAR_GROUPS: any[] = [
     ]
   },
   {
-    "id": "jobs",
-    "label": "Jobs",
-    "items": [
-      "jobs"
-    ]
-  },
-  {
     "id": "settings",
     "label": "Settings",
     "items": [
@@ -658,7 +645,6 @@ export const CLASSIC_TOOLBAR_ORDER: string[] = [
   "refresh",
   "selectAll",
   "flatView",
-  "jobs",
   "options",
   "deleteTempFiles",
   "helpContents",

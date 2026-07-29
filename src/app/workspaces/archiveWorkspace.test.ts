@@ -32,6 +32,30 @@ describe("archive workspace load state", () => {
     });
   });
 
+  it("resets only submitted extraction state after an accepted start", () => {
+    const workspace = createArchiveWorkspace();
+    workspace.loadSucceeded({
+      archivePath: "C:/tmp/project.zip",
+      entries,
+      entryCount: entries.length,
+      totalSize: 62,
+    });
+    workspace.navigateToFolder("docs");
+    selectPaths(workspace, ["docs/readme.txt"]);
+    workspace.requestPasswordRetry({
+      operation: "extractSelection",
+      error: commandError("password_required"),
+    });
+
+    const snapshot = workspace.resetAfterAcceptedExtraction();
+
+    expect(snapshot.currentArchivePath).toBe("C:/tmp/project.zip");
+    expect(snapshot.entries).toEqual(entries);
+    expect(snapshot.view.currentFolder).toBe("docs");
+    expect(snapshot.view.selection.selectedPaths).toEqual([]);
+    expect(snapshot.passwordRetry).toBeNull();
+  });
+
   it("begins loading an archive without keeping password input in the snapshot", () => {
     const workspace = createArchiveWorkspace();
 
@@ -688,7 +712,6 @@ describe("archive workspace load state", () => {
     const rootCommandState = selectCommandState({
       ...selectedDirectory.command,
       mutableOperationsSupported: false,
-      jobRunning: false,
     });
 
     expect(rootCommandState.openInside.enabled).toBe(true);
@@ -699,7 +722,6 @@ describe("archive workspace load state", () => {
     const nestedCommandState = selectCommandState({
       ...nested.command,
       mutableOperationsSupported: false,
-      jobRunning: false,
     });
 
     expect(nestedCommandState.upOneLevel.enabled).toBe(true);
@@ -718,7 +740,6 @@ describe("archive workspace load state", () => {
     const failedCommandState = selectCommandState({
       ...failed.command,
       mutableOperationsSupported: false,
-      jobRunning: false,
     });
 
     expect(failed.command).toMatchObject({
@@ -735,7 +756,6 @@ describe("archive workspace load state", () => {
     const recoveredCommandState = selectCommandState({
       ...recovered.command,
       mutableOperationsSupported: false,
-      jobRunning: false,
     });
 
     expect(recovered.command.canUseArchive).toBe(true);

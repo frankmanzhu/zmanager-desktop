@@ -161,7 +161,7 @@ impl ArchiveIndexRegistry {
                         .unwrap_or_else(|error| error.into_inner())
                         .statistics()
                 })
-                .map_err(crate::commands::map_archive_browser_error);
+                .map_err(crate::platform::map_archive_browser_error);
                 if cancelled.load(AtomicOrdering::Acquire) {
                     return;
                 }

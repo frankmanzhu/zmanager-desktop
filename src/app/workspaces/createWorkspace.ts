@@ -338,6 +338,10 @@ export type CreateWorkspace = {
   removeSources(paths: readonly unknown[]): CreateWorkspaceSourceMutation;
   clearSources(): CreateWorkspaceSourceMutation;
   reset(): CreateWorkspaceSourceMutation;
+  resetAfterAcceptedStart(
+    format: CreateArchiveFormat,
+    defaults: FormatCreateDefaults,
+  ): CreateWorkspaceSourceMutation;
   queuePlan(): CreateWorkspacePlanQueueResult;
   beginPlan(options?: Partial<CreateWorkspacePlanOptions>, revision?: number): CreateWorkspacePlanRequestResult;
   acceptPlanResult(revision: number, plan: CreatePlanResponse): CreateWorkspacePlanResultAcceptance;
@@ -623,13 +627,32 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
         planState: "idle",
         currentPlan: null,
         planStatus: null,
-        planRevision: 0,
+        planRevision: state.planRevision + 1,
         excludedArchivePaths: new Set(),
         currentFolder: CREATE_PLAN_ROOT_PATH,
         searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
         selection: emptyCreateSelection(),
         options: cloneDefaultCreateOptions(),
+        columnSettings: state.columnSettings,
+      };
+      return mutationResult(state, true, [], removedSources);
+    },
+
+    resetAfterAcceptedStart(format, defaults) {
+      const removedSources = state.sources;
+      state = {
+        sources: [],
+        planState: "idle",
+        currentPlan: null,
+        planStatus: null,
+        planRevision: state.planRevision + 1,
+        excludedArchivePaths: new Set(),
+        currentFolder: CREATE_PLAN_ROOT_PATH,
+        searchQuery: "",
+        expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
+        selection: emptyCreateSelection(),
+        options: applyDefaultsToOptions(cloneDefaultCreateOptions(), format, defaults),
         columnSettings: state.columnSettings,
       };
       return mutationResult(state, true, [], removedSources);
@@ -1576,7 +1599,6 @@ function isPlanInitial(state: MutableCreateWorkspaceState): boolean {
     state.planState === "idle" &&
     state.currentPlan === null &&
     state.planStatus === null &&
-    state.planRevision === 0 &&
     state.excludedArchivePaths.size === 0 &&
     state.currentFolder === CREATE_PLAN_ROOT_PATH &&
     state.searchQuery === "" &&

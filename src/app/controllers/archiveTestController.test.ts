@@ -59,8 +59,8 @@ function createHarness(overrides: Partial<ArchiveTestControllerOptions> = {}) {
       return password.trim() || undefined;
     },
     runTestArchive,
-    addJob(response, options) {
-      calls.jobs.push({ response, options });
+    async handoffAcceptedJob(response) {
+      calls.jobs.push(response);
     },
     toCommandError(error) {
       return error && typeof error === "object" && "code" in error
@@ -92,7 +92,7 @@ function createHarness(overrides: Partial<ArchiveTestControllerOptions> = {}) {
 }
 
 describe("archive test controller", () => {
-  it("starts a test job with retry context and clears password retry state", async () => {
+  it("hands an accepted test job to its disposable task", async () => {
     const harness = createHarness();
     harness.setInitialPassword("  initial  ");
     harness.runTestArchive.mockResolvedValueOnce(startJobResponse({ jobId: "test-job" }));
@@ -103,15 +103,9 @@ describe("archive test controller", () => {
       archivePath: "C:/archives/demo.zip",
       password: "initial",
     });
-    expect(harness.calls.jobs).toEqual([{
-      response: startJobResponse({ jobId: "test-job" }),
-      options: {
-        retryContext: {
-          retryKind: "testArchive",
-          archivePath: "C:/archives/demo.zip",
-        },
-      },
-    }]);
+    expect(harness.calls.jobs).toEqual([
+      startJobResponse({ jobId: "test-job" }),
+    ]);
     expect(harness.calls.errors).toEqual([]);
   });
 

@@ -69,38 +69,43 @@ export function createDisposableTaskWindowManager(
         fields: { jobKind: job.kind, initialStatus: job.status, openWindowCount: windows.size },
       });
 
-      await taskWindow.once<null>("zmanager-task-ready", () => {
-        diagnostics.record({
-          scope: "disposableTaskWindow",
-          name: "ready",
-          fields: { jobKind: job.kind, openWindowCount: windows.size },
-        });
-        options.onReady(job.jobId);
-      });
-      await taskWindow.once<null>("tauri://destroyed", () => {
+      const removeWindow = (name: "destroyed" | "creationFailed") => {
+        if (windows.get(job.jobId) !== taskWindow) {
+          return;
+        }
         windows.delete(job.jobId);
         options.onWindowClosed?.(job.jobId);
         diagnostics.record({
           scope: "disposableTaskWindow",
-          name: "destroyed",
+          name,
           fields: { jobKind: job.kind, openWindowCount: windows.size },
         });
         if (windows.size === 0) {
           options.onAllClosed();
         }
-      });
-      await taskWindow.once<WindowEvent>("tauri://error", () => {
-        windows.delete(job.jobId);
-        options.onWindowClosed?.(job.jobId);
-        diagnostics.record({
-          scope: "disposableTaskWindow",
-          name: "creationFailed",
-          fields: { jobKind: job.kind, openWindowCount: windows.size },
-        });
-        if (windows.size === 0) {
-          options.onAllClosed();
-        }
-      });
+      };
+
+      try {
+        await Promise.all([
+          taskWindow.once<null>("zmanager-task-ready", () => {
+            diagnostics.record({
+              scope: "disposableTaskWindow",
+              name: "ready",
+              fields: { jobKind: job.kind, openWindowCount: windows.size },
+            });
+            options.onReady(job.jobId);
+          }),
+          taskWindow.once<null>("tauri://destroyed", () => {
+            removeWindow("destroyed");
+          }),
+          taskWindow.once<WindowEvent>("tauri://error", () => {
+            removeWindow("creationFailed");
+          }),
+        ]);
+      } catch (error) {
+        removeWindow("creationFailed");
+        throw error;
+      }
       return true;
     },
 
@@ -131,5 +136,10 @@ function disposableTaskWindowUrl(job: StartJobResponseDto): string {
 }
 
 function disposableTaskWindowTitle(job: StartJobResponseDto): string {
-  return job.kind.endsWith("Create") ? "Compressing with ZManager" : "Extracting with ZManager";
+  if (job.kind === "testArchive") {
+    return "Testing with ZManager";
+  }
+  return job.kind.endsWith("Create")
+    ? "Compressing with ZManager"
+    : "Extracting with ZManager";
 }

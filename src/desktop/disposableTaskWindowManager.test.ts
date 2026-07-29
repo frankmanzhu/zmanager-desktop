@@ -1,14 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createDisposableTaskWindowManager, type DisposableTaskWindowHandle } from "./disposableTaskWindowManager";
-import type { BaseJobSnapshotDto, StartJobResponseDto } from "../api/types";
+import type { StartJobResponseDto } from "../api/types";
 
 function job(jobId = "job-1"): StartJobResponseDto {
   return { jobId, kind: "zipCreate", status: "queued", createdAt: "2026-07-11T00:00:00Z" };
-}
-
-function update(jobId = "job-1"): BaseJobSnapshotDto {
-  return { ...job(jobId), status: "running", canDismiss: false, events: [] };
 }
 
 function harness() {
@@ -60,5 +56,30 @@ describe("disposable task window manager", () => {
     listeners?.get("tauri://destroyed")?.();
     expect(test.manager.getOpenJobIds()).toEqual([]);
     expect(test.onAllClosed).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a window when listener registration fails", async () => {
+    const onAllClosed = vi.fn();
+    const handle: DisposableTaskWindowHandle = {
+      label: "task-job-1",
+      emit: vi.fn(),
+      once: vi.fn(async (event) => {
+        if (event === "tauri://error") {
+          throw new Error("registration failed");
+        }
+        return () => undefined;
+      }),
+      setFocus: vi.fn(),
+      show: vi.fn(),
+    };
+    const manager = createDisposableTaskWindowManager({
+      createWindow: () => handle,
+      onReady: vi.fn(),
+      onAllClosed,
+    });
+
+    await expect(manager.open(job())).rejects.toThrow("registration failed");
+    expect(manager.hasOpenWindows()).toBe(false);
+    expect(onAllClosed).toHaveBeenCalledOnce();
   });
 });

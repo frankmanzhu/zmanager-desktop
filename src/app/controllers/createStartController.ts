@@ -23,7 +23,10 @@ export type CreateStartControllerOptions = Readonly<{
   publishSnapshot(snapshot: CreateWorkspaceSnapshot): CreateWorkspaceSnapshot;
   isSubmissionInFlight(): boolean;
   startCreate(request: StartCreateRequest): Promise<StartJobResponseDto>;
-  onCreateStarted(response: StartJobResponseDto, request: StartCreateRequest): void;
+  onCreateStarted(
+    response: StartJobResponseDto,
+    request: StartCreateRequest,
+  ): void | Promise<void>;
   toCommandError(error: unknown): CommandErrorDto | null;
 }>;
 
@@ -60,7 +63,7 @@ export function createCreateStartController(
 
     try {
       const response = await options.startCreate(request);
-      options.onCreateStarted(response, request);
+      await options.onCreateStarted(response, request);
     } catch (error) {
       const commandError = options.toCommandError(error);
       options.publishSnapshot(options.workspace.setPlanError(

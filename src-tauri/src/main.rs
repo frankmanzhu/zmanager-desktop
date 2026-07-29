@@ -49,11 +49,7 @@ fn main() {
         );
         platform::ensure_macos_registration(&diagnostics);
         platform::shutdown();
-        let _ = diagnostics.record(
-            "postinstall",
-            "complete",
-            diagnostics::fields([]),
-        );
+        let _ = diagnostics.record("postinstall", "complete", diagnostics::fields([]));
         eprintln!("ZMANAGER_POSTINSTALL: complete");
         std::process::exit(0);
     }

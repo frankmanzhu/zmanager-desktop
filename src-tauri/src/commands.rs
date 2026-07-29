@@ -1,5 +1,3 @@
-#[cfg(unix)]
-use libc;
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -43,9 +41,7 @@ use crate::{
     native_launch_inbox::NativeLaunchInbox,
     quick_action::QuickActionLaunchCoordinator,
 };
-use zmanager_core::archive_browser::{
-    self, ArchiveBrowserError, BrowserExtractOptions, BrowserListOptions,
-};
+use zmanager_core::archive_browser::{self, BrowserExtractOptions, BrowserListOptions};
 use zmanager_core::jobs::{
     CancellationToken, run_7z_create_job_from_sources_with_plan_options,
     run_7z_extract_job_with_password_and_policy,
@@ -112,22 +108,7 @@ pub fn project_contract() -> crate::dto::ProjectContract {
     available_column_ids.push("accessed");
     available_column_ids.push("linkTarget");
 
-    // Platform-specific filesystem attributes (Available when implemented)
-    #[cfg(any(target_os = "macos", windows))]
-    available_column_ids.push("attributes");
-
-    // Unix-specific source metadata
-    #[cfg(unix)]
-    {
-        available_column_ids.push("mode");
-        available_column_ids.push("uid");
-        available_column_ids.push("gid");
-        available_column_ids.push("owner"); // Available on macOS/Linux
-        available_column_ids.push("group"); // Available on macOS/Linux
-    }
-
-    // Windows: owner is "Available when implemented" — defer to core integration
-    // Windows: group is "Unavailable in the Unix sense"
+    available_column_ids.extend_from_slice(crate::platform::source_table_column_ids());
 
     ProjectContract {
         commands: constants::PLANNED_COMMANDS,
@@ -236,7 +217,7 @@ pub fn list_archive(
             password: request.password.as_deref(),
         },
     )
-    .map_err(map_archive_browser_error)?;
+    .map_err(crate::platform::map_archive_browser_error)?;
 
     let mut total_size = 0u64;
     let mut has_size = false;
@@ -396,26 +377,8 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         .and_then(|m| m.accessed().ok())
         .and_then(system_time_to_epoch_seconds_string);
 
-    let attributes = build_source_attributes(&entry.source_path, &entry.permissions);
-
-    #[cfg(unix)]
-    let (uid, gid, owner, group) = {
-        use std::os::unix::fs::MetadataExt;
-        if let Some(ref meta) = source_meta {
-            let u = meta.uid();
-            let g = meta.gid();
-            (
-                Some(u),
-                Some(g),
-                resolve_user_name(u),
-                resolve_group_name(g),
-            )
-        } else {
-            (None, None, None, None)
-        }
-    };
-    #[cfg(not(unix))]
-    let (uid, gid, owner, group) = (None, None, None, None);
+    let platform_metadata =
+        crate::platform::source_platform_metadata(&entry.source_path, &entry.permissions);
 
     CreatePlanEntryDto {
         path: entry.archive_path.clone(),
@@ -426,143 +389,12 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
         source_path: entry.source_path.to_string_lossy().to_string(),
         created,
         accessed,
-        attributes,
+        attributes: platform_metadata.attributes,
         link_target,
-        uid,
-        gid,
-        owner,
-        group,
-    }
-}
-
-// Human-readable names for macOS BSD file flags (st_flags).
-// See man chflags(2). SF_ flags require root; UF_ flags are user-settable.
-#[cfg(target_os = "macos")]
-const MACOS_BSD_FLAGS: &[(u32, &str)] = &[
-    (libc::UF_NODUMP, "nodump"),
-    (libc::UF_IMMUTABLE, "immutable"),
-    (libc::UF_APPEND, "append-only"),
-    (libc::UF_OPAQUE, "opaque"),
-    (libc::UF_HIDDEN, "hidden"),
-    (libc::SF_ARCHIVED, "archived"),
-    (libc::SF_IMMUTABLE, "system-immutable"),
-    (libc::SF_APPEND, "system-append"),
-];
-
-// Human-readable names for Windows FILE_ATTRIBUTE_* flags.
-// Only includes user-visible flags; skips ARCHIVE / NOT_CONTENT_INDEXED
-// which are set on almost every file.
-#[cfg(windows)]
-const WINDOWS_FILE_ATTRIBUTES: &[(u32, &str)] = &[
-    (0x0000_0001, "readonly"),   // FILE_ATTRIBUTE_READONLY
-    (0x0000_0002, "hidden"),     // FILE_ATTRIBUTE_HIDDEN
-    (0x0000_0004, "system"),     // FILE_ATTRIBUTE_SYSTEM
-    (0x0000_0040, "device"),     // FILE_ATTRIBUTE_DEVICE
-    (0x0000_0100, "temporary"),  // FILE_ATTRIBUTE_TEMPORARY
-    (0x0000_0200, "sparse"),     // FILE_ATTRIBUTE_SPARSE_FILE
-    (0x0000_0400, "reparse"),    // FILE_ATTRIBUTE_REPARSE_POINT
-    (0x0000_0800, "compressed"), // FILE_ATTRIBUTE_COMPRESSED
-    (0x0000_1000, "offline"),    // FILE_ATTRIBUTE_OFFLINE
-    (0x0000_4000, "encrypted"),  // FILE_ATTRIBUTE_ENCRYPTED
-];
-
-/// Build source attributes from permission flags and platform metadata.
-fn build_source_attributes(
-    source_path: &Path,
-    perms: &zmanager_core::manifest::PermissionSnapshot,
-) -> Option<Vec<crate::dto::SourceAttributeDto>> {
-    let mut attrs = Vec::new();
-
-    if perms.readonly {
-        attrs.push(crate::dto::SourceAttributeDto {
-            namespace: "portable".into(),
-            code: "readonly".into(),
-        });
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        use std::os::darwin::fs::MetadataExt;
-        if let Ok(meta) = std::fs::symlink_metadata(source_path) {
-            let flags = meta.st_flags();
-            for (mask, name) in MACOS_BSD_FLAGS {
-                if flags & mask != 0 {
-                    attrs.push(crate::dto::SourceAttributeDto {
-                        namespace: "bsd".into(),
-                        code: (*name).into(),
-                    });
-                }
-            }
-        }
-    }
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        if let Ok(meta) = std::fs::symlink_metadata(source_path) {
-            let attrs_val = meta.file_attributes();
-            for (mask, name) in WINDOWS_FILE_ATTRIBUTES {
-                if attrs_val & mask != 0 {
-                    attrs.push(crate::dto::SourceAttributeDto {
-                        namespace: "windows".into(),
-                        code: (*name).into(),
-                    });
-                }
-            }
-        }
-    }
-
-    if attrs.is_empty() { None } else { Some(attrs) }
-}
-
-/// Resolve a Unix UID to a user name using a bounded thread-safe buffer.
-#[cfg(unix)]
-fn resolve_user_name(uid: u32) -> Option<String> {
-    // getpwuid_r requires a buffer; 16 KiB is generous for any Unix.
-    let mut buf = vec![0u8; 16384];
-    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
-    let mut result: *mut libc::passwd = std::ptr::null_mut();
-    let ret = unsafe {
-        libc::getpwuid_r(
-            uid,
-            &mut pwd,
-            buf.as_mut_ptr() as *mut libc::c_char,
-            buf.len(),
-            &mut result,
-        )
-    };
-    if ret == 0 && !result.is_null() {
-        unsafe { std::ffi::CStr::from_ptr(pwd.pw_name) }
-            .to_str()
-            .ok()
-            .map(|s| s.to_string())
-    } else {
-        None
-    }
-}
-
-/// Resolve a Unix GID to a group name using a bounded thread-safe buffer.
-#[cfg(unix)]
-fn resolve_group_name(gid: u32) -> Option<String> {
-    let mut buf = vec![0u8; 16384];
-    let mut grp: libc::group = unsafe { std::mem::zeroed() };
-    let mut result: *mut libc::group = std::ptr::null_mut();
-    let ret = unsafe {
-        libc::getgrgid_r(
-            gid,
-            &mut grp,
-            buf.as_mut_ptr() as *mut libc::c_char,
-            buf.len(),
-            &mut result,
-        )
-    };
-    if ret == 0 && !result.is_null() {
-        unsafe { std::ffi::CStr::from_ptr(grp.gr_name) }
-            .to_str()
-            .ok()
-            .map(|s| s.to_string())
-    } else {
-        None
+        uid: platform_metadata.uid,
+        gid: platform_metadata.gid,
+        owner: platform_metadata.owner,
+        group: platform_metadata.group,
     }
 }
 
@@ -1359,7 +1191,7 @@ pub fn preview_entry(
             ..BrowserExtractOptions::default()
         },
     )
-    .map_err(map_archive_browser_error)?;
+    .map_err(crate::platform::map_archive_browser_error)?;
 
     registry.replace_preview_root(report.cleanup_root.clone());
 
@@ -1637,7 +1469,7 @@ fn run_selected_extract_job(
                 ignore_symlinks: policy.ignore_symlinks,
             },
         )
-        .map_err(map_archive_browser_error)?;
+        .map_err(crate::platform::map_archive_browser_error)?;
 
         written_entries = written_entries.saturating_add(1);
         written_bytes = written_bytes.saturating_add(report.written_bytes);
@@ -1938,38 +1770,7 @@ pub(crate) fn map_browser_entry_kind(
     }
 }
 
-pub(crate) fn map_archive_browser_error(error: ArchiveBrowserError) -> CommandErrorDto {
-    match error {
-        ArchiveBrowserError::Cancelled => {
-            CommandErrorDto::cancelled("Archive enumeration was cancelled.")
-        }
-        ArchiveBrowserError::Zip(source) => map_zip_error(source),
-        ArchiveBrowserError::TarZst(source) => map_tar_zst_error(source),
-        ArchiveBrowserError::SevenZ(source) => map_7z_error(source),
-        ArchiveBrowserError::Tzap(source) => map_tzap_error(source),
-        #[cfg(target_os = "macos")]
-        ArchiveBrowserError::AppleArchive(source) => {
-            crate::platform::apple_archive::map_apple_archive_error(source)
-        }
-        ArchiveBrowserError::Libarchive(source) => map_libarchive_error(source),
-        ArchiveBrowserError::RawStream(source) => map_raw_stream_error(source),
-        ArchiveBrowserError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        ArchiveBrowserError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        ArchiveBrowserError::EntryNotFound { path } => CommandErrorDto::not_found(
-            format!("archive entry not found: {path}"),
-            Some("Open a different archive or confirm the selected entry path.".to_string()),
-        ),
-        ArchiveBrowserError::UnsupportedEntry { path, .. } => CommandErrorDto::unsupported_format(
-            format!("entry cannot be extracted or previewed here: {path}"),
-        ),
-    }
-}
-
-fn map_zip_error(error: ZipBackendError) -> CommandErrorDto {
+pub(crate) fn map_zip_error(error: ZipBackendError) -> CommandErrorDto {
     match error {
         ZipBackendError::PasswordRequired => CommandErrorDto::password_required(
             "This ZIP archive is encrypted and requires a password.",
@@ -2003,7 +1804,9 @@ fn map_zip_error(error: ZipBackendError) -> CommandErrorDto {
     }
 }
 
-fn map_tar_zst_error(error: zmanager_core::tar_zst_backend::TarZstdError) -> CommandErrorDto {
+pub(crate) fn map_tar_zst_error(
+    error: zmanager_core::tar_zst_backend::TarZstdError,
+) -> CommandErrorDto {
     match error {
         zmanager_core::tar_zst_backend::TarZstdError::Safety(source) => {
             CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
@@ -2039,7 +1842,7 @@ fn map_tar_gz_error(error: zmanager_core::tar_gz_backend::TarGzError) -> Command
     }
 }
 
-fn map_7z_error(error: SevenZError) -> CommandErrorDto {
+pub(crate) fn map_7z_error(error: SevenZError) -> CommandErrorDto {
     match error {
         SevenZError::PasswordRequired => CommandErrorDto::password_required(
             "This 7z archive is encrypted and requires a password.",
@@ -2067,7 +1870,7 @@ fn map_7z_error(error: SevenZError) -> CommandErrorDto {
     }
 }
 
-fn map_tzap_error(error: TzapError) -> CommandErrorDto {
+pub(crate) fn map_tzap_error(error: TzapError) -> CommandErrorDto {
     match error {
         TzapError::PasswordRequired => CommandErrorDto::password_required(
             "This TZAP archive is encrypted and requires a password.",
@@ -2096,7 +1899,7 @@ fn map_tzap_error(error: TzapError) -> CommandErrorDto {
     }
 }
 
-fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
+pub(crate) fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
     match error {
         LibarchiveError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
@@ -2127,7 +1930,7 @@ fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
     }
 }
 
-fn map_raw_stream_error(error: RawStreamError) -> CommandErrorDto {
+pub(crate) fn map_raw_stream_error(error: RawStreamError) -> CommandErrorDto {
     match error {
         RawStreamError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
@@ -2197,7 +2000,7 @@ fn map_plan_error(error: PlanError) -> CommandErrorDto {
     CommandErrorDto::invalid_request(error.to_string())
 }
 
-fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
+pub(crate) fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
     match source.kind() {
         io::ErrorKind::NotFound => CommandErrorDto::not_found(
             format!("could not find file or directory: {path}"),
@@ -2254,7 +2057,7 @@ fn build_native_drag_items(
         Path::new(archive_path),
         BrowserListOptions { password },
     )
-    .map_err(map_archive_browser_error)?;
+    .map_err(crate::platform::map_archive_browser_error)?;
 
     native_drag_items_from_listing(&listing.entries, entry_paths, strip_components)
 }

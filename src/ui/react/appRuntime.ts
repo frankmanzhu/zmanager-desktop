@@ -535,7 +535,6 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       states: selectCommandState({
         ...archive.command,
         mutableOperationsSupported: false,
-        jobRunning: false,
       }),
       pressed: {
         flatView: archive.view.flatView,

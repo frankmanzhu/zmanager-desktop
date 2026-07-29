@@ -135,10 +135,7 @@ scripts/build-macos.sh
 ```text
 docs/
   ARCHITECTURE.md
-  HANDOFF.md
-  PRD.md
   REQUIREMENTS.md
-  ROADMAP.md
 packaging/
   linux/
   windows/

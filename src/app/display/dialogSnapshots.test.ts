@@ -208,6 +208,34 @@ describe("dialog snapshots", () => {
     );
   });
 
+  it("derives platform-specific integration rows from capability applicability", () => {
+    const contract: ProjectContract = {
+      commands: [],
+      platformStrategy: "desktop",
+      coreDependency: "zmanager-core",
+      platformIntegration: {
+        platform: "opaque-platform-name",
+        packageKind: "development",
+        capabilities: nativeCapabilitySnapshots("macos", {
+          quickLook: "available",
+          spotlight: "unavailable",
+        }),
+      },
+      sourceTableCapabilities: { availableColumnIds: [] },
+    };
+
+    const snapshot = buildAboutDialogSnapshot({
+      display: createDisplayContext("en"),
+      contract,
+    });
+    const integrationRows = snapshot.groups.find(
+      (group) => group.title === "Desktop Integration",
+    )?.rows;
+
+    expect(integrationRows).toContainEqual(["Quick Look", "enabled"]);
+    expect(integrationRows).toContainEqual(["Spotlight", "disabled"]);
+  });
+
   it("uses display context labels instead of persisted workflow labels", () => {
     const display = createDisplayContext("zh-CN");
     const workspace = createArchiveWorkspace();

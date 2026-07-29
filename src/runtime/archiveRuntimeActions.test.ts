@@ -19,8 +19,8 @@ describe("archive runtime actions", () => {
     expect(effects.runEntryDefaultAction).toHaveBeenCalledWith("docs/readme.txt");
   });
 
-  it("blocks selection replacement and native drag while jobs are active", () => {
-    const effects = createEffects({ hasActiveJob: () => true });
+  it("keeps selection replacement and native drag reusable between Job starts", () => {
+    const effects = createEffects();
     const actions = createArchiveRuntimeActions(effects);
 
     actions.handleIntent({
@@ -31,8 +31,8 @@ describe("archive runtime actions", () => {
     });
     actions.handleIntent({ type: "startNativeDrag", entryPath: "a.txt" });
 
-    expect(effects.applySelection).not.toHaveBeenCalled();
-    expect(effects.startNativeDrag).not.toHaveBeenCalled();
+    expect(effects.applySelection).toHaveBeenCalled();
+    expect(effects.startNativeDrag).toHaveBeenCalledWith("a.txt");
   });
 
   it("routes context menu intents through typed menu callbacks", () => {
@@ -99,7 +99,6 @@ function createEffects(
     clearSelection: vi.fn(),
     selectRow: vi.fn(),
     setRowSelected: vi.fn(),
-    hasActiveJob: vi.fn(() => false),
     applySelection: vi.fn(),
     runEntryDefaultAction: vi.fn(),
     startNativeDrag: vi.fn(),
