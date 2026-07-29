@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../components/ui/select";
-import { HelpTooltip } from "../../components/ui/tooltip";
+import { InfoTip } from "../../components/ui/info-tip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
@@ -1041,8 +1041,9 @@ function ExtractionPage({
       </div>
       <div className={SETTING_GRID_CLASS}>
         <div className={SETTING_ROW_CLASS}>
-          <label htmlFor="pref-extract-path-mode">
+          <label htmlFor="pref-extract-path-mode" className="flex items-center gap-1">
             {i18n.t("extract.pathMode")}
+            <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
           </label>
           <div className={SETTING_CONTROL_CLASS}>
             <select
@@ -1067,8 +1068,9 @@ function ExtractionPage({
           </div>
         </div>
         <div className={SETTING_ROW_CLASS}>
-          <label htmlFor="pref-extract-overwrite">
+          <label htmlFor="pref-extract-overwrite" className="flex items-center gap-1">
             {i18n.t("extract.overwritePolicy")}
+            <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
           </label>
           <div className={SETTING_CONTROL_CLASS}>
             <select
@@ -1098,8 +1100,9 @@ function ExtractionPage({
           </div>
         </div>
         <div className={SETTING_ROW_CLASS}>
-          <label htmlFor="pref-extract-strip-components">
+          <label htmlFor="pref-extract-strip-components" className="flex items-center gap-1">
             {i18n.t("extract.stripComponents")}
+            <InfoTip content={i18n.t("extract.stripComponents.tooltip")} />
           </label>
           <div className={SETTING_CONTROL_CLASS}>
             <input
@@ -1125,6 +1128,7 @@ function ExtractionPage({
       <PreferenceCheckbox
         id="pref-extract-deduplicate-root"
         label={i18n.t("extract.deduplicateRoot")}
+        tooltip={i18n.t("extract.deduplicateRoot.tooltip")}
         checked={draft.defaultExtractDeduplicateRoot}
         onChange={(checked) =>
           actions.handleDialogIntent({
@@ -1143,7 +1147,10 @@ function ExtractionPage({
           </p>
         </div>
         <label className="grid gap-1.5 text-xs font-semibold">
-          <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+          <span className="inline-flex items-center gap-1">
+            {i18n.t("extract.tzapRestorePolicy")}
+            <InfoTip content={i18n.t("extract.tzapRestorePolicy.tooltip")} />
+          </span>
           <Select
             value={draft.defaultTzapRestorePolicy}
             onValueChange={(value) =>
@@ -1198,11 +1205,9 @@ function ExtractionPage({
               })
             }
           />
-          <span className="grid gap-0.5">
+          <span className="inline-flex items-center gap-1">
             <span>{i18n.t("extract.tzapAllowDegraded")}</span>
-            <span className="font-normal leading-4 opacity-70">
-              {i18n.t("extract.tzapAllowDegraded.help")}
-            </span>
+            <InfoTip content={i18n.t("extract.tzapAllowDegraded.tooltip")} />
           </span>
         </label>
       </div>
@@ -1469,7 +1474,7 @@ function PreferenceCheckbox({
   disabled?: boolean;
   onChange(checked: boolean): void;
 }>) {
-  const checkbox = (
+  return (
     <label className={TOGGLE_LINE_CLASS}>
       <input
         id={id}
@@ -1478,13 +1483,11 @@ function PreferenceCheckbox({
         disabled={disabled}
         onChange={(event) => onChange(event.currentTarget.checked)}
       />{" "}
-      <span>{label}</span>
+      <span className="flex items-center gap-1">
+        {label}
+        <InfoTip content={tooltip} />
+      </span>
     </label>
-  );
-  return tooltip ? (
-    <HelpTooltip content={tooltip}>{checkbox}</HelpTooltip>
-  ) : (
-    checkbox
   );
 }
 

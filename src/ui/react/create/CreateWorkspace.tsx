@@ -30,7 +30,7 @@ import {
 import type { Translator } from "../../../app/i18n/translator";
 import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
-import { HelpTooltip } from "../../components/ui/tooltip";
+import { InfoTip } from "../../components/ui/info-tip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { nativeIconDataUrlForPath } from "../systemFileIcons";
 import type {
@@ -1112,24 +1112,24 @@ function CreateOptions() {
             />
           </label>
           <div className="col-span-full grid gap-1.5 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-            <HelpTooltip content={i18n.t("create.cleanSource.tooltip")}>
-              <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
-                <input
-                  id="create-clean-source"
-                  type="checkbox"
-                  checked={options.cleanSource}
-                  onChange={(event) =>
-                    actions.handleCreateIntent({
-                      type: "setOptions",
-                      patch: { cleanSource: event.currentTarget.checked },
-                    })
-                  }
-                />
-                <span>{i18n.t("create.cleanSource")}</span>
-              </label>
-            </HelpTooltip>
-            <HelpTooltip content={i18n.t("create.respectGitignore.tooltip")}>
-              <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+            <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+              <input
+                id="create-clean-source"
+                type="checkbox"
+                checked={options.cleanSource}
+                onChange={(event) =>
+                  actions.handleCreateIntent({
+                    type: "setOptions",
+                    patch: { cleanSource: event.currentTarget.checked },
+                  })
+                }
+              />
+              <span className="inline-flex items-center gap-1">
+                {i18n.t("create.cleanSource")}
+                <InfoTip content={i18n.t("create.cleanSource.tooltip")} />
+              </span>
+            </label>
+            <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
                 <input
                   id="create-respect-gitignore"
                   type="checkbox"
@@ -1141,61 +1141,66 @@ function CreateOptions() {
                     })
                   }
                 />
-                <span>{i18n.t("create.respectGitignore")}</span>
+                <span className="inline-flex items-center gap-1">
+                  {i18n.t("create.respectGitignore")}
+                  <InfoTip content={i18n.t("create.respectGitignore.tooltip")} />
+                </span>
               </label>
-            </HelpTooltip>
-            <HelpTooltip
-              content={i18n.t(
-                `create.preserveMetadata.${options.format}.tooltip`,
-              )}
-            >
-              <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
-                <input
-                  id="create-preserve-metadata"
-                  type="checkbox"
-                  checked={options.preserveMetadata}
-                  onChange={(event) =>
-                    actions.handleCreateIntent({
-                      type: "setOptions",
-                      patch: { preserveMetadata: event.currentTarget.checked },
-                    })
-                  }
+            <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+              <input
+                id="create-preserve-metadata"
+                type="checkbox"
+                checked={options.preserveMetadata}
+                onChange={(event) =>
+                  actions.handleCreateIntent({
+                    type: "setOptions",
+                    patch: { preserveMetadata: event.currentTarget.checked },
+                  })
+                }
+              />
+              <span className="inline-flex items-center gap-1">
+                {i18n.t("create.preserveMetadata")}
+                <InfoTip
+                  content={i18n.t(
+                    `create.preserveMetadata.${options.format}.tooltip`,
+                  )}
                 />
-                <span>{i18n.t("create.preserveMetadata")}</span>
-              </label>
-            </HelpTooltip>
-            <HelpTooltip content={i18n.t("create.replaceExisting.tooltip")}>
-              <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
-                <input
-                  id="create-replace-existing"
-                  type="checkbox"
-                  checked={options.replaceExisting}
-                  onChange={(event) =>
-                    actions.handleCreateIntent({
-                      type: "setOptions",
-                      patch: { replaceExisting: event.currentTarget.checked },
-                    })
-                  }
-                />
-                <span>{i18n.t("create.replaceExisting")}</span>
-              </label>
-            </HelpTooltip>
-            <HelpTooltip content={i18n.t("create.followSymlinks.tooltip")}>
-              <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
-                <input
-                  id="create-follow-symlinks"
-                  type="checkbox"
-                  checked={options.followSymlinks}
-                  onChange={(event) =>
-                    actions.handleCreateIntent({
-                      type: "setOptions",
-                      patch: { followSymlinks: event.currentTarget.checked },
-                    })
-                  }
-                />
-                <span>{i18n.t("create.followSymlinks")}</span>
-              </label>
-            </HelpTooltip>
+              </span>
+            </label>
+            <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+              <input
+                id="create-replace-existing"
+                type="checkbox"
+                checked={options.replaceExisting}
+                onChange={(event) =>
+                  actions.handleCreateIntent({
+                    type: "setOptions",
+                    patch: { replaceExisting: event.currentTarget.checked },
+                  })
+                }
+              />
+              <span className="inline-flex items-center gap-1">
+                {i18n.t("create.replaceExisting")}
+                <InfoTip content={i18n.t("create.replaceExisting.tooltip")} />
+              </span>
+            </label>
+            <label className="grid min-h-9 grid-cols-[auto_1fr] items-center gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800">
+              <input
+                id="create-follow-symlinks"
+                type="checkbox"
+                checked={options.followSymlinks}
+                onChange={(event) =>
+                  actions.handleCreateIntent({
+                    type: "setOptions",
+                    patch: { followSymlinks: event.currentTarget.checked },
+                  })
+                }
+              />
+              <span className="inline-flex items-center gap-1">
+                {i18n.t("create.followSymlinks")}
+                <InfoTip content={i18n.t("create.followSymlinks.tooltip")} />
+              </span>
+            </label>
           </div>
         </div>
         <details
@@ -1387,42 +1392,42 @@ function CreateOptions() {
                     }
                   />
                 </label>
-                <HelpTooltip content={i18n.t("create.sevenZSolid.tooltip")}>
-                  <label className="flex items-center gap-2">
-                    <input
-                      id="create-7z-solid"
-                      type="checkbox"
-                      checked={options.sevenZSolid}
-                      onChange={(event) =>
-                        actions.handleCreateIntent({
-                          type: "setOptions",
-                          patch: { sevenZSolid: event.currentTarget.checked },
-                        })
-                      }
-                    />
-                    <span>{i18n.t("create.sevenZSolid")}</span>
-                  </label>
-                </HelpTooltip>
-                <HelpTooltip
-                  content={i18n.t("create.sevenZEncryptFileNames.tooltip")}
-                >
-                  <label className="flex items-center gap-2">
-                    <input
-                      id="create-7z-encrypt-names"
-                      type="checkbox"
-                      checked={options.sevenZEncryptFileNames}
-                      onChange={(event) =>
-                        actions.handleCreateIntent({
-                          type: "setOptions",
-                          patch: {
-                            sevenZEncryptFileNames: event.currentTarget.checked,
-                          },
-                        })
-                      }
-                    />
-                    <span>{i18n.t("create.sevenZEncryptFileNames")}</span>
-                  </label>
-                </HelpTooltip>
+                <label className="flex items-center gap-2">
+                  <input
+                    id="create-7z-solid"
+                    type="checkbox"
+                    checked={options.sevenZSolid}
+                    onChange={(event) =>
+                      actions.handleCreateIntent({
+                        type: "setOptions",
+                        patch: { sevenZSolid: event.currentTarget.checked },
+                      })
+                    }
+                  />
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("create.sevenZSolid")}
+                    <InfoTip content={i18n.t("create.sevenZSolid.tooltip")} />
+                  </span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    id="create-7z-encrypt-names"
+                    type="checkbox"
+                    checked={options.sevenZEncryptFileNames}
+                    onChange={(event) =>
+                      actions.handleCreateIntent({
+                        type: "setOptions",
+                        patch: {
+                          sevenZEncryptFileNames: event.currentTarget.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("create.sevenZEncryptFileNames")}
+                    <InfoTip content={i18n.t("create.sevenZEncryptFileNames.tooltip")} />
+                  </span>
+                </label>
               </section>
             ) : null}
             {options.format === "tzap" ? (

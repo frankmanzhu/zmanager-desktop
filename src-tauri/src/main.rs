@@ -20,6 +20,44 @@ mod quick_action;
 use tauri::{Emitter, Manager};
 
 fn main() {
+    // --postinstall is used by build scripts and PKG postinstall to trigger
+    // extension registration and App Group provisioning without showing UI.
+    // This must be checked BEFORE any Tauri state initialization so the
+    // single-instance plugin does not interfere with a concurrent launch.
+    if std::env::args_os().any(|arg| arg.to_str().map_or(false, |s| s == "--postinstall")) {
+        eprintln!("ZMANAGER_POSTINSTALL: begin");
+        let diagnostics = diagnostics::DiagnosticLog::new();
+        let _ = diagnostics.initialize(
+            std::env::var("ZMANAGER_DIAGNOSTICS_DIR")
+                .ok()
+                .map(std::path::PathBuf::from),
+            false,
+        );
+        let inbox = native_launch_inbox::NativeLaunchInbox::new();
+        if let Err(e) = platform::initialize_native_host(inbox, diagnostics.clone()) {
+            let _ = diagnostics.record(
+                "postinstall",
+                "nativeHostFailed",
+                diagnostics::fields([("error", serde_json::Value::String(e))]),
+            );
+        }
+        let group_ready = platform::wait_for_app_group(std::time::Duration::from_secs(30));
+        let _ = diagnostics.record(
+            "postinstall",
+            "appGroupReady",
+            diagnostics::fields([("available", serde_json::Value::Bool(group_ready))]),
+        );
+        platform::ensure_macos_registration(&diagnostics);
+        platform::shutdown();
+        let _ = diagnostics.record(
+            "postinstall",
+            "complete",
+            diagnostics::fields([]),
+        );
+        eprintln!("ZMANAGER_POSTINSTALL: complete");
+        std::process::exit(0);
+    }
+
     let diagnostics = diagnostics::DiagnosticLog::new();
     let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
@@ -73,6 +111,15 @@ fn main() {
                 app.path().app_log_dir().ok(),
                 platform::prefer_user_diagnostic_log_directory(),
             );
+            // On macOS, ensure extensions are registered on every launch.
+            // All commands are idempotent — safe to run repeatedly.
+            // Run on a background thread so startup is not blocked.
+            {
+                let diag = setup_diagnostics.clone();
+                std::thread::spawn(move || {
+                    platform::ensure_macos_registration(&diag);
+                });
+            }
             let emitter_app = app.handle().clone();
             setup_inbox
                 .attach_emitter(std::sync::Arc::new(move |window, event| {

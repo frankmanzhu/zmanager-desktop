@@ -1,9 +1,9 @@
 use std::ffi::c_void;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use tauri::menu::MenuItem;
@@ -36,6 +36,17 @@ static NATIVE_DIAGNOSTICS: OnceLock<crate::diagnostics::DiagnosticLog> = OnceLoc
 const FINDER_EXTENSION_BUNDLE_ID: &str = "org.tzap-org.zmanager.finder-extension";
 const QUICKLOOK_PREVIEW_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-preview";
 const QUICKLOOK_THUMBNAIL_BUNDLE_ID: &str = "org.tzap-org.zmanager.quicklook-thumbnail";
+
+// System command paths for extension registration. Environment variables (matching
+// the shell script ZMANAGER_* convention) allow overriding for testing.
+const LSREGISTER_PATH: &str = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+const PLUGINKIT_PATH: &str = "/usr/bin/pluginkit";
+const QLMANAGE_PATH: &str = "/usr/bin/qlmanage";
+const MDIMPORT_PATH: &str = "/usr/bin/mdimport";
+
+fn resolve_tool_path(default_path: &str, env_var: &str) -> String {
+    std::env::var(env_var).unwrap_or_else(|_| default_path.to_string())
+}
 
 #[derive(Clone, Debug)]
 struct MacOsExtensionProbe {
@@ -535,6 +546,216 @@ pub(super) fn handle_run_event(
 pub(super) fn shutdown() {
     unsafe { zmanager_macos_host_shutdown() };
     eprintln!("ZMANAGER_MACOS_HOST_SHUTDOWN_OK");
+}
+
+pub(super) fn app_group_is_available() -> bool {
+    APP_GROUP_AVAILABLE.load(Ordering::Acquire)
+}
+
+pub(super) fn wait_for_app_group(timeout: Duration) -> bool {
+    let deadline = std::time::Instant::now() + timeout;
+    while !app_group_is_available() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    app_group_is_available()
+}
+
+/// Resolve extension paths relative to the running application bundle.
+/// Returns `None` if `current_exe` is not inside a standard `.app` layout.
+fn resolve_bundle_paths() -> Option<MacOsBundlePaths> {
+    let current_exe = std::env::current_exe().ok()?;
+    let macos_dir = current_exe.parent()?; // MacOS/
+    let contents = macos_dir.parent()?; // Contents/
+    let bundle_root = contents.parent()?; // ZManager.app/
+    let plugins = contents.join("PlugIns");
+    Some(MacOsBundlePaths {
+        bundle_root: bundle_root.to_path_buf(),
+        finder: plugins.join("ZManagerFinderExtension.appex"),
+        preview: plugins.join("ZManagerQuickLookPreview.appex"),
+        thumbnail: plugins.join("ZManagerQuickLookThumbnail.appex"),
+        spotlight: contents
+            .join("Library")
+            .join("Spotlight")
+            .join("ZManagerSpotlight.mdimporter"),
+    })
+}
+
+#[derive(Debug)]
+struct MacOsBundlePaths {
+    bundle_root: PathBuf,
+    finder: PathBuf,
+    preview: PathBuf,
+    thumbnail: PathBuf,
+    spotlight: PathBuf,
+}
+
+/// Run a system command, returning `(success, stdout, stderr)`. Never panics.
+fn run_registration_cmd(exe: &str, args: &[&str]) -> (bool, String, String) {
+    match Command::new(exe).args(args).output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            (output.status.success(), stdout, stderr)
+        }
+        Err(e) => (
+            false,
+            String::new(),
+            format!("failed to execute {exe}: {e}"),
+        ),
+    }
+}
+
+/// Remove ALL registered instances of each ZManager extension bundle ID from
+/// pluginkit. This eliminates duplicate context menu entries from accumulated
+/// stale builds at different paths.
+fn remove_stale_plugin_registrations(pluginkit: &str) {
+    for bundle_id in [
+        FINDER_EXTENSION_BUNDLE_ID,
+        QUICKLOOK_PREVIEW_BUNDLE_ID,
+        QUICKLOOK_THUMBNAIL_BUNDLE_ID,
+    ] {
+        let (ok, stdout, _) =
+            run_registration_cmd(pluginkit, &["-m", "-A", "-D", "-vvv", "-i", bundle_id]);
+        if !ok {
+            continue;
+        }
+        for line in stdout.lines() {
+            let trimmed = line.trim();
+            if let Some(path) = trimmed.strip_prefix("Path = ") {
+                let _ = run_registration_cmd(pluginkit, &["-r", path]);
+            }
+        }
+    }
+}
+
+/// Ensure macOS extensions are registered and enabled. All commands are
+/// idempotent — safe to call on every launch. Runs best-effort: individual
+/// failures are recorded through the diagnostic log but never propagated.
+pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog) {
+    let Some(paths) = resolve_bundle_paths() else {
+        let _ = diagnostics.record(
+            "macosRegistration",
+            "bundleResolveFailed",
+            std::collections::BTreeMap::new(),
+        );
+        return;
+    };
+
+    let lsregister = resolve_tool_path(LSREGISTER_PATH, "ZMANAGER_LSREGISTER");
+    let pluginkit = resolve_tool_path(PLUGINKIT_PATH, "ZMANAGER_PLUGINKIT");
+    let qlmanage = resolve_tool_path(QLMANAGE_PATH, "ZMANAGER_QLMANAGE");
+    let mdimport = resolve_tool_path(MDIMPORT_PATH, "ZMANAGER_MDIMPORT");
+
+    let bundle_root_str = paths.bundle_root.to_string_lossy().to_string();
+
+    // Self-healing: remove stale registrations from any previous build paths.
+    remove_stale_plugin_registrations(&pluginkit);
+
+    // Unregister old Launch Services entry (best-effort), then re-register.
+    let _ = run_registration_cmd(&lsregister, &["-u", &bundle_root_str]);
+    let (ls_ok, _, ls_err) = run_registration_cmd(&lsregister, &["-f", &bundle_root_str]);
+    let _ = diagnostics.record(
+        "macosRegistration",
+        "step",
+        crate::diagnostics::fields([
+            ("command", serde_json::Value::String("lsregister".into())),
+            ("ok", serde_json::Value::Bool(ls_ok)),
+            ("error", serde_json::Value::String(ls_err)),
+        ]),
+    );
+
+    // Add each extension to pluginkit.
+    for ext in [&paths.finder, &paths.preview, &paths.thumbnail] {
+        let path_str = ext.to_string_lossy();
+        let present = ext.exists();
+        let (ok, _, err) = run_registration_cmd(&pluginkit, &["-a", &path_str]);
+        let _ = diagnostics.record(
+            "macosRegistration",
+            "step",
+            crate::diagnostics::fields([
+                ("command", serde_json::Value::String("pluginkitAdd".into())),
+                ("path", serde_json::Value::String(path_str.to_string())),
+                ("exists", serde_json::Value::Bool(present)),
+                ("ok", serde_json::Value::Bool(ok)),
+                ("error", serde_json::Value::String(err)),
+            ]),
+        );
+    }
+
+    // Enable each extension.
+    for bundle_id in [
+        FINDER_EXTENSION_BUNDLE_ID,
+        QUICKLOOK_PREVIEW_BUNDLE_ID,
+        QUICKLOOK_THUMBNAIL_BUNDLE_ID,
+    ] {
+        let (ok, _, err) = run_registration_cmd(&pluginkit, &["-e", "use", "-i", bundle_id]);
+        let _ = diagnostics.record(
+            "macosRegistration",
+            "step",
+            crate::diagnostics::fields([
+                ("command", serde_json::Value::String("pluginkitEnable".into())),
+                ("bundleId", serde_json::Value::String(bundle_id.to_string())),
+                ("ok", serde_json::Value::Bool(ok)),
+                ("error", serde_json::Value::String(err)),
+            ]),
+        );
+    }
+
+    // Reset QuickLook cache so new generators are loaded.
+    let (ql_ok, _, ql_err) = run_registration_cmd(&qlmanage, &["-r", "cache"]);
+    let _ = diagnostics.record(
+        "macosRegistration",
+        "step",
+        crate::diagnostics::fields([
+            ("command", serde_json::Value::String("qlmanage".into())),
+            ("ok", serde_json::Value::Bool(ql_ok)),
+            ("error", serde_json::Value::String(ql_err)),
+        ]),
+    );
+
+    // Register Spotlight importer.
+    let spotlight_str = paths.spotlight.to_string_lossy();
+    let (md_ok, _, md_err) = run_registration_cmd(&mdimport, &["-r", &spotlight_str]);
+    let _ = diagnostics.record(
+        "macosRegistration",
+        "step",
+        crate::diagnostics::fields([
+            ("command", serde_json::Value::String("mdimport".into())),
+            ("ok", serde_json::Value::Bool(md_ok)),
+            ("error", serde_json::Value::String(md_err)),
+        ]),
+    );
+
+    // Probe final state (directly — not via OnceLock, since the cached probe
+    // may have been initialized before registration was called).
+    let finder = probe_plugin_kit(FINDER_EXTENSION_BUNDLE_ID);
+    let preview = probe_plugin_kit(QUICKLOOK_PREVIEW_BUNDLE_ID);
+    let thumbnail = probe_plugin_kit(QUICKLOOK_THUMBNAIL_BUNDLE_ID);
+    let spotlight = probe_spotlight();
+
+    let _ = diagnostics.record(
+        "macosRegistration",
+        "complete",
+        crate::diagnostics::fields([
+            ("finderInstalled", serde_json::Value::Bool(finder.is_installed)),
+            ("finderEnabled", serde_json::Value::Bool(finder.is_enabled)),
+            (
+                "quicklookInstalled",
+                serde_json::Value::Bool(preview.is_installed || thumbnail.is_installed),
+            ),
+            (
+                "spotlightInstalled",
+                serde_json::Value::Bool(spotlight.is_installed),
+            ),
+        ]),
+    );
+    eprintln!(
+        "ZMANAGER_MACOS_REGISTRATION: finder_installed={} finder_enabled={} ql_installed={} spotlight_installed={}",
+        finder.is_installed,
+        finder.is_enabled,
+        preview.is_installed || thumbnail.is_installed,
+        spotlight.is_installed,
+    );
 }
 
 fn ingest_macos_native_event(

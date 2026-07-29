@@ -334,6 +334,30 @@ pub fn shutdown() {
     macos::shutdown();
 }
 
+#[allow(dead_code)]
+pub fn app_group_is_available() -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::app_group_is_available();
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
+pub fn wait_for_app_group(timeout: std::time::Duration) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::wait_for_app_group(timeout);
+    #[cfg(not(target_os = "macos"))]
+    let _ = timeout;
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
+pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog) {
+    #[cfg(target_os = "macos")]
+    macos::ensure_macos_registration(diagnostics);
+    #[cfg(not(target_os = "macos"))]
+    let _ = diagnostics;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

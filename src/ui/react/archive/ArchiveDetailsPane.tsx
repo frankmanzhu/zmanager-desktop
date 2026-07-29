@@ -16,6 +16,7 @@ import { getKnownArchiveSuffix } from "../../../app/archiveFileTypes";
 import { formatBytes, formatDate } from "../../../app/formatting";
 import type { ArchiveWorkspaceDetailsModel } from "../../../app/workspaces/archiveWorkspace";
 import { Checkbox } from "../../components/ui/checkbox";
+import { InfoTip } from "../../components/ui/info-tip";
 import {
   Select,
   SelectContent,
@@ -303,8 +304,9 @@ function ExtractOptions() {
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3 [@media(max-height:560px)]:grid-cols-2">
         <label className="!grid-cols-1 !items-stretch !gap-1.5">
-          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
             {i18n.t("extract.pathMode")}
+            <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
           </span>
           <select
             className="min-w-0 w-full"
@@ -328,8 +330,9 @@ function ExtractOptions() {
           </select>
         </label>
         <label className="!grid-cols-1 !items-stretch !gap-1.5">
-          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
             {i18n.t("extract.overwritePolicy")}
+            <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
           </span>
           <select
             className="min-w-0 w-full"
@@ -365,7 +368,10 @@ function ExtractOptions() {
               })
             }
           />
-          <span>{i18n.t("extract.deduplicateRoot")}</span>
+          <span className="inline-flex items-center gap-1">
+            {i18n.t("extract.deduplicateRoot")}
+            <InfoTip content={i18n.t("extract.deduplicateRoot.tooltip")} />
+          </span>
         </label>
         <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
           <input
@@ -379,7 +385,10 @@ function ExtractOptions() {
               })
             }
           />
-          <span>{i18n.t("extract.ignoreSymlinks")}</span>
+          <span className="inline-flex items-center gap-1">
+            {i18n.t("extract.ignoreSymlinks")}
+            <InfoTip content={i18n.t("extract.ignoreSymlinks.tooltip")} />
+          </span>
         </label>
       </div>
       <button
@@ -403,7 +412,10 @@ function ExtractOptions() {
         </summary>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3 border-t border-slate-200 p-3.5 dark:border-slate-800 [&>label]:grid [&>label]:grid-cols-1 [&>label]:items-stretch [&>label]:gap-1.5 [&>label>span]:text-[11px] [&>label>span]:font-semibold">
           <label>
-            <span>{i18n.t("extract.stripComponents")}</span>
+            <span className="inline-flex items-center gap-1">
+              {i18n.t("extract.stripComponents")}
+              <InfoTip content={i18n.t("extract.stripComponents.tooltip")} />
+            </span>
             <input
               id="extract-strip-components"
               type="number"
@@ -423,7 +435,10 @@ function ExtractOptions() {
             />
           </label>
           <label>
-            <span>{i18n.t("extract.password")}</span>
+            <span className="inline-flex items-center gap-1">
+              {i18n.t("extract.password")}
+              <InfoTip content={i18n.t("extract.password.tooltip")} />
+            </span>
             <input
               id="extract-password"
               type={passwordState.showPassword ? "text" : "password"}
@@ -436,7 +451,10 @@ function ExtractOptions() {
           {isTzap ? (
             <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
               <label className="grid gap-1.5">
-                <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+                <span className="inline-flex items-center gap-1">
+                  {i18n.t("extract.tzapRestorePolicy")}
+                  <InfoTip content={i18n.t("extract.tzapRestorePolicy.tooltip")} />
+                </span>
                 <Select
                   value={options.tzapRestorePolicy}
                   onValueChange={(value) =>
@@ -491,11 +509,9 @@ function ExtractOptions() {
                     })
                   }
                 />
-                <span className="grid gap-0.5">
+                <span className="inline-flex items-center gap-1">
                   <span>{i18n.t("extract.tzapAllowDegraded")}</span>
-                  <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
-                    {i18n.t("extract.tzapAllowDegraded.help")}
-                  </span>
+                  <InfoTip content={i18n.t("extract.tzapAllowDegraded.tooltip")} />
                 </span>
               </label>
               <label className="flex items-start gap-2 text-[11px] font-medium">
@@ -509,11 +525,9 @@ function ExtractOptions() {
                     })
                   }
                 />
-                <span className="grid gap-0.5">
+                <span className="inline-flex items-center gap-1">
                   <span>{i18n.t("extract.tzapAllowAbsoluteSymlinks")}</span>
-                  <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
-                    {i18n.t("extract.tzapAllowAbsoluteSymlinks.help")}
-                  </span>
+                  <InfoTip content={i18n.t("extract.tzapAllowAbsoluteSymlinks.tooltip")} />
                 </span>
               </label>
             </div>

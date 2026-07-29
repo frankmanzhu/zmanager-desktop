@@ -158,3 +158,7 @@ When investigating a reported bug or failure, always attempt to diagnose the iss
 - **macOS:** Logs are always located at `~/Library/Logs/org.tzap-org.zmanager/zmanager-diagnostics.log`. Never write runtime data inside the signed `.app` bundle because doing so invalidates its code-signature seal.
 
 If the existing logs do not provide enough data to identify the cause of the failure, your immediate next step should be to enhance the code by printing or logging additional diagnostic data to capture the missing context.
+
+### Writing diagnostic instrumentation
+
+Use the structured `DiagnosticLog` service (`diagnostics.record(scope, name, fields)`) for Rust backend logging instead of ad-hoc `eprintln!` or `println!`. The pipeline provides structured fields, rotation, secret redaction, and consistent platform locations. Use `eprintln!` only for build-script integration markers where the log has not been initialized yet (e.g. `--postinstall` begin/complete).

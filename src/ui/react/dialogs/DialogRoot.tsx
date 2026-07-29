@@ -3,6 +3,7 @@ import { ChevronDown, FolderOutput, SlidersHorizontal, X } from "lucide-react";
 
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
+import { InfoTip } from "../../components/ui/info-tip";
 import {
   Select,
   SelectContent,
@@ -532,7 +533,10 @@ function ExtractDialog({
                   setUseSubfolder(event.currentTarget.checked)
                 }
               />
-              <span>{i18n.t("extract.toSubfolder")}</span>
+              <span className="inline-flex items-center gap-1">
+                {i18n.t("extract.toSubfolder")}
+                <InfoTip content={i18n.t("extract.toSubfolder.tooltip")} />
+              </span>
             </label>
             <label>
               <span>{i18n.t("extract.subfolder")}</span>
@@ -566,7 +570,10 @@ function ExtractDialog({
             <div className="space-y-4 border-t border-slate-200 p-5 dark:border-slate-800">
               <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 [&>label]:grid [&>label]:grid-cols-1 [&>label]:items-stretch [&>label]:gap-1.5 [&>label>span]:text-xs [&>label>span]:font-semibold">
                 <label>
-                  <span>{i18n.t("extract.pathMode")}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.pathMode")}
+                    <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
+                  </span>
                   <select
                     id="extract-path-mode"
                     value={pathMode}
@@ -586,7 +593,10 @@ function ExtractDialog({
                   </select>
                 </label>
                 <label>
-                  <span>{i18n.t("extract.overwritePolicy")}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.overwritePolicy")}
+                    <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
+                  </span>
                   <select
                     id="browse-overwrite"
                     value={overwrite}
@@ -611,7 +621,10 @@ function ExtractDialog({
                   </select>
                 </label>
                 <label>
-                  <span>{i18n.t("extract.stripComponents")}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.stripComponents")}
+                    <InfoTip content={i18n.t("extract.stripComponents.tooltip")} />
+                  </span>
                   <input
                     id="browse-strip-components"
                     type="number"
@@ -631,7 +644,10 @@ function ExtractDialog({
                       setDeduplicateRoot(event.currentTarget.checked)
                     }
                   />
-                  <span>{i18n.t("extract.deduplicateRoot")}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.deduplicateRoot")}
+                    <InfoTip content={i18n.t("extract.deduplicateRoot.tooltip")} />
+                  </span>
                 </label>
                 <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
                   <input
@@ -642,12 +658,18 @@ function ExtractDialog({
                       setIgnoreSymlinks(event.currentTarget.checked)
                     }
                   />
-                  <span>{i18n.t("extract.ignoreSymlinks")}</span>
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.ignoreSymlinks")}
+                    <InfoTip content={i18n.t("extract.ignoreSymlinks.tooltip")} />
+                  </span>
                 </label>
                 {isTzap ? (
                   <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
                     <label className="grid gap-1.5">
-                      <span>{i18n.t("extract.tzapRestorePolicy")}</span>
+                      <span className="inline-flex items-center gap-1">
+                        {i18n.t("extract.tzapRestorePolicy")}
+                        <InfoTip content={i18n.t("extract.tzapRestorePolicy.tooltip")} />
+                      </span>
                       <Select
                         value={tzapRestorePolicy}
                         onValueChange={(value) => {
@@ -694,11 +716,9 @@ function ExtractDialog({
                           setTzapAllowDegraded(checked === true)
                         }
                       />
-                      <span className="grid gap-0.5">
+                      <span className="inline-flex items-center gap-1">
                         <span>{i18n.t("extract.tzapAllowDegraded")}</span>
-                        <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
-                          {i18n.t("extract.tzapAllowDegraded.help")}
-                        </span>
+                        <InfoTip content={i18n.t("extract.tzapAllowDegraded.tooltip")} />
                       </span>
                     </label>
                     <label className="flex items-start gap-2 text-xs font-medium">
@@ -709,11 +729,9 @@ function ExtractDialog({
                           setTzapAllowAbsoluteSymlinks(checked === true)
                         }
                       />
-                      <span className="grid gap-0.5">
+                      <span className="inline-flex items-center gap-1">
                         <span>{i18n.t("extract.tzapAllowAbsoluteSymlinks")}</span>
-                        <span className="font-normal leading-4 text-slate-500 dark:text-slate-400">
-                          {i18n.t("extract.tzapAllowAbsoluteSymlinks.help")}
-                        </span>
+                        <InfoTip content={i18n.t("extract.tzapAllowAbsoluteSymlinks.tooltip")} />
                       </span>
                     </label>
                   </div>
@@ -729,7 +747,10 @@ function ExtractDialog({
                 </summary>
                 <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700">
                   <label>
-                    <span>{i18n.t("extract.password")}</span>
+                    <span className="inline-flex items-center gap-1">
+                      {i18n.t("extract.password")}
+                      <InfoTip content={i18n.t("extract.password.tooltip")} />
+                    </span>
                     <input
                       id="browse-password"
                       type={showPassword ? "text" : "password"}

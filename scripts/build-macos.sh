@@ -425,14 +425,16 @@ if ((install_application)); then
       "$repo_root/scripts/macos-register-bundle.sh" unregister "$stale_app" 2>/dev/null || true
     fi
   done
-  # Register the installed application and its extensions. The register action
-  # performs a self-healing remove-then-add cycle that eliminates duplicate
-  # registrations at any previous path for the same bundle IDs.
-  "$repo_root/scripts/macos-register-bundle.sh" register "$destination"
-  # Reset QuickLook daemon so it loads the freshly-installed generators instead
-  # of any cached or stale extension references from prior builds.
-  qlmanage -r 2>/dev/null || true
-  killall quicklookd 2>/dev/null || true
+  # Register the installed application and its extensions by launching the app
+  # with --postinstall. This triggers extension validation, App Group container
+  # provisioning, and self-registration. The app binary runs synchronously —
+  # it registers, validates, and exits without showing UI.
+  # Finder won't spawn the Finder Sync extension until the host app binary has
+  # been validated by the system at least once, which this first launch achieves.
+  # Use open -W (wait) to block until the app exits after postinstall completes.
+  echo "Running postinstall registration for $destination"
+  open -W -a "$destination" --args --postinstall
+  echo "Postinstall completed for $destination"
 else
   echo "Skipping application install because --no-install was set."
 fi
