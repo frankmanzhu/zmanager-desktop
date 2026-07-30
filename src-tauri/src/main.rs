@@ -56,6 +56,7 @@ fn main() {
 
     let diagnostics = diagnostics::DiagnosticLog::new();
     let native_launch_inbox = native_launch_inbox::NativeLaunchInbox::new();
+    let launch_instance_mode = quick_action::LaunchInstanceMode::from_startup_env();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
     record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
     let forwarded_startup_state =
@@ -78,7 +79,7 @@ fn main() {
 
     let builder = tauri::Builder::default();
     let builder = platform::register_platform_services(builder);
-    let app = builder
+    let builder = builder
         .manage(job_registry)
         .manage(archive_index_registry)
         .manage(account_runtime)
@@ -87,8 +88,9 @@ fn main() {
         .manage(quick_action_launch_coordinator)
         .manage(native_launch_inbox.clone())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_single_instance::init(
+        .plugin(tauri_plugin_opener::init());
+    let builder = if launch_instance_mode.registers_single_instance() {
+        builder.plugin(tauri_plugin_single_instance::init(
             move |_app, argv, _cwd| {
                 record_secondary_arguments(&single_instance_diagnostics, &argv);
                 let state = single_instance_coordinator.ingest_secondary_process_args(
@@ -102,6 +104,10 @@ fn main() {
                 );
             },
         ))
+    } else {
+        builder
+    };
+    let app = builder
         .setup(move |app| {
             let _ = setup_diagnostics.initialize(
                 app.path().app_log_dir().ok(),

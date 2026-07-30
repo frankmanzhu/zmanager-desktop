@@ -49,6 +49,7 @@
     "core:window:allow-center",
     "core:window:allow-available-monitors",
     "core:window:allow-close",
+    "core:window:allow-destroy",
     "core:window:allow-inner-position",
     "core:window:allow-inner-size",
     "core:window:allow-hide",

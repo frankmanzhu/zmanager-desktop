@@ -2233,7 +2233,15 @@ function maybeCloseQuickActionOnlyCoordinator(): void {
       pendingQuickActionRequests: disposableTaskLifecycle.getSnapshot().pendingQuickActionRequests,
     },
   });
-  void appWindowController.closeCurrentWindow();
+  void appWindowController.destroyCurrentWindow().catch((error) => {
+    diagnostics.record({
+      scope: "quickActionLifecycle",
+      name: "coordinatorDestroyFailed",
+      fields: {
+        error: unknownErrorMessage(error, "Unable to close the quick-action coordinator."),
+      },
+    });
+  });
 }
 
 function queuePlanRun() {

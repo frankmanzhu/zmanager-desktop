@@ -9,6 +9,9 @@ const manifest = JSON.parse(
   await readFile(path.join(root, "manifests/shell-actions.json"), "utf8"),
 );
 const read = (relative) => readFile(path.join(root, relative), "utf8");
+const macosFinderActionSupport = await read(
+  "native/macos/Sources/ZManagerFinderExtensionSupport/FinderActionSupport.swift",
+);
 const artifacts = {
   windowsExplorer: [
     await read("native/windows-shell-extension/src/generated.rs"),
@@ -94,4 +97,15 @@ test("compatibility-only actions stay outside parity context menus", () => {
     assert.equal(action.contextMenuOrder, null);
     assert.deepEqual(action.contextMenuContexts, []);
   }
+});
+
+test("macOS Finder quick actions launch an isolated application instance", () => {
+  assert.match(
+    macosFinderActionSupport,
+    /config\.createsNewApplicationInstance\s*=\s*true/,
+  );
+  assert.match(
+    macosFinderActionSupport,
+    /config\.environment\s*=\s*\["ZMANAGER_MACOS_QUICK_ACTION":\s*"1"\]/,
+  );
 });

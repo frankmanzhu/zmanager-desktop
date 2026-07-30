@@ -51,6 +51,9 @@ function createFakeWindow(): AppWindowHandle & {
     close: vi.fn(async () => {
       record("close");
     }),
+    destroy: vi.fn(async () => {
+      record("destroy");
+    }),
     minimize: vi.fn(async () => {
       record("minimize");
     }),
@@ -192,5 +195,14 @@ describe("desktop window controller", () => {
     await controller.listenCloseRequested(listener);
 
     expect(fakeWindow.onCloseRequested).toHaveBeenCalledWith(listener);
+  });
+
+  it("force-destroys the hidden coordinator after disposable work settles", async () => {
+    const fakeWindow = createFakeWindow();
+    const { controller } = createController({ fakeWindow });
+
+    await controller.destroyCurrentWindow();
+
+    expect(fakeWindow.calls).toEqual(["destroy"]);
   });
 });

@@ -4,6 +4,7 @@ const nativeDragPermission = "allow-start-native-file-drag";
 const nativeDragCommand = "start_native_file_drag";
 const linuxWindowControlPermissions = [
   "core:window:allow-close",
+  "core:window:allow-destroy",
   "core:window:allow-minimize",
   "core:window:allow-start-dragging",
   "core:window:allow-start-resize-dragging",

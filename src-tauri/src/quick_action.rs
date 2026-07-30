@@ -21,6 +21,49 @@ const PASSWORD_ARG_PREFIXES: &[&str] = &["--password", "--passphrase", "--secret
 const MAX_SHELL_ACTION_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 #[allow(dead_code)]
 const MAX_APP_GROUP_SHELL_ACTION_REQUEST_BYTES: usize = 1_048_576;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LaunchInstanceMode {
+    NormalSingleton,
+    IsolatedQuickAction,
+}
+
+impl LaunchInstanceMode {
+    pub fn from_startup_env() -> Self {
+        Self::from_args(
+            std::env::args_os().skip(1),
+            std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok(),
+        )
+    }
+
+    fn from_args(
+        args: impl IntoIterator<Item = OsString>,
+        pending_macos_quick_action: bool,
+    ) -> Self {
+        if pending_macos_quick_action
+            || args.into_iter().any(|arg| {
+                arg.to_str().is_some_and(|value| {
+                    value == QUICK_ACTION_ARG
+                        || value == QUICK_ACTION_ARG_ALIAS
+                        || value == QUICK_ACTION_REQUEST_ARG
+                        || value == SHELL_ACTION_REQUEST_ARG
+                        || value.starts_with("--quick-action=")
+                        || value.starts_with("--action=")
+                        || value.starts_with("--quick-action-request=")
+                        || value.starts_with("--shell-action-request=")
+                })
+            })
+        {
+            Self::IsolatedQuickAction
+        } else {
+            Self::NormalSingleton
+        }
+    }
+
+    pub fn registers_single_instance(self) -> bool {
+        self == Self::NormalSingleton
+    }
+}
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
 const TZAP_VOLUME_MARKER: &str = ".vol";
 
@@ -700,6 +743,42 @@ mod tests {
         assert_eq!(
             state_from_args(&["--ordinary-open", "C:/tmp/archive.zip"]),
             QuickActionStartupState::NotRequested
+        );
+    }
+
+    #[test]
+    fn explicit_quick_actions_use_isolated_processes_without_consuming_request_files() {
+        for args in [
+            vec!["--quick-action", "compress-zip", "--path", "C:/tmp/source"],
+            vec!["--action=extract-here", "--path", "C:/tmp/archive.zip"],
+            vec!["--quick-action-request", "C:/tmp/request.json"],
+            vec!["--shell-action-request=C:/tmp/request.json"],
+        ] {
+            assert_eq!(
+                LaunchInstanceMode::from_args(args.into_iter().map(OsString::from), false),
+                LaunchInstanceMode::IsolatedQuickAction,
+            );
+        }
+    }
+
+    #[test]
+    fn normal_and_file_association_launches_remain_singleton() {
+        for args in [
+            Vec::<&str>::new(),
+            vec!["C:/tmp/archive.zip"],
+            vec!["file:///home/frank/archive.tzap"],
+        ] {
+            let mode = LaunchInstanceMode::from_args(args.into_iter().map(OsString::from), false);
+            assert_eq!(mode, LaunchInstanceMode::NormalSingleton);
+            assert!(mode.registers_single_instance());
+        }
+    }
+
+    #[test]
+    fn pending_macos_quick_actions_use_isolated_processes() {
+        assert_eq!(
+            LaunchInstanceMode::from_args(std::iter::empty(), true),
+            LaunchInstanceMode::IsolatedQuickAction,
         );
     }
 

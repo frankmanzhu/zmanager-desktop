@@ -53,6 +53,7 @@ type WindowPosition = {
 
 export type AppWindowHandle = {
   close(): Promise<void>;
+  destroy(): Promise<void>;
   hide?(): Promise<void>;
   minimize(): Promise<void>;
   toggleMaximize(): Promise<void>;
@@ -200,6 +201,9 @@ export function createWindowController(options: WindowControllerOptions = {}) {
   return {
     closeCurrentWindow(): Promise<void> {
       return dependencies.getCurrentWindow().close();
+    },
+    destroyCurrentWindow(): Promise<void> {
+      return dependencies.getCurrentWindow().destroy();
     },
     listenCloseRequested(
       listener: (event: Readonly<{ preventDefault(): void }>) => void,
