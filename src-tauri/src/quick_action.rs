@@ -567,9 +567,9 @@ fn validate_request_with_known_kind(
             validate_all_supported_archives(&paths)?;
         }
         QuickActionKindDto::ExtractToFolder => {
-            if paths.is_empty() {
+            if paths.len() != 1 {
                 return Err(QuickActionError::invalid(
-                    "extract-to-folder requires at least one archive path",
+                    "extract-to-folder requires exactly one archive path",
                 ));
             }
             validate_all_supported_archives(&paths)?;
