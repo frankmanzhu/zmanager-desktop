@@ -1,9 +1,10 @@
 use std::collections::HashSet;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use openssl::asn1::{Asn1Integer, Asn1Time};
 use openssl::bn::{BigNum, MsbOption};
@@ -16,20 +17,20 @@ use openssl::x509::{X509, X509NameBuilder};
 use tauri::{State, WebviewWindow, ipc::Channel};
 
 #[cfg(test)]
-use crate::dto::{ArchiveEntryDto, ArchiveListingResponse};
+use crate::dto::ArchiveListingResponse;
 #[cfg(test)]
 use crate::job_dto::TestJobEventsSnapshot;
 use crate::{
     archive_index::ArchiveIndexRegistry,
     constants,
     dto::{
-        AckSubscriptionRequest, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse,
-        DestinationCollisionStrategyDto, NativeFileDragOutcomeDto, NativeFileDragRequest,
-        NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
-        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract, ResumeJobRequest,
-        StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
-        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto,
-        ValidateDirectoryRequest, ValidateDirectoryResponse,
+        AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto,
+        CreatePlanResponse, DestinationCollisionStrategyDto, NativeFileDragOutcomeDto,
+        NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest,
+        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
+        ResumeJobRequest, StartCreateRequest, StartExtractRequest, SubscribeJobRequest,
+        SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
+        TzapRestorePolicyDto, ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -1207,8 +1208,11 @@ pub fn start_native_file_drag(
     window: tauri::WebviewWindow,
     request: NativeFileDragRequest,
     _registry: State<'_, JobRegistry>,
+    archive_index_registry: State<'_, ArchiveIndexRegistry>,
     drag_registry: State<'_, crate::native_drag_session::NativeDragSessionRegistry>,
+    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<NativeFileDragResponse, CommandErrorDto> {
+    let started_at = Instant::now();
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
     let password = request
@@ -1216,44 +1220,131 @@ pub fn start_native_file_drag(
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
 
-    let drag_items = build_native_drag_items(
-        &archive_path,
-        &entry_paths,
-        request.strip_components,
-        password.as_deref(),
-    )?;
+    let (drag_items, preparation_source) =
+        match archive_index_registry.drag_entries(&archive_path, &entry_paths)? {
+            Some(entries) => (
+                native_drag_items_from_cached_entries(&entries, request.strip_components)?,
+                "archiveIndex",
+            ),
+            None => (
+                build_native_drag_items(
+                    &archive_path,
+                    &entry_paths,
+                    request.strip_components,
+                    password.as_deref(),
+                )?,
+                "coreFallback",
+            ),
+        };
+    let _ = diagnostics.record(
+        "nativeDrag",
+        "prepared",
+        crate::diagnostics::fields([
+            (
+                "elapsedMs",
+                serde_json::Value::from(
+                    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ),
+            ),
+            (
+                "preparedEntryCount",
+                serde_json::Value::from(drag_items.len()),
+            ),
+            (
+                "requestedEntryCount",
+                serde_json::Value::from(entry_paths.len()),
+            ),
+            (
+                "source",
+                serde_json::Value::String(preparation_source.to_string()),
+            ),
+        ]),
+    );
     let stream_archive_path = archive_path.clone();
     let stream_password = password.clone();
-    let preflight_archive_path = archive_path.clone();
-    let preflight_password = password.clone();
+    let successful_streams = Arc::new(Mutex::new(HashSet::<String>::new()));
+    let streamed_bytes = Arc::new(AtomicU64::new(0));
+    let stream_failure = Arc::new(Mutex::new(None::<CommandErrorDto>));
+    let provider_successes = Arc::clone(&successful_streams);
+    let provider_streamed_bytes = Arc::clone(&streamed_bytes);
+    let provider_failure = Arc::clone(&stream_failure);
     let stream_provider: crate::platform::NativeFileDragStreamProvider =
         Arc::new(move |entry_path, writer| {
-            stream_native_drag_entry(
+            let result = stream_native_drag_entry(
                 &stream_archive_path,
                 stream_password.as_deref(),
                 entry_path,
                 writer,
-            )
-            .map_err(native_file_drag_error_from_command)
+            );
+            match &result {
+                Ok(written_bytes) => {
+                    provider_successes
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .insert(entry_path.to_string());
+                    provider_streamed_bytes.fetch_add(*written_bytes, AtomicOrdering::Relaxed);
+                }
+                Err(error) => {
+                    let mut failure = provider_failure
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    if failure.is_none() {
+                        *failure = Some(error.clone());
+                    }
+                }
+            }
+            result.map_err(native_file_drag_error_from_command)
         });
 
     let start = crate::platform::start_native_file_drag(
         &window,
         &drag_items,
-        || {
-            preflight_native_drag_stream(
-                &preflight_archive_path,
-                preflight_password.as_deref(),
-                &drag_items,
-            )
-            .map_err(native_file_drag_error_from_command)
-        },
         stream_provider,
         &drag_registry,
     )
-    .map_err(map_native_file_drag_error)?;
+    .map_err(|error| {
+        let mapped = map_native_file_drag_error(error);
+        let _ = diagnostics.record(
+            "nativeDrag",
+            "failed",
+            crate::diagnostics::fields([
+                ("code", serde_json::Value::String(mapped.code.to_string())),
+                (
+                    "elapsedMs",
+                    serde_json::Value::from(
+                        u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    ),
+                ),
+            ]),
+        );
+        mapped
+    })?;
+    if let Some(error) = stream_failure
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+    {
+        let _ = diagnostics.record(
+            "nativeDrag",
+            "streamFailed",
+            crate::diagnostics::fields([
+                ("code", serde_json::Value::String(error.code.to_string())),
+                (
+                    "elapsedMs",
+                    serde_json::Value::from(
+                        u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                    ),
+                ),
+            ]),
+        );
+        return Err(error);
+    }
 
-    let (outcome, session_id) = match start {
+    let streamed_entry_count = successful_streams
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .len();
+    let (mut outcome, session_id) = match start {
         crate::platform::NativeFileDragStart::Pending { session_id } => {
             (NativeFileDragOutcomeDto::Pending, Some(session_id))
         }
@@ -1261,6 +1352,42 @@ pub fn start_native_file_drag(
             (map_native_file_drag_outcome(outcome), None)
         }
     };
+    if matches!(outcome, NativeFileDragOutcomeDto::Dropped)
+        && streamed_entry_count < drag_items.len()
+    {
+        if streamed_entry_count == 0 {
+            outcome = NativeFileDragOutcomeDto::NoDrop;
+        } else {
+            return Err(CommandErrorDto::operation_failed(format!(
+                "The drop target materialized {streamed_entry_count} of {} dragged files.",
+                drag_items.len()
+            )));
+        }
+    }
+    let _ = diagnostics.record(
+        "nativeDrag",
+        "settled",
+        crate::diagnostics::fields([
+            (
+                "elapsedMs",
+                serde_json::Value::from(
+                    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ),
+            ),
+            (
+                "outcome",
+                serde_json::Value::String(format!("{outcome:?}").to_lowercase()),
+            ),
+            (
+                "streamedBytes",
+                serde_json::Value::from(streamed_bytes.load(AtomicOrdering::Relaxed)),
+            ),
+            (
+                "streamedEntryCount",
+                serde_json::Value::from(streamed_entry_count),
+            ),
+        ]),
+    );
     Ok(NativeFileDragResponse {
         outcome,
         session_id,
@@ -2068,13 +2195,37 @@ fn build_native_drag_items(
     strip_components: usize,
     password: Option<&str>,
 ) -> Result<Vec<crate::platform::NativeFileDragItem>, CommandErrorDto> {
-    let listing = archive_browser::list_entries_with_options(
+    let mut entries = Vec::new();
+    archive_browser::visit_entries_with_options(
         Path::new(archive_path),
         BrowserListOptions { password },
+        |entry| {
+            entries.push(entry);
+            true
+        },
     )
     .map_err(crate::platform::map_archive_browser_error)?;
 
-    native_drag_items_from_listing(&listing.entries, entry_paths, strip_components)
+    native_drag_items_from_listing(&entries, entry_paths, strip_components)
+}
+
+fn native_drag_items_from_cached_entries(
+    entries: &[ArchiveEntryDto],
+    strip_components: usize,
+) -> Result<Vec<crate::platform::NativeFileDragItem>, CommandErrorDto> {
+    let candidates = entries
+        .iter()
+        .map(|entry| crate::platform::NativeFileDragCandidate {
+            entry_path: entry.path.clone(),
+            size: entry.size,
+            modified_unix_seconds: entry
+                .modified
+                .as_deref()
+                .and_then(|modified| modified.parse::<u64>().ok()),
+        })
+        .collect::<Vec<_>>();
+    crate::platform::prepare_native_file_drag(&candidates, strip_components)
+        .map_err(map_native_file_drag_error)
 }
 
 fn native_drag_items_from_listing(
@@ -2199,31 +2350,6 @@ fn entry_is_under_folder_key(entry_key: &str, folder_key: &str) -> bool {
     entry_key.starts_with(folder_key) && entry_key.len() > folder_key.len()
 }
 
-fn preflight_native_drag_stream(
-    archive_path: &str,
-    password: Option<&str>,
-    items: &[crate::platform::NativeFileDragItem],
-) -> Result<(), CommandErrorDto> {
-    if zmanager_core::raw_stream_backend::detect_raw_stream_format(Path::new(archive_path))
-        .is_some()
-    {
-        return Ok(());
-    }
-
-    let Some(item) = items
-        .iter()
-        .filter(|item| item.size != Some(0))
-        .min_by_key(|item| item.size.unwrap_or(u64::MAX))
-        .or_else(|| items.first())
-    else {
-        return Ok(());
-    };
-
-    let mut sink = io::sink();
-    stream_native_drag_entry(archive_path, password, &item.entry_path, &mut sink)?;
-    Ok(())
-}
-
 fn stream_native_drag_entry(
     archive_path: &str,
     password: Option<&str>,
@@ -2293,10 +2419,10 @@ fn stream_native_drag_entry(
         }
         ArchiveFamily::Tzap => {
             let report =
-                zmanager_core::tzap_backend::copy_tzap_files_to_writer_with_optional_password(
+                zmanager_core::tzap_backend::copy_tzap_file_to_writer_with_optional_password(
                     archive_path,
                     password,
-                    |name| archive_entry_key(name) == archive_entry_key(entry_path),
+                    entry_path,
                     output,
                 )
                 .map_err(map_tzap_error)?;

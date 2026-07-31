@@ -54,7 +54,7 @@ export type ArchiveLoadController = Readonly<{
 }>;
 
 const LIST_ARCHIVE_OPERATION: ArchiveWorkspacePasswordRetryOperation = "listArchive";
-const VISIBLE_PAGE_LIMIT = 512;
+const VISIBLE_PAGE_LIMIT = 200;
 const MAX_TREE_SUMMARY_ENTRIES = 2_048;
 
 function requestWithPassword(archivePath: string, password: string | undefined): ListArchiveRequest {
@@ -77,6 +77,7 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
   } | null = null;
   let generation = 0;
   let pageRequestId = 0;
+  let lastRenderedPageSignature: string | null = null;
 
   async function closeActive(): Promise<void> {
     const previous = active;
@@ -93,6 +94,7 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
     pageNumber = 1,
     previousCursors: readonly (string | null)[] = [],
     query: string | null = null,
+    renderUnchanged = true,
   ): Promise<void> {
     const session = active;
     if (!session) return;
@@ -123,6 +125,22 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
       pageNumber,
       query,
     };
+    const pageSignature = JSON.stringify({
+      parentPath: page.parentPath,
+      cursor,
+      nextCursor: page.nextCursor ?? null,
+      childCount: page.childCount,
+      entries: page.entries.map((entry) => [
+        entry.path,
+        entry.kind,
+        entry.size ?? null,
+        entry.compressedSize ?? null,
+      ]),
+    });
+    if (!renderUnchanged && pageSignature === lastRenderedPageSignature) {
+      return;
+    }
+    lastRenderedPageSignature = pageSignature;
     options.renderPage(options.workspace.acceptPage({
       archivePath: session.archivePath,
       parentPath,
@@ -145,6 +163,7 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
     while (true) {
       const requestGeneration = ++generation;
       await closeActive();
+      lastRenderedPageSignature = null;
       options.renderLoading(options.workspace.beginLoading({
         archivePath: request.archivePath,
         preserveListing: preserveState,
@@ -191,7 +210,15 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
             query: null,
           };
           if (terminal.status === "indexing" && terminal.discoveredEntries > 0) {
-            await acceptFolder(preservedFolder, requestGeneration);
+            await acceptFolder(
+              preservedFolder,
+              requestGeneration,
+              null,
+              1,
+              [],
+              null,
+              false,
+            );
           }
         }
         if (requestGeneration !== generation || active?.sessionId !== terminal.sessionId) return;
@@ -211,13 +238,6 @@ export function createArchiveLoadController(options: ArchiveLoadControllerOption
           pageNumber: 1,
           query: null,
         };
-        options.workspace.acceptPage({
-          archivePath: terminal.archivePath,
-          parentPath: preservedFolder,
-          entries: [],
-          entryCount: terminal.finalEntryCount ?? 0,
-          totalSize: terminal.finalTotalBytes ?? null,
-        });
         await acceptFolder(preservedFolder, requestGeneration);
         if ((terminal.finalEntryCount ?? 0) === 0) {
           options.renderPage(options.workspace.setBrowseState("empty"));

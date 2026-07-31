@@ -703,7 +703,7 @@ export const enMessages = {
   "info.copyDetails": "Copy Details",
   "preview.nativeDragDesktopOnly": "Native drag-out is available in the desktop app; browser preview cannot start file drags.",
   "preview.selectEntryToDrag": "Select at least one entry to drag out.",
-  "preview.preparingDrag": "Preparing {count} item(s) for drag-out...",
+  "preview.preparingDrag": "Drag {count} item(s) to a destination...",
   "preview.dragPromiseStarted": "Finder is receiving {count} promised item(s)...",
   "preview.dragCancelled": "Drag-out cancelled.",
   "preview.dragNoDrop": "Drag-out ended without a drop.",

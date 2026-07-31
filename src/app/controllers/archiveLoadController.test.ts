@@ -91,12 +91,68 @@ describe("archive load controller", () => {
     expect(harness.get).toHaveBeenCalledWith({
       sessionId: "archive-1",
       parentPath: "",
-      limit: 512,
+      limit: 200,
       sortKey: "name",
       sortAscending: true,
     });
     expect(harness.workspace.getSnapshot().entries).toHaveLength(1);
     expect(harness.workspace.getSnapshot().entryCount).toBe(1);
+  });
+
+  it("renders current-folder rows from an indexing revision without waiting for the whole archive", async () => {
+    let resolveTerminal!: (snapshot: ArchiveIndexSnapshotDto) => void;
+    const terminalWait = new Promise<ArchiveIndexSnapshotDto>((resolve) => { resolveTerminal = resolve; });
+    const harness = createHarness();
+    harness.wait
+      .mockResolvedValueOnce(terminal({
+        revision: "2",
+        status: "indexing",
+        discoveredEntries: 256,
+        finalEntryCount: undefined,
+        finalTotalBytes: undefined,
+      }))
+      .mockImplementationOnce(() => terminalWait);
+    harness.get.mockResolvedValueOnce({
+      sessionId: "archive-1",
+      revision: "2",
+      parentPath: "",
+      entries: [{ path: "root.txt", kind: "file", size: 12 }],
+      complete: true,
+      childCount: 1,
+    });
+
+    const load = harness.controller.loadArchive({ archivePath: "C:/archives/demo.zip" });
+    await vi.waitFor(() => expect(harness.calls.pages).toHaveLength(1));
+    expect(harness.workspace.getSnapshot().entries[0]?.path).toBe("root.txt");
+
+    resolveTerminal(terminal({ revision: "3" }));
+    await load;
+  });
+
+  it("skips redundant partial page renders while forcing the terminal metadata update", async () => {
+    const harness = createHarness();
+    harness.wait
+      .mockResolvedValueOnce(terminal({
+        revision: "2",
+        status: "indexing",
+        discoveredEntries: 256,
+        finalEntryCount: undefined,
+        finalTotalBytes: undefined,
+      }))
+      .mockResolvedValueOnce(terminal({
+        revision: "3",
+        status: "indexing",
+        discoveredEntries: 512,
+        finalEntryCount: undefined,
+        finalTotalBytes: undefined,
+      }))
+      .mockResolvedValueOnce(terminal({ revision: "4" }));
+
+    await harness.controller.loadArchive({ archivePath: "C:/archives/demo.zip" });
+
+    expect(harness.get).toHaveBeenCalledTimes(3);
+    expect(harness.calls.pages).toHaveLength(2);
+    expect(harness.calls.pages.at(-1)?.entryCount).toBe(1);
   });
 
   it("closes the previous session when another archive is opened", async () => {

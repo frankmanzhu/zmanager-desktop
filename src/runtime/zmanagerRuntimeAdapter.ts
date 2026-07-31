@@ -797,6 +797,10 @@ async function subscribeToJobCatalog(): Promise<void> {
     maybeCloseQuickActionOnlyCoordinator();
   });
 }
+let activeArchiveLoadTiming: {
+  startedAt: number;
+  firstPageRecorded: boolean;
+} | null = null;
 const archiveLoadController = createArchiveLoadController({
   workspace: archiveWorkspace,
   enterExtractWorkspace: () => setWorkspaceMode("extract"),
@@ -811,6 +815,18 @@ const archiveLoadController = createArchiveLoadController({
     setOperationalMessage("status.loadingArchive");
   },
   renderPage: (snapshot) => {
+    if (activeArchiveLoadTiming && !activeArchiveLoadTiming.firstPageRecorded) {
+      activeArchiveLoadTiming.firstPageRecorded = true;
+      diagnostics.record({
+        scope: "archiveLoad",
+        name: "firstPageRendered",
+        fields: {
+          elapsedMs: Math.round(performance.now() - activeArchiveLoadTiming.startedAt),
+          entryCount: snapshot.entryCount,
+          visibleRowCount: snapshot.entries.length,
+        },
+      });
+    }
     clearTrackedPreviewState();
     contextMenuRuntime.hide();
     applyExtractPreferenceDefaults(snapshot.currentArchivePath);
@@ -3470,7 +3486,38 @@ function showCreateWorkspace() {
 }
 
 async function loadArchive(request: ListArchiveRequest, options: ArchiveLoadOptions = {}) {
-  await archiveLoadController.loadArchive(request, options);
+  const timing = {
+    startedAt: performance.now(),
+    firstPageRecorded: false,
+  };
+  activeArchiveLoadTiming = timing;
+  const familyResolution = resolveExtractFamilyFromPath(request.archivePath);
+  diagnostics.record({
+    scope: "archiveLoad",
+    name: "requested",
+    fields: {
+      format: familyResolution.kind === "known" ? familyResolution.family : "unknown",
+      preserveState: options.preserveState ?? false,
+    },
+  });
+  try {
+    await archiveLoadController.loadArchive(request, options);
+    const snapshot = archiveWorkspace.getSnapshot();
+    diagnostics.record({
+      scope: "archiveLoad",
+      name: "settled",
+      fields: {
+        browseState: snapshot.browseState,
+        elapsedMs: Math.round(performance.now() - timing.startedAt),
+        entryCount: snapshot.entryCount,
+        visibleRowCount: snapshot.entries.length,
+      },
+    });
+  } finally {
+    if (activeArchiveLoadTiming === timing) {
+      activeArchiveLoadTiming = null;
+    }
+  }
 }
 
 function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLoadOptions = {}) {

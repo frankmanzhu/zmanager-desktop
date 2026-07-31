@@ -64,7 +64,8 @@ fn main() {
     platform::initialize_native_host(native_launch_inbox.clone(), diagnostics.clone())
         .expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
-    let archive_index_registry = archive_index::ArchiveIndexRegistry::new();
+    let archive_index_registry =
+        archive_index::ArchiveIndexRegistry::with_diagnostics(diagnostics.clone());
     let account_runtime = account::AccountRuntime::new();
     let native_drag_sessions = native_drag_session::NativeDragSessionRegistry::new();
     let quick_action_launch_coordinator =

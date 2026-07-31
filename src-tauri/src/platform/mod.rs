@@ -317,14 +317,9 @@ pub fn prepare_native_file_drag(
 pub fn start_native_file_drag(
     window: &tauri::WebviewWindow<Wry>,
     items: &[NativeFileDragItem],
-    preflight: impl FnOnce() -> Result<(), NativeFileDragError>,
     stream_provider: NativeFileDragStreamProvider,
     registry: &crate::native_drag_session::NativeDragSessionRegistry,
 ) -> Result<NativeFileDragStart, NativeFileDragError> {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
-    preflight()?;
-    #[cfg(target_os = "macos")]
-    let _ = preflight;
     ActivePlatform::start_native_file_drag(window, items, stream_provider, registry)
 }
 

@@ -705,7 +705,7 @@ export const zhCnMessages = {
   "info.selectionTitle": "选择属性",
   "preview.nativeDragDesktopOnly": "原生拖出仅在桌面应用中可用。",
   "preview.selectEntryToDrag": "请至少选择一个要拖出的条目。",
-  "preview.preparingDrag": "正在准备拖出 {count} 个项目...",
+  "preview.preparingDrag": "将 {count} 个项目拖到目标位置...",
   "preview.dragPromiseStarted": "Finder 正在接收 {count} 个承诺项目...",
   "preview.dragCancelled": "拖出已取消。",
   "preview.dragNoDrop": "拖出结束，但没有放置。",

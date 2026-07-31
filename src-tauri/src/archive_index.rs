@@ -16,6 +16,7 @@ use crate::dto::{
     ArchiveSearchRequest, StartArchiveIndexRequest,
 };
 use crate::error::CommandErrorDto;
+use crate::{diagnostics, diagnostics::DiagnosticLog};
 
 const MAX_ACTIVE_ARCHIVE_SESSIONS: usize = 4;
 const MAX_ARCHIVE_INDEX_ENTRIES: usize = 500_000;
@@ -28,6 +29,7 @@ const ARCHIVE_INDEX_PUBLICATION_INTERVAL: Duration = Duration::from_millis(50);
 #[derive(Clone)]
 pub struct ArchiveIndexRegistry {
     state: Arc<Mutex<RegistryState>>,
+    diagnostics: Option<DiagnosticLog>,
 }
 
 struct RegistryState {
@@ -58,6 +60,14 @@ impl ArchiveIndexRegistry {
                 next_session_id: 0,
                 sessions: HashMap::new(),
             })),
+            diagnostics: None,
+        }
+    }
+
+    pub fn with_diagnostics(diagnostics: DiagnosticLog) -> Self {
+        Self {
+            diagnostics: Some(diagnostics),
+            ..Self::new()
         }
     }
 
@@ -112,11 +122,31 @@ impl ArchiveIndexRegistry {
             );
             (session_id, snapshot, cancelled, index)
         };
+        let archive_bytes = std::fs::metadata(&archive_path)
+            .ok()
+            .map(|metadata| metadata.len());
+        self.record(
+            "started",
+            diagnostics::fields([
+                (
+                    "archiveBytes",
+                    archive_bytes
+                        .map(serde_json::Value::from)
+                        .unwrap_or(serde_json::Value::Null),
+                ),
+                (
+                    "format",
+                    serde_json::Value::String(archive_format_label(&archive_path)),
+                ),
+                ("sessionId", serde_json::Value::String(session_id.clone())),
+            ]),
+        );
 
         let registry = self.clone();
         let spawn_failure_registry = self.clone();
         let worker_session_id = session_id.clone();
         let spawn_failure_session_id = session_id.clone();
+        let worker_started = Instant::now();
         if let Err(error) = thread::Builder::new()
             .name("archive-index".to_string())
             .spawn(move || {
@@ -165,7 +195,11 @@ impl ArchiveIndexRegistry {
                 if cancelled.load(AtomicOrdering::Acquire) {
                     return;
                 }
-                registry.finish(&worker_session_id, index_error.map_or(result, Err));
+                registry.finish(
+                    &worker_session_id,
+                    index_error.map_or(result, Err),
+                    worker_started.elapsed(),
+                );
             })
         {
             spawn_failure_registry.finish(
@@ -173,6 +207,7 @@ impl ArchiveIndexRegistry {
                 Err(CommandErrorDto::operation_failed(format!(
                     "Archive indexing worker could not start: {error}"
                 ))),
+                worker_started.elapsed(),
             );
         }
 
@@ -376,6 +411,76 @@ impl ArchiveIndexRegistry {
         })
     }
 
+    pub fn drag_entries(
+        &self,
+        archive_path: &str,
+        entry_paths: &[String],
+    ) -> Result<Option<Vec<ArchiveEntryDto>>, CommandErrorDto> {
+        let normalized_archive_path = archive_path.trim();
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(record) = state
+            .sessions
+            .values()
+            .filter(|record| {
+                record.snapshot.archive_path == normalized_archive_path
+                    && record.snapshot.status != ArchiveIndexStatusDto::Failed
+                    && record.snapshot.status != ArchiveIndexStatusDto::Cancelled
+            })
+            .max_by_key(|record| archive_session_sequence(&record.snapshot.session_id))
+        else {
+            return Ok(None);
+        };
+        let index = record
+            .index
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut selected_paths = BTreeSet::new();
+        let mut selected_entries = Vec::new();
+        for requested in entry_paths {
+            let requested = normalize_archive_path(requested);
+            let direct = index.entries.get(&requested);
+            if let Some(entry) = direct
+                && entry.kind == ArchiveEntryKindDto::File
+            {
+                if selected_paths.insert(entry.path.clone()) {
+                    selected_entries.push(entry.clone());
+                }
+                continue;
+            }
+            if direct.is_some_and(|entry| entry.kind != ArchiveEntryKindDto::Directory) {
+                return Err(CommandErrorDto::unsupported_format(format!(
+                    "entry cannot be dragged out as a virtual file: {requested}"
+                )));
+            }
+
+            if record.snapshot.status == ArchiveIndexStatusDto::Indexing {
+                return Ok(None);
+            }
+            let prefix = format!("{requested}/");
+            let mut descendants = index
+                .entries
+                .values()
+                .filter(|entry| {
+                    entry.kind == ArchiveEntryKindDto::File && entry.path.starts_with(&prefix)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            descendants.sort_by(|left, right| left.path.cmp(&right.path));
+            if descendants.is_empty() {
+                return Err(CommandErrorDto::not_found(
+                    format!("archive entry not found: {requested}"),
+                    Some("Open the archive again or choose a visible entry.".to_string()),
+                ));
+            }
+            for entry in descendants {
+                if selected_paths.insert(entry.path.clone()) {
+                    selected_entries.push(entry);
+                }
+            }
+        }
+        Ok(Some(selected_entries))
+    }
+
     fn publish_progress(&self, session_id: &str, statistics: ArchiveIndexStatistics) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let Some(record) = state.sessions.get_mut(session_id) else {
@@ -384,6 +489,8 @@ impl ArchiveIndexRegistry {
         if record.cancelled.load(AtomicOrdering::Acquire) {
             return;
         }
+        let is_first_content =
+            record.snapshot.discovered_entries == 0 && statistics.entry_count > 0;
         let revision = next_revision(&record.snapshot.revision);
         let snapshot = Arc::new(ArchiveIndexSnapshotDto {
             revision,
@@ -398,9 +505,30 @@ impl ArchiveIndexRegistry {
         });
         record.snapshot = snapshot.clone();
         record.sender.send_replace(snapshot);
+        drop(state);
+        if is_first_content {
+            self.record(
+                "firstContentIndexed",
+                diagnostics::fields([
+                    (
+                        "discoveredEntries",
+                        serde_json::Value::from(statistics.entry_count),
+                    ),
+                    (
+                        "sessionId",
+                        serde_json::Value::String(session_id.to_string()),
+                    ),
+                ]),
+            );
+        }
     }
 
-    fn finish(&self, session_id: &str, result: Result<ArchiveIndexStatistics, CommandErrorDto>) {
+    fn finish(
+        &self,
+        session_id: &str,
+        result: Result<ArchiveIndexStatistics, CommandErrorDto>,
+        elapsed: Duration,
+    ) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let Some(record) = state.sessions.get_mut(session_id) else {
             return;
@@ -440,9 +568,55 @@ impl ArchiveIndexRegistry {
             },
         };
         let snapshot = Arc::new(snapshot);
+        let discovered_entries = snapshot.discovered_entries;
+        let status = format!("{:?}", snapshot.status).to_lowercase();
         record.snapshot = snapshot.clone();
         record.sender.send_replace(snapshot);
+        drop(state);
+        self.record(
+            "finished",
+            diagnostics::fields([
+                (
+                    "discoveredEntries",
+                    serde_json::Value::from(discovered_entries),
+                ),
+                (
+                    "elapsedMs",
+                    serde_json::Value::from(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)),
+                ),
+                (
+                    "sessionId",
+                    serde_json::Value::String(session_id.to_string()),
+                ),
+                ("status", serde_json::Value::String(status)),
+            ]),
+        );
     }
+
+    fn record(&self, name: &str, fields: std::collections::BTreeMap<String, serde_json::Value>) {
+        if let Some(diagnostics) = &self.diagnostics {
+            let _ = diagnostics.record("archiveIndex", name, fields);
+        }
+    }
+}
+
+fn archive_format_label(path: &str) -> String {
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
+        return "tarZst".to_string();
+    }
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("unknown")
+        .to_ascii_lowercase()
+}
+
+fn archive_session_sequence(session_id: &str) -> u64 {
+    session_id
+        .strip_prefix("archive-")
+        .and_then(|sequence| sequence.parse().ok())
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -1198,6 +1372,90 @@ mod tests {
         assert_eq!(
             build.index.entries["folder"].kind,
             ArchiveEntryKindDto::Directory
+        );
+    }
+
+    #[test]
+    fn ready_index_resolves_file_and_folder_drag_entries_without_relisting_archive() {
+        let stale_build = build_index(BrowserListing {
+            entries: vec![entry("stale.txt", BrowserEntryKind::File)],
+        })
+        .expect("stale index should build");
+        let build = build_index(BrowserListing {
+            entries: vec![
+                entry("docs/a.txt", BrowserEntryKind::File),
+                entry("docs/nested/b.txt", BrowserEntryKind::File),
+                entry("other.txt", BrowserEntryKind::File),
+            ],
+        })
+        .expect("index should build");
+        let registry = ArchiveIndexRegistry::new();
+        let stale_snapshot = Arc::new(ArchiveIndexSnapshotDto {
+            revision: "2".to_string(),
+            session_id: "archive-1".to_string(),
+            archive_path: "C:/archives/demo.tzap".to_string(),
+            status: ArchiveIndexStatusDto::Ready,
+            discovered_entries: stale_build.entry_count,
+            discovered_bytes: stale_build.total_bytes,
+            final_entry_count: Some(stale_build.entry_count),
+            final_total_bytes: stale_build.total_bytes,
+            latest_failure: None,
+        });
+        let (stale_sender, _) = watch::channel(stale_snapshot.clone());
+        let snapshot = Arc::new(ArchiveIndexSnapshotDto {
+            revision: "2".to_string(),
+            session_id: "archive-2".to_string(),
+            archive_path: "C:/archives/demo.tzap".to_string(),
+            status: ArchiveIndexStatusDto::Ready,
+            discovered_entries: build.entry_count,
+            discovered_bytes: build.total_bytes,
+            final_entry_count: Some(build.entry_count),
+            final_total_bytes: build.total_bytes,
+            latest_failure: None,
+        });
+        let (sender, _) = watch::channel(snapshot.clone());
+        registry
+            .state
+            .lock()
+            .expect("registry lock")
+            .sessions
+            .insert(
+                "archive-1".to_string(),
+                SessionRecord {
+                    snapshot: stale_snapshot,
+                    sender: stale_sender,
+                    index: Arc::new(Mutex::new(stale_build.index)),
+                    cancelled: Arc::new(AtomicBool::new(false)),
+                },
+            );
+        registry
+            .state
+            .lock()
+            .expect("registry lock")
+            .sessions
+            .insert(
+                "archive-2".to_string(),
+                SessionRecord {
+                    snapshot,
+                    sender,
+                    index: Arc::new(Mutex::new(build.index)),
+                    cancelled: Arc::new(AtomicBool::new(false)),
+                },
+            );
+
+        let files = registry
+            .drag_entries(
+                "C:/archives/demo.tzap",
+                &["docs".to_string(), "other.txt".to_string()],
+            )
+            .expect("cached drag selection")
+            .expect("ready session should answer");
+        assert_eq!(
+            files
+                .iter()
+                .map(|entry| entry.path.as_str())
+                .collect::<Vec<_>>(),
+            ["docs/a.txt", "docs/nested/b.txt", "other.txt"]
         );
     }
 
