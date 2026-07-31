@@ -292,6 +292,14 @@ fi
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 rm -rf "$cargo_target_dir/release/bundle/rpm"
 
+build_number=$(git rev-list --count HEAD 2>/dev/null || echo "${ZMANAGER_BUILD_NUMBER:-1}")
+architecture="$(uname -m)"
+os_label="Linux"
+build_id="${os_label}-${architecture}-${build_number}"
+export ZMANAGER_BUILD_NUMBER="$build_number"
+export ZMANAGER_BUILD_ID="$build_id"
+echo "Build: ${build_id}"
+
 # Use Vite's runner config loader for Fedora packaging so a root-owned
 # node_modules/.vite-temp cache from a previous sudo build does not break Tauri's
 # beforeBuildCommand.

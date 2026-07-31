@@ -26,6 +26,16 @@ if ($resolvedArch -eq "Auto") {
 }
 $targetTriple = if ($resolvedArch -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
 
+$buildNumber = (git rev-list --count HEAD 2>$null)
+if (-not $buildNumber) {
+    $buildNumber = if ($env:ZMANAGER_BUILD_NUMBER) { $env:ZMANAGER_BUILD_NUMBER } else { "1" }
+}
+$osLabel = "Windows"
+$buildId = "${osLabel}-${resolvedArch}-${buildNumber}"
+$env:ZMANAGER_BUILD_NUMBER = $buildNumber
+$env:ZMANAGER_BUILD_ID = $buildId
+Write-Host "Build: ${buildId}"
+
 function Resolve-OptionalCommand {
     param([string[]]$Names)
 
