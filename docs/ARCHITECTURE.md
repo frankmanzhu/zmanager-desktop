@@ -72,9 +72,9 @@ Process ownership is selected before Tauri plugin registration:
   the single-instance plugin and route subsequent normal/file-open intents to
   the existing singleton Main Window process;
 - explicit Quick Action arguments and macOS Finder Quick Action launches do not
-  register the single-instance plugin; every such launch owns an independent
-  Tauri process, consumes its own request exactly once, and cannot be redirected
-  into another Main Window or Quick Action process; and
+  register the single-instance plugin on Windows and macOS; every such launch owns an independent
+  Tauri process and consumes its own request exactly once. On Linux, however, Quick Actions MUST
+  register the single-instance plugin and redirect to the primary instance due to WebKitGTK data directory locking constraints; and
 - a Disposable Task Window is a webview window inside its owning Tauri process,
   not a second executable process.
 
@@ -455,7 +455,8 @@ normal launch or file association
   -> Native Launch Inbox
 
 explicit Quick Action / macOS Finder Quick Action
-  -> create isolated application process; no single-instance plugin
+  -> Windows/macOS: create isolated application process; no single-instance plugin
+  -> Linux: register single-instance plugin to route to primary instance (WebKitGTK constraint)
   -> consume versioned ShellActionRequest exactly once
   -> Native Launch Inbox (ordered, bounded, deduplicated)
   -> frontend-ready drain and acknowledgement

@@ -61,7 +61,7 @@ impl LaunchInstanceMode {
     }
 
     pub fn registers_single_instance(self) -> bool {
-        self == Self::NormalSingleton
+        cfg!(target_os = "linux") || self == Self::NormalSingleton
     }
 }
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";
@@ -529,9 +529,9 @@ fn validate_request_with_known_kind(
 
     match kind {
         QuickActionKindDto::Open => {
-            if paths.len() != 1 {
+            if paths.is_empty() {
                 return Err(QuickActionError::invalid(
-                    "open requires exactly one archive path",
+                    "open requires at least one archive path",
                 ));
             }
             validate_all_supported_archives(&paths)?;
@@ -567,9 +567,9 @@ fn validate_request_with_known_kind(
             validate_all_supported_archives(&paths)?;
         }
         QuickActionKindDto::ExtractToFolder => {
-            if paths.len() != 1 {
+            if paths.is_empty() {
                 return Err(QuickActionError::invalid(
-                    "extract-to-folder requires exactly one archive path",
+                    "extract-to-folder requires at least one archive path",
                 ));
             }
             validate_all_supported_archives(&paths)?;
