@@ -98,22 +98,25 @@ object. They also cannot produce dynamic labels such as `Add to docs.zip`.
 
 Selected-item actions arrive as one atomic request; the app does not use a
 timing window or coalesce launches. `Add to archive...` appends the request's
-paths to the singleton Main Window's active Create Workspace. Fixed-format
-create actions start one job containing every path in the request.
+paths to the isolated launch process's reusable Main Window and active Create
+Workspace. Fixed-format create actions keep that process's coordinator hidden
+and start one job containing every path in the request.
 
 ## Window Lifecycle
 
 The generated shell-action contract classifies each action by window
 disposition:
 
-- `open`, `compress` (**Add to archive...**), and `extract` use the singleton
-  Main Window and leave it available after the operation.
+- `open`, `compress` (**Add to archive...**), and `extract` have `mainWindow`
+  disposition. An explicit shell launch remains isolated from the normal
+  singleton but reveals its own reusable Main Window and leaves closure to the
+  user. An ordinary archive file association reuses the singleton Main Window.
 - Fixed-format create actions and `extractHere`/`extractToFolder` use a
-  Disposable Task Window. A cold launch keeps the Main Window hidden and exits
-  its hidden coordinator after the request, task window, and job have all
-  settled.
-- A disposable action forwarded into an already-normal app session does not
-  close that existing Main Window.
+  Disposable Task Window. Their isolated launch keeps the Main Window hidden
+  and exits its hidden coordinator after the request, task window, and job have
+  all settled.
+- An explicit disposable action is never forwarded into an already-normal app
+  session.
 
 Cold-start transfer into the Native Launch Inbox preserves the disposition but
 does not retain a second executable copy of the request. This prevents both a

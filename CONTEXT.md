@@ -53,22 +53,28 @@ operation to be resubmitted.
 
 ### Quick Action Coordinator
 
-The hidden Desktop Shell role used only when fixed-format Quick Actions launch
-Disposable Task Windows without revealing the Main Window. It owns no progress
-workflow. It tracks only whether it is coordinator-only and the
-pending-request, active-Job, and open-task-window counts required to exit after
-all work settles. It may retain bounded Job IDs to reconcile Rust catalog
-updates, but it owns no per-Job progress, retry, output-action, or terminal
-presentation state.
+The hidden Desktop Shell role used only when an isolated Quick Action process
+launches Disposable Task Windows without revealing the Main Window. Explicit
+Quick Action launches do not register the single-instance plugin; each launch
+owns its request, hidden coordinator webview, Rust Jobs, and task windows. The
+coordinator owns no progress workflow. It tracks only whether it is
+coordinator-only and the pending-request, active-Job, and open-task-window
+counts required to exit after all work settles. It may retain bounded Job IDs
+to reconcile Rust catalog updates, but it owns no per-Job progress, retry,
+output-action, or terminal presentation state. When those counts settle and no
+visible Main Window was revealed, the hidden coordinator is destroyed so the
+isolated process exits.
 
 ### Quick Action
 
 A shell or startup request that begins a specific operation with its inputs and
-destination already implied. Quick actions normally use a Disposable Task
-Window. The general **Add to archive** action targets the singleton Main Window.
-Each shell action declares this window disposition in the generated shell-action
-contract so cold startup, single-instance forwarding, and frontend routing use
-the same classification.
+destination already implied. An explicit Quick Action is an isolated process
+launch and never joins the normal application's singleton process. Quick
+actions normally use a Disposable Task Window. A general action such as **Add
+to archive** may reveal the reusable Main Window in its own launch process when
+its generated disposition requires user review. Each shell action declares
+this window disposition in the generated shell-action contract so cold startup
+and frontend routing use the same classification.
 
 ### Shell Action Request
 

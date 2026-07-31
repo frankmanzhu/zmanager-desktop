@@ -4,6 +4,7 @@
 - Date: 2026-07-11
 - Extended by: ADR-0006 (Finder App Group transport uses opaque tokens rather
   than URL-encoded path payloads)
+- Process ownership amended by: ADR-0017
 
 ## Context
 
@@ -42,10 +43,11 @@ decodes `IShellItemArray`, writes the request, and launches ZManager. It never
 plans, creates, opens, or extracts archives. Folder-background verbs remain
 single-path executable commands because the background itself is one target.
 
-The desktop does not debounce or coalesce separate process launches. Tauri's
-single-instance boundary decides which process owns execution, then forwards
-the atomic intent to the frontend command seam so persisted per-format defaults
-are applied before any job begins.
+The desktop does not debounce or coalesce separate Quick Action launches.
+ADR-0017 assigns every explicit Quick Action to an isolated process, which
+consumes the atomic request directly and passes it to the frontend command seam
+so persisted per-format defaults are applied before any job begins. The
+single-instance boundary is reserved for normal and file-association launches.
 
 Legacy `--quick-action` arguments and unversioned `--quick-action-request` files
 remain accepted for compatibility, but new integrations use the versioned

@@ -66,9 +66,22 @@ windows have settled. Main-window shell actions such as **Add to archive...**
 may prefill the reusable manager, but starting their job follows the same
 handoff-and-reset rule.
 
-This is a behavioral analogy to 7-Zip, not a requirement to spawn one process
-per job. ZManager may host the Main Window and multiple task windows in one
-Tauri process while Rust's Job Registry remains the authoritative job owner.
+Process ownership is selected before Tauri plugin registration:
+
+- normal application launches and archive file-association launches register
+  the single-instance plugin and route subsequent normal/file-open intents to
+  the existing singleton Main Window process;
+- explicit Quick Action arguments and macOS Finder Quick Action launches do not
+  register the single-instance plugin; every such launch owns an independent
+  Tauri process, consumes its own request exactly once, and cannot be redirected
+  into another Main Window or Quick Action process; and
+- a Disposable Task Window is a webview window inside its owning Tauri process,
+  not a second executable process.
+
+This process isolation is independent of generated window disposition. Most
+Quick Actions keep the coordinator webview hidden and open only a Disposable
+Task Window. A review action may reveal the reusable Main Window in that
+isolated process when its generated disposition is `mainWindow`.
 
 ## Layering
 
@@ -188,7 +201,10 @@ quick-action-only session plus the pending-request, active-Job, and
 open-task-window counts. It consumes the Rust Job catalog to reconcile accepted
 and terminal Jobs without subscribing to per-Job progress. The same active
 count supports Main Window hide-vs-close behavior. When the session is
-coordinator-only, the process exits after all three counts reach zero.
+coordinator-only, it force-destroys the hidden coordinator after all three
+counts reach zero. With no remaining windows or Jobs, the isolated Tauri
+process exits. Normal singleton sessions never use this forced-destroy path;
+their Main Window remains under explicit user control.
 
 ### Command Router
 
@@ -429,12 +445,18 @@ The Main Window data flow ends at Job Handoff. Later Job snapshots may update
 internal process accounting, but they never disable, reset, resize, replace, or
 otherwise drive the reusable manager workflow.
 
-Shell Quick Actions and native macOS callbacks enter through a second, typed
-ingress:
+Normal file-open requests and explicit Quick Actions share a typed inbox but
+have different process policies:
 
 ```text
-AppKit/Finder/single-instance callback
-  -> versioned native event or ShellActionRequest
+normal launch or file association
+  -> register single-instance plugin
+  -> existing or new singleton Main Window process
+  -> Native Launch Inbox
+
+explicit Quick Action / macOS Finder Quick Action
+  -> create isolated application process; no single-instance plugin
+  -> consume versioned ShellActionRequest exactly once
   -> Native Launch Inbox (ordered, bounded, deduplicated)
   -> frontend-ready drain and acknowledgement
   -> generated window-disposition routing
@@ -448,6 +470,12 @@ has exactly one ingress: the Native Launch Inbox. The frontend records a
 bounded set of completed event IDs before acknowledgement, so an
 at-least-once replay within the frontend process can repeat the
 acknowledgement but not its operation side effect.
+
+Successful and cancelled Disposable Task Workflows auto-close after brief
+acknowledgement. A failed task remains visible so its error and recovery actions
+are not discarded. Closing the last terminal task causes the hidden
+quick-action-only coordinator to reevaluate its zero-count shutdown invariant
+and destroy itself.
 
 ## Error Model
 
@@ -487,6 +515,11 @@ Errors must not include passwords, raw command-line strings, or sensitive path d
 - Prove in-process Native Inbox replay idempotency, fast-terminal coordinator
   reconciliation, durable Job Feed reconnect, owner-scoped task controls, and
   native Main Window close routing through coordinator accounting.
+- Prove launch-instance classification without consuming request files:
+  explicit Quick Actions are isolated, while normal and file-association
+  launches register the singleton plugin.
+- Prove an idle quick-action-only coordinator force-destroys its hidden window,
+  successful/cancelled tasks auto-close, and failed tasks remain visible.
 - Prefer direct state and deletion over orchestration. The accepted-start guard,
   one-Job task state, and coordinator shutdown counts are sufficient; do not
   add another lifecycle module unless deleting it would force real complexity

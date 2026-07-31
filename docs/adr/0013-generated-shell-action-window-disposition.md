@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-22
+- Process ownership amended by: ADR-0017
 
 ## Context
 
@@ -29,16 +30,18 @@ through one disposition seam before executing it. Main-window actions reveal and
 the normal application. Disposable actions mark coordinator ownership, keep the
 Main Window hidden, and bracket request execution with activity tracking. The
 coordinator may exit only after disposable activity was observed and there are
-no pending requests, task windows, or jobs. A previously observed normal launch
-always wins, preserving an already-open Main Window.
+no pending requests, task windows, or jobs. ADR-0017 subsequently isolated
+explicit Quick Action launches from the normal singleton process, so a normal
+launch is no longer merged into a Quick Action coordinator.
 
 ## Consequences
 
 - Fixed-format context-menu actions show only their Disposable Task Window.
-- **Add to archive...**, generic extract, opening an archive, and launching the
-  app retain the singleton Main Window.
-- Cold and warm delivery paths share one generated classification and one
-  frontend execution seam.
+- Opening an archive and launching the app retain the singleton Main Window.
+  Explicit review actions such as **Add to archive...** may reveal a reusable
+  Main Window in their isolated process.
+- Cold startup and in-process native delivery share one generated
+  classification and one frontend execution seam.
 - Validation or job-start failure still settles disposable ownership instead of
   leaving a hidden coordinator running.
 - Passwords, selected paths, and opaque request tokens remain excluded from
@@ -51,5 +54,4 @@ always wins, preserving an already-open Main Window.
   exactly one request, and exposes no duplicate executable request in startup
   state.
 - Frontend tests cover cold forwarded startup, fixed-format hidden routing,
-  normal-action reveal, warm quick actions in normal sessions, request failure,
-  and coordinator activity gating.
+  normal-action reveal, request failure, and coordinator activity gating.

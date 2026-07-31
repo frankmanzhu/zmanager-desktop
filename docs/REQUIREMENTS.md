@@ -59,6 +59,21 @@
 - Do not leave either the manager or a task window stuck when the backend
   returns an error.
 
+### Process and Window Lifecycle
+
+- Register the single-instance plugin only for normal application and archive
+  file-association launches.
+- Run every explicit shell Quick Action in an independent application process
+  that owns and consumes its request; Quick Actions must not join the normal
+  singleton process or another Quick Action process.
+- Keep the coordinator webview hidden for disposable Quick Actions, open one
+  Disposable Task Window per accepted Job, and force-destroy the idle hidden
+  coordinator after pending requests, active Jobs, and task windows settle.
+- Auto-close successful and cancelled Disposable Task Windows after brief
+  acknowledgement. Keep failed task windows visible for error inspection and
+  recovery.
+- Leave normal Main Window closure under explicit user control.
+
 ### Preferences
 
 - Store safe preferences only: default output directory behavior, default create format, theme choice, recent files count, and update channel if added.
