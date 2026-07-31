@@ -2,11 +2,15 @@
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-zmanager-tzst">
     <comment>ZManager TZST archive</comment>
+    <icon name="application-x-zmanager-tzst"/>
+    <generic-icon name="x-office-archive"/>
     <glob pattern="*.tzst"/>
     <glob pattern="*.tar.zst"/>
   </mime-type>
   <mime-type type="application/x-zmanager-tzap">
     <comment>ZManager TZAP archive</comment>
+    <icon name="application-x-zmanager-tzap"/>
+    <generic-icon name="x-office-archive"/>
     <glob pattern="*.tzap"/>
   </mime-type>
 </mime-info>

@@ -9,9 +9,9 @@ Packaged materials:
 - `zmanager-desktop.desktop`: visible GNOME launcher whose desktop id matches
   Tauri's Wayland app id for dock/taskbar icon matching.
 - `xdg-mime.xml`: MIME definitions for ZManager-owned `.tzst`, `.tar.zst`, and `.tzap`
-  extensions.
+  extensions, including explicit XDG MIME icon definitions (`application-x-zmanager-tzap`, `application-x-zmanager-tzst`) and fallback generic archive icons.
 - `src-tauri/icons/icon-256.png`, `icon-512.png`, and `icon.png`: installed as
-  the `zmanager-desktop` hicolor app icon in indexed sizes for desktop shells.
+  the `zmanager-desktop` hicolor app icon and `application-x-zmanager-*` hicolor MIME icons in indexed sizes for desktop shells and file managers.
 - `org.tzap-org.zmanager.desktop.metainfo.xml`: AppStream metadata for graphical
   package managers and software centers.
 - `postinstall.sh` and `postremove.sh`: refresh XDG MIME, desktop, and icon

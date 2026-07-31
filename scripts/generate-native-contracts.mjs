@@ -570,6 +570,8 @@ put("packaging/linux/xdg-mime.xml", `<?xml version="1.0" encoding="UTF-8"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
 ${customLinuxTypes.map((type) => `  <mime-type type="${type.mimeType}">
     <comment>ZManager ${type.id.toUpperCase()} archive</comment>
+    <icon name="${type.mimeType.replace('/', '-')}"/>
+    <generic-icon name="x-office-archive"/>
 ${[...type.primaryExtensions, ...type.compoundExtensions].map((extension) => `    <glob pattern="*.${extension}"/>`).join("\n")}
   </mime-type>`).join("\n")}
 </mime-info>

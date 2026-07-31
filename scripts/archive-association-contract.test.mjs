@@ -66,3 +66,41 @@ test("generated runtime and package artifacts cover compound and split formats",
     assert.ok(nsis.includes(`".${suffix.slice(1)}"`));
   }
 });
+
+test("Linux custom MIME types declare icons and map mimetype assets in package configs", async () => {
+  const xdgMime = await text("packaging/linux/xdg-mime.xml");
+  const tauriConfig = await json("src-tauri/tauri.conf.json");
+
+  assert.ok(xdgMime.includes('<icon name="application-x-zmanager-tzap"/>'));
+  assert.ok(xdgMime.includes('<icon name="application-x-zmanager-tzst"/>'));
+  assert.ok(xdgMime.includes('<generic-icon name="x-office-archive"/>'));
+
+  for (const packageType of ["deb", "rpm"]) {
+    const files = tauriConfig.bundle.linux[packageType].files;
+    assert.equal(
+      files["/usr/share/icons/hicolor/256x256/mimetypes/application-x-zmanager-tzap.png"],
+      "icons/icon-256.png",
+    );
+    assert.equal(
+      files["/usr/share/icons/hicolor/512x512/mimetypes/application-x-zmanager-tzap.png"],
+      "icons/icon-512.png",
+    );
+    assert.equal(
+      files["/usr/share/icons/hicolor/1024x1024/mimetypes/application-x-zmanager-tzap.png"],
+      "icons/icon.png",
+    );
+    assert.equal(
+      files["/usr/share/icons/hicolor/256x256/mimetypes/application-x-zmanager-tzst.png"],
+      "icons/icon-256.png",
+    );
+    assert.equal(
+      files["/usr/share/icons/hicolor/512x512/mimetypes/application-x-zmanager-tzst.png"],
+      "icons/icon-512.png",
+    );
+    assert.equal(
+      files["/usr/share/icons/hicolor/1024x1024/mimetypes/application-x-zmanager-tzst.png"],
+      "icons/icon.png",
+    );
+  }
+});
+
