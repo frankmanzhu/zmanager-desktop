@@ -42,11 +42,13 @@ struct SessionRecord {
     sender: watch::Sender<Arc<ArchiveIndexSnapshotDto>>,
     index: Arc<Mutex<ArchiveIndex>>,
     cancelled: Arc<AtomicBool>,
+    password: Option<String>,
 }
 
 struct ArchiveIndex {
     entries: HashMap<String, ArchiveEntryDto>,
     children: HashMap<String, BTreeSet<String>>,
+    loaded_directories: std::collections::HashSet<String>,
     entry_count: usize,
     total_bytes: u64,
     has_total: bool,
@@ -118,6 +120,7 @@ impl ArchiveIndexRegistry {
                     sender,
                     index: index.clone(),
                     cancelled: cancelled.clone(),
+                    password: password.clone(),
                 },
             );
             (session_id, snapshot, cancelled, index)
@@ -150,6 +153,18 @@ impl ArchiveIndexRegistry {
         if let Err(error) = thread::Builder::new()
             .name("archive-index".to_string())
             .spawn(move || {
+                if archive_browser::supports_on_demand_directories(&archive_path) {
+                    registry.finish(
+                        &worker_session_id,
+                        Ok(ArchiveIndexStatistics {
+                            entry_count: 0,
+                            total_bytes: Some(0),
+                        }),
+                        worker_started.elapsed(),
+                    );
+                    return;
+                }
+
                 let mut last_publication = Instant::now();
                 let mut unpublished_entries = 0;
                 let mut index_error = None;
@@ -244,25 +259,69 @@ impl ArchiveIndexRegistry {
         }
     }
 
-    pub fn children(
+    pub async fn children(
         &self,
         request: ArchiveChildrenRequest,
     ) -> Result<ArchiveChildrenPageDto, CommandErrorDto> {
         let parent_path = normalize_archive_path(&request.parent_path);
-        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let record = state
-            .sessions
-            .get(&request.session_id)
-            .ok_or_else(|| archive_session_not_found(&request.session_id))?;
-        if record.snapshot.status == ArchiveIndexStatusDto::Failed {
-            return Err(record
-                .snapshot
-                .latest_failure
-                .clone()
-                .unwrap_or_else(|| CommandErrorDto::operation_failed("Archive indexing failed.")));
+
+        let (archive_path, password, index_mutex, revision) = {
+            let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            let record = state
+                .sessions
+                .get(&request.session_id)
+                .ok_or_else(|| archive_session_not_found(&request.session_id))?;
+            if record.snapshot.status == ArchiveIndexStatusDto::Failed {
+                return Err(record.snapshot.latest_failure.clone().unwrap_or_else(|| {
+                    CommandErrorDto::operation_failed("Archive indexing failed.")
+                }));
+            }
+            (
+                record.snapshot.archive_path.clone(),
+                record.password.clone(),
+                record.index.clone(),
+                record.snapshot.revision.clone(),
+            )
+        };
+
+        if archive_browser::supports_on_demand_directories(&archive_path) {
+            let needs_load = {
+                let index = index_mutex.lock().unwrap_or_else(|e| e.into_inner());
+                !index.loaded_directories.contains(&parent_path)
+            };
+            if needs_load {
+                let archive_path_clone = archive_path.clone();
+                let parent_path_clone = parent_path.clone();
+                let password_clone = password.clone();
+
+                let listing = tokio::task::spawn_blocking(move || {
+                    archive_browser::list_directory_with_options(
+                        &archive_path_clone,
+                        &parent_path_clone,
+                        BrowserListOptions {
+                            password: password_clone.as_deref(),
+                        },
+                    )
+                })
+                .await
+                .map_err(|e| CommandErrorDto::operation_failed(format!("Task panic: {}", e)))?
+                .map_err(crate::platform::map_archive_browser_error)?;
+
+                let mut index = index_mutex.lock().unwrap_or_else(|e| e.into_inner());
+                // Double-checked locking to prevent TOCTOU race condition
+                if !index.loaded_directories.contains(&parent_path) {
+                    for entry in listing.entries {
+                        let _ = index.insert(entry);
+                    }
+                    index.loaded_directories.insert(parent_path.clone());
+                    // For an empty root directory that has no entries, we might not get any entries, but we still marked it loaded.
+                    // However, we must ensure it exists in `children` map so we don't get an empty set incorrectly.
+                    index.children.entry(parent_path.clone()).or_default();
+                }
+            }
         }
-        let index = record
-            .index
+
+        let index = index_mutex
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let mut paths = index
@@ -284,7 +343,7 @@ impl ArchiveIndexRegistry {
             request.cursor.as_deref(),
             &request.session_id,
             &cursor_scope,
-            &record.snapshot.revision,
+            &revision,
         )?;
         if offset > paths.len() {
             return Err(CommandErrorDto::invalid_request(
@@ -296,17 +355,11 @@ impl ArchiveIndexRegistry {
             .iter()
             .filter_map(|path| index.entries.get(path).cloned())
             .collect();
-        let next_cursor = (end < paths.len()).then(|| {
-            encode_cursor(
-                &request.session_id,
-                &cursor_scope,
-                &record.snapshot.revision,
-                end,
-            )
-        });
+        let next_cursor = (end < paths.len())
+            .then(|| encode_cursor(&request.session_id, &cursor_scope, &revision, end));
         Ok(ArchiveChildrenPageDto {
             session_id: request.session_id,
-            revision: record.snapshot.revision.clone(),
+            revision,
             parent_path,
             entries,
             next_cursor,
@@ -351,6 +404,11 @@ impl ArchiveIndexRegistry {
         if record.snapshot.status == ArchiveIndexStatusDto::Indexing {
             return Err(CommandErrorDto::operation_failed(
                 "Archive search becomes available when indexing is complete.",
+            ));
+        }
+        if archive_browser::supports_on_demand_directories(&record.snapshot.archive_path) {
+            return Err(CommandErrorDto::operation_failed(
+                "Search is not currently supported for on-demand archives.",
             ));
         }
         let index = record
@@ -639,6 +697,7 @@ impl ArchiveIndex {
         Self {
             entries: HashMap::new(),
             children,
+            loaded_directories: std::collections::HashSet::new(),
             entry_count: 0,
             total_bytes: 0,
             has_total: false,
@@ -647,6 +706,16 @@ impl ArchiveIndex {
     }
 
     fn insert(&mut self, browser_entry: BrowserEntry) -> Result<(), CommandErrorDto> {
+        let path = normalize_archive_path(&browser_entry.path);
+        if path.is_empty() {
+            return Ok(());
+        }
+
+        // Ensure idempotency to prevent double-counting statistics on reload/race
+        if self.entries.contains_key(&path) {
+            return Ok(());
+        }
+
         self.entry_count = self.entry_count.saturating_add(1);
         if self.entry_count > MAX_ARCHIVE_INDEX_ENTRIES {
             return Err(CommandErrorDto::operation_failed(format!(
@@ -656,10 +725,6 @@ impl ArchiveIndex {
         if let Some(size) = browser_entry.size {
             self.total_bytes = self.total_bytes.saturating_add(size);
             self.has_total = true;
-        }
-        let path = normalize_archive_path(&browser_entry.path);
-        if path.is_empty() {
-            return Ok(());
         }
         self.estimated_metadata_bytes = self
             .estimated_metadata_bytes
@@ -1422,6 +1487,7 @@ mod tests {
             .insert(
                 "archive-1".to_string(),
                 SessionRecord {
+                    password: None,
                     snapshot: stale_snapshot,
                     sender: stale_sender,
                     index: Arc::new(Mutex::new(stale_build.index)),
@@ -1436,6 +1502,7 @@ mod tests {
             .insert(
                 "archive-2".to_string(),
                 SessionRecord {
+                    password: None,
                     snapshot,
                     sender,
                     index: Arc::new(Mutex::new(build.index)),
@@ -1459,8 +1526,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn pages_are_bounded_and_cursors_are_scoped_to_the_parent_and_revision() {
+    #[tokio::test]
+    async fn pages_are_bounded_and_cursors_are_scoped_to_the_parent_and_revision() {
         let listing = BrowserListing {
             entries: (0..600)
                 .map(|index| entry(format!("file{index}.txt"), BrowserEntryKind::File))
@@ -1489,6 +1556,7 @@ mod tests {
             .insert(
                 session_id.clone(),
                 SessionRecord {
+                    password: None,
                     snapshot,
                     sender,
                     index: Arc::new(Mutex::new(build.index)),
@@ -1505,18 +1573,21 @@ mod tests {
                 sort_key: None,
                 sort_ascending: None,
             })
+            .await
             .expect("first page");
         assert_eq!(first.entries.len(), MAX_ARCHIVE_PAGE_SIZE);
         assert!(!first.complete);
 
-        let stale = registry.children(ArchiveChildrenRequest {
-            session_id,
-            parent_path: "different".to_string(),
-            cursor: first.next_cursor,
-            limit: Some(1),
-            sort_key: None,
-            sort_ascending: None,
-        });
+        let stale = registry
+            .children(ArchiveChildrenRequest {
+                session_id,
+                parent_path: "different".to_string(),
+                cursor: first.next_cursor,
+                limit: Some(1),
+                sort_key: None,
+                sort_ascending: None,
+            })
+            .await;
         assert_eq!(
             stale.expect_err("cursor must be parent-scoped").code,
             "invalid_request"
@@ -1524,14 +1595,16 @@ mod tests {
 
         // Cursors carry their own revision signature so stale-revision
         // mismatches are tolerated without an explicit expected_revision field.
-        let older_revision = registry.children(ArchiveChildrenRequest {
-            session_id: "archive-test".to_string(),
-            parent_path: String::new(),
-            cursor: None,
-            limit: Some(1),
-            sort_key: None,
-            sort_ascending: None,
-        });
+        let older_revision = registry
+            .children(ArchiveChildrenRequest {
+                session_id: "archive-test".to_string(),
+                parent_path: String::new(),
+                cursor: None,
+                limit: Some(1),
+                sort_key: None,
+                sort_ascending: None,
+            })
+            .await;
         assert!(
             older_revision.is_ok(),
             "mismatched revision should be tolerated"
@@ -1540,14 +1613,16 @@ mod tests {
         registry
             .close("archive-test")
             .expect("session should close");
-        let after_close = registry.children(ArchiveChildrenRequest {
-            session_id: "archive-test".to_string(),
-            parent_path: String::new(),
-            cursor: None,
-            limit: Some(1),
-            sort_key: None,
-            sort_ascending: None,
-        });
+        let after_close = registry
+            .children(ArchiveChildrenRequest {
+                session_id: "archive-test".to_string(),
+                parent_path: String::new(),
+                cursor: None,
+                limit: Some(1),
+                sort_key: None,
+                sort_ascending: None,
+            })
+            .await;
         assert_eq!(
             after_close.expect_err("closed session is gone").code,
             "not_found"
@@ -1578,6 +1653,7 @@ mod tests {
             .insert(
                 session_id.clone(),
                 SessionRecord {
+                    password: None,
                     snapshot,
                     sender,
                     index: Arc::new(Mutex::new(ArchiveIndex::new())),
@@ -1644,6 +1720,21 @@ mod tests {
             elapsed.as_millis(),
             MAX_ARCHIVE_INDEX_METADATA_BYTES,
             MAX_ARCHIVE_PAGE_SIZE,
+        );
+    }
+    #[test]
+    fn insert_is_idempotent_and_does_not_double_count() {
+        let mut index = ArchiveIndex::new();
+        let e1 = entry("docs/a.txt".to_string(), BrowserEntryKind::File);
+
+        index.insert(e1.clone()).unwrap();
+        assert_eq!(index.entry_count, 1);
+
+        // Insert again
+        index.insert(e1).unwrap();
+        assert_eq!(
+            index.entry_count, 1,
+            "Duplicate insert should not increment entry count"
         );
     }
 }

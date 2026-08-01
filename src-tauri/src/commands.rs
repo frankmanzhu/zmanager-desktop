@@ -284,11 +284,11 @@ pub async fn wait_archive_index(
 }
 
 #[tauri::command]
-pub fn get_archive_children(
+pub async fn get_archive_children(
     request: crate::dto::ArchiveChildrenRequest,
     registry: State<'_, ArchiveIndexRegistry>,
 ) -> Result<crate::dto::ArchiveChildrenPageDto, CommandErrorDto> {
-    registry.children(request)
+    registry.children(request).await
 }
 
 #[tauri::command]
