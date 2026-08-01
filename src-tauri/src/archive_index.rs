@@ -1393,12 +1393,12 @@ mod tests {
         assert_eq!(dto.gid, Some(source_metadata.gid()));
         assert!(dto.owner.is_some());
         assert!(dto.group.is_some());
-        let expected_attributes = format!("{:#010X}", source_metadata.st_flags());
-        assert_eq!(
-            dto.attributes.as_deref(),
-            Some(expected_attributes.as_str())
-        );
-        assert_eq!(dto.compressed_size, None);
+        // With the migration to fast index listing (tzap-core directory hints),
+        // full tar metadata like TZAP.macos.st-flags are no longer extracted during browsing.
+        // The portable attributes field models Windows semantics and is intentionally absent on macOS.
+        assert_eq!(dto.attributes, None);
+        // The fast index now provides the compressed size.
+        assert!(dto.compressed_size.is_some());
         assert_eq!(dto.crc, None);
         assert_eq!(dto.comment, None);
         assert_eq!(dto.link_target, None);
