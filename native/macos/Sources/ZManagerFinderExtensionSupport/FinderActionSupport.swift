@@ -159,19 +159,7 @@ public struct FinderRequestTransport: Sendable {
         do {
             let inbox = try resolveInbox(identifier)
             let openURL: OpenURL = { url in
-                let config = NSWorkspace.OpenConfiguration()
-                config.createsNewApplicationInstance = true
-                config.environment = ["ZMANAGER_MACOS_QUICK_ACTION": "1"]
-                if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: ZManagerConstants.mainBundleIdentifier) {
-                    NSWorkspace.shared.open(
-                        [url],
-                        withApplicationAt: appURL,
-                        configuration: config,
-                        completionHandler: nil
-                    )
-                    return true
-                }
-                return NSWorkspace.shared.open(url)
+                NSWorkspace.shared.open(url)
             }
             return .available(
                 FinderRequestTransport(

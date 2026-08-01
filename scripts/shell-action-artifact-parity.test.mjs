@@ -99,13 +99,9 @@ test("compatibility-only actions stay outside parity context menus", () => {
   }
 });
 
-test("macOS Finder quick actions launch an isolated application instance", () => {
+test("macOS Finder quick actions route callback URLs to the singleton application instance", () => {
   assert.match(
     macosFinderActionSupport,
-    /config\.createsNewApplicationInstance\s*=\s*true/,
-  );
-  assert.match(
-    macosFinderActionSupport,
-    /config\.environment\s*=\s*\["ZMANAGER_MACOS_QUICK_ACTION":\s*"1"\]/,
+    /NSWorkspace\.shared\.open\(url\)/,
   );
 });
