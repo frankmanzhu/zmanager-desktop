@@ -80,10 +80,40 @@ function Resolve-GitCommand {
 
 $git = Resolve-GitCommand
 
+# ── zmanager-desktop ───────────────────────────────────────────────────
+
+$zmanagerDesktopDir = if ($env:ZMANAGER_DESKTOP_DIR) { $env:ZMANAGER_DESKTOP_DIR } else { Join-Path $parentDir "zmanager-desktop" }
+
+if (Test-Path (Join-Path $repoRoot ".git")) {
+    Write-Host "Updating zmanager-desktop repository at: $repoRoot"
+    try {
+        Invoke-Native -FilePath $git -Arguments @("-C", $repoRoot, "pull")
+    } catch {
+        Write-Host "Warning: git pull failed for zmanager-desktop at ${repoRoot}: $_"
+    }
+}
+
+if ($zmanagerDesktopDir -ne $repoRoot -and (Test-Path (Join-Path $zmanagerDesktopDir ".git"))) {
+    Write-Host "Updating sibling zmanager-desktop repository at: $zmanagerDesktopDir"
+    try {
+        Invoke-Native -FilePath $git -Arguments @("-C", $zmanagerDesktopDir, "pull")
+    } catch {
+        Write-Host "Warning: git pull failed for zmanager-desktop at ${zmanagerDesktopDir}: $_"
+    }
+}
+
 # ── tzap ───────────────────────────────────────────────────────────────
 
 if (Test-Path $tzapDir) {
     Write-Host "tzap sibling found at: $tzapDir"
+    if (Test-Path (Join-Path $tzapDir ".git")) {
+        Write-Host "Updating tzap repository at: $tzapDir"
+        try {
+            Invoke-Native -FilePath $git -Arguments @("-C", $tzapDir, "pull")
+        } catch {
+            Write-Host "Warning: git pull failed for tzap at ${tzapDir}: $_"
+        }
+    }
 } else {
     Write-Host "Cloning tzap ($tzapRef) into: $tzapDir"
     Invoke-Native -FilePath $git -Arguments @(
@@ -101,6 +131,14 @@ if ($SkipZmanager) {
 
 if (Test-Path $zmanagerDir) {
     Write-Host "zmanager sibling found at: $zmanagerDir"
+    if (Test-Path (Join-Path $zmanagerDir ".git")) {
+        Write-Host "Updating zmanager repository at: $zmanagerDir"
+        try {
+            Invoke-Native -FilePath $git -Arguments @("-C", $zmanagerDir, "pull")
+        } catch {
+            Write-Host "Warning: git pull failed for zmanager at ${zmanagerDir}: $_"
+        }
+    }
 } else {
     Write-Host "Cloning zmanager ($zmanagerRef) into: $zmanagerDir"
     Invoke-Native -FilePath $git -Arguments @(

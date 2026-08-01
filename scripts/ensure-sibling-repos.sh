@@ -63,10 +63,28 @@ while (($#)); do
   shift
 done
 
+# ── zmanager-desktop ───────────────────────────────────────────────────
+
+zmanager_desktop_dir="${ZMANAGER_DESKTOP_DIR:-$parent_dir/zmanager-desktop}"
+
+if [[ -d "$repo_root/.git" ]]; then
+  echo "Updating zmanager-desktop repository at: $repo_root"
+  git -C "$repo_root" pull || echo "Warning: git pull failed for zmanager-desktop at $repo_root"
+fi
+
+if [[ "$zmanager_desktop_dir" != "$repo_root" && -d "$zmanager_desktop_dir/.git" ]]; then
+  echo "Updating sibling zmanager-desktop at: $zmanager_desktop_dir"
+  git -C "$zmanager_desktop_dir" pull || echo "Warning: git pull failed for zmanager-desktop at $zmanager_desktop_dir"
+fi
+
 # ── tzap ───────────────────────────────────────────────────────────────
 
 if [[ -d "$tzap_dir" ]]; then
   echo "tzap sibling found at: $tzap_dir"
+  if [[ -d "$tzap_dir/.git" ]]; then
+    echo "Updating tzap repository at: $tzap_dir"
+    git -C "$tzap_dir" pull || echo "Warning: git pull failed for tzap at $tzap_dir"
+  fi
 else
   echo "Cloning tzap ($tzap_ref) into: $tzap_dir"
   git clone --depth 1 --branch "$tzap_ref" "$tzap_repo" "$tzap_dir"
@@ -82,6 +100,10 @@ fi
 
 if [[ -d "$zmanager_dir" ]]; then
   echo "zmanager sibling found at: $zmanager_dir"
+  if [[ -d "$zmanager_dir/.git" ]]; then
+    echo "Updating zmanager repository at: $zmanager_dir"
+    git -C "$zmanager_dir" pull || echo "Warning: git pull failed for zmanager at $zmanager_dir"
+  fi
 else
   echo "Cloning zmanager ($zmanager_ref) into: $zmanager_dir"
   git clone --depth 1 --branch "$zmanager_ref" "$zmanager_repo" "$zmanager_dir"
