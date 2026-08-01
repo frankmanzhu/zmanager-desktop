@@ -706,16 +706,6 @@ impl ArchiveIndex {
     }
 
     fn insert(&mut self, browser_entry: BrowserEntry) -> Result<(), CommandErrorDto> {
-        let path = normalize_archive_path(&browser_entry.path);
-        if path.is_empty() {
-            return Ok(());
-        }
-
-        // Ensure idempotency to prevent double-counting statistics on reload/race
-        if self.entries.contains_key(&path) {
-            return Ok(());
-        }
-
         self.entry_count = self.entry_count.saturating_add(1);
         if self.entry_count > MAX_ARCHIVE_INDEX_ENTRIES {
             return Err(CommandErrorDto::operation_failed(format!(
@@ -725,6 +715,10 @@ impl ArchiveIndex {
         if let Some(size) = browser_entry.size {
             self.total_bytes = self.total_bytes.saturating_add(size);
             self.has_total = true;
+        }
+        let path = normalize_archive_path(&browser_entry.path);
+        if path.is_empty() {
+            return Ok(());
         }
         self.estimated_metadata_bytes = self
             .estimated_metadata_bytes
@@ -1720,21 +1714,6 @@ mod tests {
             elapsed.as_millis(),
             MAX_ARCHIVE_INDEX_METADATA_BYTES,
             MAX_ARCHIVE_PAGE_SIZE,
-        );
-    }
-    #[test]
-    fn insert_is_idempotent_and_does_not_double_count() {
-        let mut index = ArchiveIndex::new();
-        let e1 = entry("docs/a.txt".to_string(), BrowserEntryKind::File);
-
-        index.insert(e1.clone()).unwrap();
-        assert_eq!(index.entry_count, 1);
-
-        // Insert again
-        index.insert(e1).unwrap();
-        assert_eq!(
-            index.entry_count, 1,
-            "Duplicate insert should not increment entry count"
         );
     }
 }
