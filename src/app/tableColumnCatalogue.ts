@@ -86,6 +86,7 @@ export type TableColumnDefinition = Readonly<{
   id: TableColumnId;
   scope: TableColumnScope;
   labelKey: MessageKey;
+  tooltipKey?: MessageKey;
   align: "left" | "right" | "center";
   /** Column cannot be hidden through header menu or preferences */
   alwaysVisible?: boolean;
@@ -103,13 +104,13 @@ export const TABLE_COLUMN_CATALOGUE: readonly TableColumnDefinition[] = [
   { id: "modified",     scope: "common",   labelKey: "table.modified",              align: "left" },
   { id: "created",      scope: "common",   labelKey: "table.created",               align: "left" },
   { id: "accessed",     scope: "common",   labelKey: "table.accessed",              align: "left" },
-  { id: "attributes",   scope: "common",   labelKey: "table.attributes",            align: "left" },
   { id: "mode",         scope: "common",   labelKey: "detail.mode",                 align: "right" },
   { id: "linkTarget",   scope: "common",   labelKey: "table.linkTarget",            align: "left" },
   { id: "uid",          scope: "common",   labelKey: "table.uid",                   align: "right" },
   { id: "gid",          scope: "common",   labelKey: "table.gid",                   align: "right" },
   { id: "owner",        scope: "common",   labelKey: "table.owner",                 align: "left" },
   { id: "group",        scope: "common",   labelKey: "table.group",                 align: "left" },
+  { id: "attributes",   scope: "common",   labelKey: "table.attributes",            tooltipKey: "table.attributes.tooltip", align: "left" },
   // Compress-only (ID 14)
   { id: "sourcePath",   scope: "compress", labelKey: "table.sourcePath",            align: "left" },
   // Extract-only (IDs 15–22)

@@ -51,8 +51,8 @@ describe("WP1 — Unified column catalogue", () => {
     const ids = TABLE_COLUMN_CATALOGUE.map((c) => c.id);
     const expected: TableColumnId[] = [
       "name", "kind", "size", "modified",
-      "created", "accessed", "attributes", "mode",
-      "linkTarget", "uid", "gid", "owner", "group",
+      "created", "accessed", "mode",
+      "linkTarget", "uid", "gid", "owner", "group", "attributes",
       "sourcePath",
       "compressedSize", "encrypted", "method", "crc",
       "comment", "ratio", "solid", "metadataDiagnostics",
@@ -65,9 +65,14 @@ describe("WP1 — Unified column catalogue", () => {
     expect(common.length).toBe(13);
     expect(common.map((c) => c.id)).toEqual([
       "name", "kind", "size", "modified",
-      "created", "accessed", "attributes", "mode",
-      "linkTarget", "uid", "gid", "owner", "group",
+      "created", "accessed", "mode",
+      "linkTarget", "uid", "gid", "owner", "group", "attributes",
     ]);
+  });
+
+  it("attributes definition includes tooltipKey", () => {
+    const def = getColumnDefinition("attributes");
+    expect(def?.tooltipKey).toBe("table.attributes.tooltip");
   });
 
   it("has exactly 1 compress-only column", () => {

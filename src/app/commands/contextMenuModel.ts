@@ -19,6 +19,9 @@ import {
   type CreateSourceColumnId,
   type CreateSourceColumnSettings,
 } from "../createTableColumns";
+import {
+  getColumnDefinition,
+} from "../tableColumnCatalogue";
 import type { Translator } from "../i18n/translator";
 
 export const CONTEXT_MENU_ACTIONS = [
@@ -279,12 +282,15 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
       .filter((column) => availableSet.has(column.id))
       .map((column) => {
         const isNameColumn = column.id === "name";
+        const def = getColumnDefinition(column.id);
+        const title = def?.tooltipKey ? input.translator.t(def.tooltipKey) : undefined;
         return checkboxItem(archiveTableColumnLabel(column, input.translator), {
           action: "toggle-column",
           columnId: column.id,
         }, {
           checked: isNameColumn || normalizedSettings.visibleColumnIds.includes(column.id),
           disabled: isNameColumn,
+          title,
         });
       }),
   );
@@ -320,12 +326,15 @@ export function buildCreateHeaderContextMenuItems(input: CreateHeaderContextMenu
       .filter((column) => availableSet.has(column.id))
       .map((column) => {
         const isNameColumn = column.id === "name";
+        const def = getColumnDefinition(column.id);
+        const title = def?.tooltipKey ? input.translator.t(def.tooltipKey) : undefined;
         return checkboxItem(createTableColumnLabel(column, input.translator), {
           action: "toggle-column",
           columnId: column.id,
         }, {
           checked: isNameColumn || normalizedSettings.visibleColumnIds.includes(column.id),
           disabled: isNameColumn,
+          title,
         });
       }),
   );

@@ -61,7 +61,7 @@ impl LaunchInstanceMode {
     }
 
     pub fn registers_single_instance(self) -> bool {
-        cfg!(target_os = "linux") || self == Self::NormalSingleton
+        crate::platform::quick_action_registers_single_instance(self == Self::NormalSingleton)
     }
 }
 const TZAP_EXTENSION_SUFFIX: &str = ".tzap";

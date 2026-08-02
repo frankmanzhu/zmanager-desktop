@@ -1592,6 +1592,7 @@ function ColumnsPage({
 }>) {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
   const visibility = snapshot.columnVisibilityDraft;
 
   if (!visibility) {
@@ -1620,6 +1621,7 @@ function ColumnsPage({
       </p>
       <GroupedColumnPreferences
         visibility={visibility}
+        i18n={i18n}
         onChange={(newVisibility) => {
           actions.handleDialogIntent({
             type: "columnVisibilityPatch",

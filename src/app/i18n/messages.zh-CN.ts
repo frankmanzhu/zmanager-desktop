@@ -118,6 +118,7 @@ export const zhCnMessages = {
   "table.include": "包含",
   "table.accessed": "访问时间",
   "table.attributes": "属性",
+  "table.attributes.tooltip": "Windows 文件系统属性。在 macOS 和 Linux 上，这些值将为空。",
   "table.encrypted": "已加密",
   "table.method": "方法",
   "table.crc": "CRC",

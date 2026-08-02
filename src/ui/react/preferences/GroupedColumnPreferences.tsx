@@ -12,19 +12,30 @@ import { TABLE_COLUMN_CATALOGUE, type TableColumnId, type TableColumnDefinition 
 import { ALL_ARCHIVE_FORMAT_FAMILIES, preferredSuffixForFamily, type ArchiveFormatFamily } from "../../../app/archiveFormatFamily";
 import type { TableColumnVisibilityPreferences } from "../../../app/tableColumnPreferences";
 
+import type { Translator } from "../../../app/i18n/translator";
+
 type Props = Readonly<{
   /** Current visibility preferences (may be draft) */
   visibility: TableColumnVisibilityPreferences;
   /** Called when the user toggles a global column or changes a family override */
   onChange: (patch: TableColumnVisibilityPreferences) => void;
+  /** Optional translator for localized labels and tooltips */
+  i18n?: Translator;
 }>;
 
 const COMMON_COLUMNS: readonly TableColumnDefinition[] = TABLE_COLUMN_CATALOGUE.filter((c: TableColumnDefinition) => c.scope === "common");
 const COMPRESS_ONLY_COLUMNS: readonly TableColumnDefinition[] = TABLE_COLUMN_CATALOGUE.filter((c: TableColumnDefinition) => c.scope === "compress");
 const EXTRACT_ONLY_COLUMNS: readonly TableColumnDefinition[] = TABLE_COLUMN_CATALOGUE.filter((c: TableColumnDefinition) => c.scope === "extract");
 
-export function GroupedColumnPreferences({ visibility, onChange }: Props) {
+export function GroupedColumnPreferences({ visibility, onChange, i18n }: Props) {
   const [selectedFamily, setSelectedFamily] = useState<string>("");
+
+  const getTooltip = (col: TableColumnDefinition): string | undefined => {
+    if (!col.tooltipKey) return undefined;
+    if (i18n) return i18n.t(col.tooltipKey);
+    if (col.id === "attributes") return "Windows filesystem attributes. On macOS and Linux, these values will be empty.";
+    return undefined;
+  };
 
   const globalVisible = new Set<TableColumnId>(visibility.visibleColumnIds as readonly TableColumnId[]);
 
@@ -96,7 +107,7 @@ export function GroupedColumnPreferences({ visibility, onChange }: Props) {
         </p>
         <div className="grid gap-2">
           {COMMON_COLUMNS.map((col: TableColumnDefinition) => (
-            <label key={col.id} className="flex items-center gap-2 text-sm font-medium">
+            <label key={col.id} className="flex items-center gap-2 text-sm font-medium" title={getTooltip(col)}>
               <Checkbox
                 checked={globalVisible.has(col.id)}
                 disabled={col.alwaysVisible}
@@ -116,7 +127,7 @@ export function GroupedColumnPreferences({ visibility, onChange }: Props) {
         </p>
         <div className="grid gap-2">
           {COMPRESS_ONLY_COLUMNS.map((col: TableColumnDefinition) => (
-            <label key={col.id} className="flex items-center gap-2 text-sm font-medium">
+            <label key={col.id} className="flex items-center gap-2 text-sm font-medium" title={getTooltip(col)}>
               <Checkbox
                 checked={globalVisible.has(col.id)}
                 disabled={col.alwaysVisible}
@@ -136,7 +147,7 @@ export function GroupedColumnPreferences({ visibility, onChange }: Props) {
         </p>
         <div className="grid gap-2">
           {EXTRACT_ONLY_COLUMNS.map((col: TableColumnDefinition) => (
-            <label key={col.id} className="flex items-center gap-2 text-sm font-medium">
+            <label key={col.id} className="flex items-center gap-2 text-sm font-medium" title={getTooltip(col)}>
               <Checkbox
                 checked={globalVisible.has(col.id)}
                 disabled={col.alwaysVisible}

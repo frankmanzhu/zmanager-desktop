@@ -145,6 +145,7 @@ export const enMessages = {
   "table.include": "Include",
   "table.accessed": "Accessed",
   "table.attributes": "Attributes",
+  "table.attributes.tooltip": "Windows filesystem attributes. On macOS and Linux, these values will be empty.",
   "table.encrypted": "Encrypted",
   "table.method": "Method",
   "table.crc": "CRC",

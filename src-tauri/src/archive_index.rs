@@ -1305,7 +1305,6 @@ mod tests {
     #[test]
     fn real_tzap_listing_populates_desktop_dto_metadata() {
         use std::fs;
-        use std::os::macos::fs::MetadataExt as _;
         use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
         use std::time::{SystemTime, UNIX_EPOCH};
         use zmanager_core::jobs::{CancellationToken, JobContext};

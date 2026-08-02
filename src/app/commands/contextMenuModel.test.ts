@@ -168,6 +168,10 @@ describe("context menu model", () => {
     // All compress-applicable columns appear in the header menu when unfiltered
     expect(checkboxes.map((item) => item.payload.columnId)).toContain("created");
     expect(checkboxes.map((item) => item.payload.columnId)).toContain("accessed");
+    expect(checkboxes.find((item) => item.payload.columnId === "attributes")).toEqual(expect.objectContaining({
+      payload: { action: "toggle-column", columnId: "attributes" },
+      title: "Windows filesystem attributes. On macOS and Linux, these values will be empty.",
+    }));
   });
 
   it("filters create header menu columns to the backend capability set", () => {

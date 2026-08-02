@@ -98,8 +98,13 @@ TypeScript never adds availability based on OS detection. The selected output fo
 **Metadata sources** (collected from `source_path` via `std::fs::symlink_metadata` during DTO mapping):
 - `created` — `Metadata::created()` (all platforms)
 - `accessed` — `Metadata::accessed()` (all platforms)
-- `attributes` — human-readable BSD `st_flags` on macOS and `FILE_ATTRIBUTE_*` values on Windows
+- `attributes` — human-readable BSD `st_flags` on macOS and `FILE_ATTRIBUTE_*` values on Windows during source file scanning
 - `mode` — `PermissionSnapshot.unix_mode` from core planner (Unix)
 - `linkTarget` — `ManifestEntry.symlink_target` from core planner (Unix)
 - `uid`, `gid` — `MetadataExt::uid()`/`gid()` (Unix)
 - `owner`, `group` — `getpwuid_r`/`getgrgid_r` name resolution (Unix)
+
+> [!NOTE]
+> **Platform Attribute Semantics (`attributes` vs `st_flags`)**:
+> - **Compress Table (Source Files)**: `attributes` is populated from local filesystem metadata during scanning — BSD `st_flags` on macOS and `FILE_ATTRIBUTE_*` on Windows.
+> - **Extract Table (`zm list`)**: `attributes` in fast index listing (`zm list --json`) models portable Windows-compatible attributes (`FILE_ATTRIBUTE_*`). For `.tzap` archives on macOS, native BSD `st_flags` are stored in PAX header extensions (`TZAP.macos.st-flags`) and fully restored on disk during extraction (`zm extract`), while fast index listing exposes `attributes: null` unless portable Windows attributes exist.

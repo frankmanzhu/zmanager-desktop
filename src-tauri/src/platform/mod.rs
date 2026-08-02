@@ -359,6 +359,13 @@ pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog
     let _ = diagnostics;
 }
 
+pub fn quick_action_registers_single_instance(is_normal_singleton: bool) -> bool {
+    #[cfg(target_os = "linux")]
+    return true;
+    #[cfg(not(target_os = "linux"))]
+    is_normal_singleton
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

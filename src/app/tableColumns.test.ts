@@ -87,13 +87,13 @@ describe("unified table columns", () => {
         "modified",
         "created",
         "accessed",
-        "attributes",
         "mode",
         "linkTarget",
         "uid",
         "gid",
         "owner",
         "group",
+        "attributes",
         "sourcePath",
       ]);
     });

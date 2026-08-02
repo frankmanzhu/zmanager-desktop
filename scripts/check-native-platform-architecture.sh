@@ -22,7 +22,7 @@ production_rust_before_tests() {
   awk '
     pending_test_attribute && /^[[:space:]]*mod tests[[:space:]]*\{/ { exit }
     pending_test_attribute { pending_test_attribute = 0 }
-    /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ { pending_test_attribute = 1; next }
+    /^[[:space:]]*#\[cfg\(.*test.*\)\][[:space:]]*$/ { pending_test_attribute = 1; next }
     { print }
   ' "$1"
 }
