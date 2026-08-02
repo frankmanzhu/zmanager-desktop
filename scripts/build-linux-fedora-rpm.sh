@@ -29,7 +29,7 @@ Options:
   --install-deps  Install required Fedora build packages, Node.js, and Rust.
   --skip-tests    Skip frontend and Rust tests before packaging.
   --allow-non-baseline
-                  Allow local/test builds outside Fedora.
+                  Allow local/test builds outside Fedora (retained for compatibility).
   --no-install    Build and stage the .rpm without reinstalling it.
   -h, --help      Show this help.
 EOF
@@ -75,20 +75,8 @@ check_release_baseline() {
     return
   fi
 
-  if ((allow_non_baseline)); then
-    echo "Warning: building outside the Fedora RPM release baseline: ${pretty_name:-unknown OS}" >&2
-    echo "Use this package for local testing only; build release .rpm artifacts on Fedora." >&2
-    return
-  fi
-
-  cat >&2 <<EOF
-Release .rpm builds must run on Fedora.
-Current build OS: ${pretty_name:-unknown OS}
-
-Build on a Fedora machine/VM for release packages, or rerun with
---allow-non-baseline for a local test package only.
-EOF
-  exit 1
+  echo "Warning: building outside the Fedora RPM release baseline: ${pretty_name:-unknown OS}" >&2
+  echo "Use this package for local testing only; build release .rpm artifacts on Fedora." >&2
 }
 
 check_release_baseline

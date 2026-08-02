@@ -31,7 +31,7 @@ Options:
   --install-deps  Install required Ubuntu build packages, Node.js, and Rust.
   --skip-tests    Skip frontend and Rust tests before packaging.
   --allow-non-baseline
-                  Allow local/test builds outside Ubuntu 22.04 jammy.
+                  Allow local/test builds outside Ubuntu 22.04 jammy (retained for compatibility).
   --no-install    Build and stage the .deb without reinstalling it.
   -h, --help      Show this help.
 EOF
@@ -78,20 +78,8 @@ check_release_baseline() {
     return
   fi
 
-  if ((allow_non_baseline)); then
-    echo "Warning: building outside the Ubuntu 22.04 jammy release baseline: ${pretty_name:-unknown OS}" >&2
-    echo "Use this package for local testing only; build release .deb artifacts on Ubuntu 22.04." >&2
-    return
-  fi
-
-  cat >&2 <<EOF
-Release .deb builds must run on Ubuntu 22.04 LTS (jammy).
-Current build OS: ${pretty_name:-unknown OS}
-
-Build on an Ubuntu 22.04 amd64 machine/VM/container for release packages, or
-rerun with --allow-non-baseline for a local test package only.
-EOF
-  exit 1
+  echo "Warning: building outside the Ubuntu 22.04 jammy release baseline: ${pretty_name:-unknown OS}" >&2
+  echo "Use this package for local testing only; build release .deb artifacts on Ubuntu 22.04." >&2
 }
 
 check_release_baseline

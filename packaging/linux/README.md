@@ -34,8 +34,8 @@ scripts/build-linux-ubuntu-deb.sh
 Release `.deb` artifacts must be built on Ubuntu 22.04 LTS (jammy), preferably
 on amd64 for the primary x86_64 package. Ubuntu 22.04 is the runtime baseline.
 Building on Ubuntu 24.04 or newer can produce binaries linked against newer
-system libraries than Ubuntu 22.04 has. The build script enforces the Jammy
-baseline by default; use `--allow-non-baseline` only for local test packages.
+system libraries than Ubuntu 22.04 has. When building outside Ubuntu 22.04 jammy,
+the script automatically prints a warning and proceeds for local testing.
 
 The build script prints both the canonical bundle artifact and an apt-readable
 copy staged under `/tmp/zmanager-desktop-deb/`, then reinstalls the staged copy
@@ -61,8 +61,8 @@ scripts/build-linux-fedora-rpm.sh
 
 Release `.rpm` artifacts should be built on Fedora. Linux builds inherit the
 build machine's glibc floor, so use the oldest Fedora release you intend to
-support for release packages. The build script enforces Fedora by default; use
-`--allow-non-baseline` only for local test packages.
+support for release packages. When building outside Fedora, the script
+automatically prints a warning and proceeds for local testing.
 
 The RPM script prints both the canonical bundle artifact and a dnf-readable copy
 staged under `/tmp/zmanager-desktop-rpm/`, then installs or reinstalls the

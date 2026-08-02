@@ -136,7 +136,7 @@ PATH="$bin_dir:$PATH" \
 HOME="$test_root/home" \
 ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
 ZMANAGER_DEB_STAGE_DIR="$stage_dir" \
-  bash scripts/build-linux-ubuntu-deb.sh --install-deps --skip-tests --allow-non-baseline --no-install
+  bash scripts/build-linux-ubuntu-deb.sh --install-deps --skip-tests --no-install
 
 if grep -q 'sudo -n' "$log_file"; then
   echo "Expected --install-deps not to use sudo -n." >&2
@@ -216,7 +216,7 @@ PATH="$bin_dir:$PATH" \
 HOME="$test_root/home" \
 CARGO_TARGET_DIR="$fedora_target_dir" \
 ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
-  bash scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --allow-non-baseline --no-install
+  bash scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --no-install
 
 fedora_install_line="$(grep '^dnf install -y ' "$log_file")"
 fedora_libarchive_packages=(
