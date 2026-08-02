@@ -113,37 +113,42 @@ function TzapVerification() {
 
       <label className="mt-3 grid gap-1 text-[11px] font-medium">
         <span>{i18n.t("extract.tzapVerification.mode")}</span>
-        <select
+        <Select
           value={verification.validateTrust ? "trust" : "signature"}
           disabled={busy}
-          onChange={(event) =>
+          onValueChange={(value) =>
             actions.handleArchiveIntent({
               type: "setTzapVerificationOptions",
-              patch: { validateTrust: event.currentTarget.value === "trust" },
+              patch: { validateTrust: value === "trust" },
             })
           }
         >
-          <option value="signature">
-            {i18n.t("extract.tzapVerification.signatureOnly")}
-          </option>
-          <option value="trust">
-            {i18n.t("extract.tzapVerification.validateTrust")}
-          </option>
-        </select>
+          <SelectTrigger id="tzap-verification-mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="signature">
+              {i18n.t("extract.tzapVerification.signatureOnly")}
+            </SelectItem>
+            <SelectItem value="trust">
+              {i18n.t("extract.tzapVerification.validateTrust")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </label>
 
       {verification.validateTrust ? (
         <div className="mt-3 grid gap-2 rounded-lg bg-black/[0.025] p-2 dark:bg-white/[0.035]">
           <label className="flex items-center gap-2 text-[11px]">
-            <input
-              type="checkbox"
+            <Checkbox
+              id="tzap-official-root"
               checked={verification.includeOfficialTzapRoot}
               disabled={busy}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 actions.handleArchiveIntent({
                   type: "setTzapVerificationOptions",
                   patch: {
-                    includeOfficialTzapRoot: event.currentTarget.checked,
+                    includeOfficialTzapRoot: checked === true,
                   },
                 })
               }
@@ -151,14 +156,14 @@ function TzapVerification() {
             <span>{i18n.t("extract.tzapVerification.officialRoot")}</span>
           </label>
           <label className="flex items-center gap-2 text-[11px]">
-            <input
-              type="checkbox"
+            <Checkbox
+              id="tzap-system-roots"
               checked={verification.trustedSystemRoots}
               disabled={busy}
-              onChange={(event) =>
+              onCheckedChange={(checked) =>
                 actions.handleArchiveIntent({
                   type: "setTzapVerificationOptions",
-                  patch: { trustedSystemRoots: event.currentTarget.checked },
+                  patch: { trustedSystemRoots: checked === true },
                 })
               }
             />
@@ -308,63 +313,66 @@ function ExtractOptions() {
             {i18n.t("extract.pathMode")}
             <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
           </span>
-          <select
-            className="min-w-0 w-full"
-            id="extract-path-mode"
+          <Select
             value={options.pathMode}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleArchiveIntent({
                 type: "setExtractOptions",
                 patch: {
-                  pathMode: event.currentTarget
-                    .value as typeof options.pathMode,
+                  pathMode: value as typeof options.pathMode,
                 },
               })
             }
           >
-            <option value="full">{i18n.t("extract.pathMode.full")}</option>
-            <option value="current">
-              {i18n.t("extract.pathMode.current")}
-            </option>
-            <option value="none">{i18n.t("extract.pathMode.none")}</option>
-          </select>
+            <SelectTrigger id="extract-path-mode" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="full">{i18n.t("extract.pathMode.full")}</SelectItem>
+              <SelectItem value="current">
+                {i18n.t("extract.pathMode.current")}
+              </SelectItem>
+              <SelectItem value="none">{i18n.t("extract.pathMode.none")}</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
         <label className="!grid-cols-1 !items-stretch !gap-1.5">
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
             {i18n.t("extract.overwritePolicy")}
             <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
           </span>
-          <select
-            className="min-w-0 w-full"
-            id="extract-overwrite"
+          <Select
             value={options.overwrite}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleArchiveIntent({
                 type: "setExtractOptions",
                 patch: {
-                  overwrite: event.currentTarget
-                    .value as typeof options.overwrite,
+                  overwrite: value as typeof options.overwrite,
                 },
               })
             }
           >
-            <option value="refuse">{i18n.t("extract.overwrite.refuse")}</option>
-            <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
-            <option value="rename">{i18n.t("extract.overwrite.rename")}</option>
-            <option value="replace">
-              {i18n.t("extract.overwrite.replace")}
-            </option>
-          </select>
+            <SelectTrigger id="extract-overwrite" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="refuse">{i18n.t("extract.overwrite.refuse")}</SelectItem>
+              <SelectItem value="ask">{i18n.t("extract.overwrite.ask")}</SelectItem>
+              <SelectItem value="rename">{i18n.t("extract.overwrite.rename")}</SelectItem>
+              <SelectItem value="replace">
+                {i18n.t("extract.overwrite.replace")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </label>
         <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-          <input
+          <Checkbox
             id="extract-deduplicate-root"
-            type="checkbox"
             checked={options.deduplicateRoot}
-            onChange={(event) =>
+            onCheckedChange={(checked) =>
               actions.handleArchiveIntent({
                 type: "setExtractOptions",
-                patch: { deduplicateRoot: event.currentTarget.checked },
+                patch: { deduplicateRoot: checked === true },
               })
             }
           />
@@ -374,14 +382,13 @@ function ExtractOptions() {
           </span>
         </label>
         <label className="grid min-h-10 grid-cols-[auto_1fr] items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-          <input
+          <Checkbox
             id="extract-ignore-symlinks"
-            type="checkbox"
             checked={options.ignoreSymlinks}
-            onChange={(event) =>
+            onCheckedChange={(checked) =>
               actions.handleArchiveIntent({
                 type: "setExtractOptions",
-                patch: { ignoreSymlinks: event.currentTarget.checked },
+                patch: { ignoreSymlinks: checked === true },
               })
             }
           />

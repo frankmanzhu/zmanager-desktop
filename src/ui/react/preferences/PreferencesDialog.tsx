@@ -311,26 +311,29 @@ function FoldersPage({
           {i18n.t("preferences.folders.workingOutput")}
         </label>
         <div className={SETTING_CONTROL_CLASS}>
-          <select
-            id="pref-output-location"
+          <Select
             value={draft.defaultOutputLocation}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleDialogIntent({
                 type: "preferencesPatch",
                 patch: {
-                  defaultOutputLocation: event.currentTarget
-                    .value as AppPreferences["defaultOutputLocation"],
+                  defaultOutputLocation: value as AppPreferences["defaultOutputLocation"],
                 },
               })
             }
           >
-            <option value="sourceFolder">
-              {i18n.t("preferences.folders.sourceFolder")}
-            </option>
-            <option value="customFolder">
-              {i18n.t("preferences.folders.customFolder")}
-            </option>
-          </select>
+            <SelectTrigger id="pref-output-location">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sourceFolder">
+                {i18n.t("preferences.folders.sourceFolder")}
+              </SelectItem>
+              <SelectItem value="customFolder">
+                {i18n.t("preferences.folders.customFolder")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <p className={SETTING_DESCRIPTION_CLASS}>
             <span className={QUICK_BADGE_CLASS}>
               {i18n.t("preferences.quickActions.badge")}
@@ -534,9 +537,9 @@ function ArchiveDefaultsPage({
               id="pref-create-compression-level"
               value={defaults.compressionLevel}
               i18n={i18n}
-              onChange={(event) =>
+              onChange={(value) =>
                 patchCreateDefaults(actions, selectedCreateFormat, {
-                  compressionLevel: optionalNumber(event.currentTarget.value),
+                  compressionLevel: optionalNumber(value),
                 })
               }
             />
@@ -547,22 +550,26 @@ function ArchiveDefaultsPage({
             {i18n.t("create.splitSize")}
           </label>
           <div className={SETTING_CONTROL_CLASS}>
-            <select
-              id="pref-create-volume"
-              value={defaults.volumeSize ?? ""}
-              onChange={(event) =>
+            <Select
+              value={defaults.volumeSize ? String(defaults.volumeSize) : "noSplit"}
+              onValueChange={(value) =>
                 patchCreateDefaults(actions, selectedCreateFormat, {
-                  volumeSize: optionalPositiveNumber(event.currentTarget.value),
+                  volumeSize: optionalPositiveNumber(value === "noSplit" ? "" : value),
                 })
               }
             >
-              <option value="">{i18n.t("create.noSplit")}</option>
-              {volumeSizeChoices.map((bytes) => (
-                <option value={bytes} key={bytes}>
-                  {formatVolumeSize(bytes)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="pref-create-volume">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="noSplit">{i18n.t("create.noSplit")}</SelectItem>
+                {volumeSizeChoices.map((bytes) => (
+                  <SelectItem value={String(bytes)} key={bytes}>
+                    {formatVolumeSize(bytes)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div
@@ -604,19 +611,22 @@ function ArchiveDefaultsPage({
             {i18n.t("create.zipCompression")}
           </label>
           <div className={SETTING_CONTROL_CLASS}>
-            <select
-              id="pref-create-zip-compression"
+            <Select
               value={defaults.zipCompression ?? "deflate"}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 patchCreateDefaults(actions, selectedCreateFormat, {
-                  zipCompression: event.currentTarget.value as
-                    "store" | "deflate",
+                  zipCompression: value as "store" | "deflate",
                 })
               }
             >
-              <option value="deflate">Deflate</option>
-              <option value="store">{i18n.t("common.store")}</option>
-            </select>
+              <SelectTrigger id="pref-create-zip-compression">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="deflate">Deflate</SelectItem>
+                <SelectItem value="store">{i18n.t("common.store")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div
@@ -1008,29 +1018,32 @@ function ExtractionPage({
           {i18n.t("preferences.archiveDefaults.defaultExtraction")}
         </label>
         <div className={SETTING_CONTROL_CLASS}>
-          <select
-            id="pref-default-extraction"
+          <Select
             value={draft.defaultExtractionBehavior}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleDialogIntent({
                 type: "preferencesPatch",
                 patch: {
-                  defaultExtractionBehavior: event.currentTarget
-                    .value as AppPreferences["defaultExtractionBehavior"],
+                  defaultExtractionBehavior: value as AppPreferences["defaultExtractionBehavior"],
                 },
               })
             }
           >
-            <option value="askEveryTime">
-              {i18n.t("preferences.extraction.askEveryTime")}
-            </option>
-            <option value="extractHere">
-              {i18n.t("preferences.extraction.extractHere")}
-            </option>
-            <option value="extractToFolder">
-              {i18n.t("preferences.extraction.extractToFolder")}
-            </option>
-          </select>
+            <SelectTrigger id="pref-default-extraction">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="askEveryTime">
+                {i18n.t("preferences.extraction.askEveryTime")}
+              </SelectItem>
+              <SelectItem value="extractHere">
+                {i18n.t("preferences.extraction.extractHere")}
+              </SelectItem>
+              <SelectItem value="extractToFolder">
+                {i18n.t("preferences.extraction.extractToFolder")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <p className={SETTING_DESCRIPTION_CLASS}>
             <span className={QUICK_BADGE_CLASS}>
               {i18n.t("preferences.quickActions.badge")}
@@ -1046,25 +1059,28 @@ function ExtractionPage({
             <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
           </label>
           <div className={SETTING_CONTROL_CLASS}>
-            <select
-              id="pref-extract-path-mode"
+            <Select
               value={draft.defaultExtractPathMode}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 actions.handleDialogIntent({
                   type: "preferencesPatch",
                   patch: {
-                    defaultExtractPathMode: event.currentTarget
-                      .value as AppPreferences["defaultExtractPathMode"],
+                    defaultExtractPathMode: value as AppPreferences["defaultExtractPathMode"],
                   },
                 })
               }
             >
-              <option value="full">{i18n.t("extract.pathMode.full")}</option>
-              <option value="current">
-                {i18n.t("extract.pathMode.current")}
-              </option>
-              <option value="none">{i18n.t("extract.pathMode.none")}</option>
-            </select>
+              <SelectTrigger id="pref-extract-path-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="full">{i18n.t("extract.pathMode.full")}</SelectItem>
+                <SelectItem value="current">
+                  {i18n.t("extract.pathMode.current")}
+                </SelectItem>
+                <SelectItem value="none">{i18n.t("extract.pathMode.none")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className={SETTING_ROW_CLASS}>
@@ -1073,30 +1089,35 @@ function ExtractionPage({
             <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
           </label>
           <div className={SETTING_CONTROL_CLASS}>
-            <select
-              id="pref-extract-overwrite"
+            <Select
               value={draft.defaultExtractOverwrite}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 actions.handleDialogIntent({
                   type: "preferencesPatch",
                   patch: {
-                    defaultExtractOverwrite: event.currentTarget
-                      .value as AppPreferences["defaultExtractOverwrite"],
+                    defaultExtractOverwrite: value as AppPreferences["defaultExtractOverwrite"],
                   },
                 })
               }
             >
-              <option value="refuse">
-                {i18n.t("extract.overwrite.refuse")}
-              </option>
-              <option value="ask">{i18n.t("extract.overwrite.ask")}</option>
-              <option value="rename">
-                {i18n.t("extract.overwrite.rename")}
-              </option>
-              <option value="replace">
-                {i18n.t("extract.overwrite.replace")}
-              </option>
-            </select>
+              <SelectTrigger id="pref-extract-overwrite">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="refuse">
+                  {i18n.t("extract.overwrite.refuse")}
+                </SelectItem>
+                <SelectItem value="ask">
+                  {i18n.t("extract.overwrite.ask")}
+                </SelectItem>
+                <SelectItem value="rename">
+                  {i18n.t("extract.overwrite.rename")}
+                </SelectItem>
+                <SelectItem value="replace">
+                  {i18n.t("extract.overwrite.replace")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className={SETTING_ROW_CLASS}>
@@ -1327,26 +1348,30 @@ function InterfacePage({
           {i18n.t("preferences.language.title")}
         </label>
         <div className={SETTING_CONTROL_CLASS}>
-          <select
-            id="pref-language"
+          <Select
             value={draft.locale}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleDialogIntent({
                 type: "preferencesPatch",
                 patch: {
-                  locale: event.currentTarget.value as AppPreferences["locale"],
+                  locale: value as AppPreferences["locale"],
                 },
               })
             }
           >
-            <option value="system">
-              {i18n.t("preferences.language.systemDefault")}
-            </option>
-            <option value="en">{i18n.t("preferences.language.english")}</option>
-            <option value="zh-CN">
-              {i18n.t("preferences.language.chineseSimplified")}
-            </option>
-          </select>
+            <SelectTrigger id="pref-language">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="system">
+                {i18n.t("preferences.language.systemDefault")}
+              </SelectItem>
+              <SelectItem value="en">{i18n.t("preferences.language.english")}</SelectItem>
+              <SelectItem value="zh-CN">
+                {i18n.t("preferences.language.chineseSimplified")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </section>
@@ -1379,26 +1404,29 @@ function SafetyPage({
           {i18n.t("preferences.archiveDefaults.previewCleanup")}
         </label>
         <div className={SETTING_CONTROL_CLASS}>
-          <select
-            id="pref-preview-cleanup"
+          <Select
             value={draft.previewCleanupPolicy}
-            onChange={(event) =>
+            onValueChange={(value) =>
               actions.handleDialogIntent({
                 type: "preferencesPatch",
                 patch: {
-                  previewCleanupPolicy: event.currentTarget
-                    .value as AppPreferences["previewCleanupPolicy"],
+                  previewCleanupPolicy: value as AppPreferences["previewCleanupPolicy"],
                 },
               })
             }
           >
-            <option value="beforeNextPreview">
-              {i18n.t("preferences.previewCleanup.beforeNextPreview")}
-            </option>
-            <option value="whenAppCloses">
-              {i18n.t("preferences.previewCleanup.whenAppCloses")}
-            </option>
-          </select>
+            <SelectTrigger id="pref-preview-cleanup">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="beforeNextPreview">
+                {i18n.t("preferences.previewCleanup.beforeNextPreview")}
+              </SelectItem>
+              <SelectItem value="whenAppCloses">
+                {i18n.t("preferences.previewCleanup.whenAppCloses")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       {snapshot.defaultHandlers.status !== "idle" ? (
@@ -1476,12 +1504,11 @@ function PreferenceCheckbox({
 }>) {
   return (
     <label className={TOGGLE_LINE_CLASS}>
-      <input
+      <Checkbox
         id={id}
-        type="checkbox"
         checked={checked}
         disabled={disabled}
-        onChange={(event) => onChange(event.currentTarget.checked)}
+        onCheckedChange={(c) => onChange(c === true)}
       />{" "}
       <span className="flex items-center gap-1">
         {label}
@@ -1503,17 +1530,21 @@ function FormatSelect({
   isMacOs: boolean;
 }>) {
   return (
-    <select
-      id={id}
+    <Select
       value={value}
-      onChange={(event) => onChange(event.currentTarget.value as CreateFormat)}
+      onValueChange={(newValue) => onChange(newValue as CreateFormat)}
     >
-      {supportedCreateFormats(isMacOs).map((format) => (
-        <option key={format} value={format}>
-          {FORMAT_LABELS[format]}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger id={id}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {supportedCreateFormats(isMacOs).map((format) => (
+          <SelectItem key={format} value={format}>
+            {FORMAT_LABELS[format]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

@@ -30,7 +30,15 @@ import {
 import type { Translator } from "../../../app/i18n/translator";
 import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
+import { Checkbox } from "../../components/ui/checkbox";
 import { InfoTip } from "../../components/ui/info-tip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { nativeIconDataUrlForPath } from "../systemFileIcons";
 import type {
@@ -1076,23 +1084,26 @@ function CreateOptions() {
             <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 [@media(max-height:560px)]:!hidden">
               {i18n.t("create.archiveFormat")}
             </span>
-            <select
-              className="w-full"
-              id="create-format"
+            <Select
               value={options.format}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 actions.handleCreateIntent({
                   type: "changeFormat",
-                  format: event.currentTarget.value as typeof options.format,
+                  format: value as typeof options.format,
                 })
               }
             >
-              {supportedCreateFormats(snapshot.runtime.isMacOs).map((format) => (
-                <option key={format} value={format}>
-                  {FORMAT_LABELS[format] ?? format}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="create-format" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {supportedCreateFormats(snapshot.runtime.isMacOs).map((format) => (
+                  <SelectItem key={format} value={format}>
+                    {FORMAT_LABELS[format] ?? format}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="!grid-cols-1 !items-stretch !gap-1.5">
             <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 [@media(max-height:560px)]:!hidden">
@@ -1103,10 +1114,10 @@ function CreateOptions() {
               className="w-full"
               value={options.compressionLevel}
               i18n={i18n}
-              onChange={(event) =>
+              onChange={(value) =>
                 actions.handleCreateIntent({
                   type: "setOptions",
-                  patch: { compressionLevel: event.currentTarget.value },
+                  patch: { compressionLevel: value },
                 })
               }
             />
@@ -1272,45 +1283,59 @@ function CreateOptions() {
                 hidden={!capabilities.splitVolumes}
               >
                 <span>{i18n.t("create.splitSize")}</span>
-                <select
-                  id="create-volume"
-                  value={options.volumeSize ?? ""}
-                  onChange={(event) =>
+                <Select
+                  value={
+                    options.volumeSize !== null &&
+                    options.volumeSize !== undefined
+                      ? String(options.volumeSize)
+                      : "noSplit"
+                  }
+                  onValueChange={(value) =>
                     actions.handleCreateIntent({
                       type: "setOptions",
-                      patch: { volumeSize: event.currentTarget.value },
+                      patch: { volumeSize: value === "noSplit" ? "" : value },
                     })
                   }
                 >
-                  <option value="">{i18n.t("create.noSplit")}</option>
-                  {volumeSizeChoices.map((bytes) => (
-                    <option value={bytes} key={bytes}>
-                      {formatVolumeSize(bytes)}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="create-volume">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="noSplit">{i18n.t("create.noSplit")}</SelectItem>
+                    {volumeSizeChoices.map((bytes) => (
+                      <SelectItem value={String(bytes)} key={bytes}>
+                        {formatVolumeSize(bytes)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </label>
               <label
                 className={ADVANCED_FIELD_CLASS}
                 hidden={!capabilities.zipCompression}
               >
                 <span>{i18n.t("create.zipCompression")}</span>
-                <select
-                  id="create-zip-compression"
+                <Select
                   value={options.zipCompression}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     actions.handleCreateIntent({
                       type: "setOptions",
                       patch: {
-                        zipCompression: event.currentTarget.value as
-                          "store" | "deflate",
+                        zipCompression: value as
+                          | "store"
+                          | "deflate",
                       },
                     })
                   }
                 >
-                  <option value="deflate">Deflate</option>
-                  <option value="store">{i18n.t("common.store")}</option>
-                </select>
+                  <SelectTrigger id="create-zip-compression">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deflate">Deflate</SelectItem>
+                    <SelectItem value="store">{i18n.t("common.store")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
               <label
                 className={ADVANCED_FIELD_CLASS}

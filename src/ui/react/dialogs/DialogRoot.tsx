@@ -574,51 +574,57 @@ function ExtractDialog({
                     {i18n.t("extract.pathMode")}
                     <InfoTip content={i18n.t("extract.pathMode.tooltip")} />
                   </span>
-                  <select
-                    id="extract-path-mode"
+                  <Select
                     value={pathMode}
-                    onChange={(event) =>
-                      setPathMode(event.currentTarget.value as typeof pathMode)
+                    onValueChange={(value) =>
+                      setPathMode(value as typeof pathMode)
                     }
                   >
-                    <option value="full">
-                      {i18n.t("extract.pathMode.full")}
-                    </option>
-                    <option value="current">
-                      {i18n.t("extract.pathMode.current")}
-                    </option>
-                    <option value="none">
-                      {i18n.t("extract.pathMode.none")}
-                    </option>
-                  </select>
+                    <SelectTrigger id="extract-path-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">
+                        {i18n.t("extract.pathMode.full")}
+                      </SelectItem>
+                      <SelectItem value="current">
+                        {i18n.t("extract.pathMode.current")}
+                      </SelectItem>
+                      <SelectItem value="none">
+                        {i18n.t("extract.pathMode.none")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label>
                   <span className="inline-flex items-center gap-1">
                     {i18n.t("extract.overwritePolicy")}
                     <InfoTip content={i18n.t("extract.overwritePolicy.tooltip")} />
                   </span>
-                  <select
-                    id="browse-overwrite"
+                  <Select
                     value={overwrite}
-                    onChange={(event) =>
-                      setOverwrite(
-                        event.currentTarget.value as typeof overwrite,
-                      )
+                    onValueChange={(value) =>
+                      setOverwrite(value as typeof overwrite)
                     }
                   >
-                    <option value="refuse">
-                      {i18n.t("extract.overwrite.refuse")}
-                    </option>
-                    <option value="ask">
-                      {i18n.t("extract.overwrite.ask")}
-                    </option>
-                    <option value="rename">
-                      {i18n.t("extract.overwrite.rename")}
-                    </option>
-                    <option value="replace">
-                      {i18n.t("extract.overwrite.replace")}
-                    </option>
-                  </select>
+                    <SelectTrigger id="browse-overwrite">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="refuse">
+                        {i18n.t("extract.overwrite.refuse")}
+                      </SelectItem>
+                      <SelectItem value="ask">
+                        {i18n.t("extract.overwrite.ask")}
+                      </SelectItem>
+                      <SelectItem value="rename">
+                        {i18n.t("extract.overwrite.rename")}
+                      </SelectItem>
+                      <SelectItem value="replace">
+                        {i18n.t("extract.overwrite.replace")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label>
                   <span className="inline-flex items-center gap-1">

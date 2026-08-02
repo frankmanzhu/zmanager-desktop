@@ -1,13 +1,18 @@
-import type { ChangeEventHandler } from "react";
-
 import type { Translator } from "../../../app/i18n/translator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../components/ui/select";
 
 type CompressionLevelSelectProps = Readonly<{
   id: string;
   className?: string;
   value: number | null;
   i18n: Translator;
-  onChange: ChangeEventHandler<HTMLSelectElement>;
+  onChange: (value: string) => void;
 }>;
 
 export function CompressionLevelSelect({
@@ -18,20 +23,25 @@ export function CompressionLevelSelect({
   onChange,
 }: CompressionLevelSelectProps) {
   return (
-    <select
-      id={id}
-      className={className}
-      value={value ?? ""}
-      onChange={onChange}
+    <Select
+      value={value === null ? "default" : String(value)}
+      onValueChange={(newValue) =>
+        onChange(newValue === "default" ? "" : newValue)
+      }
     >
-      <option value="">
-        {i18n.t("preferences.archiveDefaults.backendDefault")}
-      </option>
-      <option value="0">{i18n.t("common.store")}</option>
-      <option value="1">{i18n.t("common.fastest")}</option>
-      <option value="3">{i18n.t("common.fast")}</option>
-      <option value="9">{i18n.t("common.maximum")}</option>
-      <option value="22">{i18n.t("common.ultra")}</option>
-    </select>
+      <SelectTrigger id={id} className={className}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="default">
+          {i18n.t("preferences.archiveDefaults.backendDefault")}
+        </SelectItem>
+        <SelectItem value="0">{i18n.t("common.store")}</SelectItem>
+        <SelectItem value="1">{i18n.t("common.fastest")}</SelectItem>
+        <SelectItem value="3">{i18n.t("common.fast")}</SelectItem>
+        <SelectItem value="9">{i18n.t("common.maximum")}</SelectItem>
+        <SelectItem value="22">{i18n.t("common.ultra")}</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
