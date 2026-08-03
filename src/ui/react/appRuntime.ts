@@ -218,6 +218,7 @@ export type ZManagerCreateIntent =
       type: "chooseTzapCertificate";
       target: "recipients" | "identity" | "signer" | "privateKey" | "chain";
     }>
+  | Readonly<{ type: "validateTzapSigningIdentity"; identityPath: string; password: string }>
   | Readonly<{ type: "navigateToFolder"; folderPath: string }>
   | Readonly<{ type: "setSearchQuery"; query: string }>
   | Readonly<{ type: "clearSearch" }>
@@ -270,11 +271,7 @@ export type ZManagerCreateIntent =
       passwordConfirm: string;
       signingIdentityPassword: string;
     }>
-  | Readonly<{
-      type: "generateTzapIdentity";
-      commonName: string;
-      password: string;
-    }>;
+;
 
 export type ZManagerDialogIntent =
   | Readonly<{ type: "extract"; mode: ExtractMode }>
@@ -319,6 +316,7 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "infoAction"; action?: string; copyValue?: string }>
   | Readonly<{ type: "copyAboutDiagnostics" }>
   | Readonly<{ type: "preferencesPatch"; patch: AppPreferencePatch }>
+  | Readonly<{ type: "preferencesSaveDirectPatch"; patch: AppPreferencePatch }>
   | Readonly<{
       type: "preferencesCreateDefaultsPatch";
       format: CreateWorkspaceSnapshot["options"]["format"];
@@ -326,15 +324,6 @@ export type ZManagerDialogIntent =
     }>
   | Readonly<{ type: "preferencesChooseOutput" }>
   | Readonly<{ type: "preferencesChooseExtractOutput" }>
-  | Readonly<{
-      type: "preferencesChooseTzapSigningFile";
-      target: "identity" | "certificate" | "privateKey" | "chain";
-    }>
-  | Readonly<{
-      type: "preferencesGenerateTzapIdentity";
-      commonName: string;
-      password: string;
-    }>
   | Readonly<{ type: "defaultHandlersRefresh" }>
   | Readonly<{ type: "defaultHandlersSet" }>
   | Readonly<{ type: "defaultHandlersRestore" }>
@@ -380,8 +369,15 @@ export type ZManagerAccountIntent =
   | Readonly<{ type: "beginHostedAuth"; local?: boolean }>
   | Readonly<{ type: "forget" }>
   | Readonly<{ type: "generateRecipientKey"; label?: string }>
+  | Readonly<{ type: "generateSigningIdentity"; commonName: string; label?: string }>
+  | Readonly<{ type: "importSigningIdentity"; password: string; label?: string }>
+  | Readonly<{ type: "createSelfSignedCertificateStore"; commonName: string }>
+  | Readonly<{ type: "removeSigningIdentity"; id: string }>
   | Readonly<{ type: "removeRecipientKey"; id: string }>
-  | Readonly<{ type: "removeContact"; id: string }>;
+  | Readonly<{ type: "setDefaultSigningIdentity"; id: string }>
+  | Readonly<{ type: "removeContact"; id: string }>
+  | Readonly<{ type: "inspectContactCard"; contactCard: string }>
+  | Readonly<{ type: "acceptContactCard"; contactCard: string }>;
 
 export type ZManagerContextMenuIntent =
   | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>

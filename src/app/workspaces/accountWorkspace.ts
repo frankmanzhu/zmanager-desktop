@@ -1,9 +1,10 @@
-import type { AccountSnapshotDto } from "../../api/types";
+import type { AccountContactCardPreviewDto, AccountSnapshotDto } from "../../api/types";
 
 export type AccountWorkspaceSnapshot = Readonly<AccountSnapshotDto & {
   visible: boolean;
   busy: boolean;
   notice: string;
+  contactCardPreview: AccountContactCardPreviewDto | null;
 }>;
 
 export type AccountWorkspace = Readonly<{
@@ -12,12 +13,20 @@ export type AccountWorkspace = Readonly<{
   close(): AccountWorkspaceSnapshot;
   setBusy(value: boolean): AccountWorkspaceSnapshot;
   setNotice(value: string): AccountWorkspaceSnapshot;
+  setContactCardPreview(value: AccountContactCardPreviewDto | null): AccountWorkspaceSnapshot;
   replace(value: AccountSnapshotDto): AccountWorkspaceSnapshot;
 }>;
 
 const EMPTY: AccountSnapshotDto = {
   authStatus: "signedOut",
   pendingState: null,
+  defaultSigningIdentityId: null,
+  capabilities: {
+    auth: "launch_only",
+    enrollment: "unavailable",
+    status: "offline_cache_only",
+    accountManagement: "external_browser",
+  },
   certificates: [],
   recipientKeys: [],
   contacts: [],
@@ -27,6 +36,7 @@ export function createAccountWorkspace(): AccountWorkspace {
   let visible = false;
   let busy = false;
   let notice = "";
+  let contactCardPreview: AccountContactCardPreviewDto | null = null;
   let value = EMPTY;
 
   function getSnapshot(): AccountWorkspaceSnapshot {
@@ -35,6 +45,7 @@ export function createAccountWorkspace(): AccountWorkspace {
       certificates: Object.freeze([...value.certificates]) as unknown as AccountSnapshotDto["certificates"],
       recipientKeys: Object.freeze([...value.recipientKeys]) as unknown as AccountSnapshotDto["recipientKeys"],
       contacts: Object.freeze([...value.contacts]) as unknown as AccountSnapshotDto["contacts"],
+      contactCardPreview,
       visible,
       busy,
       notice,
@@ -47,6 +58,7 @@ export function createAccountWorkspace(): AccountWorkspace {
     close() { visible = false; return getSnapshot(); },
     setBusy(next) { busy = next; return getSnapshot(); },
     setNotice(next) { notice = next; return getSnapshot(); },
+    setContactCardPreview(next) { contactCardPreview = next; return getSnapshot(); },
     replace(next) { value = next; return getSnapshot(); },
   };
 }

@@ -80,6 +80,7 @@ function createEffects(
     changeFormat: vi.fn(),
     setOptions: vi.fn(),
     chooseTzapCertificate: vi.fn(),
+    validateTzapSigningIdentity: vi.fn(),
     navigateToFolder: vi.fn(),
     setSearchQuery: vi.fn(),
     clearSearch: vi.fn(),
@@ -97,7 +98,6 @@ function createEffects(
     setColumnWidth: vi.fn(),
     reorderColumn: vi.fn(),
     runCreate: vi.fn(),
-    generateTzapIdentity: vi.fn(),
     ...overrides,
   };
 }

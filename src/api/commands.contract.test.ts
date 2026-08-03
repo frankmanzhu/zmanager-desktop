@@ -69,14 +69,81 @@ const COMMAND_WRAPPERS = [
     call: () => api.generateAccountRecipientKey("Personal"),
   },
   {
+    command: "account_generate_signing_identity",
+    request: {
+      commonName: "Local Signing Identity",
+      label: "Local",
+    },
+    call: () => api.generateAccountSigningIdentity({
+      commonName: "Local Signing Identity",
+      label: "Local",
+    }),
+  },
+  {
+    command: "account_import_signing_identity",
+    request: { identityPath: "C:/certs/imported.p12", password: "bundle-password", label: "Imported" },
+    call: () => api.importAccountSigningIdentity({
+      identityPath: "C:/certs/imported.p12",
+      password: "bundle-password",
+      label: "Imported",
+    }),
+  },
+  {
+    command: "account_install_signing_certificate",
+    request: {
+      identityId: "signing-local-1",
+      certificateId: "certificate-online-1",
+      certificateChainDer: [[1, 2, 3]],
+      issuerCertificateSha256: "sha256:issuer",
+      issuerKeyIdentifier: "key-id",
+      serialNumber: "serial-1",
+      notBeforeUnixSeconds: 1,
+      notAfterUnixSeconds: 2,
+      assuranceLevel: "enrolled",
+      signDeviceId: "device-1",
+    },
+    call: () => api.installAccountSigningCertificate({
+      identityId: "signing-local-1",
+      certificateId: "certificate-online-1",
+      certificateChainDer: [[1, 2, 3]],
+      issuerCertificateSha256: "sha256:issuer",
+      issuerKeyIdentifier: "key-id",
+      serialNumber: "serial-1",
+      notBeforeUnixSeconds: 1,
+      notAfterUnixSeconds: 2,
+      assuranceLevel: "enrolled",
+      signDeviceId: "device-1",
+    }),
+  },
+  {
+    command: "account_remove_signing_identity",
+    request: { id: "signing-local-1" },
+    call: () => api.removeAccountSigningIdentity("signing-local-1"),
+  },
+  {
     command: "account_remove_recipient_key",
     request: { id: "recipient-1" },
     call: () => api.removeAccountRecipientKey("recipient-1"),
   },
   {
+    command: "account_set_default_signing_identity",
+    request: { id: "identity-1" },
+    call: () => api.setDefaultAccountSigningIdentity("identity-1"),
+  },
+  {
     command: "account_remove_contact",
     request: { id: "contact-1" },
     call: () => api.removeAccountContact("contact-1"),
+  },
+  {
+    command: "account_inspect_contact_card",
+    request: { contactCard: { version: 1 } },
+    call: () => api.inspectAccountContactCard({ version: 1 }),
+  },
+  {
+    command: "account_accept_contact_card",
+    request: { contactCard: { version: 1 } },
+    call: () => api.acceptAccountContactCard({ version: 1 }),
   },
   {
     command: "start_archive_index",
@@ -186,9 +253,9 @@ const COMMAND_WRAPPERS = [
     }),
   },
   {
-    command: "generate_tzap_identity",
-    request: { identityPath: "C:/certs/signer.p12", certificatePath: "C:/certs/signer.crt", commonName: "Signer" },
-    call: () => api.generateTzapIdentity({ identityPath: "C:/certs/signer.p12", certificatePath: "C:/certs/signer.crt", commonName: "Signer" }),
+    command: "validate_tzap_signing_identity",
+    request: { identityPath: "C:/certs/signer.p12", password: "bundle-password" },
+    call: () => api.validateTzapSigningIdentity({ identityPath: "C:/certs/signer.p12", password: "bundle-password" }),
   },
   {
     command: "preview_entry",

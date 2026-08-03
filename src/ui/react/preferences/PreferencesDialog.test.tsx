@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { preferencesWithPatch } from "../../../app/preferences";
 import { ZManagerAppRuntimeProvider } from "../AppProviders";
@@ -44,6 +45,55 @@ describe("React preferences dialog", () => {
     expect(archivePage).toContain('id="pref-create-preserve-metadata"');
     expect(archivePage).toContain('id="pref-create-replace-existing"');
     expect(archivePage).toContain('id="pref-create-prompt-password"');
+    expect(archivePage).toContain('id="pref-create-tzap-signing-default"');
+  });
+
+  it("uses the stable identity ID for TZAP signing defaults", () => {
+    const initial = createInitialZManagerReactSnapshot();
+    const snapshot = createZManagerReactSnapshot({
+      ...initial,
+      account: {
+        ...initial.account,
+        certificates: [
+          {
+            identityId: "identity-1",
+            certificateId: "certificate-1",
+            certificateSha256: "sha256:certificate-1",
+            label: "Primary signing identity",
+            state: "active",
+            assuranceLevel: "local_self_signed",
+            notAfterUnixSeconds: 2_000_000_000,
+          },
+        ],
+      },
+      preferencesDraft: preferencesWithPatch(initial.preferences, {
+        defaultArchiveFormat: "tzap",
+      }),
+    });
+    const handleDialogIntent = vi.fn();
+    const store = createZManagerAppStore(snapshot, {
+      ...noopZManagerReactActions,
+      handleDialogIntent,
+    });
+    render(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store },
+        createElement(PreferencesDialog),
+      ),
+    );
+
+    fireEvent.click(document.querySelector("#pref-create-tzap-signing-default")!);
+    const option = screen.getByRole("option", { name: "Primary signing identity" });
+    fireEvent.click(option);
+    expect(handleDialogIntent).toHaveBeenCalledWith({
+      type: "preferencesCreateDefaultsPatch",
+      format: "tzap",
+      patch: {
+        tzapSigningDefault: "identity",
+        tzapDefaultSigningIdentityId: "identity-1",
+      },
+    });
   });
 
   it("disables save and validates when custom output is selected without a path", () => {

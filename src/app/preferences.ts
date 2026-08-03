@@ -24,6 +24,7 @@ import { DEFAULT_VOLUME_SIZE_PRESETS, normalizeVolumeSizePresets } from "./volum
 export type DefaultOutputLocation = "sourceFolder" | "customFolder";
 export type DefaultExtractionBehavior = "askEveryTime" | "extractHere" | "extractToFolder";
 export type PreviewCleanupPolicy = "beforeNextPreview" | "whenAppCloses";
+export type TzapSigningDefault = "accountDefault" | "none" | "identity";
 export type FormatCreateDefaults = {
   cleanSource: boolean;
   respectGitignore?: boolean;
@@ -32,11 +33,8 @@ export type FormatCreateDefaults = {
   volumeSize: number | null;
   tzapRecoveryPercentage: number | null;
   tzapVolumeLossTolerance?: number;
-  tzapSigningMode?: "identity" | "advanced";
-  tzapSigningIdentityPath?: string;
-  tzapSigningCertificatePath?: string;
-  tzapSigningPrivateKeyPath?: string;
-  tzapSigningChainPaths?: string;
+  tzapSigningDefault?: TzapSigningDefault;
+  tzapDefaultSigningIdentityId?: string | null;
   zipCompression?: "store" | "deflate";
   sevenZSolid?: boolean;
   sevenZThreads?: number | null;
@@ -120,11 +118,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       replaceExisting: false,
       promptForPassword: false,
       tzapVolumeLossTolerance: 0,
-      tzapSigningMode: "identity",
-      tzapSigningIdentityPath: "",
-      tzapSigningCertificatePath: "",
-      tzapSigningPrivateKeyPath: "",
-      tzapSigningChainPaths: "",
+      tzapSigningDefault: "accountDefault",
+      tzapDefaultSigningIdentityId: null,
     },
     sevenZ: {
       cleanSource: true,
@@ -196,6 +191,7 @@ const EXTRACTION_BEHAVIORS = ["askEveryTime", "extractHere", "extractToFolder"] 
 const EXTRACT_PATH_MODES = ["full", "current", "none"] as const;
 const EXTRACT_OVERWRITE_POLICIES = ["refuse", "ask", "rename", "replace"] as const;
 const TZAP_RESTORE_POLICIES = ["content", "portable", "sameOs", "system"] as const;
+const TZAP_SIGNING_DEFAULTS = ["accountDefault", "none", "identity"] as const;
 const PREVIEW_CLEANUP_POLICIES = ["beforeNextPreview", "whenAppCloses"] as const;
 const TABLE_SORT_KEYS = [
   "name",
@@ -277,6 +273,21 @@ function storedObjectBool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+function storedOptionalString(value: unknown, fallback: string | null): string | null {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function storedTzapSigningDefault(value: unknown, fallback: TzapSigningDefault): TzapSigningDefault {
+  const candidate = typeof value === "string" ? value : null;
+  return isOneOf(TZAP_SIGNING_DEFAULTS, candidate)
+    ? candidate
+    : fallback;
+}
+
 function defaultCreateFormatDefaults(cleanSource: boolean): CreateFormatDefaultsMap {
   return Object.fromEntries(
     ARCHIVE_FORMATS.map((format) => [
@@ -320,11 +331,12 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
             ...(format === "zip" ? { zipCompression: raw?.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
             ...(format === "tzap" ? {
               tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(raw?.volumeSize, raw?.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0),
-              tzapSigningMode: raw?.tzapSigningMode === "advanced" ? "advanced" as const : "identity" as const,
-              tzapSigningIdentityPath: storedString(raw?.tzapSigningIdentityPath, ""),
-              tzapSigningCertificatePath: storedString(raw?.tzapSigningCertificatePath, ""),
-              tzapSigningPrivateKeyPath: storedString(raw?.tzapSigningPrivateKeyPath, ""),
-              tzapSigningChainPaths: storedString(raw?.tzapSigningChainPaths, ""),
+              tzapSigningDefault: (() => {
+                const mode = storedTzapSigningDefault(raw?.tzapSigningDefault, fallback.tzapSigningDefault ?? "accountDefault");
+                const identityId = storedOptionalString(raw?.tzapDefaultSigningIdentityId, fallback.tzapDefaultSigningIdentityId ?? null);
+                return mode === "identity" && !identityId ? "accountDefault" : mode;
+              })(),
+              tzapDefaultSigningIdentityId: storedOptionalString(raw?.tzapDefaultSigningIdentityId, fallback.tzapDefaultSigningIdentityId ?? null),
             } : {}),
             ...(format === "sevenZ" ? {
               sevenZSolid: storedObjectBool(raw?.sevenZSolid, fallback.sevenZSolid ?? true),
@@ -575,6 +587,19 @@ export function createDefaultsForFormat(
   return preferences.createFormatDefaults[format] ?? DEFAULT_APP_PREFERENCES.createFormatDefaults[format];
 }
 
+export function resolveTzapSigningIdentityId(
+  defaults: FormatCreateDefaults,
+  accountDefaultIdentityId: string | null,
+  activeIdentityIds: readonly string[],
+): string {
+  const candidate = defaults.tzapSigningDefault === "identity"
+    ? defaults.tzapDefaultSigningIdentityId ?? ""
+    : defaults.tzapSigningDefault === "none"
+      ? ""
+      : accountDefaultIdentityId ?? "";
+  return candidate && activeIdentityIds.includes(candidate) ? candidate : "";
+}
+
 function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): CreateFormatDefaultsMap {
   return Object.fromEntries(
     ARCHIVE_FORMATS.map((format) => {
@@ -597,11 +622,12 @@ function normalizeCreateFormatDefaults(defaults: CreateFormatDefaultsMap): Creat
           ...(format === "zip" ? { zipCompression: value.zipCompression === "store" ? "store" as const : "deflate" as const } : {}),
           ...(format === "tzap" ? {
             tzapVolumeLossTolerance: storedTzapVolumeLossToleranceForSplit(value.volumeSize, value.tzapVolumeLossTolerance, fallback.tzapVolumeLossTolerance ?? 0),
-            tzapSigningMode: value.tzapSigningMode === "advanced" ? "advanced" as const : "identity" as const,
-            tzapSigningIdentityPath: value.tzapSigningIdentityPath?.trim() ?? "",
-            tzapSigningCertificatePath: value.tzapSigningCertificatePath?.trim() ?? "",
-            tzapSigningPrivateKeyPath: value.tzapSigningPrivateKeyPath?.trim() ?? "",
-            tzapSigningChainPaths: value.tzapSigningChainPaths?.trim() ?? "",
+            tzapSigningDefault: (() => {
+              const mode = storedTzapSigningDefault(value.tzapSigningDefault, fallback.tzapSigningDefault ?? "accountDefault");
+              const identityId = storedOptionalString(value.tzapDefaultSigningIdentityId, fallback.tzapDefaultSigningIdentityId ?? null);
+              return mode === "identity" && !identityId ? "accountDefault" : mode;
+            })(),
+            tzapDefaultSigningIdentityId: storedOptionalString(value.tzapDefaultSigningIdentityId, fallback.tzapDefaultSigningIdentityId ?? null),
           } : {}),
           ...(format === "sevenZ" ? {
             sevenZSolid: storedObjectBool(value.sevenZSolid, fallback.sevenZSolid ?? true),

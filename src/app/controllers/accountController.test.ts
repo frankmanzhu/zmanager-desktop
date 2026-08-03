@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createAccountWorkspace } from "../workspaces/accountWorkspace";
 import { createAccountController } from "./accountController";
 
-const empty = { authStatus: "signedOut" as const, pendingState: null, certificates: [], recipientKeys: [], contacts: [] };
+const empty = { authStatus: "signedOut" as const, pendingState: null, defaultSigningIdentityId: null, capabilities: { auth: "launch_only", enrollment: "unavailable", status: "offline_cache_only", accountManagement: "external_browser" }, certificates: [], recipientKeys: [], contacts: [] };
 
 describe("account controller", () => {
   it("loads through injected APIs and never persists callback material", async () => {
@@ -17,8 +17,16 @@ describe("account controller", () => {
       applyHostedCallback,
       forget: async () => empty,
       generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: async () => empty,
+      removeSigningIdentity: async () => empty,
       removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
       removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
       openUrl: async () => {},
       publish,
       errorMessage: String,
@@ -40,14 +48,83 @@ describe("account controller", () => {
       applyHostedCallback: async () => {},
       forget: async () => empty,
       generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: async () => empty,
+      removeSigningIdentity: async () => empty,
       removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
       removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
       openUrl: async () => {},
       publish: () => {},
       errorMessage: (error) => error instanceof Error ? error.message : "unknown",
     });
     await controller.open();
     expect(workspace.getSnapshot().notice).toBe("offline");
+    expect(workspace.getSnapshot().busy).toBe(false);
+  });
+
+  it("refreshes the hidden account snapshot without opening the Account page", async () => {
+    const workspace = createAccountWorkspace();
+    const controller = createAccountController({
+      workspace,
+      fetchSnapshot: async () => ({ ...empty, defaultSigningIdentityId: "identity-1" }),
+      beginHostedAuth: async () => ({ launchUrl: "https://login.tzap.org/auth", state: "state-1234567890", expiresAtUnixSeconds: 2 }),
+      applyHostedCallback: async () => {},
+      forget: async () => empty,
+      generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: async () => empty,
+      removeSigningIdentity: async () => empty,
+      removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
+      removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
+      openUrl: async () => {},
+      publish: () => {},
+      errorMessage: String,
+    });
+
+    await controller.refresh();
+
+    expect(workspace.getSnapshot().visible).toBe(false);
+    expect(workspace.getSnapshot().defaultSigningIdentityId).toBe("identity-1");
+  });
+
+  it("refreshes the persistent local identity without placing key material in workspace state", async () => {
+    const workspace = createAccountWorkspace();
+    const createStore = vi.fn(async () => empty);
+    const controller = createAccountController({
+      workspace,
+      fetchSnapshot: async () => empty,
+      beginHostedAuth: async () => ({ launchUrl: "https://login.tzap.org/auth", state: "state-1234567890", expiresAtUnixSeconds: 2 }),
+      applyHostedCallback: async () => {},
+      forget: async () => empty,
+      generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: createStore,
+      removeSigningIdentity: async () => empty,
+      removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
+      removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
+      openUrl: async () => {},
+      publish: () => {},
+      errorMessage: String,
+    });
+
+    await controller.createSelfSignedCertificateStore("Signer");
+
+    expect(createStore).toHaveBeenCalledWith("Signer");
     expect(workspace.getSnapshot().busy).toBe(false);
   });
 });

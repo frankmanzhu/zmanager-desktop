@@ -9,6 +9,33 @@ extraction safety remain core-owned.
 
 ## Domain glossary
 
+### Local Identity Inventory
+
+The public catalog plus native secure references to private material available
+on this installation. It is the source of truth for local signing,
+recipient-key, and trusted-contact capabilities; it is not a hosted account
+database.
+
+### Identity & Contacts workspace
+
+The React workspace that manages the local inventory: enrolled signing
+identities, recipient keys, verified trusted contacts, aliases, lifecycle
+state, and capability-aware account connection status.
+
+### Hosted Account
+
+The browser-hosted `login.tzap.org`/Account experience for cross-device
+account management, device listing, and server-side revocation. It remains a
+separate authority from the local inventory.
+
+### Secure secret handoff
+
+At archive job handoff, Rust re-resolves selected opaque local IDs, obtains
+only the required private material through a native secure-store interface,
+and passes it to `zmanager-core`. React snapshots, persisted preferences,
+catalog files, URLs, diagnostics, and command-line arguments contain no
+private key bytes or session secrets.
+
 ### Desktop Shell
 
 The complete cross-platform Tauri application: React user interface, application
@@ -202,6 +229,15 @@ Application Support state, registrations, associations, and install identity to
 the Release Bundle.
 
 ## Ownership boundaries
+
+### TZAP local identity boundary
+
+The public catalog owns metadata and references; the native secure store owns
+private signing keys, recipient keys, and hosted sessions. The desktop may
+show capability-gated local state before hosted services are available. It
+must not infer authentication from a callback URL, relay payload, or endpoint
+presence, and it must not restore the retired secret-bearing hosted-auth
+relay described by ADR 0011.
 
 ### `src/app`
 

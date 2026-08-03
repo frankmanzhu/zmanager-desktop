@@ -83,9 +83,6 @@ const TOGGLE_GRID_CLASS = "grid gap-3 lg:grid-cols-2";
 const TOGGLE_LINE_CLASS =
   "flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900/70";
 
-const IDENTITY_FIELD_CLASS =
-  "grid gap-1.5 text-[11px] font-semibold leading-4 text-slate-600 dark:text-slate-300 [&>input]:h-9 [&>input]:w-full [&>input]:text-xs [&>input]:font-normal";
-
 const PAGES: readonly Readonly<{
   id: PreferencePage;
   labelKey: Parameters<ReturnType<typeof translatorForSnapshot>["t"]>[0];
@@ -457,11 +454,19 @@ function ArchiveDefaultsPage({
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
   const defaults = createDefaultsForFormat(draft, selectedCreateFormat);
-  const [identityName, setIdentityName] = useState("TZAP Signing Identity");
-  const [identityPassword, setIdentityPassword] = useState("");
   const supportsTzapRecovery = selectedCreateFormat === "tzap";
   const supportsPassword = createFormatSupportsPassword(selectedCreateFormat);
   const capabilities = createFormatCapabilities(selectedCreateFormat);
+  const activeSigningIdentities = snapshot.account.certificates.filter(
+    (certificate) => certificate.state === "active",
+  );
+  const selectedTzapSigningDefault = defaults.tzapSigningDefault === "identity" &&
+      defaults.tzapDefaultSigningIdentityId &&
+      activeSigningIdentities.some(
+        (certificate) => certificate.identityId === defaults.tzapDefaultSigningIdentityId,
+      )
+    ? `identity:${defaults.tzapDefaultSigningIdentityId}`
+    : defaults.tzapSigningDefault ?? "accountDefault";
   const volumeSizeChoices =
     defaults.volumeSize !== null &&
     !draft.volumeSizePresets.includes(defaults.volumeSize)
@@ -689,117 +694,49 @@ function ArchiveDefaultsPage({
           <h4 className="text-xs font-semibold">
             {i18n.t("preferences.archiveDefaults.signingIdentity")}
           </h4>
-          <p className="mt-1 text-xs opacity-65">
-            {i18n.t("preferences.archiveDefaults.signingIdentityHelp")}
-          </p>
-          <div className="mt-3 grid grid-cols-2 rounded-lg bg-black/[0.06] p-1 dark:bg-white/[0.06]">
-            <button
-              type="button"
-              className={`rounded-md px-2 py-1.5 !text-xs ${defaults.tzapSigningMode !== "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`}
-              onClick={() =>
-                patchCreateDefaults(actions, "tzap", {
-                  tzapSigningMode: "identity",
-                })
-              }
+          <div className="mt-2 max-w-xl space-y-2">
+            <Select
+              value={selectedTzapSigningDefault}
+              onValueChange={(value) => {
+                if (value === "accountDefault" || value === "none") {
+                  patchCreateDefaults(actions, selectedCreateFormat, {
+                    tzapSigningDefault: value,
+                    tzapDefaultSigningIdentityId: null,
+                  });
+                  return;
+                }
+                if (value.startsWith("identity:")) {
+                  patchCreateDefaults(actions, selectedCreateFormat, {
+                    tzapSigningDefault: "identity",
+                    tzapDefaultSigningIdentityId: value.slice("identity:".length),
+                  });
+                }
+              }}
             >
-              {i18n.t("create.tzapIdentityFile")}
-            </button>
-            <button
-              type="button"
-              className={`rounded-md px-2 py-1.5 !text-xs ${defaults.tzapSigningMode === "advanced" ? "bg-blue-600 text-white shadow-sm" : "opacity-70"}`}
-              onClick={() =>
-                patchCreateDefaults(actions, "tzap", {
-                  tzapSigningMode: "advanced",
-                })
-              }
-            >
-              {i18n.t("create.tzapAdvancedIdentity")}
-            </button>
+              <SelectTrigger id="pref-create-tzap-signing-default">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="accountDefault">
+                  {i18n.t("preferences.archiveDefaults.signingAccountDefault")}
+                </SelectItem>
+                <SelectItem value="none">
+                  {i18n.t("preferences.archiveDefaults.signingNone")}
+                </SelectItem>
+                {activeSigningIdentities.map((certificate) => (
+                  <SelectItem
+                    key={certificate.identityId}
+                    value={`identity:${certificate.identityId}`}
+                  >
+                    {certificate.label || certificate.certificateId}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs opacity-65">
+              {i18n.t("preferences.archiveDefaults.signingIdentityHelp")}
+            </p>
           </div>
-          {defaults.tzapSigningMode !== "advanced" ? (
-            <div className="mt-3 grid gap-3">
-              <PreferenceSigningFile
-                label={i18n.t("create.tzapIdentityFile")}
-                value={defaults.tzapSigningIdentityPath ?? ""}
-                onChoose={() =>
-                  actions.handleDialogIntent({
-                    type: "preferencesChooseTzapSigningFile",
-                    target: "identity",
-                  })
-                }
-              />
-              <label className={IDENTITY_FIELD_CLASS}>
-                <span>{i18n.t("create.tzapIdentityName")}</span>
-                <input
-                  aria-label={i18n.t("create.tzapIdentityName")}
-                  value={identityName}
-                  onChange={(event) =>
-                    setIdentityName(event.currentTarget.value)
-                  }
-                />
-              </label>
-              <label className={IDENTITY_FIELD_CLASS}>
-                <span>{i18n.t("create.tzapIdentityPassword")}</span>
-                <input
-                  aria-label={i18n.t("create.tzapIdentityPassword")}
-                  type="password"
-                  value={identityPassword}
-                  onChange={(event) =>
-                    setIdentityPassword(event.currentTarget.value)
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="min-h-9 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 !text-[11px] !font-semibold text-blue-700 dark:text-blue-300"
-                onClick={() =>
-                  actions.handleDialogIntent({
-                    type: "preferencesGenerateTzapIdentity",
-                    commonName: identityName,
-                    password: identityPassword,
-                  })
-                }
-              >
-                {i18n.t("create.tzapCreateIdentity")}
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3 grid gap-2">
-              <PreferenceSigningFile
-                label={i18n.t("create.tzapSigningCertificate")}
-                value={defaults.tzapSigningCertificatePath ?? ""}
-                onChoose={() =>
-                  actions.handleDialogIntent({
-                    type: "preferencesChooseTzapSigningFile",
-                    target: "certificate",
-                  })
-                }
-              />
-              <PreferenceSigningFile
-                label={i18n.t("create.tzapSigningPrivateKey")}
-                value={defaults.tzapSigningPrivateKeyPath ?? ""}
-                onChoose={() =>
-                  actions.handleDialogIntent({
-                    type: "preferencesChooseTzapSigningFile",
-                    target: "privateKey",
-                  })
-                }
-              />
-              <PreferenceSigningFile
-                label={i18n.t("create.tzapSigningChain")}
-                value={defaults.tzapSigningChainPaths ?? ""}
-                onChoose={() =>
-                  actions.handleDialogIntent({
-                    type: "preferencesChooseTzapSigningFile",
-                    target: "chain",
-                  })
-                }
-              />
-              <p className="text-xs opacity-65">
-                {i18n.t("create.tzapIntermediateHelp")}
-              </p>
-            </div>
-          )}
         </section>
       ) : null}
       <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
@@ -958,40 +895,6 @@ function VolumeSizePresetEditor({
       <p className="mt-2 text-xs opacity-70">
         {i18n.t("preferences.archiveDefaults.volumeChoicesHelp")}
       </p>
-    </div>
-  );
-}
-
-function PreferenceSigningFile({
-  label,
-  value,
-  onChoose,
-}: Readonly<{ label: string; value: string; onChoose(): void }>) {
-  const display =
-    value
-      .split(/[;\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? "Not configured";
-  return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-black/10 bg-white/60 px-3 py-2.5 dark:border-white/10 dark:bg-black/10">
-      <div className="min-w-0">
-        <span className="block text-[11px] font-semibold leading-4">
-          {label}
-        </span>
-        <span
-          className="mt-0.5 block truncate text-[11px] text-slate-500 dark:text-slate-400"
-          title={value}
-        >
-          {display}
-        </span>
-      </div>
-      <button
-        type="button"
-        className="min-h-8 rounded-md px-2 py-1 !text-[11px] !font-medium hover:bg-black/5 dark:hover:bg-white/5"
-        onClick={onChoose}
-      >
-        {value ? "Change" : "Choose"}
-      </button>
     </div>
   );
 }

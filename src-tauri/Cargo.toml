@@ -9,6 +9,7 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+base64 = "0.22.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 openssl = "0.10"
@@ -23,7 +24,6 @@ zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
 zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmanager-core" }
 
 [target.'cfg(windows)'.dependencies]
-base64 = "0.22.1"
 png = "0.18.1"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
@@ -44,6 +44,7 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Shell",
 ] }
 windows-core = "0.61.2"
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -53,10 +54,13 @@ gdk = "0.18.2"
 gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
+keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 
 [patch.crates-io]
 zmanager-libarchive-sys = { path = "../../zmanager/crates/zmanager-libarchive-sys" }
 tzap-core = { path = "../../tzap/crates/tzap-core" }
 tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
 tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }
-

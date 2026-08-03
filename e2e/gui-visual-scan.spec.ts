@@ -42,6 +42,11 @@ const nativeFileIcon =
 const nativeFolderIcon =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M18 72h84l22 28h114v112H18z' fill='%23fbbf24'/%3E%3Cpath d='M18 92h220v120H18z' fill='%23f59e0b'/%3E%3C/svg%3E";
 
+async function selectRadixOption(page: Page, trigger: string, option: string) {
+  await page.locator(trigger).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 const archiveFixture: ArchiveFixture = {
   archivePath: "C:/fixtures/visual-scan.zip",
   entryCount: 5,
@@ -397,10 +402,10 @@ test("primary GUI states have visible, non-overlapping controls", async ({ page 
   await expect(page.locator("#compress-options-panel")).toBeVisible();
   await captureAndScan(page, "05-create-dialog");
 
-  await page.locator("#create-format").selectOption("sevenZ");
+  await selectRadixOption(page, "#create-format", "7Z");
   await expect(page.locator("#create-advanced-options summary")).toBeVisible();
   await page.locator("#create-advanced-options summary").click();
-  await page.locator("#create-volume").selectOption("1048576");
+  await selectRadixOption(page, "#create-volume", "1 MB");
   await page.locator("#create-password").fill("correct horse battery staple");
   await page.locator("#create-password-confirm").fill("correct horse battery staple");
   await expect(page.locator("#create-password")).toHaveAttribute("type", "password");
@@ -529,7 +534,7 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
   await dropFiles(page, ["secret-source.txt"]);
   await waitForCompressSources(page);
 
-  await page.locator("#create-format").selectOption("sevenZ");
+  await selectRadixOption(page, "#create-format", "7Z");
   await waitForCompressSources(page);
   await expect(page.locator("#create-advanced-options summary")).toBeVisible();
   await page.locator("#create-advanced-options summary").click();
@@ -538,13 +543,13 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
   await page.locator("#create-show-password").check();
   await expect(page.locator("#create-password")).toHaveAttribute("type", "text");
 
-  await page.locator("#create-format").selectOption("tarZst");
+  await selectRadixOption(page, "#create-format", "TZST");
   await waitForCompressSources(page);
   await expect(page.locator("#create-password")).toHaveCount(0);
   await page.locator("#start-create").click();
   await expect(page.locator("main")).not.toContainText("Password confirmation does not match.");
 
-  await page.locator("#create-format").selectOption("sevenZ");
+  await selectRadixOption(page, "#create-format", "7Z");
   await waitForCompressSources(page);
   await page.locator("#create-advanced-options").evaluate((element) => { (element as HTMLDetailsElement).open = true; });
   await expect(page.locator("#create-password")).toHaveValue("");
@@ -570,7 +575,7 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator("[data-pref-page-target='folders']")).toHaveAttribute("aria-selected", "true");
   await captureAndScan(page, "10-preferences-dialog");
 
-  await page.locator("#pref-output-location").selectOption("customFolder");
+  await selectRadixOption(page, "#pref-output-location", "Specified path");
   await expect(page.locator("#preferences-save")).toBeDisabled();
   const longCustomOutputPath = "C:/Users/frankzhu/Documents/Projects/ZManager/Exports/Quarterly/Archive Output";
   await page.locator("#pref-custom-output").fill(longCustomOutputPath);

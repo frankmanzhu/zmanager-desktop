@@ -6,15 +6,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use openssl::asn1::{Asn1Integer, Asn1Time};
-use openssl::bn::{BigNum, MsbOption};
+use openssl::asn1::Asn1Time;
 use openssl::hash::MessageDigest;
-use openssl::nid::Nid;
 use openssl::pkcs12::Pkcs12;
-use openssl::pkey::PKey;
-use openssl::rsa::Rsa;
-use openssl::x509::{X509, X509NameBuilder};
-use tauri::{State, WebviewWindow, ipc::Channel};
+use openssl::x509::X509;
+use tauri::{AppHandle, State, WebviewWindow, ipc::Channel};
 
 #[cfg(test)]
 use crate::dto::ArchiveListingResponse;
@@ -67,8 +63,8 @@ use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, Sev
 use zmanager_core::tar_gz_backend::{TarGzCreateOptions, TarGzCreateReport};
 use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
 use zmanager_core::tzap_backend::{
-    TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509SigningOptions,
-    TzapX509TrustOptions, inspect_tzap_x509_public_no_key_signer, verify_tzap_x509_public_no_key,
+    TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509TrustOptions,
+    inspect_tzap_x509_public_no_key_signer, verify_tzap_x509_public_no_key,
 };
 use zmanager_core::tzap_backend::{TzapRestoreOptions, TzapRestorePolicy};
 use zmanager_core::zip_backend::{ZipBackendError, ZipCreateOptions, ZipCreateReport};
@@ -417,9 +413,88 @@ fn system_time_to_epoch_seconds_string(time: SystemTime) -> Option<String> {
 #[tauri::command]
 pub fn start_create(
     request: StartCreateRequest,
+    app: AppHandle,
+    account_runtime: State<'_, crate::account::AccountRuntime>,
     registry: State<'_, JobRegistry>,
+    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
-    start_create_internal(request, &registry)
+    let is_tzap = request.format == crate::dto::ArchiveFormatDto::Tzap;
+    let has_signing_selection = request
+        .tzap_certificates
+        .as_ref()
+        .and_then(|options| options.signing_selection.as_ref())
+        .is_some();
+    let signing_selection_kind = request
+        .tzap_certificates
+        .as_ref()
+        .and_then(|options| options.signing_selection.as_ref())
+        .map(|selection| match selection {
+            crate::dto::TzapSigningSelectionDto::None => "explicitNone",
+            crate::dto::TzapSigningSelectionDto::EnrolledIdentity { .. } => "enrolledIdentity",
+            crate::dto::TzapSigningSelectionDto::OneTimePkcs12 { .. } => "oneTimePkcs12",
+            crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { .. } => {
+                "oneTimeCertificateAndKey"
+            }
+        })
+        .unwrap_or("notProvided");
+    let _ = diagnostics.record(
+        "create",
+        "requested",
+        crate::diagnostics::fields([
+            ("format", serde_json::json!(format!("{:?}", request.format))),
+            ("sourceCount", serde_json::json!(request.sources.len())),
+            (
+                "hasSigningSelection",
+                serde_json::json!(has_signing_selection),
+            ),
+            (
+                "signingSelectionKind",
+                serde_json::json!(signing_selection_kind),
+            ),
+        ]),
+    );
+    let app_for_worker = app.clone();
+    let runtime_for_worker = account_runtime.inner().clone();
+    let diagnostics_for_worker = diagnostics.inner().clone();
+    let tzap_options = request.tzap_certificates.clone();
+    let response = start_create_internal_with_resolver(request, &registry, move || {
+        if !is_tzap {
+            return Ok(None);
+        }
+        let _ = diagnostics_for_worker.record(
+            "create",
+            "signingResolutionStarted",
+            crate::diagnostics::fields([]),
+        );
+        let result = crate::account::resolve_tzap_create_inputs(
+            &app_for_worker,
+            &runtime_for_worker,
+            tzap_options.as_ref(),
+        )
+        .map(Some);
+        let _ = diagnostics_for_worker.record(
+            "create",
+            if result.is_ok() {
+                "signingResolutionCompleted"
+            } else {
+                "signingResolutionFailed"
+            },
+            crate::diagnostics::fields([]),
+        );
+        result
+    })?;
+    let _ = diagnostics.record(
+        "create",
+        "jobAccepted",
+        crate::diagnostics::fields([
+            ("jobKind", serde_json::json!(format!("{:?}", response.kind))),
+            (
+                "status",
+                serde_json::json!(format!("{:?}", response.status)),
+            ),
+        ]),
+    );
+    Ok(response)
 }
 
 fn create_progress_estimate_for_format(
@@ -442,9 +517,34 @@ fn create_progress_estimate_for_format(
     (total_entries, manifest.total_bytes)
 }
 
+fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
+    let bytes = std::fs::read(path)
+        .map_err(|error| format!("unable to read recipient certificate: {error}"))?;
+    let certificate = X509::from_pem(&bytes)
+        .or_else(|_| X509::from_der(&bytes))
+        .map_err(|error| format!("recipient certificate is invalid: {error}"))?;
+    certificate
+        .public_key()
+        .and_then(|key| key.public_key_to_der())
+        .map_err(|error| format!("recipient certificate public key is invalid: {error}"))
+}
+
+#[cfg(test)]
 pub(crate) fn start_create_internal(
     request: StartCreateRequest,
     registry: &JobRegistry,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_create_internal_with_resolver(request, registry, || Ok(None))
+}
+
+fn start_create_internal_with_resolver(
+    request: StartCreateRequest,
+    registry: &JobRegistry,
+    resolve_tzap: impl FnOnce() -> Result<
+        Option<crate::account::ResolvedTzapCreateInputs>,
+        CommandErrorDto,
+    > + Send
+    + 'static,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
     let requested_destination_path =
@@ -521,22 +621,29 @@ pub(crate) fn start_create_internal(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
     if let Some(certificates) = request.tzap_certificates.as_ref() {
-        let has_signing_certificate = certificates
-            .signing_certificate_path
-            .as_deref()
-            .is_some_and(|path| !path.trim().is_empty());
-        let has_signing_key = certificates
-            .signing_private_key_path
-            .as_deref()
-            .is_some_and(|path| !path.trim().is_empty());
-        if has_signing_certificate != has_signing_key {
+        let has_recipient_selection =
+            certificates
+                .recipient_selection
+                .as_ref()
+                .is_some_and(|selection| {
+                    !selection.recipient_key_ids.is_empty()
+                        || !selection.contact_recipient_ids.is_empty()
+                        || !selection.one_time_certificate_paths.is_empty()
+                });
+        if has_recipient_selection && password.is_some() {
             return Err(CommandErrorDto::invalid_request(
-                "TZAP signing requires both a certificate and a matching private key",
+                "TZAP recipient encryption cannot be combined with a password",
             ));
         }
-        if !certificates.recipient_certificate_paths.is_empty() && password.is_some() {
+        if let Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
+            certificate_path,
+            private_key_path,
+            ..
+        }) = certificates.signing_selection.as_ref()
+            && (certificate_path.trim().is_empty() || private_key_path.trim().is_empty())
+        {
             return Err(CommandErrorDto::invalid_request(
-                "TZAP recipient-certificate encryption cannot be combined with a password",
+                "TZAP signing requires both a certificate and a matching private key",
             ));
         }
     }
@@ -597,7 +704,6 @@ pub(crate) fn start_create_internal(
     let seven_z_threads = request.seven_z_threads.filter(|value| *value > 0);
     let seven_z_chunk_size = request.seven_z_chunk_size.filter(|value| *value > 0);
     let seven_z_encrypt_file_names = request.seven_z_encrypt_file_names.unwrap_or(true);
-    let tzap_certificates = request.tzap_certificates;
     let format = request.format;
 
     let request_sources = sources;
@@ -605,9 +711,48 @@ pub(crate) fn start_create_internal(
     let kind_for_thread = kind;
     let plan_options = plan_options_for_thread;
     let plan = plan_for_thread;
-
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
+        let mut resolved_tzap = match resolve_tzap() {
+            Ok(resolved) => resolved,
+            Err(error) => {
+                registry_for_thread.emit_direct_event(
+                    &job_id,
+                    JobEventDto::failed_from_command_error(kind_for_thread, error),
+                );
+                return;
+            }
+        };
+        if let Some(resolved) = resolved_tzap.as_mut() {
+            let mut public_keys = resolved.recipient_public_keys.take().unwrap_or_default();
+            for path in resolved
+                .one_time_recipient_certificate_paths
+                .take()
+                .unwrap_or_default()
+            {
+                match read_recipient_public_key_der(&path) {
+                    Ok(public_key) => public_keys.push(public_key),
+                    Err(error) => {
+                        registry_for_thread.emit_direct_event(
+                            &job_id,
+                            JobEventDto::failed_from_command_error(
+                                kind_for_thread,
+                                CommandErrorDto::new(
+                                    "account_recipient_certificate_invalid",
+                                    error,
+                                    None::<String>,
+                                    ErrorSeverityDto::Error,
+                                    false,
+                                ),
+                            ),
+                        );
+                        return;
+                    }
+                }
+            }
+            resolved.recipient_public_keys = Some(public_keys);
+            resolved.one_time_recipient_certificate_paths = Some(Vec::new());
+        }
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match format {
             crate::dto::ArchiveFormatDto::Zip => {
                 let create_options = ZipCreateOptions {
@@ -677,56 +822,39 @@ pub(crate) fn start_create_internal(
                 .map_err(map_tar_gz_error)
             }
             crate::dto::ArchiveFormatDto::Tzap => {
-                let recipient_certificates = tzap_certificates
-                    .as_ref()
-                    .map(|options| {
-                        options
-                            .recipient_certificate_paths
-                            .iter()
-                            .map(PathBuf::from)
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                let key_source = if recipient_certificates.is_empty() {
-                    password
-                        .as_deref()
-                        .map(SecretString::from)
-                        .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
+                let resolved = resolved_tzap;
+                let (key_source, resolved_signing, signing_selection_provided) =
+                    if let Some(resolved) = resolved {
+                        let public_keys = resolved.recipient_public_keys.unwrap_or_default();
+                        let key_source = if resolved.recipient_selection_provided {
+                            if public_keys.is_empty() {
+                                TzapKeySource::NoPassword
+                            } else {
+                                TzapKeySource::RecipientPublicKeys(public_keys)
+                            }
+                        } else {
+                            password
+                                .as_deref()
+                                .map(SecretString::from)
+                                .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
+                        };
+                        (
+                            key_source,
+                            resolved.signing,
+                            resolved.signing_selection_provided,
+                        )
+                    } else {
+                        let key_source = password
+                            .as_deref()
+                            .map(SecretString::from)
+                            .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
+                        (key_source, None, false)
+                    };
+                let x509_signing = if signing_selection_provided {
+                    resolved_signing
                 } else {
-                    TzapKeySource::RecipientCertificates(recipient_certificates)
+                    None
                 };
-                let x509_signing = tzap_certificates.as_ref().and_then(|options| {
-                    if let Some(identity) = options
-                        .signing_identity_path
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|path| !path.is_empty())
-                    {
-                        return Some(TzapX509SigningOptions::Pkcs12 {
-                            identity: PathBuf::from(identity),
-                            password: SecretString::from(
-                                options
-                                    .signing_identity_password
-                                    .clone()
-                                    .unwrap_or_default(),
-                            ),
-                        });
-                    }
-                    let certificate = options.signing_certificate_path.as_deref()?.trim();
-                    let private_key = options.signing_private_key_path.as_deref()?.trim();
-                    if certificate.is_empty() || private_key.is_empty() {
-                        return None;
-                    }
-                    Some(TzapX509SigningOptions::CertificateAndKey {
-                        signing_certificate: PathBuf::from(certificate),
-                        signing_private_key: PathBuf::from(private_key),
-                        signing_chain: options
-                            .signing_chain_paths
-                            .iter()
-                            .map(PathBuf::from)
-                            .collect(),
-                    })
-                });
                 let create_options = TzapCreateOptions {
                     key_source,
                     level: compression_level
@@ -808,94 +936,69 @@ pub(crate) fn start_create_internal(
 #[tauri::command]
 pub fn start_extract(
     request: StartExtractRequest,
+    app: AppHandle,
+    account_runtime: State<'_, crate::account::AccountRuntime>,
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
-    start_extract_internal(request, &registry)
+    let recipient_private_key = request
+        .recipient_key_id
+        .as_deref()
+        .map(|key_id| {
+            crate::account::resolve_tzap_recipient_private_key(&app, &account_runtime, key_id)
+        })
+        .transpose()?;
+    start_extract_internal_with_recipient_key(request, &registry, recipient_private_key)
 }
 
 #[tauri::command]
-pub fn generate_tzap_identity(
-    request: crate::dto::GenerateTzapIdentityRequest,
-) -> Result<crate::dto::GenerateTzapIdentityResponse, CommandErrorDto> {
-    let identity_path = PathBuf::from(ensure_non_empty_path(
-        request.identity_path,
-        "identityPath",
-    )?);
-    let certificate_path = PathBuf::from(ensure_non_empty_path(
-        request.certificate_path,
-        "certificatePath",
-    )?);
-    let common_name = request.common_name.trim();
-    if common_name.is_empty() {
+pub fn validate_tzap_signing_identity(
+    request: crate::dto::ValidateTzapSigningIdentityRequest,
+) -> Result<crate::dto::ValidateTzapSigningIdentityResponse, CommandErrorDto> {
+    let identity_path = ensure_non_empty_path(request.identity_path, "identityPath")?;
+    let identity_bytes = std::fs::read(&identity_path)
+        .map_err(|error| map_io_error(identity_path.clone(), error))?;
+    let identity = Pkcs12::from_der(&identity_bytes).map_err(map_identity_error)?;
+    let parsed = identity
+        .parse2(request.password.as_deref().unwrap_or_default())
+        .map_err(map_identity_error)?;
+    let private_key = parsed.pkey.ok_or_else(|| {
+        CommandErrorDto::invalid_request("P12/PFX bundle does not contain a private key")
+    })?;
+    let certificate = parsed.cert.ok_or_else(|| {
+        CommandErrorDto::invalid_request("P12/PFX bundle does not contain a signing certificate")
+    })?;
+    let now = Asn1Time::days_from_now(0).map_err(map_identity_error)?;
+    if certificate.not_before() > now.as_ref() || certificate.not_after() < now.as_ref() {
         return Err(CommandErrorDto::invalid_request(
-            "commonName must not be blank",
+            "P12/PFX signing certificate is outside its validity period",
         ));
     }
-    let key = PKey::from_rsa(Rsa::generate(3072).map_err(map_identity_error)?)
-        .map_err(map_identity_error)?;
-    let mut name = X509NameBuilder::new().map_err(map_identity_error)?;
-    name.append_entry_by_nid(Nid::COMMONNAME, common_name)
-        .map_err(map_identity_error)?;
-    let name = name.build();
-    let mut serial = BigNum::new().map_err(map_identity_error)?;
-    serial
-        .rand(128, MsbOption::MAYBE_ZERO, false)
-        .map_err(map_identity_error)?;
-    let serial = Asn1Integer::from_bn(&serial).map_err(map_identity_error)?;
-    let mut certificate = X509::builder().map_err(map_identity_error)?;
-    certificate.set_version(2).map_err(map_identity_error)?;
-    certificate
-        .set_serial_number(&serial)
-        .map_err(map_identity_error)?;
-    certificate
-        .set_subject_name(&name)
-        .map_err(map_identity_error)?;
-    certificate
-        .set_issuer_name(&name)
-        .map_err(map_identity_error)?;
-    certificate.set_pubkey(&key).map_err(map_identity_error)?;
-    certificate
-        .set_not_before(
-            Asn1Time::days_from_now(0)
-                .map_err(map_identity_error)?
-                .as_ref(),
-        )
-        .map_err(map_identity_error)?;
-    certificate
-        .set_not_after(
-            Asn1Time::days_from_now(3650)
-                .map_err(map_identity_error)?
-                .as_ref(),
-        )
-        .map_err(map_identity_error)?;
-    certificate
-        .sign(&key, MessageDigest::sha256())
-        .map_err(map_identity_error)?;
-    let certificate = certificate.build();
-    let password = request.password.unwrap_or_default();
-    let mut identity = Pkcs12::builder();
-    identity.name(common_name);
-    identity.pkey(&key);
-    identity.cert(&certificate);
-    let identity = identity.build2(&password).map_err(map_identity_error)?;
-    std::fs::write(
-        &identity_path,
-        identity.to_der().map_err(map_identity_error)?,
-    )
-    .map_err(|error| map_io_error(identity_path.to_string_lossy().into_owned(), error))?;
-    std::fs::write(
-        &certificate_path,
-        certificate.to_pem().map_err(map_identity_error)?,
-    )
-    .map_err(|error| map_io_error(certificate_path.to_string_lossy().into_owned(), error))?;
-    let fingerprint = certificate
+    let certificate_key = certificate.public_key().map_err(map_identity_error)?;
+    if !private_key.public_eq(&certificate_key) {
+        return Err(CommandErrorDto::invalid_request(
+            "P12/PFX private key does not match its signing certificate",
+        ));
+    }
+    let certificate_sha256 = certificate
         .digest(MessageDigest::sha256())
         .map_err(map_identity_error)?;
-    Ok(crate::dto::GenerateTzapIdentityResponse {
-        identity_path: identity_path.to_string_lossy().into_owned(),
-        certificate_path: certificate_path.to_string_lossy().into_owned(),
-        subject: format!("CN={common_name}"),
-        certificate_sha256: hex_bytes(fingerprint.as_ref()),
+    let subject = certificate
+        .subject_name()
+        .entries()
+        .next()
+        .and_then(|entry| entry.data().to_string().ok())
+        .unwrap_or_else(|| "Unnamed signing certificate".to_owned());
+    let chain_certificate_count = parsed.ca.as_ref().map_or(0, |chain| chain.len());
+    let warnings = if chain_certificate_count == 0 {
+        vec!["The bundle has no intermediate certificate chain.".to_owned()]
+    } else {
+        Vec::new()
+    };
+    Ok(crate::dto::ValidateTzapSigningIdentityResponse {
+        certificate_sha256: hex_bytes(certificate_sha256.as_ref()),
+        chain_certificate_count,
+        subject,
+        warnings,
     })
 }
 
@@ -974,6 +1077,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
     output
 }
 
+#[cfg(test)]
 pub(crate) fn start_extract_internal(
     request: StartExtractRequest,
     registry: &JobRegistry,
@@ -983,9 +1087,34 @@ pub(crate) fn start_extract_internal(
     })
 }
 
+fn start_extract_internal_with_recipient_key(
+    request: StartExtractRequest,
+    registry: &JobRegistry,
+    recipient_private_key: Option<zmanager_core::secrets::SecretBytes>,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_extract_internal_with_recipient_key_and_spawner(
+        request,
+        registry,
+        recipient_private_key,
+        |worker| {
+            thread::spawn(worker);
+        },
+    )
+}
+
+#[cfg(test)]
 fn start_extract_internal_with_spawner(
     request: StartExtractRequest,
     registry: &JobRegistry,
+    spawn_worker: impl FnOnce(Box<dyn FnOnce() + Send + 'static>),
+) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_extract_internal_with_recipient_key_and_spawner(request, registry, None, spawn_worker)
+}
+
+fn start_extract_internal_with_recipient_key_and_spawner(
+    request: StartExtractRequest,
+    registry: &JobRegistry,
+    recipient_private_key: Option<zmanager_core::secrets::SecretBytes>,
     spawn_worker: impl FnOnce(Box<dyn FnOnce() + Send + 'static>),
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
@@ -998,11 +1127,26 @@ fn start_extract_internal_with_spawner(
             requested_destination_path
         };
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
+    if recipient_private_key.is_some() && !entry_paths.is_empty() {
+        return Err(CommandErrorDto::invalid_request(
+            "Recipient-key extraction currently requires a whole-archive operation",
+        ));
+    }
     let password = request
         .password
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
     let family = detect_archive_family(&archive_path);
+    if recipient_private_key.is_some() && password.is_some() {
+        return Err(CommandErrorDto::invalid_request(
+            "Choose either a recipient key or an archive password for extraction",
+        ));
+    }
+    if recipient_private_key.is_some() && family != ArchiveFamily::Tzap {
+        return Err(CommandErrorDto::invalid_request(
+            "Recipient-key extraction is available only for TZAP archives",
+        ));
+    }
     let kind = match family {
         ArchiveFamily::Zip => JobKindDto::ZipExtract,
         ArchiveFamily::TarZst => JobKindDto::TarZstdExtract,
@@ -1057,6 +1201,7 @@ fn start_extract_internal_with_spawner(
     };
     let archive_path = archive_path;
     let destination_path = destination_path;
+    let recipient_private_key = recipient_private_key;
 
     spawn_worker(Box::new(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
@@ -1102,17 +1247,31 @@ fn start_extract_internal_with_spawner(
                 .map(to_terminal_summary_for_extract)
                 .map_err(map_rar_error),
                 ArchiveFamily::Tzap => {
-                    run_tzap_extract_job_with_password_and_policy_and_restore_options(
-                        &archive_path,
-                        &destination_path,
-                        password.as_deref(),
-                        policy,
-                        tzap_restore_options,
-                        &token,
-                        &mut sink,
-                    )
-                    .map(to_terminal_summary_for_extract)
-                    .map_err(map_tzap_error)
+                    if let Some(recipient_private_key) = recipient_private_key.as_ref() {
+                        zmanager_core::jobs::run_tzap_extract_job_with_recipient_key_and_policy(
+                            &archive_path,
+                            &destination_path,
+                            recipient_private_key,
+                            policy,
+                            tzap_restore_options,
+                            &token,
+                            &mut sink,
+                        )
+                        .map(to_terminal_summary_for_extract)
+                        .map_err(map_tzap_error)
+                    } else {
+                        run_tzap_extract_job_with_password_and_policy_and_restore_options(
+                            &archive_path,
+                            &destination_path,
+                            password.as_deref(),
+                            policy,
+                            tzap_restore_options,
+                            &token,
+                            &mut sink,
+                        )
+                        .map(to_terminal_summary_for_extract)
+                        .map_err(map_tzap_error)
+                    }
                 }
                 ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
                     &archive_path,
@@ -2893,6 +3052,12 @@ mod tests {
     use crate::dto::OverwritePolicyDto;
     use crate::job_dto::JobStatusDto;
     use crate::quick_action::QuickActionStartupState;
+    use openssl::asn1::Asn1Integer;
+    use openssl::bn::{BigNum, MsbOption};
+    use openssl::nid::Nid;
+    use openssl::pkey::PKey;
+    use openssl::rsa::Rsa;
+    use openssl::x509::X509NameBuilder;
 
     #[test]
     fn job_controls_are_scoped_to_the_matching_disposable_task_window() {
@@ -2912,6 +3077,7 @@ mod tests {
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
+    use std::sync::mpsc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use zmanager_core::manifest::{ManifestEntry, ManifestFileType, PermissionSnapshot};
     use zmanager_core::safety::ExtractionSafetyError;
@@ -3508,31 +3674,74 @@ mod tests {
         base
     }
 
+    fn write_test_p12(identity_path: &Path, certificate_path: &Path) {
+        let key = PKey::from_rsa(Rsa::generate(2048).expect("test key should generate"))
+            .expect("test key should parse");
+        let mut name = X509NameBuilder::new().expect("test subject should build");
+        name.append_entry_by_nid(Nid::COMMONNAME, "Desktop Test Signer")
+            .expect("test subject should contain a common name");
+        let name = name.build();
+        let mut serial = BigNum::new().expect("test serial should build");
+        serial
+            .rand(64, MsbOption::MAYBE_ZERO, false)
+            .expect("test serial should generate");
+        let serial = Asn1Integer::from_bn(&serial).expect("test serial should encode");
+        let mut certificate = X509::builder().expect("test certificate should build");
+        certificate.set_version(2).expect("version should set");
+        certificate
+            .set_serial_number(&serial)
+            .expect("serial should set");
+        certificate
+            .set_subject_name(&name)
+            .expect("subject should set");
+        certificate
+            .set_issuer_name(&name)
+            .expect("issuer should set");
+        certificate.set_pubkey(&key).expect("public key should set");
+        let not_before = Asn1Time::days_from_now(0).expect("start should build");
+        let not_after = Asn1Time::days_from_now(365).expect("end should build");
+        certificate
+            .set_not_before(not_before.as_ref())
+            .and_then(|_| certificate.set_not_after(not_after.as_ref()))
+            .and_then(|_| certificate.sign(&key, MessageDigest::sha256()))
+            .expect("test certificate should sign");
+        let certificate = certificate.build();
+        let mut identity = Pkcs12::builder();
+        identity.name("Desktop Test Signer");
+        identity.pkey(&key);
+        identity.cert(&certificate);
+        let identity = identity
+            .build2("identity-secret")
+            .expect("test identity should build");
+        fs::write(
+            identity_path,
+            identity.to_der().expect("identity should encode"),
+        )
+        .expect("identity should write");
+        fs::write(
+            certificate_path,
+            certificate.to_pem().expect("certificate should encode"),
+        )
+        .expect("certificate should write");
+    }
+
     #[test]
-    fn generate_tzap_identity_writes_parseable_pkcs12_and_public_certificate() {
-        let workspace = create_temp_workspace("generate-tzap-identity");
+    fn validate_tzap_signing_identity_checks_the_private_key_match() {
+        let workspace = create_temp_workspace("validate-tzap-identity");
         let identity_path = workspace.join("signer.p12");
         let certificate_path = workspace.join("signer.crt");
-        let response = generate_tzap_identity(crate::dto::GenerateTzapIdentityRequest {
-            identity_path: identity_path.to_string_lossy().into_owned(),
-            certificate_path: certificate_path.to_string_lossy().into_owned(),
-            common_name: "Desktop Test Signer".to_owned(),
-            password: Some("identity-secret".to_owned()),
-        })
-        .expect("identity generation should succeed");
+        write_test_p12(&identity_path, &certificate_path);
 
-        let identity = Pkcs12::from_der(&fs::read(&identity_path).expect("identity should exist"))
-            .expect("identity should be valid PKCS#12");
-        let parsed = identity
-            .parse2("identity-secret")
-            .expect("identity password should work");
-        assert!(parsed.cert.is_some());
-        assert!(parsed.pkey.is_some());
-        assert!(
-            X509::from_pem(&fs::read(&certificate_path).expect("certificate should exist")).is_ok()
-        );
-        assert_eq!(response.subject, "CN=Desktop Test Signer");
-        assert!(!response.certificate_sha256.is_empty());
+        let validation =
+            validate_tzap_signing_identity(crate::dto::ValidateTzapSigningIdentityRequest {
+                identity_path: identity_path.to_string_lossy().into_owned(),
+                password: Some("identity-secret".to_owned()),
+            })
+            .expect("identity validation should succeed");
+        assert_eq!(validation.subject, "Desktop Test Signer");
+        assert_eq!(validation.chain_certificate_count, 0);
+        assert_eq!(validation.warnings.len(), 1);
+        assert!(!validation.certificate_sha256.is_empty());
         let _ = fs::remove_dir_all(workspace);
     }
 
@@ -3636,6 +3845,7 @@ mod tests {
                 archive_path: destination_archive.to_string_lossy().to_string(),
                 destination_path: extract_destination.to_string_lossy().to_string(),
                 password: None,
+                recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
@@ -3715,6 +3925,7 @@ mod tests {
                 archive_path: destination_archive.to_string_lossy().to_string(),
                 destination_path: workspace.join("out").to_string_lossy().to_string(),
                 password: None,
+                recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
@@ -3803,6 +4014,7 @@ mod tests {
                     .to_string_lossy()
                     .to_string(),
                 password: None,
+                recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
@@ -3833,6 +4045,7 @@ mod tests {
                     .to_string_lossy()
                     .to_string(),
                 password: Some("wrong-password".to_string()),
+                recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
@@ -3870,6 +4083,7 @@ mod tests {
                 archive_path: destination_archive.to_string_lossy().to_string(),
                 destination_path: valid_extract_destination.to_string_lossy().to_string(),
                 password: Some("smoke-secret".to_string()),
+                recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
                 destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
                 entry_paths: None,
@@ -3958,6 +4172,72 @@ mod tests {
             "create lifecycle should emit a completed event",
         );
         assert!(create_poll.terminal_summary.is_some());
+        assert!(destination.is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn start_create_returns_job_before_tzap_inputs_are_resolved() {
+        let workspace = create_temp_workspace("start-create-deferred-tzap-resolution");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("hello.txt"), b"hello from create")
+            .expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+        let (resolution_started_tx, resolution_started_rx) = mpsc::channel();
+        let (release_resolution_tx, release_resolution_rx) = mpsc::channel();
+        let request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+
+        let started_at = std::time::Instant::now();
+        let job = start_create_internal_with_resolver(request, &registry, move || {
+            resolution_started_tx
+                .send(())
+                .expect("resolution probe receiver should remain open");
+            release_resolution_rx
+                .recv()
+                .expect("resolution release should arrive");
+            Ok(None)
+        })
+        .expect("create command should accept the job before resolution");
+
+        assert!(
+            started_at.elapsed() < Duration::from_secs(1),
+            "start_create should not wait for secure-store resolution"
+        );
+        resolution_started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker should begin TZAP input resolution");
+        release_resolution_tx
+            .send(())
+            .expect("worker should still be resolving inputs");
+
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+        assert_eq!(poll.status, JobStatusDto::Completed);
         assert!(destination.is_file());
         let _ = fs::remove_dir_all(&workspace);
     }
@@ -4186,12 +4466,15 @@ mod tests {
                 seven_z_chunk_size: None,
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: Some(crate::dto::TzapCertificateOptionsDto {
-                    recipient_certificate_paths: Vec::new(),
-                    signing_identity_path: None,
-                    signing_identity_password: None,
-                    signing_certificate_path: Some("C:/certs/signer.pem".to_owned()),
-                    signing_private_key_path: None,
-                    signing_chain_paths: Vec::new(),
+                    signing_selection: Some(
+                        crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
+                            certificate_path: "C:/certs/signer.pem".to_owned(),
+                            private_key_path: "".to_owned(),
+                            chain_paths: Vec::new(),
+                            password: None,
+                        },
+                    ),
+                    recipient_selection: None,
                 }),
                 preserve_metadata: false,
             },
@@ -4201,6 +4484,55 @@ mod tests {
         let error = result.expect_err("incomplete signing identity must be rejected");
         assert_eq!(error.code, "invalid_request");
         assert!(error.message.contains("certificate") && error.message.contains("private key"));
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn command_boundary_start_tzap_create_rejects_password_with_recipient_selection() {
+        let workspace = create_temp_workspace("start-create-tzap-password-recipient");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("one.txt"), b"one").expect("fixture should write");
+
+        let result = start_create_internal(
+            StartCreateRequest {
+                sources: vec![sources.to_string_lossy().to_string()],
+                destination_path: destination.to_string_lossy().to_string(),
+                format: crate::dto::ArchiveFormatDto::Tzap,
+                clean_source: false,
+                exclude_names: None,
+                exclude_archive_paths: None,
+                include_archive_paths: None,
+                respect_gitignore: false,
+                follow_symlinks: false,
+                replace_existing: false,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+                password: Some("must-not-be-used-with-recipients".to_owned()),
+                compression_level: None,
+                volume_size: None,
+                tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: Some(crate::dto::TzapCertificateOptionsDto {
+                    signing_selection: Some(crate::dto::TzapSigningSelectionDto::None),
+                    recipient_selection: Some(crate::dto::TzapRecipientSelectionDto {
+                        recipient_key_ids: vec!["recipient-1".to_owned()],
+                        contact_recipient_ids: Vec::new(),
+                        one_time_certificate_paths: Vec::new(),
+                    }),
+                }),
+                preserve_metadata: false,
+            },
+            &crate::job_registry::JobRegistry::new(),
+        );
+        let error = result.expect_err("password and recipient encryption must be exclusive");
+        assert_eq!(error.code, "invalid_request");
+        assert!(error.message.contains("recipient") && error.message.contains("password"));
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4250,6 +4582,7 @@ mod tests {
             archive_path: destination_archive.to_string_lossy().to_string(),
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
+            recipient_key_id: None,
             overwrite: OverwritePolicyDto::Replace,
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: None,
@@ -4337,6 +4670,7 @@ mod tests {
             archive_path: destination_archive.to_string_lossy().to_string(),
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
+            recipient_key_id: None,
             overwrite: OverwritePolicyDto::Rename,
             destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
             entry_paths: None,
@@ -4412,6 +4746,7 @@ mod tests {
             archive_path: destination_archive.to_string_lossy().to_string(),
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
+            recipient_key_id: None,
             overwrite: OverwritePolicyDto::Replace,
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: None,
@@ -4492,6 +4827,7 @@ mod tests {
             archive_path: destination_archive.to_string_lossy().to_string(),
             destination_path: extract_destination.to_string_lossy().to_string(),
             password: None,
+            recipient_key_id: None,
             overwrite: OverwritePolicyDto::Replace,
             destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
             entry_paths: Some(vec!["sources/keep.txt".to_string()]),

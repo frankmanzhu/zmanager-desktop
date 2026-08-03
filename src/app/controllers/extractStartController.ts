@@ -86,6 +86,7 @@ export function createExtractStartController(
         tzapAllowDegraded: resolvedInput.tzapAllowDegraded,
         tzapAllowAbsoluteSymlinks: resolvedInput.tzapAllowAbsoluteSymlinks,
         ignoreSymlinks: resolvedInput.ignoreSymlinks,
+        ...(resolvedInput.tzapRecipientKeyId ? { recipientKeyId: resolvedInput.tzapRecipientKeyId } : {}),
         password: resolvedInput.password,
       });
     if (!requestResult.ok) {

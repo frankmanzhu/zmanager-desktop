@@ -25,8 +25,16 @@ describe("extract workspace", () => {
       overwrite: "rename",
       usesGlobalDefaults: false,
     });
+
+    expect(workspace.applyDefaults({ ...defaults, destinationPath: "E:/new-archive" })).toMatchObject({
+      destinationPath: "E:/new-archive",
+      overwrite: "rename",
+      usesGlobalDefaults: false,
+    });
+
     expect(workspace.resetToDefaults()).toMatchObject({
       ...defaults,
+      destinationPath: "E:/new-archive",
       usesGlobalDefaults: true,
     });
   });
@@ -66,6 +74,17 @@ describe("extract workspace", () => {
       tzapAllowDegraded: true,
     });
     expect(workspace.getSnapshot().usesGlobalDefaults).toBe(false);
+  });
+
+  it("keeps local recipient key selection in operation input", () => {
+    const workspace = createExtractWorkspace(defaults);
+    workspace.setOptions({ tzapRecipientKeyId: " recipient_local " });
+
+    expect(workspace.getSnapshot().tzapRecipientKeyId).toBe("recipient_local");
+    expect(workspace.buildStartInput()).toMatchObject({
+      tzapRecipientKeyId: "recipient_local",
+    });
+    expect(workspace.getSnapshot()).not.toHaveProperty("password");
   });
 
   it("tracks TZAP trust configuration and verification outcomes without secrets", () => {

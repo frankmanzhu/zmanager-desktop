@@ -70,6 +70,18 @@ describe("extract flow helpers", () => {
     expect(request.destinationCollisionStrategy).toBe("rename");
   });
 
+  it("includes a trimmed local recipient key selection", () => {
+    const request = buildStartExtractRequest({
+      archivePath: "C:/tmp/archive.tzap",
+      destinationPath: "C:/tmp/out",
+      overwrite: "ask",
+      stripComponents: 0,
+      recipientKeyId: "  recipient_local  ",
+    });
+
+    expect(request.recipientKeyId).toBe("recipient_local");
+  });
+
   it("resolves explicit dialog input into request-ready destination and strip depth", () => {
     const resolved = resolveExtractStartInput({
       destinationBasePath: " C:/tmp/out ",
@@ -84,6 +96,7 @@ describe("extract flow helpers", () => {
       tzapAllowAbsoluteSymlinks: true,
       ignoreSymlinks: true,
       password: " secret ",
+      tzapRecipientKeyId: " recipient_local ",
     }, {
       currentFolder: "docs/releases",
       allEntryPaths: ["root/docs/releases/readme.txt"],
@@ -96,12 +109,12 @@ describe("extract flow helpers", () => {
       destinationValid: true,
       overwrite: "ask",
       stripComponents: 2,
-      password: "secret",
       entryReferences: ["root/docs/releases/readme.txt"],
       tzapRestorePolicy: "system",
       tzapAllowDegraded: true,
       tzapAllowAbsoluteSymlinks: true,
       ignoreSymlinks: true,
+      tzapRecipientKeyId: "recipient_local",
     });
   });
 

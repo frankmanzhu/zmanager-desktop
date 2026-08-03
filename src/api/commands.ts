@@ -2,6 +2,10 @@ import { invoke, type Channel } from "@tauri-apps/api/core";
 
 import type {
   AccountHostedAuthLaunchDto,
+  AccountContactCardPreviewDto,
+  AccountGenerateSigningIdentityRequest,
+  AccountImportSigningIdentityRequest,
+  AccountInstallSigningCertificateRequest,
   AccountSnapshotDto,
   ArchiveChildrenPageDto,
   ArchiveChildrenRequest,
@@ -17,8 +21,6 @@ import type {
   DiagnosticEventRequest,
   DiagnosticLogInfoDto,
   DismissJobRequest,
-  GenerateTzapIdentityRequest,
-  GenerateTzapIdentityResponse,
   HealthcheckResponse,
   JobControlResponseDto,
   JobCatalogEnvelopeDto,
@@ -44,6 +46,8 @@ import type {
   ValidateDirectoryResponse,
   VerifyTzapCertificateRequest,
   VerifyTzapCertificateResponse,
+  ValidateTzapSigningIdentityRequest,
+  ValidateTzapSigningIdentityResponse,
 } from "./types";
 
 export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
@@ -74,12 +78,56 @@ export async function generateAccountRecipientKey(label?: string): Promise<Accou
   });
 }
 
+export async function generateAccountSigningIdentity(
+  request: AccountGenerateSigningIdentityRequest,
+): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_generate_signing_identity", {
+    request,
+  });
+}
+
+export async function importAccountSigningIdentity(
+  request: AccountImportSigningIdentityRequest,
+): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_import_signing_identity", { request });
+}
+
+export async function installAccountSigningCertificate(
+  request: AccountInstallSigningCertificateRequest,
+): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_install_signing_certificate", { request });
+}
+
 export async function removeAccountRecipientKey(id: string): Promise<AccountSnapshotDto> {
   return invoke<AccountSnapshotDto>("account_remove_recipient_key", { request: { id } });
 }
 
+export async function removeAccountSigningIdentity(id: string): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_remove_signing_identity", { request: { id } });
+}
+
+export async function setDefaultAccountSigningIdentity(id: string): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_set_default_signing_identity", { request: { id } });
+}
+
 export async function removeAccountContact(id: string): Promise<AccountSnapshotDto> {
   return invoke<AccountSnapshotDto>("account_remove_contact", { request: { id } });
+}
+
+export async function inspectAccountContactCard(
+  contactCard: Record<string, unknown>,
+): Promise<AccountContactCardPreviewDto> {
+  return invoke<AccountContactCardPreviewDto>("account_inspect_contact_card", {
+    request: { contactCard },
+  });
+}
+
+export async function acceptAccountContactCard(
+  contactCard: Record<string, unknown>,
+): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_accept_contact_card", {
+    request: { contactCard },
+  });
 }
 
 export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
@@ -193,8 +241,10 @@ export async function verifyTzapCertificate(
   return invoke<VerifyTzapCertificateResponse>("verify_tzap_certificate", { request });
 }
 
-export async function generateTzapIdentity(request: GenerateTzapIdentityRequest): Promise<GenerateTzapIdentityResponse> {
-  return invoke<GenerateTzapIdentityResponse>("generate_tzap_identity", { request });
+export async function validateTzapSigningIdentity(
+  request: ValidateTzapSigningIdentityRequest,
+): Promise<ValidateTzapSigningIdentityResponse> {
+  return invoke<ValidateTzapSigningIdentityResponse>("validate_tzap_signing_identity", { request });
 }
 
 export async function runPreviewEntry(request: PreviewEntryRequest): Promise<PreviewEntryResponse> {

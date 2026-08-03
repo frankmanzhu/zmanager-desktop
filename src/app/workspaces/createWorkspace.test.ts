@@ -191,7 +191,10 @@ describe("create workspace source state", () => {
         sevenZChunkSize: 16 * 1024 * 1024,
         sevenZEncryptFileNames: true,
         tzapRecipientCertificatePaths: "",
+        tzapRecipientKeyIds: "",
+        tzapContactRecipientIds: "",
         tzapSigningMode: "identity",
+        tzapSigningIdentityId: "",
         tzapSigningIdentityPath: "",
         tzapSigningCertificatePath: "",
         tzapSigningPrivateKeyPath: "",
@@ -1470,6 +1473,22 @@ describe("create workspace option and readiness state", () => {
 });
 
 describe("create workspace start request", () => {
+  it("hydrates the persisted TZAP signing default while keeping no-signing explicit", () => {
+    const workspace = readyWorkspace();
+    const signed = workspace.changeFormat("tzap", formatDefaults({
+      tzapSigningDefault: "identity",
+      tzapDefaultSigningIdentityId: "identity-1",
+    }));
+
+    expect(signed.snapshot.options.tzapSigningIdentityId).toBe("identity-1");
+
+    const unsigned = workspace.changeFormat("tzap", formatDefaults({
+      tzapSigningDefault: "none",
+      tzapDefaultSigningIdentityId: null,
+    }));
+    expect(unsigned.snapshot.options.tzapSigningIdentityId).toBe("");
+  });
+
   it("builds a start request from workspace state, options, and inclusion", () => {
     const workspace = readyWorkspace();
     workspace.changeFormat("tzap", formatDefaults({
@@ -1518,12 +1537,41 @@ describe("create workspace start request", () => {
       tzapRecoveryPercentage: 12,
       tzapVolumeLossTolerance: 0,
       tzapCertificates: {
-        signingCertificatePath: "C:/certs/signer.pem",
-        signingPrivateKeyPath: "C:/certs/signer-key.pem",
-        signingChainPaths: ["C:/certs/intermediate-1.pem", "C:/certs/intermediate-2.pem"],
+        signingSelection: {
+          mode: "oneTimeCertificateAndKey",
+          certificatePath: "C:/certs/signer.pem",
+          privateKeyPath: "C:/certs/signer-key.pem",
+          chainPaths: ["C:/certs/intermediate-1.pem", "C:/certs/intermediate-2.pem"],
+        },
       },
     });
     expect(result.snapshot.options.destinationPath).toBe("C:/out/project.tzap");
+  });
+
+  it("selects a persistent Account identity by ID without a create-time password", () => {
+    const workspace = readyWorkspace();
+    workspace.changeFormat("tzap", formatDefaults({}));
+    workspace.setOptions({
+      tzapSigningMode: "identity",
+      tzapSigningIdentityId: "signing_local_self_signed",
+    });
+    workspace.setDestinationPath("C:/out/signed");
+
+    const result = workspace.buildStartCreateRequest({
+      password: "",
+      passwordConfirm: "",
+      signingIdentityPassword: "must-not-be-used",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("Expected start create request to be available");
+    }
+    expect(result.request.tzapCertificates?.signingSelection).toEqual({
+      mode: "enrolledIdentity",
+      signingIdentityId: "signing_local_self_signed",
+    });
+    expect(JSON.stringify(result.request)).not.toContain("must-not-be-used");
   });
 
   it("ensures the destination extension before returning a request snapshot", () => {
@@ -1744,19 +1792,16 @@ describe("create workspace start request", () => {
     });
   });
 
-  it("resets accepted create state to current preferences without reusing a plan revision", () => {
+  it("resets accepted create state while retaining user option picks and format", () => {
     const workspace = readyWorkspace();
     const previousRevision = workspace.getSnapshot().plan.revision;
-    workspace.setDestinationPath("C:/out/project.zip");
-    workspace.setOptions({ cleanSource: false, compressionLevel: 9 });
+    workspace.changeFormat("tzap", formatDefaults({ respectGitignore: true }));
+    workspace.setDestinationPath("C:/out/project.tzap");
+    workspace.setOptions({ respectGitignore: true, cleanSource: false, compressionLevel: 9, tzapSigningIdentityId: "my-key-id" });
     workspace.selectRow("project/readme.md");
     workspace.setColumnWidth("size", 222);
 
-    const result = workspace.resetAfterAcceptedStart("zip", formatDefaults({
-      cleanSource: true,
-      compressionLevel: 3,
-      replaceExisting: true,
-    }));
+    const result = workspace.resetAfterAcceptedStart();
 
     expect(result.removedSources).toEqual(["C:/work/project"]);
     expect(result.snapshot.sources).toEqual([]);
@@ -1766,12 +1811,27 @@ describe("create workspace start request", () => {
     expect(result.snapshot.selection.selectedPaths).toEqual([]);
     expect(result.snapshot.options).toMatchObject({
       destinationPath: "",
-      format: "zip",
-      cleanSource: true,
-      compressionLevel: 3,
-      replaceExisting: true,
+      format: "tzap",
+      respectGitignore: true,
+      cleanSource: false,
+      compressionLevel: 9,
+      tzapSigningIdentityId: "my-key-id",
       submissionInFlight: false,
     });
     expect(result.snapshot.view.columnSettings.columnWidths.size).toBe(222);
+  });
+
+  it("preserves option picks when reset is called", () => {
+    const workspace = readyWorkspace();
+    workspace.changeFormat("zip", formatDefaults({ respectGitignore: false }));
+    workspace.setOptions({ respectGitignore: true, cleanSource: false });
+
+    const result = workspace.reset();
+    expect(result.snapshot.sources).toEqual([]);
+    expect(result.snapshot.options).toMatchObject({
+      format: "zip",
+      respectGitignore: true,
+      cleanSource: false,
+    });
   });
 });

@@ -92,8 +92,10 @@ export type DiagnosticLogInfoDto = {
 };
 
 export type AccountCertificateDto = {
+  identityId: string;
   certificateId: string;
   certificateSha256: string;
+  label?: string | null;
   state: string;
   assuranceLevel: string;
   notAfterUnixSeconds: number;
@@ -105,6 +107,7 @@ export type AccountRecipientKeyDto = {
   publicKeyFingerprint: string;
   createdAtUnixSeconds: number;
   label?: string | null;
+  lifecycle: "active" | "retired" | "deletion_pending" | string;
 };
 
 export type AccountContactDto = {
@@ -117,17 +120,60 @@ export type AccountContactDto = {
 };
 
 export type AccountSnapshotDto = {
-  authStatus: "signedOut" | "pending" | "callbackCompleted" | "cancelled" | "failed";
+  authStatus: "signedOut" | "pending" | "launchOnlyCallbackCompleted" | "cancelled" | "failed";
   pendingState?: string | null;
+  defaultSigningIdentityId: string | null;
+  capabilities: {
+    auth: "unavailable" | "launch_only" | "handoff_exchange" | string;
+    enrollment: "unavailable" | "available" | "approval_required" | string;
+    status: "offline_cache_only" | "online" | string;
+    accountManagement: "external_browser" | string;
+  };
   certificates: AccountCertificateDto[];
   recipientKeys: AccountRecipientKeyDto[];
   contacts: AccountContactDto[];
+};
+
+export type AccountGenerateSigningIdentityRequest = {
+  commonName: string;
+  label?: string;
+};
+
+export type AccountImportSigningIdentityRequest = {
+  identityPath: string;
+  password?: string;
+  label?: string;
+};
+
+export type AccountInstallSigningCertificateRequest = {
+  identityId: string;
+  certificateId: string;
+  certificateChainDer: number[][];
+  issuerCertificateSha256: string;
+  issuerKeyIdentifier: string;
+  serialNumber: string;
+  notBeforeUnixSeconds: number;
+  notAfterUnixSeconds: number;
+  publicSignerId?: string | null;
+  publicOrgId?: string | null;
+  publicDeviceId?: string | null;
+  assuranceLevel?: string | null;
+  signDeviceId?: string | null;
 };
 
 export type AccountHostedAuthLaunchDto = {
   launchUrl: string;
   state: string;
   expiresAtUnixSeconds: number;
+};
+
+export type AccountContactCardPreviewDto = {
+  displayName: string;
+  signingCertificateSha256: string;
+  recipientPublicKeyFingerprint: string;
+  trustSource: string;
+  verificationState: string;
+  missingStatusCaveat: boolean;
 };
 
 export type CommandErrorDto = {
@@ -302,32 +348,45 @@ export type StartCreateRequest = {
 };
 
 export type TzapCertificateOptions = {
-  recipientCertificatePaths?: string[];
-  signingIdentityPath?: string;
-  signingIdentityPassword?: string;
-  signingCertificatePath?: string;
-  signingPrivateKeyPath?: string;
-  signingChainPaths?: string[];
+  signingSelection?: TzapSigningSelection;
+  recipientSelection?: TzapRecipientSelection;
 };
 
-export type GenerateTzapIdentityRequest = {
+export type TzapSigningSelection =
+  | { mode: "none" }
+  | { mode: "enrolledIdentity"; signingIdentityId: string }
+  | { mode: "oneTimePkcs12"; path: string; password: string }
+  | {
+      mode: "oneTimeCertificateAndKey";
+      certificatePath: string;
+      privateKeyPath: string;
+      chainPaths?: string[];
+      password?: string;
+    };
+
+export type TzapRecipientSelection = {
+  recipientKeyIds: string[];
+  contactRecipientIds: string[];
+  oneTimeCertificatePaths: string[];
+};
+
+export type ValidateTzapSigningIdentityRequest = {
   identityPath: string;
-  certificatePath: string;
-  commonName: string;
   password?: string;
 };
 
-export type GenerateTzapIdentityResponse = {
-  identityPath: string;
-  certificatePath: string;
-  subject: string;
+export type ValidateTzapSigningIdentityResponse = {
   certificateSha256: string;
+  chainCertificateCount: number;
+  subject: string;
+  warnings: string[];
 };
 
 export type StartExtractRequest = {
   archivePath: string;
   destinationPath: string;
   password?: string;
+  recipientKeyId?: string;
   overwrite: "refuse" | "replace" | "rename" | "ask";
   destinationCollisionStrategy?: "refuse" | "rename";
   entryPaths?: string[];

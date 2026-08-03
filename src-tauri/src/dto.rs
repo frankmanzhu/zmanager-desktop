@@ -369,6 +369,8 @@ pub struct StartExtractRequest {
     pub archive_path: String,
     pub destination_path: String,
     pub password: Option<String>,
+    #[serde(default)]
+    pub recipient_key_id: Option<String>,
     pub overwrite: OverwritePolicyDto,
     #[serde(default)]
     pub destination_collision_strategy: DestinationCollisionStrategyDto,
@@ -469,35 +471,61 @@ pub struct VerifyTzapCertificateResponse {
     pub diagnostics: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TzapCertificateOptionsDto {
     #[serde(default)]
-    pub recipient_certificate_paths: Vec<String>,
-    pub signing_identity_path: Option<String>,
-    pub signing_identity_password: Option<String>,
-    pub signing_certificate_path: Option<String>,
-    pub signing_private_key_path: Option<String>,
+    pub signing_selection: Option<TzapSigningSelectionDto>,
     #[serde(default)]
-    pub signing_chain_paths: Vec<String>,
+    pub recipient_selection: Option<TzapRecipientSelectionDto>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "mode", rename_all = "camelCase")]
+pub enum TzapSigningSelectionDto {
+    None,
+    EnrolledIdentity {
+        #[serde(rename = "signingIdentityId")]
+        signing_identity_id: String,
+    },
+    OneTimePkcs12 {
+        path: String,
+        password: String,
+    },
+    OneTimeCertificateAndKey {
+        certificate_path: String,
+        private_key_path: String,
+        #[serde(default)]
+        chain_paths: Vec<String>,
+        password: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TzapRecipientSelectionDto {
+    #[serde(default)]
+    pub recipient_key_ids: Vec<String>,
+    #[serde(default)]
+    pub contact_recipient_ids: Vec<String>,
+    #[serde(default)]
+    pub one_time_certificate_paths: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GenerateTzapIdentityRequest {
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ValidateTzapSigningIdentityRequest {
     pub identity_path: String,
-    pub certificate_path: String,
-    pub common_name: String,
     pub password: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GenerateTzapIdentityResponse {
-    pub identity_path: String,
-    pub certificate_path: String,
-    pub subject: String,
+pub struct ValidateTzapSigningIdentityResponse {
     pub certificate_sha256: String,
+    pub chain_certificate_count: usize,
+    pub subject: String,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -569,4 +597,24 @@ pub enum TzapRestorePolicyDto {
     Portable,
     SameOs,
     System,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TzapSigningSelectionDto;
+
+    #[test]
+    fn enrolled_signing_selection_accepts_frontend_camel_case_field() {
+        let selection = serde_json::from_value::<TzapSigningSelectionDto>(serde_json::json!({
+            "mode": "enrolledIdentity",
+            "signingIdentityId": "signing_identity_1",
+        }))
+        .expect("frontend signing selection should deserialize");
+
+        assert!(matches!(
+            selection,
+            TzapSigningSelectionDto::EnrolledIdentity { signing_identity_id }
+                if signing_identity_id == "signing_identity_1"
+        ));
+    }
 }

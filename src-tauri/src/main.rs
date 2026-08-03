@@ -16,6 +16,7 @@ mod native_integration;
 mod native_launch_inbox;
 mod platform;
 mod quick_action;
+mod secure_store;
 
 use tauri::{Emitter, Manager};
 
@@ -184,8 +185,15 @@ fn main() {
             account::account_apply_hosted_callback,
             account::account_forget,
             account::account_generate_recipient_key,
+            account::account_generate_signing_identity,
+            account::account_import_signing_identity,
+            account::account_install_signing_certificate,
+            account::account_remove_signing_identity,
             account::account_remove_recipient_key,
+            account::account_set_default_signing_identity,
             account::account_remove_contact,
+            account::account_inspect_contact_card,
+            account::account_accept_contact_card,
             commands::start_archive_index,
             commands::wait_archive_index,
             commands::get_archive_children,
@@ -195,7 +203,7 @@ fn main() {
             commands::start_create,
             commands::start_extract,
             commands::verify_tzap_certificate,
-            commands::generate_tzap_identity,
+            commands::validate_tzap_signing_identity,
             commands::preview_entry,
             commands::start_native_file_drag,
             commands::cleanup_preview_roots,

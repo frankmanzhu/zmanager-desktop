@@ -277,6 +277,9 @@ function ExtractOptions() {
   const [advancedOpen, setAdvancedOpen] = useState(options.passwordPromptOpen);
   const isTzap =
     getKnownArchiveSuffix(snapshot.archive.currentArchivePath) === ".tzap";
+  const recipientKeys = snapshot.account.recipientKeys.filter(
+    (key) => key.lifecycle === "active" || key.lifecycle === "retired",
+  );
 
   useEffect(() => {
     if (options.passwordPromptOpen) {
@@ -450,13 +453,61 @@ function ExtractOptions() {
               id="extract-password"
               type={passwordState.showPassword ? "text" : "password"}
               value={passwordState.password}
-              onChange={(event) =>
-                passwordState.setPassword(event.currentTarget.value)
-              }
+              disabled={Boolean(options.tzapRecipientKeyId)}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (value.trim() && options.tzapRecipientKeyId) {
+                  actions.handleArchiveIntent({
+                    type: "setExtractOptions",
+                    patch: { tzapRecipientKeyId: "" },
+                  });
+                }
+                passwordState.setPassword(value);
+              }}
             />
           </label>
           {isTzap ? (
             <div className="grid gap-3 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
+              {recipientKeys.length > 0 ? (
+                <label className="grid gap-1.5">
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("extract.tzapRecipientKey")}
+                    <InfoTip content={i18n.t("extract.password.tooltip")} />
+                  </span>
+                  <Select
+                    value={options.tzapRecipientKeyId || "password"}
+                    onValueChange={(value) => {
+                      actions.handleArchiveIntent({
+                        type: "setExtractOptions",
+                        patch: {
+                          tzapRecipientKeyId: value === "password" ? "" : value,
+                        },
+                      });
+                      if (value !== "password") {
+                        passwordState.reset();
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="extract-tzap-recipient-key">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="password">
+                        {i18n.t("extract.tzapRecipientKey.password")}
+                      </SelectItem>
+                      {recipientKeys.map((key) => (
+                        <SelectItem key={key.keyId} value={key.keyId}>
+                          {key.label || i18n.t("extract.tzapRecipientKey.local")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              ) : (
+                <p className="text-[10px] font-normal leading-4 text-slate-500 dark:text-slate-400">
+                  {i18n.t("extract.tzapRecipientKey.none")}
+                </p>
+              )}
               <label className="grid gap-1.5">
                 <span className="inline-flex items-center gap-1">
                   {i18n.t("extract.tzapRestorePolicy")}

@@ -9,6 +9,8 @@ describe("account workspace", () => {
     const snapshot = workspace.replace({
       authStatus: "pending",
       pendingState: "state-1234567890",
+      defaultSigningIdentityId: null,
+      capabilities: { auth: "launch_only", enrollment: "unavailable", status: "offline_cache_only", accountManagement: "external_browser" },
       certificates: [],
       recipientKeys: [{
         keyId: "recipient-1",
@@ -16,6 +18,7 @@ describe("account workspace", () => {
         publicKeyFingerprint: "ab".repeat(32),
         createdAtUnixSeconds: 1,
         label: "Personal",
+        lifecycle: "active",
       }],
       contacts: [],
     });

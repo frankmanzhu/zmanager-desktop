@@ -18,6 +18,7 @@ export type ExtractStartInput = Readonly<{
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
   ignoreSymlinks?: boolean;
+  tzapRecipientKeyId?: string;
   password?: string;
 }>;
 
@@ -32,6 +33,7 @@ export type ResolvedExtractStartInput = Readonly<{
   tzapAllowDegraded: boolean;
   tzapAllowAbsoluteSymlinks: boolean;
   ignoreSymlinks: boolean;
+  tzapRecipientKeyId?: string;
 }>;
 
 export type ResolveExtractStartInputContext = Readonly<{
@@ -53,6 +55,7 @@ export type BuildStartExtractRequestInput = {
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
   ignoreSymlinks?: boolean;
+  recipientKeyId?: string;
 };
 
 export function buildStartExtractRequest(input: BuildStartExtractRequestInput): StartExtractRequest {
@@ -69,6 +72,7 @@ export function buildStartExtractRequest(input: BuildStartExtractRequestInput): 
     tzapAllowDegraded: input.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
     ignoreSymlinks: input.ignoreSymlinks ?? false,
+    ...(input.recipientKeyId?.trim() ? { recipientKeyId: input.recipientKeyId.trim() } : {}),
     ...(input.password ? { password: input.password } : {}),
   };
 }
@@ -91,12 +95,15 @@ export function resolveExtractStartInput(
       entryReferences,
       deduplicateRoot: input.deduplicateRoot,
     }),
-    ...(input.password?.trim() ? { password: input.password.trim() } : {}),
+    ...(input.password?.trim() && !input.tzapRecipientKeyId?.trim()
+      ? { password: input.password.trim() }
+      : {}),
     entryReferences,
     tzapRestorePolicy: input.tzapRestorePolicy ?? "portable",
     tzapAllowDegraded: input.tzapAllowDegraded ?? false,
     tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
     ignoreSymlinks: input.ignoreSymlinks ?? false,
+    ...(input.tzapRecipientKeyId?.trim() ? { tzapRecipientKeyId: input.tzapRecipientKeyId.trim() } : {}),
   };
 }
 

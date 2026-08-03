@@ -144,7 +144,10 @@ export type CreateWorkspaceOptionsSnapshot = Readonly<{
   sevenZChunkSize: number | null;
   sevenZEncryptFileNames: boolean;
   tzapRecipientCertificatePaths: string;
+  tzapRecipientKeyIds: string;
+  tzapContactRecipientIds: string;
   tzapSigningMode: "identity" | "advanced";
+  tzapSigningIdentityId: string;
   tzapSigningIdentityPath: string;
   tzapSigningCertificatePath: string;
   tzapSigningPrivateKeyPath: string;
@@ -205,7 +208,10 @@ export type CreateWorkspaceOptionPatch = Readonly<{
   sevenZChunkSize?: number | string | null;
   sevenZEncryptFileNames?: boolean;
   tzapRecipientCertificatePaths?: string;
+  tzapRecipientKeyIds?: string;
+  tzapContactRecipientIds?: string;
   tzapSigningMode?: "identity" | "advanced";
+  tzapSigningIdentityId?: string;
   tzapSigningIdentityPath?: string;
   tzapSigningCertificatePath?: string;
   tzapSigningPrivateKeyPath?: string;
@@ -339,8 +345,8 @@ export type CreateWorkspace = {
   clearSources(): CreateWorkspaceSourceMutation;
   reset(): CreateWorkspaceSourceMutation;
   resetAfterAcceptedStart(
-    format: CreateArchiveFormat,
-    defaults: FormatCreateDefaults,
+    format?: CreateArchiveFormat,
+    defaults?: FormatCreateDefaults,
   ): CreateWorkspaceSourceMutation;
   queuePlan(): CreateWorkspacePlanQueueResult;
   beginPlan(options?: Partial<CreateWorkspacePlanOptions>, revision?: number): CreateWorkspacePlanRequestResult;
@@ -433,7 +439,10 @@ type MutableCreateWorkspaceOptions = {
   sevenZChunkSize: number | null;
   sevenZEncryptFileNames: boolean;
   tzapRecipientCertificatePaths: string;
+  tzapRecipientKeyIds: string;
+  tzapContactRecipientIds: string;
   tzapSigningMode: "identity" | "advanced";
+  tzapSigningIdentityId: string;
   tzapSigningIdentityPath: string;
   tzapSigningCertificatePath: string;
   tzapSigningPrivateKeyPath: string;
@@ -460,7 +469,10 @@ const DEFAULT_CREATE_OPTIONS: MutableCreateWorkspaceOptions = {
   sevenZChunkSize: 16 * 1024 * 1024,
   sevenZEncryptFileNames: true,
   tzapRecipientCertificatePaths: "",
+  tzapRecipientKeyIds: "",
+  tzapContactRecipientIds: "",
   tzapSigningMode: "identity",
+  tzapSigningIdentityId: "",
   tzapSigningIdentityPath: "",
   tzapSigningCertificatePath: "",
   tzapSigningPrivateKeyPath: "",
@@ -633,7 +645,11 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
         searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
         selection: emptyCreateSelection(),
-        options: cloneDefaultCreateOptions(),
+        options: {
+          ...state.options,
+          destinationPath: "",
+          submissionInFlight: false,
+        },
         columnSettings: state.columnSettings,
       };
       return mutationResult(state, true, [], removedSources);
@@ -641,6 +657,9 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
 
     resetAfterAcceptedStart(format, defaults) {
       const removedSources = state.sources;
+      const nextOptions = format && defaults
+        ? applyDefaultsToOptions(state.options, format, defaults)
+        : state.options;
       state = {
         sources: [],
         planState: "idle",
@@ -652,7 +671,11 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
         searchQuery: "",
         expandedTreeFolders: new Set([CREATE_PLAN_ROOT_PATH]),
         selection: emptyCreateSelection(),
-        options: applyDefaultsToOptions(cloneDefaultCreateOptions(), format, defaults),
+        options: {
+          ...nextOptions,
+          destinationPath: "",
+          submissionInFlight: false,
+        },
         columnSettings: state.columnSettings,
       };
       return mutationResult(state, true, [], removedSources);
@@ -822,7 +845,10 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
           ? { sevenZEncryptFileNames: patch.sevenZEncryptFileNames }
           : {}),
         ...(patch.tzapRecipientCertificatePaths !== undefined ? { tzapRecipientCertificatePaths: patch.tzapRecipientCertificatePaths } : {}),
+        ...(patch.tzapRecipientKeyIds !== undefined ? { tzapRecipientKeyIds: patch.tzapRecipientKeyIds } : {}),
+        ...(patch.tzapContactRecipientIds !== undefined ? { tzapContactRecipientIds: patch.tzapContactRecipientIds } : {}),
         ...(patch.tzapSigningMode !== undefined ? { tzapSigningMode: patch.tzapSigningMode } : {}),
+        ...(patch.tzapSigningIdentityId !== undefined ? { tzapSigningIdentityId: patch.tzapSigningIdentityId } : {}),
         ...(patch.tzapSigningIdentityPath !== undefined ? { tzapSigningIdentityPath: patch.tzapSigningIdentityPath } : {}),
         ...(patch.tzapSigningCertificatePath !== undefined ? { tzapSigningCertificatePath: patch.tzapSigningCertificatePath } : {}),
         ...(patch.tzapSigningPrivateKeyPath !== undefined ? { tzapSigningPrivateKeyPath: patch.tzapSigningPrivateKeyPath } : {}),
@@ -1393,11 +1419,18 @@ function applyDefaultsToOptions(
     sevenZChunkSize: format === "sevenZ" ? defaults.sevenZChunkSize ?? 16 * 1024 * 1024 : null,
     sevenZEncryptFileNames: format === "sevenZ" ? defaults.sevenZEncryptFileNames ?? true : true,
     tzapRecipientCertificatePaths: "",
-    tzapSigningMode: format === "tzap" ? defaults.tzapSigningMode ?? "identity" : "identity",
-    tzapSigningIdentityPath: format === "tzap" ? defaults.tzapSigningIdentityPath ?? "" : "",
-    tzapSigningCertificatePath: format === "tzap" ? defaults.tzapSigningCertificatePath ?? "" : "",
-    tzapSigningPrivateKeyPath: format === "tzap" ? defaults.tzapSigningPrivateKeyPath ?? "" : "",
-    tzapSigningChainPaths: format === "tzap" ? defaults.tzapSigningChainPaths ?? "" : "",
+    tzapRecipientKeyIds: "",
+    tzapContactRecipientIds: "",
+    // Persist only the enrolled identity ID. Private key material and passwords remain
+    // create-time/native-secure-store data.
+    tzapSigningMode: "identity",
+    tzapSigningIdentityId: format === "tzap" && defaults.tzapSigningDefault === "identity"
+      ? defaults.tzapDefaultSigningIdentityId ?? ""
+      : "",
+    tzapSigningIdentityPath: "",
+    tzapSigningCertificatePath: "",
+    tzapSigningPrivateKeyPath: "",
+    tzapSigningChainPaths: "",
   };
 }
 
@@ -1454,24 +1487,53 @@ function tzapCertificateRequestFromState(
   signingIdentityPassword = "",
 ): StartCreateRequest["tzapCertificates"] | undefined {
   const recipientCertificatePaths = splitCertificatePaths(options.tzapRecipientCertificatePaths);
+  const recipientKeyIds = splitSelectionIds(options.tzapRecipientKeyIds);
+  const contactRecipientIds = splitSelectionIds(options.tzapContactRecipientIds);
+  const signingP12Path = options.tzapSigningMode === "advanced" ? options.tzapSigningIdentityPath.trim() : "";
   const signingChainPaths = options.tzapSigningMode === "advanced" ? splitCertificatePaths(options.tzapSigningChainPaths) : [];
   const signingCertificatePath = options.tzapSigningMode === "advanced" ? options.tzapSigningCertificatePath.trim() : "";
   const signingPrivateKeyPath = options.tzapSigningMode === "advanced" ? options.tzapSigningPrivateKeyPath.trim() : "";
-  const signingIdentityPath = options.tzapSigningMode === "identity" ? options.tzapSigningIdentityPath.trim() : "";
-  if (!recipientCertificatePaths.length && !signingIdentityPath && !signingCertificatePath && !signingPrivateKeyPath && !signingChainPaths.length) {
+  const signingIdentityId = options.tzapSigningMode === "identity" ? options.tzapSigningIdentityId.trim() : "";
+  const hasRecipientSelection = recipientCertificatePaths.length > 0 || recipientKeyIds.length > 0 || contactRecipientIds.length > 0;
+  if (!hasRecipientSelection && !signingIdentityId && !signingP12Path && !signingCertificatePath && !signingPrivateKeyPath && !signingChainPaths.length) {
     return undefined;
   }
   return {
-    ...(recipientCertificatePaths.length ? { recipientCertificatePaths } : {}),
-    ...(signingIdentityPath ? { signingIdentityPath, signingIdentityPassword } : {}),
-    ...(signingCertificatePath ? { signingCertificatePath } : {}),
-    ...(signingPrivateKeyPath ? { signingPrivateKeyPath } : {}),
-    ...(signingChainPaths.length ? { signingChainPaths } : {}),
+    ...(hasRecipientSelection
+      ? {
+          recipientSelection: {
+            recipientKeyIds,
+            contactRecipientIds,
+            oneTimeCertificatePaths: recipientCertificatePaths,
+          },
+        }
+      : {}),
+    signingSelection: signingIdentityId
+      ? { mode: "enrolledIdentity", signingIdentityId }
+      : signingP12Path
+        ? {
+            mode: "oneTimePkcs12",
+            path: signingP12Path,
+            password: signingIdentityPassword,
+          }
+      : signingCertificatePath || signingPrivateKeyPath || signingChainPaths.length
+        ? {
+            mode: "oneTimeCertificateAndKey",
+            certificatePath: signingCertificatePath,
+            privateKeyPath: signingPrivateKeyPath,
+            chainPaths: signingChainPaths,
+            ...(signingIdentityPassword ? { password: signingIdentityPassword } : {}),
+          }
+        : { mode: "none" },
   };
 }
 
 function splitCertificatePaths(value: string): string[] {
   return value.split(/[;\r\n]+/).map((path) => path.trim()).filter(Boolean);
+}
+
+function splitSelectionIds(value: string): string[] {
+  return value.split(/[;,\r\n]+/).map((id) => id.trim()).filter(Boolean);
 }
 
 function suggestedDestinationPathFromState(
@@ -1581,7 +1643,10 @@ function sameOptions(left: MutableCreateWorkspaceOptions, right: MutableCreateWo
     left.sevenZChunkSize === right.sevenZChunkSize &&
     left.sevenZEncryptFileNames === right.sevenZEncryptFileNames &&
     left.tzapRecipientCertificatePaths === right.tzapRecipientCertificatePaths &&
+    left.tzapRecipientKeyIds === right.tzapRecipientKeyIds &&
+    left.tzapContactRecipientIds === right.tzapContactRecipientIds &&
     left.tzapSigningMode === right.tzapSigningMode &&
+    left.tzapSigningIdentityId === right.tzapSigningIdentityId &&
     left.tzapSigningIdentityPath === right.tzapSigningIdentityPath &&
     left.tzapSigningCertificatePath === right.tzapSigningCertificatePath &&
     left.tzapSigningPrivateKeyPath === right.tzapSigningPrivateKeyPath &&
@@ -2291,7 +2356,10 @@ function createOptionsSnapshot(
     sevenZChunkSize: state.options.sevenZChunkSize,
     sevenZEncryptFileNames: state.options.sevenZEncryptFileNames,
     tzapRecipientCertificatePaths: state.options.tzapRecipientCertificatePaths,
+    tzapRecipientKeyIds: state.options.tzapRecipientKeyIds,
+    tzapContactRecipientIds: state.options.tzapContactRecipientIds,
     tzapSigningMode: state.options.tzapSigningMode,
+    tzapSigningIdentityId: state.options.tzapSigningIdentityId,
     tzapSigningIdentityPath: state.options.tzapSigningIdentityPath,
     tzapSigningCertificatePath: state.options.tzapSigningCertificatePath,
     tzapSigningPrivateKeyPath: state.options.tzapSigningPrivateKeyPath,

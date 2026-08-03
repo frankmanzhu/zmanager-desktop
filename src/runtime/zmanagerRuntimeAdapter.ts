@@ -254,8 +254,11 @@ import {
   fetchDiagnosticLogInfo,
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
-  generateTzapIdentity as generateTzapIdentityCommand,
+  validateTzapSigningIdentity as validateTzapSigningIdentityCommand,
   generateAccountRecipientKey,
+  generateAccountSigningIdentity,
+  importAccountSigningIdentity,
+  installAccountSigningCertificate,
   startArchiveIndex,
   waitArchiveIndex,
   getArchiveChildren,
@@ -264,7 +267,11 @@ import {
   nativeFrontendReady,
   forgetAccount,
   removeAccountContact,
+  removeAccountSigningIdentity,
+  inspectAccountContactCard,
+  acceptAccountContactCard,
   removeAccountRecipientKey,
+  setDefaultAccountSigningIdentity,
   runPlanCreate,
   runPreviewEntry,
   runStartCreate,
@@ -298,7 +305,6 @@ import {
   isDesktopRuntime,
   openNativeDialog as openRuntimeDialog,
 } from "../desktop/runtime";
-import { chooseTzapIdentityDestination } from "../desktop/tzapIdentityDialog";
 import {
   bindDesktopFileDrop,
   type DesktopFileDropEvent,
@@ -610,7 +616,7 @@ const createRuntimeActions = createCreateRuntimeActions({
     queuePlanRun();
   },
   chooseTzapCertificate: chooseCreateTzapCertificate,
-  generateTzapIdentity: generateCreateTzapIdentity,
+  validateTzapSigningIdentity: validateCreateTzapIdentity,
   navigateToFolder: (folderPath) => {
     const navigation = createWorkspace.navigateToFolder(folderPath);
     if (navigation.changed) {
@@ -760,16 +766,39 @@ const createStartController = createCreateStartController({
   workspace: createWorkspace,
   submissionGuard: mainWindowSubmissionGuard,
   publishSnapshot: publishCreateWorkspaceSnapshot,
-  startCreate: runStartCreate,
+  startCreate: async (request) => {
+    const signingSelection = request.tzapCertificates?.signingSelection;
+    const signingSelectionKind = signingSelection?.mode ?? "notProvided";
+    diagnostics.record({
+      scope: "create",
+      name: "startCommandInvoked",
+      fields: {
+        format: request.format,
+        sourceCount: request.sources.length,
+        signingSelectionKind,
+      },
+    });
+    try {
+      return await runStartCreate(request);
+    } catch (error) {
+      const commandError = asCommandError(error);
+      diagnostics.record({
+        scope: "create",
+        name: "startCommandFailed",
+        fields: {
+          errorCode: commandError?.code ?? "invokeFailed",
+          errorMessage: commandError?.message ?? unknownErrorMessage(error, "start_create failed"),
+          signingSelectionKind,
+        },
+      });
+      throw error;
+    }
+  },
   onCreateStarted: async (response, request) => {
     await jobHandoff.handoffAcceptedJob(response, {
       resetSubmittedState: () => {
         cancelQueuedPlanRun();
-        const format = appPreferences.defaultArchiveFormat;
-        publishCreateWorkspaceSnapshot(createWorkspace.resetAfterAcceptedStart(
-          format,
-          createDefaultsForFormat(appPreferences, format),
-        ).snapshot);
+        publishCreateWorkspaceSnapshot(createWorkspace.resetAfterAcceptedStart().snapshot);
       },
     });
     recordCreateDestinationHistory(request.destinationPath);
@@ -940,7 +969,7 @@ const extractStartController = createExtractStartController({
   ),
   resetSubmittedState: () => {
     archiveWorkspace.resetAfterAcceptedOperation();
-    extractWorkspace.resetToDefaults();
+    extractWorkspace.setOptions({ passwordPromptOpen: false });
     publishReactSnapshot();
   },
   unableStartMessage: (mode) => message(mode === "selection" ? "extract.unableSelected" : "extract.unableStart"),
@@ -1147,8 +1176,16 @@ const accountController = createAccountController({
   applyHostedCallback: applyAccountHostedCallback,
   forget: forgetAccount,
   generateRecipientKey: generateAccountRecipientKey,
+  generateSigningIdentity: (commonName, label) => generateAccountSigningIdentity({ commonName, label }),
+  importSigningIdentity: (identityPath, password, label) => importAccountSigningIdentity({ identityPath, password, label }),
+  installSigningCertificate: installAccountSigningCertificate,
+  createSelfSignedCertificateStore: createAccountSelfSignedCertificateStore,
+  removeSigningIdentity: removeAccountSigningIdentity,
   removeRecipientKey: removeAccountRecipientKey,
+  setDefaultSigningIdentity: setDefaultAccountSigningIdentity,
   removeContact: removeAccountContact,
+  inspectContactCard: inspectAccountContactCard,
+  acceptContactCard: acceptAccountContactCard,
   openUrl: openDesktopPath,
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Account operation failed."),
@@ -1898,8 +1935,31 @@ function handleReactAccountIntent(intent: ZManagerAccountIntent) {
     case "beginHostedAuth": void accountController.beginHostedAuth(Boolean(intent.local)); break;
     case "forget": void accountController.forget(); break;
     case "generateRecipientKey": void accountController.generateRecipientKey(intent.label); break;
+    case "generateSigningIdentity": void accountController.generateSigningIdentity(intent.commonName, intent.label); break;
+    case "importSigningIdentity": void chooseAndImportAccountSigningIdentity(intent.password, intent.label); break;
+    case "createSelfSignedCertificateStore": void accountController.createSelfSignedCertificateStore(intent.commonName); break;
+    case "removeSigningIdentity": void accountController.removeSigningIdentity(intent.id); break;
     case "removeRecipientKey": void accountController.removeRecipientKey(intent.id); break;
+    case "setDefaultSigningIdentity": void accountController.setDefaultSigningIdentity(intent.id); break;
     case "removeContact": void accountController.removeContact(intent.id); break;
+    case "inspectContactCard": {
+      try {
+        void accountController.inspectContactCard(JSON.parse(intent.contactCard) as Record<string, unknown>);
+      } catch {
+        accountWorkspace.setNotice("Contact card must be valid JSON.");
+        publishReactSnapshot();
+      }
+      break;
+    }
+    case "acceptContactCard": {
+      try {
+        void accountController.acceptContactCard(JSON.parse(intent.contactCard) as Record<string, unknown>);
+      } catch {
+        accountWorkspace.setNotice("Contact card must be valid JSON.");
+        publishReactSnapshot();
+      }
+      break;
+    }
   }
 }
 
@@ -1947,6 +2007,9 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
     case "preferencesPatch":
       updateReactPreferencesDraft(intent.patch);
       break;
+    case "preferencesSaveDirectPatch":
+      savePreferencePatch(intent.patch);
+      break;
     case "columnVisibilityPatch":
       columnVisibilityDraft = intent.visibility;
       publishReactSnapshot();
@@ -1959,12 +2022,6 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "preferencesChooseExtractOutput":
       void onSelectReactPreferenceExtractFolder();
-      break;
-    case "preferencesChooseTzapSigningFile":
-      void choosePreferenceTzapSigningFile(intent.target);
-      break;
-    case "preferencesGenerateTzapIdentity":
-      void generatePreferenceTzapIdentity(intent.commonName, intent.password);
       break;
     case "defaultHandlersRefresh":
       void defaultHandlerController.refresh();
@@ -3900,7 +3957,11 @@ async function chooseTzapTrustedCAs() {
 async function chooseCreateTzapCertificate(target: "recipients" | "identity" | "signer" | "privateKey" | "chain") {
   const multiple = target === "recipients" || target === "chain";
   const selected = await openNativeDialog({
-    title: target === "privateKey" ? "Choose signing private key" : "Choose certificate files",
+    title: target === "privateKey"
+      ? "Choose signing private key"
+      : target === "identity"
+        ? "Choose P12/PFX signing bundle"
+        : "Choose certificate files",
     directory: false,
     multiple,
     filters: [{ name: target === "privateKey" ? "Private keys" : target === "identity" ? "PKCS#12 identity" : "Certificates", extensions: target === "privateKey" ? ["pem", "key"] : target === "identity" ? ["p12", "pfx"] : ["pem", "cer", "crt", "der"] }],
@@ -3908,7 +3969,13 @@ async function chooseCreateTzapCertificate(target: "recipients" | "identity" | "
   if (!selected) return;
   const value = (Array.isArray(selected) ? selected : [selected]).join(";");
   const patch = target === "recipients" ? { tzapRecipientCertificatePaths: value }
-    : target === "identity" ? { tzapSigningIdentityPath: value, tzapSigningMode: "identity" as const }
+    : target === "identity" ? {
+        tzapSigningIdentityPath: value,
+        tzapSigningCertificatePath: "",
+        tzapSigningPrivateKeyPath: "",
+        tzapSigningChainPaths: "",
+        tzapSigningMode: "advanced" as const,
+      }
     : target === "signer" ? { tzapSigningCertificatePath: value }
     : target === "privateKey" ? { tzapSigningPrivateKeyPath: value }
     : { tzapSigningChainPaths: value };
@@ -3916,59 +3983,35 @@ async function chooseCreateTzapCertificate(target: "recipients" | "identity" | "
   queuePlanRun();
 }
 
-async function generateCreateTzapIdentity(commonName: string, password: string) {
-  const identityPath = await chooseTzapIdentityDestination(
-    `${commonName.trim() || "TZAP Signing Identity"}.p12`,
-    setOperationalStatus,
-    { unavailableInBrowser: message("nativeDialog.unavailableInBrowser"), failed: message("nativeDialog.failed") },
-  );
-  if (!identityPath) return;
-  const certificatePath = identityPath.replace(/\.(p12|pfx)$/i, "") + ".crt";
+async function validateCreateTzapIdentity(identityPath: string, password: string) {
+  if (!identityPath.trim()) return;
   try {
-    const result = await generateTzapIdentityCommand({ identityPath, certificatePath, commonName, password });
-    publishCreateWorkspaceSnapshot(createWorkspace.setOptions({
-      tzapSigningMode: "identity",
-      tzapSigningIdentityPath: result.identityPath,
-    }).snapshot);
-    setOperationalStatus(`Signing identity created. Public certificate: ${result.certificatePath}`);
+    const result = await validateTzapSigningIdentityCommand({
+      identityPath: identityPath.trim(),
+      ...(password ? { password } : {}),
+    });
+    const chainNote = result.chainCertificateCount > 0
+      ? `${result.chainCertificateCount} intermediate certificate(s) found.`
+      : "No intermediate certificate chain found; verification may be less portable.";
+    setOperationalStatus(`P12/PFX valid for ${result.subject}. ${chainNote}`);
   } catch (error) {
-    setOperationalStatus(asCommandError(error)?.message ?? unknownErrorMessage(error, "Unable to create signing identity."));
+    setOperationalStatus(asCommandError(error)?.message ?? unknownErrorMessage(error, "Unable to validate P12/PFX bundle."));
   }
 }
 
-async function choosePreferenceTzapSigningFile(target: "identity" | "certificate" | "privateKey" | "chain") {
-  const multiple = target === "chain";
+async function createAccountSelfSignedCertificateStore(commonName: string) {
+  return generateAccountSigningIdentity({ commonName, label: commonName });
+}
+
+async function chooseAndImportAccountSigningIdentity(password: string, label?: string) {
   const selected = await openNativeDialog({
-    title: target === "identity" ? "Choose default signing identity" : "Choose default signing file",
-    multiple,
-    filters: [{
-      name: target === "identity" ? "PKCS#12 identity" : target === "privateKey" ? "Private keys" : "Certificates",
-      extensions: target === "identity" ? ["p12", "pfx"] : target === "privateKey" ? ["pem", "key"] : ["pem", "cer", "crt", "der"],
-    }],
+    title: "Import P12/PFX signing identity",
+    directory: false,
+    multiple: false,
+    filters: [{ name: "PKCS#12 identity", extensions: ["p12", "pfx"] }],
   });
-  if (!selected) return;
-  const value = (Array.isArray(selected) ? selected : [selected]).join(";");
-  updateReactCreateDefaultsDraft("tzap", target === "identity" ? { tzapSigningIdentityPath: value, tzapSigningMode: "identity" }
-    : target === "certificate" ? { tzapSigningCertificatePath: value, tzapSigningMode: "advanced" }
-    : target === "privateKey" ? { tzapSigningPrivateKeyPath: value, tzapSigningMode: "advanced" }
-    : { tzapSigningChainPaths: value, tzapSigningMode: "advanced" });
-}
-
-async function generatePreferenceTzapIdentity(commonName: string, password: string) {
-  const identityPath = await chooseTzapIdentityDestination(
-    `${commonName.trim() || "TZAP Signing Identity"}.p12`,
-    setOperationalStatus,
-    { unavailableInBrowser: message("nativeDialog.unavailableInBrowser"), failed: message("nativeDialog.failed") },
-  );
-  if (!identityPath) return;
-  const certificatePath = identityPath.replace(/\.(p12|pfx)$/i, "") + ".crt";
-  try {
-    const result = await generateTzapIdentityCommand({ identityPath, certificatePath, commonName, password });
-    updateReactCreateDefaultsDraft("tzap", { tzapSigningMode: "identity", tzapSigningIdentityPath: result.identityPath });
-    setOperationalStatus(`Default signing identity created. Public certificate: ${result.certificatePath}`);
-  } catch (error) {
-    setOperationalStatus(asCommandError(error)?.message ?? unknownErrorMessage(error, "Unable to create signing identity."));
-  }
+  if (!selected || typeof selected !== "string") return;
+  void accountController.importSigningIdentity(selected, password, label);
 }
 
 async function verifyCurrentTzapCertificate() {
@@ -4057,7 +4100,32 @@ async function runCreate(
     };
   },
 ) {
-  await createStartController.runCreate(options);
+  const before = createWorkspace.getSnapshot();
+  diagnostics.record({
+    scope: "create",
+    name: "uiSubmitRequested",
+    fields: {
+      sourceCount: before.sources.length,
+      planState: before.plan.state,
+      hasPlan: before.plan.hasPlan,
+      planStatus: before.plan.status?.messageKey ?? before.plan.status?.fallbackText ?? null,
+    },
+  });
+  try {
+    await createStartController.runCreate(options);
+  } finally {
+    const after = createWorkspace.getSnapshot();
+    diagnostics.record({
+      scope: "create",
+      name: "uiSubmitFinished",
+      fields: {
+        sourceCount: after.sources.length,
+        planState: after.plan.state,
+        hasPlan: after.plan.hasPlan,
+        planStatus: after.plan.status?.messageKey ?? after.plan.status?.fallbackText ?? null,
+      },
+    });
+  }
 }
 
 async function loadBootstrapState() {
@@ -4069,6 +4137,7 @@ async function loadBootstrapState() {
     }
   }
   await startupController.loadBootstrapState();
+  await accountController.refresh();
 }
 
 function runtimeDevToolsOptions() {

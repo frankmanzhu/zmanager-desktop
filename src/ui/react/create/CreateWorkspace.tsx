@@ -22,6 +22,9 @@ import {
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
 import {
+  resolveTzapSigningIdentityId,
+} from "../../../app/preferences";
+import {
   sourcePathForCreatePlanRow,
   withCreateArchiveExtension,
   type CreatePlanInclusionState,
@@ -31,6 +34,8 @@ import type { Translator } from "../../../app/i18n/translator";
 import { createFormatCapabilities, supportedCreateFormats } from "../../../app/createFormatCapabilities";
 import { formatVolumeSize } from "../../../app/volumeSizePresets";
 import { Checkbox } from "../../components/ui/checkbox";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import { InfoTip } from "../../components/ui/info-tip";
 import {
   Select,
@@ -91,6 +96,14 @@ const FORMAT_LABELS: Record<string, string> = {
 
 const ADVANCED_FIELD_CLASS =
   "grid !grid-cols-1 !items-stretch !gap-1.5 text-[11px] font-semibold leading-4 text-slate-600 dark:text-slate-300 [&>input]:!h-9 [&>input]:!min-h-9 [&>input]:!w-full [&>input]:!text-xs [&>input]:font-normal [&>select]:!h-9 [&>select]:!min-h-9 [&>select]:!w-full [&>select]:!text-xs [&>select]:font-normal";
+
+function toggleDelimitedSelection(value: string, id: string, selected: boolean): string {
+  const current = value.split(/[;,\r\n]+/).map((item) => item.trim()).filter(Boolean);
+  const next = selected
+    ? [...current, id].filter((item, index, items) => items.indexOf(item) === index)
+    : current.filter((item) => item !== id);
+  return next.join(";");
+}
 
 export function CreateWorkspace() {
   const snapshot = useZManagerSnapshot();
@@ -1005,6 +1018,66 @@ function CreateOptions() {
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
 
+  const defaultRecipientKeyId = snapshot.account.recipientKeys.find(
+    (key) => key.lifecycle === "active",
+  )?.keyId ?? "";
+  useEffect(() => {
+    if (options.format !== "tzap") return;
+    if (!options.tzapRecipientKeyIds && defaultRecipientKeyId) {
+      actions.handleCreateIntent({
+        type: "setOptions",
+        patch: { tzapRecipientKeyIds: defaultRecipientKeyId },
+      });
+    }
+  }, [options.format, defaultRecipientKeyId]);
+
+  useEffect(() => {
+    if (options.format !== "tzap") return;
+    const tzapDefaults = snapshot.preferences.createFormatDefaults.tzap;
+    const defaultIdentityId = resolveTzapSigningIdentityId(
+      tzapDefaults,
+      snapshot.account.defaultSigningIdentityId,
+      snapshot.account.certificates
+        .filter((certificate) => certificate.state === "active")
+        .map((certificate) => certificate.identityId),
+    );
+    if (
+      options.tzapSigningMode === "identity" &&
+      !options.tzapSigningIdentityId &&
+      defaultIdentityId &&
+      snapshot.account.certificates.some(
+        (certificate) => certificate.identityId === defaultIdentityId && certificate.state === "active",
+      )
+    ) {
+      actions.handleCreateIntent({
+        type: "setOptions",
+        patch: { tzapSigningIdentityId: defaultIdentityId },
+      });
+    }
+  }, [
+    actions,
+    options.format,
+    options.tzapSigningMode,
+    options.tzapSigningIdentityId,
+    snapshot.account.certificates,
+    snapshot.account.defaultSigningIdentityId,
+    snapshot.preferences.createFormatDefaults.tzap,
+  ]);
+
+  useEffect(() => {
+    if (options.format !== "tzap" || options.tzapSigningMode !== "identity" || !options.tzapSigningIdentityId) {
+      return;
+    }
+    if (!snapshot.account.certificates.some(
+      (certificate) => certificate.identityId === options.tzapSigningIdentityId && certificate.state === "active",
+    )) {
+      actions.handleCreateIntent({
+        type: "setOptions",
+        patch: { tzapSigningIdentityId: "" },
+      });
+    }
+  }, [options.format, options.tzapSigningMode, options.tzapSigningIdentityId, snapshot.account.certificates]);
+
   // Sync .aar ↔ .aea extension when format or password changes for Apple Archive
   useEffect(() => {
     if (options.format !== "appleArchive") return;
@@ -1028,9 +1101,6 @@ function CreateOptions() {
       ? [options.volumeSize, ...snapshot.preferences.volumeSizePresets]
       : snapshot.preferences.volumeSizePresets;
   const [manualPanelOpen, setManualPanelOpen] = useState<boolean | null>(null);
-  const [identityCommonName, setIdentityCommonName] = useState(
-    "TZAP Signing Identity",
-  );
   const panelOpen = manualPanelOpen ?? true;
 
   return (
@@ -1435,15 +1505,14 @@ function CreateOptions() {
                   </span>
                 </label>
                 <label className="flex items-center gap-2">
-                  <input
+                  <Checkbox
                     id="create-7z-encrypt-names"
-                    type="checkbox"
                     checked={options.sevenZEncryptFileNames}
-                    onChange={(event) =>
+                    onCheckedChange={(checked) =>
                       actions.handleCreateIntent({
                         type: "setOptions",
                         patch: {
-                          sevenZEncryptFileNames: event.currentTarget.checked,
+                          sevenZEncryptFileNames: checked === true,
                         },
                       })
                     }
@@ -1488,6 +1557,44 @@ function CreateOptions() {
                     })
                   }
                 />
+                <div className="grid gap-2 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
+                  <span className="text-[11px] font-semibold">Account-managed recipients</span>
+                  {snapshot.account.recipientKeys.filter((key) => key.lifecycle === "active").map((key) => (
+                    <label key={key.keyId} className="flex items-center gap-2 text-[11px] font-normal">
+                      <Checkbox
+                        checked={options.tzapRecipientKeyIds.split(/[;,\\r\\n]+/).map((id) => id.trim()).includes(key.keyId)}
+                        onCheckedChange={(checked) =>
+                          actions.handleCreateIntent({
+                            type: "setOptions",
+                            patch: {
+                              tzapRecipientKeyIds: toggleDelimitedSelection(options.tzapRecipientKeyIds, key.keyId, checked === true),
+                            },
+                          })
+                        }
+                      />
+                      <span className="truncate">{key.label?.trim() || key.publicKeyFingerprint}</span>
+                    </label>
+                  ))}
+                  {snapshot.account.contacts.filter((contact) => isSelectableTzapContact(contact.verificationState)).map((contact) => (
+                    <label key={contact.contactId} className="flex items-center gap-2 text-[11px] font-normal">
+                      <Checkbox
+                        checked={options.tzapContactRecipientIds.split(/[;,\\r\\n]+/).map((id) => id.trim()).includes(contact.contactId)}
+                        onCheckedChange={(checked) =>
+                          actions.handleCreateIntent({
+                            type: "setOptions",
+                            patch: {
+                              tzapContactRecipientIds: toggleDelimitedSelection(options.tzapContactRecipientIds, contact.contactId, checked === true),
+                            },
+                          })
+                        }
+                      />
+                      <span className="truncate">{contact.displayName}{contact.verificationState !== "valid_now" ? " · offline/status caveat" : ""}</span>
+                    </label>
+                  ))}
+                  {!snapshot.account.recipientKeys.some((key) => key.lifecycle === "active") && !snapshot.account.contacts.some((contact) => isSelectableTzapContact(contact.verificationState)) ? (
+                    <span className="text-[10px] leading-4 opacity-65">Open Identity &amp; Contacts to enroll or trust a recipient.</span>
+                  ) : null}
+                </div>
                 <div className="rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">
                   <div className="mb-2 flex items-center gap-2 text-xs font-semibold">
                     <KeyRound className="size-4" />
@@ -1504,7 +1611,7 @@ function CreateOptions() {
                         })
                       }
                     >
-                      {i18n.t("create.tzapIdentityFile")}
+                      {i18n.t("create.tzapLocalSigningIdentity")}
                     </button>
                     <button
                       type="button"
@@ -1516,14 +1623,44 @@ function CreateOptions() {
                         })
                       }
                     >
-                      {i18n.t("create.tzapAdvancedIdentity")}
+                      Advanced one-time
                     </button>
                   </div>
                   {options.tzapSigningMode === "identity" ? (
                     <div className="grid gap-2">
+                      <label className={ADVANCED_FIELD_CLASS}>
+                        <span>{i18n.t("create.tzapLocalSigningIdentity")}</span>
+                        <Select
+                          value={options.tzapSigningIdentityId || "none"}
+                          onValueChange={(value) =>
+                            actions.handleCreateIntent({
+                              type: "setOptions",
+                              patch: { tzapSigningIdentityId: value === "none" ? "" : value },
+                            })
+                          }
+                        >
+                          <SelectTrigger aria-label={i18n.t("create.tzapLocalSigningIdentity")}>
+                            <SelectValue placeholder="No signing identity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No signing identity</SelectItem>
+                            {snapshot.account.certificates.filter((certificate) => certificate.state === "active").map((certificate) => (
+                              <SelectItem key={certificate.identityId} value={certificate.identityId}>
+                                {certificate.label || certificate.certificateSha256}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <p className="text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+                        {i18n.t("create.tzapLocalSigningIdentityHelp")} Private key material stays in the native secure store and is resolved by ID at start time.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
                       <CertificatePicker
                         compact
-                        title={i18n.t("create.tzapIdentityFile")}
+                        title="P12/PFX signing bundle"
                         value={options.tzapSigningIdentityPath}
                         onChoose={() =>
                           actions.handleCreateIntent({
@@ -1539,99 +1676,30 @@ function CreateOptions() {
                         }
                       />
                       <label className={ADVANCED_FIELD_CLASS}>
-                        <span>{i18n.t("create.tzapIdentityName")}</span>
-                        <input
-                          value={identityCommonName}
-                          onChange={(event) =>
-                            setIdentityCommonName(event.currentTarget.value)
-                          }
-                        />
-                      </label>
-                      <label className={ADVANCED_FIELD_CLASS}>
-                        <span>{i18n.t("create.tzapIdentityPassword")}</span>
-                        <input
+                        <span>P12/PFX password (optional)</span>
+                        <Input
                           type="password"
+                          className="text-xs font-normal"
                           value={signingIdentityPassword}
-                          onChange={(event) =>
-                            setSigningIdentityPassword(
-                              event.currentTarget.value,
-                            )
-                          }
+                          onChange={(event) => setSigningIdentityPassword(event.currentTarget.value)}
+                          autoComplete="off"
                         />
                       </label>
-                      <button
+                      <Button
                         type="button"
-                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 !text-[11px] !font-semibold text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
-                        onClick={() =>
-                          actions.handleCreateIntent({
-                            type: "generateTzapIdentity",
-                            commonName: identityCommonName,
-                            password: signingIdentityPassword,
-                          })
-                        }
+                        variant="secondary"
+                        className="w-fit"
+                        disabled={!options.tzapSigningIdentityPath.trim()}
+                        onClick={() => actions.handleCreateIntent({
+                          type: "validateTzapSigningIdentity",
+                          identityPath: options.tzapSigningIdentityPath,
+                          password: signingIdentityPassword,
+                        })}
                       >
-                        <Plus className="size-3" />
-                        {i18n.t("create.tzapCreateIdentity")}
-                      </button>
-                      <p className="text-[10px] leading-4 text-slate-500 dark:text-slate-400">
-                        {i18n.t("create.tzapIdentityHelp")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-2">
-                      <CertificatePicker
-                        compact
-                        title={i18n.t("create.tzapSigningCertificate")}
-                        value={options.tzapSigningCertificatePath}
-                        onChoose={() =>
-                          actions.handleCreateIntent({
-                            type: "chooseTzapCertificate",
-                            target: "signer",
-                          })
-                        }
-                        onClear={() =>
-                          actions.handleCreateIntent({
-                            type: "setOptions",
-                            patch: { tzapSigningCertificatePath: "" },
-                          })
-                        }
-                      />
-                      <CertificatePicker
-                        compact
-                        title={i18n.t("create.tzapSigningPrivateKey")}
-                        value={options.tzapSigningPrivateKeyPath}
-                        onChoose={() =>
-                          actions.handleCreateIntent({
-                            type: "chooseTzapCertificate",
-                            target: "privateKey",
-                          })
-                        }
-                        onClear={() =>
-                          actions.handleCreateIntent({
-                            type: "setOptions",
-                            patch: { tzapSigningPrivateKeyPath: "" },
-                          })
-                        }
-                      />
-                      <CertificatePicker
-                        compact
-                        title={i18n.t("create.tzapSigningChain")}
-                        value={options.tzapSigningChainPaths}
-                        onChoose={() =>
-                          actions.handleCreateIntent({
-                            type: "chooseTzapCertificate",
-                            target: "chain",
-                          })
-                        }
-                        onClear={() =>
-                          actions.handleCreateIntent({
-                            type: "setOptions",
-                            patch: { tzapSigningChainPaths: "" },
-                          })
-                        }
-                      />
+                        Validate bundle
+                      </Button>
                       <p className="text-[10px] opacity-60">
-                        {i18n.t("create.tzapIntermediateHelp")}
+                        The bundle must contain the signing certificate and matching private key. Intermediate certificates are optional and remain inside the bundle for this one-time operation.
                       </p>
                     </div>
                   )}
@@ -1715,6 +1783,12 @@ function CertificatePicker({
 
 function i18nFallbackNone() {
   return "Not configured";
+}
+
+function isSelectableTzapContact(verificationState: string): boolean {
+  return verificationState === "valid_now"
+    || verificationState === "valid_at_trusted_time"
+    || verificationState === "cryptographically_intact_offline";
 }
 
 function includeAllState(snapshot: ReturnType<typeof useZManagerSnapshot>) {

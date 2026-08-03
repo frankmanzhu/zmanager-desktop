@@ -6,6 +6,7 @@ import {
   loadAppPreferences,
   preferencesWithPatch,
   createDefaultsForFormat,
+  resolveTzapSigningIdentityId,
   saveAppPreferences,
   type AppPreferences,
 } from "./preferences";
@@ -113,11 +114,8 @@ describe("preferences helpers", () => {
           replaceExisting: false,
           promptForPassword: false,
           tzapVolumeLossTolerance: 0,
-          tzapSigningMode: "identity",
-          tzapSigningIdentityPath: "",
-          tzapSigningCertificatePath: "",
-          tzapSigningPrivateKeyPath: "",
-          tzapSigningChainPaths: "",
+          tzapSigningDefault: "accountDefault",
+          tzapDefaultSigningIdentityId: null,
         },
         sevenZ: {
           cleanSource: false,
@@ -349,6 +347,58 @@ describe("preferences helpers", () => {
     expect(createDefaultsForFormat(preferences, "tzap").volumeSize).toBeNull();
     expect(createDefaultsForFormat(preferences, "tzap").tzapRecoveryPercentage).toBe(100);
     expect(createDefaultsForFormat(preferences, "tzap").tzapVolumeLossTolerance).toBe(0);
+  });
+
+  it("resolves the TZAP signing default only to an active identity", () => {
+    const defaults = {
+      ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+      tzapSigningDefault: "identity" as const,
+      tzapDefaultSigningIdentityId: "identity-2",
+    };
+
+    expect(resolveTzapSigningIdentityId(defaults, "identity-1", ["identity-2"])).toBe("identity-2");
+    expect(resolveTzapSigningIdentityId({ ...defaults, tzapSigningDefault: "accountDefault" }, "identity-1", ["identity-1"])).toBe("identity-1");
+    expect(resolveTzapSigningIdentityId({ ...defaults, tzapSigningDefault: "none" }, "identity-1", ["identity-1", "identity-2"])).toBe("");
+    expect(resolveTzapSigningIdentityId(defaults, "identity-1", ["identity-1"])).toBe("");
+  });
+
+  it("loads the explicit TZAP no-signing default", () => {
+    const storage = memoryStorage({
+      [PREFERENCE_KEYS.createFormatDefaults]: JSON.stringify({
+        tzap: {
+          tzapSigningDefault: "none",
+        },
+      }),
+    });
+
+    expect(createDefaultsForFormat(loadAppPreferences(storage), "tzap")).toMatchObject({
+      tzapSigningDefault: "none",
+      tzapDefaultSigningIdentityId: null,
+    });
+  });
+
+  it("does not persist legacy TZAP signing paths", () => {
+    const storage = memoryStorage({
+      [PREFERENCE_KEYS.createFormatDefaults]: JSON.stringify({
+        tzap: {
+          ...DEFAULT_APP_PREFERENCES.createFormatDefaults.tzap,
+          tzapSigningMode: "advanced",
+          tzapSigningIdentityPath: "/private/identity.p12",
+          tzapSigningCertificatePath: "/private/certificate.pem",
+          tzapSigningPrivateKeyPath: "/private/key.pem",
+          tzapSigningChainPaths: "/private/chain.pem",
+        },
+      }),
+    });
+
+    const loaded = loadAppPreferences(storage);
+    expect(loaded.createFormatDefaults.tzap).not.toHaveProperty("tzapSigningIdentityPath");
+    expect(loaded.createFormatDefaults.tzap).not.toHaveProperty("tzapSigningPrivateKeyPath");
+
+    saveAppPreferences(loaded, storage);
+    const persisted = JSON.parse(storage.values.get(PREFERENCE_KEYS.createFormatDefaults) ?? "{}");
+    expect(persisted.tzap).not.toHaveProperty("tzapSigningIdentityPath");
+    expect(persisted.tzap).not.toHaveProperty("tzapSigningCertificatePath");
   });
 
   it("declares locale storage through the tracked preference key map", () => {

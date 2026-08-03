@@ -192,6 +192,7 @@ export type BuildArchiveWorkspaceExtractRequestInput = {
   tzapAllowDegraded?: boolean;
   tzapAllowAbsoluteSymlinks?: boolean;
   ignoreSymlinks?: boolean;
+  recipientKeyId?: string;
   password?: string;
 };
 
@@ -688,6 +689,7 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
           tzapAllowDegraded: input.tzapAllowDegraded ?? false,
           tzapAllowAbsoluteSymlinks: input.tzapAllowAbsoluteSymlinks ?? false,
           ignoreSymlinks: input.ignoreSymlinks ?? false,
+          ...(input.recipientKeyId?.trim() ? { recipientKeyId: input.recipientKeyId.trim() } : {}),
           ...(input.password ? { password: input.password } : {}),
         }),
       };
