@@ -5,6 +5,8 @@ export type AccountWorkspaceSnapshot = Readonly<AccountSnapshotDto & {
   busy: boolean;
   notice: string;
   contactCardPreview: AccountContactCardPreviewDto | null;
+  pendingEnrollment: boolean;
+  enrollmentResult: string | null;
 }>;
 
 export type AccountWorkspace = Readonly<{
@@ -14,6 +16,8 @@ export type AccountWorkspace = Readonly<{
   setBusy(value: boolean): AccountWorkspaceSnapshot;
   setNotice(value: string): AccountWorkspaceSnapshot;
   setContactCardPreview(value: AccountContactCardPreviewDto | null): AccountWorkspaceSnapshot;
+  setPendingEnrollment(value: boolean): AccountWorkspaceSnapshot;
+  setEnrollmentResult(value: string | null): AccountWorkspaceSnapshot;
   replace(value: AccountSnapshotDto): AccountWorkspaceSnapshot;
 }>;
 
@@ -30,6 +34,10 @@ const EMPTY: AccountSnapshotDto = {
   certificates: [],
   recipientKeys: [],
   contacts: [],
+  displayName: null,
+  publicSignerId: null,
+  assuranceLevel: null,
+  sessionExpiresAtUnixSeconds: null,
 };
 
 export function createAccountWorkspace(): AccountWorkspace {
@@ -37,6 +45,8 @@ export function createAccountWorkspace(): AccountWorkspace {
   let busy = false;
   let notice = "";
   let contactCardPreview: AccountContactCardPreviewDto | null = null;
+  let pendingEnrollment = false;
+  let enrollmentResult: string | null = null;
   let value = EMPTY;
 
   function getSnapshot(): AccountWorkspaceSnapshot {
@@ -49,6 +59,8 @@ export function createAccountWorkspace(): AccountWorkspace {
       visible,
       busy,
       notice,
+      pendingEnrollment,
+      enrollmentResult,
     });
   }
 
@@ -59,6 +71,8 @@ export function createAccountWorkspace(): AccountWorkspace {
     setBusy(next) { busy = next; return getSnapshot(); },
     setNotice(next) { notice = next; return getSnapshot(); },
     setContactCardPreview(next) { contactCardPreview = next; return getSnapshot(); },
+    setPendingEnrollment(next) { pendingEnrollment = next; return getSnapshot(); },
+    setEnrollmentResult(next) { enrollmentResult = next; return getSnapshot(); },
     replace(next) { value = next; return getSnapshot(); },
   };
 }

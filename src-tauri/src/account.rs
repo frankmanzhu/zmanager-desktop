@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 use zmanager_core::auth_client::{
-    AUTH_HANDOFF_LIFETIME_SECONDS, TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig,
-    TzapOAuthStateTracker, TzapPendingAuthState,
+    AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback,
+    TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
+    TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
 };
 use zmanager_core::device_identity::generate_recipient_encryption_key;
 use zmanager_core::identity_catalog::{
@@ -45,6 +46,10 @@ pub struct AccountSnapshotDto {
     pub certificates: Vec<AccountCertificateDto>,
     pub recipient_keys: Vec<AccountRecipientKeyDto>,
     pub contacts: Vec<AccountContactDto>,
+    pub display_name: Option<String>,
+    pub public_signer_id: Option<String>,
+    pub assurance_level: Option<String>,
+    pub session_expires_at_unix_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -101,8 +106,24 @@ pub struct AccountHostedAuthLaunchDto {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccountBeginHostedAuthRequest {
-    #[serde(default)]
-    pub local_service: bool,
+    pub environment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AccountCompleteHostedAuthRequest {
+    pub state: String,
+    pub relay_body: String,
+    pub callback_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountCurrentUserDto {
+    pub display_name: String,
+    pub public_signer_id: Option<String>,
+    pub assurance_level: String,
+    pub selected_org_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -178,6 +199,9 @@ pub struct AccountContactCardPreviewDto {
 struct AccountRuntimeState {
     pending: Option<TzapPendingAuthState>,
     auth_status: String,
+    session: Option<TzapSessionRecord>,
+    cached_user: Option<TzapCurrentUser>,
+    environment: String,
 }
 
 #[derive(Clone)]
@@ -188,15 +212,23 @@ pub struct AccountRuntime(
 
 impl AccountRuntime {
     pub fn new() -> Self {
+        let store = NativeTzapSecretStore::new(ACCOUNT_KEY)
+            .expect("default account secure-store scope is valid");
+        let session = store.load_session(ACCOUNT_KEY);
+        let auth_status = if session.is_some() {
+            "signedIn".to_string()
+        } else {
+            "signedOut".to_string()
+        };
         Self(
             Arc::new(Mutex::new(AccountRuntimeState {
                 pending: None,
-                auth_status: "signedOut".to_string(),
+                auth_status,
+                session,
+                cached_user: None,
+                environment: "prod".to_string(),
             })),
-            Arc::new(Mutex::new(
-                NativeTzapSecretStore::new(ACCOUNT_KEY)
-                    .expect("default account secure-store scope is valid"),
-            )),
+            Arc::new(Mutex::new(store)),
         )
     }
 }
@@ -217,10 +249,12 @@ pub fn account_begin_hosted_auth(
     let now = current_unix_seconds();
     let mut tracker = TzapOAuthStateTracker::new();
     let pending = tracker.begin("hosted", REDIRECT_URI, now);
-    let environment = if request.local_service {
-        TzapHostedAuthEnvironment::Local
-    } else {
-        TzapHostedAuthEnvironment::Prod
+    let environment_str = request.environment.as_deref().unwrap_or("prod");
+    let environment = match environment_str {
+        "local" => TzapHostedAuthEnvironment::Local,
+        "dev" => TzapHostedAuthEnvironment::Dev,
+        "staging" => TzapHostedAuthEnvironment::Staging,
+        _ => TzapHostedAuthEnvironment::Prod,
     };
     let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
     let launch_url = config
@@ -234,7 +268,104 @@ pub fn account_begin_hosted_auth(
     let mut state = runtime.0.lock().expect("account runtime lock poisoned");
     state.pending = Some(pending);
     state.auth_status = "pending".to_string();
+    state.environment = environment_str.to_string();
     Ok(response)
+}
+
+#[tauri::command]
+pub fn account_complete_hosted_auth(
+    app: AppHandle,
+    request: AccountCompleteHostedAuthRequest,
+    runtime: State<'_, AccountRuntime>,
+) -> Result<AccountSnapshotDto, CommandErrorDto> {
+    let now = current_unix_seconds();
+    let mut state = runtime.0.lock().expect("account runtime lock poisoned");
+    let mut store = runtime.1.lock().expect("account store lock poisoned");
+
+    let pending = state
+        .pending
+        .take()
+        .ok_or_else(|| CommandErrorDto::invalid_request("No hosted sign-in is pending"))?;
+
+    if pending.state != request.state {
+        return Err(CommandErrorDto::invalid_request(
+            "Hosted sign-in state did not match",
+        ));
+    }
+
+    let mut tracker = TzapOAuthStateTracker::new();
+    tracker
+        .insert_pending(pending.clone())
+        .map_err(|e| account_error("account_auth_callback_failed", e))?;
+
+    let callback = TzapHostedAuthCallback {
+        state: request.state,
+        redirect_uri: REDIRECT_URI.to_string(),
+        pkce_verifier: pending.pkce.verifier.clone(),
+        callback_url: request.callback_url,
+        relay_body: request.relay_body.into_bytes(),
+    };
+
+    let session =
+        complete_hosted_auth_handoff(&mut tracker, &mut *store, ACCOUNT_KEY, &callback, now)
+            .map_err(|e| account_error("account_auth_callback_failed", e))?;
+
+    state.session = Some(session);
+    state.auth_status = "signedIn".to_string();
+    drop(state);
+
+    let root = account_state_dir(&app)?;
+    let catalog = ensure_catalog(&root, &runtime)?;
+    snapshot_from_catalog(&runtime, catalog)
+}
+
+#[tauri::command]
+pub fn account_fetch_current_user(
+    runtime: State<'_, AccountRuntime>,
+) -> Result<AccountCurrentUserDto, CommandErrorDto> {
+    let mut state = runtime.0.lock().expect("account runtime lock poisoned");
+    let session = state
+        .session
+        .as_ref()
+        .ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
+
+    let transport = crate::hosted_transport::HostedHttpTransport::new()
+        .map_err(|e| account_error("account_http_client_failed", e))?;
+
+    let environment_str = &state.environment;
+    let environment = match environment_str.as_str() {
+        "local" => TzapHostedAuthEnvironment::Local,
+        "dev" => TzapHostedAuthEnvironment::Dev,
+        "staging" => TzapHostedAuthEnvironment::Staging,
+        _ => TzapHostedAuthEnvironment::Prod,
+    };
+    let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
+
+    let user = zmanager_core::auth_client::fetch_current_user(
+        &transport,
+        &config.hosted_account_base_url,
+        session,
+    )
+    .map_err(|e| {
+        if matches!(e, zmanager_core::auth_client::TzapAuthError::HttpStatus { status_code: 401 }) {
+            let mut store = runtime.1.lock().expect("account store lock poisoned");
+            let _ = store.clear_session(ACCOUNT_KEY);
+            state.session = None;
+            state.auth_status = "expired".to_string();
+            CommandErrorDto::unauthorized(format!("Session expired: {}", e))
+        } else {
+            account_error("account_fetch_user_failed", e)
+        }
+    })?;
+
+    state.cached_user = Some(user.clone());
+
+    Ok(AccountCurrentUserDto {
+        display_name: user.display_name,
+        public_signer_id: user.public_signer_id,
+        assurance_level: user.assurance_level.as_str().to_string(),
+        selected_org_id: user.selected_org_id,
+    })
 }
 
 #[tauri::command]
@@ -1286,16 +1417,37 @@ fn snapshot_from_catalog(
     catalog: TzapIdentityCatalog,
 ) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let state = runtime.0.lock().expect("account runtime lock poisoned");
+    let (auth_cap, enroll_cap, status_cap) = if state.session.is_some() {
+        ("handoff_exchange", "available", "online")
+    } else {
+        ("launch_only", "unavailable", "offline_cache_only")
+    };
+
+    let assurance_level = state
+        .session
+        .as_ref()
+        .map(|s| s.identity_assurance.as_str().to_owned());
+    let session_expires_at_unix_seconds = state.session.as_ref().map(|s| s.expires_at_unix_seconds);
+    let display_name = state.cached_user.as_ref().map(|u| u.display_name.clone());
+    let public_signer_id = state
+        .cached_user
+        .as_ref()
+        .and_then(|u| u.public_signer_id.clone());
+
     Ok(AccountSnapshotDto {
         auth_status: state.auth_status.clone(),
         pending_state: state.pending.as_ref().map(|pending| pending.state.clone()),
         default_signing_identity_id: catalog.default_signing_identity_id.clone(),
         capabilities: AccountCapabilitiesDto {
-            auth: "launch_only".to_owned(),
-            enrollment: "unavailable".to_owned(),
-            status: "offline_cache_only".to_owned(),
+            auth: auth_cap.to_owned(),
+            enrollment: enroll_cap.to_owned(),
+            status: status_cap.to_owned(),
             account_management: "external_browser".to_owned(),
         },
+        display_name,
+        public_signer_id,
+        assurance_level,
+        session_expires_at_unix_seconds,
         certificates: catalog
             .signing_identities
             .into_iter()

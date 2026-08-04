@@ -4,14 +4,24 @@ import type {
   AccountHostedAuthLaunchDto,
   AccountInstallSigningCertificateRequest,
   AccountSnapshotDto,
+  AccountCurrentUserDto,
 } from "../../api/types";
 import type { AccountWorkspace } from "../workspaces/accountWorkspace";
 
 export type AccountControllerOptions = Readonly<{
   workspace: AccountWorkspace;
   fetchSnapshot(): Promise<AccountSnapshotDto>;
-  beginHostedAuth(local: boolean): Promise<AccountHostedAuthLaunchDto>;
+  beginHostedAuth(environment: string): Promise<AccountHostedAuthLaunchDto>;
   applyHostedCallback(payload: NativeInboundHostedAuthEvent["payload"]): Promise<void>;
+  completeHostedAuth(state: string, relayBody: string, callbackUrl?: string): Promise<AccountSnapshotDto>;
+  fetchCurrentUser(): Promise<AccountCurrentUserDto>;
+  enrollDeviceCertificate(): Promise<AccountSnapshotDto>;
+  renewCertificate(certificateId: string): Promise<AccountSnapshotDto>;
+  revokeCertificate(certificateId: string): Promise<AccountSnapshotDto>;
+  signDocument(): Promise<void>;
+  verifyDocument(): Promise<void>;
+  exportContactCard(): Promise<void>;
+  retireDevice(): Promise<AccountSnapshotDto>;
   forget(): Promise<AccountSnapshotDto>;
   generateRecipientKey(label?: string): Promise<AccountSnapshotDto>;
   generateSigningIdentity(commonName: string, label?: string): Promise<AccountSnapshotDto>;
@@ -28,6 +38,8 @@ export type AccountControllerOptions = Readonly<{
   publish(): void;
   errorMessage(error: unknown): string;
 }>;
+
+export type AccountController = ReturnType<typeof createAccountController>;
 
 export function createAccountController(options: AccountControllerOptions) {
   async function run(operation: () => Promise<AccountSnapshotDto>): Promise<void> {
@@ -48,10 +60,10 @@ export function createAccountController(options: AccountControllerOptions) {
     refresh: () => run(options.fetchSnapshot),
     async open() { options.workspace.open(); options.publish(); await run(options.fetchSnapshot); },
     close() { options.workspace.close(); options.publish(); },
-    async beginHostedAuth(local = false) {
+    async beginHostedAuth(environment = "prod") {
       options.workspace.setBusy(true); options.publish();
       try {
-        const launch = await options.beginHostedAuth(local);
+        const launch = await options.beginHostedAuth(environment);
         await options.openUrl(launch.launchUrl);
         options.workspace.setNotice("Hosted sign-in is pending.");
         options.workspace.replace(await options.fetchSnapshot());
@@ -60,15 +72,52 @@ export function createAccountController(options: AccountControllerOptions) {
       } finally { options.workspace.setBusy(false); options.publish(); }
     },
     async handleHostedCallback(payload: NativeInboundHostedAuthEvent["payload"]) {
-      await options.applyHostedCallback(payload);
-      options.workspace.replace(await options.fetchSnapshot());
-      options.workspace.setNotice(
-        payload.result === "completed"
-          ? "Callback received. Hosted sign-in exchange is unavailable; you are not connected."
-          : `Hosted sign-in ${payload.result}.`,
-      );
-      options.publish();
+      options.workspace.setBusy(true); options.publish();
+      try {
+        if (payload.result === "completed" && payload.relayBody) {
+          options.workspace.replace(
+            await options.completeHostedAuth(payload.state, payload.relayBody, payload.callbackUrl)
+          );
+          options.workspace.setNotice("Hosted sign-in completed.");
+        } else {
+          await options.applyHostedCallback(payload);
+          options.workspace.replace(await options.fetchSnapshot());
+          options.workspace.setNotice(`Hosted sign-in ${payload.result}.`);
+        }
+      } catch (error) {
+        options.workspace.setNotice(options.errorMessage(error));
+      } finally { options.workspace.setBusy(false); options.publish(); }
     },
+    async handleFetchUser() {
+      options.workspace.setBusy(true); options.publish();
+      try {
+        await options.fetchCurrentUser();
+        options.workspace.replace(await options.fetchSnapshot());
+      } catch (error: any) {
+        if (error?.code === "unauthorized") {
+          options.workspace.replace(await options.fetchSnapshot());
+          options.workspace.setNotice("Session expired. Please sign in again.");
+        } else {
+          options.workspace.setNotice(options.errorMessage(error));
+        }
+      } finally { options.workspace.setBusy(false); options.publish(); }
+    },
+    handleEnroll: () => run(options.enrollDeviceCertificate),
+    handleRenew: (certificateId: string) => run(() => options.renewCertificate(certificateId)),
+    handleRevoke: (certificateId: string) => run(() => options.revokeCertificate(certificateId)),
+    async handleSignDocument() {
+      options.workspace.setBusy(true); options.publish();
+      try { await options.signDocument(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }
+    },
+    async handleVerifyDocument() {
+      options.workspace.setBusy(true); options.publish();
+      try { await options.verifyDocument(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }
+    },
+    async handleExportContactCard() {
+      options.workspace.setBusy(true); options.publish();
+      try { await options.exportContactCard(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }
+    },
+    handleDeviceRetire: () => run(options.retireDevice),
     forget: () => run(options.forget),
     generateRecipientKey: (label?: string) => run(() => options.generateRecipientKey(label)),
     generateSigningIdentity: (commonName: string, label?: string) => run(() => options.generateSigningIdentity(commonName, label)),

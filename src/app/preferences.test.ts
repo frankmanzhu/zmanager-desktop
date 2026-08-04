@@ -179,6 +179,7 @@ describe("preferences helpers", () => {
       flatViewDefault: true,
       tableSortKey: "size",
       tableSortAscending: false,
+      tzapEnvironment: "prod",
     });
   });
 
@@ -239,6 +240,7 @@ describe("preferences helpers", () => {
         flatViewDefault: true,
         tableSortKey: "size",
         tableSortAscending: false,
+        tzapEnvironment: "prod",
         locale: "en",
       },
       storage,
@@ -282,6 +284,7 @@ describe("preferences helpers", () => {
       "zmanager.flatViewDefault": "true",
       "zmanager.tableSortKey": "size",
       "zmanager.tableSortAscending": "false",
+      "zmanager.tzapEnvironment": "prod",
     });
   });
 

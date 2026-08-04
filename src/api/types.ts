@@ -120,7 +120,7 @@ export type AccountContactDto = {
 };
 
 export type AccountSnapshotDto = {
-  authStatus: "signedOut" | "pending" | "launchOnlyCallbackCompleted" | "cancelled" | "failed";
+  authStatus: "signedOut" | "pending" | "launchOnlyCallbackCompleted" | "signedIn" | "cancelled" | "failed" | string;
   pendingState?: string | null;
   defaultSigningIdentityId: string | null;
   capabilities: {
@@ -132,6 +132,23 @@ export type AccountSnapshotDto = {
   certificates: AccountCertificateDto[];
   recipientKeys: AccountRecipientKeyDto[];
   contacts: AccountContactDto[];
+  displayName: string | null;
+  publicSignerId: string | null;
+  assuranceLevel: string | null;
+  sessionExpiresAtUnixSeconds: number | null;
+};
+
+export type AccountCompleteHostedAuthRequest = {
+  state: string;
+  relayBody: string;
+  callbackUrl?: string;
+};
+
+export type AccountCurrentUserDto = {
+  displayName: string;
+  publicSignerId?: string | null;
+  assuranceLevel: string;
+  selectedOrgId?: string | null;
 };
 
 export type AccountGenerateSigningIdentityRequest = {

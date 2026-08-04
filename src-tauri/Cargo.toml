@@ -22,6 +22,11 @@ tokio = { version = "1", features = ["sync", "rt", "macros"] }
 unicode-normalization = "0.1"
 zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
 zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmanager-core" }
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls"] }
+tauri-plugin-deep-link = "2"
+tzap-core = { path = "../../tzap/crates/tzap-core" }
+tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
+tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }
 
 [target.'cfg(windows)'.dependencies]
 png = "0.18.1"

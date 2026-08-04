@@ -9,6 +9,7 @@ mod default_handlers;
 mod diagnostics;
 mod dto;
 mod error;
+mod hosted_transport;
 mod job_dto;
 mod job_registry;
 mod native_drag_session;
@@ -17,6 +18,7 @@ mod native_launch_inbox;
 mod platform;
 mod quick_action;
 mod secure_store;
+mod signing;
 
 use tauri::{Emitter, Manager};
 
@@ -90,7 +92,8 @@ fn main() {
         .manage(quick_action_launch_coordinator)
         .manage(native_launch_inbox.clone())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init());
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init());
     let builder = if launch_instance_mode.registers_single_instance() {
         builder.plugin(tauri_plugin_single_instance::init(
             move |_app, argv, _cwd| {
@@ -183,6 +186,8 @@ fn main() {
             account::account_snapshot,
             account::account_begin_hosted_auth,
             account::account_apply_hosted_callback,
+            account::account_complete_hosted_auth,
+            account::account_fetch_current_user,
             account::account_forget,
             account::account_generate_recipient_key,
             account::account_generate_signing_identity,
@@ -194,6 +199,8 @@ fn main() {
             account::account_remove_contact,
             account::account_inspect_contact_card,
             account::account_accept_contact_card,
+            signing::account_sign_document,
+            signing::account_verify_document,
             commands::start_archive_index,
             commands::wait_archive_index,
             commands::get_archive_children,

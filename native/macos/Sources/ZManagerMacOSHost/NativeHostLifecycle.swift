@@ -36,9 +36,12 @@ struct NativeHostEventEncoder {
               state.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }),
               let result = values["result"], ["completed", "cancelled", "failed"].contains(result)
         else { return nil }
-        var payload: [String: Any] = ["state": state, "result": result]
+        var payload: [String: Any] = ["state": state, "result": result, "callbackUrl": url.absoluteString]
         if let errorCode = values["error_code"], errorCode.count <= 128 {
             payload["errorCode"] = errorCode
+        }
+        if let relayBody = values["relay_body"] {
+            payload["relayBody"] = relayBody
         }
         return payload
     }

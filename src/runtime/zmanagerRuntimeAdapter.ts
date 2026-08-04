@@ -64,6 +64,7 @@ import {
   createStartupController,
 } from "../app/controllers/startupController";
 import { createAccountController } from "../app/controllers/accountController";
+import { initializeDeepLinkAdapter } from "../desktop/deepLinkAdapter";
 import { createDefaultHandlerController } from "../app/controllers/defaultHandlerController";
 import {
   createNativeInboundController,
@@ -247,6 +248,8 @@ import {
   asCommandError,
   applyAccountHostedCallback,
   beginAccountHostedAuth,
+  completeAccountHostedAuth,
+  fetchAccountCurrentUser,
   acknowledgeNativeEvent,
   fetchHealthcheck,
   fetchAccountSnapshot,
@@ -1174,6 +1177,15 @@ const accountController = createAccountController({
   fetchSnapshot: fetchAccountSnapshot,
   beginHostedAuth: beginAccountHostedAuth,
   applyHostedCallback: applyAccountHostedCallback,
+  completeHostedAuth: (state, relayBody, callbackUrl) => completeAccountHostedAuth({ state, relayBody, callbackUrl }),
+  fetchCurrentUser: fetchAccountCurrentUser,
+  enrollDeviceCertificate: () => Promise.reject(new Error("Not implemented yet")),
+  renewCertificate: () => Promise.reject(new Error("Not implemented yet")),
+  revokeCertificate: () => Promise.reject(new Error("Not implemented yet")),
+  signDocument: () => Promise.reject(new Error("Not implemented yet")),
+  verifyDocument: () => Promise.reject(new Error("Not implemented yet")),
+  exportContactCard: () => Promise.reject(new Error("Not implemented yet")),
+  retireDevice: () => Promise.reject(new Error("Not implemented yet")),
   forget: forgetAccount,
   generateRecipientKey: generateAccountRecipientKey,
   generateSigningIdentity: (commonName, label) => generateAccountSigningIdentity({ commonName, label }),
@@ -1932,7 +1944,7 @@ function handleReactAccountIntent(intent: ZManagerAccountIntent) {
     case "open": void accountController.open(); break;
     case "close": accountController.close(); break;
     case "refresh": void accountController.open(); break;
-    case "beginHostedAuth": void accountController.beginHostedAuth(Boolean(intent.local)); break;
+    case "beginHostedAuth": void accountController.beginHostedAuth(intent.environment ?? "prod"); break;
     case "forget": void accountController.forget(); break;
     case "generateRecipientKey": void accountController.generateRecipientKey(intent.label); break;
     case "generateSigningIdentity": void accountController.generateSigningIdentity(intent.commonName, intent.label); break;
@@ -3754,6 +3766,10 @@ async function initializeDesktopRuntime() {
     });
   });
   await startupController.initializeDesktopRuntime();
+  
+  initializeDeepLinkAdapter(accountController).catch(error => {
+    console.error("Failed to initialize deep link adapter", error);
+  });
 }
 
 async function handleHostedAuthCallback(

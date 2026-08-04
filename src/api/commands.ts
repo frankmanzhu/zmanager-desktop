@@ -47,6 +47,8 @@ import type {
   VerifyTzapCertificateRequest,
   VerifyTzapCertificateResponse,
   ValidateTzapSigningIdentityRequest,
+  AccountCurrentUserDto,
+  AccountCompleteHostedAuthRequest,
   ValidateTzapSigningIdentityResponse,
 } from "./types";
 
@@ -54,9 +56,9 @@ export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
   return invoke<AccountSnapshotDto>("account_snapshot");
 }
 
-export async function beginAccountHostedAuth(localService = false): Promise<AccountHostedAuthLaunchDto> {
+export async function beginAccountHostedAuth(environment: string = "prod"): Promise<AccountHostedAuthLaunchDto> {
   return invoke<AccountHostedAuthLaunchDto>("account_begin_hosted_auth", {
-    request: { localService },
+    request: { environment },
   });
 }
 
@@ -70,6 +72,14 @@ export async function applyAccountHostedCallback(request: {
 
 export async function forgetAccount(): Promise<AccountSnapshotDto> {
   return invoke<AccountSnapshotDto>("account_forget");
+}
+
+export async function completeAccountHostedAuth(request: AccountCompleteHostedAuthRequest): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_complete_hosted_auth", { request });
+}
+
+export async function fetchAccountCurrentUser(): Promise<AccountCurrentUserDto> {
+  return invoke<AccountCurrentUserDto>("account_fetch_current_user");
 }
 
 export async function generateAccountRecipientKey(label?: string): Promise<AccountSnapshotDto> {

@@ -31,9 +31,9 @@ export type PreferenceStorageKey =
   | "alternativeSelectionMode"
   | "showToolbarLabels"
   | "flatViewDefault"
-  | "tableColumnVisibility"
   | "tableSortKey"
-  | "tableSortAscending";
+  | "tableSortAscending"
+  | "tzapEnvironment";
 
 export const PREFERENCE_KEYS = {
   locale: "zmanager.locale",
@@ -64,8 +64,8 @@ export const PREFERENCE_KEYS = {
   flatViewDefault: "zmanager.flatViewDefault",
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
-  tableColumnVisibility: "zmanager.tableColumnVisibility",
-} satisfies Record<PreferenceStorageKey, string>;
+  tzapEnvironment: "zmanager.tzapEnvironment",
+};
 
 export function resolvePreferenceStorage(): PreferenceStorage | null {
   try {

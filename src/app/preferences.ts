@@ -75,6 +75,7 @@ export type AppPreferences = {
   flatViewDefault: boolean;
   tableSortKey: ArchiveSortKey;
   tableSortAscending: boolean;
+  tzapEnvironment: "prod" | "staging";
 };
 
 export type AppPreferencePatch = Partial<AppPreferences>;
@@ -183,6 +184,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   flatViewDefault: false,
   tableSortKey: "name",
   tableSortAscending: true,
+  tzapEnvironment: "prod",
 };
 
 const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ", "tarGz", "appleArchive"] as const;
@@ -489,6 +491,7 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       storage.getItem(PREFERENCE_KEYS.tableSortAscending),
       DEFAULT_APP_PREFERENCES.tableSortAscending,
     ),
+    tzapEnvironment: (storage.getItem(PREFERENCE_KEYS.tzapEnvironment) as "prod" | "staging") || DEFAULT_APP_PREFERENCES.tzapEnvironment,
   };
 }
 
@@ -521,10 +524,9 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.alternativeSelectionMode, String(preferences.alternativeSelectionMode));
   storage.setItem(PREFERENCE_KEYS.showToolbarLabels, String(preferences.showToolbarLabels));
   storage.setItem(PREFERENCE_KEYS.flatViewDefault, String(preferences.flatViewDefault));
-  // Column visibility, order, and width persistence is handled by the
-  // unified column preferences path (tableColumnVisibility).
   storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
   storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
+  storage.setItem(PREFERENCE_KEYS.tzapEnvironment, preferences.tzapEnvironment);
 
   const customOutputFolderPath = preferences.customOutputFolderPath.trim();
   if (customOutputFolderPath) {

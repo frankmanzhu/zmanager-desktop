@@ -21,6 +21,10 @@ describe("account workspace", () => {
         lifecycle: "active",
       }],
       contacts: [],
+      displayName: null,
+      publicSignerId: null,
+      assuranceLevel: null,
+      sessionExpiresAtUnixSeconds: null,
     });
     expect(snapshot.visible).toBe(true);
     expect(Object.isFrozen(snapshot)).toBe(true);

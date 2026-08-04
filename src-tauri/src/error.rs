@@ -126,4 +126,14 @@ impl CommandErrorDto {
             false,
         )
     }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        Self::new(
+            crate::constants::COMMAND_ERROR_UNAUTHORIZED,
+            message,
+            None::<String>,
+            ErrorSeverityDto::Warning,
+            false,
+        )
+    }
 }

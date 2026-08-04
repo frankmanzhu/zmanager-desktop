@@ -366,7 +366,7 @@ export type ZManagerAccountIntent =
   | Readonly<{ type: "open" }>
   | Readonly<{ type: "close" }>
   | Readonly<{ type: "refresh" }>
-  | Readonly<{ type: "beginHostedAuth"; local?: boolean }>
+  | Readonly<{ type: "beginHostedAuth"; environment?: string }>
   | Readonly<{ type: "forget" }>
   | Readonly<{ type: "generateRecipientKey"; label?: string }>
   | Readonly<{ type: "generateSigningIdentity"; commonName: string; label?: string }>

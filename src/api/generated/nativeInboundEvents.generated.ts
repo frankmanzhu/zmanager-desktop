@@ -35,6 +35,8 @@ export type NativeInboundHostedAuthEvent = Readonly<{
     state: string;
     result: "completed" | "cancelled" | "failed";
     errorCode?: string | null;
+    relayBody?: string;
+    callbackUrl?: string;
   }>;
 }>;
 export type NativeInboundReopenEvent = Readonly<{

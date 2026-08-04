@@ -31,6 +31,7 @@ pub const COMMAND_ERROR_IO_ERROR: &str = "io_error";
 pub const COMMAND_ERROR_UNSUPPORTED_FORMAT: &str = "unsupported_format";
 pub const COMMAND_ERROR_CANCELLED: &str = "cancelled";
 pub const COMMAND_ERROR_OPERATION_FAILED: &str = "operation_failed";
+pub const COMMAND_ERROR_UNAUTHORIZED: &str = "unauthorized";
 
 pub const PLANNED_COMMANDS: &[&str] = &[
     COMMAND_HEALTHCHECK,

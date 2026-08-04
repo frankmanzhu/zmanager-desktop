@@ -42,7 +42,7 @@ import { translatorForSnapshot } from "../shell/shellHelpers";
 import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
 
 type PreferencePage =
-  "folders" | "archive" | "columns" | "extraction" | "interface" | "safety";
+  "folders" | "archive" | "columns" | "extraction" | "interface" | "safety" | "advanced";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
 
 const FORMAT_LABELS: Record<CreateFormat, string> = {
@@ -61,6 +61,7 @@ const PAGE_ICONS: Record<PreferencePage, typeof FolderOpen> = {
   extraction: Sparkles,
   interface: Monitor,
   safety: ShieldCheck,
+  advanced: Sparkles, // reusing Sparkles or maybe Settings if imported, but let's use Sparkles for now
 };
 
 const PREFERENCE_PAGE_CLASS = [
@@ -93,6 +94,7 @@ const PAGES: readonly Readonly<{
   { id: "extraction", labelKey: "preferences.extraction.title" },
   { id: "interface", labelKey: "preferences.interface.title" },
   { id: "safety", labelKey: "preferences.safety.title" },
+  { id: "advanced", labelKey: "Advanced" as any },
 ];
 
 export function PreferencesDialog() {
@@ -215,6 +217,7 @@ export function PreferencesDialog() {
                 active={activePage === "columns"}
               />
               <SafetyPage draft={draft} active={activePage === "safety"} />
+              <AdvancedPage draft={draft} active={activePage === "advanced"} />
               <p
                 id="preferences-status"
                 className={`mt-6 rounded-xl border px-4 py-3 text-xs ${customOutputMissing ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400"}`}
@@ -1533,5 +1536,51 @@ function ColumnsPage({
         }}
       />
     </section>
+  );
+}
+function AdvancedPage({
+  draft,
+  active,
+}: {
+  draft: AppPreferences;
+  active: boolean;
+}) {
+  const actions = useZManagerActions();
+
+  return (
+    <div className={PREFERENCE_PAGE_CLASS} hidden={!active}>
+      <h3>Advanced</h3>
+      <p className={DESCRIPTION_CLASS}>
+        Developer settings and experimental features.
+      </p>
+
+      <section className="mt-6 space-y-4">
+        <div className={SETTING_ROW_CLASS}>
+          <label>TZAP Server Environment</label>
+          <div className={SETTING_CONTROL_CLASS}>
+            <Select
+              value={draft.tzapEnvironment}
+              onValueChange={(val: "prod" | "staging") => {
+                actions.handleDialogIntent({
+                  type: "preferencesPatch",
+                  patch: { tzapEnvironment: val },
+                });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="prod">Production</SelectItem>
+                <SelectItem value="staging">Staging</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className={SETTING_DESCRIPTION_CLASS}>
+              Controls which backend environment the application connects to for TZAP hosted features.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

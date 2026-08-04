@@ -15,8 +15,6 @@ fn main() {
             "default_handler_status",
             "default_handler_set",
             "default_handler_restore",
-            "replacement_migration_prepare",
-            "replacement_migration_complete",
             "validate_directory",
             "record_diagnostic_event",
             "diagnostic_log_info",

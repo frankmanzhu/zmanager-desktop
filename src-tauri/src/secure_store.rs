@@ -1,10 +1,15 @@
 //! Native OS secure-store adapter for TZAP private material.
 
 use keyring::{Entry, Error as KeyringError};
+use serde_json::{Value, json};
+use zmanager_core::auth_client::{
+    TzapAuthError, TzapBearerToken, TzapSessionRecord, TzapSessionStore,
+};
 use zmanager_core::identity_catalog::{
     TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
 };
 use zmanager_core::secrets::SecretBytes;
+use zmanager_core::trust::TzapIdentityAssurance;
 
 const SERVICE_NAME: &str = "org.tzap.zmanager.identity";
 
@@ -98,6 +103,92 @@ impl TzapSecretMaterialStore for NativeTzapSecretStore {
         entry
             .delete_credential()
             .map_err(|error| map_keyring_error(error, reference))
+    }
+}
+
+impl TzapSessionStore for NativeTzapSecretStore {
+    fn save_session(
+        &mut self,
+        account_key: &str,
+        session: TzapSessionRecord,
+    ) -> Result<(), TzapAuthError> {
+        let json_value = json!({
+            "audience": session.audience,
+            "access_token": session.access_token.expose(),
+            "expires_at_unix_seconds": session.expires_at_unix_seconds,
+            "identity_assurance": session.identity_assurance.as_str(),
+            "selected_org_id": session.selected_org_id,
+            "login_session_id": session.login_session_id,
+        });
+        let bytes = serde_json::to_vec(&json_value).map_err(|e| TzapAuthError::Storage {
+            message: format!("Serialize failed: {}", e),
+        })?;
+
+        let entry = Entry::new(
+            SERVICE_NAME,
+            &format!("{}:session:{}", self.account_scope, account_key),
+        )
+        .map_err(|_| TzapAuthError::Storage {
+            message: "Keyring entry failed".into(),
+        })?;
+
+        entry
+            .set_secret(&bytes)
+            .map_err(|_| TzapAuthError::Storage {
+                message: "Save to keyring failed".into(),
+            })?;
+        Ok(())
+    }
+
+    fn load_session(&self, account_key: &str) -> Option<TzapSessionRecord> {
+        let entry = Entry::new(
+            SERVICE_NAME,
+            &format!("{}:session:{}", self.account_scope, account_key),
+        )
+        .ok()?;
+
+        let bytes = entry.get_secret().ok()?;
+        let value: Value = serde_json::from_slice(&bytes).ok()?;
+
+        let audience = value.get("audience")?.as_str()?.to_string();
+        let access_token = TzapBearerToken::new(value.get("access_token")?.as_str()?).ok()?;
+        let expires_at_unix_seconds = value.get("expires_at_unix_seconds")?.as_u64()?;
+        let identity_assurance =
+            TzapIdentityAssurance::parse(value.get("identity_assurance")?.as_str()?)?;
+        let selected_org_id = value
+            .get("selected_org_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let login_session_id = value
+            .get("login_session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        Some(TzapSessionRecord {
+            audience,
+            access_token,
+            expires_at_unix_seconds,
+            identity_assurance,
+            selected_org_id,
+            login_session_id,
+        })
+    }
+
+    fn clear_session(&mut self, account_key: &str) -> Result<(), TzapAuthError> {
+        let entry = Entry::new(
+            SERVICE_NAME,
+            &format!("{}:session:{}", self.account_scope, account_key),
+        )
+        .map_err(|_| TzapAuthError::Storage {
+            message: "Keyring entry failed".into(),
+        })?;
+
+        match entry.delete_credential() {
+            Ok(_) | Err(KeyringError::NoEntry) => Ok(()),
+            Err(e) => Err(TzapAuthError::Storage {
+                message: format!("Delete failed: {}", e),
+            }),
+        }
     }
 }
 
