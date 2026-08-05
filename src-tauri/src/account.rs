@@ -252,7 +252,6 @@ pub fn account_begin_hosted_auth(
     let environment_str = request.environment.as_deref().unwrap_or("prod");
     let environment = match environment_str {
         "local" => TzapHostedAuthEnvironment::Local,
-        "dev" => TzapHostedAuthEnvironment::Dev,
         "staging" => TzapHostedAuthEnvironment::Staging,
         _ => TzapHostedAuthEnvironment::Prod,
     };
@@ -335,7 +334,6 @@ pub fn account_fetch_current_user(
     let environment_str = &state.environment;
     let environment = match environment_str.as_str() {
         "local" => TzapHostedAuthEnvironment::Local,
-        "dev" => TzapHostedAuthEnvironment::Dev,
         "staging" => TzapHostedAuthEnvironment::Staging,
         _ => TzapHostedAuthEnvironment::Prod,
     };

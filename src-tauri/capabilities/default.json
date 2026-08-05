@@ -20,6 +20,8 @@
     "allow-account-snapshot",
     "allow-account-begin-hosted-auth",
     "allow-account-apply-hosted-callback",
+    "allow-account-complete-hosted-auth",
+    "allow-account-fetch-current-user",
     "allow-account-forget",
     "allow-account-generate-recipient-key",
     "allow-account-generate-signing-identity",

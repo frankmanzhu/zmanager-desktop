@@ -24,6 +24,8 @@ fn main() {
             "account_snapshot",
             "account_begin_hosted_auth",
             "account_apply_hosted_callback",
+            "account_complete_hosted_auth",
+            "account_fetch_current_user",
             "account_forget",
             "account_generate_recipient_key",
             "account_generate_signing_identity",

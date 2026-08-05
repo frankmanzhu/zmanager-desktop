@@ -62,6 +62,12 @@ const COMMAND_WRAPPERS = [
     request: { state: "state-1234567890", result: "completed" },
     call: () => api.applyAccountHostedCallback({ state: "state-1234567890", result: "completed" }),
   },
+  {
+    command: "account_complete_hosted_auth",
+    request: { state: "state-1234567890", relayBody: "relay-body-1234567890" },
+    call: () => api.completeAccountHostedAuth({ state: "state-1234567890", relayBody: "relay-body-1234567890" }),
+  },
+  { command: "account_fetch_current_user", call: () => api.fetchAccountCurrentUser() },
   { command: "account_forget", call: () => api.forgetAccount() },
   {
     command: "account_generate_recipient_key",
