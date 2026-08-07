@@ -8,7 +8,7 @@ import {
   createInitialZManagerReactSnapshot,
   noopZManagerReactActions,
 } from "../appRuntime";
-import { AccountWorkspace } from "./AccountWorkspace";
+import { AccountWorkspace, type AccountWorkspaceProps } from "./AccountWorkspace";
 
 describe("AccountWorkspace", () => {
   it("renders the React account surface from a secret-free snapshot", () => {
@@ -24,7 +24,7 @@ describe("AccountWorkspace", () => {
       createElement(
         ZManagerAppRuntimeProvider,
         { store },
-        createElement(AccountWorkspace),
+        createElement<AccountWorkspaceProps>(AccountWorkspace, { defaultTab: "certificates" }),
       ),
     );
     expect(html).toContain("Identity &amp; Contacts");
@@ -72,7 +72,7 @@ describe("AccountWorkspace", () => {
       createElement(
         ZManagerAppRuntimeProvider,
         { store },
-        createElement(AccountWorkspace),
+        createElement<AccountWorkspaceProps>(AccountWorkspace, { defaultTab: "contacts" }),
       ),
     );
 
@@ -122,7 +122,7 @@ describe("AccountWorkspace", () => {
       createElement(
         ZManagerAppRuntimeProvider,
         { store },
-        createElement(AccountWorkspace),
+        createElement<AccountWorkspaceProps>(AccountWorkspace, { defaultTab: "certificates" }),
       ),
     );
 

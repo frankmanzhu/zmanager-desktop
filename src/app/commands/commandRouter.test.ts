@@ -233,6 +233,7 @@ describe("context command selector", () => {
       commandId: "open",
       payload: { openSource: "path", archivePath: "C:/archives/app.zip" },
     });
+    expect(selectContextCommand("open-entry")).toEqual({ commandId: "view" });
     expect(selectContextCommand("open-outside")).toEqual({ commandId: "openOutside" });
     expect(selectContextCommand("select-by-type")).toEqual({ commandId: "selectByType" });
     expect(selectContextCommand("deselect-by-type")).toEqual({ commandId: "deselectByType" });

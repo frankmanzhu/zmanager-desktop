@@ -3,6 +3,7 @@ use crate::error::CommandErrorDto;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSignDocumentRequest {
@@ -23,9 +24,12 @@ pub fn account_sign_document(
     _request: AccountSignDocumentRequest,
     _runtime: State<'_, AccountRuntime>,
 ) -> Result<AccountSignDocumentResultDto, CommandErrorDto> {
-    Err(CommandErrorDto::operation_failed("Document signing is not fully implemented yet."))
+    Err(CommandErrorDto::operation_failed(
+        "Document signing is not fully implemented yet.",
+    ))
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountVerifyDocumentRequest {
@@ -45,5 +49,7 @@ pub fn account_verify_document(
     _request: AccountVerifyDocumentRequest,
     _runtime: State<'_, AccountRuntime>,
 ) -> Result<AccountVerifyDocumentResultDto, CommandErrorDto> {
-    Err(CommandErrorDto::operation_failed("Document verification is not fully implemented yet."))
+    Err(CommandErrorDto::operation_failed(
+        "Document verification is not fully implemented yet.",
+    ))
 }

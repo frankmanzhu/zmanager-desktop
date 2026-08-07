@@ -23,10 +23,6 @@ use zmanager_core::identity_catalog::{
     FileTzapIdentityCatalogStore, TzapIdentityCatalog, TzapIdentityCatalogStore,
     TzapPublicContactRecord, TzapPublicRecipientKeyRecord, TzapPublicSigningIdentityRecord,
     TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
-    migrate_legacy_inventory,
-};
-use zmanager_core::local_identity_store::{
-    FileTzapLocalIdentityStore, IDENTITY_INVENTORY_FILE_SUFFIX,
 };
 
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
@@ -345,7 +341,10 @@ pub fn account_fetch_current_user(
         session,
     )
     .map_err(|e| {
-        if matches!(e, zmanager_core::auth_client::TzapAuthError::HttpStatus { status_code: 401 }) {
+        if matches!(
+            e,
+            zmanager_core::auth_client::TzapAuthError::HttpStatus { status_code: 401 }
+        ) {
             let mut store = runtime.1.lock().expect("account store lock poisoned");
             let _ = store.clear_session(ACCOUNT_KEY);
             state.session = None;
@@ -422,51 +421,10 @@ pub fn account_generate_recipient_key(
     let material = generate_recipient_encryption_key()
         .map_err(|error| account_error("account_key_generation_failed", error))?;
     let now = current_unix_seconds();
-    let mutation_id = format!("recipient-key-{now}-{}", catalog.revision);
-    catalog.pending_mutations.push(mutation_id.clone());
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let private_key_ref = with_secret_store(&runtime, |secret_store| {
         secret_store.put(TzapSecretPurpose::RecipientKey, material.private_key_der)
     })
     .map_err(|error| account_error("account_secure_store_failed", error))?;
-    let pending_with_ref = format!("{mutation_id}:{}", private_key_ref.as_str());
-    if let Some(pending) = catalog
-        .pending_mutations
-        .iter_mut()
-        .find(|pending| **pending == mutation_id)
-    {
-        *pending = pending_with_ref.clone();
-    }
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref)
-        });
-        return Err(account_error("account_catalog_save_failed", error));
-    }
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let key_id = format!("recipient_{}", TzapSecretRef::generate().as_str());
     for existing in catalog.recipient_keys.iter_mut() {
         if existing.lifecycle == "active" {
@@ -480,19 +438,19 @@ pub fn account_generate_recipient_key(
         algorithm: material.algorithm.to_string(),
         public_key_der: material.public_key_spki_der,
         fingerprint: material.public_key_fingerprint,
-        private_key_ref,
+        private_key_ref: private_key_ref.clone(),
         lifecycle: "active".to_owned(),
         created_at_unix_seconds: now,
         retired_at_unix_seconds: None,
     });
-    catalog
-        .pending_mutations
-        .retain(|pending| pending != &pending_with_ref);
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
+        let _ = with_secret_store(&runtime, |secret_store| {
+            secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref)
+        });
+        return Err(account_error("account_catalog_save_failed", error));
+    }
     snapshot_at(&root, &runtime)
 }
 
@@ -564,22 +522,6 @@ pub fn account_generate_signing_identity(
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
     let now = current_unix_seconds();
-    let mutation_id = format!("signing-identity-{now}-{}", catalog.revision);
-    catalog.pending_mutations.push(mutation_id.clone());
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let signing_key_ref = with_secret_store(&runtime, |secret_store| {
         secret_store.put(TzapSecretPurpose::SigningKey, material.private_key_der)
     })
@@ -589,31 +531,6 @@ pub fn account_generate_signing_identity(
         "signing_identity_secret_stored",
         crate::diagnostics::fields([]),
     );
-    let pending_with_ref = format!("{mutation_id}:{}", signing_key_ref.as_str());
-    if let Some(pending) = catalog
-        .pending_mutations
-        .iter_mut()
-        .find(|pending| **pending == mutation_id)
-    {
-        *pending = pending_with_ref.clone();
-    }
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
-        });
-        return Err(account_error("account_catalog_save_failed", error));
-    }
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let identity_id = format!("signing_{}", TzapSecretRef::generate().as_str());
     catalog
         .signing_identities
@@ -633,25 +550,31 @@ pub fn account_generate_signing_identity(
             public_device_id: None,
             assurance_level: Some("local_self_signed".to_owned()),
             sign_device_id: None,
-            signing_key_ref,
+            sign_device_routing: None,
+            signing_key_created_at_unix_seconds: Some(now),
+            legacy_key_id: None,
+            metadata_version: None,
+            policy_oid: None,
+            signing_key_ref: signing_key_ref.clone(),
             lifecycle: "active".to_owned(),
         });
     if catalog.default_signing_identity_id.is_none() {
         catalog.default_signing_identity_id = Some(identity_id);
     }
-    catalog
-        .pending_mutations
-        .retain(|pending| pending != &pending_with_ref);
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
+        let _ = with_secret_store(&runtime, |secret_store| {
+            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
+        });
+        return Err(account_error("account_catalog_save_failed", error));
+    }
     let _ = diagnostics.record(
         "account",
         "signing_identity_generation_completed",
         crate::diagnostics::fields([]),
     );
+
     snapshot_at(&root, &runtime)
 }
 
@@ -738,51 +661,10 @@ pub fn account_import_signing_identity(
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
     let now = current_unix_seconds();
-    let mutation_id = format!("signing-identity-import-{now}-{}", catalog.revision);
-    catalog.pending_mutations.push(mutation_id.clone());
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let signing_key_ref = with_secret_store(&runtime, |secret_store| {
         secret_store.put(TzapSecretPurpose::SigningKey, private_key_der.into())
     })
     .map_err(|error| account_error("account_secure_store_failed", error))?;
-    let pending_with_ref = format!("{mutation_id}:{}", signing_key_ref.as_str());
-    if let Some(pending) = catalog
-        .pending_mutations
-        .iter_mut()
-        .find(|pending| **pending == mutation_id)
-    {
-        *pending = pending_with_ref.clone();
-    }
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
-        });
-        return Err(account_error("account_catalog_save_failed", error));
-    }
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
     let identity_id = format!("signing_{}", TzapSecretRef::generate().as_str());
     catalog
         .signing_identities
@@ -805,20 +687,25 @@ pub fn account_import_signing_identity(
             public_device_id: None,
             assurance_level: Some("imported_p12".to_owned()),
             sign_device_id: None,
-            signing_key_ref,
+            sign_device_routing: None,
+            signing_key_created_at_unix_seconds: Some(now),
+            legacy_key_id: None,
+            metadata_version: None,
+            policy_oid: None,
+            signing_key_ref: signing_key_ref.clone(),
             lifecycle: "active".to_owned(),
         });
     if catalog.default_signing_identity_id.is_none() {
         catalog.default_signing_identity_id = Some(identity_id);
     }
-    catalog
-        .pending_mutations
-        .retain(|pending| pending != &pending_with_ref);
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
+        let _ = with_secret_store(&runtime, |secret_store| {
+            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
+        });
+        return Err(account_error("account_catalog_save_failed", error));
+    }
     snapshot_at(&root, &runtime)
 }
 
@@ -910,27 +797,17 @@ pub fn account_remove_signing_identity(
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
-    let identity = catalog
+    let identity_index = catalog
         .signing_identities
         .iter()
-        .find(|identity| identity.id == request.id)
+        .position(|identity| identity.id == request.id)
         .ok_or_else(|| {
             account_error(
                 "account_signing_identity_not_found",
                 "Signing identity was not found",
             )
         })?;
-    let signing_key_ref = identity.signing_key_ref.clone();
-    let mutation_prefix = format!("delete-signing-{}-", request.id);
-    let mutation_id = format!("{}{}", mutation_prefix, catalog.revision);
-    catalog.pending_mutations.push(mutation_id.clone());
-    if let Some(identity) = catalog
-        .signing_identities
-        .iter_mut()
-        .find(|identity| identity.id == request.id)
-    {
-        identity.lifecycle = "deletion_pending".to_owned();
-    }
+    let identity = catalog.signing_identities.remove(identity_index);
     if catalog.default_signing_identity_id.as_deref() == Some(request.id.as_str()) {
         catalog.default_signing_identity_id = None;
     }
@@ -940,33 +817,10 @@ pub fn account_remove_signing_identity(
         .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
         .map_err(|error| account_error("account_catalog_save_failed", error))?;
 
-    match with_secret_store(&runtime, |secret_store| {
-        secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
-    }) {
-        Ok(()) | Err(TzapSecretStoreError::Missing { .. }) => {}
-        Err(error) => return Err(account_error("account_secure_store_failed", error)),
-    }
+    let _ = with_secret_store(&runtime, |secret_store| {
+        secret_store.delete(TzapSecretPurpose::SigningKey, &identity.signing_key_ref)
+    });
 
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
-    catalog
-        .signing_identities
-        .retain(|identity| identity.id != request.id);
-    catalog
-        .pending_mutations
-        .retain(|pending| !pending.starts_with(&mutation_prefix));
-    let expected_revision = catalog.revision;
-    catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
 }
 
@@ -1492,126 +1346,21 @@ fn snapshot_from_catalog(
 
 fn ensure_catalog(
     root: &Path,
-    runtime: &AccountRuntime,
+    _runtime: &AccountRuntime,
 ) -> Result<TzapIdentityCatalog, CommandErrorDto> {
     let mut catalog_store = FileTzapIdentityCatalogStore::new(root);
-    let mut secret_store = runtime
-        .1
-        .lock()
-        .expect("account secure-store lock poisoned");
-    let legacy_store = FileTzapLocalIdentityStore::new(root);
-    let migration = migrate_legacy_inventory(
-        &legacy_store,
-        &mut catalog_store,
-        &mut *secret_store,
-        ACCOUNT_KEY,
-        current_unix_seconds(),
-    )
-    .map_err(|error| account_error("account_inventory_migration_failed", error))?;
-    if migration.migrated {
-        let legacy_path = root.join(format!("{ACCOUNT_KEY}{IDENTITY_INVENTORY_FILE_SUFFIX}"));
-        if legacy_path.exists() {
-            let backup_path = root.join(format!(
-                "{ACCOUNT_KEY}{IDENTITY_INVENTORY_FILE_SUFFIX}.migration-backup"
-            ));
-            std::fs::rename(&legacy_path, &backup_path).map_err(|error| {
-                account_error(
-                    "account_inventory_migration_backup_failed",
-                    format!("unable to preserve the legacy inventory backup: {error}"),
-                )
-            })?;
-        }
-    }
-    let mut catalog = catalog_store
-        .load_catalog(ACCOUNT_KEY)
-        .map_err(|error| account_error("account_catalog_failed", error))?
-        .ok_or_else(|| {
-            account_error(
-                "account_catalog_missing",
-                "Identity catalog was not created",
-            )
-        })?;
-    reconcile_pending_account_mutations(&mut catalog_store, &mut *secret_store, &mut catalog)?;
-    Ok(catalog)
-}
-
-fn reconcile_pending_account_mutations(
-    catalog_store: &mut FileTzapIdentityCatalogStore,
-    secret_store: &mut NativeTzapSecretStore,
-    catalog: &mut TzapIdentityCatalog,
-) -> Result<(), CommandErrorDto> {
-    if catalog.pending_mutations.is_empty() {
-        return Ok(());
-    }
-    let pending = std::mem::take(&mut catalog.pending_mutations);
-    let mut changed = false;
-    for mutation in pending {
-        if mutation.starts_with("legacy-migration-") {
-            catalog.pending_mutations.push(mutation);
-            continue;
-        }
-        changed = true;
-        let (operation, reference) = mutation
-            .split_once(':')
-            .map_or((mutation.as_str(), None), |(operation, reference)| {
-                (operation, TzapSecretRef::parse(reference.to_owned()).ok())
-            });
-        if operation.starts_with("delete-signing-") {
-            let identity_id = operation
-                .strip_prefix("delete-signing-")
-                .and_then(|value| value.rsplit_once('-').map(|(id, _)| id))
-                .unwrap_or_default();
-            if let Some(identity) = catalog
-                .signing_identities
-                .iter()
-                .find(|identity| identity.id == identity_id)
-            {
-                let _ =
-                    secret_store.delete(TzapSecretPurpose::SigningKey, &identity.signing_key_ref);
-            }
+    let catalog = match catalog_store.load_catalog(ACCOUNT_KEY) {
+        Ok(Some(catalog)) => catalog,
+        Ok(None) => {
+            let catalog = TzapIdentityCatalog::empty();
+            catalog_store
+                .save_catalog(ACCOUNT_KEY, None, catalog.clone())
+                .map_err(|error| account_error("account_catalog_save_failed", error))?;
             catalog
-                .signing_identities
-                .retain(|identity| identity.id != identity_id);
-            if catalog.default_signing_identity_id.as_deref() == Some(identity_id) {
-                catalog.default_signing_identity_id = None;
-            }
-            if let Some(reference) = reference {
-                let _ = secret_store.delete(TzapSecretPurpose::SigningKey, &reference);
-            }
-            continue;
         }
-        let purpose = if operation.starts_with("recipient-key-") {
-            TzapSecretPurpose::RecipientKey
-        } else if operation.starts_with("signing-identity-") {
-            TzapSecretPurpose::SigningKey
-        } else {
-            continue;
-        };
-        if let Some(reference) = reference {
-            let still_referenced = match purpose {
-                TzapSecretPurpose::RecipientKey => catalog
-                    .recipient_keys
-                    .iter()
-                    .any(|key| key.private_key_ref == reference),
-                TzapSecretPurpose::SigningKey => catalog
-                    .signing_identities
-                    .iter()
-                    .any(|identity| identity.signing_key_ref == reference),
-                TzapSecretPurpose::Session => false,
-            };
-            if !still_referenced {
-                let _ = secret_store.delete(purpose, &reference);
-            }
-        }
-    }
-    if changed {
-        let expected_revision = catalog.revision;
-        catalog.revision = catalog.revision.saturating_add(1);
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog.clone())
-            .map_err(|error| account_error("account_catalog_save_failed", error))?;
-    }
-    Ok(())
+        Err(error) => return Err(account_error("account_catalog_failed", error)),
+    };
+    Ok(catalog)
 }
 
 fn validate_callback(request: &AccountHostedAuthCallbackRequest) -> Result<(), CommandErrorDto> {
@@ -1762,6 +1511,11 @@ mod tests {
                 public_device_id: None,
                 assurance_level: Some("local_self_signed".to_owned()),
                 sign_device_id: None,
+                sign_device_routing: None,
+                signing_key_created_at_unix_seconds: Some(1),
+                legacy_key_id: None,
+                metadata_version: None,
+                policy_oid: None,
                 signing_key_ref: TzapSecretRef::generate(),
                 lifecycle: "deletion_pending".to_owned(),
             });

@@ -1827,7 +1827,7 @@ const commandRouter = createCommandRouter({
         });
         return;
       }
-      void startExtract(mode, extractWorkspace.buildStartInput());
+      openExtractDialog(mode);
     },
     test: () => void onTestArchive(),
     view: () => void onPreviewSelectedEntry(),

@@ -74,12 +74,6 @@
     "dialog:allow-open",
     "dialog:allow-save",
     "opener:allow-reveal-item-in-dir",
-    {
-      "identifier": "opener:allow-open-path",
-      "allow": [
-        { "path": "$TEMP/zmanager-preview-*/**" },
-        { "path": "$TEMP/zmanager-preview-windows-*/**" }
-      ]
-    }
+    "opener:allow-open-path"
   ]
 }

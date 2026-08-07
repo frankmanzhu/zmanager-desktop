@@ -22,11 +22,12 @@ use crate::{
     dto::{
         AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto,
         CreatePlanResponse, DestinationCollisionStrategyDto, NativeFileDragOutcomeDto,
-        NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest,
-        PreviewEntryRequest, PreviewEntryResponse, ProjectContract, ProjectIntegrationContract,
-        ResumeJobRequest, StartCreateRequest, StartExtractRequest, SubscribeJobRequest,
-        SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest,
-        TzapRestorePolicyDto, ValidateDirectoryRequest, ValidateDirectoryResponse,
+        NativeFileDragRequest, NativeFileDragResponse, OverwritePolicyDto, PauseJobRequest,
+        PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
+        ProjectIntegrationContract, ResumeJobRequest, StartCreateRequest, StartExtractRequest,
+        SubscribeJobRequest, SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse,
+        TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
+        ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -40,14 +41,12 @@ use crate::{
 };
 use zmanager_core::archive_browser::{self, BrowserExtractOptions, BrowserListOptions};
 use zmanager_core::jobs::{
-    CancellationToken, run_7z_create_job_from_sources_with_plan_options,
+    CancellationToken, JobEvent, JobEventSink, run_7z_create_job_from_sources_with_plan_options,
     run_7z_extract_job_with_password_and_policy,
     run_libarchive_extract_job_with_password_and_policy,
     run_rar_extract_job_with_password_and_policy,
-    run_tar_gz_create_job_from_sources_with_plan_options,
     run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
     run_tzap_create_job_from_sources_with_plan_options,
-    run_tzap_extract_job_with_password_and_policy_and_restore_options,
     run_zip_create_job_from_sources_with_plan_options,
     run_zip_extract_job_with_password_and_policy,
 };
@@ -551,9 +550,8 @@ fn start_create_internal_with_resolver(
         ensure_non_empty_path(request.destination_path, "destinationPath")?
             .trim()
             .to_string();
-    let destination_path = if request.destination_collision_strategy
-        == DestinationCollisionStrategyDto::Rename
-        && !request.replace_existing
+    let destination_path = if !request.replace_existing
+        || request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename
     {
         next_available_destination_path(&requested_destination_path)
     } else {
@@ -810,16 +808,36 @@ fn start_create_internal_with_resolver(
                     replace_existing,
                     ..TarGzCreateOptions::default()
                 };
-                run_tar_gz_create_job_from_sources_with_plan_options(
-                    &request_sources,
-                    &destination,
-                    &create_options,
-                    &plan_options,
+                let manifest = match plan_archives(&request_sources, &plan_options) {
+                    Ok(manifest) => manifest,
+                    Err(err) => {
+                        registry_for_thread.emit_direct_event(
+                            &job_id,
+                            JobEventDto::failed_from_command_error(kind, map_plan_error(err)),
+                        );
+                        return;
+                    }
+                };
+                sink.emit(JobEvent::Started {
+                    kind: zmanager_core::jobs::JobKind::TarGzCreate,
+                    total_bytes: Some(manifest.total_bytes),
+                });
+                let mut context = zmanager_core::jobs::JobContext::new_with_progress_total(
                     &token,
                     &mut sink,
-                )
-                .map(to_terminal_summary_for_tar_gz_create)
-                .map_err(map_tar_gz_error)
+                    Some(manifest.total_bytes),
+                );
+                let result =
+                    zmanager_core::tar_gz_backend::create_tar_gz_from_manifest_with_context(
+                        &manifest,
+                        &destination,
+                        &create_options,
+                        &mut context,
+                    );
+                context.flush_progress();
+                result
+                    .map(to_terminal_summary_for_tar_gz_create)
+                    .map_err(map_tar_gz_error)
             }
             crate::dto::ArchiveFormatDto::Tzap => {
                 let resolved = resolved_tzap;
@@ -1120,12 +1138,16 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let requested_destination_path =
         ensure_non_empty_path(request.destination_path, "destinationPath")?;
-    let destination_path =
-        if request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename {
-            next_available_destination_path(&requested_destination_path)
-        } else {
-            requested_destination_path
-        };
+    let destination_path = if request.destination_collision_strategy
+        == DestinationCollisionStrategyDto::Rename
+        || request.overwrite == OverwritePolicyDto::Rename
+        || (request.overwrite != OverwritePolicyDto::Replace
+            && request.destination_collision_strategy != DestinationCollisionStrategyDto::Refuse)
+    {
+        next_available_destination_path(&requested_destination_path)
+    } else {
+        requested_destination_path
+    };
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
     if recipient_private_key.is_some() && !entry_paths.is_empty() {
         return Err(CommandErrorDto::invalid_request(
@@ -1247,31 +1269,26 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                 .map(to_terminal_summary_for_extract)
                 .map_err(map_rar_error),
                 ArchiveFamily::Tzap => {
-                    if let Some(recipient_private_key) = recipient_private_key.as_ref() {
-                        zmanager_core::jobs::run_tzap_extract_job_with_recipient_key_and_policy(
-                            &archive_path,
-                            &destination_path,
-                            recipient_private_key,
-                            policy,
-                            tzap_restore_options,
-                            &token,
-                            &mut sink,
+                    let key = if let Some(recipient_private_key) = recipient_private_key.as_ref() {
+                        zmanager_core::tzap_backend::TzapExtractKeySource::RecipientKeyBytes(
+                            recipient_private_key.expose_secret(),
                         )
-                        .map(to_terminal_summary_for_extract)
-                        .map_err(map_tzap_error)
+                    } else if let Some(password) = password.as_deref() {
+                        zmanager_core::tzap_backend::TzapExtractKeySource::Password(password)
                     } else {
-                        run_tzap_extract_job_with_password_and_policy_and_restore_options(
-                            &archive_path,
-                            &destination_path,
-                            password.as_deref(),
-                            policy,
-                            tzap_restore_options,
-                            &token,
-                            &mut sink,
-                        )
-                        .map(to_terminal_summary_for_extract)
-                        .map_err(map_tzap_error)
-                    }
+                        zmanager_core::tzap_backend::TzapExtractKeySource::None
+                    };
+                    run_tzap_extract_job_with_key_and_policy_and_restore_options(
+                        &archive_path,
+                        &destination_path,
+                        key,
+                        policy,
+                        tzap_restore_options,
+                        &token,
+                        &mut sink,
+                    )
+                    .map(to_terminal_summary_for_extract)
+                    .map_err(map_tzap_error)
                 }
                 ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
                     &archive_path,
@@ -1322,6 +1339,50 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     }));
 
     Ok(response)
+}
+
+fn run_tzap_extract_job_with_key_and_policy_and_restore_options(
+    archive_path: impl AsRef<std::path::Path>,
+    destination: impl AsRef<std::path::Path>,
+    key: zmanager_core::tzap_backend::TzapExtractKeySource<'_>,
+    policy: ExtractionPolicy,
+    restore_options: zmanager_core::tzap_backend::TzapRestoreOptions,
+    token: &CancellationToken,
+    sink: &mut dyn zmanager_core::jobs::JobEventSink,
+) -> Result<zmanager_core::tzap_backend::TzapExtractReport, zmanager_core::tzap_backend::TzapError>
+{
+    if token.is_cancelled() {
+        return Err(zmanager_core::tzap_backend::TzapError::Cancelled);
+    }
+    sink.emit(zmanager_core::jobs::JobEvent::Started {
+        kind: zmanager_core::jobs::JobKind::TzapExtract,
+        total_bytes: None,
+    });
+    let mut context = zmanager_core::jobs::JobContext::new(token, sink);
+    let result = zmanager_core::tzap_backend::extract_tzap(
+        zmanager_core::tzap_backend::TzapExtractRequest {
+            key,
+            policy,
+            restore_options,
+            overwrite_resolver: None,
+            context: Some(&mut context),
+            fast: true,
+        },
+        archive_path,
+        destination,
+    );
+    context.flush_progress();
+    if let Err(err) = &result {
+        sink.emit(zmanager_core::jobs::JobEvent::Failed {
+            message: err.to_string(),
+        });
+    } else if let Ok(report) = &result {
+        sink.emit(zmanager_core::jobs::JobEvent::Completed {
+            entries: report.written_entries,
+            bytes: report.written_bytes,
+        });
+    }
+    result
 }
 
 fn complete_job_if_needed(
@@ -2137,7 +2198,10 @@ fn map_tar_gz_error(error: zmanager_core::tar_gz_backend::TarGzError) -> Command
         zmanager_core::tar_gz_backend::TarGzError::Plan(source) => {
             CommandErrorDto::operation_failed(format!("TAR.GZ plan error: {source}"))
         }
-        zmanager_core::tar_gz_backend::TarGzError::Cancelled(_) => {
+        zmanager_core::tar_gz_backend::TarGzError::InvalidLevel { level } => {
+            CommandErrorDto::invalid_request(format!("Invalid compression level: {level}"))
+        }
+        zmanager_core::tar_gz_backend::TarGzError::Cancelled => {
             CommandErrorDto::cancelled("TAR.GZ job was cancelled.")
         }
     }
@@ -2577,14 +2641,19 @@ fn stream_native_drag_entry(
             one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
         }
         ArchiveFamily::Tzap => {
-            let report =
-                zmanager_core::tzap_backend::copy_tzap_file_to_writer_with_optional_password(
-                    archive_path,
-                    password,
-                    entry_path,
-                    output,
-                )
-                .map_err(map_tzap_error)?;
+            let key = match password {
+                Some(password) => {
+                    zmanager_core::tzap_backend::TzapExtractKeySource::Password(password)
+                }
+                None => zmanager_core::tzap_backend::TzapExtractKeySource::None,
+            };
+            let report = zmanager_core::tzap_backend::copy_tzap_file_to_writer(
+                archive_path,
+                key,
+                entry_path,
+                output,
+            )
+            .map_err(map_tzap_error)?;
             one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
         }
         ArchiveFamily::AppleArchive => {
@@ -2961,6 +3030,7 @@ fn split_collision_name(name: &str) -> (&str, &str) {
         ".tar.xz",
         ".tar.z",
         ".tar.zst",
+        ".7z.001",
     ];
 
     let lower_name = name.to_ascii_lowercase();
@@ -4701,6 +4771,778 @@ mod tests {
     }
 
     #[test]
+    fn quick_compress_and_extract_end_to_end_collision_auto_renames_real_zip_files() {
+        let workspace = create_temp_workspace("quick-action-real-zip-collision");
+        let source_dir = workspace.join("xxx");
+        let pre_existing_zip = workspace.join("xxx.zip");
+        let expected_auto_renamed_zip = workspace.join("xxx 2.zip");
+
+        fs::create_dir_all(&source_dir).expect("source dir create");
+        fs::write(source_dir.join("sample.txt"), b"new compressed data").expect("write sample.txt");
+
+        // Pre-create xxx.zip with original marker data
+        fs::write(&pre_existing_zip, b"original existing archive marker")
+            .expect("write pre-existing zip");
+
+        let registry = crate::job_registry::JobRegistry::new();
+
+        // 1. Quick Compress step (replace_existing: false)
+        let create_request = StartCreateRequest {
+            sources: vec![source_dir.to_string_lossy().to_string()],
+            destination_path: pre_existing_zip.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("quick compress command should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&pre_existing_zip).expect("pre-existing zip should remain untouched"),
+            b"original existing archive marker"
+        );
+        assert!(
+            expected_auto_renamed_zip.is_file(),
+            "xxx 2.zip should be created automatically without error"
+        );
+
+        // 2. Quick Extract step into existing folder (overwrite: Rename)
+        let pre_existing_extract_dir = workspace.join("extract_out");
+        let expected_auto_renamed_extract_dir = workspace.join("extract_out 2");
+        fs::create_dir_all(&pre_existing_extract_dir).expect("create pre-existing extract dir");
+        fs::write(
+            pre_existing_extract_dir.join("old.txt"),
+            b"old extract marker",
+        )
+        .expect("write old.txt");
+
+        let extract_request = StartExtractRequest {
+            archive_path: expected_auto_renamed_zip.to_string_lossy().to_string(),
+            destination_path: pre_existing_extract_dir.to_string_lossy().to_string(),
+            password: None,
+            recipient_key_id: None,
+            overwrite: OverwritePolicyDto::Rename,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            entry_paths: None,
+            strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
+        };
+
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("quick extract command should start");
+        let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(pre_existing_extract_dir.join("old.txt"))
+                .expect("old extract marker should stay"),
+            b"old extract marker"
+        );
+        assert!(
+            expected_auto_renamed_extract_dir
+                .join("xxx")
+                .join("sample.txt")
+                .is_file(),
+            "extract_out 2/xxx/sample.txt should be created with extracted archive content"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn quick_compress_and_extract_folder_trees_end_to_end_collision() {
+        let workspace = create_temp_workspace("quick-folder-tree-collision");
+        let project_dir = workspace.join("my_project");
+        let src_dir = project_dir.join("src");
+        let docs_dir = project_dir.join("docs");
+
+        fs::create_dir_all(&src_dir).expect("src dir create");
+        fs::create_dir_all(&docs_dir).expect("docs dir create");
+        fs::write(src_dir.join("main.rs"), b"fn main() {}").expect("write main.rs");
+        fs::write(docs_dir.join("readme.md"), b"# My Project").expect("write readme.md");
+
+        // 1. Pre-existing target archive collision when compressing a folder tree
+        let pre_existing_archive = workspace.join("my_project.zip");
+        let expected_auto_renamed_archive = workspace.join("my_project 2.zip");
+        fs::write(&pre_existing_archive, b"existing archive marker")
+            .expect("write pre-existing my_project.zip");
+
+        let registry = crate::job_registry::JobRegistry::new();
+
+        let create_request = StartCreateRequest {
+            sources: vec![project_dir.to_string_lossy().to_string()],
+            destination_path: pre_existing_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+
+        let create_job = start_create_internal(create_request, &registry)
+            .expect("folder tree compress should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&pre_existing_archive).expect("original archive should stay untouched"),
+            b"existing archive marker"
+        );
+        assert!(
+            expected_auto_renamed_archive.is_file(),
+            "my_project 2.zip should be created automatically for folder tree"
+        );
+
+        // 2. Pre-existing target directory collision when extracting a folder tree
+        let target_extract_base = workspace.join("out_dir");
+        let existing_dest_folder = target_extract_base.join("my_project");
+        let expected_renamed_dest_folder = target_extract_base.join("my_project 2");
+
+        fs::create_dir_all(&existing_dest_folder).expect("create existing target dir");
+        fs::write(
+            existing_dest_folder.join("existing_file.txt"),
+            b"do not overwrite me",
+        )
+        .expect("write existing marker file");
+
+        let extract_request = StartExtractRequest {
+            archive_path: expected_auto_renamed_archive.to_string_lossy().to_string(),
+            destination_path: existing_dest_folder.to_string_lossy().to_string(),
+            password: None,
+            recipient_key_id: None,
+            overwrite: OverwritePolicyDto::Rename,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            entry_paths: None,
+            strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
+        };
+
+        let extract_job = start_extract_internal(extract_request, &registry)
+            .expect("folder tree extract should start");
+        let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(existing_dest_folder.join("existing_file.txt"))
+                .expect("existing file in target dir must be untouched"),
+            b"do not overwrite me"
+        );
+        assert!(
+            expected_renamed_dest_folder.is_dir(),
+            "my_project 2 directory should be created"
+        );
+        assert_eq!(
+            fs::read_to_string(
+                expected_renamed_dest_folder
+                    .join("my_project")
+                    .join("src")
+                    .join("main.rs")
+            )
+            .expect("nested main.rs should be extracted"),
+            "fn main() {}"
+        );
+        assert_eq!(
+            fs::read_to_string(
+                expected_renamed_dest_folder
+                    .join("my_project")
+                    .join("docs")
+                    .join("readme.md")
+            )
+            .expect("nested readme.md should be extracted"),
+            "# My Project"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    fn assert_create_format_auto_renames(
+        format: crate::dto::ArchiveFormatDto,
+        initial_name: &str,
+        expected_name: &str,
+    ) {
+        let workspace = create_temp_workspace(&format!(
+            "create-fmt-test-{}",
+            initial_name.replace('.', "-")
+        ));
+        fs::create_dir_all(&workspace).expect("workspace dir create");
+
+        let source_dir = workspace.join("src_folder");
+        fs::create_dir_all(&source_dir).expect("source dir create");
+        fs::write(source_dir.join("file.txt"), b"test content").expect("write file.txt");
+
+        let pre_existing_archive = workspace.join(initial_name);
+        let expected_auto_renamed_archive = workspace.join(expected_name);
+        fs::write(&pre_existing_archive, b"existing marker").expect("write pre-existing marker");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_request = StartCreateRequest {
+            sources: vec![source_dir.to_string_lossy().to_string()],
+            destination_path: pre_existing_archive.to_string_lossy().to_string(),
+            format,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+
+        let create_job = start_create_internal(create_request, &registry)
+            .unwrap_or_else(|err| panic!("start_create failed for format {format:?}: {err:?}"));
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(&pre_existing_archive).expect("pre-existing archive must be untouched"),
+            b"existing marker"
+        );
+        assert!(
+            expected_auto_renamed_archive.is_file(),
+            "{expected_name} should be created automatically"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    fn assert_extract_format_auto_renames(initial_folder_name: &str, expected_folder_name: &str) {
+        let workspace = create_temp_workspace(&format!(
+            "extract-fmt-test-{}",
+            initial_folder_name.replace(' ', "-")
+        ));
+        let sources = workspace.join("src_content");
+        let archive_file = workspace.join("test.zip");
+        let pre_existing_dest = workspace.join(initial_folder_name);
+        let expected_dest = workspace.join(expected_folder_name);
+
+        fs::create_dir_all(&sources).expect("source dir");
+        fs::write(sources.join("data.txt"), b"extracted content").expect("write data.txt");
+        fs::create_dir_all(&pre_existing_dest).expect("existing dest dir");
+        fs::write(pre_existing_dest.join("old.txt"), b"old marker").expect("write old marker");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_req = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: archive_file.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+        let c_job = start_create_internal(create_req, &registry).expect("zip create should start");
+        wait_for_job_terminal(&registry, &c_job.job_id);
+
+        let extract_req = StartExtractRequest {
+            archive_path: archive_file.to_string_lossy().to_string(),
+            destination_path: pre_existing_dest.to_string_lossy().to_string(),
+            password: None,
+            recipient_key_id: None,
+            overwrite: OverwritePolicyDto::Rename,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            entry_paths: None,
+            strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
+        };
+        let e_job = start_extract_internal(extract_req, &registry).expect("extract should start");
+        let (e_poll, _) = wait_for_job_terminal(&registry, &e_job.job_id);
+
+        assert_eq!(e_poll.status, JobStatusDto::Completed);
+        assert_eq!(
+            fs::read(pre_existing_dest.join("old.txt")).expect("old marker should stay"),
+            b"old marker"
+        );
+        assert!(
+            expected_dest.is_dir(),
+            "{expected_folder_name} should be created"
+        );
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_zip() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::Zip,
+            "archive.zip",
+            "archive 2.zip",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_seven_z() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::SevenZ,
+            "archive.7z",
+            "archive 2.7z",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_tzap() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::Tzap,
+            "archive.tzap",
+            "archive 2.tzap",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_apple_archive() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::AppleArchive,
+            "archive.aar",
+            "archive 2.aar",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_tar_gz() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::TarGz,
+            "archive.tar.gz",
+            "archive 2.tar.gz",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_tar_zst() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::TarZst,
+            "archive.tar.zst",
+            "archive 2.tar.zst",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_zip_destination() {
+        assert_extract_format_auto_renames("my_dest", "my_dest 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_seven_z_destination() {
+        assert_extract_format_auto_renames("output_7z", "output_7z 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tzap_destination() {
+        assert_extract_format_auto_renames("output_tzap", "output_tzap 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_apple_archive_destination() {
+        assert_extract_format_auto_renames("output_aar", "output_aar 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tar_gz_destination() {
+        assert_extract_format_auto_renames("output_targz", "output_targz 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tar_zst_destination() {
+        assert_extract_format_auto_renames("output_tarzst", "output_tarzst 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_iso_destination() {
+        assert_extract_format_auto_renames("output_iso", "output_iso 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_deb_destination() {
+        assert_extract_format_auto_renames("output_deb", "output_deb 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_rpm_destination() {
+        assert_extract_format_auto_renames("output_rpm", "output_rpm 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_dmg_destination() {
+        assert_extract_format_auto_renames("output_dmg", "output_dmg 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_cab_destination() {
+        assert_extract_format_auto_renames("output_cab", "output_cab 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_wim_destination() {
+        assert_extract_format_auto_renames("output_wim", "output_wim 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_rar_destination() {
+        assert_extract_format_auto_renames("output_rar", "output_rar 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tar_bz2_destination() {
+        assert_extract_format_auto_renames("output_tarbz2", "output_tarbz2 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tar_xz_destination() {
+        assert_extract_format_auto_renames("output_tarxz", "output_tarxz 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_tar_lz4_destination() {
+        assert_extract_format_auto_renames("output_tarlz4", "output_tarlz4 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_7z_split_destination() {
+        assert_extract_format_auto_renames("output_7zsplit", "output_7zsplit 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_sequential_increment_zip() {
+        let workspace = create_temp_workspace("seq-inc-zip");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        let src = workspace.join("src");
+        fs::create_dir_all(&src).expect("src dir");
+        fs::write(src.join("a.txt"), b"seq data").expect("write a.txt");
+
+        fs::write(workspace.join("seq.zip"), b"1").expect("write seq.zip");
+        fs::write(workspace.join("seq 2.zip"), b"2").expect("write seq 2.zip");
+        fs::write(workspace.join("seq 3.zip"), b"3").expect("write seq 3.zip");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_req = StartCreateRequest {
+            sources: vec![src.to_string_lossy().to_string()],
+            destination_path: workspace.join("seq.zip").to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+        let job = start_create_internal(create_req, &registry).expect("job start");
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+
+        assert_eq!(poll.status, JobStatusDto::Completed);
+        assert!(workspace.join("seq 4.zip").is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_sequential_increment_seven_z() {
+        let workspace = create_temp_workspace("seq-inc-7z");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        let src = workspace.join("src");
+        fs::create_dir_all(&src).expect("src dir");
+        fs::write(src.join("a.txt"), b"seq data").expect("write a.txt");
+
+        fs::write(workspace.join("seq.7z"), b"1").expect("write seq.7z");
+        fs::write(workspace.join("seq 2.7z"), b"2").expect("write seq 2.7z");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_req = StartCreateRequest {
+            sources: vec![src.to_string_lossy().to_string()],
+            destination_path: workspace.join("seq.7z").to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::SevenZ,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+        let job = start_create_internal(create_req, &registry).expect("job start");
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+
+        assert_eq!(poll.status, JobStatusDto::Completed);
+        assert!(workspace.join("seq 3.7z").is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_sequential_increment_tzap() {
+        let workspace = create_temp_workspace("seq-inc-tzap");
+        fs::create_dir_all(&workspace).expect("workspace dir");
+        let src = workspace.join("src");
+        fs::create_dir_all(&src).expect("src dir");
+        fs::write(src.join("a.txt"), b"seq data").expect("write a.txt");
+
+        fs::write(workspace.join("seq.tzap"), b"1").expect("write seq.tzap");
+        fs::write(workspace.join("seq 2.tzap"), b"2").expect("write seq 2.tzap");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let create_req = StartCreateRequest {
+            sources: vec![src.to_string_lossy().to_string()],
+            destination_path: workspace.join("seq.tzap").to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Rename,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+        let job = start_create_internal(create_req, &registry).expect("job start");
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+
+        assert_eq!(poll.status, JobStatusDto::Completed);
+        assert!(workspace.join("seq 3.tzap").is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_sequential_increment_folder() {
+        assert_extract_format_auto_renames("seq_out 2", "seq_out 2 2");
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_with_dots_in_filename() {
+        assert_create_format_auto_renames(
+            crate::dto::ArchiveFormatDto::Zip,
+            "my.app.v1.0.zip",
+            "my.app.v1.0 2.zip",
+        );
+    }
+
+    #[test]
+    fn test_collision_auto_rename_create_replace_existing_overwrites() {
+        let workspace = create_temp_workspace("create-replace-overwrite");
+        let src = workspace.join("src");
+        let dest = workspace.join("target.zip");
+
+        fs::create_dir_all(&src).expect("src dir");
+        fs::write(src.join("new.txt"), b"new").expect("write new");
+        fs::write(&dest, b"old content").expect("write old content");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let req = StartCreateRequest {
+            sources: vec![src.to_string_lossy().to_string()],
+            destination_path: dest.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+
+        let job = start_create_internal(req, &registry).expect("start create");
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+
+        assert_eq!(poll.status, JobStatusDto::Completed);
+        assert_ne!(
+            fs::read(&dest).expect("dest read"),
+            b"old content",
+            "replace_existing: true should overwrite existing destination file"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn test_collision_auto_rename_extract_replace_overwrites_existing() {
+        let workspace = create_temp_workspace("extract-replace-overwrite");
+        let src = workspace.join("src");
+        let archive = workspace.join("data.zip");
+        let dest = workspace.join("extract_target");
+
+        fs::create_dir_all(&src).expect("src dir");
+        fs::write(src.join("data.txt"), b"new extracted content").expect("write data.txt");
+        fs::create_dir_all(&dest).expect("dest dir");
+
+        let registry = crate::job_registry::JobRegistry::new();
+        let c_req = StartCreateRequest {
+            sources: vec![src.to_string_lossy().to_string()],
+            destination_path: archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Zip,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            preserve_metadata: false,
+        };
+        let c_job = start_create_internal(c_req, &registry).expect("c_job");
+        wait_for_job_terminal(&registry, &c_job.job_id);
+
+        let e_req = StartExtractRequest {
+            archive_path: archive.to_string_lossy().to_string(),
+            destination_path: dest.to_string_lossy().to_string(),
+            password: None,
+            recipient_key_id: None,
+            overwrite: OverwritePolicyDto::Replace,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            entry_paths: None,
+            strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
+        };
+        let e_job = start_extract_internal(e_req, &registry).expect("e_job");
+        let (e_poll, _) = wait_for_job_terminal(&registry, &e_job.job_id);
+
+        assert_eq!(e_poll.status, JobStatusDto::Completed);
+        assert!(
+            !workspace.join("extract_target 2").exists(),
+            "no auto-renamed 2-folder created on replace"
+        );
+        assert_eq!(
+            fs::read_to_string(dest.join("src").join("data.txt")).expect("read data.txt"),
+            "new extracted content"
+        );
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn command_boundary_start_extract_job_reaches_terminal_and_outputs_expected_file() {
         let workspace = create_temp_workspace("start-extract");
         let sources = workspace.join("sources");
@@ -5261,6 +6103,96 @@ mod tests {
             long_path.to_string_lossy().to_string()
         );
         assert!(fs::metadata(&long_path).is_ok());
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn next_available_destination_path_handles_all_format_types_and_compound_extensions() {
+        let workspace = create_temp_workspace("collision-formats");
+        fs::create_dir_all(&workspace).expect("workspace directory should exist");
+
+        // Test cases: (file/dir name to pre-create, expected next path suffix)
+        let cases = vec![
+            ("archive.zip", "archive 2.zip"),
+            ("archive.7z", "archive 2.7z"),
+            ("archive.tzap", "archive 2.tzap"),
+            ("archive.aar", "archive 2.aar"),
+            ("archive.aea", "archive 2.aea"),
+            ("archive.apk", "archive 2.apk"),
+            ("archive.appx", "archive 2.appx"),
+            ("archive.br", "archive 2.br"),
+            ("archive.bz2", "archive 2.bz2"),
+            ("archive.cab", "archive 2.cab"),
+            ("archive.cbr", "archive 2.cbr"),
+            ("archive.cpio", "archive 2.cpio"),
+            ("archive.deb", "archive 2.deb"),
+            ("archive.dmg", "archive 2.dmg"),
+            ("archive.gz", "archive 2.gz"),
+            ("archive.img", "archive 2.img"),
+            ("archive.ipa", "archive 2.ipa"),
+            ("archive.iso", "archive 2.iso"),
+            ("archive.jar", "archive 2.jar"),
+            ("archive.lrz", "archive 2.lrz"),
+            ("archive.lz", "archive 2.lz"),
+            ("archive.lz4", "archive 2.lz4"),
+            ("archive.lzma", "archive 2.lzma"),
+            ("archive.lzo", "archive 2.lzo"),
+            ("archive.rar", "archive 2.rar"),
+            ("archive.rpm", "archive 2.rpm"),
+            ("archive.tar", "archive 2.tar"),
+            ("archive.tbz2", "archive 2.tbz2"),
+            ("archive.tgz", "archive 2.tgz"),
+            ("archive.txz", "archive 2.txz"),
+            ("archive.tzst", "archive 2.tzst"),
+            ("archive.war", "archive 2.war"),
+            ("archive.wim", "archive 2.wim"),
+            ("archive.xar", "archive 2.xar"),
+            ("archive.xpi", "archive 2.xpi"),
+            ("archive.xz", "archive 2.xz"),
+            ("archive.z", "archive 2.z"),
+            ("archive.zipx", "archive 2.zipx"),
+            ("archive.zst", "archive 2.zst"),
+            ("archive.tar.br", "archive 2.tar.br"),
+            ("archive.tar.bz2", "archive 2.tar.bz2"),
+            ("archive.tar.gz", "archive 2.tar.gz"),
+            ("archive.tar.lrz", "archive 2.tar.lrz"),
+            ("archive.tar.lz", "archive 2.tar.lz"),
+            ("archive.tar.lz4", "archive 2.tar.lz4"),
+            ("archive.tar.lzma", "archive 2.tar.lzma"),
+            ("archive.tar.lzo", "archive 2.tar.lzo"),
+            ("archive.tar.xz", "archive 2.tar.xz"),
+            ("archive.tar.z", "archive 2.tar.z"),
+            ("archive.tar.zst", "archive 2.tar.zst"),
+            ("archive.7z.001", "archive 2.7z.001"),
+            ("my_folder", "my_folder 2"),
+        ];
+
+        for (name, expected_name) in cases {
+            let target = workspace.join(name);
+            if name.contains('.') && !name.ends_with("folder") {
+                fs::write(&target, b"existing archive").expect("fixture file write");
+            } else {
+                fs::create_dir_all(&target).expect("fixture dir create");
+            }
+
+            let resolved = next_available_destination_path(&target.to_string_lossy());
+            let expected_path = workspace.join(expected_name);
+            assert_eq!(
+                PathBuf::from(resolved),
+                expected_path,
+                "collision resolution for {name} should equal {expected_name}"
+            );
+        }
+
+        // Sequential collision check: target, target 2, target 3 -> target 4
+        let seq_base = workspace.join("seq.zip");
+        fs::write(&seq_base, b"1").expect("write seq.zip");
+        fs::write(workspace.join("seq 2.zip"), b"2").expect("write seq 2.zip");
+        fs::write(workspace.join("seq 3.zip"), b"3").expect("write seq 3.zip");
+
+        let seq_resolved = next_available_destination_path(&seq_base.to_string_lossy());
+        assert_eq!(PathBuf::from(seq_resolved), workspace.join("seq 4.zip"));
 
         let _ = fs::remove_dir_all(&workspace);
     }

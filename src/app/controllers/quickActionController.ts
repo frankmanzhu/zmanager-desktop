@@ -8,6 +8,7 @@ import type {
   StartJobResponseDto,
 } from "../../api/types";
 import { isSupportedArchivePath } from "../archiveFileTypes";
+import { resolveDestinationCollisionStrategy } from "../collisionPolicy";
 import { NOOP_DIAGNOSTIC_RECORDER, type DiagnosticRecorder } from "../diagnostics";
 import { createFormatSupportsPassword, type CreateArchiveFormat } from "../createFlow";
 import { buildStartExtractRequest } from "../extractFlow";
@@ -119,7 +120,10 @@ export function createQuickActionController(
         format,
         cleanSource,
         replaceExisting: defaults.replaceExisting,
-        destinationCollisionStrategy: "rename",
+        destinationCollisionStrategy: resolveDestinationCollisionStrategy({
+          isQuickAction: true,
+          replaceExisting: defaults.replaceExisting,
+        }),
         preserveMetadata: defaults.preserveMetadata,
         password,
         compressionLevel: defaults.compressionLevel ?? undefined,
@@ -256,11 +260,16 @@ export function createQuickActionController(
             break;
           }
 
+          const overwrite = "rename";
           const request = buildStartExtractRequest({
             archivePath,
             destinationPath: destinationPlan.destinationPath,
-            overwrite: "rename",
-            destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
+            overwrite,
+            destinationCollisionStrategy: resolveDestinationCollisionStrategy({
+              isQuickAction: true,
+              overwrite,
+              destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
+            }),
             stripComponents: destinationPlan.stripComponents,
             tzapRestorePolicy: options.preferences().defaultTzapRestorePolicy,
             tzapAllowDegraded: options.preferences().defaultTzapAllowDegraded,

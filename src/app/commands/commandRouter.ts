@@ -171,6 +171,8 @@ export function selectContextCommand(action?: ContextMenuAction | string, option
       return options.archivePath
         ? { commandId: "open", payload: { openSource: "path", archivePath: options.archivePath } }
         : null;
+    case "open-entry":
+      return { commandId: "view" };
     case "open-outside":
       return { commandId: "openOutside" };
     case "select-by-type":

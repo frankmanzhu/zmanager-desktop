@@ -6,6 +6,7 @@ import type {
   StartCreateRequest,
 } from "../../api/types";
 import { getParentArchivePath, normalizeArchivePath } from "../archiveTree";
+import { resolveDestinationCollisionStrategy } from "../collisionPolicy";
 import {
   applyCreatePlanPathInclusion,
   buildStartCreateRequest as buildStartCreateRequestDto,
@@ -507,7 +508,10 @@ export function buildQuickCreateStartRequest(
       format: input.format,
       cleanSource: input.cleanSource,
       replaceExisting: input.replaceExisting,
-      destinationCollisionStrategy: input.destinationCollisionStrategy,
+      destinationCollisionStrategy: resolveDestinationCollisionStrategy({
+        replaceExisting: input.replaceExisting,
+        destinationCollisionStrategy: input.destinationCollisionStrategy,
+      }),
       preserveMetadata: input.preserveMetadata,
       password: input.password?.trim() || undefined,
       compressionLevel: input.compressionLevel ?? undefined,

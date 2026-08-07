@@ -8,7 +8,11 @@ import { ContactsTab } from "./ContactsTab";
 import { DocumentsTab } from "./DocumentsTab";
 import { DeviceTab } from "./DeviceTab";
 
-export function AccountWorkspace() {
+export type AccountWorkspaceProps = {
+  defaultTab?: string;
+};
+
+export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspaceProps = {}) {
   const fullSnapshot = useZManagerSnapshot();
   const snapshot = fullSnapshot.account;
   const actions = useZManagerActions();
@@ -63,7 +67,7 @@ export function AccountWorkspace() {
             </p>
           ) : null}
           
-          <Tabs defaultValue="session" className="w-full">
+          <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="mb-4 w-full justify-start overflow-x-auto">
               <TabsTrigger value="session">Session</TabsTrigger>
               <TabsTrigger value="certificates">Certificates</TabsTrigger>
@@ -72,23 +76,23 @@ export function AccountWorkspace() {
               <TabsTrigger value="device">Device</TabsTrigger>
             </TabsList>
             
-            <TabsContent forceMount value="session" className="m-0 border-none p-0 outline-none">
+            <TabsContent value="session" className="m-0 border-none p-0 outline-none">
               <SessionStatus />
             </TabsContent>
             
-            <TabsContent forceMount value="certificates" className="m-0 border-none p-0 outline-none">
+            <TabsContent value="certificates" className="m-0 border-none p-0 outline-none">
               <CertificatesTab />
             </TabsContent>
             
-            <TabsContent forceMount value="contacts" className="m-0 border-none p-0 outline-none">
+            <TabsContent value="contacts" className="m-0 border-none p-0 outline-none">
               <ContactsTab />
             </TabsContent>
             
-            <TabsContent forceMount value="documents" className="m-0 border-none p-0 outline-none">
+            <TabsContent value="documents" className="m-0 border-none p-0 outline-none">
               <DocumentsTab />
             </TabsContent>
             
-            <TabsContent forceMount value="device" className="m-0 border-none p-0 outline-none">
+            <TabsContent value="device" className="m-0 border-none p-0 outline-none">
               <DeviceTab />
             </TabsContent>
           </Tabs>
