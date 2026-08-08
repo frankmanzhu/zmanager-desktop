@@ -71,19 +71,19 @@ pub struct NativeFileDragCandidate {
 pub struct NativeFileDragItem {
     pub entry_path: String,
     pub display_path: String,
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    #[allow(dead_code)]
     pub size: Option<u64>,
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    #[allow(dead_code)]
     pub modified_unix_seconds: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragOutcome {
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     Dropped,
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    #[allow(dead_code)]
     Cancelled,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[allow(dead_code)]
     NoDrop,
 }
 
@@ -360,6 +360,7 @@ pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog
 }
 
 pub fn quick_action_registers_single_instance(is_normal_singleton: bool) -> bool {
+<<<<<<< HEAD
     #[cfg(target_os = "linux")]
     {
         let _ = is_normal_singleton;
@@ -367,6 +368,13 @@ pub fn quick_action_registers_single_instance(is_normal_singleton: bool) -> bool
     }
     #[cfg(not(target_os = "linux"))]
     is_normal_singleton
+=======
+    if cfg!(target_os = "linux") {
+        true
+    } else {
+        is_normal_singleton
+    }
+>>>>>>> 31a638c (Fix platform-conditional dead_code and unused_variables clippy warnings for Linux target)
 }
 
 #[cfg(test)]
