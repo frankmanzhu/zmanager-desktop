@@ -110,6 +110,11 @@ $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
 $env:PATH = "$resolvedCargoBin;$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
 
+if ($resolvedArchitecture -eq "arm64") {
+    $env:CC_aarch64_pc_windows_msvc = "cl.exe"
+    $env:AR_aarch64_pc_windows_msvc = "lib.exe"
+}
+
 Write-Host "Configured Windows static native build environment."
 Write-Host "Architecture: $resolvedArchitecture"
 Write-Host "Triplet: $Triplet"
