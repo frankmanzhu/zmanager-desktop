@@ -23,12 +23,10 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            target: aarch64-apple-darwin
             runner: macos-15
             artifact-name: zmanager-macos-arm64-ci
           - arch: x86_64
-            target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-15-intel
             artifact-name: zmanager-macos-x86_64-ci
 
     steps:
@@ -38,7 +36,7 @@ jobs:
       - name: Install Rust target and frontend dependencies
         run: |
           brew install cmake lz4 xz ripgrep
-          rustup target add ${{ matrix.target }}
+          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
           scripts/ensure-sibling-repos.sh
 
@@ -79,11 +77,6 @@ jobs:
   windows:
     name: Windows ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
-    # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
-    # below must mirror this location.
-    env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
     strategy:
       fail-fast: false
       matrix:
@@ -92,7 +85,7 @@ jobs:
             runner: windows-2022
             artifact-name: zmanager-windows-x64
           - arch: arm64
-            runner: windows-2022
+            runner: windows-11-arm
             artifact-name: zmanager-windows-arm64
 
     steps:
@@ -101,6 +94,11 @@ jobs:
 
       - name: Prepare and build Windows package
         shell: pwsh
+        # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
+        # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
+        # below must mirror this location.
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
         run: |
           .\scripts\prepare-windows-static-build.ps1 `
             -Architecture ${{ matrix.arch }} `
@@ -127,7 +125,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-deb
           - arch: arm64
-            runner: ubuntu-22.04
+            runner: ubuntu-22.04-arm
             artifact-name: zmanager-linux-arm64-deb
 
     steps:
@@ -159,7 +157,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-rpm
           - arch: arm64
-            runner: ubuntu-22.04
+            runner: ubuntu-22.04-arm
             artifact-name: zmanager-linux-arm64-rpm
 
     steps:
