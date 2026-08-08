@@ -8,6 +8,8 @@ import type {
 } from "../../api/types";
 import type { AccountWorkspace } from "../workspaces/accountWorkspace";
 
+import type { DiagnosticRecorder } from "../diagnostics";
+
 export type AccountControllerOptions = Readonly<{
   workspace: AccountWorkspace;
   fetchSnapshot(): Promise<AccountSnapshotDto>;
@@ -37,19 +39,31 @@ export type AccountControllerOptions = Readonly<{
   openUrl(url: string): Promise<void>;
   publish(): void;
   errorMessage(error: unknown): string;
+  diagnostics?: DiagnosticRecorder;
 }>;
 
 export type AccountController = ReturnType<typeof createAccountController>;
 
 export function createAccountController(options: AccountControllerOptions) {
-  async function run(operation: () => Promise<AccountSnapshotDto>): Promise<void> {
+  async function run(operation: () => Promise<AccountSnapshotDto>, actionName = "operation"): Promise<void> {
+    const startMs = Date.now();
     options.workspace.setBusy(true);
     options.publish();
     try {
       options.workspace.replace(await operation());
       options.workspace.setNotice("");
+      options.diagnostics?.record({
+        scope: "account",
+        name: `${actionName}Completed`,
+        fields: { elapsedMs: Date.now() - startMs },
+      });
     } catch (error) {
       options.workspace.setNotice(options.errorMessage(error));
+      options.diagnostics?.record({
+        scope: "account",
+        name: `${actionName}Failed`,
+        fields: { elapsedMs: Date.now() - startMs },
+      });
     } finally {
       options.workspace.setBusy(false);
       options.publish();
@@ -57,8 +71,19 @@ export function createAccountController(options: AccountControllerOptions) {
   }
 
   return {
-    refresh: () => run(options.fetchSnapshot),
-    async open() { options.workspace.open(); options.publish(); await run(options.fetchSnapshot); },
+    refresh: () => run(options.fetchSnapshot, "refreshSnapshot"),
+    async open() {
+      const startMs = Date.now();
+      options.diagnostics?.record({ scope: "account", name: "openRequested" });
+      options.workspace.open();
+      options.publish();
+      await run(options.fetchSnapshot, "openSnapshot");
+      options.diagnostics?.record({
+        scope: "account",
+        name: "openCompleted",
+        fields: { elapsedMs: Date.now() - startMs },
+      });
+    },
     close() { options.workspace.close(); options.publish(); },
     async beginHostedAuth(environment = "prod") {
       options.workspace.setBusy(true); options.publish();

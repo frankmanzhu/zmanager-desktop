@@ -233,8 +233,17 @@ impl AccountRuntime {
 pub fn account_snapshot(
     app: AppHandle,
     runtime: State<'_, AccountRuntime>,
+    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<AccountSnapshotDto, CommandErrorDto> {
-    snapshot_at(&account_state_dir(&app)?, &runtime)
+    let start = std::time::Instant::now();
+    let result = snapshot_at(&account_state_dir(&app)?, &runtime);
+    let elapsed_ms = start.elapsed().as_millis() as u64;
+    let _ = diagnostics.record(
+        "account",
+        "snapshot_fetched",
+        crate::diagnostics::fields([("elapsedMs", serde_json::json!(elapsed_ms))]),
+    );
+    result
 }
 
 #[tauri::command]

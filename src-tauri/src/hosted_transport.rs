@@ -12,8 +12,8 @@ pub struct HostedHttpTransport {
 impl HostedHttpTransport {
     pub fn new() -> Result<Self, String> {
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(3))
+            .connect_timeout(Duration::from_secs(2))
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;

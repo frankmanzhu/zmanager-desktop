@@ -1201,6 +1201,7 @@ const accountController = createAccountController({
   openUrl: openDesktopPath,
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Account operation failed."),
+  diagnostics,
 });
 
 const defaultHandlerController = createDefaultHandlerController({
