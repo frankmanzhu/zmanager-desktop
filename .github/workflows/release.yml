@@ -135,6 +135,11 @@ jobs:
   package-windows:
     name: Windows ${{ matrix.arch }} package
     runs-on: ${{ matrix.runner }}
+    # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
+    # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
+    # below must mirror this location.
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
     strategy:
       fail-fast: false
       matrix:
@@ -165,9 +170,8 @@ jobs:
           name: ${{ matrix.artifact-name }}
           if-no-files-found: error
           path: |
-            src-tauri/target/release/zmanager-desktop.exe
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/*/release/bundle/nsis/*.exe
+            ${{ runner.temp }}\zmbuild\*\release\zmanager-desktop.exe
+            ${{ runner.temp }}\zmbuild\*\release\bundle\nsis\*.exe
 
   package-deb:
     name: Linux DEB ${{ matrix.arch }} package
