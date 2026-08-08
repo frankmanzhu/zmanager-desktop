@@ -44,6 +44,8 @@ jobs:
         run: |
           npm run test:frontend
           npm run test:architecture
+          (cd src-tauri && cargo fmt --check)
+          (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
           cargo test --manifest-path src-tauri/Cargo.toml
           cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
           cargo test --manifest-path crates/zmanager-public-metadata-ffi/Cargo.toml
