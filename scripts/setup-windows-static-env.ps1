@@ -80,10 +80,46 @@ function Resolve-CargoBin {
     throw "Rust Cargo was not found on PATH or at $defaultCargo. Install Rust with the MSVC toolchain, then reopen the shell."
 }
 
+function Resolve-MsvcBinDir {
+    param([string]$TargetArchitecture = "x64")
+
+    $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
+    $lib = Get-Command "lib.exe" -ErrorAction SilentlyContinue
+    if ($cl -and $lib) {
+        return (Split-Path $cl.Source -Parent)
+    }
+
+    $vswherePaths = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+        "$env:ProgramFiles\Microsoft Visual Studio\Installer\vswhere.exe"
+    )
+    $vswhere = $vswherePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($vswhere) {
+        $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($installationPath -and (Test-Path (Join-Path $installationPath "VC\Tools\MSVC"))) {
+            $msvcBase = Join-Path $installationPath "VC\Tools\MSVC"
+            $hostArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "Hostarm64" } else { "Hostx64" }
+            $targetSubdir = if ($TargetArchitecture -eq "arm64") { "arm64" } else { "x64" }
+
+            $match = Get-ChildItem -Path (Join-Path $msvcBase "*\bin\$hostArch\$targetSubdir\cl.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $match) {
+                $match = Get-ChildItem -Path (Join-Path $msvcBase "*\bin\*\$targetSubdir\cl.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+            }
+            if ($match) {
+                return (Split-Path $match.FullName -Parent)
+            }
+        }
+    }
+
+    return $null
+}
+
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $Triplet = Resolve-WindowsStaticTriplet -RequestedTriplet $Triplet -ResolvedArchitecture $resolvedArchitecture
 $resolvedPerlBin = Resolve-PerlBin -RequestedPerlBin $PerlBin
 $resolvedCargoBin = Resolve-CargoBin
+$resolvedMsvcBin = Resolve-MsvcBinDir -TargetArchitecture $resolvedArchitecture
 
 $toolchainFile = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $debugLib = Join-Path $VcpkgRoot "installed\$Triplet\debug\lib"
@@ -108,11 +144,18 @@ $env:VCPKG_DEFAULT_TRIPLET = $Triplet
 $env:VCPKG_TARGET_TRIPLET = $Triplet
 $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
-$env:PATH = "$resolvedCargoBin;$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
+
+$pathParts = @($resolvedCargoBin, $resolvedPerlBin, $debugBin, $releaseBin)
+if ($resolvedMsvcBin) {
+    $pathParts += $resolvedMsvcBin
+}
+$env:PATH = ($pathParts -join ";") + ";" + $env:PATH
 
 if ($resolvedArchitecture -eq "arm64") {
-    $env:CC_aarch64_pc_windows_msvc = "cl.exe"
-    $env:AR_aarch64_pc_windows_msvc = "lib.exe"
+    $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
+    $lib = Get-Command "lib.exe" -ErrorAction SilentlyContinue
+    $env:CC_aarch64_pc_windows_msvc = if ($cl) { $cl.Source } else { "cl.exe" }
+    $env:AR_aarch64_pc_windows_msvc = if ($lib) { $lib.Source } else { "lib.exe" }
 }
 
 Write-Host "Configured Windows static native build environment."
