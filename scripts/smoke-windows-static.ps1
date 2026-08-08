@@ -25,15 +25,26 @@ function Resolve-WindowsStaticArchitecture {
         return $RequestedArchitecture
     }
 
-    $architecture = $env:PROCESSOR_ARCHITECTURE
-    if ($architecture -eq "ARM64") {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64" -or $env:PROCESSOR_IDENTIFIER -like "*ARM*") {
         return "arm64"
     }
-    if ($architecture -eq "AMD64") {
+
+    $rustc = Get-Command "rustc.exe" -ErrorAction SilentlyContinue
+    if (-not $rustc) {
+        $rustc = Get-Command "rustc" -ErrorAction SilentlyContinue
+    }
+    if ($rustc) {
+        $hostLine = & $rustc.Source -vV | Where-Object { $_ -like "host: *" } | Select-Object -First 1
+        if ($hostLine -like "*aarch64*") {
+            return "arm64"
+        }
+    }
+
+    if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64") {
         return "x64"
     }
 
-    throw "Could not determine Windows build architecture from PROCESSOR_ARCHITECTURE='$architecture'. Pass -Architecture x64 or -Architecture arm64."
+    throw "Could not determine Windows build architecture. Pass -Architecture x64 or -Architecture arm64."
 }
 
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture

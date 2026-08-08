@@ -18,11 +18,19 @@ Set-Location $repoRoot
 
 # Respect CARGO_TARGET_DIR so build artifacts land in a short path
 # (avoids Windows MAX_PATH issues with deeply nested build outputs).
-$cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repoRoot "src-tauri\target" }
+$cargoTargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $env:USERPROFILE ".zmbuild" }
+$env:CARGO_TARGET_DIR = $cargoTargetDir
+if (-not (Test-Path $cargoTargetDir)) {
+    New-Item -ItemType Directory -Force -Path $cargoTargetDir | Out-Null
+}
 
 $resolvedArch = $Architecture
 if ($resolvedArch -eq "Auto") {
-    $resolvedArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64" -or $env:PROCESSOR_IDENTIFIER -like "*ARM*") {
+        $resolvedArch = "arm64"
+    } else {
+        $resolvedArch = "x64"
+    }
 }
 $targetTriple = if ($resolvedArch -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
 

@@ -17,15 +17,26 @@ function Resolve-WindowsStaticArchitecture {
         return $RequestedArchitecture
     }
 
-    $architecture = $env:PROCESSOR_ARCHITECTURE
-    if ($architecture -eq "ARM64") {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64" -or $env:PROCESSOR_ARCHITEW6432 -eq "ARM64" -or $env:PROCESSOR_IDENTIFIER -like "*ARM*") {
         return "arm64"
     }
-    if ($architecture -eq "AMD64") {
+
+    $rustc = Get-Command "rustc.exe" -ErrorAction SilentlyContinue
+    if (-not $rustc) {
+        $rustc = Get-Command "rustc" -ErrorAction SilentlyContinue
+    }
+    if ($rustc) {
+        $hostLine = & $rustc.Source -vV | Where-Object { $_ -like "host: *" } | Select-Object -First 1
+        if ($hostLine -like "*aarch64*") {
+            return "arm64"
+        }
+    }
+
+    if ($env:PROCESSOR_ARCHITECTURE -eq "AMD64") {
         return "x64"
     }
 
-    throw "Could not determine Windows build architecture from PROCESSOR_ARCHITECTURE='$architecture'. Pass -Architecture x64 or -Architecture arm64."
+    throw "Could not determine Windows build architecture. Pass -Architecture x64 or -Architecture arm64."
 }
 
 function Resolve-WindowsStaticTriplet {
@@ -80,13 +91,15 @@ function Resolve-CargoBin {
     throw "Rust Cargo was not found on PATH or at $defaultCargo. Install Rust with the MSVC toolchain, then reopen the shell."
 }
 
-function Resolve-MsvcBinDir {
+function Import-MsvcEnvironment {
     param([string]$TargetArchitecture = "x64")
 
-    $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
-    $lib = Get-Command "lib.exe" -ErrorAction SilentlyContinue
-    if ($cl -and $lib) {
-        return (Split-Path $cl.Source -Parent)
+    # If cl.exe is already on PATH (e.g. from a VS Developer Command Prompt),
+    # we don't need to do anything.
+    $existingCl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
+    if ($existingCl) {
+        Write-Host "MSVC compiler already on PATH: $($existingCl.Source)"
+        return
     }
 
     $vswherePaths = @(
@@ -94,32 +107,96 @@ function Resolve-MsvcBinDir {
         "$env:ProgramFiles\Microsoft Visual Studio\Installer\vswhere.exe"
     )
     $vswhere = $vswherePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $vswhere) {
+        Write-Host "WARNING: vswhere.exe not found. MSVC environment may not be configured."
+        return
+    }
 
-    if ($vswhere) {
-        $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($installationPath -and (Test-Path (Join-Path $installationPath "VC\Tools\MSVC"))) {
-            $msvcBase = Join-Path $installationPath "VC\Tools\MSVC"
-            $hostArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "Hostarm64" } else { "Hostx64" }
-            $targetSubdir = if ($TargetArchitecture -eq "arm64") { "arm64" } else { "x64" }
+    # vswhere is not on the default PATH, but vcvarsall.bat (and its helper
+    # scripts) may invoke it internally.  Prepend its directory so the child
+    # cmd.exe session can find it.
+    $vswhereDir = Split-Path $vswhere -Parent
+    $env:PATH = "$vswhereDir;$env:PATH"
 
-            $match = Get-ChildItem -Path (Join-Path $msvcBase "*\bin\$hostArch\$targetSubdir\cl.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $match) {
-                $match = Get-ChildItem -Path (Join-Path $msvcBase "*\bin\*\$targetSubdir\cl.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+    $rawPaths = & $vswhere -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>&1
+    if (-not $rawPaths) {
+        Write-Host "WARNING: No Visual Studio installation with C++ tools found via vswhere."
+        return
+    }
+
+    $vcvars = $null
+    foreach ($path in $rawPaths) {
+        $candidate = Join-Path $path "VC\Auxiliary\Build\vcvarsall.bat"
+        if (Test-Path $candidate) {
+            $vcvars = $candidate
+            break
+        }
+    }
+    if (-not $vcvars) {
+        Write-Host "WARNING: vcvarsall.bat not found in any VS installation."
+        return
+    }
+
+    $archArg = if ($TargetArchitecture -eq "arm64") {
+        if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64_arm64" }
+    } else {
+        if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64_x64" } else { "amd64" }
+    }
+
+    Write-Host "Importing MSVC environment: $vcvars $archArg"
+
+    $file = [System.IO.Path]::GetTempFileName() + ".bat"
+    # Redirect both stdout and stderr inside the cmd.exe session so that
+    # any incidental errors from vcvarsall.bat helpers (e.g. vswhere.exe)
+    # don't leak to the console or the error stream.
+    Set-Content -Path $file -Value "@echo off`r`ncall `"$vcvars`" $archArg >nul 2>&1`r`nset"
+    $envOutput = cmd.exe /c $file 2>&1
+    Remove-Item $file -Force -ErrorAction SilentlyContinue
+
+    # Import all MSVC and Windows SDK environment variables from the
+    # vcvarsall.bat output.  Build scripts (cc-rs, ring, etc.) probe for
+    # variables like VCINSTALLDIR, VCToolsVersion, WindowsSdkDir, and
+    # WindowsSDKVersion to detect the MSVC toolchain — without them they
+    # fall back to looking for clang/gcc and fail.
+    $msvcPrefixes = @(
+        "VC", "VS", "VCTools", "DevEnv",
+        "WindowsSdk", "WindowsSDK", "ExtensionSdk",
+        "UCRT", "UniversalCRT", "Framework",
+        "VisualStudio", "CommandPrompt", "Platform",
+        "VSCMD"
+    )
+    foreach ($line in $envOutput) {
+        if ($line -match "^([^=]+)=(.*)$") {
+            $key = $matches[1]
+            $val = $matches[2]
+            $import = ($key -ieq "PATH" -or $key -ieq "INCLUDE" -or $key -ieq "LIB" -or $key -ieq "LIBPATH")
+            if (-not $import) {
+                foreach ($prefix in $msvcPrefixes) {
+                    if ($key -like "$prefix*") { $import = $true; break }
+                }
             }
-            if ($match) {
-                return (Split-Path $match.FullName -Parent)
+            if ($import) {
+                [Environment]::SetEnvironmentVariable($key, $val, [EnvironmentVariableTarget]::Process)
+                Set-Item -Path "env:$key" -Value $val
             }
         }
     }
 
-    return $null
+    # Verify the import actually worked.
+    $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
+    if ($cl) {
+        Write-Host "MSVC compiler configured: $($cl.Source)"
+    } else {
+        Write-Host "WARNING: cl.exe was not found on PATH after importing the MSVC environment. The build may fail."
+    }
 }
 
 $resolvedArchitecture = Resolve-WindowsStaticArchitecture -RequestedArchitecture $Architecture
 $Triplet = Resolve-WindowsStaticTriplet -RequestedTriplet $Triplet -ResolvedArchitecture $resolvedArchitecture
 $resolvedPerlBin = Resolve-PerlBin -RequestedPerlBin $PerlBin
 $resolvedCargoBin = Resolve-CargoBin
-$resolvedMsvcBin = Resolve-MsvcBinDir -TargetArchitecture $resolvedArchitecture
+
+Import-MsvcEnvironment -TargetArchitecture $resolvedArchitecture
 
 $toolchainFile = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $debugLib = Join-Path $VcpkgRoot "installed\$Triplet\debug\lib"
@@ -142,20 +219,34 @@ $env:VCPKG_ROOT = $VcpkgRoot
 $env:CMAKE_TOOLCHAIN_FILE = $toolchainFile
 $env:VCPKG_DEFAULT_TRIPLET = $Triplet
 $env:VCPKG_TARGET_TRIPLET = $Triplet
+# Point openssl-sys to the vcpkg-installed OpenSSL so it doesn't try to
+# build from source (which is unreliable on ARM64 Windows).
+$env:OPENSSL_DIR = Join-Path $VcpkgRoot "installed\$Triplet"
 $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
 
-$pathParts = @($resolvedCargoBin, $resolvedPerlBin, $debugBin, $releaseBin)
-if ($resolvedMsvcBin) {
-    $pathParts += $resolvedMsvcBin
+if (-not $env:CARGO_TARGET_DIR) {
+    $env:CARGO_TARGET_DIR = Join-Path $env:USERPROFILE ".zmbuild"
 }
-$env:PATH = ($pathParts -join ";") + ";" + $env:PATH
+if (-not (Test-Path $env:CARGO_TARGET_DIR)) {
+    New-Item -ItemType Directory -Force -Path $env:CARGO_TARGET_DIR | Out-Null
+}
+
+# Prepend tool paths to PATH; the MSVC directories are already present
+# from Import-MsvcEnvironment above.
+$env:PATH = "$resolvedCargoBin;$resolvedPerlBin;$debugBin;$releaseBin;" + $env:PATH
 
 if ($resolvedArchitecture -eq "arm64") {
     $cl = Get-Command "cl.exe" -ErrorAction SilentlyContinue
     $lib = Get-Command "lib.exe" -ErrorAction SilentlyContinue
-    $env:CC_aarch64_pc_windows_msvc = if ($cl) { $cl.Source } else { "cl.exe" }
-    $env:AR_aarch64_pc_windows_msvc = if ($lib) { $lib.Source } else { "lib.exe" }
+    if ($cl) {
+        $env:CC_aarch64_pc_windows_msvc = "cl.exe"
+        ${env:CC_aarch64-pc-windows-msvc} = "cl.exe"
+    }
+    if ($lib) {
+        $env:AR_aarch64_pc_windows_msvc = "lib.exe"
+        ${env:AR_aarch64-pc-windows-msvc} = "lib.exe"
+    }
 }
 
 Write-Host "Configured Windows static native build environment."

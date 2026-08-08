@@ -5,6 +5,19 @@ setlocal enabledelayedexpansion
 set "REPO_ROOT=%~dp0.."
 for %%I in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fI"
 
+:: Enable Windows long-path support for this process if available.
+:: Build artifacts in deeply-nested Cargo dependency trees can exceed the
+:: legacy 260-char MAX_PATH limit; the OS supports longer paths when the
+:: registry key is set.  We attempt to enable it non-destructively for the
+:: lifetime of this console session.
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled 2>nul | find "0x1" >nul
+if %ERRORLEVEL% neq 0 (
+    echo NOTE: Windows long-path support is not enabled system-wide.
+    echo   To enable it, run the following in an elevated prompt:
+    echo     reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+    echo   The build will continue, but path-length failures are possible.
+)
+
 :: Use a short target directory to avoid Windows MAX_PATH (260 chars).
 :: Build artifacts under src-tauri\target\ can reach 240+ chars with the
 :: default layout; a single-level directory under the user profile saves
