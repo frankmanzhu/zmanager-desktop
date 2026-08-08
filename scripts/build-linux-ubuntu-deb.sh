@@ -87,6 +87,8 @@ check_release_baseline
 ubuntu_packages=(
   build-essential
   ca-certificates
+  clang
+  libclang-dev
   cmake
   curl
   file

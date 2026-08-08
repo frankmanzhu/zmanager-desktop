@@ -19,7 +19,7 @@ set -euo pipefail
 # (useful when zmanager-core is pinned to a git dependency in CI).
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-parent_dir="$(dirname "$repo_root")"
+parent_dir="$(cd "$repo_root/.." && pwd)"
 
 tzap_repo="${ZMANAGER_TZAP_REPO:-https://github.com/tzap-org/tzap}"
 tzap_ref="${ZMANAGER_TZAP_REF:-main}"

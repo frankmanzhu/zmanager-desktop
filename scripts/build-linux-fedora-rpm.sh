@@ -85,6 +85,8 @@ fedora_packages=(
   git
   ripgrep
   ca-certificates
+  clang
+  clang-devel
   cmake
   curl
   file
