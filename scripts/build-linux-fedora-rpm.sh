@@ -253,7 +253,16 @@ if ((!skip_tests && node_major < 20)); then
   exit 1
 fi
 
-if [[ ! -d node_modules ]]; then
+npm_install_required() {
+  if [[ ! -d node_modules ]]; then
+    return 0
+  fi
+
+  # Exit 1 when any declared dependency is missing or mismatched (stale tree).
+  ! npm ls --depth=0 >/dev/null 2>&1
+}
+
+if npm_install_required; then
   npm install
 fi
 
