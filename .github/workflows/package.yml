@@ -77,11 +77,6 @@ jobs:
   windows:
     name: Windows ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
-    # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
-    # below must mirror this location.
-    env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
     strategy:
       fail-fast: false
       matrix:
@@ -99,6 +94,11 @@ jobs:
 
       - name: Prepare and build Windows package
         shell: pwsh
+        # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
+        # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
+        # below must mirror this location.
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
         run: |
           .\scripts\prepare-windows-static-build.ps1 `
             -Architecture ${{ matrix.arch }} `
