@@ -11,8 +11,9 @@ Ensures tzap (and optionally zmanager) exist as sibling directories.
 .DESCRIPTION
 Clones the tzap repository into the parent directory of this repo so that
 Cargo path dependencies in src-tauri/Cargo.toml and its vendored crates
-can resolve. The zmanager sibling is only needed when zmanager-core is a
-path dependency (local-dev mode); CI pins it to git instead.
+can resolve. The zmanager sibling is required because src-tauri/Cargo.toml
+and the zmanager-ffi staticlib use zmanager-core as a path dependency, and
+the extension bindings are copied from crates/zmanager-ffi/bindings/swift.
 
 Override defaults via environment variables:
   ZMANAGER_TZAP_REPO      – tzap repository URL

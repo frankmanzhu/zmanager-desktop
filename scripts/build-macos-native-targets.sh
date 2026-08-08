@@ -8,6 +8,11 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export MACOSX_DEPLOYMENT_TARGET=14.0
+# The extensions consume the UniFFI zmanager-ffi crate from the sibling
+# zmanager checkout (same source tree as the main application; the zmanager
+# workspace [patch] entries make tzap resolve to the sibling tzap repo).
+sibling_zmanager="${ZMANAGER_ZMANAGER_DIR:-$(cd "$repo_root/.." && pwd)/zmanager}"
+uniffi_manifest="$sibling_zmanager/crates/zmanager-ffi/Cargo.toml"
 app=$1
 architecture=${2:-$(uname -m)}
 case "$architecture" in
@@ -33,13 +38,13 @@ appex="$plugins/ZManagerFinderExtension.appex"
 preview_appex="$plugins/ZManagerQuickLookPreview.appex"
 thumbnail_appex="$plugins/ZManagerQuickLookThumbnail.appex"
 spotlight="$app/Contents/Library/Spotlight/ZManagerSpotlight.mdimporter"
-metadata_manifest="$repo_root/crates/zmanager-public-metadata-ffi/Cargo.toml"
-metadata_target="$repo_root/target/macos-public-metadata/$architecture"
-metadata_library="$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.a"
+uniffi_target="$repo_root/target/macos-uniffi/$architecture"
+ffi_library="$uniffi_target/$rust_triple/release/libzmanager_ffi.a"
 
+"$repo_root/scripts/sync-uniffi-swift-bindings.sh"
 swift build --package-path "$package" -c release --triple "$swift_package_triple"
-CARGO_TARGET_DIR="$metadata_target" cargo build --release --target "$rust_triple" \
-  --manifest-path "$metadata_manifest"
+CARGO_TARGET_DIR="$uniffi_target" cargo build --release --target "$rust_triple" \
+  --manifest-path "$uniffi_manifest"
 bin_dir=$(swift build --package-path "$package" -c release --triple "$swift_package_triple" --show-bin-path)
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
 build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")
@@ -50,8 +55,8 @@ sync_bundle_identity() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build" "$bundle/Contents/Info.plist"
 }
 
-metadata_link_args=(
-  "$metadata_library"
+ffi_link_args=(
+  "$ffi_library"
   -lc++ -lpthread -framework CoreFoundation -framework Security
   -lz -lbz2
   -liconv -lxml2 -lAppleArchive
@@ -82,10 +87,11 @@ ditto "$repo_root/packaging/macos/QuickLookPreview/Info.plist" "$preview_appex/C
 sync_bundle_identity "$preview_appex"
 xcrun swiftc -o "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
   -target "$swift_compile_target" \
-  "$bin_dir"/ZManagerPublicMetadataSupport.build/*.swift.o \
+  "$bin_dir"/ZManagerUniFFI.build/*.swift.o \
+  "$bin_dir"/ZManagerPreviewModel.build/*.swift.o \
   "$bin_dir"/ZManagerQuickLookPreview.build/*.swift.o \
   -framework AppKit -framework QuickLookUI -framework UniformTypeIdentifiers \
-  "${metadata_link_args[@]}" \
+  "${ffi_link_args[@]}" \
   -Xlinker -e -Xlinker _NSExtensionMain
 chmod 0755 "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview"
 
@@ -112,10 +118,10 @@ ditto "$repo_root/packaging/macos/Spotlight/zh-Hans.lproj/schema.strings" \
 sync_bundle_identity "$spotlight"
 xcrun clang -arch "$architecture" -fobjc-arc -mmacosx-version-min=14.0 -bundle \
   -F "$(xcrun --sdk macosx --show-sdk-path)/System/Library/Frameworks/CoreServices.framework/Frameworks" \
-  -I "$repo_root/crates/zmanager-public-metadata-ffi/include" \
+  -I "$package/Sources/zmanagerFFI/include" \
   "$repo_root/native/macos/Spotlight/ZManagerSpotlightImporter.m" \
   -framework Foundation -framework CoreServices \
-  "${metadata_link_args[@]}" \
+  "${ffi_link_args[@]}" \
   -o "$spotlight/Contents/MacOS/ZManagerSpotlight"
 chmod 0755 "$spotlight/Contents/MacOS/ZManagerSpotlight"
 
@@ -124,33 +130,27 @@ expected_finder_id=$(/usr/bin/python3 -c "import json,sys; print(json.load(open(
   "$expected_finder_id" ]]
 file "$appex/Contents/MacOS/ZManagerFinderExtension" | grep -q 'Mach-O 64-bit executable'
 "$repo_root/scripts/check-macos-core-revision-and-symbols.sh" \
-  "$metadata_target/$rust_triple/release/libzmanager_public_metadata_ffi.dylib"
+  "$uniffi_target/$rust_triple/release/libzmanager_ffi.dylib"
 for executable in \
   "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
   "$thumbnail_appex/Contents/MacOS/ZManagerQuickLookThumbnail" \
   "$spotlight/Contents/MacOS/ZManagerSpotlight"; do
   file "$executable" | grep -q 'Mach-O 64-bit'
-  while IFS= read -r symbol; do
-    grep -Fxq "$symbol" "$repo_root/crates/zmanager-public-metadata-ffi/exported-symbols.txt" || {
-      echo "Unexpected ZManager ABI symbol in metadata target: $symbol" >&2
-      exit 1
-    }
-  done < <(nm -m "$executable" | awk '{print $NF}' | grep '^_zmanager_' | sort -u || true)
   if otool -L "$executable" | grep -Eq '^\s+/(opt/homebrew|usr/local)/'; then
-    echo "Native metadata target contains a build-machine library path: $executable" >&2
+    echo "Native target contains a build-machine library path: $executable" >&2
     exit 1
   fi
 done
-# Verify metadata FFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
+# Verify UniFFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
 for executable in \
   "$preview_appex/Contents/MacOS/ZManagerQuickLookPreview" \
   "$spotlight/Contents/MacOS/ZManagerSpotlight"; do
   for required_symbol in \
-    _zmanager_public_metadata_ffi_version \
-    _zmanager_public_metadata_string_free \
-    _zmanager_public_metadata_summary_json; do
-    nm -m "$executable" | awk '{print $NF}' | grep -Fxq "$required_symbol" || {
-      echo "Native metadata target is missing required ABI symbol $required_symbol: $executable" >&2
+    _ffi_zmanager_ffi_rustbuffer_alloc \
+    _ffi_zmanager_ffi_rustbuffer_free \
+    _uniffi_zmanager_ffi_fn_func_tzappublicmetadatadisplaysummary; do
+    nm -m "$executable" | awk -v symbol="$required_symbol" '$NF == symbol { found = 1 } END { exit !found }' || {
+      echo "Native target is missing required UniFFI symbol $required_symbol: $executable" >&2
       exit 1
     }
   done

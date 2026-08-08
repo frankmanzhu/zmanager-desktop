@@ -1,13 +1,8 @@
 import Foundation
 import QuickLookUI
 import UniformTypeIdentifiers
-import ZManagerPublicMetadataSupport
-
-@_silgen_name("zmanager_public_metadata_summary_json")
-private func metadataSummaryJSON(_ path: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("zmanager_public_metadata_string_free")
-private func metadataStringFree(_ value: UnsafeMutablePointer<CChar>?)
+import ZManagerPreviewModel
+import ZManagerUniFFI
 
 final class TzapPreviewProvider: QLPreviewProvider, QLPreviewingController {
     func providePreview(
@@ -26,10 +21,6 @@ final class TzapPreviewProvider: QLPreviewProvider, QLPreviewingController {
 }
 
 private func loadPublicMetadata(fileURL: URL) -> PublicMetadataSummary {
-    let raw = fileURL.path.withCString(metadataSummaryJSON)
-    guard let raw else {
-        return .parse(fileName: fileURL.lastPathComponent, json: #"{"ok":false,"message":"Metadata inspection failed."}"#)
-    }
-    defer { metadataStringFree(raw) }
-    return .parse(fileName: fileURL.lastPathComponent, json: String(cString: raw))
+    let json = tzapPublicMetadataDisplaySummary(archivePath: fileURL.path)
+    return .parse(fileName: fileURL.lastPathComponent, json: json)
 }

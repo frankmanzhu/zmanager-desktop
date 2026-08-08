@@ -281,16 +281,16 @@ for relative in "${expected_macho[@]}"; do
   ((bad_rpath == 0)) && pass || fail "bad rpath in $relative: $rpaths"
 done
 
-# Verify metadata FFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
+# Verify UniFFI symbols in targets that use them (preview and spotlight; thumbnail renders only the app icon)
 for executable in \
   "$app/Contents/PlugIns/ZManagerQuickLookPreview.appex/Contents/MacOS/ZManagerQuickLookPreview" \
   "$app/Contents/Library/Spotlight/ZManagerSpotlight.mdimporter/Contents/MacOS/ZManagerSpotlight"; do
-  for symbol in _zmanager_public_metadata_ffi_version _zmanager_public_metadata_string_free _zmanager_public_metadata_summary_json; do
-    nm -m "$executable" 2>/dev/null | awk '{print $NF}' | grep -Fxq "$symbol" && pass || fail "missing metadata symbol $symbol in ${executable#"$app/"}"
+  for symbol in _ffi_zmanager_ffi_rustbuffer_alloc _ffi_zmanager_ffi_rustbuffer_free _uniffi_zmanager_ffi_fn_func_tzappublicmetadatadisplaysummary; do
+    nm -m "$executable" 2>/dev/null | awk -v symbol="$symbol" '$NF == symbol { found = 1 } END { exit !found }' && pass || fail "missing UniFFI symbol $symbol in ${executable#"$app/"}"
   done
 done
 preview="$app/Contents/PlugIns/ZManagerQuickLookPreview.appex/Contents/MacOS/ZManagerQuickLookPreview"
-otool -ov "$preview" 2>/dev/null | grep -q 'providePreviewForFileRequest:completionHandler:' && pass || \
+otool -ov "$preview" 2>/dev/null | grep -F 'providePreviewForFileRequest:completionHandler:' >/dev/null && pass || \
   fail "Quick Look packaged selector is missing"
 
 if [[ -n $dmg ]]; then

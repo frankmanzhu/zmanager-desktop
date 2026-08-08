@@ -5,9 +5,12 @@ set -euo pipefail
 # directories so that Cargo path dependencies resolve.
 #
 # The tzap repo is required because src-tauri/Cargo.toml patches tzap-core,
-# tzap-plugin-keywrap and tzap-plugin-signing to their local source trees.
-# The zmanager repo is required when zmanager-core is a path dependency
-# (local-dev mode; CI pins it to git via pin-zmanager-core-release.sh instead).
+# tzap-plugin-keywrap and tzap-plugin-signing to their local source trees, and
+# the zmanager workspace patches make the zmanager-ffi staticlib (built for
+# the macOS extensions) resolve the same tzap sources.
+# The zmanager repo is required because src-tauri/Cargo.toml and the
+# zmanager-ffi staticlib use zmanager-core as a path dependency, and the
+# extension bindings are copied from crates/zmanager-ffi/bindings/swift.
 #
 # Override defaults via environment variables:
 #   ZMANAGER_TZAP_REPO    – tzap repository URL
@@ -16,7 +19,7 @@ set -euo pipefail
 #   ZMANAGER_ZMANAGER_REF  – branch or tag to check out (default: main)
 #
 # Pass --skip-zmanager to skip cloning the zmanager sibling entirely
-# (useful when zmanager-core is pinned to a git dependency in CI).
+# (only useful for builds that do not need zmanager-core at all).
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 parent_dir="$(cd "$repo_root/.." && pwd)"

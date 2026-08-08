@@ -210,11 +210,15 @@ losing, duplicating, or exposing secret-bearing events.
 A Rust-owned archive-handle and password-lifetime session paired with a Swift
 file-promise drag. Bytes are streamed only after Finder chooses a destination.
 
-### Public Metadata FFI
+### Extension Bindings
 
-The separately pinned, bounded ABI for reading public TZAP metadata in Quick
-Look and Spotlight. It exposes no archive jobs, account state, private keys, or
-mutations.
+Quick Look and Spotlight consume the UniFFI zmanager-ffi crate from the
+sibling zmanager checkout (`crates/zmanager-ffi`, staticlib linked into the
+extension executables by `scripts/build-macos-native-targets.sh`). The
+generated Swift bindings are copied into the Swift package at build time by
+`scripts/sync-uniffi-swift-bindings.sh`. Extensions only call the bounded
+`tzapPublicMetadataDisplaySummary` entry point — no archive jobs, account
+state, private keys, or mutations.
 
 ### Release Bundle
 

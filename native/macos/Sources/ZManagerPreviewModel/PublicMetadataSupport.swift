@@ -2,8 +2,14 @@ import Foundation
 
 public struct PublicMetadataSummary: Equatable, Sendable {
     public enum SignatureStatus: Equatable, Sendable {
-        case verified
-        case inspected
+        /// Footer signature is authentic (assertion 1 only; no content Merkle,
+        /// no trust chain — those are app-side verification).
+        case signed
+        /// Archive carries no signature.
+        case unsigned
+        /// A signature is present but not authentic.
+        case notAuthentic
+        /// The footer could not be read; status is unknown.
         case unavailable
     }
 
@@ -55,8 +61,9 @@ public struct PublicMetadataSummary: Equatable, Sendable {
         let signature = dictionary(object["signature"])
         let rootAuth = dictionary(signature["root_auth"])
         let signatureStatus: SignatureStatus = switch string(signature["status"]) {
-        case "verified": .verified
-        case "unverified": .inspected
+        case "signed": .signed
+        case "unsigned": .unsigned
+        case "not_authentic": .notAuthentic
         default: .unavailable
         }
         return Self(
@@ -144,12 +151,20 @@ public enum PublicMetadataHTML {
     public static func render(_ summary: PublicMetadataSummary) -> String {
         let status: (String, String)
         if let error = summary.errorMessage {
-            status = ("Preview unavailable", error)
+            status = ("Archive unreadable", error)
         } else {
             status = switch summary.signatureStatus {
-            case .verified: ("Signature verified", summary.signer ?? "The signing certificate is trusted.")
-            case .inspected: ("Signature inspected", summary.signer ?? summary.signatureMessage ?? "System trust was not established.")
-            case .unavailable: ("Public metadata", summary.signatureMessage ?? "No public signer certificate is available.")
+            case .signed:
+                (
+                    summary.signer.map { "Signed by \($0) — signature authentic" } ?? "Signature authentic",
+                    "Footer-only signature check passed. Full archive verification is available in the app."
+                )
+            case .unsigned:
+                ("No signature", "This archive carries no signature.")
+            case .notAuthentic:
+                ("Signature not authentic", summary.signatureMessage ?? "The archive footer signature is not authentic.")
+            case .unavailable:
+                ("Archive unreadable", summary.signatureMessage ?? "The archive footer could not be read.")
             }
         }
         let format = [summary.compressionAlgorithm, summary.encryptionAlgorithm]

@@ -48,7 +48,7 @@ jobs:
           (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
           cargo test --manifest-path src-tauri/Cargo.toml
           cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
-          cargo test --manifest-path crates/zmanager-public-metadata-ffi/Cargo.toml
+          scripts/sync-uniffi-swift-bindings.sh
           swift test --package-path native/macos
 
       - name: Build and inspect ad-hoc release bundle

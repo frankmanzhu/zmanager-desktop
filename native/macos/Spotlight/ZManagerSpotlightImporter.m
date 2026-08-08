@@ -4,7 +4,10 @@
 #import <Foundation/Foundation.h>
 #import <Metadata/MDImporter.h>
 
-#import "zmanager_public_metadata_ffi.h"
+// UniFFI-generated C surface for zmanager-ffi (synced from the sibling
+// zmanager checkout by scripts/sync-uniffi-swift-bindings.sh). The
+// implementation is linked from libzmanager_ffi.a.
+#import "zmanagerFFI.h"
 
 static NSString *const ZMTzapUTI = @"org.tzap-org.zmanager.tzap";
 static NSString *const ZMSignatureStatus = @"com_frankmanzhu_zmanager_tzapSignatureStatus";
@@ -46,6 +49,33 @@ static void ZMSet(CFMutableDictionaryRef attributes, NSString *key, NSString *va
     }
 }
 
+// Calls the UniFFI tzapPublicMetadataDisplaySummary entry point through the
+// generated zmanagerFFI C ABI. The path and result are RustBuffer-marshaled;
+// the caller-owned buffers are released here. Returns the JSON envelope, or
+// nil if the call itself failed.
+static NSString *ZMSummaryJSON(NSString *path) {
+    const char *pathBytes = path.fileSystemRepresentation;
+    size_t pathLength = strlen(pathBytes);
+    RustCallStatus callStatus = {0};
+    RustBuffer pathBuffer = ffi_zmanager_ffi_rustbuffer_alloc((uint64_t)pathLength, &callStatus);
+    if (callStatus.code != 0) {
+        return nil;
+    }
+    memcpy(pathBuffer.data, pathBytes, pathLength);
+    pathBuffer.len = (uint64_t)pathLength;
+    RustBuffer result = uniffi_zmanager_ffi_fn_func_tzappublicmetadatadisplaysummary(pathBuffer, &callStatus);
+    ffi_zmanager_ffi_rustbuffer_free(pathBuffer, &callStatus);
+    if (callStatus.code != 0) {
+        if (callStatus.errorBuf.data != NULL) {
+            ffi_zmanager_ffi_rustbuffer_free(callStatus.errorBuf, &callStatus);
+        }
+        return nil;
+    }
+    NSString *json = [[NSString alloc] initWithBytes:result.data length:result.len encoding:NSUTF8StringEncoding];
+    ffi_zmanager_ffi_rustbuffer_free(result, &callStatus);
+    return json;
+}
+
 static Boolean GetMetadataForFile(
     void *thisInterface,
     CFMutableDictionaryRef attributes,
@@ -58,12 +88,8 @@ static Boolean GetMetadataForFile(
             return false;
         }
         NSString *path = (__bridge NSString *)pathToFile;
-        char *raw = zmanager_public_metadata_summary_json(path.fileSystemRepresentation);
-        if (raw == NULL) {
-            return false;
-        }
-        NSData *data = [[[NSString alloc] initWithUTF8String:raw] dataUsingEncoding:NSUTF8StringEncoding];
-        zmanager_public_metadata_string_free(raw);
+        NSString *json = ZMSummaryJSON(path);
+        NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
         if (data.length == 0 || data.length > 1048576) {
             return false;
         }
@@ -76,9 +102,10 @@ static Boolean GetMetadataForFile(
         NSDictionary *signature = ZMDictionary(root, @"signature");
         NSDictionary *rootAuth = ZMDictionary(signature, @"root_auth");
         NSString *signatureCode = ZMString(signature, @"status");
-        NSString *status = [signatureCode isEqualToString:@"verified"]
-            ? @"Signature verified"
-            : ([signatureCode isEqualToString:@"unverified"] ? @"Signature inspected" : @"No public signature");
+        NSString *status = [signatureCode isEqualToString:@"signed"]
+            ? @"Signature authentic"
+            : ([signatureCode isEqualToString:@"unsigned"] ? @"No signature"
+               : ([signatureCode isEqualToString:@"not_authentic"] ? @"Signature not authentic" : @"Archive unreadable"));
         NSString *signer = ZMString(rootAuth, @"subject");
         NSString *issuer = ZMString(rootAuth, @"issuer");
         NSString *encryption = ZMString(format, @"encryption_algorithm");

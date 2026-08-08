@@ -1,5 +1,5 @@
 import Testing
-@testable import ZManagerPublicMetadataSupport
+@testable import ZManagerPreviewModel
 
 @Test
 func parsesEncryptedMultiVolumeAndEscapesPreviewHTML() {
@@ -21,36 +21,39 @@ func parsesEncryptedMultiVolumeAndEscapesPreviewHTML() {
             ],
         ],
         "signature": [
-            "status": "verified",
+            "status": "signed",
             "root_auth": ["subject": "CN=<Signer>", "issuer": "CN=Root"],
         ],
     ])
-    #expect(summary.signatureStatus == .verified)
+    #expect(summary.signatureStatus == .signed)
     #expect(summary.missingVolumeIndices == [2])
     #expect(summary.passwordRequired == true)
     let html = PublicMetadataHTML.render(summary)
     #expect(html.contains("&lt;project&gt;"))
-    #expect(html.contains("CN=&lt;Signer&gt;"))
+    #expect(html.contains("Signed by CN=&lt;Signer&gt; — signature authentic"))
     #expect(!html.contains("<project>"))
+    #expect(!html.contains("verified"))
 }
 
 @Test
-func rendersUnsignedAndUntrustedArchivesWithoutClaimingVerification() {
+func rendersUnsignedAndNotAuthenticArchivesWithoutClaimingVerification() {
     let unsigned = PublicMetadataSummary.parse(fileName: "plain.tzap", object: [
         "ok": true,
         "metadata": ["format": ["encryption_algorithm": "none", "password_required": false]],
-        "signature": ["status": "unavailable", "message": "No public signer certificate is available."],
+        "signature": ["status": "unsigned"],
     ])
-    #expect(unsigned.signatureStatus == .unavailable)
-    #expect(PublicMetadataHTML.render(unsigned).contains("No public signer certificate"))
+    #expect(unsigned.signatureStatus == .unsigned)
+    let unsignedHTML = PublicMetadataHTML.render(unsigned)
+    #expect(unsignedHTML.contains("No signature"))
+    #expect(!unsignedHTML.contains("verified"))
 
-    let inspected = PublicMetadataSummary.parse(fileName: "signed.tzap", object: [
+    let notAuthentic = PublicMetadataSummary.parse(fileName: "tampered.tzap", object: [
         "ok": true,
         "metadata": ["format": [:]],
-        "signature": ["status": "unverified", "root_auth": ["subject": "CN=Local Signer"]],
+        "signature": ["status": "not_authentic", "message": "The footer signature does not verify."],
     ])
-    #expect(inspected.signatureStatus == .inspected)
-    #expect(inspected.signer == "CN=Local Signer")
+    #expect(notAuthentic.signatureStatus == .notAuthentic)
+    #expect(PublicMetadataHTML.render(notAuthentic).contains("The footer signature does not verify."))
 }
 
 @Test
