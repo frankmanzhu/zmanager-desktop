@@ -360,21 +360,11 @@ pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog
 }
 
 pub fn quick_action_registers_single_instance(is_normal_singleton: bool) -> bool {
-<<<<<<< HEAD
-    #[cfg(target_os = "linux")]
-    {
-        let _ = is_normal_singleton;
-        true
-    }
-    #[cfg(not(target_os = "linux"))]
-    is_normal_singleton
-=======
     if cfg!(target_os = "linux") {
         true
     } else {
         is_normal_singleton
     }
->>>>>>> 31a638c (Fix platform-conditional dead_code and unused_variables clippy warnings for Linux target)
 }
 
 #[cfg(test)]
