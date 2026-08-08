@@ -10,9 +10,11 @@ Issues and PRDs are tracked in GitHub Issues for `frankmanzhu/zmanager-desktop`.
 
 Use the five canonical workflow labels defined for this repository. See `docs/agents/triage-labels.md`.
 
-### Domain docs
+### Domain docs & Private Documentation Policy
 
-This is a single-context repository with `CONTEXT.md` at the root and architectural decisions under `docs/adr/`. See `docs/agents/domain.md`.
+- `docs/` is a private directory/submodule linked to a private repository (`frankmanzhu/zmanager-desktop-docs`). It MUST ALWAYS be listed in `.gitignore` and MUST NEVER be committed directly to this repository.
+- `public-docs/` is the public documentation directory intended for end users and public developers.
+- All architecture guard scripts, contract tests, and CI workflows MUST handle `docs/` gracefully when it is not present in CI environments (e.g. checking `existsSync` before reading `docs/` files).
 
 ## Project Structure & Module Organization
 
