@@ -5163,6 +5163,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_collision_auto_rename_create_apple_archive() {
         assert_create_format_auto_renames(
             crate::dto::ArchiveFormatDto::AppleArchive,
