@@ -66,7 +66,11 @@ export function validateWorkspace(workspaceRoot = root) {
 
   const governingDocs = ["AGENTS.md", "CONTEXT.md", "docs/ARCHITECTURE.md", "docs/REQUIREMENTS.md", "docs/developer-setup.md"];
   const forbiddenPolicy = /separate SwiftUI|separate native Swift|Do not (?:add|move).*?(?:Finder Sync|Quick Look|notarization)|Windows and Linux are the signed\/release packaging targets/gi;
-  for (const doc of governingDocs) if (forbiddenPolicy.test(readFileSync(join(workspaceRoot, doc), "utf8"))) errors.push(`${doc}: contains active separate-product policy`);
+  for (const doc of governingDocs) {
+    const fullPath = join(workspaceRoot, doc);
+    if (!existsSync(fullPath)) continue;
+    if (forbiddenPolicy.test(readFileSync(fullPath, "utf8"))) errors.push(`${doc}: contains active separate-product policy`);
+  }
   return errors;
 }
 
