@@ -23,10 +23,12 @@ jobs:
       matrix:
         include:
           - arch: arm64
+            target: aarch64-apple-darwin
             runner: macos-15
             artifact-name: zmanager-macos-arm64-ci
           - arch: x86_64
-            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            runner: macos-13
             artifact-name: zmanager-macos-x86_64-ci
 
     steps:
@@ -36,7 +38,7 @@ jobs:
       - name: Install Rust target and frontend dependencies
         run: |
           brew install cmake lz4 xz ripgrep
-          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          rustup target add ${{ matrix.target }}
           npm ci
           scripts/ensure-sibling-repos.sh
 
@@ -90,7 +92,7 @@ jobs:
             runner: windows-2022
             artifact-name: zmanager-windows-x64
           - arch: arm64
-            runner: windows-11-arm
+            runner: windows-2022
             artifact-name: zmanager-windows-arm64
 
     steps:
@@ -125,7 +127,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-deb
           - arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-22.04
             artifact-name: zmanager-linux-arm64-deb
 
     steps:
@@ -157,7 +159,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-rpm
           - arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-22.04
             artifact-name: zmanager-linux-arm64-rpm
 
     steps:

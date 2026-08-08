@@ -26,10 +26,12 @@ jobs:
       matrix:
         include:
           - arch: arm64
+            target: aarch64-apple-darwin
             runner: macos-15
             artifact-name: zmanager-macos-arm64
           - arch: x86_64
-            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            runner: macos-13
             artifact-name: zmanager-macos-x86_64
     steps:
       - name: Checkout
@@ -42,7 +44,7 @@ jobs:
       - name: Install build dependencies
         run: |
           brew install cmake lz4 xz ripgrep
-          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          rustup target add ${{ matrix.target }}
           npm ci
           scripts/ensure-sibling-repos.sh
 
@@ -148,7 +150,7 @@ jobs:
             runner: windows-2022
             artifact-name: zmanager-windows-x64
           - arch: arm64
-            runner: windows-11-arm
+            runner: windows-2022
             artifact-name: zmanager-windows-arm64
 
     steps:
@@ -184,7 +186,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-deb
           - arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-22.04
             artifact-name: zmanager-linux-arm64-deb
 
     steps:
@@ -216,7 +218,7 @@ jobs:
             runner: ubuntu-22.04
             artifact-name: zmanager-linux-x64-rpm
           - arch: arm64
-            runner: ubuntu-22.04-arm
+            runner: ubuntu-22.04
             artifact-name: zmanager-linux-arm64-rpm
 
     steps:
@@ -256,7 +258,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p release-bundles
-          release_tag="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}"
+          release_tag="${{ inputs.tag || github.ref_name }}"
           release_version="${release_tag#v}"
           declare -A seen_names=()
 
@@ -364,8 +366,8 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
-          name: zmanager-desktop ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: zmanager-desktop ${{ inputs.tag || github.ref_name }}
           body: |
             Automated release of zmanager-desktop from GitHub Actions.
 
