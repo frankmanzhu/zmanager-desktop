@@ -20,8 +20,6 @@ describe("account controller", () => {
       enrollDeviceCertificate: async () => empty,
       renewCertificate: async () => empty,
       revokeCertificate: async () => empty,
-      signDocument: async () => {},
-      verifyDocument: async () => {},
       exportContactCard: async () => {},
       retireDevice: async () => empty,
       forget: async () => empty,
@@ -60,8 +58,6 @@ describe("account controller", () => {
       enrollDeviceCertificate: async () => empty,
       renewCertificate: async () => empty,
       revokeCertificate: async () => empty,
-      signDocument: async () => {},
-      verifyDocument: async () => {},
       exportContactCard: async () => {},
       retireDevice: async () => empty,
       forget: async () => empty,
@@ -97,8 +93,6 @@ describe("account controller", () => {
       enrollDeviceCertificate: async () => empty,
       renewCertificate: async () => empty,
       revokeCertificate: async () => empty,
-      signDocument: async () => {},
-      verifyDocument: async () => {},
       exportContactCard: async () => {},
       retireDevice: async () => empty,
       forget: async () => empty,
@@ -137,8 +131,6 @@ describe("account controller", () => {
       enrollDeviceCertificate: async () => empty,
       renewCertificate: async () => empty,
       revokeCertificate: async () => empty,
-      signDocument: async () => {},
-      verifyDocument: async () => {},
       exportContactCard: async () => {},
       retireDevice: async () => empty,
       forget: async () => empty,
@@ -162,5 +154,46 @@ describe("account controller", () => {
 
     expect(createStore).toHaveBeenCalledWith("Signer");
     expect(workspace.getSnapshot().busy).toBe(false);
+  });
+
+  it("handles export contact card and device retirement intent handlers", async () => {
+    const workspace = createAccountWorkspace();
+    const exportCard = vi.fn(async () => {});
+    const retire = vi.fn(async () => empty);
+
+    const controller = createAccountController({
+      workspace,
+      fetchSnapshot: async () => empty,
+      beginHostedAuth: async () => ({ launchUrl: "", state: "", expiresAtUnixSeconds: 0 }),
+      applyHostedCallback: async () => {},
+      completeHostedAuth: async () => empty,
+      fetchCurrentUser: async () => ({ displayName: "Test", assuranceLevel: "basic" }),
+      enrollDeviceCertificate: async () => empty,
+      renewCertificate: async () => empty,
+      revokeCertificate: async () => empty,
+      exportContactCard: exportCard,
+      retireDevice: retire,
+      forget: async () => empty,
+      generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: async () => empty,
+      removeSigningIdentity: async () => empty,
+      removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
+      removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "", recipientPublicKeyFingerprint: "", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
+      openUrl: async () => {},
+      publish: () => {},
+      errorMessage: (error) => error instanceof Error ? error.message : String(error),
+    });
+
+    await controller.handleExportContactCard();
+    expect(exportCard).toHaveBeenCalled();
+
+    await controller.handleDeviceRetire();
+    expect(retire).toHaveBeenCalled();
   });
 });

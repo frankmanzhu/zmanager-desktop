@@ -27,9 +27,9 @@ describe("AccountWorkspace", () => {
         createElement<AccountWorkspaceProps>(AccountWorkspace, { defaultTab: "certificates" }),
       ),
     );
-    expect(html).toContain("Identity &amp; Contacts");
+    expect(html).toContain("TZAP Account &amp; Identity");
     expect(html).toContain(
-      "Local identities, recipient keys, verified contacts, and secure-store capabilities",
+      "Local offline mode · Encryption &amp; signing identities operational",
     );
     expect(html).not.toContain("Authentication: launch only");
     expect(html).toContain("Create local self-signed identity");
@@ -128,5 +128,58 @@ describe("AccountWorkspace", () => {
 
     expect(html).toContain("Global Default Cert");
     expect(html).toContain("Delete identity");
+  });
+
+  it("hides Session and Device tabs when signed out, exposing header Sign In button", () => {
+    const initial = createInitialZManagerReactSnapshot();
+    const signedOutStore = createZManagerAppStore(
+      {
+        ...initial,
+        account: {
+          ...initial.account,
+          visible: true,
+          authStatus: "signedOut",
+          capabilities: { ...initial.account.capabilities, auth: "handoff_exchange" },
+        },
+      },
+      noopZManagerReactActions,
+    );
+    const signedOutHtml = renderToStaticMarkup(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store: signedOutStore },
+        createElement(AccountWorkspace),
+      ),
+    );
+
+    expect(signedOutHtml).not.toContain("Sign In");
+    expect(signedOutHtml).not.toContain(">Session<");
+    expect(signedOutHtml).not.toContain(">Device<");
+    expect(signedOutHtml).toContain("Certificates");
+
+    const signedInStore = createZManagerAppStore(
+      {
+        ...initial,
+        account: {
+          ...initial.account,
+          visible: true,
+          authStatus: "signedIn",
+          displayName: "Alice Dev",
+        },
+      },
+      noopZManagerReactActions,
+    );
+    const signedInHtml = renderToStaticMarkup(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store: signedInStore },
+        createElement(AccountWorkspace),
+      ),
+    );
+
+    expect(signedInHtml).toContain("Sign Out");
+    expect(signedInHtml).toContain("Alice Dev");
+    expect(signedInHtml).toContain("Session");
+    expect(signedInHtml).toContain("Device");
   });
 });

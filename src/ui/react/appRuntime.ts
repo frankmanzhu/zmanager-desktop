@@ -377,7 +377,9 @@ export type ZManagerAccountIntent =
   | Readonly<{ type: "setDefaultSigningIdentity"; id: string }>
   | Readonly<{ type: "removeContact"; id: string }>
   | Readonly<{ type: "inspectContactCard"; contactCard: string }>
-  | Readonly<{ type: "acceptContactCard"; contactCard: string }>;
+  | Readonly<{ type: "acceptContactCard"; contactCard: string }>
+  | Readonly<{ type: "exportContactCard" }>
+  | Readonly<{ type: "retireDevice" }>;
 
 export type ZManagerContextMenuIntent =
   | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>

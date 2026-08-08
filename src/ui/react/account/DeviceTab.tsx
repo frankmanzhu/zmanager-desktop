@@ -36,7 +36,7 @@ export function DeviceTab() {
             disabled={snapshot.busy}
             onClick={() => {
               if (window.confirm("Are you sure you want to retire this device? This action cannot be undone.")) {
-                actions.handleAccountIntent({ type: "retireDevice" } as any);
+                actions.handleAccountIntent({ type: "retireDevice" });
               }
             }}
           >

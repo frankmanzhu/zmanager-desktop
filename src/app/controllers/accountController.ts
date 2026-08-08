@@ -20,8 +20,6 @@ export type AccountControllerOptions = Readonly<{
   enrollDeviceCertificate(): Promise<AccountSnapshotDto>;
   renewCertificate(certificateId: string): Promise<AccountSnapshotDto>;
   revokeCertificate(certificateId: string): Promise<AccountSnapshotDto>;
-  signDocument(): Promise<void>;
-  verifyDocument(): Promise<void>;
   exportContactCard(): Promise<void>;
   retireDevice(): Promise<AccountSnapshotDto>;
   forget(): Promise<AccountSnapshotDto>;
@@ -130,14 +128,6 @@ export function createAccountController(options: AccountControllerOptions) {
     handleEnroll: () => run(options.enrollDeviceCertificate),
     handleRenew: (certificateId: string) => run(() => options.renewCertificate(certificateId)),
     handleRevoke: (certificateId: string) => run(() => options.revokeCertificate(certificateId)),
-    async handleSignDocument() {
-      options.workspace.setBusy(true); options.publish();
-      try { await options.signDocument(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }
-    },
-    async handleVerifyDocument() {
-      options.workspace.setBusy(true); options.publish();
-      try { await options.verifyDocument(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }
-    },
     async handleExportContactCard() {
       options.workspace.setBusy(true); options.publish();
       try { await options.exportContactCard(); } catch (error) { options.workspace.setNotice(options.errorMessage(error)); } finally { options.workspace.setBusy(false); options.publish(); }

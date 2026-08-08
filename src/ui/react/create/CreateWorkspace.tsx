@@ -1592,7 +1592,7 @@ function CreateOptions() {
                     </label>
                   ))}
                   {!snapshot.account.recipientKeys.some((key) => key.lifecycle === "active") && !snapshot.account.contacts.some((contact) => isSelectableTzapContact(contact.verificationState)) ? (
-                    <span className="text-[10px] leading-4 opacity-65">Open Identity &amp; Contacts to enroll or trust a recipient.</span>
+                    <span className="text-[10px] leading-4 opacity-65">Open TZAP Account &amp; Identity to enroll or trust a recipient.</span>
                   ) : null}
                 </div>
                 <div className="rounded-xl border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">

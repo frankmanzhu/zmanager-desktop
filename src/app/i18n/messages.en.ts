@@ -493,7 +493,7 @@ export const enMessages = {
   "extract.tzapRecipientKey": "Recipient key",
   "extract.tzapRecipientKey.password": "Use archive password",
   "extract.tzapRecipientKey.local": "Local recipient key",
-  "extract.tzapRecipientKey.none": "No local recipient keys are available. Generate one in Identity & Contacts.",
+  "extract.tzapRecipientKey.none": "No local recipient keys are available. Generate one in TZAP Account & Identity.",
   "extract.showPassword": "Show Password",
   "extract.restoreSecurity": "Restore file security",
   "extract.advancedOptions": "Advanced options",

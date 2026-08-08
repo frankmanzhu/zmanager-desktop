@@ -18,7 +18,6 @@ mod native_launch_inbox;
 mod platform;
 mod quick_action;
 mod secure_store;
-mod signing;
 
 use tauri::{Emitter, Manager};
 
@@ -199,8 +198,6 @@ fn main() {
             account::account_remove_contact,
             account::account_inspect_contact_card,
             account::account_accept_contact_card,
-            signing::account_sign_document,
-            signing::account_verify_document,
             commands::start_archive_index,
             commands::wait_archive_index,
             commands::get_archive_children,

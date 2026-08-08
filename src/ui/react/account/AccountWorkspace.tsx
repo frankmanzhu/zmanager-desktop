@@ -1,25 +1,31 @@
 import { useState } from "react";
-import { UserRound, ShieldCheck, KeyRound, FileSignature, Laptop2, X, AlertCircle } from "lucide-react";
+import { UserRound, ShieldCheck, KeyRound, Laptop2, X, AlertCircle, ExternalLink, LogOut, CheckCircle2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { SessionStatus } from "./SessionStatus";
 import { CertificatesTab } from "./CertificatesTab";
 import { ContactsTab } from "./ContactsTab";
-import { DocumentsTab } from "./DocumentsTab";
 import { DeviceTab } from "./DeviceTab";
 
 export type AccountWorkspaceProps = {
   defaultTab?: string;
 };
 
-export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspaceProps = {}) {
+export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
   const fullSnapshot = useZManagerSnapshot();
   const snapshot = fullSnapshot.account;
   const actions = useZManagerActions();
-  const [activeTab, setActiveTab] = useState(defaultTab);
-  
+
+  const isSignedIn = snapshot.authStatus === "signedIn";
+  const initialTab = defaultTab ?? (isSignedIn ? "session" : "certificates");
+  const [activeTab, setActiveTab] = useState(initialTab);
+
   if (!snapshot.visible) return null;
+
+  const effectiveTab = (!isSignedIn && (activeTab === "session" || activeTab === "device"))
+    ? "certificates"
+    : activeTab;
 
   return (
     <div
@@ -47,21 +53,46 @@ export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspacePro
           </div>
           <div className="min-w-0 flex-1">
             <h2 id="account-title" className="text-base font-semibold tracking-tight">
-              Identity &amp; Contacts
+              TZAP Account &amp; Identity
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Local identities, recipient keys, verified contacts, and secure-store capabilities
+              {isSignedIn
+                ? `Authenticated as ${snapshot.displayName || "Signed In Account"}`
+                : "Local offline mode · Encryption & signing identities operational"}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg text-slate-500 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            aria-label="Close account"
-            onClick={() => actions.handleAccountIntent({ type: "close" })}
-          >
-            <X className="size-4" />
-          </Button>
+
+          {/* Header Authentication Action */}
+          <div className="flex items-center gap-2">
+            {isSignedIn ? (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <CheckCircle2 className="size-3.5" />
+                  {snapshot.displayName || "Signed In"}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 border-slate-200 text-xs text-slate-700 hover:bg-red-50 hover:text-red-700 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-red-950/50 dark:hover:text-red-300"
+                  disabled={snapshot.busy}
+                  onClick={() => actions.handleAccountIntent({ type: "forget" })}
+                >
+                  <LogOut className="mr-1.5 size-3.5" />
+                  Sign Out
+                </Button>
+              </div>
+            ) : null}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 rounded-lg text-slate-500 hover:bg-slate-200/60 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              aria-label="Close account"
+              onClick={() => actions.handleAccountIntent({ type: "close" })}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
         </header>
 
         {/* Workspace Body */}
@@ -76,16 +107,19 @@ export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspacePro
             </div>
           ) : null}
           
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col min-h-0">
+          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="flex flex-1 flex-col min-h-0">
             <div className="border-b border-slate-200/80 px-6 pt-3 dark:border-slate-800/80">
               <TabsList className="h-10 w-fit justify-start gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
-                <TabsTrigger
-                  value="session"
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
-                >
-                  <UserRound className="size-3.5" />
-                  Session
-                </TabsTrigger>
+                {isSignedIn ? (
+                  <TabsTrigger
+                    value="session"
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
+                  >
+                    <UserRound className="size-3.5" />
+                    Session
+                  </TabsTrigger>
+                ) : null}
+
                 <TabsTrigger
                   value="certificates"
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
@@ -93,6 +127,7 @@ export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspacePro
                   <ShieldCheck className="size-3.5" />
                   Certificates
                 </TabsTrigger>
+
                 <TabsTrigger
                   value="contacts"
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
@@ -100,49 +135,39 @@ export function AccountWorkspace({ defaultTab = "session" }: AccountWorkspacePro
                   <KeyRound className="size-3.5" />
                   Contacts &amp; Keys
                 </TabsTrigger>
-                <TabsTrigger
-                  value="documents"
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
-                >
-                  <FileSignature className="size-3.5" />
-                  Documents
-                </TabsTrigger>
-                <TabsTrigger
-                  value="device"
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
-                >
-                  <Laptop2 className="size-3.5" />
-                  Device
-                </TabsTrigger>
+
+                {isSignedIn ? (
+                  <TabsTrigger
+                    value="device"
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-slate-100"
+                  >
+                    <Laptop2 className="size-3.5" />
+                    Device
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
             </div>
             
             <div className="flex-1 min-h-0 overflow-y-auto p-6">
-              {activeTab === "session" ? (
+              {effectiveTab === "session" && isSignedIn ? (
                 <TabsContent value="session" className="m-0 border-none p-0 outline-none">
                   <SessionStatus />
                 </TabsContent>
               ) : null}
               
-              {activeTab === "certificates" ? (
+              {effectiveTab === "certificates" ? (
                 <TabsContent value="certificates" className="m-0 border-none p-0 outline-none">
                   <CertificatesTab />
                 </TabsContent>
               ) : null}
               
-              {activeTab === "contacts" ? (
+              {effectiveTab === "contacts" ? (
                 <TabsContent value="contacts" className="m-0 border-none p-0 outline-none">
                   <ContactsTab />
                 </TabsContent>
               ) : null}
               
-              {activeTab === "documents" ? (
-                <TabsContent value="documents" className="m-0 border-none p-0 outline-none">
-                  <DocumentsTab />
-                </TabsContent>
-              ) : null}
-              
-              {activeTab === "device" ? (
+              {effectiveTab === "device" && isSignedIn ? (
                 <TabsContent value="device" className="m-0 border-none p-0 outline-none">
                   <DeviceTab />
                 </TabsContent>

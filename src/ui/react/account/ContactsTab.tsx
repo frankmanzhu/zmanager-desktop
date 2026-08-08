@@ -249,8 +249,8 @@ export function ContactsTab() {
               disabled={snapshot.busy || !exportName.trim()}
               onClick={() => {
                 actions.handleAccountIntent({
-                  type: "exportContactCard"
-                } as any);
+                  type: "exportContactCard",
+                });
               }}
             >
               <Download className="mr-1.5 size-3.5 text-purple-600 dark:text-purple-400" />

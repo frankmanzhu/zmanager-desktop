@@ -1182,8 +1182,6 @@ const accountController = createAccountController({
   enrollDeviceCertificate: () => Promise.reject(new Error("Not implemented yet")),
   renewCertificate: () => Promise.reject(new Error("Not implemented yet")),
   revokeCertificate: () => Promise.reject(new Error("Not implemented yet")),
-  signDocument: () => Promise.reject(new Error("Not implemented yet")),
-  verifyDocument: () => Promise.reject(new Error("Not implemented yet")),
   exportContactCard: () => Promise.reject(new Error("Not implemented yet")),
   retireDevice: () => Promise.reject(new Error("Not implemented yet")),
   forget: forgetAccount,
@@ -1973,6 +1971,8 @@ function handleReactAccountIntent(intent: ZManagerAccountIntent) {
       }
       break;
     }
+    case "exportContactCard": void accountController.handleExportContactCard(); break;
+    case "retireDevice": void accountController.handleDeviceRetire(); break;
   }
 }
 
