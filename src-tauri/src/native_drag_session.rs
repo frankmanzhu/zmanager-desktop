@@ -334,7 +334,6 @@ fn write_file_promise(
         cancelled,
     };
     let streamed = provider(entry_path, &mut writer);
-    drop(writer);
     let result = streamed.and_then(|written| {
         if cancelled.load(Ordering::Acquire) {
             return Err(cancelled_drag_error());

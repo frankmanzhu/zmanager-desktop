@@ -438,6 +438,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn recording_emitter() -> (InboxEmitter, Arc<Mutex<Vec<(String, String)>>>) {
         let records = Arc::new(Mutex::new(Vec::new()));
         let captured = Arc::clone(&records);

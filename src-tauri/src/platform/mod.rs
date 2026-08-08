@@ -256,7 +256,7 @@ type ActivePlatform = macos::MacOsPlatform;
 pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     #[cfg(target_os = "macos")]
     {
-        return macos::register_services(builder);
+        macos::register_services(builder)
     }
     #[cfg(not(target_os = "macos"))]
     builder
@@ -268,7 +268,7 @@ pub fn initialize_native_host(
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        return macos::initialize_native_host(inbox, diagnostics);
+        macos::initialize_native_host(inbox, diagnostics)
     }
     #[cfg(not(target_os = "macos"))]
     {

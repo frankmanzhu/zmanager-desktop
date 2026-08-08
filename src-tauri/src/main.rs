@@ -26,7 +26,7 @@ fn main() {
     // extension registration and App Group provisioning without showing UI.
     // This must be checked BEFORE any Tauri state initialization so the
     // single-instance plugin does not interfere with a concurrent launch.
-    if std::env::args_os().any(|arg| arg.to_str().map_or(false, |s| s == "--postinstall")) {
+    if std::env::args_os().any(|arg| arg.to_str() == Some("--postinstall")) {
         eprintln!("ZMANAGER_POSTINSTALL: begin");
         let diagnostics = diagnostics::DiagnosticLog::new();
         let _ = diagnostics.initialize(
@@ -225,14 +225,11 @@ fn main() {
         .expect("failed to build ZManager desktop");
     app.run(move |_app_handle, event| {
         platform::handle_run_event(&event, &native_launch_inbox);
-        match event {
-            tauri::RunEvent::Exit => {
-                let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
-                exit_inbox.shutdown();
-                native_drag_sessions.shutdown();
-                platform::shutdown();
-            }
-            _ => {}
+        if let tauri::RunEvent::Exit = event {
+            let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
+            exit_inbox.shutdown();
+            native_drag_sessions.shutdown();
+            platform::shutdown();
         }
     });
 }
@@ -246,7 +243,7 @@ fn record_launch_classification(
         quick_action::QuickActionStartupState::NotRequested => ("normal", None, 0),
         quick_action::QuickActionStartupState::Requested(request) => (
             "quickAction",
-            serde_json::to_value(&request.kind)
+            serde_json::to_value(request.kind)
                 .ok()
                 .and_then(|value| value.as_str().map(str::to_owned)),
             request.paths.len(),

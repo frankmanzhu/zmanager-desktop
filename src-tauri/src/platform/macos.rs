@@ -518,10 +518,10 @@ pub(super) fn handle_run_event(
     let mut file_paths = Vec::new();
     for (index, url) in urls.iter().enumerate() {
         if url.scheme() == "file" {
-            if let Ok(path) = url.to_file_path() {
-                if let Some(path_str) = path.to_str() {
-                    file_paths.push(path_str.to_string());
-                }
+            if let Ok(path) = url.to_file_path()
+                && let Some(path_str) = path.to_str()
+            {
+                file_paths.push(path_str.to_string());
             }
         } else if let Some(event) = shell_action_event_from_url(url, pid, timestamp_ms, index) {
             ingest_macos_native_event(event, inbox);

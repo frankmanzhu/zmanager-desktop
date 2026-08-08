@@ -313,6 +313,7 @@ fn snapshot_for_definition(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn availability(
     source: NativeCapabilitySourceState,
     package: NativeCapabilityPackageState,

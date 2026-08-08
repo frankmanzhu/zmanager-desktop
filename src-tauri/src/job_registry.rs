@@ -421,6 +421,7 @@ impl JobRegistry {
         self.with_lock(|state| state.catalog_sender.subscribe())
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn register_job_subscription(
         &self,
         owner: &str,
@@ -476,6 +477,7 @@ impl JobRegistry {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn register_catalog_subscription(
         &self,
         owner: &str,
@@ -1023,10 +1025,8 @@ impl JobRegistry {
                         record.status = JobStatusDto::Running;
                     }
                 }
-                JobEvent::Completed { .. } => {
-                    if !record.status.is_terminal() {
-                        record.status = JobStatusDto::Completed;
-                    }
+                JobEvent::Completed { .. } if !record.status.is_terminal() => {
+                    record.status = JobStatusDto::Completed;
                 }
                 JobEvent::Failed { .. } if !record.status.is_terminal() => {
                     record.status = JobStatusDto::Failed
@@ -1085,10 +1085,8 @@ impl JobRegistry {
                         record.status = JobStatusDto::Running;
                     }
                 }
-                JobEventKindDto::Completed => {
-                    if !record.status.is_terminal() {
-                        record.status = JobStatusDto::Completed;
-                    }
+                JobEventKindDto::Completed if !record.status.is_terminal() => {
+                    record.status = JobStatusDto::Completed;
                 }
                 JobEventKindDto::Failed if !record.status.is_terminal() => {
                     record.status = JobStatusDto::Failed

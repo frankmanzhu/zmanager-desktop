@@ -806,7 +806,6 @@ fn start_create_internal_with_resolver(
                     level,
                     preserve_metadata,
                     replace_existing,
-                    ..TarGzCreateOptions::default()
                 };
                 let manifest = match plan_archives(&request_sources, &plan_options) {
                     Ok(manifest) => manifest,
@@ -1221,8 +1220,6 @@ fn start_extract_internal_with_recipient_key_and_spawner(
         allow_degraded: request.tzap_allow_degraded,
         allow_absolute_symlinks: request.tzap_allow_absolute_symlinks,
     };
-    let archive_path = archive_path;
-    let destination_path = destination_path;
     let recipient_private_key = recipient_private_key;
 
     spawn_worker(Box::new(move || {
@@ -1742,6 +1739,7 @@ fn start_test_archive_internal(
     Ok(response)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_selected_extract_job(
     archive_path: &str,
     destination_path: &str,
