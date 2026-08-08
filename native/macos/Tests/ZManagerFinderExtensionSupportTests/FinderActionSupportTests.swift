@@ -10,20 +10,20 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
 
 @Test func finderMenusFollowGeneratedSelectionShapesAndOrdering() {
     #expect(FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: { $0 }).map(\.id)
-        == [.extractHere, .extractToFolder, .open, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz])
+        == [.extractHere, .extractToFolder, .open, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/one.zip"), item("/tmp/two.tar.gz")], localize: { $0 }
-    ).map(\.id) == [.extractHere, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz])
+    ).map(\.id) == [.extractHere, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
     #expect(FinderMenuBuilder.actions(for: [item("/tmp/folder", directory: true)], localize: { $0 }).map(\.id)
-        == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz])
+        == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/folder", directory: true), item("/tmp/readme.txt")], localize: { $0 }
-    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz])
+    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/folder", directory: true)],
         context: .container,
         localize: { $0 }
-    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz])
+    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
 }
 
 @Test func finderArchiveClassificationCoversCompoundSplitAndUnsupportedPaths() {
