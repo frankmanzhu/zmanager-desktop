@@ -8,9 +8,18 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 A fast, open-source archive manager for Windows, Linux, and macOS, built on
-`zmanager-core`.
+`zmanager-core`. ZManager provides one workflow for browsing, testing,
+extracting, and creating archives, with native shell integration on each
+desktop platform.
 
-![ZManager Desktop first-run Compress workflow](docs/gui-audit/00-readme-hero.png)
+## Latest release: 1.2.2
+
+This release adds Apple Archive and TGZ creation, configurable archive columns,
+Simplified Chinese localization, TZAP account management, improved task
+windows, and broader Windows, Linux, and macOS integration.
+
+See the [full release notes](https://github.com/frankmanzhu/zmanager-desktop/releases/tag/v1.2.2)
+and download the installers from [GitHub Releases](https://github.com/frankmanzhu/zmanager-desktop/releases/latest).
 
 ## Why this feels trustworthy
 
@@ -41,21 +50,43 @@ A fast, open-source archive manager for Windows, Linux, and macOS, built on
 | macOS ARM64 | `ZManager-<version>-macos-arm64.dmg` | `.zip` |
 | macOS x86_64 | `ZManager-<version>-macos-x86_64.dmg` | `.zip` |
 
-## Formats and positioning
+## Archive formats
 
-- ZIP, TZST, TZAP, 7Z
-- 7-Zip is historically Windows-first.
+- Browse and extract supported archive formats through the shared Rust engine,
+  including ZIP, 7z, TZST, TZAP, and common tar-based formats.
+- Create ZIP, 7z, TZST, TZAP, and TGZ archives on supported platforms.
+- Create Apple Archive (`.aar`, or encrypted `.aea`) archives on macOS.
 - `TZAP` is the cross-platform format this project targets for resilient,
   secure, and fast workflows.
 
+## Platform integration
+
+- **Windows:** Explorer context-menu actions, file associations, portable and
+  installer packages, and x64/ARM64 builds.
+- **Linux:** desktop and file-manager actions, MIME associations, and x64/ARM64
+  DEB and RPM packages.
+- **macOS:** Finder actions, Quick Look previews, Spotlight metadata, native
+  file opening, and Apple Silicon/Intel DMG and ZIP packages.
+
+## Recent improvements
+
+- Each accepted archive operation runs in its own task window with progress,
+  cancellation, and recovery support.
+- Archive columns can be customized globally and per workspace.
+- TZAP account, certificate, signing identity, and contact-management flows are
+  available from the account workspace.
+- Passwords remain in transient application state and are never logged or
+  persisted.
+- Release artifacts include checksums for verification.
+
 ## For users who want to go deeper
 
-- Release notes: [`ReadMe.txt`](./ReadMe.txt)
+- [Release notes](https://github.com/frankmanzhu/zmanager-desktop/releases)
 - Engine context: [`zmanager` README](https://github.com/frankmanzhu/zmanager/blob/main/README.md)
 - TZAP context: [`TZAP` README](https://github.com/frankmanzhu/tzap/blob/main/README.md)
 
 ## Developer docs
 
-- [Developer setup and build details](./docs/developer-setup.md)
-- [Architecture overview](./docs/ARCHITECTURE.md)
-- [Requirements](./docs/REQUIREMENTS.md)
+- [Developer setup and build details](./public-docs/developer-setup.md)
+- [Architecture overview](./public-docs/ARCHITECTURE.md)
+- [Requirements](./public-docs/REQUIREMENTS.md)
