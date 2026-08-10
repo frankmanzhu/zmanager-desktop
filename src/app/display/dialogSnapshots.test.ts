@@ -137,7 +137,7 @@ describe("dialog snapshots", () => {
     const display = createDisplayContext("en");
     const healthcheck: HealthcheckResponse = {
       engine: "zmanager-core",
-      version: "1.2.3",
+      version: "9.9.9",
       ready: true,
       summary: "ready",
       shell: "tauri",
@@ -148,7 +148,7 @@ describe("dialog snapshots", () => {
     const contract: ProjectContract = {
       commands: ["list", "extract"],
       platformStrategy: "desktop",
-      coreDependency: "zmanager-core 1.2.3",
+      coreDependency: "zmanager-core 9.9.9",
       platformIntegration: {
         platform: "windows",
         packageKind: "development",
@@ -179,8 +179,8 @@ describe("dialog snapshots", () => {
       "",
       "Shell and Runtime",
       "Shell: tauri",
-      "Engine: zmanager-core 1.2.3",
-      "Core dependency: zmanager-core 1.2.3",
+      "Engine: zmanager-core 9.9.9",
+      "Core dependency: zmanager-core 9.9.9",
       "",
       "Desktop Integration",
       "Platform: windows",

@@ -20,7 +20,8 @@ ditto -x -k "$zip" "$stage"
 candidate="$stage/ZManager.app"
 [[ -d "$candidate" ]]
 [[ $(defaults read "$candidate/Contents/Info" CFBundleIdentifier) == org.tzap-org.zmanager ]]
-[[ $(defaults read "$candidate/Contents/Info" CFBundleShortVersionString) == 1.1.0 ]]
+product_version=$(defaults read "$candidate/Contents/Info" CFBundleShortVersionString)
+[[ $product_version =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
 codesign --verify --deep --strict "$candidate"
 
 rm -rf "$app"
@@ -47,7 +48,7 @@ cat > "$report" <<EOF
 - Console user: $console_user
 - Replacement path: $app
 - Bundle identifier: org.tzap-org.zmanager
-- Product version: 1.1.0
+- Product version: $product_version
 - Canonical user-local application count: $count
 - Finder extension identifier: $finder_id
 - Quick Look preview identifier: $quicklook_id

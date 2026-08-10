@@ -77,15 +77,14 @@
     }
   },
   "packageArtifactExpectations": {
-    "windowsSmoke": "ZManager_0.1.0_$resolvedArchitecture-setup.exe",
-    "windowsReleaseGate": "ZManager_0.1.0_$resolvedArchitecture-setup.exe",
+    "windowsSmoke": "ZManager_${version}_$resolvedArchitecture-setup.exe",
+    "windowsReleaseGate": "ZManager_${version}_$resolvedArchitecture-setup.exe",
     "windowsBuildGlob": "ZManager_*-setup.exe",
     "linuxDebGlob": "*.deb",
     "linuxRpmGlob": "*.rpm",
     "macosBuildTemplate": "ZManager-${version}-macos-${architecture}"
   },
   "knownDrift": [
-    "The static Windows smoke and release-gate scripts expect product version 0.1.0 while the product version is 1.1.0.",
     "The React and macOS application-owned command sets are independently maintained and not equal.",
     "Tauri and Linux association lists cover a smaller subset than the archive engine catalog.",
     "Main quick-action and Disposable Task Window dimensions are independently maintained."

@@ -7,6 +7,15 @@ information that was previously in the repository front page.
 
 For each release, update [`README.md`](../README.md) with the notes that should appear in GitHub release assets/description.
 
+Set the product release version through the single bump command; it updates
+the Cargo, Tauri, package, native bundle, and generated metadata versions:
+
+```sh
+bash scripts/bump-version.sh 1.1.2
+```
+
+The command runs the generated-contract and product-version consistency checks.
+
 ## Repository relationship
 
 This project replaces the former macOS app while retaining its repository as
@@ -88,7 +97,7 @@ scripts/build-linux-ubuntu-deb.sh
 - Install via:
 
 ```sh
-sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_0.1.0_amd64.deb
+sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_<version>_amd64.deb
 ```
 
 ## Fedora RPM build

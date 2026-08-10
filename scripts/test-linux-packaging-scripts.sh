@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+product_version=$(node -p 'require("./package.json").version')
 
 test_root="$(mktemp -d)"
 created_node_modules=0
@@ -60,7 +61,7 @@ write_stub node <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "-p" || "${1:-}" == "-e" ]]; then
-  echo "1.1.0"
+  echo "${ZMANAGER_TEST_PRODUCT_VERSION:?}"
   exit 0
 fi
 echo "v20.19.0"
@@ -76,7 +77,7 @@ fi
 if [[ "$*" == "run tauri -- build --bundles deb" ]]; then
   mkdir -p src-tauri/target/release/bundle/deb
   printf 'test deb\n' >src-tauri/target/release/bundle/deb/ZManager_test_amd64.deb
-  printf 'stale deb\n' >src-tauri/target/release/bundle/deb/ZManager_0.1.0_amd64.deb
+  printf 'stale deb\n' >src-tauri/target/release/bundle/deb/ZManager_0.0.1_amd64.deb
 fi
 if [[ "$*" == *"run tauri -- build --bundles rpm"* ]]; then
   mkdir -p "${CARGO_TARGET_DIR:?}/release/bundle/rpm"
@@ -115,10 +116,10 @@ write_stub dpkg-deb <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == "-f" ]]; then
-  if [[ "${2:-}" == *"0.1.0"* ]]; then
-    echo "0.1.0"
+  if [[ "${2:-}" == *"0.0.1"* ]]; then
+    echo "0.0.1"
   else
-    echo "1.1.0"
+    echo "${ZMANAGER_TEST_PRODUCT_VERSION:?}"
   fi
   exit 0
 fi
@@ -135,6 +136,7 @@ EOF
 PATH="$bin_dir:$PATH" \
 HOME="$test_root/home" \
 ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
+ZMANAGER_TEST_PRODUCT_VERSION="$product_version" \
 ZMANAGER_DEB_STAGE_DIR="$stage_dir" \
   bash scripts/build-linux-ubuntu-deb.sh --install-deps --skip-tests --no-install
 
@@ -177,8 +179,8 @@ if [[ ! -f "$stage_dir/ZManager_test_amd64.deb" ]]; then
   exit 1
 fi
 
-if [[ -f "$stage_dir/ZManager_0.1.0_amd64.deb" ]]; then
-  echo "Expected the mismatched version .deb (0.1.0) to be skipped from staging." >&2
+if [[ -f "$stage_dir/ZManager_0.0.1_amd64.deb" ]]; then
+  echo "Expected the mismatched version .deb (0.0.1) to be skipped from staging." >&2
   exit 1
 fi
 
@@ -196,7 +198,7 @@ write_stub rpm <<'EOF'
 set -euo pipefail
 printf 'rpm %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
 if [[ "${1:-}" == "-qp" ]]; then
-  echo "1.1.0"
+    echo "${ZMANAGER_TEST_PRODUCT_VERSION:?}"
   exit 0
 fi
 if [[ "${1:-}" == "-q" ]]; then
@@ -216,6 +218,7 @@ PATH="$bin_dir:$PATH" \
 HOME="$test_root/home" \
 CARGO_TARGET_DIR="$fedora_target_dir" \
 ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
+ZMANAGER_TEST_PRODUCT_VERSION="$product_version" \
   bash scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --no-install
 
 fedora_install_line="$(grep '^dnf install -y ' "$log_file")"

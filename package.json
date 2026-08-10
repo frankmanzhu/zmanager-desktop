@@ -1,6 +1,6 @@
 {
   "name": "zmanager-desktop",
-  "version": "1.1.0",
+  "version": "1.2.2",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -9,12 +9,13 @@
     "build": "npm run check:generated-contracts && tsc --noEmit && vite build",
     "generate:archive-types": "npm run generate:contracts",
     "generate:contracts": "node scripts/generate-native-contracts.mjs",
+    "version:set": "bash scripts/bump-version.sh",
     "check:generated-contracts": "node scripts/generate-native-contracts.mjs --check",
     "preview": "vite preview",
     "test:frontend": "vitest run",
     "test:e2e": "playwright test",
     "ast:lint": "ast-grep scan",
-    "test:architecture": "bash scripts/check-job-feed-architecture.sh && bash scripts/check-native-platform-architecture.test.sh && bash scripts/check-native-platform-architecture.sh && python3 scripts/macos_provisioning_profile_test.py && node --test scripts/archive-association-contract.test.mjs scripts/check-product-version-consistency.test.mjs scripts/check-macos-full-target-architecture.test.mjs scripts/native-capability-contract.test.mjs scripts/native-integration-baseline.test.mjs scripts/shell-action-artifact-parity.test.mjs && node scripts/check-product-version-consistency.mjs && node scripts/check-macos-full-target-architecture.mjs && node scripts/check-native-integration-contract.mjs && bash scripts/check-macos-core-revision-and-symbols.sh && npm run check:generated-contracts && npm run ast:lint",
+    "test:architecture": "bash scripts/check-job-feed-architecture.sh && bash scripts/check-native-platform-architecture.test.sh && bash scripts/check-native-platform-architecture.sh && python3 scripts/macos_provisioning_profile_test.py && node --test scripts/archive-association-contract.test.mjs scripts/check-product-version-consistency.test.mjs scripts/macos-build-contract.test.mjs scripts/check-macos-full-target-architecture.test.mjs scripts/native-capability-contract.test.mjs scripts/native-integration-baseline.test.mjs scripts/shell-action-artifact-parity.test.mjs && node scripts/check-product-version-consistency.mjs && node scripts/check-macos-full-target-architecture.mjs && node scripts/check-native-integration-contract.mjs && bash scripts/check-macos-core-revision-and-symbols.sh && npm run check:generated-contracts && npm run ast:lint",
     "tauri": "tauri"
   },
   "dependencies": {

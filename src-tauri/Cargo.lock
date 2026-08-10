@@ -5492,7 +5492,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "tzap-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aes-gcm",
  "aes-gcm-siv",
@@ -5521,7 +5521,7 @@ dependencies = [
 
 [[package]]
 name = "tzap-plugin-keywrap"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "hpke",
  "openssl",
@@ -6717,14 +6717,14 @@ checksum = "b142a20ec14a91d5bc708c1dc21b080c550113d8aa77afa29635673a65dd02c5"
 
 [[package]]
 name = "zmanager-apple-archive"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "zmanager-core"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6760,7 +6760,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-desktop"
-version = "1.1.0"
+version = "1.2.2"
 dependencies = [
  "base64 0.22.1",
  "gdk",
@@ -6795,7 +6795,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "libc",
  "zmanager-libarchive-sys",
@@ -6803,7 +6803,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-libarchive-sys"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "bindgen 0.70.1",
  "cmake",
@@ -6816,7 +6816,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-shell-contract"
-version = "0.1.0"
+version = "1.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -6824,7 +6824,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-unrar"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "cc",
  "zeroize",

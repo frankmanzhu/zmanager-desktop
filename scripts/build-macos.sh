@@ -305,6 +305,7 @@ if [[ ! -d node_modules ]] || ! npm ls --depth=0 @tauri-apps/cli typescript vite
 fi
 
 scripts/ensure-sibling-repos.sh
+scripts/sync-uniffi-swift-bindings.sh
 
 if ((!skip_tests)); then
   npm run test:frontend

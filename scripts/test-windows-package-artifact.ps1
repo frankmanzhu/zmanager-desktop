@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 
+$productVersion = (Get-Content (Join-Path $PSScriptRoot "..\package.json") -Raw | ConvertFrom-Json).version
+
 $helperPath = Join-Path $PSScriptRoot "windows-package-artifact.ps1"
 . $helperPath
 
@@ -21,8 +23,8 @@ try {
     $bundleDir = Join-Path $testRoot "aarch64-pc-windows-msvc\release\bundle\nsis"
     New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
 
-    $currentInstaller = Join-Path $bundleDir "zmanager-desktop_1.1.0_arm64-setup.exe"
-    $retiredInstaller = Join-Path $bundleDir "ZManager_1.1.0_arm64-setup.exe"
+    $currentInstaller = Join-Path $bundleDir "zmanager-desktop_${productVersion}_arm64-setup.exe"
+    $retiredInstaller = Join-Path $bundleDir "ZManager_${productVersion}_arm64-setup.exe"
     New-Item -ItemType File -Path $retiredInstaller | Out-Null
 
     $missingCurrentThrew = $false
@@ -31,7 +33,7 @@ try {
             -CargoTargetDir $testRoot `
             -Architecture "arm64" `
             -ProductName "zmanager-desktop" `
-            -ProductVersion "1.1.0" | Out-Null
+            -ProductVersion $productVersion | Out-Null
     } catch {
         $missingCurrentThrew = $true
     }
@@ -42,7 +44,7 @@ try {
         -CargoTargetDir $testRoot `
         -Architecture "arm64" `
         -ProductName "zmanager-desktop" `
-        -ProductVersion "1.1.0"
+        -ProductVersion $productVersion
     Assert-Equal $currentInstaller $resolvedInstaller "The exact current ARM64 installer must be selected."
 
     $releaseExecutable = Get-ZManagerReleaseExecutablePath `

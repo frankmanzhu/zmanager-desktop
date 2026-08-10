@@ -1,5 +1,7 @@
+import packageJson from "../../package.json";
+
 export const APP_TITLE = "ZManager";
-export const APP_VERSION = "1.1.0";
+export const APP_VERSION = packageJson.version;
 
 export const COMMAND_PASSWORD_REQUIRED = "password_required";
 export const COMMAND_INVALID_PASSWORD = "invalid_password";

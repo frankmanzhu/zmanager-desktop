@@ -39,6 +39,7 @@ jobs:
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
           scripts/ensure-sibling-repos.sh
+          scripts/sync-uniffi-swift-bindings.sh
 
       - name: Run macOS migration and contract tests
         run: |
@@ -48,7 +49,6 @@ jobs:
           (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
           cargo test --manifest-path src-tauri/Cargo.toml
           cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
-          scripts/sync-uniffi-swift-bindings.sh
           swift test --package-path native/macos
 
       - name: Build and inspect ad-hoc release bundle
