@@ -4,6 +4,9 @@
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "npm run check:generated-contracts && tsc --noEmit && vite build",
@@ -19,38 +22,38 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@radix-ui/react-checkbox": "^1.3.7",
-    "@radix-ui/react-popover": "^1.1.19",
-    "@radix-ui/react-select": "^2.3.3",
-    "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-popover": "^1.1.23",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
     "@radix-ui/react-tabs": "^1.1.21",
-    "@radix-ui/react-tooltip": "^1.2.12",
-    "@tailwindcss/vite": "^4.3.2",
-    "@tauri-apps/api": "^2.2.0",
+    "@radix-ui/react-tooltip": "^1.2.16",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
-    "@tauri-apps/plugin-dialog": "^2.2.0",
-    "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide": "^1.21.0",
-    "lucide-react": "^1.23.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "lucide": "^1.31.0",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@ast-grep/cli": "^0.44.1",
-    "@playwright/test": "^1.61.1",
-    "@tauri-apps/cli": "^2.2.0",
-    "@testing-library/jest-dom": "^7.0.0",
+    "@ast-grep/cli": "^0.45.1",
+    "@playwright/test": "^1.62.1",
+    "@tauri-apps/cli": "^2.11.4",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "jsdom": "~28.0.0",
-    "typescript": "^5.7.2",
-    "vite": "^8.1.4",
-    "vitest": "^4.1.8"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "~30.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   }
 }

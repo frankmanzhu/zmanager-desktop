@@ -91,7 +91,7 @@ by the Rust build.
 scripts/build-linux-ubuntu-deb.sh
 ```
 
-- `--install-deps`: installs Ubuntu packages, Node.js 20, and Rust via rustup when needed.
+- `--install-deps`: installs Ubuntu packages, Node.js 24, and Rust via rustup when needed.
 - `--skip-tests`: packaging-only mode.
 - Build output is staged to `/tmp/zmanager-desktop-deb/`.
 - Install via:

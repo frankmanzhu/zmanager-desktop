@@ -191,7 +191,7 @@ function Resolve-NodeCommand {
     }
 
     if (-not $InstallMissing) {
-        throw "Node.js was not found. Install Node.js 20, pass -NodePath C:\path\to\node.exe, or rerun with -InstallMissing to try winget."
+        throw "Node.js was not found. Install Node.js 24, pass -NodePath C:\path\to\node.exe, or rerun with -InstallMissing to try winget."
     }
 
     Install-WingetPackage -PackageId "OpenJS.NodeJS.LTS" -ExtraArguments @("--silent")

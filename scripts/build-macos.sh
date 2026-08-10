@@ -294,8 +294,8 @@ if ((rust_major < 1 || (rust_major == 1 && rust_minor < 85))); then
 fi
 
 node_major="$(version_major node)"
-if ((node_major < 20)); then
-  echo "Node.js 20 or newer is required. Current node: $(node --version)" >&2
+if ((node_major < 24)); then
+  echo "Node.js 24 is required. Current node: $(node --version)" >&2
   echo "Install a current Node.js release, or rerun with --install-deps." >&2
   exit 1
 fi
