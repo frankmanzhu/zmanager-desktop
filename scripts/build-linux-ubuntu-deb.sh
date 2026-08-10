@@ -24,7 +24,7 @@ Ubuntu prerequisites:
   sudo apt-get update
   sudo apt-get install build-essential ca-certificates cmake curl file gnupg libacl1-dev libayatana-appindicator3-dev libbz2-dev libexpat1-dev libgtk-3-dev liblz4-dev liblzma-dev libxml2-dev libsoup-3.0-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev libzstd-dev patchelf pkg-config zlib1g-dev
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
   sudo apt-get install nodejs
 
 Options:
@@ -138,7 +138,7 @@ node_install_required() {
 
   local node_major
   node_major="$(version_major node)"
-  [[ -z "$node_major" || "$node_major" -lt 20 ]]
+  [[ -z "$node_major" || "$node_major" -lt 24 ]]
 }
 
 rust_install_required() {
@@ -217,9 +217,9 @@ ensure_package_install_access() {
 
 run_nodesource_setup() {
   if ((EUID == 0)); then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   else
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
   fi
 }
 
@@ -246,7 +246,7 @@ if ((${#missing_commands[@]})); then
   echo "Or run: scripts/build-linux-ubuntu-deb.sh --install-deps" >&2
   echo "Ubuntu packages: sudo apt-get install ${ubuntu_packages[*]}" >&2
   echo "Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" >&2
-  echo "Node.js: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install nodejs" >&2
+  echo "Node.js: curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && sudo apt-get install nodejs" >&2
   exit 1
 fi
 

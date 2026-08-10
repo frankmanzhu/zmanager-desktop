@@ -170,7 +170,7 @@ node_install_required() {
   fi
   local node_major
   node_major="$(version_major node)"
-  [[ -z "$node_major" || "$node_major" -lt 20 ]]
+  [[ -z "$node_major" || "$node_major" -lt 24 ]]
 }
 
 rust_install_required() {

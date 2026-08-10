@@ -35,6 +35,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
       - name: Bind release version
         run: |
           echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
@@ -150,6 +156,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
       - name: Prepare and build Windows package
         shell: pwsh
         # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
@@ -191,6 +203,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
       - name: Build Debian package
         shell: bash
         run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
@@ -222,6 +240,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
 
       - name: Build RPM package
         shell: bash
