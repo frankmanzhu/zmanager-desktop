@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DesktopDialog } from "./DesktopDialog";
@@ -29,6 +30,34 @@ describe("DesktopDialog", () => {
     expect(html).toContain('aria-describedby="dialog-description"');
     expect(html).toContain("max-h-[calc(100vh-48px)]");
     expect(html).toContain("overflow-y-auto");
+  });
+
+  it("returns focus to the external launcher when the dialog unmounts", () => {
+    const launcher = document.createElement("button");
+    document.body.append(launcher);
+    launcher.focus();
+    const requestAnimationFrame = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 0;
+      });
+
+    const view = render(
+      createElement(DesktopDialog, {
+        titleId: "dialog-title",
+        header: createElement("h2", { id: "dialog-title" }, "Title"),
+        content: createElement("p", null, "Body"),
+        onEscape() {},
+      }),
+    );
+
+    expect(document.activeElement).toBe(view.getByRole("dialog"));
+    view.unmount();
+
+    expect(document.activeElement).toBe(launcher);
+    requestAnimationFrame.mockRestore();
+    launcher.remove();
   });
 
   it("focuses and reveals the first invalid control in its owned region", () => {

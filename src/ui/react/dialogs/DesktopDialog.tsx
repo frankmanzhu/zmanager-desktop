@@ -43,11 +43,24 @@ export function DesktopDialog({
   revealFirstInvalidControl: shouldRevealFirstInvalidControl = false,
 }: DesktopDialogProps) {
   const surfaceRef = useRef<HTMLElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && !surfaceRef.current?.contains(activeElement)) {
+      returnFocusRef.current = activeElement;
+    }
+
     surfaceRef.current?.focus();
     const frame = window.requestAnimationFrame(() => surfaceRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      const returnFocusTarget = returnFocusRef.current;
+      if (!returnFocusTarget?.isConnected || returnFocusTarget.closest("[hidden], #context-menu")) {
+        return;
+      }
+      window.requestAnimationFrame(() => returnFocusTarget.focus());
+    };
   }, []);
 
   useEffect(() => {

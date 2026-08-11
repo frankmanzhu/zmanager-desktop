@@ -784,6 +784,22 @@ test("Preferences invalid output keeps scroll ownership at tall and compact size
   await auditDesktopDialogLayout(page);
 });
 
+test("Preferences live validation preserves selector focus and accessible error wiring", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await openDevSurface(page, "preferences");
+
+  const outputLocation = page.locator("#pref-output-location");
+  await outputLocation.click();
+  await page.locator('[role="option"][data-value="customFolder"]').click();
+
+  const customOutput = page.locator("#pref-custom-output");
+  await expect(customOutput).toHaveAttribute("aria-invalid", "true");
+  await expect(customOutput).toHaveAttribute("aria-describedby", /pref-custom-output-validation/);
+  await expect(page.locator("#pref-custom-output-validation")).toBeVisible();
+  await expect(outputLocation).toBeFocused();
+  await auditDesktopDialogLayout(page);
+});
+
 test("Account modal keeps its tab content inside the shared shell", async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 540 });
   await page.getByRole("button", { name: "TZAP Account" }).click();
@@ -801,6 +817,18 @@ test("Account modal keeps its tab content inside the shared shell", async ({ pag
   await dialog.getByRole("tab", { name: /Contacts & Keys/ }).click();
   await expect(dialog.locator("[data-account-tab-navigation]")).toBeVisible();
   await auditDesktopDialogLayout(page);
+});
+
+test("Account Escape restores focus to the launching toolbar control", async ({ page }) => {
+  const accountButton = page.getByRole("button", { name: "TZAP Account" });
+  await accountButton.focus();
+  await accountButton.click();
+
+  const dialog = page.getByRole("dialog", { name: /TZAP Account & Identity/ });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(accountButton).toBeFocused();
 });
 
 test("error-surface fixtures cover account, create, and archive ownership", async ({ page }) => {
