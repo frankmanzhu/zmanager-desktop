@@ -32,6 +32,7 @@ describe("disposable task view", () => {
     expect(html).toContain("Compressing with ZManager");
     expect(html).toContain("Starting…");
     expect(html).toContain('aria-label="Task progress"');
+    expect(html).toContain('data-task-content="true"');
     expect(html).toContain("overflow-y-auto");
     expect(html).not.toContain("Archive Options");
   });

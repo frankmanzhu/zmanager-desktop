@@ -783,6 +783,25 @@ test("Preferences invalid output keeps scroll ownership at tall and compact size
   await auditDesktopDialogLayout(page);
 });
 
+test("Account modal keeps its tab content inside the shared shell", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 540 });
+  await page.getByRole("button", { name: "TZAP Account" }).click();
+
+  const dialog = page.getByRole("dialog", { name: /TZAP Account & Identity/ });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("[data-account-tab-navigation]")).toBeVisible();
+  await expect(dialog.getByRole("tab", { name: /Contacts & Keys/ })).toBeVisible();
+
+  const initial = await measureDesktopDialogLayout(page);
+  expect(initial.surface.bottom).toBeLessThanOrEqual(540 + 2);
+  expect(initial.content.overflowY).toMatch(/auto|scroll/);
+  await auditDesktopDialogLayout(page);
+
+  await dialog.getByRole("tab", { name: /Contacts & Keys/ }).click();
+  await expect(dialog.locator("[data-account-tab-navigation]")).toBeVisible();
+  await auditDesktopDialogLayout(page);
+});
+
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 700 });
   await expect(page.locator("#create-format")).toBeVisible();

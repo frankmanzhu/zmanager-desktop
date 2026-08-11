@@ -112,7 +112,10 @@ export function DisposableTaskView({
         </Button>
       </header>
 
-      <section className="grid min-h-0 min-w-0 flex-1 content-start gap-5 overflow-y-auto px-5 py-5">
+      <section
+        data-task-content
+        className="grid min-h-0 min-w-0 flex-1 content-start gap-5 overflow-y-auto px-5 py-5"
+      >
         {surfaceError ? (
           <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200">
             {surfaceError}
