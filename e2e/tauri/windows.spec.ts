@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 type NativeCapability = {
   id: string;
   sourceState: string;
+  runtimeState: string;
   availability: string;
 };
 
@@ -29,6 +31,27 @@ type SystemFileIconResponse = {
 type NativeWindowSize = {
   width: number;
   height: number;
+};
+
+type NativeMonitor = {
+  name: string | null;
+  scaleFactor: number;
+  position: { x: number; y: number };
+  size: NativeWindowSize;
+};
+
+type DiagnosticLogInfo = {
+  enabled: boolean;
+  path: string | null;
+  sessionId: string;
+  location: string;
+};
+
+type DiagnosticLogEntry = {
+  sessionId: string;
+  scope: string;
+  name: string;
+  fields: Record<string, unknown>;
 };
 
 const MIN_WINDOW_WIDTH = 720;
@@ -59,9 +82,46 @@ describe("Windows native Tauri integration", () => {
     assert.equal(capability("nativeHostLifecycle").availability, "notApplicable");
   });
 
+  it("reports the required Windows runtime seams as available", async () => {
+    const contract = await invoke<ProjectContract>("project_contract");
+    const capability = (id: string) => {
+      const result = contract.platformIntegration.capabilities.find((item) => item.id === id);
+      assert.ok(result, `Missing native capability ${id}`);
+      return result;
+    };
+
+    for (const id of [
+      "mainWindowPolicy",
+      "disposableTaskWindowPolicy",
+      "nativeFileDrag",
+      "diagnosticLog",
+    ]) {
+      assert.deepEqual(
+        {
+          sourceState: capability(id).sourceState,
+          runtimeState: capability(id).runtimeState,
+          availability: capability(id).availability,
+        },
+        { sourceState: "supported", runtimeState: "ready", availability: "available" },
+        id,
+      );
+    }
+  });
+
   it("publishes the command seam required by the Windows shell workflow", async () => {
     const contract = await invoke<ProjectContract>("project_contract");
-    for (const command of ["healthcheck", "project_contract"]) {
+    for (const command of [
+      "healthcheck",
+      "project_contract",
+      "start_archive_index",
+      "wait_archive_index",
+      "get_archive_children",
+      "search_archive_index",
+      "close_archive_index",
+      "preview_entry",
+      "start_native_file_drag",
+      "cleanup_preview_roots",
+    ]) {
       assert.ok(contract.commands.includes(command), `Missing command contract entry ${command}`);
     }
   });
@@ -104,6 +164,41 @@ describe("Windows native Tauri integration", () => {
         `Windows did not return a PNG shell icon for ${icon.key}`,
       );
     }
+  });
+
+  it("returns complete 32-by-32 RGBA PNGs from the Windows shell", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", {
+      request: {
+        entries: [
+          { key: "unicode", path: "sample.測試", isDirectory: false },
+          { key: "directory", path: "C:\\not-used-for-directory-icons", isDirectory: true },
+        ],
+      },
+    });
+
+    for (const icon of response.icons) {
+      const png = decodePngDataUrl(icon.dataUrl, icon.key);
+      assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+      assert.equal(png.toString("ascii", 12, 16), "IHDR");
+      assert.equal(png.readUInt32BE(16), 32);
+      assert.equal(png.readUInt32BE(20), 32);
+      assert.equal(png[24], 8, "Windows icon PNG should use eight-bit channels");
+      assert.equal(png[25], 6, "Windows icon PNG should use RGBA color");
+    }
+  });
+
+  it("uses case-insensitive Windows extension lookup for shell icons", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", {
+      request: {
+        entries: [
+          { key: "lower", path: "sample.zip", isDirectory: false },
+          { key: "upper", path: "sample.ZIP", isDirectory: false },
+        ],
+      },
+    });
+
+    assert.equal(response.icons.length, 2);
+    assert.equal(response.icons[0]?.dataUrl, response.icons[1]?.dataUrl);
   });
 
   it("returns no invented shell icons for an empty Windows request", async () => {
@@ -152,6 +247,72 @@ describe("Windows native Tauri integration", () => {
       isDirectory: false,
       accessible: false,
     });
+  });
+
+  it("accepts Windows directory paths with alternate casing and a trailing separator", async () => {
+    const windowsRoot = process.env.SystemRoot ?? "C:\\Windows";
+    const alternateCase = windowsRoot.replace(/[A-Za-z]/g, (character) => (
+      character === character.toUpperCase() ? character.toLowerCase() : character.toUpperCase()
+    ));
+    const response = await invoke<{
+      exists: boolean;
+      isDirectory: boolean;
+      accessible: boolean;
+    }>("validate_directory", { request: { path: `${alternateCase}\\` } });
+
+    assert.deepEqual(response, { exists: true, isDirectory: true, accessible: true });
+  });
+
+  it("writes Windows diagnostics next to the running executable", async () => {
+    const info = await invoke<DiagnosticLogInfo>("diagnostic_log_info");
+    const appBinary = process.env.ZMANAGER_GUI_APP_PATH ?? path.resolve(
+      "src-tauri",
+      "target",
+      "debug",
+      "zmanager-desktop.exe",
+    );
+    const expectedPath = path.join(path.dirname(appBinary), "logs", "zmanager-diagnostics.log");
+
+    assert.equal(info.enabled, true);
+    assert.equal(info.location, "installation");
+    assert.ok(info.path);
+    assert.equal(normalizeWindowsPath(info.path), normalizeWindowsPath(expectedPath));
+    assert.match(info.sessionId, /^\d+-\d+$/);
+  });
+
+  it("persists and redacts a diagnostic event through the real Windows command", async () => {
+    const info = await invoke<DiagnosticLogInfo>("diagnostic_log_info");
+    assert.ok(info.path, "Windows diagnostic log path is unavailable");
+    const marker = `native-windows-${Date.now()}`;
+    const password = `test-password-${Date.now()}`;
+    const archivePath = `C:\\private\\${marker}.zip`;
+
+    await invoke<void>("record_diagnostic_event", {
+      request: {
+        scope: "windows.native.e2e",
+        name: "redaction-proof",
+        fields: { marker, password, archivePath },
+      },
+    });
+
+    let event: DiagnosticLogEntry | undefined;
+    await browser.waitUntil(() => {
+      event = readDiagnosticEntries(info.path ?? "").find((candidate) => (
+        candidate.sessionId === info.sessionId
+        && candidate.scope === "windows.native.e2e"
+        && candidate.name === "redaction-proof"
+        && candidate.fields.marker === marker
+      ));
+      return event !== undefined;
+    }, {
+      timeout: 5_000,
+      timeoutMsg: "The Windows diagnostic event was not flushed to disk",
+    });
+
+    assert.equal(event?.fields.password, "[REDACTED]");
+    assert.equal(event?.fields.archivePath, "[REDACTED_PATH]");
+    assert.equal(JSON.stringify(event).includes(password), false);
+    assert.equal(JSON.stringify(event).includes(archivePath), false);
   });
 
   it("uses the decorated Windows frame and advertises the native minimum size", async () => {
@@ -206,6 +367,43 @@ describe("Windows native Tauri integration", () => {
     const scaleFactor = await invoke<number>("plugin:window|scale_factor", { label: "main" });
     assert.ok(Number.isFinite(scaleFactor));
     assert.ok(scaleFactor > 0);
+  });
+
+  it("reports a valid Windows monitor topology", async () => {
+    const monitors = await invoke<NativeMonitor[]>("plugin:window|available_monitors");
+
+    assert.ok(monitors.length >= 1);
+    for (const monitor of monitors) {
+      assert.ok(Number.isFinite(monitor.position.x), JSON.stringify(monitor));
+      assert.ok(Number.isFinite(monitor.position.y), JSON.stringify(monitor));
+      assert.ok(monitor.size.width > 0, JSON.stringify(monitor));
+      assert.ok(monitor.size.height > 0, JSON.stringify(monitor));
+      assert.ok(Number.isFinite(monitor.scaleFactor) && monitor.scaleFactor > 0, JSON.stringify(monitor));
+    }
+  });
+
+  it("keeps the WebView viewport synchronized with the native Windows inner size", async () => {
+    const nativeSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+    const scaleFactor = await invoke<number>("plugin:window|scale_factor", { label: "main" });
+    const viewport = await browser.execute(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+      documentWidth: document.documentElement.clientWidth,
+      documentHeight: document.documentElement.clientHeight,
+    }));
+
+    assert.equal(viewport.width, viewport.documentWidth);
+    assert.equal(viewport.height, viewport.documentHeight);
+    assert.ok(Math.abs(nativeSize.width - viewport.width * scaleFactor) <= 2, JSON.stringify({
+      nativeSize,
+      scaleFactor,
+      viewport,
+    }));
+    assert.ok(Math.abs(nativeSize.height - viewport.height * scaleFactor) <= 2, JSON.stringify({
+      nativeSize,
+      scaleFactor,
+      viewport,
+    }));
   });
 
   it("keeps the decorated outer frame larger than the WebView inner area", async () => {
@@ -341,4 +539,28 @@ function readNativeMinimumTrackSize(): NativeWindowSize {
   );
   const result = JSON.parse(output) as { minTrackWidth: number; minTrackHeight: number };
   return { width: result.minTrackWidth, height: result.minTrackHeight };
+}
+
+function decodePngDataUrl(dataUrl: string | null, key: string): Buffer {
+  assert.ok(dataUrl, `Windows did not return an icon for ${key}`);
+  const encoded = dataUrl.replace(/^data:image\/png;base64,/, "");
+  assert.notEqual(encoded, dataUrl, `Windows icon ${key} is not a PNG data URL`);
+  return Buffer.from(encoded, "base64");
+}
+
+function normalizeWindowsPath(value: string): string {
+  return path.resolve(value).replaceAll("/", "\\").toLowerCase();
+}
+
+function readDiagnosticEntries(logPath: string): DiagnosticLogEntry[] {
+  return readFileSync(logPath, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as DiagnosticLogEntry];
+      } catch {
+        return [];
+      }
+    });
 }

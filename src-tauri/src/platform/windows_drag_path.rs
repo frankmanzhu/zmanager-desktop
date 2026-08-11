@@ -157,4 +157,82 @@ mod tests {
         assert!(prepare_windows_drag_items(&[candidate(&maximum_name)], 0).is_ok());
         assert!(prepare_windows_drag_items(&[candidate(&too_long_name)], 0).is_err());
     }
+
+    #[test]
+    fn counts_utf16_code_units_instead_of_unicode_scalars_for_the_path_limit() {
+        let maximum_name = "📦".repeat(WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16 / 2);
+        let too_long_name = "📦".repeat(WINDOWS_FILE_DESCRIPTOR_PATH_MAX_UTF16 / 2 + 1);
+
+        assert_eq!(maximum_name.chars().count(), 129);
+        assert_eq!(maximum_name.encode_utf16().count(), 258);
+        assert!(prepare_windows_drag_items(&[candidate(&maximum_name)], 0).is_ok());
+        assert!(prepare_windows_drag_items(&[candidate(&too_long_name)], 0).is_err());
+    }
+
+    #[test]
+    fn rejects_every_windows_forbidden_character_and_control_character() {
+        for character in ['<', '>', ':', '"', '|', '?', '*', '\0', '\u{001f}'] {
+            let path = format!("folder/report{character}.txt");
+            assert!(
+                prepare_windows_drag_items(&[candidate(&path)], 0).is_err(),
+                "{character:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_reserved_device_names_regardless_of_case_or_extension() {
+        for name in [
+            "con",
+            "PrN.txt",
+            "AUX.backup.txt",
+            "nul",
+            "com1.log",
+            "COM9",
+            "lpt1.txt",
+            "LPT9",
+        ] {
+            assert!(
+                prepare_windows_drag_items(&[candidate(&format!("folder/{name}"))], 0).is_err(),
+                "{name} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_names_that_only_begin_with_windows_device_name_text() {
+        for name in ["console.txt", "nulled.txt", "COM10.txt", "LPT10.txt"] {
+            assert!(
+                prepare_windows_drag_items(&[candidate(&format!("folder/{name}"))], 0).is_ok(),
+                "{name} should be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_candidate_metadata_and_original_archive_path() {
+        let candidate = NativeFileDragCandidate {
+            entry_path: "root/folder/report.txt".to_string(),
+            size: Some(u64::from(u32::MAX) + 42),
+            modified_unix_seconds: Some(1_700_000_000),
+        };
+
+        let items = prepare_windows_drag_items(&[candidate], 1).expect("prepare Windows item");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].entry_path, "root/folder/report.txt");
+        assert_eq!(items[0].display_path, "folder\\report.txt");
+        assert_eq!(items[0].size, Some(u64::from(u32::MAX) + 42));
+        assert_eq!(items[0].modified_unix_seconds, Some(1_700_000_000));
+    }
+
+    #[test]
+    fn rejects_paths_left_empty_after_normalization_or_stripping() {
+        for (path, strip_components) in [("///\\\\", 0), ("folder/file.txt", 2)] {
+            assert!(
+                prepare_windows_drag_items(&[candidate(path)], strip_components).is_err(),
+                "{path:?} should be empty after normalization"
+            );
+        }
+    }
 }

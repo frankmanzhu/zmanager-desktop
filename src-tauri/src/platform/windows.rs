@@ -827,6 +827,99 @@ mod windows_file_drag {
 
         const KEEP_VIRTUAL_DROP_PROOF_DIR_ENV: &str = "ZMANAGER_KEEP_VIRTUAL_DROP_PROOF_DIR";
 
+        fn drag_item(
+            display_path: &str,
+            size: Option<u64>,
+            modified_unix_seconds: Option<u64>,
+        ) -> NativeFileDragItem {
+            NativeFileDragItem {
+                entry_path: display_path.replace('\\', "/"),
+                display_path: display_path.to_string(),
+                size,
+                modified_unix_seconds,
+            }
+        }
+
+        #[test]
+        fn file_descriptor_preserves_utf16_name_large_size_and_timestamp() {
+            let size = 0x1234_5678_9ABC_DEF0;
+            let modified = 1_700_000_000;
+            let descriptor =
+                file_descriptor(&drag_item("folder\\資料📦.txt", Some(size), Some(modified)));
+            let name_end = descriptor
+                .cFileName
+                .iter()
+                .position(|value| *value == 0)
+                .expect("descriptor file name terminator");
+
+            assert_eq!(
+                String::from_utf16(&descriptor.cFileName[..name_end]).expect("UTF-16 file name"),
+                "folder\\資料📦.txt"
+            );
+            assert_eq!(descriptor.dwFileAttributes, FILE_ATTRIBUTE_NORMAL);
+            assert_ne!(descriptor.dwFlags & FD_ATTRIBUTES.0 as u32, 0);
+            assert_ne!(descriptor.dwFlags & FD_FILESIZE.0 as u32, 0);
+            assert_ne!(descriptor.dwFlags & FD_WRITESTIME.0 as u32, 0);
+            assert_eq!(descriptor.nFileSizeHigh, 0x1234_5678);
+            assert_eq!(descriptor.nFileSizeLow, 0x9ABC_DEF0);
+
+            let expected_ticks = (modified + UNIX_EPOCH_AS_WINDOWS_FILETIME_SECONDS) * WINDOWS_TICK;
+            let actual_ticks = u64::from(descriptor.ftLastWriteTime.dwHighDateTime) << 32
+                | u64::from(descriptor.ftLastWriteTime.dwLowDateTime);
+            assert_eq!(actual_ticks, expected_ticks);
+        }
+
+        #[test]
+        fn file_descriptor_omits_unknown_optional_metadata() {
+            let descriptor = file_descriptor(&drag_item("report.txt", None, None));
+
+            assert_ne!(descriptor.dwFlags & FD_ATTRIBUTES.0 as u32, 0);
+            assert_eq!(descriptor.dwFlags & FD_FILESIZE.0 as u32, 0);
+            assert_eq!(descriptor.dwFlags & FD_WRITESTIME.0 as u32, 0);
+            assert_eq!(descriptor.nFileSizeHigh, 0);
+            assert_eq!(descriptor.nFileSizeLow, 0);
+            assert_eq!(descriptor.ftLastWriteTime.dwHighDateTime, 0);
+            assert_eq!(descriptor.ftLastWriteTime.dwLowDateTime, 0);
+        }
+
+        #[test]
+        fn windows_filetime_conversion_saturates_instead_of_wrapping() {
+            let filetime = filetime_from_unix_seconds(u64::MAX);
+
+            assert_eq!(filetime.dwHighDateTime, u32::MAX);
+            assert_eq!(filetime.dwLowDateTime, u32::MAX);
+        }
+
+        #[test]
+        fn drag_file_name_filters_embedded_nuls_without_losing_unicode() {
+            let wide = wide_drag_file_name("a\0b📦.txt");
+
+            assert!(!wide.contains(&0));
+            assert_eq!(
+                String::from_utf16(&wide).expect("UTF-16 file name"),
+                "ab📦.txt"
+            );
+        }
+
+        #[test]
+        fn file_content_indices_must_select_an_existing_item() {
+            let mut format = file_contents_formatetc();
+            format.lindex = 0;
+            assert_eq!(item_index(&format, 2).expect("first item"), 0);
+            format.lindex = 1;
+            assert_eq!(item_index(&format, 2).expect("second item"), 1);
+
+            for invalid_index in [-1, 2, i32::MAX] {
+                format.lindex = invalid_index;
+                assert_eq!(
+                    item_index(&format, 2)
+                        .expect_err("invalid drag item index")
+                        .code(),
+                    DV_E_LINDEX
+                );
+            }
+        }
+
         #[test]
         fn shell_folder_accepts_virtual_file_drag_data_object() {
             let kept_drop_target =
