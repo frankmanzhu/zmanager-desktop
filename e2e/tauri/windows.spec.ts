@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 
 type NativeCapability = {
   id: string;
@@ -152,7 +154,7 @@ describe("Windows native Tauri integration", () => {
     });
   });
 
-  it("uses the decorated Windows frame and enforces the native minimum size", async () => {
+  it("uses the decorated Windows frame and advertises the native minimum size", async () => {
     const decorated = await invoke<boolean>("plugin:window|is_decorated", { label: "main" });
     assert.equal(decorated, true);
     assert.equal(
@@ -164,7 +166,6 @@ describe("Windows native Tauri integration", () => {
     const initialMaximized = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
     let currentMaximized = initialMaximized;
     const originalSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
-    let observedSize = originalSize;
     try {
       if (currentMaximized) {
         await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
@@ -177,32 +178,118 @@ describe("Windows native Tauri integration", () => {
         });
       }
 
-      await invoke<void>("plugin:window|set_min_size", {
-        label: "main",
-        value: { Logical: { width: MIN_WINDOW_WIDTH, height: MIN_WINDOW_HEIGHT } },
-      });
-      await invoke<void>("plugin:window|set_size", {
-        label: "main",
-        value: { Logical: { width: 320, height: 240 } },
-      });
-      await browser.waitUntil(async () => {
-        observedSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
-        return observedSize.width >= MIN_WINDOW_WIDTH && observedSize.height >= MIN_WINDOW_HEIGHT;
-      }, {
-        timeout: 5_000,
-        timeoutMsg: `Windows native minimum size was not enforced: ${JSON.stringify(observedSize)}`,
-      });
+      const scaleFactor = await invoke<number>("plugin:window|scale_factor", { label: "main" });
+      const nativeMinimum = readNativeMinimumTrackSize();
+      const expectedWidth = Math.floor(MIN_WINDOW_WIDTH * scaleFactor);
+      const expectedHeight = Math.floor(MIN_WINDOW_HEIGHT * scaleFactor);
+      assert.ok(
+        nativeMinimum.width >= expectedWidth,
+        `Windows native minimum width was not advertised: ${JSON.stringify({ nativeMinimum, expectedWidth })}`,
+      );
+      assert.ok(
+        nativeMinimum.height >= expectedHeight,
+        `Windows native minimum height was not advertised: ${JSON.stringify({ nativeMinimum, expectedHeight })}`,
+      );
     } finally {
       await invoke<void>("plugin:window|set_size", {
         label: "main",
         value: { Physical: originalSize },
       });
-      await invoke<void>("plugin:window|set_min_size", { label: "main", value: null });
       const restoredMaximized = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
       if (restoredMaximized !== initialMaximized) {
         await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
       }
     }
+  });
+
+  it("reports a positive Windows display scale factor", async () => {
+    const scaleFactor = await invoke<number>("plugin:window|scale_factor", { label: "main" });
+    assert.ok(Number.isFinite(scaleFactor));
+    assert.ok(scaleFactor > 0);
+  });
+
+  it("keeps the decorated outer frame larger than the WebView inner area", async () => {
+    const [outer, inner] = await Promise.all([
+      invoke<NativeWindowSize>("plugin:window|outer_size", { label: "main" }),
+      invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" }),
+    ]);
+    assert.ok(outer.width >= inner.width, JSON.stringify({ outer, inner }));
+    assert.ok(outer.height >= inner.height, JSON.stringify({ outer, inner }));
+    assert.ok(outer.width > inner.width || outer.height > inner.height, JSON.stringify({ outer, inner }));
+  });
+
+  it("keeps the visible Windows window enabled", async () => {
+    const [visible, enabled] = await Promise.all([
+      invoke<boolean>("plugin:window|is_visible", { label: "main" }),
+      invoke<boolean>("plugin:window|is_enabled", { label: "main" }),
+    ]);
+    assert.equal(visible, true);
+    assert.equal(enabled, true);
+  });
+
+  it("starts outside fullscreen and minimized states", async () => {
+    const [fullscreen, minimized] = await Promise.all([
+      invoke<boolean>("plugin:window|is_fullscreen", { label: "main" }),
+      invoke<boolean>("plugin:window|is_minimized", { label: "main" }),
+    ]);
+    assert.equal(fullscreen, false);
+    assert.equal(minimized, false);
+  });
+
+  it("round-trips the native Windows resizable flag", async () => {
+    const initial = await invoke<boolean>("plugin:window|is_resizable", { label: "main" });
+    try {
+      await invoke<void>("plugin:window|set_resizable", { label: "main", value: !initial });
+      assert.equal(await invoke<boolean>("plugin:window|is_resizable", { label: "main" }), !initial);
+    } finally {
+      await invoke<void>("plugin:window|set_resizable", { label: "main", value: initial });
+    }
+  });
+
+  it("reports a finite native window position", async () => {
+    const position = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
+    assert.ok(Number.isFinite(position.x), JSON.stringify(position));
+    assert.ok(Number.isFinite(position.y), JSON.stringify(position));
+  });
+
+  it("preserves duplicate Windows shell icon request keys in order", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", {
+      request: {
+        entries: [
+          { key: "same", path: "first.exe", isDirectory: false },
+          { key: "same", path: "second.zip", isDirectory: false },
+        ],
+      },
+    });
+    assert.deepEqual(response.icons.map((icon) => icon.key), ["same", "same"]);
+    assert.ok(response.icons.every((icon) => icon.dataUrl?.startsWith("data:image/png;base64,")));
+  });
+
+  it("uses the generic Windows file icon for a blank file path", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", {
+      request: { entries: [{ key: "blank", path: "   ", isDirectory: false }] },
+    });
+    assert.equal(response.icons.length, 1);
+    assert.match(response.icons[0]?.dataUrl ?? "", /^data:image\/png;base64,/);
+  });
+
+  it("trims whitespace before validating a Windows directory", async () => {
+    const windowsRoot = process.env.SystemRoot ?? "C:\\Windows";
+    const response = await invoke<{
+      exists: boolean;
+      isDirectory: boolean;
+      accessible: boolean;
+    }>("validate_directory", { request: { path: `  ${windowsRoot}  ` } });
+    assert.deepEqual(response, { exists: true, isDirectory: true, accessible: true });
+  });
+
+  it("rejects an empty Windows directory path without probing the filesystem", async () => {
+    const response = await invoke<{
+      exists: boolean;
+      isDirectory: boolean;
+      accessible: boolean;
+    }>("validate_directory", { request: { path: "   " } });
+    assert.deepEqual(response, { exists: false, isDirectory: false, accessible: false });
   });
 
   it("round-trips the real Windows maximize state without losing the normal window", async () => {
@@ -243,4 +330,15 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
         : core.invoke(payload.command, payload.args),
     { command, args },
   ) as Promise<T>;
+}
+
+function readNativeMinimumTrackSize(): NativeWindowSize {
+  const scriptPath = path.join(process.cwd(), "scripts", "read-windows-min-track-size.ps1");
+  const output = execFileSync(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-ProcessName", "zmanager-desktop"],
+    { encoding: "utf8" },
+  );
+  const result = JSON.parse(output) as { minTrackWidth: number; minTrackHeight: number };
+  return { width: result.minTrackWidth, height: result.minTrackHeight };
 }

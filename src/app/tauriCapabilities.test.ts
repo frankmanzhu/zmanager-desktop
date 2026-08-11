@@ -21,6 +21,9 @@ const persistedWindowGeometryPermissions = [
   "core:window:allow-center",
   "core:window:allow-show",
 ];
+const nativeWindowResizePermissions = [
+  "core:window:allow-set-resizable",
+];
 
 declare const process: {
   cwd(): string;
@@ -68,6 +71,12 @@ describe("Tauri command capabilities", () => {
   it("allows every operation needed to restore and reveal persisted window geometry", () => {
     expect(mainWindowPermissionIds()).toEqual(
       expect.arrayContaining(persistedWindowGeometryPermissions),
+    );
+  });
+
+  it("allows native window resize control from the main window", () => {
+    expect(mainWindowPermissionIds()).toEqual(
+      expect.arrayContaining(nativeWindowResizePermissions),
     );
   });
 
