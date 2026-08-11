@@ -7,6 +7,7 @@ type NativeCapability = {
 };
 
 type ProjectContract = {
+  commands: string[];
   platformIntegration: {
     platform: string;
     capabilities: NativeCapability[];
@@ -56,6 +57,32 @@ describe("Windows native Tauri integration", () => {
     assert.equal(capability("nativeHostLifecycle").availability, "notApplicable");
   });
 
+  it("publishes the command seam required by the Windows shell workflow", async () => {
+    const contract = await invoke<ProjectContract>("project_contract");
+    for (const command of ["healthcheck", "project_contract"]) {
+      assert.ok(contract.commands.includes(command), `Missing command contract entry ${command}`);
+    }
+  });
+
+  it("starts with one addressable native main window", async () => {
+    assert.deepEqual(await browser.getWindowHandles(), ["main"]);
+  });
+
+  it("reports the native Windows title and a non-empty WebView title", async () => {
+    assert.equal(await invoke<string>("plugin:window|title", { label: "main" }), "ZManager");
+    assert.match(await browser.getTitle(), /ZManager/);
+  });
+
+  it("keeps the Windows native window controls available", async () => {
+    const flags = await Promise.all([
+      invoke<boolean>("plugin:window|is_resizable", { label: "main" }),
+      invoke<boolean>("plugin:window|is_maximizable", { label: "main" }),
+      invoke<boolean>("plugin:window|is_minimizable", { label: "main" }),
+      invoke<boolean>("plugin:window|is_closable", { label: "main" }),
+    ]);
+    assert.deepEqual(flags, [true, true, true, true]);
+  });
+
   it("renders Windows shell icons through the real native command", async () => {
     const response = await invoke<SystemFileIconResponse>("system_file_icons", {
       request: {
@@ -75,6 +102,11 @@ describe("Windows native Tauri integration", () => {
         `Windows did not return a PNG shell icon for ${icon.key}`,
       );
     }
+  });
+
+  it("returns no invented shell icons for an empty Windows request", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", { request: { entries: [] } });
+    assert.deepEqual(response, { icons: [] });
   });
 
   it("keeps Windows directory validation and missing-path handling distinct", async () => {
@@ -106,6 +138,20 @@ describe("Windows native Tauri integration", () => {
     });
   });
 
+  it("distinguishes a Windows file from a directory", async () => {
+    const filePath = process.env.ComSpec ?? "C:\\Windows\\System32\\cmd.exe";
+    const response = await invoke<{
+      exists: boolean;
+      isDirectory: boolean;
+      accessible: boolean;
+    }>("validate_directory", { request: { path: filePath } });
+    assert.deepEqual(response, {
+      exists: true,
+      isDirectory: false,
+      accessible: false,
+    });
+  });
+
   it("uses the decorated Windows frame and enforces the native minimum size", async () => {
     const decorated = await invoke<boolean>("plugin:window|is_decorated", { label: "main" });
     assert.equal(decorated, true);
@@ -115,24 +161,47 @@ describe("Windows native Tauri integration", () => {
     );
     assert.equal(await $('[data-shell-chrome="title"]').isDisplayed(), false);
 
+    const initialMaximized = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
+    let currentMaximized = initialMaximized;
     const originalSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+    let observedSize = originalSize;
     try {
+      if (currentMaximized) {
+        await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
+        await browser.waitUntil(async () => {
+          currentMaximized = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
+          return !currentMaximized;
+        }, {
+          timeout: 5_000,
+          timeoutMsg: "Windows native window did not leave maximized state",
+        });
+      }
+
+      await invoke<void>("plugin:window|set_min_size", {
+        label: "main",
+        value: { Logical: { width: MIN_WINDOW_WIDTH, height: MIN_WINDOW_HEIGHT } },
+      });
       await invoke<void>("plugin:window|set_size", {
         label: "main",
         value: { Logical: { width: 320, height: 240 } },
       });
       await browser.waitUntil(async () => {
-        const size = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
-        return size.width >= MIN_WINDOW_WIDTH && size.height >= MIN_WINDOW_HEIGHT;
+        observedSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+        return observedSize.width >= MIN_WINDOW_WIDTH && observedSize.height >= MIN_WINDOW_HEIGHT;
       }, {
         timeout: 5_000,
-        timeoutMsg: "Windows native minimum size was not enforced",
+        timeoutMsg: `Windows native minimum size was not enforced: ${JSON.stringify(observedSize)}`,
       });
     } finally {
       await invoke<void>("plugin:window|set_size", {
         label: "main",
         value: { Physical: originalSize },
       });
+      await invoke<void>("plugin:window|set_min_size", { label: "main", value: null });
+      const restoredMaximized = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
+      if (restoredMaximized !== initialMaximized) {
+        await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
+      }
     }
   });
 

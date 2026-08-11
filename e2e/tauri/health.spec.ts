@@ -46,9 +46,9 @@ describe("ZManager packaged application", () => {
 
     const outputLocation = await $("#pref-output-location");
     await outputLocation.click();
-    await browser.keys("Home");
-    await browser.keys("ArrowDown");
-    await browser.keys("Enter");
+    const customOutputOption = await $('[role="option"][data-value="customFolder"]');
+    await customOutputOption.waitForDisplayed();
+    await customOutputOption.click();
 
     const customOutput = await $("#pref-custom-output");
     assert.equal(await customOutput.getAttribute("aria-invalid"), "true");
@@ -68,11 +68,12 @@ describe("ZManager packaged application", () => {
       return {
         id: element?.id ?? "",
         tagName: element?.tagName ?? "",
+        menuGroup: element?.getAttribute("data-menu-group-label") ?? "",
         visible: element instanceof HTMLElement && Boolean(element.offsetWidth || element.offsetHeight),
       };
     });
-    assert.notEqual(focusedElement.id, "");
-    assert.notEqual(focusedElement.id, "app");
+    assert.equal(focusedElement.tagName, "SUMMARY");
+    assert.equal(focusedElement.menuGroup, "Tools");
     assert.equal(focusedElement.visible, true);
   });
 

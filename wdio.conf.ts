@@ -9,8 +9,11 @@ const appBinaryPath = process.env.ZMANAGER_GUI_APP_PATH ?? resolve(
 
 export const config: WebdriverIO.Config = {
   runner: "local",
-  specs: ["./e2e/tauri/**/*.spec.ts"],
+  // The embedded Tauri service owns one native window. Import all native specs
+  // through one worker so window-size/maximize tests cannot race each other.
+  specs: ["./e2e/tauri/all.spec.ts"],
   maxInstances: 1,
+  maxInstancesPerCapability: 1,
   services: [["@wdio/tauri-service", {
     appBinaryPath,
     driverProvider: "embedded",
@@ -18,6 +21,7 @@ export const config: WebdriverIO.Config = {
   }]],
   capabilities: [{
     browserName: "tauri",
+    "wdio:maxInstances": 1,
     "tauri:options": {
       application: appBinaryPath,
     },
