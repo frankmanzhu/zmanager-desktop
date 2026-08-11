@@ -1333,10 +1333,16 @@ function selectedExtractEntryPaths(state: MutableArchiveWorkspaceState): string[
   const extractPaths = new Set<string>();
 
   for (const selectedPath of state.view.selection.selectedPaths) {
-    const entry = entryByPath(state.entries, selectedPath);
+    const entry = entryByPath(state.entries, selectedPath) ?? entryByPath(state.treeEntries, selectedPath);
     if (!entry) {
       for (const descendantPath of fileDescendantEntryPaths(state.entries, selectedPath)) {
         extractPaths.add(descendantPath);
+      }
+      for (const descendantPath of fileDescendantEntryPaths(state.treeEntries, selectedPath)) {
+        extractPaths.add(descendantPath);
+      }
+      if (extractPaths.size === 0 && selectedPath.trim().length > 0) {
+        extractPaths.add(selectedPath);
       }
       continue;
     }
@@ -1346,7 +1352,12 @@ function selectedExtractEntryPaths(state: MutableArchiveWorkspaceState): string[
       continue;
     }
 
-    const descendantPaths = fileDescendantEntryPaths(state.entries, entry.path);
+    const descendantPaths = Array.from(
+      new Set([
+        ...fileDescendantEntryPaths(state.entries, entry.path),
+        ...fileDescendantEntryPaths(state.treeEntries, entry.path),
+      ]),
+    );
     if (descendantPaths.length === 0) {
       extractPaths.add(entry.path);
       continue;

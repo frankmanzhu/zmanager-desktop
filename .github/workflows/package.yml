@@ -188,6 +188,12 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: Run Fedora packaging and architecture tests
+        shell: bash
+        run: |
+          scripts/test-linux-packaging-scripts.sh
+          npm run test:architecture
+
       - name: Build RPM package
         shell: bash
         run: scripts/build-linux-fedora-rpm.sh --install-deps --no-install

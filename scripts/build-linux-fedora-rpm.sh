@@ -113,6 +113,7 @@ fedora_packages=(
   patchelf
   nodejs
   nautilus-python
+  perl-IPC-Cmd
 )
 
 collect_missing_fedora_packages() {

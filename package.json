@@ -21,6 +21,7 @@
     "test:gui:build": "npm run tauri build -- --debug --no-bundle --config src-tauri/tauri.gui.conf.json",
     "test:gui:run": "wdio run wdio.conf.ts",
     "test:gui:windows": "powershell -ExecutionPolicy Bypass -File scripts/test-windows-gui.ps1",
+    "test:gui:linux": "bash scripts/test-linux-gui.sh",
     "ast:lint": "ast-grep scan",
     "test:architecture": "bash scripts/check-job-feed-architecture.sh && bash scripts/check-native-platform-architecture.test.sh && bash scripts/check-native-platform-architecture.sh && python3 scripts/macos_provisioning_profile_test.py && node --test scripts/archive-association-contract.test.mjs scripts/check-product-version-consistency.test.mjs scripts/macos-build-contract.test.mjs scripts/check-macos-full-target-architecture.test.mjs scripts/native-capability-contract.test.mjs scripts/native-integration-baseline.test.mjs scripts/shell-action-artifact-parity.test.mjs && node scripts/check-product-version-consistency.mjs && node scripts/check-macos-full-target-architecture.mjs && node scripts/check-native-integration-contract.mjs && bash scripts/check-macos-core-revision-and-symbols.sh && npm run check:generated-contracts && npm run ast:lint",
     "tauri": "tauri"

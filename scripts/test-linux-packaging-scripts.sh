@@ -64,7 +64,7 @@ if [[ "${1:-}" == "-p" || "${1:-}" == "-e" ]]; then
   echo "${ZMANAGER_TEST_PRODUCT_VERSION:?}"
   exit 0
 fi
-echo "v20.19.0"
+echo "v24.0.0"
 EOF
 
 write_stub npm <<'EOF'

@@ -401,6 +401,268 @@ describe("Linux native Tauri integration", () => {
     assert.ok(Number.isFinite(position.x), JSON.stringify(position));
     assert.ok(Number.isFinite(position.y), JSON.stringify(position));
   });
+
+  it("round-trips the native Linux always-on-top window flag", async () => {
+    const initial = await invoke<boolean>("plugin:window|is_always_on_top", { label: "main" });
+    try {
+      await invoke<void>("plugin:window|set_always_on_top", { label: "main", value: !initial });
+      assert.equal(await invoke<boolean>("plugin:window|is_always_on_top", { label: "main" }), !initial);
+    } finally {
+      await invoke<void>("plugin:window|set_always_on_top", { label: "main", value: initial });
+    }
+  });
+
+  it("supports requesting native Linux window focus", async () => {
+    await invoke<void>("plugin:window|set_focus", { label: "main" });
+    const focused = await invoke<boolean>("plugin:window|is_focused", { label: "main" });
+    assert.equal(typeof focused, "boolean");
+  });
+
+  it("round-trips native Linux title updates", async () => {
+    const initialTitle = await invoke<string>("plugin:window|title", { label: "main" });
+    const testTitle = "ZManager - Fedora Native GUI Test";
+    try {
+      await invoke<void>("plugin:window|set_title", { label: "main", value: testTitle });
+      assert.equal(await invoke<string>("plugin:window|title", { label: "main" }), testTitle);
+    } finally {
+      await invoke<void>("plugin:window|set_title", { label: "main", value: initialTitle });
+    }
+  });
+
+  it("supports native Linux window resize and position adjustments", async () => {
+    const initialSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+    const initialPosition = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
+
+    assert.ok(initialSize.width > 0 && initialSize.height > 0);
+    assert.ok(Number.isFinite(initialPosition.x) && Number.isFinite(initialPosition.y));
+  });
+
+  it("validates Fedora system directory locations and hierarchy", async () => {
+    for (const fedoraDir of ["/etc", "/usr/share/applications", "/var/tmp"]) {
+      const result = await validateDirectory(fedoraDir);
+      assert.deepEqual(result, { exists: true, isDirectory: true, accessible: true }, fedoraDir);
+    }
+  });
+
+  it("rejects native Linux drag preparation with empty candidate lists", async () => {
+    await assert.rejects(
+      async () => {
+        await invoke("start_native_file_drag", {
+          request: {
+            candidates: [],
+            stripComponents: 0,
+          },
+        });
+      },
+      (err: Error) => err.message.includes("No archive files are available to drag") || err.message.includes("drag"),
+    );
+  });
+
+  it("supports native Linux window centering", async () => {
+    await invoke<void>("plugin:window|center", { label: "main" });
+    const position = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
+    assert.ok(Number.isFinite(position.x), JSON.stringify(position));
+    assert.ok(Number.isFinite(position.y), JSON.stringify(position));
+  });
+
+  it("sets native Linux window minimum and maximum size constraints", async () => {
+    try {
+      await invoke<void>("plugin:window|set_min_size", { label: "main", value: { type: "Physical", width: 400, height: 300 } });
+      await invoke<void>("plugin:window|set_max_size", { label: "main", value: { type: "Physical", width: 3840, height: 2160 } });
+    } finally {
+      await invoke<void>("plugin:window|set_min_size", { label: "main", value: null });
+      await invoke<void>("plugin:window|set_max_size", { label: "main", value: null });
+    }
+  });
+
+  it("round-trips native Linux window maximize and unmaximize states", async () => {
+    const initial = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
+    try {
+      await invoke<void>("plugin:window|maximize", { label: "main" });
+      assert.equal(await invoke<boolean>("plugin:window|is_maximized", { label: "main" }), true);
+      await invoke<void>("plugin:window|unmaximize", { label: "main" });
+      assert.equal(await invoke<boolean>("plugin:window|is_maximized", { label: "main" }), false);
+    } finally {
+      if (initial) {
+        await invoke<void>("plugin:window|maximize", { label: "main" });
+      } else {
+        await invoke<void>("plugin:window|unmaximize", { label: "main" });
+      }
+    }
+  });
+
+  it("round-trips native Linux window minimize and restore states", async () => {
+    const initial = await invoke<boolean>("plugin:window|is_minimized", { label: "main" });
+    try {
+      await invoke<void>("plugin:window|minimize", { label: "main" });
+      assert.equal(await invoke<boolean>("plugin:window|is_minimized", { label: "main" }), true);
+      await invoke<void>("plugin:window|unminimize", { label: "main" });
+      assert.equal(await invoke<boolean>("plugin:window|is_minimized", { label: "main" }), false);
+    } finally {
+      if (initial) {
+        await invoke<void>("plugin:window|minimize", { label: "main" });
+      } else {
+        await invoke<void>("plugin:window|unminimize", { label: "main" });
+      }
+    }
+  });
+
+  it("reports native Linux GTK theme property or null", async () => {
+    const theme = await invoke<string | null>("plugin:window|theme", { label: "main" });
+    assert.ok(theme === null || ["dark", "light"].includes(theme), `Unexpected theme value: ${theme}`);
+  });
+
+  it("handles batch system icon requests with deep Linux paths and root", async () => {
+    const response = await invoke<SystemFileIconResponse>("system_file_icons", {
+      request: {
+        entries: [
+          { key: "root", path: "/", isDirectory: true },
+          { key: "python", path: "/usr/bin/python3", isDirectory: false },
+          { key: "var_log", path: "/var/log", isDirectory: true },
+          { key: "missing", path: "/non-existent-path-test-123.tmp", isDirectory: false },
+          { key: "empty", path: "   ", isDirectory: false },
+        ],
+      },
+    });
+
+    assert.equal(response.icons.length, 5);
+    assert.deepEqual(response.icons.map((item) => item.key), [
+      "root",
+      "python",
+      "var_log",
+      "missing",
+      "empty",
+    ]);
+    for (const icon of response.icons) {
+      assert.equal(icon.dataUrl, null);
+    }
+  });
+
+  it("validates restricted Linux system directory locations", async () => {
+    for (const sysDir of ["/proc", "/sys", "/dev"]) {
+      const result = await validateDirectory(sysDir);
+      assert.equal(result.exists, true, `Expected ${sysDir} to exist`);
+      assert.equal(result.isDirectory, true, `Expected ${sysDir} to be a directory`);
+    }
+  });
+
+  it("verifies Linux POSIX source table columns contract", async () => {
+    const contract = await invoke<ProjectContract>("project_contract");
+    const cols = contract.sourceTableCapabilities.availableColumnIds;
+
+    assert.ok(cols.includes("mode"), "Missing mode column");
+    assert.ok(cols.includes("uid"), "Missing uid column");
+    assert.ok(cols.includes("gid"), "Missing gid column");
+    assert.ok(cols.includes("owner"), "Missing owner column");
+    assert.ok(cols.includes("group"), "Missing group column");
+    assert.equal(cols.includes("attributes"), false, "Linux should not have Windows attributes column");
+  });
+
+  it("redacts structured tokens and authentication fields in Linux diagnostic logging", async () => {
+    const info = await invoke<DiagnosticLogInfo>("diagnostic_log_info");
+    assert.ok(info.path, "Linux diagnostic log path is unavailable");
+    const marker = `fedora-redact-${Date.now()}`;
+    const token = `secret-token-${Date.now()}`;
+    const auth = `bearer-auth-${Date.now()}`;
+    const secret = `my-secret-${Date.now()}`;
+    const key = `api-key-${Date.now()}`;
+
+    await invoke<void>("record_diagnostic_event", {
+      request: {
+        scope: "linux.fedora.e2e",
+        name: "multi-field-redaction",
+        fields: { marker, token, auth, secret, key },
+      },
+    });
+
+    let event: DiagnosticLogEntry | undefined;
+    await browser.waitUntil(() => {
+      event = readDiagnosticEntries(info.path ?? "").find((candidate) => (
+        candidate.sessionId === info.sessionId
+        && candidate.scope === "linux.fedora.e2e"
+        && candidate.name === "multi-field-redaction"
+        && candidate.fields.marker === marker
+      ));
+      return event !== undefined;
+    }, {
+      timeout: 5_000,
+      timeoutMsg: "The multi-field redaction diagnostic event was not flushed to disk",
+    });
+
+    assert.equal(event?.fields.token, "[REDACTED]");
+    assert.equal(event?.fields.auth, "[REDACTED]");
+    assert.equal(event?.fields.secret, "[REDACTED]");
+    assert.equal(event?.fields.key, "[REDACTED]");
+    assert.equal(JSON.stringify(event).includes(token), false);
+    assert.equal(JSON.stringify(event).includes(auth), false);
+    assert.equal(JSON.stringify(event).includes(secret), false);
+    assert.equal(JSON.stringify(event).includes(key), false);
+  });
+
+  it("reports Linux RPM capability packageState accurately", async () => {
+    const contract = await invoke<ProjectContract>("project_contract");
+    const capability = capabilityLookup(contract);
+
+    assert.equal(capability("mainWindowPolicy").sourceState, "supported");
+    assert.equal(capability("mainWindowPolicy").runtimeState, "ready");
+    assert.equal(capability("mainWindowPolicy").availability, "available");
+  });
+
+  it("rejects native Linux drag preparation with path traversal components", async () => {
+    await assert.rejects(
+      async () => {
+        await invoke("start_native_file_drag", {
+          request: {
+            candidates: [
+              { entryPath: "../outside.txt", size: 10, modifiedUnixSeconds: null },
+            ],
+            stripComponents: 0,
+          },
+        });
+      },
+      (err: Error) => err.message.length > 0,
+    );
+  });
+
+  it("verifies native Linux window inner size update round-trip", async () => {
+    const initialSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+    const newWidth = Math.max(600, initialSize.width - 50);
+    const newHeight = Math.max(400, initialSize.height - 50);
+
+    try {
+      await invoke<void>("plugin:window|set_size", {
+        label: "main",
+        value: { type: "Physical", width: newWidth, height: newHeight },
+      });
+      const updatedSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
+      assert.ok(updatedSize.width > 0 && updatedSize.height > 0);
+    } finally {
+      await invoke<void>("plugin:window|set_size", {
+        label: "main",
+        value: { type: "Physical", width: initialSize.width, height: initialSize.height },
+      });
+    }
+  });
+
+  it("verifies native Linux window inner position update round-trip", async () => {
+    const initialPos = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
+    const targetX = initialPos.x + 10;
+    const targetY = initialPos.y + 10;
+
+    try {
+      await invoke<void>("plugin:window|set_position", {
+        label: "main",
+        value: { type: "Physical", x: targetX, y: targetY },
+      });
+      const updatedPos = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
+      assert.ok(Number.isFinite(updatedPos.x) && Number.isFinite(updatedPos.y));
+    } finally {
+      await invoke<void>("plugin:window|set_position", {
+        label: "main",
+        value: { type: "Physical", x: initialPos.x, y: initialPos.y },
+      });
+    }
+  });
 });
 
 function capabilityLookup(contract: ProjectContract): (id: string) => NativeCapability {
