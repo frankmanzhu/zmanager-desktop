@@ -70,6 +70,22 @@ cd src-tauri
 cargo check
 ```
 
+## Automated GUI testing
+
+The test layers are intentionally split by responsibility:
+
+- `npm run test:frontend` runs fast Vitest workflow and component tests.
+- `npm run test:e2e` runs Playwright browser tests with deterministic Tauri
+  stubs, covering broad UI behavior without native-process startup cost.
+- `npm run test:gui` builds a debug Tauri application with the GUI test mode,
+  starts its embedded WebDriver server, and runs WebdriverIO against the real
+  window and Rust commands. The test specs live in `e2e/tauri/`.
+
+The embedded WDIO plugins are registered only for debug Rust builds. Do not
+ship a debug build or expose its WebDriver port outside the local test host.
+The GUI build uses `src-tauri/tauri.gui.conf.json` so the frontend is built
+with the WDIO bridge before Tauri embeds the assets.
+
 ## Linux build prerequisites
 
 Ubuntu/Debian builds need Rust 1.85+ and native dependencies for the Tauri and

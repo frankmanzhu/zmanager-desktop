@@ -15,7 +15,7 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-base64 = "0.22.1"
+base64 = "0.23.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 openssl = "0.10"
@@ -24,11 +24,13 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 url = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-wdio = "1.3.0"
+tauri-plugin-wdio-webdriver = "1.3.0"
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 unicode-normalization = "0.1"
 zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
 zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmanager-core" }
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "native-tls"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "native-tls"] }
 tauri-plugin-deep-link = "2"
 tzap-core = { path = "../../tzap/crates/tzap-core" }
 tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
@@ -55,7 +57,7 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Shell",
 ] }
 windows-core = "0.61.2"
-keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
+keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -65,10 +67,10 @@ gdk = "0.18.2"
 gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
-keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent"] }
+keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
+keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
 
 [patch.crates-io]
 zmanager-libarchive-sys = { path = "../../zmanager/crates/zmanager-libarchive-sys" }

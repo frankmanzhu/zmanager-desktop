@@ -15,6 +15,8 @@
     "allow-ack-subscription",
     "allow-unsubscribe-job",
     "core:default",
+    "wdio:default",
+    "wdio-webdriver:default",
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-minimize"

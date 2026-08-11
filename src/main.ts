@@ -6,6 +6,10 @@ import "./styles.tailwind.css";
 import { AppShell } from "./ui/react/AppShell";
 import { DisposableTaskRuntimeApp } from "./runtime/DisposableTaskRuntimeApp";
 
+if (import.meta.env.MODE === "gui") {
+  await import("@wdio/tauri-plugin");
+}
+
 const app = document.querySelector<HTMLElement>("#app");
 
 if (!app) {

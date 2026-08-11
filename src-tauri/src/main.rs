@@ -93,6 +93,10 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init());
+    #[cfg(debug_assertions)]
+    let builder = builder
+        .plugin(tauri_plugin_wdio::init())
+        .plugin(tauri_plugin_wdio_webdriver::init());
     let builder = if launch_instance_mode.registers_single_instance() {
         builder.plugin(tauri_plugin_single_instance::init(
             move |_app, argv, _cwd| {

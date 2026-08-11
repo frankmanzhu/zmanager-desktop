@@ -5,6 +5,7 @@ const browserChannel =
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "**/tauri/**",
   fullyParallel: true,
   reporter: [["list"]],
   use: {
