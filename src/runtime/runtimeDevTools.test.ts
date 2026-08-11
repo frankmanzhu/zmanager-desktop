@@ -70,6 +70,7 @@ function createOptions(
     api: {
       loadArchiveFixture: vi.fn(),
       setSystemIconFixtures: vi.fn(),
+      setErrorSurfaceFixture: vi.fn(),
       openSurface: vi.fn(),
       closeModal: vi.fn(),
     },

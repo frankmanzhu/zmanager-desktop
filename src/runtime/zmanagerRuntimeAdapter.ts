@@ -373,6 +373,7 @@ import type {
 import {
   installRuntimeDevTools,
   loadLocalDevFixtureFromUrl as loadRuntimeLocalDevFixtureFromUrl,
+  type RuntimeDevErrorSurfaceFixture,
 } from "./runtimeDevTools";
 import {
   startZManagerRuntime,
@@ -4167,6 +4168,57 @@ function runtimeDevToolsOptions() {
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
         systemIconDataUrls = new Map(Object.entries(fixtures));
         renderBrowse();
+      },
+      setErrorSurfaceFixture: (fixture: RuntimeDevErrorSurfaceFixture) => {
+        if (fixture === "account-notice-long-contacts") {
+          accountWorkspace.replace({
+            authStatus: "signedOut",
+            pendingState: null,
+            defaultSigningIdentityId: null,
+            capabilities: {
+              auth: "launch_only",
+              enrollment: "unavailable",
+              status: "offline_cache_only",
+              accountManagement: "external_browser",
+            },
+            certificates: [],
+            recipientKeys: [],
+            contacts: Array.from({ length: 18 }, (_, index) => ({
+              contactId: `fixture-contact-${index + 1}`,
+              displayName: `Fixture contact ${index + 1} with a deliberately long display name for compact viewport verification`,
+              signingCertificateSha256: `sha256:fixture-certificate-${index + 1}`,
+              recipientPublicKeyFingerprint: `sha256:fixture-recipient-${index + 1}`,
+              verificationState: "verified",
+              missingStatusCaveat: false,
+            })),
+            displayName: null,
+            publicSignerId: null,
+            assuranceLevel: null,
+            sessionExpiresAtUnixSeconds: null,
+          });
+          accountWorkspace.open();
+          accountWorkspace.setNotice("Fixture notice: identity data is available from the local cache.");
+          publishReactSnapshot();
+          return;
+        }
+
+        if (fixture === "create-plan-error") {
+          setWorkspaceMode("compress");
+          publishCreateWorkspaceSnapshot(
+            createWorkspace.setPlanError({ messageKey: "create.error.refreshPlan" }),
+          );
+          return;
+        }
+
+        setWorkspaceMode("extract");
+        publishArchiveSnapshot(
+          archiveWorkspace.loadFailed({
+            code: "archive_open_failed",
+            message: "Fixture error: the archive listing could not be loaded.",
+            severity: "error",
+            retryable: true,
+          }),
+        );
       },
       openSurface: (surface: "about" | "preferences" | "info") => {
         if (surface === "about") {

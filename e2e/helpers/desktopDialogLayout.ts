@@ -108,3 +108,32 @@ export async function auditDesktopDialogLayout(page: Page): Promise<void> {
     await expect(control).toBeInViewport({ ratio: 0.5 });
   }
 }
+
+export async function auditWorkspaceContentLayout(page: Page): Promise<void> {
+  const viewport = page.viewportSize();
+  if (!viewport) {
+    throw new Error("A viewport is required for workspace layout auditing.");
+  }
+
+  const layout = await page.locator("[data-workspace-content]").evaluate((region) => {
+    const element = region as HTMLElement;
+    const root = document.querySelector<HTMLElement>("#root");
+    return {
+      overflowY: window.getComputedStyle(element).overflowY,
+      documentWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      documentHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+      rootWidth: root?.scrollWidth ?? null,
+      rootHeight: root?.scrollHeight ?? null,
+    };
+  });
+
+  expect(layout.overflowY, "workspace content owns vertical overflow").toMatch(/auto|scroll/);
+  expect(layout.documentWidth, "document has no workspace horizontal overflow").toBeLessThanOrEqual(viewport.width + 2);
+  expect(layout.documentHeight, "document has no workspace vertical overflow").toBeLessThanOrEqual(viewport.height + 2);
+  if (layout.rootWidth !== null) {
+    expect(layout.rootWidth, "app root has no workspace horizontal overflow").toBeLessThanOrEqual(viewport.width + 2);
+  }
+  if (layout.rootHeight !== null) {
+    expect(layout.rootHeight, "app root has no workspace vertical overflow").toBeLessThanOrEqual(viewport.height + 2);
+  }
+}

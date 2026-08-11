@@ -2,9 +2,14 @@ import type { ArchiveFixture } from "./runtimeArchiveFixtures";
 import { localDevArchiveFixture } from "./runtimeArchiveFixtures";
 
 export type RuntimeDevDialogName = "about" | "preferences" | "info";
+export type RuntimeDevErrorSurfaceFixture =
+  | "account-notice-long-contacts"
+  | "create-plan-error"
+  | "archive-listing-error";
 export type RuntimeDevApi = Readonly<{
   loadArchiveFixture: (fixture: ArchiveFixture) => void;
   setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
+  setErrorSurfaceFixture: (fixture: RuntimeDevErrorSurfaceFixture) => void;
   openSurface: (surface: RuntimeDevDialogName) => void;
   closeModal: () => void;
 }>;

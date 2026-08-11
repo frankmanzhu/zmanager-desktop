@@ -8,13 +8,14 @@ import {
   runStartExtract,
   runTestArchive,
 } from "../api/commands";
-import type { JobKind, JobStatus, StartJobResponseDto } from "../api/types";
+import type { JobEventDto, JobKind, JobStatus, StartJobResponseDto } from "../api/types";
 import { createDisposableTaskRecoveryController } from "../app/controllers/disposableTaskRecoveryController";
 import {
   createDisposableTask,
   isLiveDisposableTask,
   reduceDisposableTask,
 } from "../app/workspaces/disposableTask";
+import type { DisposableTaskState } from "../app/workspaces/disposableTask";
 import {
   announceDisposableTaskReady,
   closeDisposableTaskWindow,
@@ -27,8 +28,13 @@ import { createTauriJobFeed } from "../desktop/jobFeed";
 import { persistDiagnosticEvent } from "../desktop/diagnostics";
 import { DisposableTaskView } from "../ui/react/tasks/DisposableTaskApp";
 import { createBrowserPasswordPromptAdapter } from "./passwordPromptAdapter";
+import { isLocalDevHost } from "./runtimeDevTools";
 
 const AUTO_CLOSE_SUCCESS_MS = 850;
+
+type DisposableTaskBootstrap = StartJobResponseDto & {
+  initialFailure: JobEventDto | null;
+};
 
 export function DisposableTaskRuntimeApp() {
   const bootstrap = disposableTaskBootstrap(globalThis.location?.search ?? "");
@@ -38,8 +44,12 @@ export function DisposableTaskRuntimeApp() {
   return <DisposableTaskRuntime bootstrap={bootstrap} />;
 }
 
-function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResponseDto }>) {
-  const [state, dispatch] = useReducer(reduceDisposableTask, bootstrap, createDisposableTask);
+function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: DisposableTaskBootstrap }>) {
+  const [state, dispatch] = useReducer(
+    reduceDisposableTask,
+    bootstrap,
+    createInitialDisposableTaskState,
+  );
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [retrying, setRetrying] = useState(false);
   const [replacementAccepted, setReplacementAccepted] = useState(false);
@@ -170,12 +180,57 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: StartJobResp
   />;
 }
 
-function disposableTaskBootstrap(search: string): StartJobResponseDto | null {
+function disposableTaskBootstrap(search: string): DisposableTaskBootstrap | null {
   const params = new URLSearchParams(search);
   const jobId = params.get("jobId")?.trim() ?? "";
   const kind = params.get("kind") as JobKind | null;
   const status = params.get("status") as JobStatus | null;
   const createdAt = params.get("createdAt")?.trim() ?? "";
   if (!jobId || !kind || !status || !createdAt) return null;
-  return { jobId, kind, status, createdAt };
+  const initialFailure =
+    import.meta.env.DEV &&
+    isLocalDevHost(true, globalThis.location?.hostname ?? "") &&
+    params.get("fixture") === "long-task-error"
+      ? longTaskErrorFixture(kind)
+      : null;
+  return { jobId, kind, status, createdAt, initialFailure };
+}
+
+function createInitialDisposableTaskState(
+  bootstrap: DisposableTaskBootstrap,
+): DisposableTaskState {
+  const base = createDisposableTask({
+    ...bootstrap,
+    status: bootstrap.initialFailure ? "queued" : bootstrap.status,
+  });
+  if (!bootstrap.initialFailure) {
+    return base;
+  }
+
+  return reduceDisposableTask(base, {
+    type: "jobUpdated",
+    snapshot: {
+      ...base.job,
+      revision: "1",
+      status: "failed",
+      updatedAt: bootstrap.createdAt,
+      canPause: false,
+      canResume: false,
+      canCancel: false,
+      canDismiss: true,
+      latestFailure: bootstrap.initialFailure,
+    },
+  });
+}
+
+function longTaskErrorFixture(kind: JobKind): JobEventDto {
+  return {
+    eventType: "failed",
+    jobKind: kind,
+    code: "fixture_long_task_error",
+    severity: "error",
+    retryable: false,
+    message: "Fixture error: the archive task failed after validation.",
+    hint: `Diagnostic detail: ${"path component mismatch; archive metadata remained bounded; ".repeat(80)}`,
+  };
 }

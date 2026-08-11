@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   auditDesktopDialogLayout,
+  auditWorkspaceContentLayout,
   measureDesktopDialogLayout,
 } from "./helpers/desktopDialogLayout";
 
@@ -802,6 +803,32 @@ test("Account modal keeps its tab content inside the shared shell", async ({ pag
   await auditDesktopDialogLayout(page);
 });
 
+test("error-surface fixtures cover account, create, and archive ownership", async ({ page }) => {
+  await page.setViewportSize({ width: 760, height: 540 });
+
+  await setErrorSurfaceFixture(page, "account-notice-long-contacts");
+  const accountDialog = page.getByRole("dialog", { name: /TZAP Account & Identity/ });
+  await expect(accountDialog).toBeVisible();
+  await expect(accountDialog.getByRole("status")).toContainText("Fixture notice");
+  await accountDialog.getByRole("tab", { name: /Contacts & Keys/ }).click();
+  await expect(accountDialog.getByText(/Fixture contact 18/)).toBeVisible();
+  await auditDesktopDialogLayout(page);
+  await accountDialog.getByRole("button", { name: "Close account" }).click();
+  await expect(accountDialog).toBeHidden();
+
+  await setErrorSurfaceFixture(page, "create-plan-error");
+  await expect(page.locator("#create-plan-summary")).toHaveAttribute("role", "alert");
+  await expect(page.locator("#create-plan-summary")).toContainText("Refresh the plan");
+  await expect(page.locator("[data-dialog-surface]")).toHaveCount(0);
+  await auditWorkspaceContentLayout(page);
+
+  await setErrorSurfaceFixture(page, "archive-listing-error");
+  await expect(page.locator("#browse-message")).toHaveAttribute("role", "alert");
+  await expect(page.locator("#browse-message")).toContainText("Fixture error");
+  await expect(page.locator("[data-dialog-surface]")).toHaveCount(0);
+  await auditWorkspaceContentLayout(page);
+});
+
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 700 });
   await expect(page.locator("#create-format")).toBeVisible();
@@ -894,6 +921,18 @@ async function loadArchiveWithIcons(page: Page) {
 
 async function openDevSurface(page: Page, surface: "about" | "preferences" | "info") {
   await page.evaluate((surfaceName) => window.__zmanagerDev?.openSurface(surfaceName), surface);
+}
+
+async function setErrorSurfaceFixture(
+  page: Page,
+  fixture: "account-notice-long-contacts" | "create-plan-error" | "archive-listing-error",
+) {
+  await page.evaluate((fixtureName) => {
+    const dev = window.__zmanagerDev as unknown as {
+      setErrorSurfaceFixture?: (name: string) => void;
+    };
+    dev.setErrorSurfaceFixture?.(fixtureName);
+  }, fixture);
 }
 
 async function closeDevSurface(page: Page) {

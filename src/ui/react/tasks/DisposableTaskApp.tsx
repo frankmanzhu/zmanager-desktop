@@ -86,7 +86,7 @@ export function DisposableTaskView({
     && isPasswordErrorCode(failedEvent?.code);
 
   return (
-    <main className="flex min-h-screen min-w-0 max-w-full flex-col overflow-hidden bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
+    <main className="flex min-h-screen min-w-0 max-w-full h-screen max-h-screen flex-col overflow-hidden bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
       <header className="flex items-start justify-between border-b border-black/10 px-5 py-4 dark:border-white/10">
         <div className="flex min-w-0 items-center gap-3">
           <div className="rounded-xl bg-blue-600 p-2.5 text-white shadow-sm">
