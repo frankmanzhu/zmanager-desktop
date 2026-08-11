@@ -166,6 +166,17 @@ function Install-WingetPackage {
     ) + $ExtraArguments)
 }
 
+function Test-Node24 {
+    param([string]$NodePath)
+
+    try {
+        $version = (& $NodePath --version 2>$null | Select-Object -First 1).Trim()
+        return $version -match '^v24\.'
+    } catch {
+        return $false
+    }
+}
+
 function Resolve-NodeCommand {
     param([string]$RequestedNodePath)
 
@@ -173,11 +184,15 @@ function Resolve-NodeCommand {
         if (-not (Test-Path $RequestedNodePath)) {
             throw "Node executable was not found: $RequestedNodePath"
         }
-        return (Resolve-Path $RequestedNodePath).Path
+        $requested = (Resolve-Path $RequestedNodePath).Path
+        if (-not (Test-Node24 -NodePath $requested)) {
+            throw "Node.js 24 is required. The requested executable is not Node 24: $requested"
+        }
+        return $requested
     }
 
     $node = Resolve-OptionalCommand -Names @("node.exe", "node")
-    if ($node) {
+    if ($node -and (Test-Node24 -NodePath $node)) {
         return $node
     }
 
@@ -186,7 +201,7 @@ function Resolve-NodeCommand {
         (Join-Path ${env:ProgramFiles(x86)} "nodejs\node.exe"),
         (Join-Path $env:LOCALAPPDATA "Programs\nodejs\node.exe")
     )
-    if ($node) {
+    if ($node -and (Test-Node24 -NodePath $node)) {
         return $node
     }
 
@@ -201,7 +216,7 @@ function Resolve-NodeCommand {
         (Join-Path ${env:ProgramFiles(x86)} "nodejs\node.exe"),
         (Join-Path $env:LOCALAPPDATA "Programs\nodejs\node.exe")
     )
-    if ($node) {
+    if ($node -and (Test-Node24 -NodePath $node)) {
         return $node
     }
 
@@ -420,7 +435,8 @@ Invoke-Step "Check native build tools" {
 Invoke-Step "Check Node.js" {
     $script:resolvedNodePath = Resolve-NodeCommand -RequestedNodePath $NodePath
     $script:npmCommand = Resolve-NpmCommand -ResolvedNodePath $script:resolvedNodePath
-    Write-Host "Node found: $script:resolvedNodePath"
+    $nodeVersion = (& $script:resolvedNodePath --version).Trim()
+    Write-Host "Node found: $script:resolvedNodePath ($nodeVersion)"
     Write-Host "npm found: $script:npmCommand"
 }
 

@@ -281,10 +281,11 @@ if ((rust_major < 1 || (rust_major == 1 && rust_minor < 85))); then
 fi
 
 node_major="$(version_major node)"
-if ((!skip_tests && node_major < 24)); then
-  echo "Node.js 24 or newer is required to run the current frontend tests." >&2
+echo "Using Node.js: $(node --version)"
+if ((node_major != 24)); then
+  echo "Node.js 24 is required for the release build." >&2
   echo "Current node: $(node --version)" >&2
-  echo "Use --skip-tests for packaging-only builds, or install Node.js 24+." >&2
+  echo "Install Node.js 24 or ensure actions/setup-node is first on PATH." >&2
   exit 1
 fi
 
