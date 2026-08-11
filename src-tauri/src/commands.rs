@@ -2332,7 +2332,7 @@ pub(crate) fn map_raw_stream_error(error: RawStreamError) -> CommandErrorDto {
     }
 }
 
-fn map_rar_error(error: RarBackendError) -> CommandErrorDto {
+pub(crate) fn map_rar_error(error: RarBackendError) -> CommandErrorDto {
     match error {
         RarBackendError::Io { path, source } => {
             map_io_error(path.to_string_lossy().to_string(), source)
