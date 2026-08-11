@@ -56,10 +56,19 @@ export function DesktopDialog({
     return () => {
       window.cancelAnimationFrame(frame);
       const returnFocusTarget = returnFocusRef.current;
-      if (!returnFocusTarget?.isConnected || returnFocusTarget.closest("[hidden], #context-menu")) {
+      const closedMenuSummary = returnFocusTarget
+        ?.closest("details:not([open])")
+        ?.querySelector<HTMLElement>("summary");
+      const target = returnFocusTarget?.isConnected &&
+        !returnFocusTarget.closest("[hidden], #context-menu, details:not([open])")
+        ? returnFocusTarget
+        : closedMenuSummary?.isConnected
+          ? closedMenuSummary
+          : null;
+      if (!target) {
         return;
       }
-      window.requestAnimationFrame(() => returnFocusTarget.focus());
+      window.requestAnimationFrame(() => target.focus());
     };
   }, []);
 

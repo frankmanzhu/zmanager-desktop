@@ -60,6 +60,39 @@ describe("DesktopDialog", () => {
     launcher.remove();
   });
 
+  it("falls back to a closed menu summary when the launcher is no longer focusable", () => {
+    const menu = document.createElement("details");
+    menu.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = "Tools";
+    const launcher = document.createElement("button");
+    menu.append(summary, launcher);
+    document.body.append(menu);
+    launcher.focus();
+    const requestAnimationFrame = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 0;
+      });
+
+    const view = render(
+      createElement(DesktopDialog, {
+        titleId: "dialog-title",
+        header: createElement("h2", { id: "dialog-title" }, "Title"),
+        content: createElement("p", null, "Body"),
+        onEscape() {},
+      }),
+    );
+
+    menu.open = false;
+    view.unmount();
+
+    expect(document.activeElement).toBe(summary);
+    requestAnimationFrame.mockRestore();
+    menu.remove();
+  });
+
   it("focuses and reveals the first invalid control in its owned region", () => {
     const region = document.createElement("div");
     const control = document.createElement("input");

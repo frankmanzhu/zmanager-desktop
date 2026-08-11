@@ -99,7 +99,7 @@ function dialogReturnFocusElement(
     return null;
   }
 
-  if (element.closest("[hidden], #context-menu")) {
+  if (element.closest("[hidden], #context-menu, details:not([open])")) {
     return null;
   }
 
