@@ -40,6 +40,11 @@ import { InfoTip } from "../../components/ui/info-tip";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { CompressionLevelSelect } from "../create/CompressionLevelSelect";
+import { DesktopDialog } from "../dialogs/DesktopDialog";
+import {
+  fieldValidationProps,
+  FieldMessage,
+} from "../../components/ui/field-message";
 
 type PreferencePage =
   "folders" | "archive" | "columns" | "extraction" | "interface" | "safety" | "advanced";
@@ -124,24 +129,13 @@ export function PreferencesDialog() {
     customOutputSelected && !draft.customOutputFolderPath.trim();
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/40 p-6 backdrop-blur-[2px]"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          actions.handleDialogIntent({ type: "preferencesCancel" });
-        }
-      }}
-    >
-      <section
-        className="grid h-[min(780px,calc(100vh-48px))] w-[min(1040px,calc(100vw-48px))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="preferences-title"
-        tabIndex={-1}
-        autoFocus
-      >
-        <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-7 py-5 dark:border-slate-800">
+    <DesktopDialog
+      titleId="preferences-title"
+      descriptionId="preferences-description"
+      widthClassName="w-[min(1040px,calc(100vw-48px))]"
+      minHeightClassName="min-h-[min(780px,calc(100vh-48px))]"
+      header={
+        <div className="flex items-start justify-between gap-6 border-b border-slate-200 px-7 py-5 dark:border-slate-800">
           <div>
             <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
               <Sparkles className="size-3.5" />
@@ -153,7 +147,10 @@ export function PreferencesDialog() {
             >
               {i18n.t("preferences.title")}
             </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p
+              id="preferences-description"
+              className="mt-1 text-sm text-slate-500 dark:text-slate-400"
+            >
               {i18n.t("preferences.description")}
             </p>
           </div>
@@ -170,8 +167,10 @@ export function PreferencesDialog() {
           >
             <X className="size-4" />
           </Button>
-        </header>
-        <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] max-md:grid-cols-1">
+        </div>
+      }
+      content={
+        <div className="grid grid-cols-[220px_minmax(0,1fr)] max-md:grid-cols-1">
           <nav
             className="flex flex-col gap-1 border-r border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/45 max-md:flex-row max-md:overflow-x-auto max-md:border-b max-md:border-r-0"
             aria-label="Preference categories"
@@ -189,7 +188,7 @@ export function PreferencesDialog() {
               </PreferenceNavigationButton>
             ))}
           </nav>
-          <div className="min-h-0 overflow-y-auto bg-slate-50/35 px-7 py-6 dark:bg-slate-950">
+          <div className="bg-slate-50/35 px-7 py-6 dark:bg-slate-950">
             <div className="mx-auto max-w-3xl">
               <FoldersPage
                 draft={draft}
@@ -222,14 +221,14 @@ export function PreferencesDialog() {
                 id="preferences-status"
                 className={`mt-6 rounded-xl border px-4 py-3 text-xs ${customOutputMissing ? "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200" : "border-slate-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400"}`}
               >
-                {customOutputMissing
-                  ? i18n.t("preferences.validation.customOutputRequired")
-                  : i18n.t("preferences.status.localOnly")}
+                {i18n.t("preferences.status.localOnly")}
               </p>
             </div>
           </div>
         </div>
-        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-7 py-4 dark:border-slate-800 dark:bg-slate-950">
+      }
+      footer={
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-7 py-4 dark:border-slate-800 dark:bg-slate-950">
           <Button
             id="preferences-cancel"
             type="button"
@@ -253,9 +252,11 @@ export function PreferencesDialog() {
           >
             {i18n.t("common.save")}
           </Button>
-        </footer>
-      </section>
-    </div>
+        </div>
+      }
+      onEscape={() => actions.handleDialogIntent({ type: "preferencesCancel" })}
+      revealFirstInvalidControl={customOutputMissing}
+    />
   );
 }
 
@@ -352,8 +353,10 @@ function FoldersPage({
               id="pref-custom-output"
               className="path-input"
               type="text"
-              aria-describedby="pref-custom-output-help pref-custom-output-validation"
-              aria-invalid={customOutputMissing}
+              {...fieldValidationProps(customOutputMissing, [
+                "pref-custom-output-help",
+                "pref-custom-output-validation",
+              ])}
               placeholder={i18n.t("preferences.folders.customPlaceholder")}
               value={customOutputDisplay}
               title={draft.customOutputFolderPath}
@@ -383,20 +386,14 @@ function FoldersPage({
           <p id="pref-custom-output-help" className={SETTING_DESCRIPTION_CLASS}>
             {i18n.t("preferences.folders.customHelp")}
           </p>
-          <p
+          <FieldMessage
             id="pref-custom-output-validation"
-            className={
+            error={
               customOutputMissing
-                ? "setting-validation status-error"
-                : "setting-validation"
+                ? i18n.t("preferences.validation.customOutputRequired")
+                : null
             }
-            aria-live="polite"
-            hidden={!customOutputMissing}
-          >
-            {customOutputMissing
-              ? i18n.t("preferences.validation.customOutputRequired")
-              : ""}
-          </p>
+          />
         </div>
       </div>
       <div className="mt-4 rounded-lg border border-black/10 bg-black/[0.025] p-3 dark:border-white/10 dark:bg-white/[0.035]">

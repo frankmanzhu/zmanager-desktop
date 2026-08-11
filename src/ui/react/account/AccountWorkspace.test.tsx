@@ -28,6 +28,11 @@ describe("AccountWorkspace", () => {
       ),
     );
     expect(html).toContain("TZAP Account &amp; Identity");
+    expect(html).toContain('data-dialog-surface="true"');
+    expect(html).toContain('data-dialog-content="true"');
+    expect(html).toContain('id="account-description"');
+    expect(html).toContain('data-account-tab-navigation="true"');
+    expect(html).toContain("sticky top-0");
     expect(html).toContain(
       "Local offline mode · Encryption &amp; signing identities operational",
     );
@@ -36,6 +41,44 @@ describe("AccountWorkspace", () => {
     expect(html).toContain("Import existing P12/PFX identity");
     expect(html).not.toContain("Export P12");
     expect(html).not.toContain("access_token");
+  });
+
+  it("keeps a notice and long Contacts content inside the shared bounded surface", () => {
+    const initial = createInitialZManagerReactSnapshot();
+    const store = createZManagerAppStore(
+      {
+        ...initial,
+        account: {
+          ...initial.account,
+          visible: true,
+          notice: "Identity data is available from the local cache.",
+          contacts: [
+            {
+              contactId: "contact-long",
+              displayName: "A contact with a deliberately long display name for compact windows",
+              signingCertificateSha256: "sha256:certificate",
+              recipientPublicKeyFingerprint: "sha256:recipient",
+              verificationState: "verified",
+              missingStatusCaveat: false,
+            },
+          ],
+        },
+      },
+      noopZManagerReactActions,
+    );
+    const html = renderToStaticMarkup(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store },
+        createElement<AccountWorkspaceProps>(AccountWorkspace, { defaultTab: "contacts" }),
+      ),
+    );
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Identity data is available from the local cache.");
+    expect(html).toContain("A contact with a deliberately long display name");
+    expect(html).toContain('data-dialog-content="true"');
+    expect(html).not.toContain('class="fixed h-[620px]');
   });
 
   it("separates retired recipient keys from active keys after retirement", () => {

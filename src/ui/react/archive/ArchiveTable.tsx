@@ -98,6 +98,7 @@ export function ArchiveTable() {
       <p
         id="browse-message"
         className={archiveStatusClassName(archive.browseState)}
+        role={archive.browseState === "error" ? "alert" : undefined}
       >
         {archive.status.fallbackText ??
           i18n.t(archive.status.key, archive.status.values)}

@@ -1095,6 +1095,13 @@ function CreateOptions() {
   }, [options.format, password]);
 
   const capabilities = createFormatCapabilities(options.format);
+  const planStatus = snapshot.create.plan.status;
+  const planHasError =
+    snapshot.create.plan.state === "error" && planStatus !== null;
+  const planStatusText = planStatus
+    ? planStatus.fallbackText ??
+      (planStatus.messageKey ? i18n.t(planStatus.messageKey) : "")
+    : "";
   const volumeSizeChoices =
     options.volumeSize !== null &&
     !snapshot.preferences.volumeSizePresets.includes(options.volumeSize)
@@ -1106,6 +1113,7 @@ function CreateOptions() {
   return (
     <aside
       id="details-pane"
+      data-workspace-content
       className="min-h-0 min-w-[220px] overflow-x-hidden overflow-y-auto bg-slate-50/70 pb-5 dark:bg-slate-950/70"
       aria-label={i18n.t("workspace.details.aria")}
     >
@@ -1133,9 +1141,12 @@ function CreateOptions() {
         </div>
         <div
           id="create-plan-summary"
-          className="mb-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-400"
+          className={`mb-3 rounded-xl border px-3 py-2.5 text-[11px] shadow-sm ${planHasError ? "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" : "border-slate-200 bg-white text-slate-500 dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-400"}`}
+          role={planHasError ? "alert" : undefined}
         >
-          {snapshot.create.inclusion.filteredPlan ? (
+          {planHasError ? (
+            <p>{planStatusText}</p>
+          ) : snapshot.create.inclusion.filteredPlan ? (
             <p>
               {i18n.t("create.status.ready", {
                 count: snapshot.create.inclusion.filteredPlan.includedCount,

@@ -57,6 +57,8 @@ describe("DialogRoot", () => {
     });
 
     expect(html).toContain('role="dialog"');
+    expect(html).toContain("data-dialog-surface");
+    expect(html).toContain("data-dialog-content");
     expect(html).toContain('id="extract-destination"');
     expect(html).toContain('id="extract-start"');
     expect(html).not.toContain("passwordValue");
@@ -127,5 +129,26 @@ describe("DialogRoot", () => {
     expect(html).toContain('data-diagnostics-group="true"');
     expect(html).toContain("browser preview");
     expect(html).toContain('id="copy-diagnostics"');
+  });
+
+  it("keeps the shared shell header and footer outside its primary content owner", () => {
+    const html = renderDialog({
+      kind: "info",
+      title: "Entry Info",
+      description: "Details",
+      sectionTitle: "Metadata",
+      rows: [],
+      actions: [],
+      returnFocusPath: "",
+    });
+
+    const contentStart = html.indexOf("data-dialog-content");
+    const headerEnd = html.indexOf("info-dialog-body");
+    const footerStart = html.indexOf("info-action-group");
+    expect(contentStart).toBeGreaterThan(-1);
+    expect(headerEnd).toBeGreaterThan(contentStart);
+    expect(footerStart).toBeGreaterThan(headerEnd);
+    expect(html).toContain('aria-labelledby="info-title"');
+    expect(html).toContain('aria-describedby="info-description"');
   });
 });

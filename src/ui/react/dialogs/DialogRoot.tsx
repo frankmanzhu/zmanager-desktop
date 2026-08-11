@@ -15,6 +15,7 @@ import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerDialogSnapshot } from "../appRuntime";
 import { PreferencesDialog } from "../preferences/PreferencesDialog";
 import { translatorForSnapshot } from "../shell/shellHelpers";
+import { DesktopDialog } from "./DesktopDialog";
 
 export function DialogRoot() {
   const snapshot = useZManagerSnapshot();
@@ -46,18 +47,6 @@ export function DialogRoot() {
   }
 
   return null;
-}
-
-function useDialogSurfaceFocus<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-
-  useEffect(() => {
-    ref.current?.focus();
-    const frame = window.requestAnimationFrame(() => ref.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  return ref;
 }
 
 function useDialogFocusRestoration(
@@ -154,34 +143,21 @@ function InfoDialog({
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const dialogRef = useDialogSurfaceFocus<HTMLElement>();
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/40 p-6 backdrop-blur-[2px]"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          actions.handleDialogIntent({ type: "closeCurrent" });
-        }
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="grid max-h-[calc(100vh-48px)] w-[min(720px,calc(100vw-48px))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="info-title"
-        tabIndex={-1}
-        autoFocus
-      >
+    <DesktopDialog
+      titleId="info-title"
+      descriptionId="info-description"
+      header={
         <div className="flex items-start justify-between gap-5 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
           <div>
             <h2 id="info-title">{dialog.title}</h2>
             <p id="info-description">{dialog.description}</p>
           </div>
         </div>
-        <div className="min-h-0 overflow-y-auto bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
+      }
+      content={
+        <div className="bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
           <div id="info-dialog-body" className="grid gap-3">
             <section className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
               <h3>{dialog.sectionTitle}</h3>
@@ -208,6 +184,8 @@ function InfoDialog({
             </section>
           </div>
         </div>
+      }
+      footer={
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
           <div id="info-action-group" className="flex flex-wrap gap-2">
             {dialog.actions.map((action) => (
@@ -242,8 +220,9 @@ function InfoDialog({
             {i18n.t("common.close")}
           </Button>
         </div>
-      </section>
-    </div>
+      }
+      onEscape={() => actions.handleDialogIntent({ type: "closeCurrent" })}
+    />
   );
 }
 
@@ -253,32 +232,18 @@ function AboutDialog({
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const dialogRef = useDialogSurfaceFocus<HTMLElement>();
   const [copied, setCopied] = useState(false);
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/40 p-6 backdrop-blur-[2px]"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          actions.handleDialogIntent({ type: "closeCurrent" });
-        }
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="grid max-h-[calc(100vh-48px)] w-[min(920px,calc(100vw-48px))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="about-title"
-        tabIndex={-1}
-        autoFocus
-      >
+    <DesktopDialog
+      titleId="about-title"
+      descriptionId="about-description"
+      widthClassName="w-[min(920px,calc(100vw-48px))]"
+      header={
         <div className="flex items-start justify-between gap-5 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
           <div>
             <h2 id="about-title">{dialog.title}</h2>
-            <p>{i18n.t("about.description")}</p>
+            <p id="about-description">{i18n.t("about.description")}</p>
           </div>
           <Button
             id="about-dialog-close"
@@ -292,7 +257,9 @@ function AboutDialog({
             {i18n.t("common.close")}
           </Button>
         </div>
-        <div className="min-h-0 overflow-y-auto bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
+      }
+      content={
+        <div className="bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
           <div id="about-diagnostics" className="grid gap-3">
             {dialog.groups.map((group) => (
               <section
@@ -313,6 +280,8 @@ function AboutDialog({
             ))}
           </div>
         </div>
+      }
+      footer={
         <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
           <Button
             id="copy-diagnostics"
@@ -337,8 +306,9 @@ function AboutDialog({
             {i18n.t("common.close")}
           </Button>
         </div>
-      </section>
-    </div>
+      }
+      onEscape={() => actions.handleDialogIntent({ type: "closeCurrent" })}
+    />
   );
 }
 
@@ -348,7 +318,6 @@ function ExtractDialog({
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const dialogRef = useDialogSurfaceFocus<HTMLElement>();
   const destinationRef = useRef<HTMLInputElement | null>(null);
   const [destination, setDestination] = useState(dialog.destination);
   const [useSubfolder, setUseSubfolder] = useState(dialog.useSubfolder);
@@ -430,25 +399,11 @@ function ExtractDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/40 p-6 backdrop-blur-[2px]"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          actions.handleDialogIntent({ type: "closeCurrent" });
-        }
-      }}
-    >
-      <section
-        ref={dialogRef}
-        className="grid max-h-[calc(100vh-48px)] w-[min(720px,calc(100vw-48px))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="extract-title"
-        tabIndex={-1}
-        autoFocus
-      >
-        <header className="flex items-start justify-between gap-5 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
+    <DesktopDialog
+      titleId="extract-title"
+      descriptionId="extract-dialog-message"
+      header={
+        <div className="flex items-start justify-between gap-5 border-b border-slate-200 px-6 py-5 dark:border-slate-800">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400">
               <FolderOutput className="size-4" />
@@ -478,8 +433,10 @@ function ExtractDialog({
           >
             <X className="size-4" />
           </Button>
-        </header>
-        <div className="min-h-0 space-y-4 overflow-y-auto bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
+        </div>
+      }
+      content={
+        <div className="space-y-4 bg-slate-50/40 px-6 py-5 dark:bg-slate-950">
           <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/70 [&>label]:grid [&>label]:gap-1.5 [&>label>span]:text-xs [&>label>span]:font-semibold">
             <div className="flex items-center gap-2">
               <div className="rounded-lg bg-blue-50 p-2 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
@@ -782,7 +739,9 @@ function ExtractDialog({
             </div>
           </details>
         </div>
-        <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+      }
+      footer={
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
           <Button
             id="extract-cancel"
             variant="dialog"
@@ -811,9 +770,10 @@ function ExtractDialog({
           >
             {dialog.startLabel}
           </Button>
-        </footer>
-      </section>
-    </div>
+        </div>
+      }
+      onEscape={() => actions.handleDialogIntent({ type: "closeCurrent" })}
+    />
   );
 }
 

@@ -7,6 +7,7 @@ import { SessionStatus } from "./SessionStatus";
 import { CertificatesTab } from "./CertificatesTab";
 import { ContactsTab } from "./ContactsTab";
 import { DeviceTab } from "./DeviceTab";
+import { DesktopDialog } from "../dialogs/DesktopDialog";
 
 export type AccountWorkspaceProps = {
   defaultTab?: string;
@@ -28,26 +29,13 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
     : activeTab;
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-6 backdrop-blur-sm transition-opacity"
-      role="presentation"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          actions.handleAccountIntent({ type: "close" });
-        }
-      }}
-    >
-      <section
-        className="flex h-[620px] max-h-[calc(100vh-64px)] w-[min(920px,calc(100vw-48px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="account-title"
-        tabIndex={-1}
-        autoFocus
-      >
-        {/* Header */}
-        <header className="flex items-center gap-3.5 border-b border-slate-200/80 bg-slate-50/50 px-6 py-4 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/40">
+    <DesktopDialog
+      titleId="account-title"
+      descriptionId="account-description"
+      widthClassName="w-[min(920px,calc(100vw-48px))]"
+      minHeightClassName="min-h-[min(620px,calc(100vh-48px))]"
+      header={
+        <div className="flex items-center gap-3.5 border-b border-slate-200/80 bg-slate-50/50 px-6 py-4 backdrop-blur dark:border-slate-800/80 dark:bg-slate-900/40">
           <div className="grid size-9 place-items-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
             <UserRound className="size-5" />
           </div>
@@ -55,7 +43,7 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
             <h2 id="account-title" className="text-base font-semibold tracking-tight">
               TZAP Account &amp; Identity
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p id="account-description" className="text-xs text-slate-500 dark:text-slate-400">
               {isSignedIn
                 ? `Authenticated as ${snapshot.displayName || "Signed In Account"}`
                 : "Local offline mode · Encryption & signing identities operational"}
@@ -93,10 +81,10 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
               <X className="size-4" />
             </Button>
           </div>
-        </header>
-
-        {/* Workspace Body */}
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+        </div>
+      }
+      content={
+        <div className="flex flex-col bg-white dark:bg-slate-950">
           {snapshot.notice ? (
             <div
               className="mx-6 mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900 shadow-sm dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
@@ -107,8 +95,11 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
             </div>
           ) : null}
           
-          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="flex flex-1 flex-col min-h-0">
-            <div className="border-b border-slate-200/80 px-6 pt-3 dark:border-slate-800/80">
+          <Tabs value={effectiveTab} onValueChange={setActiveTab} className="flex flex-col">
+            <div
+              data-account-tab-navigation
+              className="sticky top-0 z-10 border-b border-slate-200/80 bg-white px-6 pt-3 dark:border-slate-800/80 dark:bg-slate-950"
+            >
               <TabsList className="h-10 w-fit justify-start gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
                 {isSignedIn ? (
                   <TabsTrigger
@@ -148,7 +139,7 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
               </TabsList>
             </div>
             
-            <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            <div className="p-6">
               {effectiveTab === "session" && isSignedIn ? (
                 <TabsContent value="session" className="m-0 border-none p-0 outline-none">
                   <SessionStatus />
@@ -175,7 +166,8 @@ export function AccountWorkspace({ defaultTab }: AccountWorkspaceProps = {}) {
             </div>
           </Tabs>
         </div>
-      </section>
-    </div>
+      }
+      onEscape={() => actions.handleAccountIntent({ type: "close" })}
+    />
   );
 }

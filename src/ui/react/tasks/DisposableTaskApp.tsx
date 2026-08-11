@@ -22,6 +22,7 @@ import {
 } from "../../../app/workspaces/disposableTask";
 import { formatBytes } from "../../../app/formatting";
 import { Button } from "../../components/ui/button";
+import { ErrorDetailsPanel } from "../../components/ui/error-details-panel";
 import { HelpTooltip } from "../../components/ui/tooltip";
 
 export function DisposableTaskView({
@@ -67,6 +68,12 @@ export function DisposableTaskView({
       : "Extracting with ZManager";
   const subtitle = taskKindLabel(state.job.kind);
   const failedEvent = state.job.latestFailure;
+  const failureMessage =
+    failedEvent?.message || "The archive job could not be completed.";
+  const failureDetail = [failedEvent?.message, failedEvent?.hint]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join("\n");
+  const hasLongFailureDetail = failureDetail.length > 180;
   const artifacts = new Map(
     state.job.outputArtifacts.map((artifact) => [artifact.artifactId, artifact]),
   );
@@ -105,7 +112,7 @@ export function DisposableTaskView({
         </Button>
       </header>
 
-      <section className="grid min-w-0 flex-1 content-start gap-5 overflow-hidden px-5 py-5">
+      <section className="grid min-h-0 min-w-0 flex-1 content-start gap-5 overflow-y-auto px-5 py-5">
         {surfaceError ? (
           <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200">
             {surfaceError}
@@ -156,12 +163,17 @@ export function DisposableTaskView({
         </div>
 
         {state.phase === "failed" ? (
-          <div className="rounded-xl border border-red-500/25 bg-red-500/[0.07] p-3 text-sm text-red-800 dark:text-red-200">
+          <div
+            className="grid gap-2 rounded-xl border border-red-500/25 bg-red-500/[0.07] p-3 text-sm text-red-800 dark:text-red-200"
+            role="alert"
+          >
             <strong className="block">Task failed</strong>
-            <span>
-              {failedEvent?.message ||
-                "The archive job could not be completed."}
-            </span>
+            <span>{failureMessage}</span>
+            {hasLongFailureDetail ? (
+              <ErrorDetailsPanel>{failureDetail}</ErrorDetailsPanel>
+            ) : failedEvent?.hint ? (
+              <span className="text-xs leading-5">{failedEvent.hint}</span>
+            ) : null}
           </div>
         ) : null}
         {state.closePromptOpen ? (

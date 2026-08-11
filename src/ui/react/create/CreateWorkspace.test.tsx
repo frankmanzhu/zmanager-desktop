@@ -54,6 +54,27 @@ describe("React create workspace", () => {
     expect(html).not.toContain('<option value="5">5</option>');
   });
 
+  it("renders an error-valued plan status as a bounded workspace alert", () => {
+    const snapshot = createSnapshot();
+    const html = renderCreateWorkspace({
+      ...snapshot,
+      create: {
+        ...snapshot.create,
+        plan: {
+          ...snapshot.create.plan,
+          state: "error",
+          status: { messageKey: "create.error.refreshPlan" },
+        },
+      },
+    });
+
+    expect(html).toContain('data-workspace-content="true"');
+    expect(html).toContain('id="create-plan-summary"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Refresh the plan before creating.");
+    expect(html).not.toContain("<dialog");
+  });
+
   it("labels the compress workspace from the destination archive name", () => {
     const html = renderCreateWorkspace(
       createSnapshot("tarZst", undefined, "C:/abc/abc.zip"),

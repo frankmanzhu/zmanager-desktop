@@ -36,6 +36,7 @@ describe("React archive workspace", () => {
     expect(html).toContain('data-entry-path="docs/readme.txt"');
     expect(html).toContain('data-column-id="name"');
     expect(html).toContain('id="details-content"');
+    expect(html).toContain('data-workspace-content="true"');
     expect(html).toContain('id="extract-path-mode"');
     expect(html).toContain('id="extract-overwrite"');
     expect(html).toContain('id="extract-password"');
@@ -70,6 +71,25 @@ describe("React archive workspace", () => {
     expect(html).toMatch(/data-empty-action="open-archive"[^>]*disabled=""/);
     expect(html).toMatch(/data-details-action="open-archive"[^>]*disabled=""/);
     expect(html).toContain(ARCHIVE_NOT_READY_MESSAGE);
+  });
+
+  it("announces archive listing failures as pane-owned alerts", () => {
+    const workspace = createArchiveWorkspace();
+    const snapshot = workspace.loadFailed({
+      code: "archive_open_failed",
+      message: "The archive could not be opened.",
+      severity: "error",
+      retryable: false,
+    });
+    const html = renderArchiveWorkspace(
+      createZManagerReactSnapshot({
+        ...createInitialZManagerReactSnapshot(),
+        archive: snapshot,
+      }),
+    );
+
+    expect(html).toMatch(/id="browse-message"[^>]*role="alert"/);
+    expect(html).toContain("The archive could not be opened.");
   });
 });
 

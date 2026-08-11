@@ -45,6 +45,7 @@ export function ArchiveDetailsPane() {
   return (
     <aside
       id="details-pane"
+      data-workspace-content
       className="min-h-0 min-w-[220px] overflow-x-hidden overflow-y-auto bg-slate-50/70 dark:bg-slate-950/70"
       aria-label={i18n.t("workspace.details.aria")}
     >

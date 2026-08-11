@@ -112,6 +112,20 @@ const dialogRootSource = normalizedWorkspaceFile(
   "dialogs",
   "DialogRoot.tsx",
 );
+const desktopDialogSource = normalizedWorkspaceFile(
+  "src",
+  "ui",
+  "react",
+  "dialogs",
+  "DesktopDialog.tsx",
+);
+const accountWorkspaceSource = normalizedWorkspaceFile(
+  "src",
+  "ui",
+  "react",
+  "account",
+  "AccountWorkspace.tsx",
+);
 const appRuntimeSource = normalizedWorkspaceFile(
   "src",
   "ui",
@@ -887,7 +901,9 @@ describe("GUI layout contracts", () => {
     expect(paneResizerSource).not.toContain("document.");
     expect(archiveTableSource).toContain("table-fixed");
     expect(createWorkspaceSource).toContain("table-fixed");
-    expect(dialogRootSource).toContain("max-h-[calc(100vh-48px)]");
+    expect(desktopDialogSource).toContain("data-dialog-surface");
+    expect(desktopDialogSource).toContain("data-dialog-content");
+    expect(desktopDialogSource).toContain("max-h-[calc(100vh-48px)]");
     expect(contextMenuRootSource).toContain("<PopoverContent");
   });
 
@@ -897,7 +913,14 @@ describe("GUI layout contracts", () => {
     expect(createWorkspaceSource).toContain("data-compress-path");
     expect(createWorkspaceSource).toContain("data-compress-include");
     expect(workspacePathBarSource).toContain('role="search"');
-    expect(dialogRootSource).toContain('role="dialog"');
+    expect(desktopDialogSource).toContain('role="dialog"');
+    expect(dialogRootSource).toContain('from "./DesktopDialog"');
+    expect(preferencesDialogSource).toContain('from "../dialogs/DesktopDialog"');
+    expect(accountWorkspaceSource).toContain('from "../dialogs/DesktopDialog"');
+    expect(dialogRootSource).not.toMatch(/\sh-\[min\(/);
+    expect(preferencesDialogSource).not.toMatch(/\sh-\[min\(780px/);
+    expect(accountWorkspaceSource).not.toContain("h-[620px]");
+    expect(desktopDialogSource).toContain("overflow-y-auto");
     expect(dropOverlaySource).toContain('id="drop-overlay"');
     expect(dropOverlaySource).toContain("data-drop-choice");
     expect(archiveDetailsPaneSource).toContain("data-details-action");

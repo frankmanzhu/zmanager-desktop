@@ -20,6 +20,8 @@ describe("React preferences dialog", () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('id="preferences-title"');
+    expect(html).toContain('data-dialog-surface="true"');
+    expect(html).toContain('data-dialog-content="true"');
     expect(html).toContain('data-pref-page-target="folders"');
     expect(html).toContain('data-pref-page="folders"');
     expect(html).toContain('id="pref-output-location"');
@@ -107,6 +109,12 @@ describe("React preferences dialog", () => {
     expect(html).toContain('id="preferences-save" type="button" disabled=""');
     expect(html).toContain('aria-invalid="true"');
     expect(html).toContain("Choose a custom output folder before saving.");
+    const statusStart = html.indexOf('id="preferences-status"');
+    const statusEnd = html.indexOf("</p>", statusStart);
+    expect(statusStart).toBeGreaterThan(-1);
+    expect(html.slice(statusStart, statusEnd)).not.toContain(
+      "Choose a custom output folder before saving.",
+    );
   });
 
   it("renders long custom output paths in middle-truncated display form", () => {

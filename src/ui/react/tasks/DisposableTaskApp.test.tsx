@@ -32,6 +32,7 @@ describe("disposable task view", () => {
     expect(html).toContain("Compressing with ZManager");
     expect(html).toContain("Starting…");
     expect(html).toContain('aria-label="Task progress"');
+    expect(html).toContain("overflow-y-auto");
     expect(html).not.toContain("Archive Options");
   });
 
@@ -91,6 +92,7 @@ describe("disposable task view", () => {
           eventType: "failed" as const,
           code: "password_required",
           message: "Password required",
+          hint: "Try again with the archive password.",
         },
         retryDescriptor: {
           retryKind: "extractArchive" as const,
@@ -131,5 +133,50 @@ describe("disposable task view", () => {
 
     expect(html).toContain("Retry with password");
     expect(html).toContain("Open output");
+    expect(html).toContain("Try again with the archive password.");
+    expect(html).not.toContain('data-dialog-nested-scroll="details"');
+  });
+
+  it("bounds long failure details in the explicitly marked nested panel", () => {
+    const initial = createDisposableTask({
+      jobId: "long-failed-job",
+      kind: "zipExtract",
+      status: "queued",
+      createdAt: "2026-07-11T00:00:00Z",
+    });
+    const message = "Archive extraction failed after the archive was inspected.";
+    const hint = "A detailed backend diagnostic: " + "path component mismatch; ".repeat(16);
+    const state = {
+      ...initial,
+      phase: "failed" as const,
+      job: {
+        ...initial.job,
+        status: "failed" as const,
+        latestFailure: {
+          eventType: "failed" as const,
+          message,
+          hint,
+        },
+      },
+    };
+
+    const html = renderToStaticMarkup(createElement(DisposableTaskView, {
+      state,
+      nowMs: Date.parse("2026-07-11T00:00:01Z"),
+      onCancel() {},
+      onClose() {},
+      onContinueInBackground() {},
+      onKeepOpen() {},
+      onMinimize() {},
+      onPause() {},
+      onRetry() {},
+      onResume() {},
+      onRunOutputAction() {},
+    }));
+
+    expect(html).toContain('data-dialog-nested-scroll="details"');
+    expect(html).toContain("max-h-40");
+    expect(html).toContain(message);
+    expect(html).toContain(hint);
   });
 });

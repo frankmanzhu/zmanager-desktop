@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import {
+  auditDesktopDialogLayout,
+  measureDesktopDialogLayout,
+} from "./helpers/desktopDialogLayout";
+
 type ArchiveEntryKind = "file" | "directory" | "symlink" | "hardlink" | "special";
 
 type ArchiveEntryFixture = {
@@ -721,6 +726,63 @@ test("secondary GUI surfaces have visible, bounded controls", async ({ page }) =
   await expect(page.locator('tr[data-entry-path="documents/notes.txt"]')).toBeVisible();
 });
 
+test("Preferences invalid output keeps scroll ownership at tall and compact sizes", async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 1000 });
+  await openDevSurface(page, "preferences");
+  const tallBefore = await measureDesktopDialogLayout(page);
+  await page.locator("#pref-output-location").click();
+  await page.locator('[role="option"][data-value="customFolder"]').click();
+  await expect(page.locator("#pref-custom-output-validation")).toBeVisible();
+  const tallAfter = await measureDesktopDialogLayout(page);
+  expect(tallAfter.surface.height).toBeGreaterThan(tallBefore.surface.height);
+  expect(tallAfter.content.scrollHeight).toBeLessThanOrEqual(tallAfter.content.clientHeight + 2);
+  await page.screenshot({ path: `${auditDir}/38-preferences-invalid-tall.png`, fullPage: false });
+  await auditDesktopDialogLayout(page);
+  await closeDevSurface(page);
+
+  await page.setViewportSize({ width: 760, height: 540 });
+  await openDevSurface(page, "preferences");
+  await page.locator("#pref-output-location").click();
+  await page.locator('[role="option"][data-value="customFolder"]').click();
+  await expect(page.locator("#pref-custom-output-validation")).toBeVisible();
+  const compact = await measureDesktopDialogLayout(page);
+  expect(compact.surface.bottom).toBeLessThanOrEqual(540 + 2);
+  expect(compact.surface.height).toBeLessThanOrEqual(492 + 2);
+  expect(compact.content.overflowY).toMatch(/auto|scroll/);
+  await page.screenshot({ path: `${auditDir}/39-preferences-invalid-compact.png`, fullPage: false });
+  await auditDesktopDialogLayout(page);
+
+  await closeDevSurface(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await openDevSurface(page, "preferences");
+  await page.locator("#pref-output-location").click();
+  await page.locator('[role="option"][data-value="customFolder"]').click();
+  await expect(page.locator("#pref-custom-output-validation")).toBeVisible();
+  const medium = await measureDesktopDialogLayout(page);
+  expect(medium.surface.bottom).toBeLessThanOrEqual(700 + 2);
+  expect(medium.content.overflowY).toMatch(/auto|scroll/);
+  await auditDesktopDialogLayout(page);
+
+  await closeDevSurface(page);
+  await page.setViewportSize({ width: 1200, height: 1000 });
+  await openDevSurface(page, "preferences");
+  await page.locator('[data-pref-page-target="interface"]').click();
+  await page.locator("#pref-language").click();
+  await page.locator('[role="option"][data-value="zh-CN"]').click();
+  await page.locator("#preferences-save").click();
+  await expect(page.locator('[data-dialog-surface]')).toBeHidden();
+  await expect(page.locator('[data-locale="zh-CN"]')).toHaveCount(1);
+
+  await openDevSurface(page, "preferences");
+  await page.locator("#pref-output-location").click();
+  await page.locator('[role="option"][data-value="customFolder"]').click();
+  await expect(page.locator("#pref-custom-output-validation")).toBeVisible();
+  const zhTall = await measureDesktopDialogLayout(page);
+  expect(zhTall.surface.bottom).toBeLessThanOrEqual(1000 + 2);
+  expect(zhTall.content.scrollHeight).toBeLessThanOrEqual(zhTall.content.clientHeight + 2);
+  await auditDesktopDialogLayout(page);
+});
+
 test("core surfaces remain bounded in a compact viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 700 });
   await expect(page.locator("#create-format")).toBeVisible();
@@ -773,6 +835,9 @@ async function captureAndScan(page: Page, name: string) {
   await page.screenshot({ path: `${auditDir}/${name}.png`, fullPage: false });
   const problems = await scanVisibleLayout(page);
   expect(problems, `${name} layout problems`).toEqual([]);
+  if (await page.locator("[data-dialog-surface]").count()) {
+    await auditDesktopDialogLayout(page);
+  }
 }
 
 async function captureHero(page: Page, name: string, selector: string) {
