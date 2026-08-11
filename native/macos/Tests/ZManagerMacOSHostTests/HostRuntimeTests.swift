@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import ZManagerMacOSHost
+import ZManagerGenerated
 import ZManagerMacOSShared
 
 private final class CallbackState: @unchecked Sendable {
@@ -13,6 +14,15 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     let state = Unmanaged<CallbackState>.fromOpaque(context).takeUnretainedValue()
     state.payload = bytes.map { Data(bytes: $0, count: count) }
 }
+
+private func promiseWriteCallback(
+    _: UnsafePointer<UInt8>?, _: Int,
+    _: UnsafePointer<UInt8>?, _: Int,
+    _: UnsafeMutableRawPointer?
+) -> Int32 { 0 }
+
+private func promiseOutcomeCallback(_: Int32, _: UnsafeMutableRawPointer?) {}
+private func promiseReleaseCallback(_: UnsafeMutableRawPointer?) {}
 
 @Test @MainActor func hostStartsReportsRuntimeReadinessAndShutsDown() throws {
     let state = CallbackState()
@@ -29,6 +39,7 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     #expect(zmanagerMacOSHostStart(callback, context) == 2)
     zmanagerMacOSHostShutdown()
     #expect(!zmanagerMacOSHostIsRunning())
+    #expect(zmanagerMacOSHostStart(nil, nil) == MacOSFFIErrorMapping.invalidPayload)
 }
 
 @Test func nativeEventsAreVersionedTypedAndBounded() throws {
@@ -66,6 +77,41 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
         == "abcdefghijklmnopqrstuv")
 }
 
+@Test func urlRoutingRejectsBoundaryAndMalformedValues() throws {
+    let shortState = String(repeating: "a", count: 15)
+    let longState = String(repeating: "a", count: 257)
+    let invalidState = "state.with punctuation"
+    let invalidResult = "zmanager://auth-callback?state=state-1234567890&result=unknown"
+
+    for value in [shortState, longState, invalidState] {
+        let url = try #require(URL(string:
+            "zmanager://auth-callback?state=\(value)&result=completed"
+        ))
+        #expect(NativeHostEventEncoder.hostedAuthPayload(from: url) == nil)
+    }
+    #expect(NativeHostEventEncoder.hostedAuthPayload(from: try #require(URL(string: invalidResult))) == nil)
+
+    let validMinimum = try #require(URL(string:
+        "zmanager://shell-request/abcdefghijklmnopqrstuv"
+    ))
+    let validMaximum = try #require(URL(string:
+        "zmanager://shell-request/\(String(repeating: "a", count: 128))"
+    ))
+    let tooShort = try #require(URL(string: "zmanager://shell-request/abcdefghijklmnopqrstu"))
+    let tooLong = try #require(URL(string:
+        "zmanager://shell-request/\(String(repeating: "a", count: 129))"
+    ))
+    let illegal = try #require(URL(string:
+        "zmanager://shell-request/abcdefghijklmnopqrstuv/extra"
+    ))
+
+    #expect(NativeHostEventEncoder.shellActionToken(from: validMinimum) != nil)
+    #expect(NativeHostEventEncoder.shellActionToken(from: validMaximum) != nil)
+    #expect(NativeHostEventEncoder.shellActionToken(from: tooShort) == nil)
+    #expect(NativeHostEventEncoder.shellActionToken(from: tooLong) == nil)
+    #expect(NativeHostEventEncoder.shellActionToken(from: illegal) == nil)
+}
+
 @Test @MainActor func lifecycleFiltersInvalidPathsAndEmitsExactlyOneEvent() throws {
     var delivered: [Data] = []
     let lifecycle = NativeHostLifecycle { delivered.append($0) }
@@ -75,6 +121,16 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     #expect(object["kind"] as? String == "openPaths")
     let payload = try #require(object["payload"] as? [String: Any])
     #expect(payload["paths"] as? [String] == ["/tmp/demo.zip"])
+}
+
+@Test @MainActor func lifecycleRejectsOversizedEventsWithoutPartialDelivery() {
+    var delivered: [Data] = []
+    let lifecycle = NativeHostLifecycle { delivered.append($0) }
+    lifecycle.emit(
+        kind: .openPaths,
+        payload: ["paths": [String(repeating: "x", count: MacOSFFILimits.maxRequestBytes)]]
+    )
+    #expect(delivered.isEmpty)
 }
 
 @Test @MainActor func servicePasteboardMapsToOneTypedShellActionRequest() throws {
@@ -129,6 +185,43 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     #expect((rows[0]["dataUrl"] as? String)?.hasPrefix("data:image/png;base64,") == true)
 }
 
+@Test @MainActor func nativeIconOperationRejectsMalformedInputAndHandlesUnknownTypes() throws {
+    let state = CallbackState()
+    let context = Unmanaged.passUnretained(state).toOpaque()
+    #expect(zmanagerMacOSSystemFileIcons(nil, 0, callback, context) != MacOSFFIErrorMapping.success)
+    #expect(state.payload == nil)
+
+    let malformed = Data("not-json".utf8)
+    #expect(malformed.withUnsafeBytes { bytes in
+        zmanagerMacOSSystemFileIcons(
+            bytes.bindMemory(to: UInt8.self).baseAddress,
+            bytes.count,
+            callback,
+            context
+        )
+    } != MacOSFFIErrorMapping.success)
+    #expect(state.payload == nil)
+
+    let requests = try JSONSerialization.data(withJSONObject: [
+        ["key": "unknown", "path": ".zmanager-unknown-extension", "isDirectory": false],
+        ["key": "empty", "path": "", "isDirectory": false],
+    ])
+    let status = requests.withUnsafeBytes { bytes in
+        zmanagerMacOSSystemFileIcons(
+            bytes.bindMemory(to: UInt8.self).baseAddress,
+            bytes.count,
+            callback,
+            context
+        )
+    }
+    #expect(status == MacOSFFIErrorMapping.success)
+    let payload = try #require(state.payload)
+    let rows = try #require(JSONSerialization.jsonObject(with: payload) as? [[String: Any]])
+    #expect(rows.count == 2)
+    #expect((rows[0]["dataUrl"] as? String)?.hasPrefix("data:image/png;base64,") == true)
+    #expect(rows[1]["dataUrl"] == nil)
+}
+
 @Test @MainActor func nativeDefaultHandlerStatusReturnsTypedLaunchServicesRows() throws {
     let request = try JSONSerialization.data(withJSONObject: [
         "action": "status",
@@ -152,6 +245,32 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
     #expect(rows[0]["fileExtension"] as? String == "zip")
     #expect(rows[0]["contentType"] as? String != nil)
     #expect(rows[0]["isCurrentApplication"] as? Bool != nil)
+}
+
+@Test @MainActor func nativeDefaultHandlerRejectsInvalidContractsWithoutCallingBack() {
+    let state = CallbackState()
+    let context = Unmanaged.passUnretained(state).toOpaque()
+    let invalidRequests: [Data] = [
+        Data(),
+        Data("not-json".utf8),
+        Data("{\"action\":\"status\",\"extensions\":[],\"bundleId\":\"org.example.App\"}".utf8),
+        Data("{\"action\":\"status\",\"extensions\":[\"bad.ext!\"],\"bundleId\":\"org.example.App\"}".utf8),
+        Data("{\"action\":\"unknown\",\"extensions\":[\"zip\"],\"bundleId\":\"org.example.App\"}".utf8),
+    ]
+
+    for request in invalidRequests {
+        state.payload = nil
+        let status = request.withUnsafeBytes { bytes in
+            zmanagerMacOSDefaultHandlers(
+                bytes.bindMemory(to: UInt8.self).baseAddress,
+                bytes.count,
+                callback,
+                context
+            )
+        }
+        #expect(status == MacOSFFIErrorMapping.invalidPayload)
+        #expect(state.payload == nil)
+    }
 }
 
 @Test @MainActor func nativeShellActionConsumeUsesSecureAppGroupInterfaceOnce() throws {
@@ -185,4 +304,33 @@ private func callback(bytes: UnsafePointer<UInt8>?, count: Int, context: UnsafeM
         )
     }
     #expect(replay != 0)
+}
+
+@Test func nativeShellActionConsumeRejectsInvalidTokenBeforeFilesystemAccess() {
+    let state = CallbackState()
+    let invalidToken = Data("../not-a-token".utf8)
+    let status = invalidToken.withUnsafeBytes { bytes in
+        zmanagerMacOSConsumeShellActionRequest(
+            bytes.bindMemory(to: UInt8.self).baseAddress,
+            bytes.count,
+            callback,
+            Unmanaged.passUnretained(state).toOpaque()
+        )
+    }
+    #expect(status == MacOSFFIErrorMapping.systemError)
+    #expect(state.payload == nil)
+}
+
+@Test @MainActor func nativePromiseDragRejectsMalformedRequestsBeforeTouchingAppKit() {
+    #expect(zmanagerMacOSStartPromiseDrag(
+        nil,
+        nil,
+        0,
+        nil,
+        0,
+        promiseWriteCallback,
+        promiseOutcomeCallback,
+        promiseReleaseCallback,
+        nil
+    ) == MacOSFFIErrorMapping.invalidPayload)
 }

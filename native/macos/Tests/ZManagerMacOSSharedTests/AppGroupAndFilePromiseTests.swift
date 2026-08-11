@@ -117,3 +117,36 @@ import Testing
     #expect(state.started)
     #expect(try String(contentsOf: destination.appending(path: "entry.txt"), encoding: .utf8) == "streamed")
 }
+
+@Test @MainActor func filePromiseReportsStreamFailuresAndSerializesOperations() throws {
+    enum TestError: Error, Equatable { case streamFailed }
+    let writer = FilePromiseStreamWriter(promisedName: "entry.txt") { _ in
+        throw TestError.streamFailed
+    }
+    let provider = NSFilePromiseProvider(fileType: "public.data", delegate: writer)
+    let destination = FileManager.default.temporaryDirectory
+        .appending(path: "zmanager-promise-error-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: destination) }
+
+    #expect(writer.filePromiseProvider(provider, fileNameForType: "public.data") == "entry.txt")
+    var completionError: Error?
+    writer.filePromiseProvider(provider, writePromiseTo: destination) { completionError = $0 }
+    #expect((completionError as? TestError) == .streamFailed)
+    #expect(writer.operationQueue(for: provider).maxConcurrentOperationCount == 1)
+}
+
+@Test func appGroupRejectsBoundaryAndPathTraversalTokens() {
+    let root = FileManager.default.temporaryDirectory
+        .appending(path: "zmanager-app-group-token-boundaries-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let inbox = AppGroupRequestInbox(directory: root)
+    for token in ["a", String(repeating: "a", count: 21), "../abcdefghijklmnopqrstuv", "abc/abcdefghijklmnopqrstuv"] {
+        #expect(throws: AppGroupRequestInboxError.invalidToken) {
+            try inbox.writeFromExtension(data: Data("payload".utf8), token: token)
+        }
+    }
+    #expect(throws: AppGroupRequestInboxError.invalidToken) {
+        try inbox.writeFromExtension(data: Data("payload".utf8), token: String(repeating: "a", count: 129))
+    }
+}
