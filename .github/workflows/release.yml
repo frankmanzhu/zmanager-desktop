@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   package-macos:
-    name: macOS ${{ matrix.arch }} signed package
+    name: macOS ${{ matrix.arch }} package
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -52,7 +52,37 @@ jobs:
           npm ci
           scripts/ensure-sibling-repos.sh
 
+      - name: Determine macOS signing mode
+        id: macos_signing
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_MAIN_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_MAIN_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_FINDER_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_FINDER_PROVISIONING_PROFILE_BASE64 }}
+          MACOS_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.MACOS_NOTARY_PRIVATE_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "$MACOS_DEVELOPER_ID_P12_BASE64" ]] || missing+=(MACOS_DEVELOPER_ID_P12_BASE64)
+          [[ -n "$MACOS_DEVELOPER_ID_P12_PASSWORD" ]] || missing+=(MACOS_DEVELOPER_ID_P12_PASSWORD)
+          [[ -n "$MACOS_MAIN_PROVISIONING_PROFILE_BASE64" ]] || missing+=(MACOS_MAIN_PROVISIONING_PROFILE_BASE64)
+          [[ -n "$MACOS_FINDER_PROVISIONING_PROFILE_BASE64" ]] || missing+=(MACOS_FINDER_PROVISIONING_PROFILE_BASE64)
+          [[ -n "$MACOS_NOTARY_PRIVATE_KEY_BASE64" ]] || missing+=(MACOS_NOTARY_PRIVATE_KEY_BASE64)
+          [[ -n "$MACOS_NOTARY_KEY_ID" ]] || missing+=(MACOS_NOTARY_KEY_ID)
+          [[ -n "$MACOS_NOTARY_ISSUER_ID" ]] || missing+=(MACOS_NOTARY_ISSUER_ID)
+
+          if ((${#missing[@]} == 0)); then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "macOS Developer ID signing and notarization are configured."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::macOS release credentials are incomplete; building an ad-hoc-signed testing package. Missing: ${missing[*]}"
+          fi
+
       - name: Import Developer ID and notary credentials
+        if: steps.macos_signing.outputs.configured == 'true'
         env:
           MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
           MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
@@ -107,21 +137,32 @@ jobs:
         env:
           ZMANAGER_BUILD_NUMBER: ${{ env.ZMANAGER_RELEASE_BUILD_NUMBER }}
           ZMANAGER_MACOS_STAGE_DIR: /tmp/zmanager-macos-release
+          ZMANAGER_RELEASE_SIGNED: ${{ steps.macos_signing.outputs.configured }}
         run: |
+          set -euo pipefail
+          if [[ "$ZMANAGER_RELEASE_SIGNED" == "true" ]]; then
+            echo "Building the Developer ID signed and notarized macOS package."
+          else
+            echo "::warning::Building an ad-hoc-signed macOS testing package; it is not suitable for public Gatekeeper distribution."
+            export ZMANAGER_CODESIGN_IDENTITY="-"
+          fi
           scripts/build-macos.sh --skip-tests --no-install --arch "${{ matrix.arch }}" --bundle all
           version=$(node -p 'require("./package.json").version')
           app="/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.app"
-          scripts/release-gate-macos.sh "$app" --expected-arch "${{ matrix.arch }}" \
-            --require-developer-id --require-notarization \
-            --zip "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.zip" \
-            --dmg "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.dmg" \
-            --report "/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}-inspection.json"
+          zip="/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.zip"
+          dmg="/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}.dmg"
+          report="/tmp/zmanager-macos-release/ZManager-${version}-macos-${{ matrix.arch }}-inspection.json"
+          gate_args=("$app" --expected-arch "${{ matrix.arch }}" --zip "$zip" --dmg "$dmg" --report "$report")
+          if [[ "$ZMANAGER_RELEASE_SIGNED" == "true" ]]; then
+            gate_args+=(--require-developer-id --require-notarization)
+          fi
+          scripts/release-gate-macos.sh "${gate_args[@]}"
           cd /tmp/zmanager-macos-release
           shasum -a 256 "ZManager-${version}-macos-${{ matrix.arch }}.zip" \
             "ZManager-${version}-macos-${{ matrix.arch }}.dmg" \
             > "ZManager-${version}-macos-${{ matrix.arch }}-SHA256SUMS.txt"
 
-      - name: Upload signed macOS release artifacts
+      - name: Upload macOS release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
@@ -394,7 +435,8 @@ jobs:
             Automated release of zmanager-desktop from GitHub Actions.
 
             - Built from pinned zmanager dependency tag.
-            - Includes notarized and stapled macOS arm64/x86_64 ZIP and DMG artifacts, Windows portable and installer binaries, and Linux DEB/RPM packages.
+            - Includes macOS arm64/x86_64 ZIP and DMG artifacts, Windows portable and installer binaries, and Linux DEB/RPM packages.
+            - macOS artifacts are Developer ID signed and notarized when release credentials are configured; otherwise they are ad-hoc-signed testing artifacts and are not suitable for public Gatekeeper distribution.
             - SHA256SUMS file is included for artifact verification.
           files: |
             release-bundles/*
