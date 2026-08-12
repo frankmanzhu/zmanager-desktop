@@ -121,7 +121,7 @@ export function DisposableTaskView({
             {surfaceError}
           </p>
         ) : null}
-        <div className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="min-w-0 max-w-full rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
           <div className="mb-3 flex items-center justify-between gap-3">
             <TaskState state={state} />
             <span className="text-xs tabular-nums opacity-60">
