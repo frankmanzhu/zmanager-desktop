@@ -1,39 +1,506 @@
 {
   "schemaVersion": 1,
-  "singleExtensions": ["7z","aar","aea","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzap","tzst","war","xar","xpi","xz","z","zip","zipx","zst"],
-  "compoundExtensions": ["tar.br","tar.bz2","tar.gz","tar.lz","tar.lz4","tar.lzma","tar.lzo","tar.lrz","tar.xz","tar.z","tar.zst"],
-  "splitArchiveSuffixes": [".7z.001",".vol000.tzap"],
+  "singleExtensions": [
+    "7z",
+    "a",
+    "aar",
+    "aea",
+    "apk",
+    "appx",
+    "ar",
+    "br",
+    "bz2",
+    "cab",
+    "cb7",
+    "cbr",
+    "cbt",
+    "cbz",
+    "cpio",
+    "deb",
+    "epub",
+    "gz",
+    "ipa",
+    "iso",
+    "jar",
+    "lha",
+    "lrz",
+    "lz",
+    "lz4",
+    "lzh",
+    "lzma",
+    "lzo",
+    "mtree",
+    "rar",
+    "rpm",
+    "tar",
+    "tbz",
+    "tbz2",
+    "tgz",
+    "tlzma",
+    "txz",
+    "tzap",
+    "tzst",
+    "war",
+    "xar",
+    "xpi",
+    "xz",
+    "z",
+    "zip",
+    "zipx",
+    "zst"
+  ],
+  "compoundExtensions": [
+    "tar.br",
+    "tar.bz2",
+    "tar.gz",
+    "tar.lrz",
+    "tar.lz",
+    "tar.lz4",
+    "tar.lzma",
+    "tar.lzo",
+    "tar.xz",
+    "tar.z",
+    "tar.zst"
+  ],
+  "splitArchiveSuffixes": [
+    ".7z.001",
+    ".vol000.tzap"
+  ],
   "associationTypes": [
-    {"id":"zip","primaryExtensions":["zip","zipx","jar","war","apk","ipa","appx","xpi"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/zip","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"sevenZip","primaryExtensions":["7z"],"compoundExtensions":[],"splitSuffixes":[".7z.001"],"mimeType":"application/x-7z-compressed","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"rar","primaryExtensions":["rar","cbr"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/vnd.rar","mimeAliases":["application/x-rar-compressed"],"windows":true,"linux":true,"macos":true},
-    {"id":"tar","primaryExtensions":["tar"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/x-tar","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"gzip","primaryExtensions":["gz","tgz"],"compoundExtensions":["tar.gz"],"splitSuffixes":[],"mimeType":"application/gzip","mimeAliases":["application/x-compressed-tar"],"windows":true,"linux":true,"macos":true},
-    {"id":"bzip2","primaryExtensions":["bz2","tbz2"],"compoundExtensions":["tar.bz2"],"splitSuffixes":[],"mimeType":"application/x-bzip2","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"xz","primaryExtensions":["xz","txz"],"compoundExtensions":["tar.xz"],"splitSuffixes":[],"mimeType":"application/x-xz","mimeAliases":["application/x-xz-compressed-tar"],"windows":true,"linux":true,"macos":true},
-    {"id":"zstd","primaryExtensions":["zst"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/zstd","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"tzst","primaryExtensions":["tzst"],"compoundExtensions":["tar.zst"],"splitSuffixes":[],"mimeType":"application/x-zmanager-tzst","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"tzap","primaryExtensions":["tzap"],"compoundExtensions":[],"splitSuffixes":[".vol000.tzap"],"mimeType":"application/x-zmanager-tzap","mimeAliases":[],"windows":true,"linux":true,"macos":true},
-    {"id":"brotli","primaryExtensions":["br"],"compoundExtensions":["tar.br"],"splitSuffixes":[],"mimeType":"application/x-brotli","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"lzip","primaryExtensions":["lz"],"compoundExtensions":["tar.lz"],"splitSuffixes":[],"mimeType":"application/x-lzip","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"lz4","primaryExtensions":["lz4"],"compoundExtensions":["tar.lz4"],"splitSuffixes":[],"mimeType":"application/x-lz4","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"lzma","primaryExtensions":["lzma"],"compoundExtensions":["tar.lzma"],"splitSuffixes":[],"mimeType":"application/x-lzma","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"lzo","primaryExtensions":["lzo"],"compoundExtensions":["tar.lzo"],"splitSuffixes":[],"mimeType":"application/x-lzop","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"lrz","primaryExtensions":["lrz"],"compoundExtensions":["tar.lrz"],"splitSuffixes":[],"mimeType":"application/x-lrzip","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"compressZ","primaryExtensions":["z"],"compoundExtensions":["tar.z"],"splitSuffixes":[],"mimeType":"application/x-compress","mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"genericPackages","primaryExtensions":["cab","cpio","deb","iso","rpm","xar"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":null,"mimeAliases":[],"windows":true,"linux":false,"macos":true},
-    {"id":"appleArchive","primaryExtensions":["aar","aea"],"compoundExtensions":[],"splitSuffixes":[],"mimeType":"application/x-apple-archive","mimeAliases":[],"windows":false,"linux":false,"macos":true}
+    {
+      "id": "zip",
+      "primaryExtensions": [
+        "apk",
+        "appx",
+        "cbz",
+        "epub",
+        "ipa",
+        "jar",
+        "war",
+        "xpi",
+        "zip",
+        "zipx"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/zip",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "sevenZip",
+      "primaryExtensions": [
+        "7z",
+        "cb7"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [
+        ".7z.001"
+      ],
+      "mimeType": "application/x-7z-compressed",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "rar",
+      "primaryExtensions": [
+        "cbr",
+        "rar"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/vnd.rar",
+      "mimeAliases": [
+        "application/x-rar-compressed"
+      ],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "tar",
+      "primaryExtensions": [
+        "cbt",
+        "tar"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/x-tar",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "gzip",
+      "primaryExtensions": [
+        "gz",
+        "tgz"
+      ],
+      "compoundExtensions": [
+        "tar.gz"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/gzip",
+      "mimeAliases": [
+        "application/x-compressed-tar"
+      ],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "bzip2",
+      "primaryExtensions": [
+        "bz2",
+        "tbz",
+        "tbz2"
+      ],
+      "compoundExtensions": [
+        "tar.bz2"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-bzip2",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "xz",
+      "primaryExtensions": [
+        "txz",
+        "xz"
+      ],
+      "compoundExtensions": [
+        "tar.xz"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-xz",
+      "mimeAliases": [
+        "application/x-xz-compressed-tar"
+      ],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "zstd",
+      "primaryExtensions": [
+        "zst"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/zstd",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "tzst",
+      "primaryExtensions": [
+        "tzst"
+      ],
+      "compoundExtensions": [
+        "tar.zst"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-zmanager-tzst",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "tzap",
+      "primaryExtensions": [
+        "tzap"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [
+        ".vol000.tzap"
+      ],
+      "mimeType": "application/x-zmanager-tzap",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": true,
+      "macos": true
+    },
+    {
+      "id": "brotli",
+      "primaryExtensions": [
+        "br"
+      ],
+      "compoundExtensions": [
+        "tar.br"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-brotli",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "lzip",
+      "primaryExtensions": [
+        "lz"
+      ],
+      "compoundExtensions": [
+        "tar.lz"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-lzip",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "lz4",
+      "primaryExtensions": [
+        "lz4"
+      ],
+      "compoundExtensions": [
+        "tar.lz4"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-lz4",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "lzma",
+      "primaryExtensions": [
+        "lzma",
+        "tlzma"
+      ],
+      "compoundExtensions": [
+        "tar.lzma"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-lzma",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "lzo",
+      "primaryExtensions": [
+        "lzo"
+      ],
+      "compoundExtensions": [
+        "tar.lzo"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-lzop",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "lrz",
+      "primaryExtensions": [
+        "lrz"
+      ],
+      "compoundExtensions": [
+        "tar.lrz"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-lrzip",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "compressZ",
+      "primaryExtensions": [
+        "z"
+      ],
+      "compoundExtensions": [
+        "tar.z"
+      ],
+      "splitSuffixes": [],
+      "mimeType": "application/x-compress",
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "genericPackages",
+      "primaryExtensions": [
+        "a",
+        "ar",
+        "cab",
+        "cpio",
+        "deb",
+        "iso",
+        "lha",
+        "lzh",
+        "mtree",
+        "rpm",
+        "xar"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": null,
+      "mimeAliases": [],
+      "windows": true,
+      "linux": false,
+      "macos": true
+    },
+    {
+      "id": "appleArchive",
+      "primaryExtensions": [
+        "aar",
+        "aea"
+      ],
+      "compoundExtensions": [],
+      "splitSuffixes": [],
+      "mimeType": "application/x-apple-archive",
+      "mimeAliases": [],
+      "windows": false,
+      "linux": false,
+      "macos": true
+    }
   ],
   "packageAssociationProfiles": {
-    "windows": {"extensions":"all","mimeTypes":[]},
-    "linux": {"extensions":[],"mimeTypes":["application/zip","application/x-7z-compressed","application/vnd.rar","application/x-rar-compressed","application/x-tar","application/gzip","application/x-compressed-tar","application/x-xz","application/x-xz-compressed-tar","application/zstd","application/x-zmanager-tzst","application/x-zmanager-tzap"]},
-    "macos": {"extensions":"all","mimeTypes":[]}
+    "windows": {
+      "extensions": "all",
+      "mimeTypes": []
+    },
+    "linux": {
+      "extensions": [],
+      "mimeTypes": [
+        "application/zip",
+        "application/x-7z-compressed",
+        "application/vnd.rar",
+        "application/x-rar-compressed",
+        "application/x-tar",
+        "application/gzip",
+        "application/x-compressed-tar",
+        "application/x-xz",
+        "application/x-xz-compressed-tar",
+        "application/zstd",
+        "application/x-zmanager-tzst",
+        "application/x-zmanager-tzap"
+      ]
+    },
+    "macos": {
+      "extensions": "all",
+      "mimeTypes": []
+    }
   },
   "exportedTypes": [
-    {"identifier":"org.tzap-org.zmanager.tzap","descriptionKey":"archiveType.tzap","macOSDescription":"TZAP archive","macOSDescriptionZhHans":"TZAP 归档","conformsTo":["public.data"],"extensions":["tzap"],"mimeTypes":["application/x-zmanager-tzap"],"role":"Viewer","rank":"Owner"}
+    {
+      "identifier": "org.tzap-org.zmanager.tzap",
+      "descriptionKey": "archiveType.tzap",
+      "macOSDescription": "TZAP archive",
+      "macOSDescriptionZhHans": "TZAP 归档",
+      "conformsTo": [
+        "public.data"
+      ],
+      "extensions": [
+        "tzap"
+      ],
+      "mimeTypes": [
+        "application/x-zmanager-tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    }
   ],
   "documentGroups": [
-    {"id":"tzap","displayKey":"archiveType.tzap","macOSDisplayName":"TZAP archive","macOSDisplayNameZhHans":"TZAP 归档","extensions":["tzap"],"role":"Viewer","rank":"Owner"},
-    {"id":"archives","displayKey":"archiveType.archive","macOSDisplayName":"Archive","macOSDisplayNameZhHans":"归档","extensions":["7z","aar","aea","apk","appx","br","bz2","cab","cbr","cpio","deb","gz","ipa","iso","jar","lz","lz4","lzma","lzo","lrz","rar","rpm","tar","tbz2","tgz","txz","tzst","war","xar","xpi","xz","z","zip","zipx","zst","tar.br","tar.bz2","tar.gz","tar.lz","tar.lz4","tar.lzma","tar.lzo","tar.lrz","tar.xz","tar.z","tar.zst","7z.001","vol000.tzap"],"role":"Viewer","rank":"Alternate"}
+    {
+      "id": "tzap",
+      "displayKey": "archiveType.tzap",
+      "macOSDisplayName": "TZAP archive",
+      "macOSDisplayNameZhHans": "TZAP 归档",
+      "extensions": [
+        "tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Owner"
+    },
+    {
+      "id": "archives",
+      "displayKey": "archiveType.archive",
+      "macOSDisplayName": "Archive",
+      "macOSDisplayNameZhHans": "归档",
+      "extensions": [
+        "7z",
+        "a",
+        "aar",
+        "aea",
+        "apk",
+        "appx",
+        "ar",
+        "br",
+        "bz2",
+        "cab",
+        "cb7",
+        "cbr",
+        "cbt",
+        "cbz",
+        "cpio",
+        "deb",
+        "epub",
+        "gz",
+        "ipa",
+        "iso",
+        "jar",
+        "lha",
+        "lrz",
+        "lz",
+        "lz4",
+        "lzh",
+        "lzma",
+        "lzo",
+        "mtree",
+        "rar",
+        "rpm",
+        "tar",
+        "tbz",
+        "tbz2",
+        "tgz",
+        "tlzma",
+        "txz",
+        "tzst",
+        "war",
+        "xar",
+        "xpi",
+        "xz",
+        "z",
+        "zip",
+        "zipx",
+        "zst",
+        "tar.br",
+        "tar.bz2",
+        "tar.gz",
+        "tar.lrz",
+        "tar.lz",
+        "tar.lz4",
+        "tar.lzma",
+        "tar.lzo",
+        "tar.xz",
+        "tar.z",
+        "tar.zst",
+        "7z.001",
+        "vol000.tzap"
+      ],
+      "role": "Viewer",
+      "rank": "Alternate"
+    }
   ]
 }

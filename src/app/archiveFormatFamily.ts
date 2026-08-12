@@ -38,7 +38,10 @@ export type ArchiveFormatFamily =
   | "deb"
   | "iso"
   | "rpm"
-  | "xar";
+  | "xar"
+  | "lha"
+  | "ar"
+  | "mtree";
 
 export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "zip",
@@ -75,6 +78,9 @@ export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "iso",
   "rpm",
   "xar",
+  "lha",
+  "ar",
+  "mtree",
 ];
 
 // ---------------------------------------------------------------------------
@@ -139,7 +145,7 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "tarLzma",
-    physicalSuffixes: [".tar.lzma"],
+    physicalSuffixes: [".tar.lzma", ".tlzma"],
     displayLabelKey: "format.family.tarLzma",
   },
   {
@@ -159,18 +165,18 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "tar",
-    physicalSuffixes: [".tar"],
+    physicalSuffixes: [".tar", ".cbt"],
     displayLabelKey: "format.family.tar",
   },
   // -- Container / multi-file formats --
   {
     family: "zip",
-    physicalSuffixes: [".zip", ".zipx", ".jar", ".war", ".ipa", ".apk", ".appx", ".xpi"],
+    physicalSuffixes: [".zip", ".zipx", ".jar", ".war", ".ipa", ".apk", ".appx", ".xpi", ".cbz", ".epub"],
     displayLabelKey: "format.family.zip",
   },
   {
     family: "sevenZ",
-    physicalSuffixes: [".7z"], // split .7z.001 matched separately below
+    physicalSuffixes: [".7z", ".cb7"], // split .7z.001 matched separately below
     displayLabelKey: "format.family.sevenZ",
   },
   {
@@ -217,6 +223,21 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "xar",
     physicalSuffixes: [".xar"],
     displayLabelKey: "format.family.xar",
+  },
+  {
+    family: "lha",
+    physicalSuffixes: [".lha", ".lzh"],
+    displayLabelKey: "format.family.lha",
+  },
+  {
+    family: "ar",
+    physicalSuffixes: [".a", ".ar"],
+    displayLabelKey: "format.family.ar",
+  },
+  {
+    family: "mtree",
+    physicalSuffixes: [".mtree"],
+    displayLabelKey: "format.family.mtree",
   },
   // -- Raw stream formats (must follow compound families) --
   {

@@ -11,6 +11,162 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const check = process.argv.includes("--check");
 const readJson = (path) => JSON.parse(readFileSync(resolve(root, path), "utf8"));
 const archive = readJson("manifests/archive-file-types.json");
+
+// ---- Archive extension data comes from the zmanager format contract ----
+//
+// The extension lists in manifests/archive-file-types.json are regenerated
+// from zmanager's committed capability contract (crates/zmanager-cli/
+// contracts/archive-formats.json, the output of `zm formats --contract`), so
+// recognition cannot drift from zmanager-core's FORMAT_CAPABILITIES registry.
+// The mapping tables below are local *policy*: which association type owns a
+// kind's suffixes, which kinds the desktop does not associate yet, and which
+// raw-codec suffixes belong to which type. New contract kinds fail the
+// coverage validation until assigned here or denylisted deliberately.
+const contractPath = resolve(root, "../zmanager/crates/zmanager-cli/contracts/archive-formats.json");
+let contract;
+try {
+  contract = JSON.parse(readFileSync(contractPath, "utf8"));
+} catch (error) {
+  throw new Error(
+    `cannot read the zmanager format contract at ${contractPath}: ${error.message}\n`
+    + `Generate it with zmanager's scripts/refresh-format-contract.sh and commit it.`,
+  );
+}
+const contractKinds = new Set(contract.formats.map(({ kind }) => kind));
+
+// Contract kind -> association type. `null` kinds are predicate-detected in
+// core (no extension row) or not association targets.
+const KIND_OWNERS = {
+  Zip: "zip",
+  SevenZ: "sevenZip",
+  Rar: "rar",
+  Tar: "tar",
+  TarGz: "gzip",
+  TarBz2: "bzip2",
+  TarXz: "xz",
+  TarZst: "tzst",
+  TarLzma: "lzma",
+  AppleArchive: "appleArchive",
+  Cab: "genericPackages",
+  Cpio: "genericPackages",
+  Deb: "genericPackages",
+  Iso: "genericPackages",
+  Rpm: "genericPackages",
+  Xar: "genericPackages",
+  Lha: "genericPackages",
+  Ar: "genericPackages",
+  Mtree: "genericPackages",
+  Tzap: null,
+  SplitZip: null,
+  Unknown: null,
+};
+// Kinds the desktop recognizes but does not associate until a core-backed
+// extract path exists. Each name is validated against the contract below.
+const DENYLISTED_KINDS = ["Dmg", "Pkg", "Warc"];
+// Ambiguous extension excluded from associations (Windows context menus).
+const DENYLISTED_EXTENSIONS = [".lib"];
+// RawStream carries every raw codec suffix in one row; this assigns each
+// suffix to its codec association type. A new codec suffix fails the build
+// until it gets an explicit owner.
+const RAW_SUFFIX_OWNERS = {
+  zst: "zstd",
+  gz: "gzip",
+  bz2: "bzip2",
+  xz: "xz",
+  lzma: "lzma",
+  lz: "lzip",
+  br: "brotli",
+  lz4: "lz4",
+  lzo: "lzo",
+  z: "compressZ",
+  lrz: "lrz",
+};
+// TAR-wrapped compounds for raw codecs without a dedicated tar-* kind in core.
+const SYNTHETIC_COMPOUNDS = {
+  br: "tar.br",
+  lz: "tar.lz",
+  lz4: "tar.lz4",
+  lzo: "tar.lzo",
+  lrz: "tar.lrz",
+  z: "tar.z",
+};
+// Tzap is predicate-detected in core and carries no extension row.
+const LOCAL_PRIMARY_EXTENSIONS = { tzap: ["tzap"] };
+
+for (const kind of [...Object.keys(KIND_OWNERS), ...DENYLISTED_KINDS]) {
+  if (!contractKinds.has(kind)) {
+    throw new Error(`format contract is missing kind ${kind} (referenced by generator policy)`);
+  }
+}
+for (const suffix of DENYLISTED_EXTENSIONS) {
+  if (!contract.formats.some((row) => row.extensions.includes(suffix))) {
+    throw new Error(`format contract is missing denylisted extension ${suffix}`);
+  }
+}
+for (const owner of [...Object.values(RAW_SUFFIX_OWNERS), ...Object.keys(LOCAL_PRIMARY_EXTENSIONS)]) {
+  if (!archive.associationTypes.some((type) => type.id === owner)) {
+    throw new Error(`generator policy references unknown association type ${owner}`);
+  }
+}
+
+const stripDot = (suffix) => suffix.slice(1).toLowerCase();
+const computedExtensions = new Map();
+const extensionsFor = (id) => {
+  if (!computedExtensions.has(id)) computedExtensions.set(id, { primary: new Set(), compound: new Set() });
+  return computedExtensions.get(id);
+};
+for (const row of contract.formats) {
+  if (row.kind === "RawStream") {
+    for (const suffix of row.extensions) {
+      const name = stripDot(suffix);
+      const owner = RAW_SUFFIX_OWNERS[name];
+      if (!owner) throw new Error(`raw stream suffix ${suffix} has no association owner; extend RAW_SUFFIX_OWNERS`);
+      extensionsFor(owner).primary.add(name);
+    }
+    continue;
+  }
+  const owner = KIND_OWNERS[row.kind];
+  if (owner === undefined) {
+    if (DENYLISTED_KINDS.includes(row.kind)) continue;
+    throw new Error(`contract kind ${row.kind} has no association owner and is not denylisted; update KIND_OWNERS`);
+  }
+  if (owner === null) continue;
+  for (const suffix of row.extensions) {
+    if (DENYLISTED_EXTENSIONS.includes(suffix)) continue;
+    const name = stripDot(suffix);
+    if (name.includes(".")) extensionsFor(owner).compound.add(name);
+    else extensionsFor(owner).primary.add(name);
+  }
+}
+for (const [codec, compound] of Object.entries(SYNTHETIC_COMPOUNDS)) {
+  extensionsFor(RAW_SUFFIX_OWNERS[codec]).compound.add(compound);
+}
+for (const [id, extensions] of Object.entries(LOCAL_PRIMARY_EXTENSIONS)) {
+  for (const extension of extensions) extensionsFor(id).primary.add(extension);
+}
+for (const [id, { primary, compound }] of computedExtensions) {
+  const type = archive.associationTypes.find((candidate) => candidate.id === id);
+  if (!type) throw new Error(`computed extensions reference unknown association type ${id}`);
+  type.primaryExtensions = [...primary].sort();
+  type.compoundExtensions = [...compound].sort();
+}
+archive.singleExtensions = [...new Set(archive.associationTypes.flatMap(({ primaryExtensions }) => primaryExtensions))].sort();
+archive.compoundExtensions = [...new Set(archive.associationTypes.flatMap(({ compoundExtensions }) => compoundExtensions))].sort();
+for (const group of archive.documentGroups) {
+  if (group.id === "archives") {
+    // The archives group claims every supported association except those
+    // owned by dedicated groups (tzap), which appear there only.
+    const otherExtensions = new Set(
+      archive.documentGroups.filter(({ id }) => id !== "archives").flatMap(({ extensions }) => extensions),
+    );
+    group.extensions = [
+      ...archive.singleExtensions,
+      ...archive.compoundExtensions,
+      ...archive.splitArchiveSuffixes.map((suffix) => suffix.slice(1)),
+    ].filter((extension) => !otherExtensions.has(extension));
+  }
+}
+
 const shell = readJson("manifests/shell-actions.json");
 const inbound = readJson("manifests/native-inbound-events.schema.json");
 const appCommands = readJson("manifests/application-commands.json");
@@ -244,6 +400,9 @@ put("src-tauri/src/generated/archive_file_types.generated.json", json({
   associationTypes: archive.associationTypes,
   packageAssociationProfiles: archive.packageAssociationProfiles,
 }));
+// The manifest itself is a generated output: extension data is derived from
+// the contract, so --check detects any drift.
+put("manifests/archive-file-types.json", json(archive));
 
 const actionIds = shell.actions.map(({ id }) => id);
 put("src/api/generated/shellActions.generated.ts", `// Generated by scripts/generate-native-contracts.mjs. Do not edit.

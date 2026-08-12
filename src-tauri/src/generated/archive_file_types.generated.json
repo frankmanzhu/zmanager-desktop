@@ -1,30 +1,41 @@
 {
   "singleExtensions": [
     "7z",
+    "a",
     "aar",
     "aea",
     "apk",
     "appx",
+    "ar",
     "br",
     "bz2",
     "cab",
+    "cb7",
     "cbr",
+    "cbt",
+    "cbz",
     "cpio",
     "deb",
+    "epub",
     "gz",
     "ipa",
     "iso",
     "jar",
+    "lha",
+    "lrz",
     "lz",
     "lz4",
+    "lzh",
     "lzma",
     "lzo",
-    "lrz",
+    "mtree",
     "rar",
     "rpm",
     "tar",
+    "tbz",
     "tbz2",
     "tgz",
+    "tlzma",
     "txz",
     "tzap",
     "tzst",
@@ -41,11 +52,11 @@
     "tar.br",
     "tar.bz2",
     "tar.gz",
+    "tar.lrz",
     "tar.lz",
     "tar.lz4",
     "tar.lzma",
     "tar.lzo",
-    "tar.lrz",
     "tar.xz",
     "tar.z",
     "tar.zst"
@@ -58,14 +69,16 @@
     {
       "id": "zip",
       "primaryExtensions": [
-        "zip",
-        "zipx",
+        "apk",
+        "appx",
+        "cbz",
+        "epub",
+        "ipa",
         "jar",
         "war",
-        "apk",
-        "ipa",
-        "appx",
-        "xpi"
+        "xpi",
+        "zip",
+        "zipx"
       ],
       "compoundExtensions": [],
       "splitSuffixes": [],
@@ -78,7 +91,8 @@
     {
       "id": "sevenZip",
       "primaryExtensions": [
-        "7z"
+        "7z",
+        "cb7"
       ],
       "compoundExtensions": [],
       "splitSuffixes": [
@@ -93,8 +107,8 @@
     {
       "id": "rar",
       "primaryExtensions": [
-        "rar",
-        "cbr"
+        "cbr",
+        "rar"
       ],
       "compoundExtensions": [],
       "splitSuffixes": [],
@@ -109,6 +123,7 @@
     {
       "id": "tar",
       "primaryExtensions": [
+        "cbt",
         "tar"
       ],
       "compoundExtensions": [],
@@ -141,6 +156,7 @@
       "id": "bzip2",
       "primaryExtensions": [
         "bz2",
+        "tbz",
         "tbz2"
       ],
       "compoundExtensions": [
@@ -156,8 +172,8 @@
     {
       "id": "xz",
       "primaryExtensions": [
-        "xz",
-        "txz"
+        "txz",
+        "xz"
       ],
       "compoundExtensions": [
         "tar.xz"
@@ -262,7 +278,8 @@
     {
       "id": "lzma",
       "primaryExtensions": [
-        "lzma"
+        "lzma",
+        "tlzma"
       ],
       "compoundExtensions": [
         "tar.lzma"
@@ -322,10 +339,15 @@
     {
       "id": "genericPackages",
       "primaryExtensions": [
+        "a",
+        "ar",
         "cab",
         "cpio",
         "deb",
         "iso",
+        "lha",
+        "lzh",
+        "mtree",
         "rpm",
         "xar"
       ],

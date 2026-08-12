@@ -53,14 +53,16 @@
     "fileAssociations": [
       {
         "ext": [
-          "zip",
-          "zipx",
+          "apk",
+          "appx",
+          "cbz",
+          "epub",
+          "ipa",
           "jar",
           "war",
-          "apk",
-          "ipa",
-          "appx",
-          "xpi"
+          "xpi",
+          "zip",
+          "zipx"
         ],
         "name": "zip archive",
         "description": "zip archive",
@@ -70,6 +72,7 @@
       {
         "ext": [
           "7z",
+          "cb7",
           "7z.001"
         ],
         "name": "sevenZip archive",
@@ -79,8 +82,8 @@
       },
       {
         "ext": [
-          "rar",
-          "cbr"
+          "cbr",
+          "rar"
         ],
         "name": "rar archive",
         "description": "rar archive",
@@ -89,6 +92,7 @@
       },
       {
         "ext": [
+          "cbt",
           "tar"
         ],
         "name": "tar archive",
@@ -109,8 +113,8 @@
       },
       {
         "ext": [
-          "xz",
           "txz",
+          "xz",
           "tar.xz"
         ],
         "name": "xz archive",

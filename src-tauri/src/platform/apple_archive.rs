@@ -1,17 +1,16 @@
 //! Apple Archive platform integration.
 //!
-//! Apple Archive is only available on macOS via system frameworks. This module
-//! encapsulates all `#[cfg(target_os = "macos")]` gating so that `commands.rs`
-//! does not need to reference `target_os` directly.
+//! Apple Archive is only available on macOS via system frameworks, but the
+//! platform gating lives in zmanager-core (its entry points are portable and
+//! return `AppleArchiveError::Unsupported` off-Apple); this module just maps
+//! core errors onto desktop DTOs and carries no `#[cfg(target_os)]` itself.
 
 use std::path::Path;
 
 use crate::error::CommandErrorDto;
 use crate::job_dto::JobTerminalSummaryDto;
-#[cfg(target_os = "macos")]
 use zmanager_core::apple_archive_backend::{AppleArchiveCreateOptions, AppleArchiveError};
 use zmanager_core::jobs::CancellationToken;
-#[cfg(target_os = "macos")]
 use zmanager_core::jobs::JobContext;
 use zmanager_core::manifest::ArchiveManifest;
 use zmanager_core::safety::ExtractionPolicy;
@@ -22,8 +21,6 @@ pub(crate) struct AppleArchiveExtractReportDto {
 }
 
 /// Creates an Apple Archive from a manifest, emitting job events through the context.
-/// Only available on macOS.
-#[cfg(target_os = "macos")]
 pub(crate) fn create_apple_archive(
     manifest: &ArchiveManifest,
     destination: &str,
@@ -56,8 +53,6 @@ pub(crate) fn create_apple_archive(
 }
 
 /// Extracts an Apple Archive, emitting job events through the context.
-/// Only available on macOS.
-#[cfg(target_os = "macos")]
 pub(crate) fn extract_apple_archive(
     archive_path: &str,
     destination_path: &str,
@@ -83,7 +78,6 @@ pub(crate) fn extract_apple_archive(
     .map_err(map_apple_archive_error)
 }
 
-#[cfg(target_os = "macos")]
 pub(crate) fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorDto {
     match error {
         AppleArchiveError::Plan(source) => {
@@ -116,12 +110,13 @@ pub(crate) fn map_apple_archive_error(error: AppleArchiveError) -> CommandErrorD
         AppleArchiveError::Cancelled => {
             CommandErrorDto::cancelled("AppleArchive job was cancelled.")
         }
+        AppleArchiveError::Unsupported => CommandErrorDto::unsupported_format(
+            "Apple Archive format (.aar / .aea) is only supported on macOS",
+        ),
     }
 }
 
 /// Copies Apple Archive file entries to a writer.
-/// Only available on macOS.
-#[cfg(target_os = "macos")]
 pub(crate) fn copy_apple_archive_files_to_writer<W: std::io::Write>(
     archive_path: &Path,
     selected: impl FnMut(&str) -> bool,
@@ -139,49 +134,4 @@ pub(crate) fn copy_apple_archive_files_to_writer<W: std::io::Write>(
         written_bytes: report.written_bytes,
     })
     .map_err(map_apple_archive_error)
-}
-
-// Non-macOS stubs — return unsupported_format errors.
-// All actual Apple Archive code is gated behind `#[cfg(target_os = "macos")]` above,
-// which is permitted inside the platform module.
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn create_apple_archive(
-    _manifest: &ArchiveManifest,
-    _destination: &str,
-    _preserve_metadata: bool,
-    _replace_existing: bool,
-    _password: Option<&str>,
-    _token: &CancellationToken,
-    _sink: &mut dyn zmanager_core::jobs::JobEventSink,
-) -> Result<JobTerminalSummaryDto, CommandErrorDto> {
-    Err(CommandErrorDto::unsupported_format(
-        "Apple Archive format (.aar / .aea) is only supported on macOS",
-    ))
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn extract_apple_archive(
-    _archive_path: &str,
-    _destination_path: &str,
-    _policy: ExtractionPolicy,
-    _password: Option<&str>,
-    _token: &CancellationToken,
-    _sink: &mut dyn zmanager_core::jobs::JobEventSink,
-) -> Result<JobTerminalSummaryDto, CommandErrorDto> {
-    Err(CommandErrorDto::unsupported_format(
-        "Apple Archive format (.aar / .aea) is only supported on macOS",
-    ))
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn copy_apple_archive_files_to_writer<W: std::io::Write>(
-    _archive_path: &Path,
-    _selected: impl FnMut(&str) -> bool,
-    _output: &mut W,
-    _password: Option<&str>,
-) -> Result<AppleArchiveExtractReportDto, CommandErrorDto> {
-    Err(CommandErrorDto::unsupported_format(
-        "Apple Archive format (.aar / .aea) is only supported on macOS",
-    ))
 }

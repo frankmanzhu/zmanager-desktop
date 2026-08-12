@@ -174,6 +174,18 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   xar: [
     "size", "modified",
   ],
+
+  lha: [
+    "size", "modified",
+  ],
+
+  ar: [
+    "size", "modified",
+  ],
+
+  mtree: [
+    "size", "modified",
+  ],
 };
 
 // ---------------------------------------------------------------------------

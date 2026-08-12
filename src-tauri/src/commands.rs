@@ -3059,58 +3059,20 @@ enum ArchiveFamily {
 }
 
 fn detect_archive_family(path: &str) -> ArchiveFamily {
-    let path = Path::new(path);
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase());
-
-    // Apple Archive detection (macOS-only format)
-    // Check BEFORE stem extraction to avoid unused-variable warning on early return
-    if matches!(extension.as_deref(), Some("aar") | Some("aea")) {
-        return ArchiveFamily::AppleArchive;
-    }
-
-    let stem = path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase());
-
-    if matches!(
-        extension.as_deref(),
-        Some("zip")
-            | Some("zipx")
-            | Some("jar")
-            | Some("war")
-            | Some("ipa")
-            | Some("apk")
-            | Some("appx")
-            | Some("xpi")
-            | Some("z01")
-            | Some("z02")
-            | Some("z03")
-    ) {
-        ArchiveFamily::Zip
-    } else if matches!(
-        extension.as_deref(),
-        Some("tzst") | Some("tzap") | Some("7z")
-    ) {
-        match extension.as_deref() {
-            Some("7z") => ArchiveFamily::SevenZ,
-            Some("tzap") => ArchiveFamily::Tzap,
-            Some("tzst") => ArchiveFamily::TarZst,
-            _ => ArchiveFamily::Archive,
-        }
-    } else if extension == Some("zst".to_string())
-        && stem.is_some_and(|value| value.ends_with(".tar"))
-    {
-        ArchiveFamily::TarZst
-    } else if extension == Some("rar".to_string()) {
-        ArchiveFamily::Rar
-    } else if zmanager_core::tzap_backend::is_tzap_archive_path(path) {
-        ArchiveFamily::Tzap
-    } else {
-        ArchiveFamily::Archive
+    // Recognition delegates to the canonical core detector (CR-114) so the
+    // desktop cannot drift from zmanager's FORMAT_CAPABILITIES registry;
+    // this match only maps core kinds onto the desktop's dispatch families.
+    let kind = zmanager_core::archive_format::detect_archive_format(path);
+    match kind {
+        zmanager_core::archive_format::ArchiveFormatKind::Zip | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => ArchiveFamily::Zip,
+        zmanager_core::archive_format::ArchiveFormatKind::TarZst => ArchiveFamily::TarZst,
+        zmanager_core::archive_format::ArchiveFormatKind::SevenZ => ArchiveFamily::SevenZ,
+        zmanager_core::archive_format::ArchiveFormatKind::Rar => ArchiveFamily::Rar,
+        zmanager_core::archive_format::ArchiveFormatKind::Tzap => ArchiveFamily::Tzap,
+        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => ArchiveFamily::AppleArchive,
+        // Everything else (raw streams, plain tars, disk images, packages,
+        // libarchive formats, unknown) dispatches to the generic Archive path.
+        _ => ArchiveFamily::Archive,
     }
 }
 
@@ -3722,6 +3684,27 @@ mod tests {
             detect_archive_family("test.aea"),
             ArchiveFamily::AppleArchive
         );
+    }
+
+    #[test]
+    fn detect_archive_family_maps_registry_kinds_to_dispatch_families() {
+        // Recognition comes from core's FORMAT_CAPABILITIES registry; the
+        // family mapping is what dispatch consumes.
+        assert_eq!(detect_archive_family("comic.cbz"), ArchiveFamily::Zip);
+        assert_eq!(detect_archive_family("book.epub"), ArchiveFamily::Zip);
+        assert_eq!(detect_archive_family("archive.cb7"), ArchiveFamily::SevenZ);
+        assert_eq!(detect_archive_family("comic.cbr"), ArchiveFamily::Rar);
+        assert_eq!(detect_archive_family("archive.cbt"), ArchiveFamily::Archive);
+        assert_eq!(detect_archive_family("archive.tbz"), ArchiveFamily::Archive);
+        assert_eq!(detect_archive_family("archive.tlzma"), ArchiveFamily::Archive);
+        assert_eq!(detect_archive_family("image.iso"), ArchiveFamily::Archive);
+        assert_eq!(detect_archive_family("installer.dmg"), ArchiveFamily::Archive);
+        // Predicate-detected kinds still reach their family.
+        assert_eq!(detect_archive_family("archive.7z.001"), ArchiveFamily::SevenZ);
+        assert_eq!(detect_archive_family("bundle.vol000.tzap"), ArchiveFamily::Tzap);
+        // A lone split-ZIP volume is not recognized by core without its final
+        // .zip; both old and new paths fail at extract time (benign).
+        assert_eq!(detect_archive_family("archive.z01"), ArchiveFamily::Archive);
     }
 
     #[test]
