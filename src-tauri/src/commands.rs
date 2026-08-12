@@ -3064,12 +3064,15 @@ fn detect_archive_family(path: &str) -> ArchiveFamily {
     // this match only maps core kinds onto the desktop's dispatch families.
     let kind = zmanager_core::archive_format::detect_archive_format(path);
     match kind {
-        zmanager_core::archive_format::ArchiveFormatKind::Zip | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => ArchiveFamily::Zip,
+        zmanager_core::archive_format::ArchiveFormatKind::Zip
+        | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => ArchiveFamily::Zip,
         zmanager_core::archive_format::ArchiveFormatKind::TarZst => ArchiveFamily::TarZst,
         zmanager_core::archive_format::ArchiveFormatKind::SevenZ => ArchiveFamily::SevenZ,
         zmanager_core::archive_format::ArchiveFormatKind::Rar => ArchiveFamily::Rar,
         zmanager_core::archive_format::ArchiveFormatKind::Tzap => ArchiveFamily::Tzap,
-        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => ArchiveFamily::AppleArchive,
+        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => {
+            ArchiveFamily::AppleArchive
+        }
         // Everything else (raw streams, plain tars, disk images, packages,
         // libarchive formats, unknown) dispatches to the generic Archive path.
         _ => ArchiveFamily::Archive,
@@ -3696,12 +3699,24 @@ mod tests {
         assert_eq!(detect_archive_family("comic.cbr"), ArchiveFamily::Rar);
         assert_eq!(detect_archive_family("archive.cbt"), ArchiveFamily::Archive);
         assert_eq!(detect_archive_family("archive.tbz"), ArchiveFamily::Archive);
-        assert_eq!(detect_archive_family("archive.tlzma"), ArchiveFamily::Archive);
+        assert_eq!(
+            detect_archive_family("archive.tlzma"),
+            ArchiveFamily::Archive
+        );
         assert_eq!(detect_archive_family("image.iso"), ArchiveFamily::Archive);
-        assert_eq!(detect_archive_family("installer.dmg"), ArchiveFamily::Archive);
+        assert_eq!(
+            detect_archive_family("installer.dmg"),
+            ArchiveFamily::Archive
+        );
         // Predicate-detected kinds still reach their family.
-        assert_eq!(detect_archive_family("archive.7z.001"), ArchiveFamily::SevenZ);
-        assert_eq!(detect_archive_family("bundle.vol000.tzap"), ArchiveFamily::Tzap);
+        assert_eq!(
+            detect_archive_family("archive.7z.001"),
+            ArchiveFamily::SevenZ
+        );
+        assert_eq!(
+            detect_archive_family("bundle.vol000.tzap"),
+            ArchiveFamily::Tzap
+        );
         // A lone split-ZIP volume is not recognized by core without its final
         // .zip; both old and new paths fail at extract time (benign).
         assert_eq!(detect_archive_family("archive.z01"), ArchiveFamily::Archive);

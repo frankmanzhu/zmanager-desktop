@@ -56,6 +56,7 @@ const KIND_OWNERS = {
   Lha: "genericPackages",
   Ar: "genericPackages",
   Mtree: "genericPackages",
+  Msi: "genericPackages",
   Tzap: null,
   SplitZip: null,
   Unknown: null,

@@ -29,6 +29,7 @@
     "lzh",
     "lzma",
     "lzo",
+    "msi",
     "mtree",
     "rar",
     "rpm",
@@ -348,6 +349,7 @@
         "iso",
         "lha",
         "lzh",
+        "msi",
         "mtree",
         "rpm",
         "xar"
@@ -467,6 +469,7 @@
         "lzh",
         "lzma",
         "lzo",
+        "msi",
         "mtree",
         "rar",
         "rpm",

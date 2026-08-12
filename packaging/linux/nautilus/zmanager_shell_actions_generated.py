@@ -41,6 +41,7 @@ ARCHIVE_SUFFIXES = (
     ".lz4",
     ".lzh",
     ".lzo",
+    ".msi",
     ".rar",
     ".rpm",
     ".tar",

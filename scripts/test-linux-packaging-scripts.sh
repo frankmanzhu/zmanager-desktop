@@ -133,6 +133,16 @@ printf 'curl %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
 exit 1
 EOF
 
+write_stub git <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "rev-list" ]]; then
+  echo "1"
+  exit 0
+fi
+echo "git test stub"
+EOF
+
 PATH="$bin_dir:$PATH" \
 HOME="$test_root/home" \
 ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
