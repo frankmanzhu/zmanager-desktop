@@ -76,6 +76,7 @@ impl ArchiveIndexRegistry {
                 return Err(CommandErrorDto::operation_failed("Too many archives are currently opening. Close an archive and try again."));
             }
             state.next_session_id = state.next_session_id.checked_add(1).ok_or_else(|| CommandErrorDto::operation_failed("Archive session IDs exhausted."))?;
+            let session_id = format!("archive-{}", state.next_session_id);
             let format = Some(crate::dto::ArchiveFormatKindDto::from(zmanager_core::archive_format::detect_archive_format(&archive_path)));
             let snapshot = Arc::new(ArchiveIndexSnapshotDto {
                 revision: "1".to_string(),
@@ -261,6 +262,7 @@ impl ArchiveIndexRegistry {
             final_entry_count: None,
             final_total_bytes: None,
             latest_failure: None,
+            format: record.snapshot.format,
         });
         record.sender.send_replace(cancelled);
         Ok(())
@@ -377,6 +379,7 @@ impl ArchiveIndexRegistry {
             final_entry_count: None,
             final_total_bytes: None,
             latest_failure: None,
+            format: record.snapshot.format,
         });
         record.snapshot = snapshot.clone();
         record.sender.send_replace(snapshot);
