@@ -67,5 +67,9 @@
     "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.1",
+    "@puppeteer/browsers": "^3.2.1"
   }
 }
