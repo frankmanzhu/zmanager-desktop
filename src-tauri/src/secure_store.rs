@@ -2,14 +2,14 @@
 
 use keyring::{Entry, Error as KeyringError};
 use serde_json::{Value, json};
-use zmanager_tzap_hosted::auth_client::{
-    TzapAuthError, TzapBearerToken, TzapSessionRecord, TzapSessionStore,
-};
 use zmanager_core::identity_catalog::{
     TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
 };
 use zmanager_core::secrets::SecretBytes;
 use zmanager_core::trust::TzapIdentityAssurance;
+use zmanager_tzap_hosted::auth_client::{
+    TzapAuthError, TzapBearerToken, TzapSessionRecord, TzapSessionStore,
+};
 
 const SERVICE_NAME: &str = "org.tzap.zmanager.identity";
 

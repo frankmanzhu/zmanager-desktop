@@ -13,16 +13,16 @@ use openssl::x509::{X509, X509NameBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
-use zmanager_tzap_hosted::auth_client::{
-    AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback,
-    TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
-    TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
-};
 use zmanager_core::device_identity::generate_recipient_encryption_key;
 use zmanager_core::identity_catalog::{
     FileTzapIdentityCatalogStore, TzapIdentityCatalog, TzapIdentityCatalogStore,
     TzapPublicContactRecord, TzapPublicRecipientKeyRecord, TzapPublicSigningIdentityRecord,
     TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
+};
+use zmanager_tzap_hosted::auth_client::{
+    AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback,
+    TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
+    TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
 };
 
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
@@ -1128,28 +1128,24 @@ pub fn resolve_tzap_create_inputs(
                 .resolve(TzapSecretPurpose::SigningKey, &identity.signing_key_ref)
                 .map_err(|error| account_error("account_secure_store_failed", error))?;
             (
-                Some(
-                    zmanager_core::engine::TzapX509SigningOptions::InMemory {
-                        signing_certificate: leaf,
-                        signing_private_key: private_key,
-                        signing_chain: identity
-                            .certificate_chain_der
-                            .iter()
-                            .skip(1)
-                            .cloned()
-                            .collect(),
-                    },
-                ),
+                Some(zmanager_core::engine::TzapX509SigningOptions::InMemory {
+                    signing_certificate: leaf,
+                    signing_private_key: private_key,
+                    signing_chain: identity
+                        .certificate_chain_der
+                        .iter()
+                        .skip(1)
+                        .cloned()
+                        .collect(),
+                }),
                 true,
             )
         }
         Some(crate::dto::TzapSigningSelectionDto::OneTimePkcs12 { path, password }) => (
-            Some(
-                zmanager_core::engine::TzapX509SigningOptions::Pkcs12 {
-                    identity: PathBuf::from(path),
-                    password: zmanager_core::secrets::SecretString::from(password.as_str()),
-                },
-            ),
+            Some(zmanager_core::engine::TzapX509SigningOptions::Pkcs12 {
+                identity: PathBuf::from(path),
+                password: zmanager_core::secrets::SecretString::from(password.as_str()),
+            }),
             true,
         ),
         Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {

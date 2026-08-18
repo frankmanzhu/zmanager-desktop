@@ -265,7 +265,7 @@ unsafe fn draw_hicon_bgra(icon: HICON, icon_size: i32, background_bgr: [u8; 3]) 
         return None;
     }
 
-    let mut bitmap_info = BITMAPINFO {
+    let bitmap_info = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: size_of::<BITMAPINFOHEADER>() as u32,
             biWidth: icon_size,
@@ -282,7 +282,7 @@ unsafe fn draw_hicon_bgra(icon: HICON, icon_size: i32, background_bgr: [u8; 3]) 
     let bitmap = unsafe {
         CreateDIBSection(
             screen_dc,
-            &mut bitmap_info,
+            &bitmap_info,
             DIB_RGB_COLORS,
             &mut bits,
             null_mut(),
