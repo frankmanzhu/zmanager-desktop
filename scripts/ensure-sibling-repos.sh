@@ -1,25 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ensure-sibling-repos.sh — clone tzap (and optionally zmanager) as sibling
-# directories so that Cargo path dependencies resolve.
+# ensure-sibling-repos.sh — clone/update sibling repositories so that Cargo
+# path dependencies resolve.
 #
-# The tzap repo is required because src-tauri/Cargo.toml patches tzap-core,
-# tzap-plugin-keywrap and tzap-plugin-signing to their local source trees, and
-# the zmanager workspace patches make the zmanager-ffi staticlib (built for
-# the macOS extensions) resolve the same tzap sources.
-# The zmanager repo is required because src-tauri/Cargo.toml and the
-# zmanager-ffi staticlib use zmanager-core as a path dependency, and the
-# extension bindings are copied from crates/zmanager-ffi/bindings/swift.
+# Sibling repositories:
+#   - tzap (https://github.com/tzap-org/tzap)
+#   - zmanager (https://github.com/tzap-org/zmanager)
+#   - forensic-vfs-engine (https://github.com/frankmanzhu/forensic-vfs-engine)
+#   - ntfs-forensic (https://github.com/frankmanzhu/ntfs-forensic)
+#   - udf-forensic (https://github.com/frankmanzhu/udf-forensic)
+#   - dpp (https://github.com/frankmanzhu/dpp)
 #
 # Override defaults via environment variables:
-#   ZMANAGER_TZAP_REPO    – tzap repository URL
-#   ZMANAGER_TZAP_REF     – branch or tag to check out (default: main)
-#   ZMANAGER_ZMANAGER_REPO – zmanager repository URL
-#   ZMANAGER_ZMANAGER_REF  – branch or tag to check out (default: main)
+#   ZMANAGER_TZAP_REPO                 – tzap repository URL
+#   ZMANAGER_TZAP_REF                  – branch or tag to check out (default: main)
+#   ZMANAGER_ZMANAGER_REPO             – zmanager repository URL
+#   ZMANAGER_ZMANAGER_REF              – branch or tag to check out (default: main)
+#   ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
+#   ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
+#   ZMANAGER_NTFS_FORENSIC_REPO        – ntfs-forensic repository URL
+#   ZMANAGER_NTFS_FORENSIC_REF         – branch or tag to check out (default: main)
+#   ZMANAGER_UDF_FORENSIC_REPO         – udf-forensic repository URL
+#   ZMANAGER_UDF_FORENSIC_REF          – branch or tag to check out (default: main)
+#   ZMANAGER_DPP_REPO                  – dpp repository URL
+#   ZMANAGER_DPP_REF                   – branch or tag to check out (default: main)
 #
-# Pass --skip-zmanager to skip cloning the zmanager sibling entirely
-# (only useful for builds that do not need zmanager-core at all).
+# Pass --skip-zmanager to skip cloning the zmanager sibling entirely.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 parent_dir="$(cd "$repo_root/.." && pwd)"
@@ -32,18 +39,33 @@ zmanager_repo="${ZMANAGER_ZMANAGER_REPO:-https://github.com/tzap-org/zmanager}"
 zmanager_ref="${ZMANAGER_ZMANAGER_REF:-main}"
 zmanager_dir="${ZMANAGER_ZMANAGER_DIR:-$parent_dir/zmanager}"
 
+forensic_vfs_engine_repo="${ZMANAGER_FORENSIC_VFS_ENGINE_REPO:-https://github.com/frankmanzhu/forensic-vfs-engine}"
+forensic_vfs_engine_ref="${ZMANAGER_FORENSIC_VFS_ENGINE_REF:-main}"
+forensic_vfs_engine_dir="${ZMANAGER_FORENSIC_VFS_ENGINE_DIR:-$parent_dir/forensic-vfs-engine}"
+
+ntfs_forensic_repo="${ZMANAGER_NTFS_FORENSIC_REPO:-https://github.com/frankmanzhu/ntfs-forensic}"
+ntfs_forensic_ref="${ZMANAGER_NTFS_FORENSIC_REF:-main}"
+ntfs_forensic_dir="${ZMANAGER_NTFS_FORENSIC_DIR:-$parent_dir/ntfs-forensic}"
+
+udf_forensic_repo="${ZMANAGER_UDF_FORENSIC_REPO:-https://github.com/frankmanzhu/udf-forensic}"
+udf_forensic_ref="${ZMANAGER_UDF_FORENSIC_REF:-main}"
+udf_forensic_dir="${ZMANAGER_UDF_FORENSIC_DIR:-$parent_dir/udf-forensic}"
+
+dpp_repo="${ZMANAGER_DPP_REPO:-https://github.com/frankmanzhu/dpp}"
+dpp_ref="${ZMANAGER_DPP_REF:-main}"
+dpp_dir="${ZMANAGER_DPP_DIR:-$parent_dir/dpp}"
+
 skip_zmanager=0
 
 usage() {
   cat <<'EOF'
 Usage: scripts/ensure-sibling-repos.sh [--skip-zmanager]
 
-Ensure the tzap repository (and optionally zmanager) exist as sibling
-directories so that Cargo path dependencies in src-tauri/Cargo.toml
-and its vendored crates can resolve.
+Ensure all required sibling repositories exist and are updated to the latest
+so that Cargo path dependencies in src-tauri/Cargo.toml and vendored crates resolve.
 
 Options:
-  --skip-zmanager  Only clone tzap; skip zmanager entirely.
+  --skip-zmanager  Skip zmanager sibling repository.
   -h, --help       Show this help.
 EOF
 }
@@ -66,6 +88,25 @@ while (($#)); do
   shift
 done
 
+ensure_sibling_repo() {
+  local name="$1"
+  local dir="$2"
+  local repo="$3"
+  local ref="$4"
+
+  if [[ -d "$dir" ]]; then
+    echo "$name sibling found at: $dir"
+    if [[ -d "$dir/.git" ]]; then
+      echo "Updating $name repository at: $dir"
+      git -C "$dir" pull || echo "Warning: git pull failed for $name at $dir"
+    fi
+  else
+    echo "Cloning $name ($ref) into: $dir"
+    git clone --depth 1 --branch "$ref" "$repo" "$dir"
+    echo "$name clone complete."
+  fi
+}
+
 # ── zmanager-desktop ───────────────────────────────────────────────────
 
 zmanager_desktop_dir="${ZMANAGER_DESKTOP_DIR:-$parent_dir/zmanager-desktop}"
@@ -81,34 +122,23 @@ if [[ "$zmanager_desktop_dir" != "$repo_root" && -d "$zmanager_desktop_dir/.git"
 fi
 
 # ── tzap ───────────────────────────────────────────────────────────────
-
-if [[ -d "$tzap_dir" ]]; then
-  echo "tzap sibling found at: $tzap_dir"
-  if [[ -d "$tzap_dir/.git" ]]; then
-    echo "Updating tzap repository at: $tzap_dir"
-    git -C "$tzap_dir" pull || echo "Warning: git pull failed for tzap at $tzap_dir"
-  fi
-else
-  echo "Cloning tzap ($tzap_ref) into: $tzap_dir"
-  git clone --depth 1 --branch "$tzap_ref" "$tzap_repo" "$tzap_dir"
-  echo "tzap clone complete."
-fi
+ensure_sibling_repo "tzap" "$tzap_dir" "$tzap_repo" "$tzap_ref"
 
 # ── zmanager ───────────────────────────────────────────────────────────
-
 if ((skip_zmanager)); then
   echo "Skipping zmanager sibling (--skip-zmanager)."
-  exit 0
+else
+  ensure_sibling_repo "zmanager" "$zmanager_dir" "$zmanager_repo" "$zmanager_ref"
 fi
 
-if [[ -d "$zmanager_dir" ]]; then
-  echo "zmanager sibling found at: $zmanager_dir"
-  if [[ -d "$zmanager_dir/.git" ]]; then
-    echo "Updating zmanager repository at: $zmanager_dir"
-    git -C "$zmanager_dir" pull || echo "Warning: git pull failed for zmanager at $zmanager_dir"
-  fi
-else
-  echo "Cloning zmanager ($zmanager_ref) into: $zmanager_dir"
-  git clone --depth 1 --branch "$zmanager_ref" "$zmanager_repo" "$zmanager_dir"
-  echo "zmanager clone complete."
-fi
+# ── forensic-vfs-engine ────────────────────────────────────────────────
+ensure_sibling_repo "forensic-vfs-engine" "$forensic_vfs_engine_dir" "$forensic_vfs_engine_repo" "$forensic_vfs_engine_ref"
+
+# ── ntfs-forensic ──────────────────────────────────────────────────────
+ensure_sibling_repo "ntfs-forensic" "$ntfs_forensic_dir" "$ntfs_forensic_repo" "$ntfs_forensic_ref"
+
+# ── udf-forensic ───────────────────────────────────────────────────────
+ensure_sibling_repo "udf-forensic" "$udf_forensic_dir" "$udf_forensic_repo" "$udf_forensic_ref"
+
+# ── dpp ────────────────────────────────────────────────────────────────
+ensure_sibling_repo "dpp" "$dpp_dir" "$dpp_repo" "$dpp_ref"

@@ -6,25 +6,35 @@ param(
 
 <#
 .SYNOPSIS
-Ensures tzap (and optionally zmanager) exist as sibling directories.
+Ensures all required sibling repositories exist and are kept up to date.
 
 .DESCRIPTION
-Clones the tzap repository into the parent directory of this repo so that
-Cargo path dependencies in src-tauri/Cargo.toml and its vendored crates
-can resolve. The zmanager sibling is required because src-tauri/Cargo.toml
-and the zmanager-ffi staticlib use zmanager-core as a path dependency, and
-the extension bindings are copied from crates/zmanager-ffi/bindings/swift.
+Clones and updates sibling repositories (tzap, zmanager, forensic-vfs-engine,
+ntfs-forensic, udf-forensic, dpp) into the parent directory of this repo so
+that Cargo path dependencies and bindings resolve.
 
 Override defaults via environment variables:
-  ZMANAGER_TZAP_REPO      – tzap repository URL
-  ZMANAGER_TZAP_REF       – branch or tag to check out (default: main)
-  ZMANAGER_TZAP_DIR       – absolute path for tzap clone
-  ZMANAGER_ZMANAGER_REPO  – zmanager repository URL
-  ZMANAGER_ZMANAGER_REF   – branch or tag to check out (default: main)
-  ZMANAGER_ZMANAGER_DIR   – absolute path for zmanager clone
+  ZMANAGER_TZAP_REPO                 – tzap repository URL
+  ZMANAGER_TZAP_REF                  – branch or tag to check out (default: main)
+  ZMANAGER_TZAP_DIR                  – absolute path for tzap clone
+  ZMANAGER_ZMANAGER_REPO             – zmanager repository URL
+  ZMANAGER_ZMANAGER_REF              – branch or tag to check out (default: main)
+  ZMANAGER_ZMANAGER_DIR              – absolute path for zmanager clone
+  ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
+  ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
+  ZMANAGER_FORENSIC_VFS_ENGINE_DIR   – absolute path for forensic-vfs-engine clone
+  ZMANAGER_NTFS_FORENSIC_REPO        – ntfs-forensic repository URL
+  ZMANAGER_NTFS_FORENSIC_REF         – branch or tag to check out (default: main)
+  ZMANAGER_NTFS_FORENSIC_DIR         – absolute path for ntfs-forensic clone
+  ZMANAGER_UDF_FORENSIC_REPO         – udf-forensic repository URL
+  ZMANAGER_UDF_FORENSIC_REF          – branch or tag to check out (default: main)
+  ZMANAGER_UDF_FORENSIC_DIR          – absolute path for udf-forensic clone
+  ZMANAGER_DPP_REPO                  – dpp repository URL
+  ZMANAGER_DPP_REF                   – branch or tag to check out (default: main)
+  ZMANAGER_DPP_DIR                   – absolute path for dpp clone
 
 .Parameter ParentDir
-Absolute path to the parent directory where tzap and zmanager should
+Absolute path to the parent directory where sibling repositories should
 be cloned. When building via build.bat with a subst drive, pass the
 real (non-subst) parent path explicitly. If omitted, the script infers
 the parent from its own location.
@@ -48,6 +58,22 @@ $tzapDir = if ($env:ZMANAGER_TZAP_DIR) { $env:ZMANAGER_TZAP_DIR } else { Join-Pa
 $zmanagerRepo = if ($env:ZMANAGER_ZMANAGER_REPO) { $env:ZMANAGER_ZMANAGER_REPO } else { "https://github.com/tzap-org/zmanager" }
 $zmanagerRef = if ($env:ZMANAGER_ZMANAGER_REF) { $env:ZMANAGER_ZMANAGER_REF } else { "main" }
 $zmanagerDir = if ($env:ZMANAGER_ZMANAGER_DIR) { $env:ZMANAGER_ZMANAGER_DIR } else { Join-Path $parentDir "zmanager" }
+
+$forensicVfsEngineRepo = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO } else { "https://github.com/frankmanzhu/forensic-vfs-engine" }
+$forensicVfsEngineRef = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REF) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REF } else { "main" }
+$forensicVfsEngineDir = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_DIR) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_DIR } else { Join-Path $parentDir "forensic-vfs-engine" }
+
+$ntfsForensicRepo = if ($env:ZMANAGER_NTFS_FORENSIC_REPO) { $env:ZMANAGER_NTFS_FORENSIC_REPO } else { "https://github.com/frankmanzhu/ntfs-forensic" }
+$ntfsForensicRef = if ($env:ZMANAGER_NTFS_FORENSIC_REF) { $env:ZMANAGER_NTFS_FORENSIC_REF } else { "main" }
+$ntfsForensicDir = if ($env:ZMANAGER_NTFS_FORENSIC_DIR) { $env:ZMANAGER_NTFS_FORENSIC_DIR } else { Join-Path $parentDir "ntfs-forensic" }
+
+$udfForensicRepo = if ($env:ZMANAGER_UDF_FORENSIC_REPO) { $env:ZMANAGER_UDF_FORENSIC_REPO } else { "https://github.com/frankmanzhu/udf-forensic" }
+$udfForensicRef = if ($env:ZMANAGER_UDF_FORENSIC_REF) { $env:ZMANAGER_UDF_FORENSIC_REF } else { "main" }
+$udfForensicDir = if ($env:ZMANAGER_UDF_FORENSIC_DIR) { $env:ZMANAGER_UDF_FORENSIC_DIR } else { Join-Path $parentDir "udf-forensic" }
+
+$dppRepo = if ($env:ZMANAGER_DPP_REPO) { $env:ZMANAGER_DPP_REPO } else { "https://github.com/frankmanzhu/dpp" }
+$dppRef = if ($env:ZMANAGER_DPP_REF) { $env:ZMANAGER_DPP_REF } else { "main" }
+$dppDir = if ($env:ZMANAGER_DPP_DIR) { $env:ZMANAGER_DPP_DIR } else { Join-Path $parentDir "dpp" }
 
 function Invoke-Native {
     param(
@@ -81,6 +107,33 @@ function Resolve-GitCommand {
 
 $git = Resolve-GitCommand
 
+function Ensure-SiblingRepo {
+    param(
+        [string]$Name,
+        [string]$Directory,
+        [string]$RepoUrl,
+        [string]$BranchRef
+    )
+
+    if (Test-Path $Directory) {
+        Write-Host "$Name sibling found at: $Directory"
+        if (Test-Path (Join-Path $Directory ".git")) {
+            Write-Host "Updating $Name repository at: $Directory"
+            try {
+                Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "pull")
+            } catch {
+                Write-Host "Warning: git pull failed for $Name at ${Directory}: $_"
+            }
+        }
+    } else {
+        Write-Host "Cloning $Name ($BranchRef) into: $Directory"
+        Invoke-Native -FilePath $git -Arguments @(
+            "clone", "--depth", "1", "--branch", $BranchRef, $RepoUrl, $Directory
+        )
+        Write-Host "$Name clone complete."
+    }
+}
+
 # ── zmanager-desktop ───────────────────────────────────────────────────
 
 $zmanagerDesktopDir = if ($env:ZMANAGER_DESKTOP_DIR) { $env:ZMANAGER_DESKTOP_DIR } else { Join-Path $parentDir "zmanager-desktop" }
@@ -104,46 +157,23 @@ if ($zmanagerDesktopDir -ne $repoRoot -and (Test-Path (Join-Path $zmanagerDeskto
 }
 
 # ── tzap ───────────────────────────────────────────────────────────────
-
-if (Test-Path $tzapDir) {
-    Write-Host "tzap sibling found at: $tzapDir"
-    if (Test-Path (Join-Path $tzapDir ".git")) {
-        Write-Host "Updating tzap repository at: $tzapDir"
-        try {
-            Invoke-Native -FilePath $git -Arguments @("-C", $tzapDir, "pull")
-        } catch {
-            Write-Host "Warning: git pull failed for tzap at ${tzapDir}: $_"
-        }
-    }
-} else {
-    Write-Host "Cloning tzap ($tzapRef) into: $tzapDir"
-    Invoke-Native -FilePath $git -Arguments @(
-        "clone", "--depth", "1", "--branch", $tzapRef, $tzapRepo, $tzapDir
-    )
-    Write-Host "tzap clone complete."
-}
+Ensure-SiblingRepo -Name "tzap" -Directory $tzapDir -RepoUrl $tzapRepo -BranchRef $tzapRef
 
 # ── zmanager ───────────────────────────────────────────────────────────
-
-if ($SkipZmanager) {
-    Write-Host "Skipping zmanager sibling (-SkipZmanager)."
-    exit 0
-}
-
-if (Test-Path $zmanagerDir) {
-    Write-Host "zmanager sibling found at: $zmanagerDir"
-    if (Test-Path (Join-Path $zmanagerDir ".git")) {
-        Write-Host "Updating zmanager repository at: $zmanagerDir"
-        try {
-            Invoke-Native -FilePath $git -Arguments @("-C", $zmanagerDir, "pull")
-        } catch {
-            Write-Host "Warning: git pull failed for zmanager at ${zmanagerDir}: $_"
-        }
-    }
+if (-not $SkipZmanager) {
+    Ensure-SiblingRepo -Name "zmanager" -Directory $zmanagerDir -RepoUrl $zmanagerRepo -BranchRef $zmanagerRef
 } else {
-    Write-Host "Cloning zmanager ($zmanagerRef) into: $zmanagerDir"
-    Invoke-Native -FilePath $git -Arguments @(
-        "clone", "--depth", "1", "--branch", $zmanagerRef, $zmanagerRepo, $zmanagerDir
-    )
-    Write-Host "zmanager clone complete."
+    Write-Host "Skipping zmanager sibling (-SkipZmanager)."
 }
+
+# ── forensic-vfs-engine ────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "forensic-vfs-engine" -Directory $forensicVfsEngineDir -RepoUrl $forensicVfsEngineRepo -BranchRef $forensicVfsEngineRef
+
+# ── ntfs-forensic ──────────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "ntfs-forensic" -Directory $ntfsForensicDir -RepoUrl $ntfsForensicRepo -BranchRef $ntfsForensicRef
+
+# ── udf-forensic ───────────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "udf-forensic" -Directory $udfForensicDir -RepoUrl $udfForensicRepo -BranchRef $udfForensicRef
+
+# ── dpp ────────────────────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "dpp" -Directory $dppDir -RepoUrl $dppRepo -BranchRef $dppRef
