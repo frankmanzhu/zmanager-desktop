@@ -172,6 +172,7 @@ impl ArchiveIndexRegistry {
                     Path::new(&archive_path),
                     BrowserListOptions {
                         password: password.as_deref(),
+                        ..Default::default()
                     },
                     |entry| {
                         if cancelled.load(AtomicOrdering::Acquire) {
@@ -300,6 +301,7 @@ impl ArchiveIndexRegistry {
                         &parent_path_clone,
                         BrowserListOptions {
                             password: password_clone.as_deref(),
+                            ..Default::default()
                         },
                     )
                 })

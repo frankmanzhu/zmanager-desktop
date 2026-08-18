@@ -73,6 +73,7 @@
         "ext": [
           "7z",
           "cb7",
+          "sevenz",
           "7z.001"
         ],
         "name": "sevenZip archive",
@@ -93,7 +94,9 @@
       {
         "ext": [
           "cbt",
-          "tar"
+          "pax",
+          "tar",
+          "ustar"
         ],
         "name": "tar archive",
         "description": "tar archive",

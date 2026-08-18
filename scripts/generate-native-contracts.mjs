@@ -46,6 +46,11 @@ const KIND_OWNERS = {
   TarXz: "xz",
   TarZst: "tzst",
   TarLzma: "lzma",
+  TarLz: "lzip",
+  TarLzo: "lzo",
+  TarCompress: "compressZ",
+  TarLz4: "lz4",
+  TarUu: "genericPackages",
   AppleArchive: "appleArchive",
   Cab: "genericPackages",
   Cpio: "genericPackages",
@@ -57,9 +62,11 @@ const KIND_OWNERS = {
   Ar: "genericPackages",
   Mtree: "genericPackages",
   Msi: "genericPackages",
+  Vhd: "genericPackages",
+  Vmdk: "genericPackages",
+  Udf: "genericPackages",
   Tzap: null,
   SplitZip: null,
-  Unknown: null,
 };
 // Kinds the desktop recognizes but does not associate until a core-backed
 // extract path exists. Each name is validated against the contract below.
@@ -81,6 +88,8 @@ const RAW_SUFFIX_OWNERS = {
   lzo: "lzo",
   z: "compressZ",
   lrz: "lrz",
+  uu: "genericPackages",
+  b64: "genericPackages",
 };
 // TAR-wrapped compounds for raw codecs without a dedicated tar-* kind in core.
 const SYNTHETIC_COMPOUNDS = {

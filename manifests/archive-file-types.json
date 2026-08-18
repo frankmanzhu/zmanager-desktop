@@ -8,6 +8,7 @@
     "apk",
     "appx",
     "ar",
+    "b64",
     "br",
     "bz2",
     "cab",
@@ -15,6 +16,7 @@
     "cbr",
     "cbt",
     "cbz",
+    "cpgz",
     "cpio",
     "deb",
     "epub",
@@ -23,7 +25,6 @@
     "iso",
     "jar",
     "lha",
-    "lrz",
     "lz",
     "lz4",
     "lzh",
@@ -31,9 +32,12 @@
     "lzo",
     "msi",
     "mtree",
+    "pax",
     "rar",
     "rpm",
+    "sevenz",
     "tar",
+    "taz",
     "tbz",
     "tbz2",
     "tgz",
@@ -41,6 +45,11 @@
     "txz",
     "tzap",
     "tzst",
+    "udf",
+    "ustar",
+    "uu",
+    "vhd",
+    "vmdk",
     "war",
     "xar",
     "xpi",
@@ -51,6 +60,12 @@
     "zst"
   ],
   "compoundExtensions": [
+    "cpio.bz2",
+    "cpio.gz",
+    "cpio.lzma",
+    "cpio.xz",
+    "cpio.zst",
+    "tar.b64",
     "tar.br",
     "tar.bz2",
     "tar.gz",
@@ -59,6 +74,7 @@
     "tar.lz4",
     "tar.lzma",
     "tar.lzo",
+    "tar.uu",
     "tar.xz",
     "tar.z",
     "tar.zst"
@@ -94,7 +110,8 @@
       "id": "sevenZip",
       "primaryExtensions": [
         "7z",
-        "cb7"
+        "cb7",
+        "sevenz"
       ],
       "compoundExtensions": [],
       "splitSuffixes": [
@@ -126,7 +143,9 @@
       "id": "tar",
       "primaryExtensions": [
         "cbt",
-        "tar"
+        "pax",
+        "tar",
+        "ustar"
       ],
       "compoundExtensions": [],
       "splitSuffixes": [],
@@ -310,9 +329,7 @@
     },
     {
       "id": "lrz",
-      "primaryExtensions": [
-        "lrz"
-      ],
+      "primaryExtensions": [],
       "compoundExtensions": [
         "tar.lrz"
       ],
@@ -326,6 +343,7 @@
     {
       "id": "compressZ",
       "primaryExtensions": [
+        "taz",
         "z"
       ],
       "compoundExtensions": [
@@ -343,7 +361,9 @@
       "primaryExtensions": [
         "a",
         "ar",
+        "b64",
         "cab",
+        "cpgz",
         "cpio",
         "deb",
         "iso",
@@ -352,9 +372,21 @@
         "msi",
         "mtree",
         "rpm",
+        "udf",
+        "uu",
+        "vhd",
+        "vmdk",
         "xar"
       ],
-      "compoundExtensions": [],
+      "compoundExtensions": [
+        "cpio.bz2",
+        "cpio.gz",
+        "cpio.lzma",
+        "cpio.xz",
+        "cpio.zst",
+        "tar.b64",
+        "tar.uu"
+      ],
       "splitSuffixes": [],
       "mimeType": null,
       "mimeAliases": [],
@@ -448,6 +480,7 @@
         "apk",
         "appx",
         "ar",
+        "b64",
         "br",
         "bz2",
         "cab",
@@ -455,6 +488,7 @@
         "cbr",
         "cbt",
         "cbz",
+        "cpgz",
         "cpio",
         "deb",
         "epub",
@@ -463,7 +497,6 @@
         "iso",
         "jar",
         "lha",
-        "lrz",
         "lz",
         "lz4",
         "lzh",
@@ -471,15 +504,23 @@
         "lzo",
         "msi",
         "mtree",
+        "pax",
         "rar",
         "rpm",
+        "sevenz",
         "tar",
+        "taz",
         "tbz",
         "tbz2",
         "tgz",
         "tlzma",
         "txz",
         "tzst",
+        "udf",
+        "ustar",
+        "uu",
+        "vhd",
+        "vmdk",
         "war",
         "xar",
         "xpi",
@@ -488,6 +529,12 @@
         "zip",
         "zipx",
         "zst",
+        "cpio.bz2",
+        "cpio.gz",
+        "cpio.lzma",
+        "cpio.xz",
+        "cpio.zst",
+        "tar.b64",
         "tar.br",
         "tar.bz2",
         "tar.gz",
@@ -496,6 +543,7 @@
         "tar.lz4",
         "tar.lzma",
         "tar.lzo",
+        "tar.uu",
         "tar.xz",
         "tar.z",
         "tar.zst",

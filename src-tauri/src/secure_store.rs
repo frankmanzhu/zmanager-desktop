@@ -2,7 +2,7 @@
 
 use keyring::{Entry, Error as KeyringError};
 use serde_json::{Value, json};
-use zmanager_core::auth_client::{
+use zmanager_tzap_hosted::auth_client::{
     TzapAuthError, TzapBearerToken, TzapSessionRecord, TzapSessionStore,
 };
 use zmanager_core::identity_catalog::{

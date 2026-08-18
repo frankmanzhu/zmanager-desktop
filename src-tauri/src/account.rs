@@ -13,7 +13,7 @@ use openssl::x509::{X509, X509NameBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
-use zmanager_core::auth_client::{
+use zmanager_tzap_hosted::auth_client::{
     AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback,
     TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
     TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
@@ -344,7 +344,7 @@ pub fn account_fetch_current_user(
     };
     let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
 
-    let user = zmanager_core::auth_client::fetch_current_user(
+    let user = zmanager_tzap_hosted::auth_client::fetch_current_user(
         &transport,
         &config.hosted_account_base_url,
         session,
@@ -352,7 +352,7 @@ pub fn account_fetch_current_user(
     .map_err(|e| {
         if matches!(
             e,
-            zmanager_core::auth_client::TzapAuthError::HttpStatus { status_code: 401 }
+            zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 }
         ) {
             let mut store = runtime.1.lock().expect("account store lock poisoned");
             let _ = store.clear_session(ACCOUNT_KEY);
@@ -973,7 +973,7 @@ pub fn account_accept_contact_card(
 pub struct ResolvedTzapCreateInputs {
     pub recipient_public_keys: Option<Vec<Vec<u8>>>,
     pub one_time_recipient_certificate_paths: Option<Vec<PathBuf>>,
-    pub signing: Option<zmanager_core::tzap_backend::TzapX509SigningOptions>,
+    pub signing: Option<zmanager_core::engine::TzapX509SigningOptions>,
     pub signing_selection_provided: bool,
     pub recipient_selection_provided: bool,
 }
@@ -1129,7 +1129,7 @@ pub fn resolve_tzap_create_inputs(
                 .map_err(|error| account_error("account_secure_store_failed", error))?;
             (
                 Some(
-                    zmanager_core::tzap_backend::TzapX509SigningOptions::InMemory {
+                    zmanager_core::engine::TzapX509SigningOptions::InMemory {
                         signing_certificate: leaf,
                         signing_private_key: private_key,
                         signing_chain: identity
@@ -1145,7 +1145,7 @@ pub fn resolve_tzap_create_inputs(
         }
         Some(crate::dto::TzapSigningSelectionDto::OneTimePkcs12 { path, password }) => (
             Some(
-                zmanager_core::tzap_backend::TzapX509SigningOptions::Pkcs12 {
+                zmanager_core::engine::TzapX509SigningOptions::Pkcs12 {
                     identity: PathBuf::from(path),
                     password: zmanager_core::secrets::SecretString::from(password.as_str()),
                 },
@@ -1172,7 +1172,7 @@ pub fn resolve_tzap_create_inputs(
             }
             (
                 Some(
-                    zmanager_core::tzap_backend::TzapX509SigningOptions::CertificateAndKey {
+                    zmanager_core::engine::TzapX509SigningOptions::CertificateAndKey {
                         signing_certificate: PathBuf::from(certificate_path),
                         signing_private_key: PathBuf::from(private_key_path),
                         signing_chain: chain_paths.iter().map(PathBuf::from).collect(),

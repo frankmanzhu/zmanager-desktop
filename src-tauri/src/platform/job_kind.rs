@@ -14,9 +14,7 @@ impl From<JobKind> for JobKindDto {
             JobKind::TarZstdExtract => JobKindDto::TarZstdExtract,
             JobKind::TzapCreate => JobKindDto::TzapCreate,
             JobKind::TzapExtract => JobKindDto::TzapExtract,
-            #[cfg(target_os = "macos")]
             JobKind::AppleArchiveCreate => JobKindDto::AppleArchiveCreate,
-            #[cfg(target_os = "macos")]
             JobKind::AppleArchiveExtract => JobKindDto::AppleArchiveExtract,
             JobKind::ArchiveExtract => JobKindDto::ArchiveExtract,
             JobKind::RawStreamExtract => JobKindDto::RawStreamExtract,

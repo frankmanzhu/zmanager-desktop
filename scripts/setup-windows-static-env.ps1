@@ -222,6 +222,8 @@ $env:VCPKG_TARGET_TRIPLET = $Triplet
 # Point openssl-sys to the vcpkg-installed OpenSSL so it doesn't try to
 # build from source (which is unreliable on ARM64 Windows).
 $env:OPENSSL_DIR = Join-Path $VcpkgRoot "installed\$Triplet"
+$env:OPENSSL_STATIC = "1"
+$env:OPENSSL_NO_VENDOR = "1"
 $env:LIB = "$debugLib;$releaseLib;" + $env:LIB
 $env:INCLUDE = "$include;" + $env:INCLUDE
 

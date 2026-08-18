@@ -7,8 +7,7 @@ mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 
-pub(crate) mod apple_archive;
-mod archive_error;
+pub(crate) mod archive_error;
 mod job_kind;
 mod source_metadata;
 

@@ -1,6 +1,6 @@
 use reqwest::blocking::Client;
 use std::time::Duration;
-use zmanager_core::auth_client::{
+use zmanager_tzap_hosted::auth_client::{
     TzapAuthError, TzapAuthHttpMethod, TzapAuthHttpRequest, TzapAuthHttpResponse,
     TzapAuthHttpTransport,
 };

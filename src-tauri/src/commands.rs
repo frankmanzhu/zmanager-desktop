@@ -40,33 +40,18 @@ use crate::{
     quick_action::QuickActionLaunchCoordinator,
 };
 use zmanager_core::archive_browser::{self, BrowserExtractOptions, BrowserListOptions};
-use zmanager_core::jobs::{
-    CancellationToken, JobEvent, JobEventSink, run_7z_create_job_from_sources_with_plan_options,
-    run_7z_extract_job_with_password_and_policy,
-    run_libarchive_extract_job_with_password_and_policy,
-    run_rar_extract_job_with_password_and_policy,
-    run_tar_zst_create_job_from_sources_with_plan_options, run_tar_zst_extract_job_with_policy,
-    run_tzap_create_job_from_sources_with_plan_options,
-    run_zip_create_job_from_sources_with_plan_options,
-    run_zip_extract_job_with_password_and_policy,
+use zmanager_core::engine::{
+    AppleArchiveCreateOptions, CreateOptions, SevenZCreateOptions, TarGzCreateOptions,
+    TarZstdCreateOptions, TzapCreateOptions, TzapKeySource, TzapRestoreOptions,
+    TzapRestorePolicy, TzapX509TrustOptions, ZipCompression, ZipCreateOptions,
+    is_tzap_archive_path,
 };
-use zmanager_core::libarchive_backend::LibarchiveError;
+use zmanager_core::jobs::{CancellationToken, JobEvent, JobEventSink};
 use zmanager_core::manifest::{
     ArchiveManifest, ManifestFileType, PlanError, PlanOptions, plan_archives,
 };
-use zmanager_core::rar_backend::RarBackendError;
-use zmanager_core::raw_stream_backend::RawStreamError;
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
-use zmanager_core::sevenz_backend::{SevenZCreateOptions, SevenZCreateReport, SevenZError};
-use zmanager_core::tar_gz_backend::{TarGzCreateOptions, TarGzCreateReport};
-use zmanager_core::tar_zst_backend::{TarZstdCreateOptions, TarZstdCreateReport};
-use zmanager_core::tzap_backend::{
-    TzapCreateOptions, TzapCreateReport, TzapError, TzapKeySource, TzapX509TrustOptions,
-    inspect_tzap_x509_public_no_key_signer, verify_tzap_x509_public_no_key,
-};
-use zmanager_core::tzap_backend::{TzapRestoreOptions, TzapRestorePolicy};
-use zmanager_core::zip_backend::{ZipBackendError, ZipCreateOptions, ZipCreateReport};
 
 #[tauri::command]
 pub fn healthcheck() -> crate::dto::HealthcheckResponse {
@@ -211,6 +196,7 @@ pub fn list_archive(
         Path::new(&archive_path),
         BrowserListOptions {
             password: request.password.as_deref(),
+            ..Default::default()
         },
     )
     .map_err(crate::platform::map_archive_browser_error)?;
@@ -600,7 +586,6 @@ fn start_create_internal_with_resolver(
         .as_ref()
         .ok()
         .map(|manifest| create_progress_estimate_for_format(manifest, request.format));
-    let plan_for_thread = plan_result.ok();
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -708,7 +693,6 @@ fn start_create_internal_with_resolver(
     let destination = destination_path;
     let kind_for_thread = kind;
     let plan_options = plan_options_for_thread;
-    let plan = plan_for_thread;
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
         let mut resolved_tzap = match resolve_tzap() {
@@ -751,92 +735,38 @@ fn start_create_internal_with_resolver(
             resolved.recipient_public_keys = Some(public_keys);
             resolved.one_time_recipient_certificate_paths = Some(Vec::new());
         }
-        let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match format {
-            crate::dto::ArchiveFormatDto::Zip => {
-                let create_options = ZipCreateOptions {
-                    compression: match zip_compression {
-                        Some(crate::dto::ZipCompressionDto::Store) => {
-                            zmanager_core::zip_backend::ZipCompression::Store
-                        }
-                        _ => zmanager_core::zip_backend::ZipCompression::Deflate,
-                    },
-                    level: compression_level.map(i64::from),
-                    preserve_metadata,
-                    replace_existing,
-                    password: password.as_deref().map(SecretString::from),
-                    volume_size,
-                };
-                run_zip_create_job_from_sources_with_plan_options(
-                    &request_sources,
-                    &destination,
-                    &create_options,
-                    &plan_options,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_zip_create)
-                .map_err(map_zip_error)
-            }
+        let create_options = match format {
+            crate::dto::ArchiveFormatDto::Zip => CreateOptions::Zip(ZipCreateOptions {
+                compression: match zip_compression {
+                    Some(crate::dto::ZipCompressionDto::Store) => ZipCompression::Store,
+                    _ => ZipCompression::Deflate,
+                },
+                level: compression_level.map(i64::from),
+                preserve_metadata,
+                replace_existing,
+                password: password.as_deref().map(SecretString::from),
+                volume_size,
+            }),
             crate::dto::ArchiveFormatDto::TarZst => {
                 let level = compression_level
                     .and_then(|value| i32::try_from(value).ok())
                     .unwrap_or(TarZstdCreateOptions::default().level);
-                let create_options = TarZstdCreateOptions {
+                CreateOptions::TarZstd(TarZstdCreateOptions {
                     level,
                     preserve_metadata,
                     replace_existing,
                     ..TarZstdCreateOptions::default()
-                };
-                run_tar_zst_create_job_from_sources_with_plan_options(
-                    &request_sources,
-                    &destination,
-                    &create_options,
-                    &plan_options,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_tar_create)
-                .map_err(map_tar_zst_error)
+                })
             }
             crate::dto::ArchiveFormatDto::TarGz => {
                 let level = compression_level
                     .and_then(|value| i32::try_from(value).ok())
                     .unwrap_or(TarGzCreateOptions::default().level);
-                let create_options = TarGzCreateOptions {
+                CreateOptions::TarGz(TarGzCreateOptions {
                     level,
                     preserve_metadata,
                     replace_existing,
-                };
-                let manifest = match plan_archives(&request_sources, &plan_options) {
-                    Ok(manifest) => manifest,
-                    Err(err) => {
-                        registry_for_thread.emit_direct_event(
-                            &job_id,
-                            JobEventDto::failed_from_command_error(kind, map_plan_error(err)),
-                        );
-                        return;
-                    }
-                };
-                sink.emit(JobEvent::Started {
-                    kind: zmanager_core::jobs::JobKind::TarGzCreate,
-                    total_bytes: Some(manifest.total_bytes),
-                });
-                let mut context = zmanager_core::jobs::JobContext::new_with_progress_total(
-                    &token,
-                    &mut sink,
-                    Some(manifest.total_bytes),
-                );
-                let result =
-                    zmanager_core::tar_gz_backend::create_tar_gz_from_manifest_with_context(
-                        &manifest,
-                        &destination,
-                        &create_options,
-                        &mut context,
-                    );
-                context.flush_progress();
-                result
-                    .map(to_terminal_summary_for_tar_gz_create)
-                    .map_err(map_tar_gz_error)
+                })
             }
             crate::dto::ArchiveFormatDto::Tzap => {
                 let resolved = resolved_tzap;
@@ -872,7 +802,7 @@ fn start_create_internal_with_resolver(
                 } else {
                     None
                 };
-                let create_options = TzapCreateOptions {
+                CreateOptions::Tzap(TzapCreateOptions {
                     key_source,
                     level: compression_level
                         .and_then(|value| i32::try_from(value).ok())
@@ -883,56 +813,44 @@ fn start_create_internal_with_resolver(
                     recovery_percentage: tzap_recovery_percentage,
                     volume_loss_tolerance: tzap_volume_loss_tolerance,
                     x509_signing,
-                };
-                run_tzap_create_job_from_sources_with_plan_options(
-                    &request_sources,
-                    &destination,
-                    &create_options,
-                    &plan_options,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_tzap_create)
-                .map_err(map_tzap_error)
+                })
             }
-            crate::dto::ArchiveFormatDto::SevenZ => {
-                let create_options = SevenZCreateOptions {
-                    solid: seven_z_solid,
-                    level: compression_level,
-                    preserve_metadata,
-                    password: password.as_deref().map(SecretString::from),
-                    encrypt_file_names: seven_z_encrypt_file_names,
-                    replace_existing,
-                    volume_size,
-                    threads: seven_z_threads,
-                    chunk_size: seven_z_chunk_size,
-                };
-                run_7z_create_job_from_sources_with_plan_options(
-                    &request_sources,
-                    &destination,
-                    &create_options,
-                    &plan_options,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_seven_create)
-                .map_err(map_7z_error)
-            }
-            crate::dto::ArchiveFormatDto::AppleArchive => match plan.as_ref() {
-                Some(manifest) => crate::platform::apple_archive::create_apple_archive(
-                    manifest,
-                    &destination,
+            crate::dto::ArchiveFormatDto::SevenZ => CreateOptions::SevenZ(SevenZCreateOptions {
+                solid: seven_z_solid,
+                level: compression_level,
+                preserve_metadata,
+                password: password.as_deref().map(SecretString::from),
+                encrypt_file_names: seven_z_encrypt_file_names,
+                replace_existing,
+                volume_size,
+                threads: seven_z_threads,
+                chunk_size: seven_z_chunk_size,
+            }),
+            crate::dto::ArchiveFormatDto::AppleArchive => {
+                CreateOptions::AppleArchive(AppleArchiveCreateOptions {
                     preserve_metadata,
                     replace_existing,
-                    password.as_deref(),
-                    &token,
-                    &mut sink,
-                ),
-                None => Err(CommandErrorDto::operation_failed(
-                    "AppleArchive create requires a valid source plan".to_string(),
-                )),
-            },
+                    password: password.clone(),
+                    ..Default::default()
+                })
+            }
         };
+
+        let result = zmanager_core::jobs::run_engine_create_job_from_sources(
+            &request_sources,
+            &destination,
+            &create_options,
+            &plan_options,
+            &token,
+            &mut sink,
+        )
+        .map(|report| JobTerminalSummaryDto {
+            written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
+            skipped_entries: None,
+            written_bytes: report.written_bytes,
+            warnings: report.warnings,
+        })
+        .map_err(crate::platform::archive_error::map_engine_error);
 
         match result {
             Ok(summary) => {
@@ -1034,7 +952,7 @@ pub fn verify_tzap_certificate(
     request: crate::dto::VerifyTzapCertificateRequest,
 ) -> Result<crate::dto::VerifyTzapCertificateResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
-    if !zmanager_core::tzap_backend::is_tzap_archive_path(Path::new(&archive_path)) {
+    if !is_tzap_archive_path(Path::new(&archive_path)) {
         return Err(CommandErrorDto::invalid_request(
             "certificate verification is available only for TZAP archives",
         ));
@@ -1055,8 +973,8 @@ pub fn verify_tzap_certificate(
                 "trust validation requires the official TZAP root, a custom CA, or system roots",
             ));
         }
-        let report =
-            verify_tzap_x509_public_no_key(&archive_path, &trust).map_err(map_tzap_error)?;
+        let report = zmanager_core::engine::verify_tzap_x509_public_no_key(&archive_path, &trust)
+            .map_err(crate::platform::archive_error::map_engine_error)?;
         return Ok(crate::dto::VerifyTzapCertificateResponse {
             outcome: "trusted",
             subject: report.subject,
@@ -1070,8 +988,8 @@ pub fn verify_tzap_certificate(
         });
     }
 
-    let inspection =
-        inspect_tzap_x509_public_no_key_signer(&archive_path).map_err(map_tzap_error)?;
+    let inspection = zmanager_core::engine::inspect_tzap_x509_public_no_key_signer(&archive_path)
+        .map_err(crate::platform::archive_error::map_engine_error)?;
     Ok(crate::dto::VerifyTzapCertificateResponse {
         outcome: "signatureValid",
         subject: inspection.subject,
@@ -1209,7 +1127,6 @@ fn start_extract_internal_with_recipient_key_and_spawner(
         .map_err(subscription_error)?;
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
-    let family_for_thread = family;
     let policy = extraction_policy(
         request.overwrite,
         request.strip_components,
@@ -1225,88 +1142,59 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     spawn_worker(Box::new(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
         let result = if entry_paths.is_empty() {
-            match family_for_thread {
-                ArchiveFamily::Zip => run_zip_extract_job_with_password_and_policy(
-                    &archive_path,
-                    &destination_path,
-                    password.as_deref(),
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_zip_error),
-                ArchiveFamily::TarZst => run_tar_zst_extract_job_with_policy(
-                    &archive_path,
-                    &destination_path,
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_tar_zst_error),
-                ArchiveFamily::SevenZ => run_7z_extract_job_with_password_and_policy(
-                    &archive_path,
-                    &destination_path,
-                    password.as_deref(),
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_7z_error),
-                ArchiveFamily::Rar => run_rar_extract_job_with_password_and_policy(
-                    &archive_path,
-                    &destination_path,
-                    password.as_deref(),
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_rar_error),
-                ArchiveFamily::Tzap => {
-                    let key = if let Some(recipient_private_key) = recipient_private_key.as_ref() {
-                        zmanager_core::tzap_backend::TzapExtractKeySource::RecipientKeyBytes(
-                            recipient_private_key.expose_secret(),
-                        )
-                    } else if let Some(password) = password.as_deref() {
-                        zmanager_core::tzap_backend::TzapExtractKeySource::Password(password)
-                    } else {
-                        zmanager_core::tzap_backend::TzapExtractKeySource::None
-                    };
-                    run_tzap_extract_job_with_key_and_policy_and_restore_options(
-                        &archive_path,
-                        &destination_path,
-                        key,
-                        policy,
-                        tzap_restore_options,
-                        &token,
-                        &mut sink,
-                    )
-                    .map(to_terminal_summary_for_extract)
-                    .map_err(map_tzap_error)
+            sink.emit(JobEvent::Started {
+                kind: match kind {
+                    JobKindDto::ZipExtract => zmanager_core::jobs::JobKind::ZipExtract,
+                    JobKindDto::TarZstdExtract => zmanager_core::jobs::JobKind::TarZstdExtract,
+                    JobKindDto::SevenZExtract => zmanager_core::jobs::JobKind::SevenZExtract,
+                    JobKindDto::RarExtract => zmanager_core::jobs::JobKind::RarExtract,
+                    JobKindDto::TzapExtract => zmanager_core::jobs::JobKind::TzapExtract,
+                    JobKindDto::AppleArchiveExtract => {
+                        zmanager_core::jobs::JobKind::AppleArchiveExtract
+                    }
+                    _ => zmanager_core::jobs::JobKind::ArchiveExtract,
+                },
+                total_bytes: None,
+            });
+            let mut options = zmanager_core::engine::ExtractOptions {
+                destination: PathBuf::from(&destination_path),
+                policy,
+                recipient_key_bytes: recipient_private_key
+                    .as_ref()
+                    .map(|k| k.expose_secret().to_vec()),
+                tzap_password: password.clone(),
+                tzap_restore_options: Some(tzap_restore_options),
+                cancellation: Some(token.clone()),
+                ..Default::default()
+            };
+            let engine_res = zmanager_core::engine::create_default_engine();
+            match engine_res {
+                Ok(engine) => {
+                    let open_res = engine.open(
+                        zmanager_core::engine::ArchiveSource::from_path_autodetect(&archive_path),
+                        zmanager_core::engine::OpenOptions {
+                            password: password.clone(),
+                            recipient_key: None,
+                            ..Default::default()
+                        },
+                    );
+                    match open_res {
+                        Ok(mut handle) => handle
+                            .extract(&mut options)
+                            .map(|report| JobTerminalSummaryDto {
+                                written_entries: usize::try_from(report.written_entries)
+                                    .unwrap_or(usize::MAX),
+                                skipped_entries: Some(
+                                    usize::try_from(report.skipped_entries).unwrap_or(usize::MAX),
+                                ),
+                                written_bytes: report.written_bytes,
+                                warnings: report.warnings,
+                            })
+                            .map_err(crate::platform::archive_error::map_engine_error),
+                        Err(err) => Err(crate::platform::archive_error::map_engine_error(err)),
+                    }
                 }
-                ArchiveFamily::Archive => run_libarchive_extract_job_with_password_and_policy(
-                    &archive_path,
-                    &destination_path,
-                    password.as_deref(),
-                    policy,
-                    &token,
-                    &mut sink,
-                )
-                .map(to_terminal_summary_for_extract)
-                .map_err(map_libarchive_error),
-                ArchiveFamily::AppleArchive => {
-                    crate::platform::apple_archive::extract_apple_archive(
-                        &archive_path,
-                        &destination_path,
-                        policy,
-                        password.as_deref(),
-                        &token,
-                        &mut sink,
-                    )
-                }
+                Err(err) => Err(crate::platform::archive_error::map_engine_error(err)),
             }
         } else {
             run_selected_extract_job(
@@ -1336,50 +1224,6 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     }));
 
     Ok(response)
-}
-
-fn run_tzap_extract_job_with_key_and_policy_and_restore_options(
-    archive_path: impl AsRef<std::path::Path>,
-    destination: impl AsRef<std::path::Path>,
-    key: zmanager_core::tzap_backend::TzapExtractKeySource<'_>,
-    policy: ExtractionPolicy,
-    restore_options: zmanager_core::tzap_backend::TzapRestoreOptions,
-    token: &CancellationToken,
-    sink: &mut dyn zmanager_core::jobs::JobEventSink,
-) -> Result<zmanager_core::tzap_backend::TzapExtractReport, zmanager_core::tzap_backend::TzapError>
-{
-    if token.is_cancelled() {
-        return Err(zmanager_core::tzap_backend::TzapError::Cancelled);
-    }
-    sink.emit(zmanager_core::jobs::JobEvent::Started {
-        kind: zmanager_core::jobs::JobKind::TzapExtract,
-        total_bytes: None,
-    });
-    let mut context = zmanager_core::jobs::JobContext::new(token, sink);
-    let result = zmanager_core::tzap_backend::extract_tzap(
-        zmanager_core::tzap_backend::TzapExtractRequest {
-            key,
-            policy,
-            restore_options,
-            overwrite_resolver: None,
-            context: Some(&mut context),
-            fast: true,
-        },
-        archive_path,
-        destination,
-    );
-    context.flush_progress();
-    if let Err(err) = &result {
-        sink.emit(zmanager_core::jobs::JobEvent::Failed {
-            message: err.to_string(),
-        });
-    } else if let Ok(report) = &result {
-        sink.emit(zmanager_core::jobs::JobEvent::Completed {
-            entries: report.written_entries,
-            bytes: report.written_bytes,
-        });
-    }
-    result
 }
 
 fn complete_job_if_needed(
@@ -1636,7 +1480,6 @@ fn start_test_archive_internal(
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
     let retry_entry_paths = entry_paths.clone();
     let selected_entry_keys = Arc::new(entry_paths.into_iter().collect::<HashSet<_>>());
-    let family = detect_archive_family(&archive_path);
 
     let (response, _token) = registry
         .try_create_job(JobKindDto::TestArchive)
@@ -1682,45 +1525,37 @@ fn start_test_archive_internal(
             },
         );
 
-        let result: Result<JobTerminalSummaryDto, CommandErrorDto> = match family {
-            ArchiveFamily::Zip => {
-                let selected_entry_keys = Arc::clone(&selected_entry_keys);
-                zmanager_core::zip_backend::test_zip_with_password_filter(
-                    &archive_path,
-                    password.as_deref(),
-                    move |path| {
-                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
+        let result: Result<JobTerminalSummaryDto, CommandErrorDto> = (|| {
+            let engine = zmanager_core::engine::create_default_engine()
+                .map_err(crate::platform::archive_error::map_engine_error)?;
+            let mut handle = engine
+                .open(
+                    zmanager_core::engine::ArchiveSource::from_path_autodetect(&archive_path),
+                    zmanager_core::engine::OpenOptions {
+                        password: password.clone(),
+                        recipient_key: None,
+                        ..Default::default()
                     },
                 )
-                .map(to_terminal_summary_for_zip_test)
-                .map_err(map_zip_error)
-            }
-            ArchiveFamily::Tzap => {
-                let selected_entry_keys = Arc::clone(&selected_entry_keys);
-                zmanager_core::tzap_backend::test_tzap_with_optional_password_filter_and_x509_trust(
-                    &archive_path,
-                    password.as_deref(),
-                    move |path| {
-                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
-                    },
-                    None,
-                )
-                .map(to_terminal_summary_for_tzap_test)
-                .map_err(map_tzap_error)
-            }
-            _ => {
-                let selected_entry_keys = Arc::clone(&selected_entry_keys);
-                zmanager_core::libarchive_backend::test_archive_with_password_filter(
-                    &archive_path,
-                    password.as_deref(),
-                    move |path| {
-                        selected_entry_keys.is_empty() || selected_entry_keys.contains(path)
-                    },
-                )
-                .map(to_terminal_summary_for_libarchive_test)
-                .map_err(map_libarchive_error)
-            }
-        };
+                .map_err(crate::platform::archive_error::map_engine_error)?;
+            let selected_paths = selected_entry_keys.iter().cloned().collect::<Vec<_>>();
+            let report = handle
+                .test(&zmanager_core::engine::TestOptions {
+                    selected_paths,
+                    recipient_key: None,
+                    tzap_x509_trust: None,
+                    cancellation: None,
+                })
+                .map_err(crate::platform::archive_error::map_engine_error)?;
+            Ok(JobTerminalSummaryDto {
+                written_entries: usize::try_from(report.tested_entries).unwrap_or(usize::MAX),
+                skipped_entries: Some(
+                    usize::try_from(report.skipped_entries).unwrap_or(usize::MAX),
+                ),
+                written_bytes: report.tested_bytes,
+                warnings: report.warnings,
+            })
+        })();
 
         match result {
             Ok(summary) => {
@@ -2120,242 +1955,14 @@ pub(crate) fn map_browser_entry_kind(
     entry: zmanager_core::archive_browser::BrowserEntryKind,
 ) -> ArchiveEntryKindDto {
     match entry {
-        zmanager_core::archive_browser::BrowserEntryKind::File => ArchiveEntryKindDto::File,
+        zmanager_core::archive_browser::BrowserEntryKind::File
+        | zmanager_core::archive_browser::BrowserEntryKind::FileCopy => ArchiveEntryKindDto::File,
         zmanager_core::archive_browser::BrowserEntryKind::Directory => {
             ArchiveEntryKindDto::Directory
         }
         zmanager_core::archive_browser::BrowserEntryKind::Symlink => ArchiveEntryKindDto::Symlink,
         zmanager_core::archive_browser::BrowserEntryKind::Hardlink => ArchiveEntryKindDto::Hardlink,
         zmanager_core::archive_browser::BrowserEntryKind::Special => ArchiveEntryKindDto::Special,
-    }
-}
-
-pub(crate) fn map_zip_error(error: ZipBackendError) -> CommandErrorDto {
-    match error {
-        ZipBackendError::PasswordRequired => CommandErrorDto::password_required(
-            "This ZIP archive is encrypted and requires a password.",
-            Some("Enter the archive password.".to_string()),
-        ),
-        ZipBackendError::InvalidPassword => {
-            CommandErrorDto::invalid_password("The ZIP password was incorrect.")
-        }
-        ZipBackendError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        ZipBackendError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        ZipBackendError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("ZIP plan failed: {source}"))
-        }
-        ZipBackendError::VolumeSizeTooSmall { size, minimum } => CommandErrorDto::invalid_request(
-            format!("ZIP volume size {size} is smaller than minimum {minimum}"),
-        ),
-        ZipBackendError::UnsupportedSplitZip { .. } => CommandErrorDto::unsupported_format(
-            "ZIP split archives are unsupported for this operation in this path.".to_string(),
-        ),
-        ZipBackendError::InvalidSymlinkTarget { archive_path } => {
-            CommandErrorDto::operation_failed(format!("invalid symlink target for {archive_path}"))
-        }
-        ZipBackendError::Zip(source) => {
-            CommandErrorDto::operation_failed(format!("ZIP operation failed: {source}"))
-        }
-        ZipBackendError::Cancelled => CommandErrorDto::cancelled("ZIP job was cancelled."),
-    }
-}
-
-pub(crate) fn map_tar_zst_error(
-    error: zmanager_core::tar_zst_backend::TarZstdError,
-) -> CommandErrorDto {
-    match error {
-        zmanager_core::tar_zst_backend::TarZstdError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        zmanager_core::tar_zst_backend::TarZstdError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        zmanager_core::tar_zst_backend::TarZstdError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("TAR/ZST plan error: {source}"))
-        }
-        zmanager_core::tar_zst_backend::TarZstdError::MissingLinkTarget { archive_path } => {
-            CommandErrorDto::unsupported_format(format!(
-                "tar link entry has no target: {archive_path}"
-            ))
-        }
-        zmanager_core::tar_zst_backend::TarZstdError::Cancelled => {
-            CommandErrorDto::cancelled("TAR/ZST job was cancelled.")
-        }
-    }
-}
-
-fn map_tar_gz_error(error: zmanager_core::tar_gz_backend::TarGzError) -> CommandErrorDto {
-    match error {
-        zmanager_core::tar_gz_backend::TarGzError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        zmanager_core::tar_gz_backend::TarGzError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("TAR.GZ plan error: {source}"))
-        }
-        zmanager_core::tar_gz_backend::TarGzError::InvalidLevel { level } => {
-            CommandErrorDto::invalid_request(format!("Invalid compression level: {level}"))
-        }
-        zmanager_core::tar_gz_backend::TarGzError::Cancelled => {
-            CommandErrorDto::cancelled("TAR.GZ job was cancelled.")
-        }
-    }
-}
-
-pub(crate) fn map_7z_error(error: SevenZError) -> CommandErrorDto {
-    match error {
-        SevenZError::PasswordRequired => CommandErrorDto::password_required(
-            "This 7z archive is encrypted and requires a password.",
-            Some("Enter the archive password.".to_string()),
-        ),
-        SevenZError::InvalidPassword => {
-            CommandErrorDto::invalid_password("The 7z password was incorrect.")
-        }
-        SevenZError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        SevenZError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        SevenZError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("7z plan error: {source}"))
-        }
-        SevenZError::VolumeSizeTooSmall { size, minimum } => CommandErrorDto::invalid_request(
-            format!("7z volume size {size} bytes is smaller than minimum {minimum} bytes"),
-        ),
-        SevenZError::SevenZ(source) => {
-            CommandErrorDto::operation_failed(format!("7z operation failed: {source}"))
-        }
-        SevenZError::Cancelled => CommandErrorDto::cancelled("7z job was cancelled."),
-    }
-}
-
-pub(crate) fn map_tzap_error(error: TzapError) -> CommandErrorDto {
-    match error {
-        TzapError::PasswordRequired => CommandErrorDto::password_required(
-            "This TZAP archive is encrypted and requires a password.",
-            Some("Enter the archive password.".to_string()),
-        ),
-        TzapError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        TzapError::Io { path, source } => map_io_error(path.to_string_lossy().to_string(), source),
-        TzapError::Plan(source) => {
-            CommandErrorDto::operation_failed(format!("TZAP plan error: {source}"))
-        }
-        TzapError::Format(source) => {
-            CommandErrorDto::unsupported_format(format!("TZAP format rejected archive: {source}"))
-        }
-        TzapError::X509RootAuth(message) => CommandErrorDto::unsupported_format(format!(
-            "TZAP root-auth verification failed: {message}"
-        )),
-        TzapError::KeyWrap(message) => {
-            CommandErrorDto::operation_failed(format!("TZAP key wrapping failed: {message}"))
-        }
-        TzapError::RecipientKeyRequired => CommandErrorDto::unsupported_format(
-            "This TZAP archive requires a recipient private key.".to_string(),
-        ),
-        TzapError::Cancelled => CommandErrorDto::cancelled("TZAP job was cancelled."),
-    }
-}
-
-pub(crate) fn map_libarchive_error(error: LibarchiveError) -> CommandErrorDto {
-    match error {
-        LibarchiveError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        LibarchiveError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        LibarchiveError::MissingPath => {
-            CommandErrorDto::unsupported_format("archive entry has no path".to_string())
-        }
-        LibarchiveError::MissingLinkTarget { path } => {
-            CommandErrorDto::unsupported_format(format!("link entry has no target: {path}"))
-        }
-        LibarchiveError::EntryNotFound { path } => CommandErrorDto::not_found(
-            format!("archive entry not found: {path}"),
-            Some("Select a path present in this archive.".to_string()),
-        ),
-        LibarchiveError::StdoutSelectionNotSingleFile { selected_files } => {
-            CommandErrorDto::unsupported_format(format!(
-                "expected exactly one selected file, got {selected_files}"
-            ))
-        }
-        LibarchiveError::Archive(source) => {
-            CommandErrorDto::operation_failed(format!("libarchive error: {source}"))
-        }
-        LibarchiveError::RawStream(source) => map_raw_stream_error(source),
-        LibarchiveError::Cancelled => CommandErrorDto::cancelled("archive job was cancelled."),
-    }
-}
-
-pub(crate) fn map_raw_stream_error(error: RawStreamError) -> CommandErrorDto {
-    match error {
-        RawStreamError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        RawStreamError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        RawStreamError::MissingOutputName { archive_path } => {
-            CommandErrorDto::unsupported_format(format!(
-                "could not derive an output file name from {}",
-                archive_path.display()
-            ))
-        }
-        RawStreamError::ExternalToolUnavailable { tool, source } => {
-            CommandErrorDto::operation_failed(format!(
-                "required decoder tool {tool} is not available: {source}"
-            ))
-        }
-        RawStreamError::ExternalToolFailed {
-            tool,
-            archive_path,
-            status,
-            message,
-        } => {
-            let status = status.map_or_else(|| "unknown".to_string(), |status| status.to_string());
-            let detail = if message.is_empty() {
-                String::new()
-            } else {
-                format!(": {message}")
-            };
-            CommandErrorDto::operation_failed(format!(
-                "{tool} failed to decode {} with status {status}{detail}",
-                archive_path.display()
-            ))
-        }
-    }
-}
-
-pub(crate) fn map_rar_error(error: RarBackendError) -> CommandErrorDto {
-    match error {
-        RarBackendError::Io { path, source } => {
-            map_io_error(path.to_string_lossy().to_string(), source)
-        }
-        RarBackendError::Safety(source) => {
-            CommandErrorDto::unsafe_archive(format!("entry blocked by safety policy: {source}"))
-        }
-        RarBackendError::Unrar(source) => {
-            CommandErrorDto::operation_failed(format!("RAR error: {source}"))
-        }
-        RarBackendError::MissingLinkTarget { path } => {
-            CommandErrorDto::unsupported_format(format!("RAR link entry has no target: {path}"))
-        }
-        RarBackendError::InvalidLinkTarget {
-            path,
-            target,
-            reason,
-        } => CommandErrorDto::unsupported_format(format!(
-            "RAR link target is invalid for {path}: {target}: {reason}"
-        )),
-        RarBackendError::DictionaryTooLarge { path, size } => CommandErrorDto::invalid_request(
-            format!("RAR dictionary is too large for {path}: {size} bytes"),
-        ),
     }
 }
 
@@ -2419,7 +2026,10 @@ fn build_native_drag_items(
     let mut entries = Vec::new();
     archive_browser::visit_entries_with_options(
         Path::new(archive_path),
-        BrowserListOptions { password },
+        BrowserListOptions {
+            password,
+            ..Default::default()
+        },
         |entry| {
             entries.push(entry);
             true
@@ -2577,151 +2187,44 @@ fn stream_native_drag_entry(
     entry_path: &str,
     output: &mut dyn Write,
 ) -> Result<u64, CommandErrorDto> {
-    let archive_path = Path::new(archive_path);
+    stream_entry_to_writer(Path::new(archive_path), entry_path, output, password)
+}
 
-    if let Some(format) = zmanager_core::raw_stream_backend::detect_raw_stream_format(archive_path)
-    {
-        let output_name =
-            zmanager_core::raw_stream_backend::output_name_for_raw_stream(archive_path, format)
-                .ok_or_else(|| {
-                    CommandErrorDto::unsupported_format(format!(
-                        "could not derive an output file name from {}",
-                        archive_path.display()
-                    ))
-                })?;
-        if archive_entry_key(&output_name) != archive_entry_key(entry_path) {
-            return Err(CommandErrorDto::not_found(
+fn stream_entry_to_writer(
+    archive_path: &Path,
+    entry_path: &str,
+    output: &mut (dyn Write + '_),
+    password: Option<&str>,
+) -> Result<u64, CommandErrorDto> {
+    let engine = zmanager_core::engine::create_default_engine()
+        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let mut handle = engine
+        .open(
+            zmanager_core::engine::ArchiveSource::from_path_autodetect(archive_path),
+            zmanager_core::engine::OpenOptions {
+                password: password.map(str::to_owned),
+                ..Default::default()
+            },
+        )
+        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let listing = handle
+        .list()
+        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let target_key = archive_entry_key(entry_path);
+    let entry = listing
+        .entries
+        .iter()
+        .find(|e| archive_entry_key(&e.path) == target_key)
+        .ok_or_else(|| {
+            CommandErrorDto::not_found(
                 format!("archive entry not found: {entry_path}"),
                 Some("Open the archive again or choose a visible entry.".to_string()),
-            ));
-        }
-
-        let mut writer = DynWriteAdapter { inner: output };
-        return zmanager_core::raw_stream_backend::copy_raw_stream_to_writer(
-            archive_path,
-            format,
-            &mut writer,
-        )
-        .map_err(map_raw_stream_error);
-    }
-
-    match stream_archive_family(archive_path) {
-        ArchiveFamily::Zip => {
-            let mut writer = DynWriteAdapter { inner: output };
-            let report = zmanager_core::zip_backend::copy_zip_files_to_writer(
-                archive_path,
-                password,
-                |name| archive_entry_key(name) == archive_entry_key(entry_path),
-                &mut writer,
             )
-            .map_err(map_zip_error)?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-        ArchiveFamily::TarZst => {
-            let mut writer = DynWriteAdapter { inner: output };
-            let report = zmanager_core::tar_zst_backend::copy_tar_zst_files_to_writer(
-                archive_path,
-                |name| archive_entry_key(name) == archive_entry_key(entry_path),
-                &mut writer,
-            )
-            .map_err(map_tar_zst_error)?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-        ArchiveFamily::SevenZ => {
-            let mut writer = DynWriteAdapter { inner: output };
-            let report = zmanager_core::sevenz_backend::copy_7z_files_to_writer(
-                archive_path,
-                password,
-                |name| archive_entry_key(name) == archive_entry_key(entry_path),
-                &mut writer,
-            )
-            .map_err(map_7z_error)?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-        ArchiveFamily::Tzap => {
-            let key = match password {
-                Some(password) => {
-                    zmanager_core::tzap_backend::TzapExtractKeySource::Password(password)
-                }
-                None => zmanager_core::tzap_backend::TzapExtractKeySource::None,
-            };
-            let report = zmanager_core::tzap_backend::copy_tzap_file_to_writer(
-                archive_path,
-                key,
-                entry_path,
-                output,
-            )
-            .map_err(map_tzap_error)?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-        ArchiveFamily::AppleArchive => {
-            let mut writer = DynWriteAdapter { inner: output };
-            let report = crate::platform::apple_archive::copy_apple_archive_files_to_writer(
-                archive_path,
-                |name| archive_entry_key(name) == archive_entry_key(entry_path),
-                &mut writer,
-                password,
-            )?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-        ArchiveFamily::Rar | ArchiveFamily::Archive => {
-            let mut writer = DynWriteAdapter { inner: output };
-            let report = zmanager_core::libarchive_backend::copy_archive_files_to_writer(
-                archive_path,
-                password,
-                |name| archive_entry_key(name) == archive_entry_key(entry_path),
-                &mut writer,
-            )
-            .map_err(map_libarchive_error)?;
-            one_streamed_entry_bytes(entry_path, report.written_entries, report.written_bytes)
-        }
-    }
-}
-
-fn stream_archive_family(archive_path: &Path) -> ArchiveFamily {
-    let family = detect_archive_family(&archive_path.to_string_lossy());
-    if family == ArchiveFamily::Zip
-        && zmanager_core::libarchive_backend::is_split_zip_path(archive_path)
-    {
-        ArchiveFamily::Archive
-    } else {
-        family
-    }
-}
-
-fn one_streamed_entry_bytes(
-    entry_path: &str,
-    written_entries: usize,
-    written_bytes: u64,
-) -> Result<u64, CommandErrorDto> {
-    if written_entries == 1 {
-        return Ok(written_bytes);
-    }
-
-    if written_entries == 0 {
-        return Err(CommandErrorDto::not_found(
-            format!("archive entry was not streamed: {entry_path}"),
-            Some("Open the archive again or choose a regular file entry.".to_string()),
-        ));
-    }
-
-    Err(CommandErrorDto::operation_failed(format!(
-        "archive streamed {written_entries} files for one drag-out entry: {entry_path}"
-    )))
-}
-
-struct DynWriteAdapter<'a> {
-    inner: &'a mut dyn Write,
-}
-
-impl Write for DynWriteAdapter<'_> {
-    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        self.inner.write(buffer)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
-    }
+        })?;
+    let report = handle
+        .copy_entry(entry.id, output)
+        .map_err(crate::platform::archive_error::map_engine_error)?;
+    Ok(report.written_bytes)
 }
 
 fn map_overwrite_policy(policy: crate::dto::OverwritePolicyDto) -> OverwritePolicy {
@@ -2755,169 +2258,6 @@ fn extraction_policy(
         strip_components,
         limits: Default::default(),
         ignore_symlinks,
-    }
-}
-
-fn to_terminal_summary_for_zip_create(report: ZipCreateReport) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.written_entries,
-        skipped_entries: None,
-        written_bytes: report.written_bytes,
-        warnings: report.warnings,
-    }
-}
-
-fn to_terminal_summary_for_tar_create(report: TarZstdCreateReport) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.written_entries,
-        skipped_entries: None,
-        written_bytes: report.written_bytes,
-        warnings: report.warnings,
-    }
-}
-
-fn to_terminal_summary_for_tar_gz_create(report: TarGzCreateReport) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.written_entries,
-        skipped_entries: None,
-        written_bytes: report.written_bytes,
-        warnings: report.warnings,
-    }
-}
-
-fn to_terminal_summary_for_tzap_create(report: TzapCreateReport) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.written_entries,
-        skipped_entries: None,
-        written_bytes: report.written_bytes,
-        warnings: report.warnings,
-    }
-}
-
-fn to_terminal_summary_for_seven_create(report: SevenZCreateReport) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.written_entries,
-        skipped_entries: None,
-        written_bytes: report.written_bytes,
-        warnings: report.warnings,
-    }
-}
-
-fn to_terminal_summary_for_extract(report: impl ExtractSummary) -> JobTerminalSummaryDto {
-    report.into_summary()
-}
-
-fn to_terminal_summary_for_zip_test(
-    report: zmanager_core::zip_backend::ZipTestReport,
-) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.tested_entries,
-        skipped_entries: Some(report.skipped_entries),
-        written_bytes: report.tested_bytes,
-        warnings: Vec::new(),
-    }
-}
-
-fn to_terminal_summary_for_tzap_test(
-    report: zmanager_core::tzap_backend::TzapTestReport,
-) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.tested_entries,
-        skipped_entries: Some(report.skipped_entries),
-        written_bytes: report.tested_bytes,
-        warnings: report
-            .x509_root_auth
-            .map(|verification| {
-                let mut warnings = Vec::with_capacity(1 + verification.diagnostics.len());
-                warnings.push(format!(
-                    "tzap root-auth verified for {}",
-                    verification.subject
-                ));
-                warnings.extend(verification.diagnostics);
-                warnings
-            })
-            .unwrap_or_default(),
-    }
-}
-
-fn to_terminal_summary_for_libarchive_test(
-    report: zmanager_core::libarchive_backend::LibarchiveTestReport,
-) -> JobTerminalSummaryDto {
-    JobTerminalSummaryDto {
-        written_entries: report.tested_entries,
-        skipped_entries: Some(report.skipped_entries),
-        written_bytes: report.tested_bytes,
-        warnings: Vec::new(),
-    }
-}
-
-trait ExtractSummary {
-    fn into_summary(self) -> JobTerminalSummaryDto;
-}
-
-impl ExtractSummary for zmanager_core::zip_backend::ZipExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
-    }
-}
-
-impl ExtractSummary for zmanager_core::tar_zst_backend::TarZstdExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
-    }
-}
-
-impl ExtractSummary for zmanager_core::sevenz_backend::SevenZExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
-    }
-}
-
-impl ExtractSummary for zmanager_core::rar_backend::RarExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
-    }
-}
-
-impl ExtractSummary for zmanager_core::libarchive_backend::LibarchiveExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
-    }
-}
-
-impl ExtractSummary for zmanager_core::tzap_backend::TzapExtractReport {
-    fn into_summary(self) -> JobTerminalSummaryDto {
-        JobTerminalSummaryDto {
-            written_entries: self.written_entries,
-            skipped_entries: Some(self.skipped_entries),
-            written_bytes: self.written_bytes,
-            warnings: self.warnings,
-        }
     }
 }
 
@@ -3113,7 +2453,6 @@ mod tests {
     use std::sync::mpsc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use zmanager_core::manifest::{ManifestEntry, ManifestFileType, PermissionSnapshot};
-    use zmanager_core::safety::ExtractionSafetyError;
 
     #[test]
     fn create_plan_entry_dto_preserves_core_permission_mode() {
@@ -3503,8 +2842,18 @@ mod tests {
 
     #[test]
     fn mapping_password_required_is_distinct_from_invalid_password() {
-        let password_required = map_zip_error(ZipBackendError::PasswordRequired);
-        let invalid_password = map_zip_error(ZipBackendError::InvalidPassword);
+        let password_required = crate::platform::archive_error::map_engine_error(
+            zmanager_core::engine::ArchiveError::usable(
+                zmanager_core::engine::ErrorKind::PasswordRequired,
+                "Password required",
+            ),
+        );
+        let invalid_password = crate::platform::archive_error::map_engine_error(
+            zmanager_core::engine::ArchiveError::usable(
+                zmanager_core::engine::ErrorKind::WrongPassword,
+                "Invalid password",
+            ),
+        );
 
         assert_eq!(
             password_required.code,
@@ -3519,11 +2868,12 @@ mod tests {
 
     #[test]
     fn mapping_safety_errors_to_unsafe_archive() {
-        let safety_error = map_zip_error(ZipBackendError::Safety(
-            ExtractionSafetyError::UnsafeFileType {
-                archive_path: "blocked".to_string(),
-            },
-        ));
+        let safety_error = crate::platform::archive_error::map_engine_error(
+            zmanager_core::engine::ArchiveError::usable(
+                zmanager_core::engine::ErrorKind::SafetyViolation,
+                "blocked",
+            ),
+        );
 
         assert_eq!(
             safety_error.code,
@@ -3717,9 +3067,7 @@ mod tests {
             detect_archive_family("bundle.vol000.tzap"),
             ArchiveFamily::Tzap
         );
-        // A lone split-ZIP volume is not recognized by core without its final
-        // .zip; both old and new paths fail at extract time (benign).
-        assert_eq!(detect_archive_family("archive.z01"), ArchiveFamily::Archive);
+        assert_eq!(detect_archive_family("archive.z01"), ArchiveFamily::Zip);
     }
 
     #[test]

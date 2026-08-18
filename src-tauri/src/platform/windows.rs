@@ -846,40 +846,49 @@ mod windows_file_drag {
             let modified = 1_700_000_000;
             let descriptor =
                 file_descriptor(&drag_item("folder\\資料📦.txt", Some(size), Some(modified)));
-            let name_end = descriptor
-                .cFileName
+            let c_file_name = descriptor.cFileName;
+            let name_end = c_file_name
                 .iter()
                 .position(|value| *value == 0)
                 .expect("descriptor file name terminator");
 
             assert_eq!(
-                String::from_utf16(&descriptor.cFileName[..name_end]).expect("UTF-16 file name"),
+                String::from_utf16(&c_file_name[..name_end]).expect("UTF-16 file name"),
                 "folder\\資料📦.txt"
             );
-            assert_eq!(descriptor.dwFileAttributes, FILE_ATTRIBUTE_NORMAL);
-            assert_ne!(descriptor.dwFlags & FD_ATTRIBUTES.0 as u32, 0);
-            assert_ne!(descriptor.dwFlags & FD_FILESIZE.0 as u32, 0);
-            assert_ne!(descriptor.dwFlags & FD_WRITESTIME.0 as u32, 0);
-            assert_eq!(descriptor.nFileSizeHigh, 0x1234_5678);
-            assert_eq!(descriptor.nFileSizeLow, 0x9ABC_DEF0);
+            let dw_file_attributes = descriptor.dwFileAttributes;
+            assert_eq!(dw_file_attributes, FILE_ATTRIBUTE_NORMAL);
+            let dw_flags = descriptor.dwFlags;
+            assert_ne!(dw_flags & FD_ATTRIBUTES.0 as u32, 0);
+            assert_ne!(dw_flags & FD_FILESIZE.0 as u32, 0);
+            assert_ne!(dw_flags & FD_WRITESTIME.0 as u32, 0);
+            let n_file_size_high = descriptor.nFileSizeHigh;
+            let n_file_size_low = descriptor.nFileSizeLow;
+            assert_eq!(n_file_size_high, 0x1234_5678);
+            assert_eq!(n_file_size_low, 0x9ABC_DEF0);
 
             let expected_ticks = (modified + UNIX_EPOCH_AS_WINDOWS_FILETIME_SECONDS) * WINDOWS_TICK;
-            let actual_ticks = u64::from(descriptor.ftLastWriteTime.dwHighDateTime) << 32
-                | u64::from(descriptor.ftLastWriteTime.dwLowDateTime);
+            let last_write_time = descriptor.ftLastWriteTime;
+            let actual_ticks = u64::from(last_write_time.dwHighDateTime) << 32
+                | u64::from(last_write_time.dwLowDateTime);
             assert_eq!(actual_ticks, expected_ticks);
         }
 
         #[test]
         fn file_descriptor_omits_unknown_optional_metadata() {
             let descriptor = file_descriptor(&drag_item("report.txt", None, None));
+            let dw_flags = descriptor.dwFlags;
+            let n_file_size_high = descriptor.nFileSizeHigh;
+            let n_file_size_low = descriptor.nFileSizeLow;
+            let last_write_time = descriptor.ftLastWriteTime;
 
-            assert_ne!(descriptor.dwFlags & FD_ATTRIBUTES.0 as u32, 0);
-            assert_eq!(descriptor.dwFlags & FD_FILESIZE.0 as u32, 0);
-            assert_eq!(descriptor.dwFlags & FD_WRITESTIME.0 as u32, 0);
-            assert_eq!(descriptor.nFileSizeHigh, 0);
-            assert_eq!(descriptor.nFileSizeLow, 0);
-            assert_eq!(descriptor.ftLastWriteTime.dwHighDateTime, 0);
-            assert_eq!(descriptor.ftLastWriteTime.dwLowDateTime, 0);
+            assert_ne!(dw_flags & FD_ATTRIBUTES.0 as u32, 0);
+            assert_eq!(dw_flags & FD_FILESIZE.0 as u32, 0);
+            assert_eq!(dw_flags & FD_WRITESTIME.0 as u32, 0);
+            assert_eq!(n_file_size_high, 0);
+            assert_eq!(n_file_size_low, 0);
+            assert_eq!(last_write_time.dwHighDateTime, 0);
+            assert_eq!(last_write_time.dwLowDateTime, 0);
         }
 
         #[test]
