@@ -11,9 +11,8 @@ use tokio::sync::watch;
 use zmanager_core::archive_browser::{self, BrowserEntry, BrowserListOptions};
 
 use crate::dto::{
-    ArchiveChildrenPageDto, ArchiveChildrenRequest, ArchiveEntryDto, ArchiveEntryKindDto,
-    ArchiveIndexSnapshotDto, ArchiveIndexStartResponseDto, ArchiveIndexStatusDto,
-    ArchiveSearchRequest, StartArchiveIndexRequest,
+    ArchiveChildrenPageDto, ArchiveChildrenRequest, ArchiveEntryDto, ArchiveEntryKindDto, ArchiveIndexSnapshotDto, ArchiveIndexStartResponseDto,
+    ArchiveIndexStatusDto, ArchiveSearchRequest, StartArchiveIndexRequest,
 };
 use crate::error::CommandErrorDto;
 use crate::{diagnostics, diagnostics::DiagnosticLog};
@@ -57,50 +56,27 @@ struct ArchiveIndex {
 
 impl ArchiveIndexRegistry {
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(RegistryState {
-                next_session_id: 0,
-                sessions: HashMap::new(),
-            })),
-            diagnostics: None,
-        }
+        Self { state: Arc::new(Mutex::new(RegistryState { next_session_id: 0, sessions: HashMap::new() })), diagnostics: None }
     }
 
     pub fn with_diagnostics(diagnostics: DiagnosticLog) -> Self {
-        Self {
-            diagnostics: Some(diagnostics),
-            ..Self::new()
-        }
+        Self { diagnostics: Some(diagnostics), ..Self::new() }
     }
 
-    pub fn start(
-        &self,
-        request: StartArchiveIndexRequest,
-    ) -> Result<ArchiveIndexStartResponseDto, CommandErrorDto> {
+    pub fn start(&self, request: StartArchiveIndexRequest) -> Result<ArchiveIndexStartResponseDto, CommandErrorDto> {
         let archive_path = request.archive_path.trim().to_string();
         if archive_path.is_empty() {
-            return Err(CommandErrorDto::invalid_request(
-                "archivePath cannot be empty",
-            ));
+            return Err(CommandErrorDto::invalid_request("archivePath cannot be empty"));
         }
-        let password = request
-            .password
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
+        let password = request.password.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
 
         let (session_id, snapshot, cancelled, index) = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
             if state.sessions.len() >= MAX_ACTIVE_ARCHIVE_SESSIONS {
-                return Err(CommandErrorDto::operation_failed(
-                    "Too many archives are currently opening. Close an archive and try again.",
-                ));
+                return Err(CommandErrorDto::operation_failed("Too many archives are currently opening. Close an archive and try again."));
             }
-            state.next_session_id = state.next_session_id.checked_add(1).ok_or_else(|| {
-                CommandErrorDto::operation_failed("Archive session IDs exhausted.")
-            })?;
-            let format = Some(crate::dto::ArchiveFormatKindDto::from(
-                zmanager_core::archive_format::detect_archive_format(&archive_path),
-            ));
+            state.next_session_id = state.next_session_id.checked_add(1).ok_or_else(|| CommandErrorDto::operation_failed("Archive session IDs exhausted."))?;
+            let format = Some(crate::dto::ArchiveFormatKindDto::from(zmanager_core::archive_format::detect_archive_format(&archive_path)));
             let snapshot = Arc::new(ArchiveIndexSnapshotDto {
                 revision: "1".to_string(),
                 session_id: session_id.clone(),
@@ -118,32 +94,16 @@ impl ArchiveIndexRegistry {
             let index = Arc::new(Mutex::new(ArchiveIndex::new()));
             state.sessions.insert(
                 session_id.clone(),
-                SessionRecord {
-                    snapshot: snapshot.clone(),
-                    sender,
-                    index: index.clone(),
-                    cancelled: cancelled.clone(),
-                    password: password.clone(),
-                },
+                SessionRecord { snapshot: snapshot.clone(), sender, index: index.clone(), cancelled: cancelled.clone(), password: password.clone() },
             );
             (session_id, snapshot, cancelled, index)
         };
-        let archive_bytes = std::fs::metadata(&archive_path)
-            .ok()
-            .map(|metadata| metadata.len());
+        let archive_bytes = std::fs::metadata(&archive_path).ok().map(|metadata| metadata.len());
         self.record(
             "started",
             diagnostics::fields([
-                (
-                    "archiveBytes",
-                    archive_bytes
-                        .map(serde_json::Value::from)
-                        .unwrap_or(serde_json::Value::Null),
-                ),
-                (
-                    "format",
-                    serde_json::Value::String(archive_format_label(&archive_path)),
-                ),
+                ("archiveBytes", archive_bytes.map(serde_json::Value::from).unwrap_or(serde_json::Value::Null)),
+                ("format", serde_json::Value::String(archive_format_label(&archive_path))),
                 ("sessionId", serde_json::Value::String(session_id.clone())),
             ]),
         );
@@ -153,139 +113,78 @@ impl ArchiveIndexRegistry {
         let worker_session_id = session_id.clone();
         let spawn_failure_session_id = session_id.clone();
         let worker_started = Instant::now();
-        if let Err(error) = thread::Builder::new()
-            .name("archive-index".to_string())
-            .spawn(move || {
-                if archive_browser::supports_on_demand_directories(&archive_path) {
-                    registry.finish(
-                        &worker_session_id,
-                        Ok(ArchiveIndexStatistics {
-                            entry_count: 0,
-                            total_bytes: Some(0),
-                        }),
-                        worker_started.elapsed(),
-                    );
-                    return;
-                }
+        if let Err(error) = thread::Builder::new().name("archive-index".to_string()).spawn(move || {
+            if archive_browser::supports_on_demand_directories(&archive_path) {
+                registry.finish(&worker_session_id, Ok(ArchiveIndexStatistics { entry_count: 0, total_bytes: Some(0) }), worker_started.elapsed());
+                return;
+            }
 
-                let mut last_publication = Instant::now();
-                let mut unpublished_entries = 0;
-                let mut index_error = None;
-                let result = archive_browser::visit_entries_with_options(
-                    Path::new(&archive_path),
-                    BrowserListOptions {
-                        password: password.as_deref(),
-                        ..Default::default()
-                    },
-                    |entry| {
-                        if cancelled.load(AtomicOrdering::Acquire) {
-                            return false;
-                        }
-                        let insertion = index
-                            .lock()
-                            .unwrap_or_else(|error| error.into_inner())
-                            .insert(entry);
-                        if let Err(error) = insertion {
-                            index_error = Some(error);
-                            return false;
-                        }
-                        unpublished_entries += 1;
-                        if unpublished_entries >= ARCHIVE_INDEX_PUBLICATION_BATCH
-                            || last_publication.elapsed() >= ARCHIVE_INDEX_PUBLICATION_INTERVAL
-                        {
-                            let statistics = index
-                                .lock()
-                                .unwrap_or_else(|error| error.into_inner())
-                                .statistics();
-                            registry.publish_progress(&worker_session_id, statistics);
-                            unpublished_entries = 0;
-                            last_publication = Instant::now();
-                        }
-                        true
-                    },
-                )
-                .map(|_| {
-                    index
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .statistics()
-                })
-                .map_err(crate::platform::map_archive_browser_error);
-                if cancelled.load(AtomicOrdering::Acquire) {
-                    return;
-                }
-                registry.finish(
-                    &worker_session_id,
-                    index_error.map_or(result, Err),
-                    worker_started.elapsed(),
-                );
-            })
-        {
+            let mut last_publication = Instant::now();
+            let mut unpublished_entries = 0;
+            let mut index_error = None;
+            let result = archive_browser::visit_entries_with_options(
+                Path::new(&archive_path),
+                BrowserListOptions { password: password.as_deref(), ..Default::default() },
+                |entry| {
+                    if cancelled.load(AtomicOrdering::Acquire) {
+                        return false;
+                    }
+                    let insertion = index.lock().unwrap_or_else(|error| error.into_inner()).insert(entry);
+                    if let Err(error) = insertion {
+                        index_error = Some(error);
+                        return false;
+                    }
+                    unpublished_entries += 1;
+                    if unpublished_entries >= ARCHIVE_INDEX_PUBLICATION_BATCH || last_publication.elapsed() >= ARCHIVE_INDEX_PUBLICATION_INTERVAL {
+                        let statistics = index.lock().unwrap_or_else(|error| error.into_inner()).statistics();
+                        registry.publish_progress(&worker_session_id, statistics);
+                        unpublished_entries = 0;
+                        last_publication = Instant::now();
+                    }
+                    true
+                },
+            )
+            .map(|_| index.lock().unwrap_or_else(|error| error.into_inner()).statistics())
+            .map_err(crate::platform::map_archive_browser_error);
+            if cancelled.load(AtomicOrdering::Acquire) {
+                return;
+            }
+            registry.finish(&worker_session_id, index_error.map_or(result, Err), worker_started.elapsed());
+        }) {
             spawn_failure_registry.finish(
                 &spawn_failure_session_id,
-                Err(CommandErrorDto::operation_failed(format!(
-                    "Archive indexing worker could not start: {error}"
-                ))),
+                Err(CommandErrorDto::operation_failed(format!("Archive indexing worker could not start: {error}"))),
                 worker_started.elapsed(),
             );
         }
 
-        Ok(ArchiveIndexStartResponseDto {
-            session_id,
-            snapshot: (*snapshot).clone(),
-        })
+        Ok(ArchiveIndexStartResponseDto { session_id, snapshot: (*snapshot).clone() })
     }
 
-    pub async fn wait_for_change(
-        &self,
-        session_id: &str,
-        after_revision: Option<&str>,
-    ) -> Result<ArchiveIndexSnapshotDto, CommandErrorDto> {
+    pub async fn wait_for_change(&self, session_id: &str, after_revision: Option<&str>) -> Result<ArchiveIndexSnapshotDto, CommandErrorDto> {
         let mut receiver = {
             let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            state
-                .sessions
-                .get(session_id)
-                .map(|record| record.sender.subscribe())
-                .ok_or_else(|| archive_session_not_found(session_id))?
+            state.sessions.get(session_id).map(|record| record.sender.subscribe()).ok_or_else(|| archive_session_not_found(session_id))?
         };
         loop {
             let snapshot = receiver.borrow().clone();
-            if after_revision.is_none_or(|revision| revision != snapshot.revision)
-                || snapshot.status != ArchiveIndexStatusDto::Indexing
-            {
+            if after_revision.is_none_or(|revision| revision != snapshot.revision) || snapshot.status != ArchiveIndexStatusDto::Indexing {
                 return Ok((*snapshot).clone());
             }
-            receiver
-                .changed()
-                .await
-                .map_err(|_| archive_session_not_found(session_id))?;
+            receiver.changed().await.map_err(|_| archive_session_not_found(session_id))?;
         }
     }
 
-    pub async fn children(
-        &self,
-        request: ArchiveChildrenRequest,
-    ) -> Result<ArchiveChildrenPageDto, CommandErrorDto> {
+    pub async fn children(&self, request: ArchiveChildrenRequest) -> Result<ArchiveChildrenPageDto, CommandErrorDto> {
         let parent_path = normalize_archive_path(&request.parent_path);
 
         let (archive_path, password, index_mutex, revision) = {
             let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            let record = state
-                .sessions
-                .get(&request.session_id)
-                .ok_or_else(|| archive_session_not_found(&request.session_id))?;
+            let record = state.sessions.get(&request.session_id).ok_or_else(|| archive_session_not_found(&request.session_id))?;
             if record.snapshot.status == ArchiveIndexStatusDto::Failed {
-                return Err(record.snapshot.latest_failure.clone().unwrap_or_else(|| {
-                    CommandErrorDto::operation_failed("Archive indexing failed.")
-                }));
+                return Err(record.snapshot.latest_failure.clone().unwrap_or_else(|| CommandErrorDto::operation_failed("Archive indexing failed.")));
             }
-            (
-                record.snapshot.archive_path.clone(),
-                record.password.clone(),
-                record.index.clone(),
-                record.snapshot.revision.clone(),
-            )
+            (record.snapshot.archive_path.clone(), record.password.clone(), record.index.clone(), record.snapshot.revision.clone())
         };
 
         if archive_browser::supports_on_demand_directories(&archive_path) {
@@ -302,10 +201,7 @@ impl ArchiveIndexRegistry {
                     archive_browser::list_directory_with_options(
                         &archive_path_clone,
                         &parent_path_clone,
-                        BrowserListOptions {
-                            password: password_clone.as_deref(),
-                            ..Default::default()
-                        },
+                        BrowserListOptions { password: password_clone.as_deref(), ..Default::default() },
                     )
                 })
                 .await
@@ -326,42 +222,20 @@ impl ArchiveIndexRegistry {
             }
         }
 
-        let index = index_mutex
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        let mut paths = index
-            .children
-            .get(&parent_path)
-            .map(|paths| paths.iter().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
+        let index = index_mutex.lock().unwrap_or_else(|error| error.into_inner());
+        let mut paths = index.children.get(&parent_path).map(|paths| paths.iter().cloned().collect::<Vec<_>>()).unwrap_or_default();
         let sort_key = request.sort_key.as_deref().unwrap_or("name");
         let ascending = request.sort_ascending.unwrap_or(true);
-        paths.sort_by(|left, right| {
-            compare_paths_by_sort(left, right, &index.entries, sort_key, ascending)
-        });
+        paths.sort_by(|left, right| compare_paths_by_sort(left, right, &index.entries, sort_key, ascending));
         let cursor_scope = format!("{parent_path}\0{sort_key}\0{ascending}");
-        let limit = request
-            .limit
-            .unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE)
-            .clamp(1, MAX_ARCHIVE_PAGE_SIZE);
-        let offset = decode_cursor(
-            request.cursor.as_deref(),
-            &request.session_id,
-            &cursor_scope,
-            &revision,
-        )?;
+        let limit = request.limit.unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE).clamp(1, MAX_ARCHIVE_PAGE_SIZE);
+        let offset = decode_cursor(request.cursor.as_deref(), &request.session_id, &cursor_scope, &revision)?;
         if offset > paths.len() {
-            return Err(CommandErrorDto::invalid_request(
-                "Archive page cursor is out of range.",
-            ));
+            return Err(CommandErrorDto::invalid_request("Archive page cursor is out of range."));
         }
         let end = offset.saturating_add(limit).min(paths.len());
-        let entries = paths[offset..end]
-            .iter()
-            .filter_map(|path| index.entries.get(path).cloned())
-            .collect();
-        let next_cursor = (end < paths.len())
-            .then(|| encode_cursor(&request.session_id, &cursor_scope, &revision, end));
+        let entries = paths[offset..end].iter().filter_map(|path| index.entries.get(path).cloned()).collect();
+        let next_cursor = (end < paths.len()).then(|| encode_cursor(&request.session_id, &cursor_scope, &revision, end));
         Ok(ArchiveChildrenPageDto {
             session_id: request.session_id,
             revision,
@@ -374,13 +248,8 @@ impl ArchiveIndexRegistry {
     }
 
     pub fn close(&self, session_id: &str) -> Result<(), CommandErrorDto> {
-        let record = self
-            .state
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .sessions
-            .remove(session_id)
-            .ok_or_else(|| archive_session_not_found(session_id))?;
+        let record =
+            self.state.lock().unwrap_or_else(|error| error.into_inner()).sessions.remove(session_id).ok_or_else(|| archive_session_not_found(session_id))?;
         record.cancelled.store(true, AtomicOrdering::Release);
         let cancelled = Arc::new(ArchiveIndexSnapshotDto {
             revision: next_revision(&record.snapshot.revision),
@@ -397,72 +266,31 @@ impl ArchiveIndexRegistry {
         Ok(())
     }
 
-    pub fn search(
-        &self,
-        request: ArchiveSearchRequest,
-    ) -> Result<ArchiveChildrenPageDto, CommandErrorDto> {
+    pub fn search(&self, request: ArchiveSearchRequest) -> Result<ArchiveChildrenPageDto, CommandErrorDto> {
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let record = state
-            .sessions
-            .get(&request.session_id)
-            .ok_or_else(|| archive_session_not_found(&request.session_id))?;
+        let record = state.sessions.get(&request.session_id).ok_or_else(|| archive_session_not_found(&request.session_id))?;
         if record.snapshot.status == ArchiveIndexStatusDto::Indexing {
-            return Err(CommandErrorDto::operation_failed(
-                "Archive search becomes available when indexing is complete.",
-            ));
+            return Err(CommandErrorDto::operation_failed("Archive search becomes available when indexing is complete."));
         }
         if archive_browser::supports_on_demand_directories(&record.snapshot.archive_path) {
-            return Err(CommandErrorDto::operation_failed(
-                "Search is not currently supported for on-demand archives.",
-            ));
+            return Err(CommandErrorDto::operation_failed("Search is not currently supported for on-demand archives."));
         }
-        let index = record
-            .index
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let index = record.index.lock().unwrap_or_else(|error| error.into_inner());
         let normalized_query = request.query.trim().to_lowercase();
-        let mut paths = index
-            .entries
-            .keys()
-            .filter(|path| {
-                normalized_query.is_empty() || path.to_lowercase().contains(&normalized_query)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut paths =
+            index.entries.keys().filter(|path| normalized_query.is_empty() || path.to_lowercase().contains(&normalized_query)).cloned().collect::<Vec<_>>();
         let sort_key = request.sort_key.as_deref().unwrap_or("name");
         let ascending = request.sort_ascending.unwrap_or(true);
-        paths.sort_by(|left, right| {
-            compare_paths_by_sort(left, right, &index.entries, sort_key, ascending)
-        });
+        paths.sort_by(|left, right| compare_paths_by_sort(left, right, &index.entries, sort_key, ascending));
         let cursor_scope = format!("?search={normalized_query}\0{sort_key}\0{ascending}");
-        let limit = request
-            .limit
-            .unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE)
-            .clamp(1, MAX_ARCHIVE_PAGE_SIZE);
-        let offset = decode_cursor(
-            request.cursor.as_deref(),
-            &request.session_id,
-            &cursor_scope,
-            &record.snapshot.revision,
-        )?;
+        let limit = request.limit.unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE).clamp(1, MAX_ARCHIVE_PAGE_SIZE);
+        let offset = decode_cursor(request.cursor.as_deref(), &request.session_id, &cursor_scope, &record.snapshot.revision)?;
         if offset > paths.len() {
-            return Err(CommandErrorDto::invalid_request(
-                "Archive search cursor is out of range.",
-            ));
+            return Err(CommandErrorDto::invalid_request("Archive search cursor is out of range."));
         }
         let end = offset.saturating_add(limit).min(paths.len());
-        let entries = paths[offset..end]
-            .iter()
-            .filter_map(|path| index.entries.get(path).cloned())
-            .collect();
-        let next_cursor = (end < paths.len()).then(|| {
-            encode_cursor(
-                &request.session_id,
-                &cursor_scope,
-                &record.snapshot.revision,
-                end,
-            )
-        });
+        let entries = paths[offset..end].iter().filter_map(|path| index.entries.get(path).cloned()).collect();
+        let next_cursor = (end < paths.len()).then(|| encode_cursor(&request.session_id, &cursor_scope, &record.snapshot.revision, end));
         Ok(ArchiveChildrenPageDto {
             session_id: request.session_id,
             revision: record.snapshot.revision.clone(),
@@ -474,11 +302,7 @@ impl ArchiveIndexRegistry {
         })
     }
 
-    pub fn drag_entries(
-        &self,
-        archive_path: &str,
-        entry_paths: &[String],
-    ) -> Result<Option<Vec<ArchiveEntryDto>>, CommandErrorDto> {
+    pub fn drag_entries(&self, archive_path: &str, entry_paths: &[String]) -> Result<Option<Vec<ArchiveEntryDto>>, CommandErrorDto> {
         let normalized_archive_path = archive_path.trim();
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let Some(record) = state
@@ -493,10 +317,7 @@ impl ArchiveIndexRegistry {
         else {
             return Ok(None);
         };
-        let index = record
-            .index
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let index = record.index.lock().unwrap_or_else(|error| error.into_inner());
         let mut selected_paths = BTreeSet::new();
         let mut selected_entries = Vec::new();
         for requested in entry_paths {
@@ -511,23 +332,15 @@ impl ArchiveIndexRegistry {
                 continue;
             }
             if direct.is_some_and(|entry| entry.kind != ArchiveEntryKindDto::Directory) {
-                return Err(CommandErrorDto::unsupported_format(format!(
-                    "entry cannot be dragged out as a virtual file: {requested}"
-                )));
+                return Err(CommandErrorDto::unsupported_format(format!("entry cannot be dragged out as a virtual file: {requested}")));
             }
 
             if record.snapshot.status == ArchiveIndexStatusDto::Indexing {
                 return Ok(None);
             }
             let prefix = format!("{requested}/");
-            let mut descendants = index
-                .entries
-                .values()
-                .filter(|entry| {
-                    entry.kind == ArchiveEntryKindDto::File && entry.path.starts_with(&prefix)
-                })
-                .cloned()
-                .collect::<Vec<_>>();
+            let mut descendants =
+                index.entries.values().filter(|entry| entry.kind == ArchiveEntryKindDto::File && entry.path.starts_with(&prefix)).cloned().collect::<Vec<_>>();
             descendants.sort_by(|left, right| left.path.cmp(&right.path));
             if descendants.is_empty() {
                 return Err(CommandErrorDto::not_found(
@@ -552,8 +365,7 @@ impl ArchiveIndexRegistry {
         if record.cancelled.load(AtomicOrdering::Acquire) {
             return;
         }
-        let is_first_content =
-            record.snapshot.discovered_entries == 0 && statistics.entry_count > 0;
+        let is_first_content = record.snapshot.discovered_entries == 0 && statistics.entry_count > 0;
         let revision = next_revision(&record.snapshot.revision);
         let snapshot = Arc::new(ArchiveIndexSnapshotDto {
             revision,
@@ -573,25 +385,14 @@ impl ArchiveIndexRegistry {
             self.record(
                 "firstContentIndexed",
                 diagnostics::fields([
-                    (
-                        "discoveredEntries",
-                        serde_json::Value::from(statistics.entry_count),
-                    ),
-                    (
-                        "sessionId",
-                        serde_json::Value::String(session_id.to_string()),
-                    ),
+                    ("discoveredEntries", serde_json::Value::from(statistics.entry_count)),
+                    ("sessionId", serde_json::Value::String(session_id.to_string())),
                 ]),
             );
         }
     }
 
-    fn finish(
-        &self,
-        session_id: &str,
-        result: Result<ArchiveIndexStatistics, CommandErrorDto>,
-        elapsed: Duration,
-    ) {
+    fn finish(&self, session_id: &str, result: Result<ArchiveIndexStatistics, CommandErrorDto>, elapsed: Duration) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let Some(record) = state.sessions.get_mut(session_id) else {
             return;
@@ -601,11 +402,7 @@ impl ArchiveIndexRegistry {
         }
         let snapshot = match result {
             Ok(statistics) => {
-                let status = if statistics.entry_count == 0 {
-                    ArchiveIndexStatusDto::Empty
-                } else {
-                    ArchiveIndexStatusDto::Ready
-                };
+                let status = if statistics.entry_count == 0 { ArchiveIndexStatusDto::Empty } else { ArchiveIndexStatusDto::Ready };
                 ArchiveIndexSnapshotDto {
                     revision: next_revision(&record.snapshot.revision),
                     session_id: session_id.to_string(),
@@ -641,18 +438,9 @@ impl ArchiveIndexRegistry {
         self.record(
             "finished",
             diagnostics::fields([
-                (
-                    "discoveredEntries",
-                    serde_json::Value::from(discovered_entries),
-                ),
-                (
-                    "elapsedMs",
-                    serde_json::Value::from(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)),
-                ),
-                (
-                    "sessionId",
-                    serde_json::Value::String(session_id.to_string()),
-                ),
+                ("discoveredEntries", serde_json::Value::from(discovered_entries)),
+                ("elapsedMs", serde_json::Value::from(u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX))),
+                ("sessionId", serde_json::Value::String(session_id.to_string())),
                 ("status", serde_json::Value::String(status)),
             ]),
         );
@@ -670,18 +458,11 @@ fn archive_format_label(path: &str) -> String {
     if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
         return "tarZst".to_string();
     }
-    std::path::Path::new(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or("unknown")
-        .to_ascii_lowercase()
+    std::path::Path::new(path).extension().and_then(|extension| extension.to_str()).unwrap_or("unknown").to_ascii_lowercase()
 }
 
 fn archive_session_sequence(session_id: &str) -> u64 {
-    session_id
-        .strip_prefix("archive-")
-        .and_then(|sequence| sequence.parse().ok())
-        .unwrap_or(0)
+    session_id.strip_prefix("archive-").and_then(|sequence| sequence.parse().ok()).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -731,57 +512,29 @@ impl ArchiveIndex {
             .estimated_metadata_bytes
             .saturating_add(path.len())
             .saturating_add(128)
-            .saturating_add(
-                browser_entry
-                    .metadata_diagnostics
-                    .iter()
-                    .map(String::len)
-                    .sum::<usize>(),
-            )
-            .saturating_add(estimate_ancestor_growth(
-                &path,
-                browser_entry.kind,
-                &self.entries,
-                &self.children,
-            ));
+            .saturating_add(browser_entry.metadata_diagnostics.iter().map(String::len).sum::<usize>())
+            .saturating_add(estimate_ancestor_growth(&path, browser_entry.kind, &self.entries, &self.children));
         if self.estimated_metadata_bytes > MAX_ARCHIVE_INDEX_METADATA_BYTES {
-            return Err(CommandErrorDto::operation_failed(
-                "Archive metadata exceeds the bounded browse index limit. Extract All and Test remain available.",
-            ));
+            return Err(CommandErrorDto::operation_failed("Archive metadata exceeds the bounded browse index limit. Extract All and Test remain available."));
         }
-        ensure_ancestors(
-            &path,
-            browser_entry.kind,
-            &mut self.entries,
-            &mut self.children,
-        );
-        self.entries
-            .insert(path.clone(), browser_entry_to_dto(browser_entry, path));
+        ensure_ancestors(&path, browser_entry.kind, &mut self.entries, &mut self.children);
+        self.entries.insert(path.clone(), browser_entry_to_dto(browser_entry, path));
         Ok(())
     }
 
     fn statistics(&self) -> ArchiveIndexStatistics {
-        ArchiveIndexStatistics {
-            entry_count: self.entry_count,
-            total_bytes: self.has_total.then_some(self.total_bytes),
-        }
+        ArchiveIndexStatistics { entry_count: self.entry_count, total_bytes: self.has_total.then_some(self.total_bytes) }
     }
 }
 
 #[cfg(test)]
-fn build_index(
-    listing: zmanager_core::archive_browser::BrowserListing,
-) -> Result<ArchiveIndexBuild, CommandErrorDto> {
+fn build_index(listing: zmanager_core::archive_browser::BrowserListing) -> Result<ArchiveIndexBuild, CommandErrorDto> {
     let mut index = ArchiveIndex::new();
     for browser_entry in listing.entries {
         index.insert(browser_entry)?;
     }
     let statistics = index.statistics();
-    Ok(ArchiveIndexBuild {
-        index,
-        entry_count: statistics.entry_count,
-        total_bytes: statistics.total_bytes,
-    })
+    Ok(ArchiveIndexBuild { index, entry_count: statistics.entry_count, total_bytes: statistics.total_bytes })
 }
 
 fn estimate_ancestor_growth(
@@ -791,26 +544,13 @@ fn estimate_ancestor_growth(
     children: &HashMap<String, BTreeSet<String>>,
 ) -> usize {
     let segments = path.split('/').collect::<Vec<_>>();
-    let directory_depth = if matches!(
-        kind,
-        zmanager_core::archive_browser::BrowserEntryKind::Directory
-    ) {
-        segments.len()
-    } else {
-        segments.len().saturating_sub(1)
-    };
+    let directory_depth =
+        if matches!(kind, zmanager_core::archive_browser::BrowserEntryKind::Directory) { segments.len() } else { segments.len().saturating_sub(1) };
     let mut parent = String::new();
     let mut growth = 0_usize;
     for (index, segment) in segments.iter().enumerate() {
-        let current = if parent.is_empty() {
-            (*segment).to_string()
-        } else {
-            format!("{parent}/{segment}")
-        };
-        if !children
-            .get(&parent)
-            .is_some_and(|paths| paths.contains(&current))
-        {
+        let current = if parent.is_empty() { (*segment).to_string() } else { format!("{parent}/{segment}") };
+        if !children.get(&parent).is_some_and(|paths| paths.contains(&current)) {
             growth = growth.saturating_add(current.len()).saturating_add(32);
         }
         if index < directory_depth && !entries.contains_key(&current) {
@@ -828,50 +568,35 @@ fn ensure_ancestors(
     children: &mut HashMap<String, BTreeSet<String>>,
 ) {
     let segments = path.split('/').collect::<Vec<_>>();
-    let directory_depth = if matches!(
-        kind,
-        zmanager_core::archive_browser::BrowserEntryKind::Directory
-    ) {
-        segments.len()
-    } else {
-        segments.len().saturating_sub(1)
-    };
+    let directory_depth =
+        if matches!(kind, zmanager_core::archive_browser::BrowserEntryKind::Directory) { segments.len() } else { segments.len().saturating_sub(1) };
     let mut parent = String::new();
     for (index, segment) in segments.iter().enumerate() {
-        let current = if parent.is_empty() {
-            (*segment).to_string()
-        } else {
-            format!("{parent}/{segment}")
-        };
-        children
-            .entry(parent.clone())
-            .or_default()
-            .insert(current.clone());
+        let current = if parent.is_empty() { (*segment).to_string() } else { format!("{parent}/{segment}") };
+        children.entry(parent.clone()).or_default().insert(current.clone());
         if index < directory_depth {
-            entries
-                .entry(current.clone())
-                .or_insert_with(|| ArchiveEntryDto {
-                    path: current.clone(),
-                    kind: ArchiveEntryKindDto::Directory,
-                    size: None,
-                    compressed_size: None,
-                    modified: None,
-                    mode: None,
-                    metadata_diagnostics: Vec::new(),
-                    encrypted: None,
-                    method: None,
-                    crc: None,
-                    comment: None,
-                    created: None,
-                    accessed: None,
-                    solid: None,
-                    link_target: None,
-                    attributes: None,
-                    uid: None,
-                    gid: None,
-                    owner: None,
-                    group: None,
-                });
+            entries.entry(current.clone()).or_insert_with(|| ArchiveEntryDto {
+                path: current.clone(),
+                kind: ArchiveEntryKindDto::Directory,
+                size: None,
+                compressed_size: None,
+                modified: None,
+                mode: None,
+                metadata_diagnostics: Vec::new(),
+                encrypted: None,
+                method: None,
+                crc: None,
+                comment: None,
+                created: None,
+                accessed: None,
+                solid: None,
+                link_target: None,
+                attributes: None,
+                uid: None,
+                gid: None,
+                owner: None,
+                group: None,
+            });
         }
         parent = current;
     }
@@ -907,25 +632,13 @@ fn compare_paths(left: &str, right: &str, entries: &HashMap<String, ArchiveEntry
     compare_paths_by_sort(left, right, entries, "name", true)
 }
 
-fn compare_paths_by_sort(
-    left: &str,
-    right: &str,
-    entries: &HashMap<String, ArchiveEntryDto>,
-    sort_key: &str,
-    ascending: bool,
-) -> Ordering {
-    let left_directory = entries
-        .get(left)
-        .is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
-    let right_directory = entries
-        .get(right)
-        .is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
+fn compare_paths_by_sort(left: &str, right: &str, entries: &HashMap<String, ArchiveEntryDto>, sort_key: &str, ascending: bool) -> Ordering {
+    let left_directory = entries.get(left).is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
+    let right_directory = entries.get(right).is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
     let value_ordering = match (entries.get(left), entries.get(right)) {
         (Some(left_entry), Some(right_entry)) => match sort_key {
             "size" => compare_optional(&left_entry.size, &right_entry.size),
-            "compressedSize" => {
-                compare_optional(&left_entry.compressed_size, &right_entry.compressed_size)
-            }
+            "compressedSize" => compare_optional(&left_entry.compressed_size, &right_entry.compressed_size),
             "modified" => compare_optional_timestamps(&left_entry.modified, &right_entry.modified),
             "created" => compare_optional_timestamps(&left_entry.created, &right_entry.created),
             "accessed" => compare_optional_timestamps(&left_entry.accessed, &right_entry.accessed),
@@ -939,27 +652,19 @@ fn compare_paths_by_sort(
             "method" => compare_optional_text(&left_entry.method, &right_entry.method),
             "crc" => compare_optional_text(&left_entry.crc, &right_entry.crc),
             "comment" => compare_optional_text(&left_entry.comment, &right_entry.comment),
-            "linkTarget" => {
-                compare_optional_text(&left_entry.link_target, &right_entry.link_target)
-            }
+            "linkTarget" => compare_optional_text(&left_entry.link_target, &right_entry.link_target),
             "attributes" => compare_optional_text(&left_entry.attributes, &right_entry.attributes),
             "owner" => compare_optional_text(&left_entry.owner, &right_entry.owner),
             "group" => compare_optional_text(&left_entry.group, &right_entry.group),
             "metadataDiagnostics" => compare_optional(
-                &(!left_entry.metadata_diagnostics.is_empty())
-                    .then_some(left_entry.metadata_diagnostics.len()),
-                &(!right_entry.metadata_diagnostics.is_empty())
-                    .then_some(right_entry.metadata_diagnostics.len()),
+                &(!left_entry.metadata_diagnostics.is_empty()).then_some(left_entry.metadata_diagnostics.len()),
+                &(!right_entry.metadata_diagnostics.is_empty()).then_some(right_entry.metadata_diagnostics.len()),
             ),
             _ => natural_cmp(archive_name(left), archive_name(right)),
         },
         _ => Ordering::Equal,
     };
-    let value_ordering = if ascending {
-        value_ordering
-    } else {
-        value_ordering.reverse()
-    };
+    let value_ordering = if ascending { value_ordering } else { value_ordering.reverse() };
     right_directory
         .cmp(&left_directory)
         .then(value_ordering)
@@ -978,13 +683,10 @@ fn archive_kind_rank(kind: ArchiveEntryKindDto) -> u8 {
 }
 
 fn compression_ratio_order(left: &ArchiveEntryDto, right: &ArchiveEntryDto) -> Ordering {
-    match (
-        left.size.zip(left.compressed_size),
-        right.size.zip(right.compressed_size),
-    ) {
-        (Some((left_size, left_packed)), Some((right_size, right_packed))) => left_packed
-            .saturating_mul(right_size)
-            .cmp(&right_packed.saturating_mul(left_size)),
+    match (left.size.zip(left.compressed_size), right.size.zip(right.compressed_size)) {
+        (Some((left_size, left_packed)), Some((right_size, right_packed))) => {
+            left_packed.saturating_mul(right_size).cmp(&right_packed.saturating_mul(left_size))
+        }
         (None, None) => Ordering::Equal,
         (None, Some(_)) => Ordering::Greater,
         (Some(_), None) => Ordering::Less,
@@ -1036,9 +738,7 @@ fn parse_epoch_timestamp(value: &str) -> Option<i128> {
     for _ in fraction.len()..9 {
         nanoseconds = nanoseconds.checked_mul(10)?;
     }
-    seconds
-        .checked_mul(1_000_000_000)?
-        .checked_add(if negative { -nanoseconds } else { nanoseconds })
+    seconds.checked_mul(1_000_000_000)?.checked_add(if negative { -nanoseconds } else { nanoseconds })
 }
 
 fn natural_cmp(left: &str, right: &str) -> Ordering {
@@ -1058,11 +758,7 @@ fn natural_cmp(left: &str, right: &str) -> Ordering {
                     .trim_start_matches('0')
                     .len()
                     .cmp(&right_number.trim_start_matches('0').len())
-                    .then_with(|| {
-                        left_number
-                            .trim_start_matches('0')
-                            .cmp(right_number.trim_start_matches('0'))
-                    })
+                    .then_with(|| left_number.trim_start_matches('0').cmp(right_number.trim_start_matches('0')))
                     .then_with(|| left_number.len().cmp(&right_number.len()));
                 if ordering != Ordering::Equal {
                     return ordering;
@@ -1091,11 +787,7 @@ fn archive_name(path: &str) -> &str {
 }
 
 fn normalize_archive_path(path: &str) -> String {
-    path.replace('\\', "/")
-        .split('/')
-        .filter(|segment| !segment.is_empty() && *segment != ".")
-        .collect::<Vec<_>>()
-        .join("/")
+    path.replace('\\', "/").split('/').filter(|segment| !segment.is_empty() && *segment != ".").collect::<Vec<_>>().join("/")
 }
 
 fn cursor_signature(session_id: &str, parent: &str, revision: &str) -> u64 {
@@ -1107,48 +799,30 @@ fn cursor_signature(session_id: &str, parent: &str, revision: &str) -> u64 {
 }
 
 fn encode_cursor(session_id: &str, parent: &str, revision: &str, offset: usize) -> String {
-    format!(
-        "v1:{:016x}:{offset}",
-        cursor_signature(session_id, parent, revision)
-    )
+    format!("v1:{:016x}:{offset}", cursor_signature(session_id, parent, revision))
 }
 
-fn decode_cursor(
-    cursor: Option<&str>,
-    session_id: &str,
-    parent: &str,
-    revision: &str,
-) -> Result<usize, CommandErrorDto> {
+fn decode_cursor(cursor: Option<&str>, session_id: &str, parent: &str, revision: &str) -> Result<usize, CommandErrorDto> {
     let Some(cursor) = cursor else {
         return Ok(0);
     };
     let mut parts = cursor.split(':');
     let valid = parts.next() == Some("v1")
-        && parts.next()
-            == Some(format!("{:016x}", cursor_signature(session_id, parent, revision)).as_str())
+        && parts.next() == Some(format!("{:016x}", cursor_signature(session_id, parent, revision)).as_str())
         && parts.clone().count() == 1;
     let offset = parts.next().and_then(|value| value.parse::<usize>().ok());
     if !valid || offset.is_none() {
-        return Err(CommandErrorDto::invalid_request(
-            "Archive page cursor is invalid or stale.",
-        ));
+        return Err(CommandErrorDto::invalid_request("Archive page cursor is invalid or stale."));
     }
     Ok(offset.expect("validated cursor offset"))
 }
 
 fn archive_session_not_found(session_id: &str) -> CommandErrorDto {
-    CommandErrorDto::not_found(
-        format!("Archive session {session_id} was not found."),
-        Some("Open the archive again.".to_string()),
-    )
+    CommandErrorDto::not_found(format!("Archive session {session_id} was not found."), Some("Open the archive again.".to_string()))
 }
 
 fn next_revision(revision: &str) -> String {
-    revision
-        .parse::<u64>()
-        .unwrap_or_default()
-        .saturating_add(1)
-        .to_string()
+    revision.parse::<u64>().unwrap_or_default().saturating_add(1).to_string()
 }
 
 impl Default for ArchiveIndexRegistry {
@@ -1237,63 +911,25 @@ mod tests {
         assert_field_sort!("created", created, Some("-1.5".into()), Some("-0.5".into()));
         assert_field_sort!("accessed", accessed, Some("9".into()), Some("10".into()));
         assert_field_sort!("mode", mode, Some(0o600), Some(0o700));
-        assert_field_sort!(
-            "kind",
-            kind,
-            ArchiveEntryKindDto::File,
-            ArchiveEntryKindDto::Symlink
-        );
+        assert_field_sort!("kind", kind, ArchiveEntryKindDto::File, ArchiveEntryKindDto::Symlink);
         assert_field_sort!("uid", uid, Some(1), Some(2));
         assert_field_sort!("gid", gid, Some(1), Some(2));
         assert_field_sort!("encrypted", encrypted, Some(false), Some(true));
         assert_field_sort!("solid", solid, Some(false), Some(true));
-        assert_field_sort!(
-            "method",
-            method,
-            Some("Deflate2".into()),
-            Some("Deflate10".into())
-        );
+        assert_field_sort!("method", method, Some("Deflate2".into()), Some("Deflate10".into()));
         assert_field_sort!("crc", crc, Some("00000001".into()), Some("00000002".into()));
-        assert_field_sort!(
-            "comment",
-            comment,
-            Some("Alpha2".into()),
-            Some("Alpha10".into())
-        );
-        assert_field_sort!(
-            "linkTarget",
-            link_target,
-            Some("target2".into()),
-            Some("target10".into())
-        );
-        assert_field_sort!(
-            "attributes",
-            attributes,
-            Some("0x1".into()),
-            Some("0x2".into())
-        );
-        assert_field_sort!(
-            "owner",
-            owner,
-            Some("owner2".into()),
-            Some("owner10".into())
-        );
-        assert_field_sort!(
-            "group",
-            group,
-            Some("group2".into()),
-            Some("group10".into())
-        );
+        assert_field_sort!("comment", comment, Some("Alpha2".into()), Some("Alpha10".into()));
+        assert_field_sort!("linkTarget", link_target, Some("target2".into()), Some("target10".into()));
+        assert_field_sort!("attributes", attributes, Some("0x1".into()), Some("0x2".into()));
+        assert_field_sort!("owner", owner, Some("owner2".into()), Some("owner10".into()));
+        assert_field_sort!("group", group, Some("group2".into()), Some("group10".into()));
 
         let mut low = dto_entry("z-low");
         let mut high = dto_entry("a-high");
         low.metadata_diagnostics = vec!["one".into()];
         high.metadata_diagnostics = vec!["one".into(), "two".into()];
         let entries = HashMap::from([(low.path.clone(), low), (high.path.clone(), high)]);
-        assert_eq!(
-            compare_paths_by_sort("z-low", "a-high", &entries, "metadataDiagnostics", true,),
-            Ordering::Less,
-        );
+        assert_eq!(compare_paths_by_sort("z-low", "a-high", &entries, "metadataDiagnostics", true,), Ordering::Less,);
 
         let mut low = dto_entry("z-low");
         let mut high = dto_entry("a-high");
@@ -1302,10 +938,7 @@ mod tests {
         high.size = Some(100);
         high.compressed_size = Some(20);
         let entries = HashMap::from([(low.path.clone(), low), (high.path.clone(), high)]);
-        assert_eq!(
-            compare_paths_by_sort("z-low", "a-high", &entries, "ratio", true),
-            Ordering::Less,
-        );
+        assert_eq!(compare_paths_by_sort("z-low", "a-high", &entries, "ratio", true), Ordering::Less,);
     }
 
     #[cfg(target_os = "macos")]
@@ -1315,34 +948,20 @@ mod tests {
         use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
         use std::time::{SystemTime, UNIX_EPOCH};
         use zmanager_core::jobs::{CancellationToken, JobContext};
-        use zmanager_core::manifest::{
-            ArchiveManifest, ManifestEntry, ManifestFileType, PermissionSnapshot,
-        };
-        use zmanager_core::tzap_backend::{
-            TzapCreateOptions, TzapKeySource, create_tzap_from_manifest_with_context,
-        };
+        use zmanager_core::manifest::{ArchiveManifest, ManifestEntry, ManifestFileType, PermissionSnapshot};
+        use zmanager_core::tzap_backend::{TzapCreateOptions, TzapKeySource, create_tzap_from_manifest_with_context};
 
         let root = std::env::temp_dir().join(format!(
             "zmanager-desktop-real-tzap-dto-{}-{}",
             std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
         ));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("metadata.txt");
         let archive = root.join("metadata.tzap");
         fs::write(&source, b"desktop metadata").unwrap();
         fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
-        assert!(
-            std::process::Command::new("/usr/bin/chflags")
-                .arg("hidden")
-                .arg(&source)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(std::process::Command::new("/usr/bin/chflags").arg("hidden").arg(&source).status().unwrap().success());
         let source_metadata = fs::symlink_metadata(&source).unwrap();
         let manifest = ArchiveManifest {
             root: root.clone(),
@@ -1352,10 +971,7 @@ mod tests {
                 file_type: ManifestFileType::File,
                 size: b"desktop metadata".len() as u64,
                 modified: source_metadata.modified().ok(),
-                permissions: PermissionSnapshot {
-                    readonly: false,
-                    unix_mode: Some(source_metadata.permissions().mode() & 0o7777),
-                },
+                permissions: PermissionSnapshot { readonly: false, unix_mode: Some(source_metadata.permissions().mode() & 0o7777) },
                 symlink_target: None,
             }],
             total_bytes: b"desktop metadata".len() as u64,
@@ -1383,8 +999,7 @@ mod tests {
         )
         .unwrap();
 
-        let build =
-            build_index(zmanager_core::archive_browser::list_entries(&archive).unwrap()).unwrap();
+        let build = build_index(zmanager_core::archive_browser::list_entries(&archive).unwrap()).unwrap();
         let dto = build.index.entries.get("metadata.txt").unwrap();
         assert_eq!(dto.kind, ArchiveEntryKindDto::File);
         assert_eq!(dto.size, Some(b"desktop metadata".len() as u64));
@@ -1427,25 +1042,16 @@ mod tests {
         assert_eq!(build.entry_count, 3);
         let mut root = build.index.children[""].iter().cloned().collect::<Vec<_>>();
         root.sort_by(|left, right| compare_paths(left, right, &build.index.entries));
-        let mut folder = build.index.children["folder"]
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut folder = build.index.children["folder"].iter().cloned().collect::<Vec<_>>();
         folder.sort_by(|left, right| compare_paths(left, right, &build.index.entries));
         assert_eq!(root, vec!["folder", "root.txt"]);
         assert_eq!(folder, vec!["folder/file2.txt", "folder/file10.txt"]);
-        assert_eq!(
-            build.index.entries["folder"].kind,
-            ArchiveEntryKindDto::Directory
-        );
+        assert_eq!(build.index.entries["folder"].kind, ArchiveEntryKindDto::Directory);
     }
 
     #[test]
     fn ready_index_resolves_file_and_folder_drag_entries_without_relisting_archive() {
-        let stale_build = build_index(BrowserListing {
-            entries: vec![entry("stale.txt", BrowserEntryKind::File)],
-        })
-        .expect("stale index should build");
+        let stale_build = build_index(BrowserListing { entries: vec![entry("stale.txt", BrowserEntryKind::File)] }).expect("stale index should build");
         let build = build_index(BrowserListing {
             entries: vec![
                 entry("docs/a.txt", BrowserEntryKind::File),
@@ -1481,60 +1087,31 @@ mod tests {
             format: Some(crate::dto::ArchiveFormatKindDto::Tzap),
         });
         let (sender, _) = watch::channel(snapshot.clone());
-        registry
-            .state
-            .lock()
-            .expect("registry lock")
-            .sessions
-            .insert(
-                "archive-1".to_string(),
-                SessionRecord {
-                    password: None,
-                    snapshot: stale_snapshot,
-                    sender: stale_sender,
-                    index: Arc::new(Mutex::new(stale_build.index)),
-                    cancelled: Arc::new(AtomicBool::new(false)),
-                },
-            );
-        registry
-            .state
-            .lock()
-            .expect("registry lock")
-            .sessions
-            .insert(
-                "archive-2".to_string(),
-                SessionRecord {
-                    password: None,
-                    snapshot,
-                    sender,
-                    index: Arc::new(Mutex::new(build.index)),
-                    cancelled: Arc::new(AtomicBool::new(false)),
-                },
-            );
+        registry.state.lock().expect("registry lock").sessions.insert(
+            "archive-1".to_string(),
+            SessionRecord {
+                password: None,
+                snapshot: stale_snapshot,
+                sender: stale_sender,
+                index: Arc::new(Mutex::new(stale_build.index)),
+                cancelled: Arc::new(AtomicBool::new(false)),
+            },
+        );
+        registry.state.lock().expect("registry lock").sessions.insert(
+            "archive-2".to_string(),
+            SessionRecord { password: None, snapshot, sender, index: Arc::new(Mutex::new(build.index)), cancelled: Arc::new(AtomicBool::new(false)) },
+        );
 
         let files = registry
-            .drag_entries(
-                "C:/archives/demo.tzap",
-                &["docs".to_string(), "other.txt".to_string()],
-            )
+            .drag_entries("C:/archives/demo.tzap", &["docs".to_string(), "other.txt".to_string()])
             .expect("cached drag selection")
             .expect("ready session should answer");
-        assert_eq!(
-            files
-                .iter()
-                .map(|entry| entry.path.as_str())
-                .collect::<Vec<_>>(),
-            ["docs/a.txt", "docs/nested/b.txt", "other.txt"]
-        );
+        assert_eq!(files.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>(), ["docs/a.txt", "docs/nested/b.txt", "other.txt"]);
     }
 
     #[tokio::test]
     async fn pages_are_bounded_and_cursors_are_scoped_to_the_parent_and_revision() {
-        let listing = BrowserListing {
-            entries: (0..600)
-                .map(|index| entry(format!("file{index}.txt"), BrowserEntryKind::File))
-                .collect(),
-        };
+        let listing = BrowserListing { entries: (0..600).map(|index| entry(format!("file{index}.txt"), BrowserEntryKind::File)).collect() };
         let build = build_index(listing).expect("index should build");
         let registry = ArchiveIndexRegistry::new();
         let session_id = "archive-test".to_string();
@@ -1551,21 +1128,10 @@ mod tests {
             format: Some(crate::dto::ArchiveFormatKindDto::Zip),
         });
         let (sender, _) = watch::channel(snapshot.clone());
-        registry
-            .state
-            .lock()
-            .expect("registry lock")
-            .sessions
-            .insert(
-                session_id.clone(),
-                SessionRecord {
-                    password: None,
-                    snapshot,
-                    sender,
-                    index: Arc::new(Mutex::new(build.index)),
-                    cancelled: Arc::new(AtomicBool::new(false)),
-                },
-            );
+        registry.state.lock().expect("registry lock").sessions.insert(
+            session_id.clone(),
+            SessionRecord { password: None, snapshot, sender, index: Arc::new(Mutex::new(build.index)), cancelled: Arc::new(AtomicBool::new(false)) },
+        );
 
         let first = registry
             .children(ArchiveChildrenRequest {
@@ -1591,10 +1157,7 @@ mod tests {
                 sort_ascending: None,
             })
             .await;
-        assert_eq!(
-            stale.expect_err("cursor must be parent-scoped").code,
-            "invalid_request"
-        );
+        assert_eq!(stale.expect_err("cursor must be parent-scoped").code, "invalid_request");
 
         // Cursors carry their own revision signature so stale-revision
         // mismatches are tolerated without an explicit expected_revision field.
@@ -1608,14 +1171,9 @@ mod tests {
                 sort_ascending: None,
             })
             .await;
-        assert!(
-            older_revision.is_ok(),
-            "mismatched revision should be tolerated"
-        );
+        assert!(older_revision.is_ok(), "mismatched revision should be tolerated");
 
-        registry
-            .close("archive-test")
-            .expect("session should close");
+        registry.close("archive-test").expect("session should close");
         let after_close = registry
             .children(ArchiveChildrenRequest {
                 session_id: "archive-test".to_string(),
@@ -1626,10 +1184,7 @@ mod tests {
                 sort_ascending: None,
             })
             .await;
-        assert_eq!(
-            after_close.expect_err("closed session is gone").code,
-            "not_found"
-        );
+        assert_eq!(after_close.expect_err("closed session is gone").code, "not_found");
     }
 
     #[test]
@@ -1649,30 +1204,13 @@ mod tests {
             format: Some(crate::dto::ArchiveFormatKindDto::Zip),
         });
         let (sender, receiver) = watch::channel(snapshot.clone());
-        registry
-            .state
-            .lock()
-            .expect("registry lock")
-            .sessions
-            .insert(
-                session_id.clone(),
-                SessionRecord {
-                    password: None,
-                    snapshot,
-                    sender,
-                    index: Arc::new(Mutex::new(ArchiveIndex::new())),
-                    cancelled: Arc::new(AtomicBool::new(false)),
-                },
-            );
+        registry.state.lock().expect("registry lock").sessions.insert(
+            session_id.clone(),
+            SessionRecord { password: None, snapshot, sender, index: Arc::new(Mutex::new(ArchiveIndex::new())), cancelled: Arc::new(AtomicBool::new(false)) },
+        );
 
         for count in 1..=10 {
-            registry.publish_progress(
-                &session_id,
-                ArchiveIndexStatistics {
-                    entry_count: count,
-                    total_bytes: Some(count as u64),
-                },
-            );
+            registry.publish_progress(&session_id, ArchiveIndexStatistics { entry_count: count, total_bytes: Some(count as u64) });
         }
 
         let latest = receiver.borrow().clone();
@@ -1684,16 +1222,12 @@ mod tests {
     fn entry_and_metadata_admission_limits_fail_closed() {
         let mut entry_limited = ArchiveIndex::new();
         entry_limited.entry_count = MAX_ARCHIVE_INDEX_ENTRIES;
-        let entry_error = entry_limited
-            .insert(entry("overflow.txt", BrowserEntryKind::File))
-            .expect_err("entry limit should reject the next entry");
+        let entry_error = entry_limited.insert(entry("overflow.txt", BrowserEntryKind::File)).expect_err("entry limit should reject the next entry");
         assert_eq!(entry_error.code, "operation_failed");
 
         let mut metadata_limited = ArchiveIndex::new();
         metadata_limited.estimated_metadata_bytes = MAX_ARCHIVE_INDEX_METADATA_BYTES - 1;
-        let metadata_error = metadata_limited
-            .insert(entry("metadata.txt", BrowserEntryKind::File))
-            .expect_err("metadata limit should reject the next entry");
+        let metadata_error = metadata_limited.insert(entry("metadata.txt", BrowserEntryKind::File)).expect_err("metadata limit should reject the next entry");
         assert_eq!(metadata_error.code, "operation_failed");
     }
 
@@ -1703,11 +1237,7 @@ mod tests {
         let listing = BrowserListing {
             entries: (0..100_000)
                 .map(|index| {
-                    let path = if index < 50_000 {
-                        format!("wide/file{index}.txt")
-                    } else {
-                        format!("deep/{}/{}/file{index}.txt", index % 100, index % 1_000)
-                    };
+                    let path = if index < 50_000 { format!("wide/file{index}.txt") } else { format!("deep/{}/{}/file{index}.txt", index % 100, index % 1_000) };
                     entry(path, BrowserEntryKind::File)
                 })
                 .collect(),

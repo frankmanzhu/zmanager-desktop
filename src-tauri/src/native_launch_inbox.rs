@@ -83,8 +83,7 @@ pub enum HostedAuthResult {
 #[serde(deny_unknown_fields)]
 pub struct ReopenApplicationPayload {}
 
-pub type InboxEmitter =
-    Arc<dyn Fn(&str, &NativeInboundEvent) -> Result<(), String> + Send + Sync + 'static>;
+pub type InboxEmitter = Arc<dyn Fn(&str, &NativeInboundEvent) -> Result<(), String> + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct NativeLaunchInbox {
@@ -171,12 +170,7 @@ impl NativeLaunchInbox {
             if state.shutdown {
                 return Err(NativeLaunchInboxError::Shutdown);
             }
-            if state.seen_id_set.contains(&event.event_id)
-                || event
-                    .idempotency_key
-                    .as_ref()
-                    .is_some_and(|key| state.idempotency_set.contains(key))
-            {
+            if state.seen_id_set.contains(&event.event_id) || event.idempotency_key.as_ref().is_some_and(|key| state.idempotency_set.contains(key)) {
                 return Err(NativeLaunchInboxError::Duplicate);
             }
             if state.queue.len() >= state.queue_limit {
@@ -186,11 +180,7 @@ impl NativeLaunchInbox {
             if let Some(key) = &event.idempotency_key {
                 state.remember_idempotency_key(key.clone());
             }
-            state.queue.push_back(QueuedEvent {
-                event,
-                assigned_window: None,
-                delivery_attempts: 0,
-            });
+            state.queue.push_back(QueuedEvent { event, assigned_window: None, delivery_attempts: 0 });
         }
         self.deliver_pending();
         Ok(())
@@ -209,9 +199,7 @@ impl NativeLaunchInbox {
 
     pub fn frontend_ready(&self, window_label: &str) -> Result<usize, NativeLaunchInboxError> {
         if window_label.trim().is_empty() || window_label.len() > 128 {
-            return Err(NativeLaunchInboxError::InvalidEvent(
-                "window label is invalid".to_string(),
-            ));
+            return Err(NativeLaunchInboxError::InvalidEvent("window label is invalid".to_string()));
         }
         let before = {
             let mut state = self.inner.lock().expect("native inbox lock poisoned");
@@ -219,21 +207,10 @@ impl NativeLaunchInbox {
                 return Err(NativeLaunchInboxError::Shutdown);
             }
             state.ready_windows.insert(window_label.to_string());
-            state
-                .queue
-                .iter()
-                .map(|queued| usize::from(queued.delivery_attempts))
-                .sum::<usize>()
+            state.queue.iter().map(|queued| usize::from(queued.delivery_attempts)).sum::<usize>()
         };
         self.deliver_pending();
-        let after = self
-            .inner
-            .lock()
-            .expect("native inbox lock poisoned")
-            .queue
-            .iter()
-            .map(|queued| usize::from(queued.delivery_attempts))
-            .sum::<usize>();
+        let after = self.inner.lock().expect("native inbox lock poisoned").queue.iter().map(|queued| usize::from(queued.delivery_attempts)).sum::<usize>();
         Ok(after.saturating_sub(before))
     }
 
@@ -249,17 +226,9 @@ impl NativeLaunchInbox {
             .collect()
     }
 
-    pub fn acknowledge(
-        &self,
-        window_label: &str,
-        event_id: &str,
-    ) -> Result<(), NativeLaunchInboxError> {
+    pub fn acknowledge(&self, window_label: &str, event_id: &str) -> Result<(), NativeLaunchInboxError> {
         let mut state = self.inner.lock().expect("native inbox lock poisoned");
-        let Some(index) = state
-            .queue
-            .iter()
-            .position(|queued| queued.event.event_id == event_id)
-        else {
+        let Some(index) = state.queue.iter().position(|queued| queued.event.event_id == event_id) else {
             return Err(NativeLaunchInboxError::UnknownEvent);
         };
         if state.queue[index].assigned_window.as_deref() != Some(window_label) {
@@ -279,24 +248,15 @@ impl NativeLaunchInbox {
 
     pub fn from_quick_action(request: QuickActionRequestDto) -> NativeInboundEvent {
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        let timestamp_unix_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-            .min(u128::from(u64::MAX)) as u64;
+        let timestamp_unix_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis().min(u128::from(u64::MAX)) as u64;
         let counter = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         NativeInboundEvent {
             version: NATIVE_INBOUND_EVENT_VERSION,
-            event_id: format!(
-                "native-{}-{timestamp_unix_ms}-{counter}",
-                std::process::id()
-            ),
+            event_id: format!("native-{}-{timestamp_unix_ms}-{counter}", std::process::id()),
             kind: NativeInboundEventKind::ShellActionRequest,
             timestamp_unix_ms,
             idempotency_key: None,
-            payload: NativeInboundPayload::ShellActionRequest(ShellActionRequestPayload {
-                request,
-            }),
+            payload: NativeInboundPayload::ShellActionRequest(ShellActionRequestPayload { request }),
         }
     }
 
@@ -334,24 +294,11 @@ fn validate_event(event: &NativeInboundEvent) -> Result<(), NativeLaunchInboxErr
     if event.version != NATIVE_INBOUND_EVENT_VERSION {
         return Err(NativeLaunchInboxError::UnsupportedVersion(event.version));
     }
-    if !(16..=128).contains(&event.event_id.len())
-        || !event
-            .event_id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-    {
-        return Err(NativeLaunchInboxError::InvalidEvent(
-            "event id is invalid".to_string(),
-        ));
+    if !(16..=128).contains(&event.event_id.len()) || !event.event_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')) {
+        return Err(NativeLaunchInboxError::InvalidEvent("event id is invalid".to_string()));
     }
-    if event
-        .idempotency_key
-        .as_ref()
-        .is_some_and(|key| key.len() > 256 || key.bytes().any(|byte| byte.is_ascii_control()))
-    {
-        return Err(NativeLaunchInboxError::InvalidEvent(
-            "idempotency key is invalid".to_string(),
-        ));
+    if event.idempotency_key.as_ref().is_some_and(|key| key.len() > 256 || key.bytes().any(|byte| byte.is_ascii_control())) {
+        return Err(NativeLaunchInboxError::InvalidEvent("idempotency key is invalid".to_string()));
     }
     if serde_json::to_vec(event).map_or(true, |bytes| bytes.len() > MAX_SERIALIZED_EVENT_BYTES) {
         return Err(NativeLaunchInboxError::Oversized);
@@ -360,63 +307,33 @@ fn validate_event(event: &NativeInboundEvent) -> Result<(), NativeLaunchInboxErr
         (NativeInboundEventKind::OpenPaths, NativeInboundPayload::OpenPaths(payload)) => {
             if payload.paths.is_empty()
                 || payload.paths.len() > MAX_PATHS
-                || payload.paths.iter().any(|path| {
-                    path.is_empty()
-                        || path.len() > MAX_PATH_BYTES
-                        || path.contains('\0')
-                        || path.contains("://")
-                })
+                || payload.paths.iter().any(|path| path.is_empty() || path.len() > MAX_PATH_BYTES || path.contains('\0') || path.contains("://"))
             {
-                return Err(NativeLaunchInboxError::InvalidEvent(
-                    "open paths are invalid".to_string(),
-                ));
+                return Err(NativeLaunchInboxError::InvalidEvent("open paths are invalid".to_string()));
             }
         }
-        (
-            NativeInboundEventKind::ShellActionRequest,
-            NativeInboundPayload::ShellActionRequest(payload),
-        ) => {
+        (NativeInboundEventKind::ShellActionRequest, NativeInboundPayload::ShellActionRequest(payload)) => {
             if payload.request.paths.is_empty()
                 || payload.request.paths.len() > MAX_PATHS
-                || payload.request.paths.iter().any(|path| {
-                    path.is_empty() || path.len() > MAX_PATH_BYTES || path.contains('\0')
-                })
+                || payload.request.paths.iter().any(|path| path.is_empty() || path.len() > MAX_PATH_BYTES || path.contains('\0'))
             {
-                return Err(NativeLaunchInboxError::InvalidEvent(
-                    "shell action paths are invalid".to_string(),
-                ));
+                return Err(NativeLaunchInboxError::InvalidEvent("shell action paths are invalid".to_string()));
             }
         }
         (NativeInboundEventKind::ShellActionRequest, NativeInboundPayload::ShellActionToken(_)) => {
-            return Err(NativeLaunchInboxError::InvalidEvent(
-                "shell action tokens must be consumed before inbox ingestion".to_string(),
-            ));
+            return Err(NativeLaunchInboxError::InvalidEvent("shell action tokens must be consumed before inbox ingestion".to_string()));
         }
-        (
-            NativeInboundEventKind::HostedAuthCallback,
-            NativeInboundPayload::HostedAuthCallback(payload),
-        ) => {
+        (NativeInboundEventKind::HostedAuthCallback, NativeInboundPayload::HostedAuthCallback(payload)) => {
             if !(16..=256).contains(&payload.state.len())
-                || !payload
-                    .state
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-                || payload
-                    .error_code
-                    .as_ref()
-                    .is_some_and(|code| code.len() > 128)
+                || !payload.state.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+                || payload.error_code.as_ref().is_some_and(|code| code.len() > 128)
             {
-                return Err(NativeLaunchInboxError::InvalidEvent(
-                    "hosted authentication callback is invalid".to_string(),
-                ));
+                return Err(NativeLaunchInboxError::InvalidEvent("hosted authentication callback is invalid".to_string()));
             }
         }
-        (NativeInboundEventKind::ReopenApplication, NativeInboundPayload::ReopenApplication(_)) => {
-        }
+        (NativeInboundEventKind::ReopenApplication, NativeInboundPayload::ReopenApplication(_)) => {}
         _ => {
-            return Err(NativeLaunchInboxError::InvalidEvent(
-                "event kind does not match payload".to_string(),
-            ));
+            return Err(NativeLaunchInboxError::InvalidEvent("event kind does not match payload".to_string()));
         }
     }
     Ok(())
@@ -443,10 +360,7 @@ mod tests {
         let records = Arc::new(Mutex::new(Vec::new()));
         let captured = Arc::clone(&records);
         let emitter: InboxEmitter = Arc::new(move |window, event| {
-            captured
-                .lock()
-                .unwrap()
-                .push((window.to_string(), event.event_id.clone()));
+            captured.lock().unwrap().push((window.to_string(), event.event_id.clone()));
             Ok(())
         });
         (emitter, records)
@@ -463,10 +377,7 @@ mod tests {
         assert_eq!(inbox.frontend_ready("main").unwrap(), 2);
         assert_eq!(
             records.lock().unwrap().clone(),
-            vec![
-                ("main".to_string(), "event-one-1234567890".to_string()),
-                ("main".to_string(), "event-two-1234567890".to_string())
-            ]
+            vec![("main".to_string(), "event-one-1234567890".to_string()), ("main".to_string(), "event-two-1234567890".to_string())]
         );
     }
 
@@ -514,15 +425,9 @@ mod tests {
         let inbox = NativeLaunchInbox::with_queue_limit(1);
         let mut unknown = event("unknown");
         unknown.version = 2;
-        assert_eq!(
-            inbox.ingest(unknown),
-            Err(NativeLaunchInboxError::UnsupportedVersion(2))
-        );
+        assert_eq!(inbox.ingest(unknown), Err(NativeLaunchInboxError::UnsupportedVersion(2)));
         inbox.ingest(event("first")).unwrap();
-        assert_eq!(
-            inbox.ingest(event("overflow")),
-            Err(NativeLaunchInboxError::QueueFull)
-        );
+        assert_eq!(inbox.ingest(event("overflow")), Err(NativeLaunchInboxError::QueueFull));
 
         let oversized = NativeInboundEvent {
             version: 1,
@@ -530,14 +435,9 @@ mod tests {
             kind: NativeInboundEventKind::OpenPaths,
             timestamp_unix_ms: 1,
             idempotency_key: None,
-            payload: NativeInboundPayload::OpenPaths(OpenPathsPayload {
-                paths: vec!["x".repeat(MAX_SERIALIZED_EVENT_BYTES)],
-            }),
+            payload: NativeInboundPayload::OpenPaths(OpenPathsPayload { paths: vec!["x".repeat(MAX_SERIALIZED_EVENT_BYTES)] }),
         };
-        assert_eq!(
-            inbox.ingest(oversized),
-            Err(NativeLaunchInboxError::Oversized)
-        );
+        assert_eq!(inbox.ingest(oversized), Err(NativeLaunchInboxError::Oversized));
     }
 
     #[test]
@@ -546,9 +446,7 @@ mod tests {
         let mut threads = Vec::new();
         for index in 0..32 {
             let inbox = inbox.clone();
-            threads.push(std::thread::spawn(move || {
-                inbox.ingest(event(&index.to_string()))
-            }));
+            threads.push(std::thread::spawn(move || inbox.ingest(event(&index.to_string()))));
         }
         for thread in threads {
             thread.join().unwrap().unwrap();
@@ -570,10 +468,7 @@ mod tests {
         inbox.ingest(item.clone()).unwrap();
         assert_eq!(inbox.pending_events("main"), vec![item.clone()]);
         assert!(inbox.pending_events("task-1").is_empty());
-        assert_eq!(
-            inbox.acknowledge("task-1", &item.event_id),
-            Err(NativeLaunchInboxError::WrongWindow)
-        );
+        assert_eq!(inbox.acknowledge("task-1", &item.event_id), Err(NativeLaunchInboxError::WrongWindow));
     }
 
     #[test]
@@ -582,22 +477,14 @@ mod tests {
         inbox.ingest(event("queued")).unwrap();
         inbox.shutdown();
         assert!(inbox.pending_events("main").is_empty());
-        assert_eq!(
-            inbox.ingest(event("late")),
-            Err(NativeLaunchInboxError::Shutdown)
-        );
+        assert_eq!(inbox.ingest(event("late")), Err(NativeLaunchInboxError::Shutdown));
     }
 
     #[test]
     fn quick_action_payload_remains_typed_and_secret_free() {
-        let event = NativeLaunchInbox::from_quick_action(QuickActionRequestDto {
-            kind: QuickActionKindDto::CompressZip,
-            paths: vec!["/tmp/source".to_string()],
-        });
-        assert!(matches!(
-            event.payload,
-            NativeInboundPayload::ShellActionRequest(ShellActionRequestPayload { .. })
-        ));
+        let event =
+            NativeLaunchInbox::from_quick_action(QuickActionRequestDto { kind: QuickActionKindDto::CompressZip, paths: vec!["/tmp/source".to_string()] });
+        assert!(matches!(event.payload, NativeInboundPayload::ShellActionRequest(ShellActionRequestPayload { .. })));
         assert!(!serde_json::to_string(&event).unwrap().contains("password"));
     }
 
@@ -605,9 +492,7 @@ mod tests {
     fn shell_action_tokens_cannot_enter_the_executable_inbox() {
         let mut token_event = event("opaque-token");
         token_event.kind = NativeInboundEventKind::ShellActionRequest;
-        token_event.payload = NativeInboundPayload::ShellActionToken(ShellActionTokenPayload {
-            request_token: "opaque-request-token".to_string(),
-        });
+        token_event.payload = NativeInboundPayload::ShellActionToken(ShellActionTokenPayload { request_token: "opaque-request-token".to_string() });
 
         assert!(matches!(
             NativeLaunchInbox::new().ingest(token_event),

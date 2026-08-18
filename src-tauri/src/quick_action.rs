@@ -7,10 +7,7 @@ use std::{
 
 use tauri::Url;
 
-use crate::dto::{
-    QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto,
-    QuickActionStartupStateDto, QuickActionWindowDispositionDto,
-};
+use crate::dto::{QuickActionKindDto, QuickActionRequestDto, QuickActionStartupErrorDto, QuickActionStartupStateDto, QuickActionWindowDispositionDto};
 
 const QUICK_ACTION_ARG: &str = "--quick-action";
 const QUICK_ACTION_ARG_ALIAS: &str = "--action";
@@ -30,16 +27,10 @@ pub enum LaunchInstanceMode {
 
 impl LaunchInstanceMode {
     pub fn from_startup_env() -> Self {
-        Self::from_args(
-            std::env::args_os().skip(1),
-            std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok(),
-        )
+        Self::from_args(std::env::args_os().skip(1), std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok())
     }
 
-    fn from_args(
-        args: impl IntoIterator<Item = OsString>,
-        pending_macos_quick_action: bool,
-    ) -> Self {
+    fn from_args(args: impl IntoIterator<Item = OsString>, pending_macos_quick_action: bool) -> Self {
         if pending_macos_quick_action
             || args.into_iter().any(|arg| {
                 arg.to_str().is_some_and(|value| {
@@ -104,18 +95,11 @@ impl QuickActionStartupState {
         }
     }
 
-    pub fn forward_requested_to_native_inbox(
-        self,
-        inbox: &crate::native_launch_inbox::NativeLaunchInbox,
-    ) -> Self {
+    pub fn forward_requested_to_native_inbox(self, inbox: &crate::native_launch_inbox::NativeLaunchInbox) -> Self {
         match self {
             Self::Requested(request) => {
                 let kind = request.kind;
-                inbox
-                    .ingest(
-                        crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request),
-                    )
-                    .expect("startup native event should be valid");
+                inbox.ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request)).expect("startup native event should be valid");
                 Self::ForwardedToNativeInbox(kind)
             }
             other => other,
@@ -124,31 +108,17 @@ impl QuickActionStartupState {
 
     pub fn to_dto(&self) -> QuickActionStartupStateDto {
         match self {
-            Self::NotRequested => QuickActionStartupStateDto {
-                launched_for_quick_action: false,
-                window_disposition: None,
-                error: None,
-            },
-            Self::Requested(request) => QuickActionStartupStateDto {
-                launched_for_quick_action: true,
-                window_disposition: Some(request.kind.window_disposition()),
-                error: None,
-            },
-            Self::ForwardedToNativeInbox(kind) => QuickActionStartupStateDto {
-                launched_for_quick_action: true,
-                window_disposition: Some(kind.window_disposition()),
-                error: None,
-            },
-            Self::PendingMacOsQuickAction => QuickActionStartupStateDto {
-                launched_for_quick_action: true,
-                window_disposition: None,
-                error: None,
-            },
-            Self::Invalid(error) => QuickActionStartupStateDto {
-                launched_for_quick_action: true,
-                window_disposition: error.window_disposition,
-                error: Some(error.to_dto()),
-            },
+            Self::NotRequested => QuickActionStartupStateDto { launched_for_quick_action: false, window_disposition: None, error: None },
+            Self::Requested(request) => {
+                QuickActionStartupStateDto { launched_for_quick_action: true, window_disposition: Some(request.kind.window_disposition()), error: None }
+            }
+            Self::ForwardedToNativeInbox(kind) => {
+                QuickActionStartupStateDto { launched_for_quick_action: true, window_disposition: Some(kind.window_disposition()), error: None }
+            }
+            Self::PendingMacOsQuickAction => QuickActionStartupStateDto { launched_for_quick_action: true, window_disposition: None, error: None },
+            Self::Invalid(error) => {
+                QuickActionStartupStateDto { launched_for_quick_action: true, window_disposition: error.window_disposition, error: Some(error.to_dto()) }
+            }
         }
     }
 }
@@ -165,9 +135,7 @@ struct QuickActionLaunchState {
 
 impl QuickActionLaunchCoordinator {
     pub fn from_startup_state(state: QuickActionStartupState) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(QuickActionLaunchState { startup: state })),
-        }
+        Self { inner: Arc::new(Mutex::new(QuickActionLaunchState { startup: state })) }
     }
 
     pub fn startup_state(&self) -> QuickActionStartupState {
@@ -175,16 +143,10 @@ impl QuickActionLaunchCoordinator {
         std::mem::replace(&mut inner.startup, QuickActionStartupState::NotRequested)
     }
 
-    pub fn ingest_secondary_process_args(
-        &self,
-        args: Vec<OsString>,
-        inbox: &crate::native_launch_inbox::NativeLaunchInbox,
-    ) -> QuickActionStartupState {
+    pub fn ingest_secondary_process_args(&self, args: Vec<OsString>, inbox: &crate::native_launch_inbox::NativeLaunchInbox) -> QuickActionStartupState {
         let state = QuickActionStartupState::from_process_or_user_args(args);
         if let QuickActionStartupState::Requested(request) = &state {
-            let _ = inbox.ingest(
-                crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request.clone()),
-            );
+            let _ = inbox.ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request.clone()));
         }
         state
     }
@@ -200,12 +162,7 @@ pub struct QuickActionError {
 
 impl QuickActionError {
     fn invalid(message: impl Into<String>) -> Self {
-        Self {
-            code: crate::constants::COMMAND_ERROR_INVALID_REQUEST,
-            message: message.into(),
-            hint: None,
-            window_disposition: None,
-        }
+        Self { code: crate::constants::COMMAND_ERROR_INVALID_REQUEST, message: message.into(), hint: None, window_disposition: None }
     }
 
     fn with_hint(mut self, hint: impl Into<String>) -> Self {
@@ -213,20 +170,13 @@ impl QuickActionError {
         self
     }
 
-    fn with_window_disposition(
-        mut self,
-        window_disposition: QuickActionWindowDispositionDto,
-    ) -> Self {
+    fn with_window_disposition(mut self, window_disposition: QuickActionWindowDispositionDto) -> Self {
         self.window_disposition = Some(window_disposition);
         self
     }
 
     fn to_dto(&self) -> QuickActionStartupErrorDto {
-        QuickActionStartupErrorDto {
-            code: self.code.to_string(),
-            message: self.message.clone(),
-            hint: self.hint.clone(),
-        }
+        QuickActionStartupErrorDto { code: self.code.to_string(), message: self.message.clone(), hint: self.hint.clone() }
     }
 }
 
@@ -241,11 +191,7 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
     };
 
     let path = Path::new(arg);
-    if path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
-    {
+    if path.extension().and_then(|extension| extension.to_str()).is_some_and(|extension| extension.eq_ignore_ascii_case("exe")) {
         return true;
     }
 
@@ -253,9 +199,7 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
         return false;
     };
 
-    if file_name.eq_ignore_ascii_case("zmanager-desktop")
-        || file_name.eq_ignore_ascii_case("zmanager-desktop.exe")
-    {
+    if file_name.eq_ignore_ascii_case("zmanager-desktop") || file_name.eq_ignore_ascii_case("zmanager-desktop.exe") {
         return true;
     }
 
@@ -267,27 +211,17 @@ fn first_arg_is_executable_path(arg: Option<&OsString>) -> bool {
 }
 
 pub fn is_supported_archive_path(path: &str) -> bool {
-    let name = path
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(path)
-        .to_ascii_lowercase();
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_ascii_lowercase();
 
     if is_tzap_volume_archive_name(&name) {
         return true;
     }
 
-    if crate::archive_file_types::split_archive_suffixes()
-        .iter()
-        .any(|suffix| name.ends_with(suffix.as_str()))
-    {
+    if crate::archive_file_types::split_archive_suffixes().iter().any(|suffix| name.ends_with(suffix.as_str())) {
         return true;
     }
 
-    if crate::archive_file_types::compound_extensions()
-        .iter()
-        .any(|extension| name.ends_with(&format!(".{extension}")))
-    {
+    if crate::archive_file_types::compound_extensions().iter().any(|extension| name.ends_with(&format!(".{extension}"))) {
         return true;
     }
 
@@ -295,9 +229,7 @@ pub fn is_supported_archive_path(path: &str) -> bool {
         return false;
     };
 
-    crate::archive_file_types::single_extensions()
-        .iter()
-        .any(|supported_extension| supported_extension == extension)
+    crate::archive_file_types::single_extensions().iter().any(|supported_extension| supported_extension == extension)
 }
 
 fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOutcome {
@@ -314,16 +246,12 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
         let arg = match arg.into_string() {
             Ok(value) => value,
             Err(_) => {
-                return ParseOutcome::Requested(Err(QuickActionError::invalid(
-                    "quick-action arguments must be valid Unicode",
-                )));
+                return ParseOutcome::Requested(Err(QuickActionError::invalid("quick-action arguments must be valid Unicode")));
             }
         };
 
         if is_password_arg(&arg) {
-            return ParseOutcome::Requested(Err(QuickActionError::invalid(
-                "passwords cannot be supplied through quick-action arguments",
-            )));
+            return ParseOutcome::Requested(Err(QuickActionError::invalid("passwords cannot be supplied through quick-action arguments")));
         }
 
         if let Some(value) = arg.strip_prefix("--quick-action=") {
@@ -341,10 +269,7 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             continue;
         }
 
-        if let Some(value) = arg
-            .strip_prefix("--shell-action-request=")
-            .or_else(|| arg.strip_prefix("--quick-action-request="))
-        {
+        if let Some(value) = arg.strip_prefix("--shell-action-request=").or_else(|| arg.strip_prefix("--quick-action-request=")) {
             requested = true;
             request_file_path = Some(value.to_string());
             pending_path_values = false;
@@ -354,9 +279,7 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
 
         if arg == QUICK_ACTION_ARG || arg == QUICK_ACTION_ARG_ALIAS {
             requested = true;
-            kind = Some(Err(QuickActionError::invalid(
-                "--quick-action requires an action value",
-            )));
+            kind = Some(Err(QuickActionError::invalid("--quick-action requires an action value")));
             pending_path_values = false;
             pending_request_file_value = false;
             continue;
@@ -404,27 +327,18 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
             return ParseOutcome::NotRequested;
         }
 
-        return ParseOutcome::Requested(validate_request(
-            QuickActionKindDto::Open,
-            ordinary_open_paths,
-        ));
+        return ParseOutcome::Requested(validate_request(QuickActionKindDto::Open, ordinary_open_paths));
     }
 
     if pending_request_file_value {
-        return ParseOutcome::Requested(Err(QuickActionError::invalid(
-            "--shell-action-request requires a file path",
-        )));
+        return ParseOutcome::Requested(Err(QuickActionError::invalid("--shell-action-request requires a file path")));
     }
 
     if let Some(request_file_path) = request_file_path {
         return ParseOutcome::Requested(read_quick_action_request_file(&request_file_path));
     }
 
-    let kind = match kind.unwrap_or_else(|| {
-        Err(QuickActionError::invalid(
-            "--quick-action is required for quick-action launches",
-        ))
-    }) {
+    let kind = match kind.unwrap_or_else(|| Err(QuickActionError::invalid("--quick-action is required for quick-action launches"))) {
         Ok(kind) => kind,
         Err(error) => return ParseOutcome::Requested(Err(error)),
     };
@@ -432,107 +346,69 @@ fn parse_quick_action_args(args: impl IntoIterator<Item = OsString>) -> ParseOut
     ParseOutcome::Requested(validate_request(kind, paths))
 }
 
-fn read_quick_action_request_file(
-    request_file_path: &str,
-) -> Result<QuickActionRequestDto, QuickActionError> {
+fn read_quick_action_request_file(request_file_path: &str) -> Result<QuickActionRequestDto, QuickActionError> {
     let trimmed_path = request_file_path.trim();
     if trimmed_path.is_empty() {
-        return Err(QuickActionError::invalid(
-            "--shell-action-request requires a file path",
-        ));
+        return Err(QuickActionError::invalid("--shell-action-request requires a file path"));
     }
     if trimmed_path.contains("://") {
-        return Err(QuickActionError::invalid(format!(
-            "quick-action request path must be local: {trimmed_path}"
-        )));
+        return Err(QuickActionError::invalid(format!("quick-action request path must be local: {trimmed_path}")));
     }
 
-    let content = fs::read(trimmed_path).map_err(|error| {
-        QuickActionError::invalid(format!("unable to read quick-action request: {error}"))
-    })?;
+    let content = fs::read(trimmed_path).map_err(|error| QuickActionError::invalid(format!("unable to read quick-action request: {error}")))?;
     let _ = fs::remove_file(trimmed_path);
     if content.len() > MAX_SHELL_ACTION_REQUEST_BYTES {
-        return Err(QuickActionError::invalid(format!(
-            "shell-action request exceeds the {} byte limit",
-            MAX_SHELL_ACTION_REQUEST_BYTES
-        )));
+        return Err(QuickActionError::invalid(format!("shell-action request exceeds the {} byte limit", MAX_SHELL_ACTION_REQUEST_BYTES)));
     }
-    let content = String::from_utf8(content).map_err(|error| {
-        QuickActionError::invalid(format!("shell-action request must be UTF-8 JSON: {error}"))
-    })?;
+    let content = String::from_utf8(content).map_err(|error| QuickActionError::invalid(format!("shell-action request must be UTF-8 JSON: {error}")))?;
 
-    let value = serde_json::from_str::<serde_json::Value>(&content).map_err(|error| {
-        QuickActionError::invalid(format!("invalid shell-action request JSON: {error}"))
-    })?;
+    let value = serde_json::from_str::<serde_json::Value>(&content)
+        .map_err(|error| QuickActionError::invalid(format!("invalid shell-action request JSON: {error}")))?;
     if value.get("version").is_some() || value.get("action").is_some() {
-        let request = zmanager_shell_contract::ShellActionRequest::from_json(&content)
-            .map_err(|error| QuickActionError::invalid(error.to_string()))?;
+        let request = zmanager_shell_contract::ShellActionRequest::from_json(&content).map_err(|error| QuickActionError::invalid(error.to_string()))?;
         return validate_request(request.action, request.paths);
     }
 
-    let request = serde_json::from_value::<QuickActionRequestDto>(value).map_err(|error| {
-        QuickActionError::invalid(format!("invalid legacy quick-action request JSON: {error}"))
-    })?;
+    let request = serde_json::from_value::<QuickActionRequestDto>(value)
+        .map_err(|error| QuickActionError::invalid(format!("invalid legacy quick-action request JSON: {error}")))?;
     validate_request(request.kind, request.paths)
 }
 
 #[allow(dead_code)]
-pub fn parse_app_group_shell_action_request(
-    content: &[u8],
-) -> Result<QuickActionRequestDto, String> {
+pub fn parse_app_group_shell_action_request(content: &[u8]) -> Result<QuickActionRequestDto, String> {
     if content.is_empty() || content.len() > MAX_APP_GROUP_SHELL_ACTION_REQUEST_BYTES {
         return Err("App Group shell-action request has an invalid size".to_string());
     }
-    let content = std::str::from_utf8(content)
-        .map_err(|_| "App Group shell-action request must be UTF-8 JSON".to_string())?;
-    let request = zmanager_shell_contract::ShellActionRequest::from_json(content)
-        .map_err(|error| error.to_string())?;
+    let content = std::str::from_utf8(content).map_err(|_| "App Group shell-action request must be UTF-8 JSON".to_string())?;
+    let request = zmanager_shell_contract::ShellActionRequest::from_json(content).map_err(|error| error.to_string())?;
     validate_request(request.action, request.paths).map_err(|error| error.message)
 }
 
 #[allow(dead_code)]
-pub fn validate_ingested_shell_action_request(
-    request: QuickActionRequestDto,
-) -> Result<QuickActionRequestDto, String> {
+pub fn validate_ingested_shell_action_request(request: QuickActionRequestDto) -> Result<QuickActionRequestDto, String> {
     validate_request(request.kind, request.paths).map_err(|error| error.message)
 }
 
 fn parse_kind(value: &str) -> Result<QuickActionKindDto, QuickActionError> {
-    let normalized = value
-        .trim()
-        .chars()
-        .filter(|character| *character != '-' && *character != '_' && *character != ' ')
-        .flat_map(char::to_lowercase)
-        .collect::<String>();
+    let normalized =
+        value.trim().chars().filter(|character| *character != '-' && *character != '_' && *character != ' ').flat_map(char::to_lowercase).collect::<String>();
 
     zmanager_shell_contract::ShellActionKind::from_normalized_compatibility_alias(&normalized)
-        .ok_or_else(|| {
-            QuickActionError::invalid(format!("unknown quick action: {value}"))
-                .with_hint("Use a generated shell action identifier.")
-        })
+        .ok_or_else(|| QuickActionError::invalid(format!("unknown quick action: {value}")).with_hint("Use a generated shell action identifier."))
 }
 
-fn validate_request(
-    kind: QuickActionKindDto,
-    paths: Vec<String>,
-) -> Result<QuickActionRequestDto, QuickActionError> {
+fn validate_request(kind: QuickActionKindDto, paths: Vec<String>) -> Result<QuickActionRequestDto, QuickActionError> {
     let window_disposition = kind.window_disposition();
-    validate_request_with_known_kind(kind, paths)
-        .map_err(|error| error.with_window_disposition(window_disposition))
+    validate_request_with_known_kind(kind, paths).map_err(|error| error.with_window_disposition(window_disposition))
 }
 
-fn validate_request_with_known_kind(
-    kind: QuickActionKindDto,
-    paths: Vec<String>,
-) -> Result<QuickActionRequestDto, QuickActionError> {
+fn validate_request_with_known_kind(kind: QuickActionKindDto, paths: Vec<String>) -> Result<QuickActionRequestDto, QuickActionError> {
     let paths = normalize_local_paths(paths)?;
 
     match kind {
         QuickActionKindDto::Open => {
             if paths.is_empty() {
-                return Err(QuickActionError::invalid(
-                    "open requires at least one archive path",
-                ));
+                return Err(QuickActionError::invalid("open requires at least one archive path"));
             }
             validate_all_supported_archives(&paths)?;
         }
@@ -545,32 +421,24 @@ fn validate_request_with_known_kind(
         | QuickActionKindDto::CompressAppleArchive
         | QuickActionKindDto::CompressCleanSource => {
             if paths.is_empty() {
-                return Err(QuickActionError::invalid(
-                    "compress quick actions require at least one path",
-                ));
+                return Err(QuickActionError::invalid("compress quick actions require at least one path"));
             }
         }
         QuickActionKindDto::Extract => {
             if paths.is_empty() {
-                return Err(QuickActionError::invalid(
-                    "extract quick actions require at least one archive path",
-                ));
+                return Err(QuickActionError::invalid("extract quick actions require at least one archive path"));
             }
             validate_all_supported_archives(&paths)?;
         }
         QuickActionKindDto::ExtractHere => {
             if paths.is_empty() {
-                return Err(QuickActionError::invalid(
-                    "extract-here requires at least one archive path",
-                ));
+                return Err(QuickActionError::invalid("extract-here requires at least one archive path"));
             }
             validate_all_supported_archives(&paths)?;
         }
         QuickActionKindDto::ExtractToFolder => {
             if paths.len() != 1 {
-                return Err(QuickActionError::invalid(
-                    "extract-to-folder requires exactly one archive path",
-                ));
+                return Err(QuickActionError::invalid("extract-to-folder requires exactly one archive path"));
             }
             validate_all_supported_archives(&paths)?;
         }
@@ -597,23 +465,15 @@ fn normalize_local_paths(paths: Vec<String>) -> Result<Vec<String>, QuickActionE
 
 fn normalize_local_path(path: &str) -> Result<String, QuickActionError> {
     if path.contains("://") {
-        let url = Url::parse(path).map_err(|_| {
-            QuickActionError::invalid(format!("quick-action path must be local: {path}"))
-        })?;
+        let url = Url::parse(path).map_err(|_| QuickActionError::invalid(format!("quick-action path must be local: {path}")))?;
         if url.scheme() != "file" {
-            return Err(QuickActionError::invalid(format!(
-                "quick-action path must be local: {path}"
-            )));
+            return Err(QuickActionError::invalid(format!("quick-action path must be local: {path}")));
         }
 
         return match url.to_file_path() {
             Ok(path) => Ok(path.to_string_lossy().to_string()),
-            Err(()) if url.host_str().is_none() && url.path().starts_with('/') => {
-                Ok(percent_decode_uri_path(url.path()))
-            }
-            Err(()) => Err(QuickActionError::invalid(format!(
-                "quick-action path must be local: {path}"
-            ))),
+            Err(()) if url.host_str().is_none() && url.path().starts_with('/') => Ok(percent_decode_uri_path(url.path())),
+            Err(()) => Err(QuickActionError::invalid(format!("quick-action path must be local: {path}"))),
         };
     }
 
@@ -628,10 +488,7 @@ fn percent_decode_uri_path(path: &str) -> String {
     while index < bytes.len() {
         if bytes[index] == b'%'
             && index + 2 < bytes.len()
-            && let (Some(high), Some(low)) = (
-                hex_digit_value(bytes[index + 1]),
-                hex_digit_value(bytes[index + 2]),
-            )
+            && let (Some(high), Some(low)) = (hex_digit_value(bytes[index + 1]), hex_digit_value(bytes[index + 2]))
         {
             decoded.push((high << 4) | low);
             index += 3;
@@ -657,9 +514,7 @@ fn hex_digit_value(byte: u8) -> Option<u8> {
 fn validate_all_supported_archives(paths: &[String]) -> Result<(), QuickActionError> {
     for path in paths {
         if !is_supported_archive_path(path) {
-            return Err(QuickActionError::invalid(format!(
-                "unsupported archive for quick action: {path}"
-            )));
+            return Err(QuickActionError::invalid(format!("unsupported archive for quick action: {path}")));
         }
     }
 
@@ -667,9 +522,7 @@ fn validate_all_supported_archives(paths: &[String]) -> Result<(), QuickActionEr
 }
 
 fn is_password_arg(arg: &str) -> bool {
-    PASSWORD_ARG_PREFIXES
-        .iter()
-        .any(|prefix| arg == *prefix || arg.starts_with(&format!("{prefix}=")))
+    PASSWORD_ARG_PREFIXES.iter().any(|prefix| arg == *prefix || arg.starts_with(&format!("{prefix}=")))
 }
 
 fn is_tzap_volume_archive_name(name: &str) -> bool {
@@ -685,10 +538,7 @@ fn base_name_without_tzap_volume_suffix(name: &str) -> Option<&str> {
     let marker_index = stem.rfind(TZAP_VOLUME_MARKER)?;
     let base_name = &stem[..marker_index];
     let digits = &stem[marker_index + TZAP_VOLUME_MARKER.len()..];
-    if base_name.is_empty()
-        || digits.is_empty()
-        || !digits.bytes().all(|byte| byte.is_ascii_digit())
-    {
+    if base_name.is_empty() || digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
 
@@ -706,10 +556,7 @@ mod tests {
 
     #[test]
     fn app_group_shell_action_contract_parses_and_validates_without_paths_in_arguments() {
-        let request = parse_app_group_shell_action_request(
-            br#"{"version":1,"action":"compressZip","paths":["/tmp/one","/tmp/two"]}"#,
-        )
-        .unwrap();
+        let request = parse_app_group_shell_action_request(br#"{"version":1,"action":"compressZip","paths":["/tmp/one","/tmp/two"]}"#).unwrap();
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["/tmp/one", "/tmp/two"]);
         assert!(parse_app_group_shell_action_request(br#"{"version":2}"#).is_err());
@@ -731,19 +578,13 @@ mod tests {
     }
 
     fn unique_temp_file(name: &str) -> std::path::PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time should be after unix epoch")
-            .as_nanos();
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time should be after unix epoch").as_nanos();
         std::env::temp_dir().join(format!("zmanager-{name}-{nanos}.json"))
     }
 
     #[test]
     fn parse_without_quick_action_is_not_requested() {
-        assert_eq!(
-            state_from_args(&["--ordinary-open", "C:/tmp/archive.zip"]),
-            QuickActionStartupState::NotRequested
-        );
+        assert_eq!(state_from_args(&["--ordinary-open", "C:/tmp/archive.zip"]), QuickActionStartupState::NotRequested);
     }
 
     #[test]
@@ -754,20 +595,13 @@ mod tests {
             vec!["--quick-action-request", "C:/tmp/request.json"],
             vec!["--shell-action-request=C:/tmp/request.json"],
         ] {
-            assert_eq!(
-                LaunchInstanceMode::from_args(args.into_iter().map(OsString::from), false),
-                LaunchInstanceMode::IsolatedQuickAction,
-            );
+            assert_eq!(LaunchInstanceMode::from_args(args.into_iter().map(OsString::from), false), LaunchInstanceMode::IsolatedQuickAction,);
         }
     }
 
     #[test]
     fn normal_and_file_association_launches_remain_singleton() {
-        for args in [
-            Vec::<&str>::new(),
-            vec!["C:/tmp/archive.zip"],
-            vec!["file:///home/frank/archive.tzap"],
-        ] {
+        for args in [Vec::<&str>::new(), vec!["C:/tmp/archive.zip"], vec!["file:///home/frank/archive.tzap"]] {
             let mode = LaunchInstanceMode::from_args(args.into_iter().map(OsString::from), false);
             assert_eq!(mode, LaunchInstanceMode::NormalSingleton);
             assert!(mode.registers_single_instance());
@@ -776,10 +610,7 @@ mod tests {
 
     #[test]
     fn pending_macos_quick_actions_use_isolated_processes() {
-        assert_eq!(
-            LaunchInstanceMode::from_args(std::iter::empty(), true),
-            LaunchInstanceMode::IsolatedQuickAction,
-        );
+        assert_eq!(LaunchInstanceMode::from_args(std::iter::empty(), true), LaunchInstanceMode::IsolatedQuickAction,);
     }
 
     #[test]
@@ -795,22 +626,13 @@ mod tests {
         let request = requested(&["file:///home/frank/Documents/beeware-tutorial.tzap"]);
 
         assert_eq!(request.kind, QuickActionKindDto::Open);
-        assert_eq!(
-            request.paths,
-            ["/home/frank/Documents/beeware-tutorial.tzap"]
-        );
+        assert_eq!(request.paths, ["/home/frank/Documents/beeware-tutorial.tzap"]);
     }
 
     #[test]
     fn parse_secondary_process_args_ignores_linux_executable_argv() {
         let state = QuickActionStartupState::from_process_or_user_args(
-            [
-                "/usr/bin/zmanager-desktop",
-                "file:///home/frank/Documents/beeware-tutorial.tzap",
-            ]
-            .into_iter()
-            .map(OsString::from)
-            .collect(),
+            ["/usr/bin/zmanager-desktop", "file:///home/frank/Documents/beeware-tutorial.tzap"].into_iter().map(OsString::from).collect(),
         );
 
         let QuickActionStartupState::Requested(request) = state else {
@@ -818,90 +640,47 @@ mod tests {
         };
 
         assert_eq!(request.kind, QuickActionKindDto::Open);
-        assert_eq!(
-            request.paths,
-            ["/home/frank/Documents/beeware-tutorial.tzap"]
-        );
+        assert_eq!(request.paths, ["/home/frank/Documents/beeware-tutorial.tzap"]);
     }
 
     #[test]
     fn parse_accepts_kebab_and_camel_case_actions() {
-        let preferred_compress = requested(&[
-            "--quick-action",
-            "compress",
-            "--path",
-            "C:/tmp/source one",
-            "C:/tmp/source two",
-        ]);
+        let preferred_compress = requested(&["--quick-action", "compress", "--path", "C:/tmp/source one", "C:/tmp/source two"]);
         assert_eq!(preferred_compress.kind, QuickActionKindDto::Compress);
-        assert_eq!(
-            preferred_compress.paths,
-            ["C:/tmp/source one", "C:/tmp/source two"]
-        );
+        assert_eq!(preferred_compress.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
 
-        let preferred_extract =
-            requested(&["--quick-action=extract", "--path", "C:/tmp/archive.tar.zst"]);
+        let preferred_extract = requested(&["--quick-action=extract", "--path", "C:/tmp/archive.tar.zst"]);
         assert_eq!(preferred_extract.kind, QuickActionKindDto::Extract);
         assert_eq!(preferred_extract.paths, ["C:/tmp/archive.tar.zst"]);
 
-        let compress = requested(&[
-            "--quick-action",
-            "compress-zip",
-            "--path",
-            "C:/tmp/source one",
-            "C:/tmp/source two",
-        ]);
+        let compress = requested(&["--quick-action", "compress-zip", "--path", "C:/tmp/source one", "C:/tmp/source two"]);
         assert_eq!(compress.kind, QuickActionKindDto::CompressZip);
         assert_eq!(compress.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
 
-        let compress_tzap =
-            requested(&["--quick-action", "compress-tzap", "--path", "C:/tmp/source"]);
+        let compress_tzap = requested(&["--quick-action", "compress-tzap", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tzap.kind, QuickActionKindDto::CompressTzap);
 
-        let compress_seven_z =
-            requested(&["--quick-action", "compress-7z", "--path", "C:/tmp/source"]);
+        let compress_seven_z = requested(&["--quick-action", "compress-7z", "--path", "C:/tmp/source"]);
         assert_eq!(compress_seven_z.kind, QuickActionKindDto::CompressSevenZ);
 
-        let compress_tzst =
-            requested(&["--quick-action", "compress-tzst", "--path", "C:/tmp/source"]);
+        let compress_tzst = requested(&["--quick-action", "compress-tzst", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tzst.kind, QuickActionKindDto::CompressTarZst);
 
-        let compress_tgz =
-            requested(&["--quick-action", "compress-tgz", "--path", "C:/tmp/source"]);
+        let compress_tgz = requested(&["--quick-action", "compress-tgz", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tgz.kind, QuickActionKindDto::CompressTarGz);
 
-        let unknown_option_compress = requested(&[
-            "--quick-action",
-            "compress-tzap",
-            "--ignored-shell-option",
-            "--path",
-            "C:/tmp/source",
-        ]);
-        assert_eq!(
-            unknown_option_compress.kind,
-            QuickActionKindDto::CompressTzap
-        );
+        let unknown_option_compress = requested(&["--quick-action", "compress-tzap", "--ignored-shell-option", "--path", "C:/tmp/source"]);
+        assert_eq!(unknown_option_compress.kind, QuickActionKindDto::CompressTzap);
         assert_eq!(unknown_option_compress.paths, ["C:/tmp/source"]);
 
-        let extract = requested(&[
-            "--quick-action=extractToFolder",
-            "--path",
-            "C:/tmp/archive.tar.zst",
-        ]);
+        let extract = requested(&["--quick-action=extractToFolder", "--path", "C:/tmp/archive.tar.zst"]);
         assert_eq!(extract.kind, QuickActionKindDto::ExtractToFolder);
         assert_eq!(extract.paths, ["C:/tmp/archive.tar.zst"]);
     }
 
     #[test]
     fn parse_accepts_repeated_path_groups() {
-        let request = requested(&[
-            "--quick-action",
-            "extract-here",
-            "--path",
-            "C:/tmp/one.zip",
-            "--path",
-            "C:/tmp/two.tzap",
-        ]);
+        let request = requested(&["--quick-action", "extract-here", "--path", "C:/tmp/one.zip", "--path", "C:/tmp/two.tzap"]);
 
         assert_eq!(request.kind, QuickActionKindDto::ExtractHere);
         assert_eq!(request.paths, ["C:/tmp/one.zip", "C:/tmp/two.tzap"]);
@@ -910,86 +689,62 @@ mod tests {
     #[test]
     fn parse_accepts_structured_quick_action_request_file() {
         let request_path = unique_temp_file("quick-action-request");
-        std::fs::write(
-            &request_path,
-            r#"{"kind":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#,
-        )
-        .expect("quick-action request fixture should write");
+        std::fs::write(&request_path, r#"{"kind":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#)
+            .expect("quick-action request fixture should write");
 
         let request_path_text = request_path.to_string_lossy().to_string();
         let request = requested(&["--quick-action-request", &request_path_text]);
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
-        assert!(
-            !request_path.exists(),
-            "consumed request file should be removed"
-        );
+        assert!(!request_path.exists(), "consumed request file should be removed");
     }
 
     #[test]
     fn parse_accepts_versioned_shell_action_request_file() {
         let request_path = unique_temp_file("shell-action-request");
-        std::fs::write(
-            &request_path,
-            r#"{"version":1,"action":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#,
-        )
-        .expect("shell-action request fixture should write");
+        std::fs::write(&request_path, r#"{"version":1,"action":"compressZip","paths":["C:/tmp/source one","C:/tmp/source two"]}"#)
+            .expect("shell-action request fixture should write");
 
         let request_path_text = request_path.to_string_lossy().to_string();
         let request = requested(&["--shell-action-request", &request_path_text]);
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/source one", "C:/tmp/source two"]);
-        assert!(
-            !request_path.exists(),
-            "consumed request file should be removed"
-        );
+        assert!(!request_path.exists(), "consumed request file should be removed");
     }
 
     #[test]
     fn versioned_shell_action_request_rejects_unknown_versions() {
         let request_path = unique_temp_file("future-shell-action-request");
-        std::fs::write(
-            &request_path,
-            r#"{"version":2,"action":"compressZip","paths":["C:/tmp/source"]}"#,
-        )
-        .expect("future shell-action request fixture should write");
+        std::fs::write(&request_path, r#"{"version":2,"action":"compressZip","paths":["C:/tmp/source"]}"#)
+            .expect("future shell-action request fixture should write");
 
         let request_path_text = request_path.to_string_lossy().to_string();
         let error = invalid(&["--shell-action-request", &request_path_text]);
 
         assert_eq!(error.message, "unsupported shell-action request version: 2");
-        assert!(
-            !request_path.exists(),
-            "rejected request file should be removed"
-        );
+        assert!(!request_path.exists(), "rejected request file should be removed");
     }
 
     #[test]
     fn malformed_shell_action_request_is_removed_after_reading() {
         let request_path = unique_temp_file("malformed-shell-action-request");
-        std::fs::write(&request_path, [0xff, 0xfe, 0xfd])
-            .expect("malformed shell-action request fixture should write");
+        std::fs::write(&request_path, [0xff, 0xfe, 0xfd]).expect("malformed shell-action request fixture should write");
 
         let request_path_text = request_path.to_string_lossy().to_string();
         let error = invalid(&["--shell-action-request", &request_path_text]);
 
         assert!(error.message.contains("must be UTF-8 JSON"));
-        assert!(
-            !request_path.exists(),
-            "malformed request file should be removed"
-        );
+        assert!(!request_path.exists(), "malformed request file should be removed");
     }
 
     #[test]
     fn startup_coordinator_returns_one_atomic_shell_request_without_waiting() {
-        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
-            QuickActionStartupState::Requested(QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressZip,
-                paths: vec!["C:/tmp/one".to_string(), "C:/tmp/two".to_string()],
-            }),
-        );
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(QuickActionStartupState::Requested(QuickActionRequestDto {
+            kind: QuickActionKindDto::CompressZip,
+            paths: vec!["C:/tmp/one".to_string(), "C:/tmp/two".to_string()],
+        }));
 
         let request = match coordinator.startup_state() {
             QuickActionStartupState::Requested(request) => request,
@@ -998,27 +753,19 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::CompressZip);
         assert_eq!(request.paths, ["C:/tmp/one", "C:/tmp/two"]);
-        assert_eq!(
-            coordinator.startup_state(),
-            QuickActionStartupState::NotRequested
-        );
+        assert_eq!(coordinator.startup_state(), QuickActionStartupState::NotRequested);
     }
 
     #[test]
     fn cold_start_multi_select_exposes_only_the_disposition_marker() {
-        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
-            QuickActionStartupState::Requested(QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressZip,
-                paths: vec!["C:/tmp/folder1".to_string(), "C:/tmp/folder2".to_string()],
-            }),
-        );
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(QuickActionStartupState::Requested(QuickActionRequestDto {
+            kind: QuickActionKindDto::CompressZip,
+            paths: vec!["C:/tmp/folder1".to_string(), "C:/tmp/folder2".to_string()],
+        }));
 
         let response = coordinator.startup_state().to_dto();
 
-        assert_eq!(
-            response.window_disposition,
-            Some(QuickActionWindowDispositionDto::DisposableTask),
-        );
+        assert_eq!(response.window_disposition, Some(QuickActionWindowDispositionDto::DisposableTask),);
     }
 
     #[test]
@@ -1028,32 +775,22 @@ mod tests {
         let delivered_for_emitter = delivered.clone();
         inbox
             .attach_emitter(Arc::new(move |_window, event| {
-                delivered_for_emitter
-                    .lock()
-                    .expect("delivery lock poisoned")
-                    .push(event.clone());
+                delivered_for_emitter.lock().expect("delivery lock poisoned").push(event.clone());
                 Ok(())
             }))
             .unwrap();
-        let forwarded = QuickActionStartupState::Requested(QuickActionRequestDto {
-            kind: QuickActionKindDto::CompressTzap,
-            paths: vec!["C:/tmp/source".to_string()],
-        })
-        .forward_requested_to_native_inbox(&inbox);
+        let forwarded =
+            QuickActionStartupState::Requested(QuickActionRequestDto { kind: QuickActionKindDto::CompressTzap, paths: vec!["C:/tmp/source".to_string()] })
+                .forward_requested_to_native_inbox(&inbox);
 
         let dto = forwarded.to_dto();
         assert!(dto.launched_for_quick_action);
-        assert_eq!(
-            dto.window_disposition,
-            Some(crate::dto::QuickActionWindowDispositionDto::DisposableTask)
-        );
+        assert_eq!(dto.window_disposition, Some(crate::dto::QuickActionWindowDispositionDto::DisposableTask));
 
         assert_eq!(inbox.frontend_ready("main"), Ok(1));
         let delivered = delivered.lock().expect("delivery lock poisoned");
         assert_eq!(delivered.len(), 1);
-        let crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) =
-            &delivered[0].payload
-        else {
+        let crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) = &delivered[0].payload else {
             panic!("expected one forwarded shell action request");
         };
         assert_eq!(payload.request.kind, QuickActionKindDto::CompressTzap);
@@ -1063,55 +800,30 @@ mod tests {
     #[test]
     fn structured_quick_action_request_file_uses_normal_validation() {
         let request_path = unique_temp_file("invalid-quick-action-request");
-        std::fs::write(
-            &request_path,
-            r#"{"kind":"extractHere","paths":["C:/tmp/notes.txt"]}"#,
-        )
-        .expect("invalid quick-action request fixture should write");
+        std::fs::write(&request_path, r#"{"kind":"extractHere","paths":["C:/tmp/notes.txt"]}"#).expect("invalid quick-action request fixture should write");
 
         let request_path_text = request_path.to_string_lossy().to_string();
         let error = invalid(&["--quick-action-request", &request_path_text]);
 
         assert!(error.message.contains("unsupported archive"));
-        assert!(
-            !request_path.exists(),
-            "rejected request file should be removed"
-        );
+        assert!(!request_path.exists(), "rejected request file should be removed");
     }
 
     #[test]
     fn compress_actions_require_at_least_one_local_path() {
-        assert_eq!(
-            invalid(&["--quick-action", "compress-zip"]).message,
-            "compress quick actions require at least one path"
-        );
+        assert_eq!(invalid(&["--quick-action", "compress-zip"]).message, "compress quick actions require at least one path");
 
-        let request = requested(&[
-            "--quick-action",
-            "compress-clean-source",
-            "--path",
-            "notes.txt",
-        ]);
+        let request = requested(&["--quick-action", "compress-clean-source", "--path", "notes.txt"]);
         assert_eq!(request.kind, QuickActionKindDto::CompressCleanSource);
         assert_eq!(request.paths, ["notes.txt"]);
     }
 
     #[test]
     fn extract_here_accepts_multiple_supported_archives() {
-        let request = requested(&[
-            "--quick-action",
-            "extract",
-            "--path",
-            "first.zip",
-            "second.tar",
-            "third.vol001.tzap",
-        ]);
+        let request = requested(&["--quick-action", "extract", "--path", "first.zip", "second.tar", "third.vol001.tzap"]);
 
         assert_eq!(request.kind, QuickActionKindDto::Extract);
-        assert_eq!(
-            request.paths,
-            ["first.zip", "second.tar", "third.vol001.tzap"]
-        );
+        assert_eq!(request.paths, ["first.zip", "second.tar", "third.vol001.tzap"]);
     }
 
     #[test]
@@ -1124,51 +836,19 @@ mod tests {
 
     #[test]
     fn extract_to_folder_accepts_exactly_one_archive() {
-        let request = requested(&[
-            "--quick-action",
-            "extract-to-folder",
-            "--path",
-            "archive.7z.001",
-        ]);
+        let request = requested(&["--quick-action", "extract-to-folder", "--path", "archive.7z.001"]);
         assert_eq!(request.kind, QuickActionKindDto::ExtractToFolder);
 
         assert_eq!(
-            invalid(&[
-                "--quick-action",
-                "extract-to-folder",
-                "--path",
-                "one.zip",
-                "two.zip",
-            ])
-            .message,
+            invalid(&["--quick-action", "extract-to-folder", "--path", "one.zip", "two.zip",]).message,
             "extract-to-folder requires exactly one archive path"
         );
     }
 
     #[test]
     fn quick_actions_reject_remote_urls_and_password_args() {
-        assert!(
-            invalid(&[
-                "--quick-action",
-                "compress-zip",
-                "--path",
-                "https://example.com/a"
-            ])
-            .message
-            .contains("must be local")
-        );
-        assert!(
-            invalid(&[
-                "--quick-action",
-                "extract",
-                "--password",
-                "secret",
-                "--path",
-                "archive.zip",
-            ])
-            .message
-            .contains("passwords cannot be supplied")
-        );
+        assert!(invalid(&["--quick-action", "compress-zip", "--path", "https://example.com/a"]).message.contains("must be local"));
+        assert!(invalid(&["--quick-action", "extract", "--password", "secret", "--path", "archive.zip",]).message.contains("passwords cannot be supplied"));
     }
 
     #[test]
@@ -1191,43 +871,25 @@ mod tests {
             "archive.iso",
             r"C:\tmp\bundle.TAR.GZ",
         ] {
-            assert!(
-                is_supported_archive_path(path),
-                "{path} should be supported"
-            );
+            assert!(is_supported_archive_path(path), "{path} should be supported");
         }
 
-        for path in [
-            "notes.txt",
-            "image.png",
-            "archive",
-            "archive.zmanager",
-            "archive.7z.002",
-            "archive.z01",
-        ] {
-            assert!(
-                !is_supported_archive_path(path),
-                "{path} should not be supported"
-            );
+        for path in ["notes.txt", "image.png", "archive", "archive.zmanager", "archive.7z.002", "archive.z01"] {
+            assert!(!is_supported_archive_path(path), "{path} should not be supported");
         }
     }
 
     #[test]
     fn startup_state_exposes_tzap_disposition_without_a_second_execution_path() {
-        let coordinator = QuickActionLaunchCoordinator::from_startup_state(
-            QuickActionStartupState::Requested(QuickActionRequestDto {
-                kind: QuickActionKindDto::CompressTzap,
-                paths: vec!["C:/tmp/source".to_string()],
-            }),
-        );
+        let coordinator = QuickActionLaunchCoordinator::from_startup_state(QuickActionStartupState::Requested(QuickActionRequestDto {
+            kind: QuickActionKindDto::CompressTzap,
+            paths: vec!["C:/tmp/source".to_string()],
+        }));
         let response = coordinator.startup_state().to_dto();
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
-        assert_eq!(
-            response.window_disposition,
-            Some(QuickActionWindowDispositionDto::DisposableTask),
-        );
+        assert_eq!(response.window_disposition, Some(QuickActionWindowDispositionDto::DisposableTask),);
     }
 
     #[test]
@@ -1235,9 +897,6 @@ mod tests {
         let response = state_from_args(&["--quick-action", "compressZip"]).to_dto();
 
         assert!(response.error.is_some());
-        assert_eq!(
-            response.window_disposition,
-            Some(QuickActionWindowDispositionDto::DisposableTask),
-        );
+        assert_eq!(response.window_disposition, Some(QuickActionWindowDispositionDto::DisposableTask),);
     }
 }

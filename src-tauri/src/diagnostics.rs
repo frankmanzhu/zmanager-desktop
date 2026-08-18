@@ -70,27 +70,13 @@ impl DiagnosticLog {
     pub fn new() -> Self {
         let timestamp = unix_timestamp_ms();
         let process_id = std::process::id();
-        Self {
-            session_id: Arc::new(format!("{timestamp}-{process_id}")),
-            process_id,
-            inner: Arc::new(Mutex::new(DiagnosticLogState::default())),
-        }
+        Self { session_id: Arc::new(format!("{timestamp}-{process_id}")), process_id, inner: Arc::new(Mutex::new(DiagnosticLogState::default())) }
     }
 
-    pub fn initialize(
-        &self,
-        user_log_directory: Option<PathBuf>,
-        prefer_user_log_directory: bool,
-    ) -> io::Result<()> {
-        let install_log_directory = std::env::current_exe()
-            .ok()
-            .and_then(|path| path.parent().map(|parent| parent.join(LOG_DIRECTORY_NAME)));
+    pub fn initialize(&self, user_log_directory: Option<PathBuf>, prefer_user_log_directory: bool) -> io::Result<()> {
+        let install_log_directory = std::env::current_exe().ok().and_then(|path| path.parent().map(|parent| parent.join(LOG_DIRECTORY_NAME)));
 
-        self.initialize_with_directories(
-            install_log_directory.as_deref(),
-            user_log_directory.as_deref(),
-            prefer_user_log_directory,
-        )
+        self.initialize_with_directories(install_log_directory.as_deref(), user_log_directory.as_deref(), prefer_user_log_directory)
     }
 
     fn initialize_with_directories(
@@ -100,38 +86,25 @@ impl DiagnosticLog {
         prefer_user_log_directory: bool,
     ) -> io::Result<()> {
         if prefer_user_log_directory {
-            let directory = user_log_directory.ok_or_else(|| {
-                io::Error::new(io::ErrorKind::NotFound, "user log directory unavailable")
-            })?;
+            let directory = user_log_directory.ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "user log directory unavailable"))?;
             self.activate(directory, "user")?;
             self.record(
                 "diagnostics",
                 "initialized",
-                fields([
-                    ("location", Value::String("user".to_string())),
-                    ("installationLocationAllowed", Value::Bool(false)),
-                ]),
+                fields([("location", Value::String("user".to_string())), ("installationLocationAllowed", Value::Bool(false))]),
             )?;
             return Ok(());
         }
 
         let primary_result = install_log_directory
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "installation directory unavailable",
-                )
-            })
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "installation directory unavailable"))
             .and_then(|directory| self.activate(directory, "installation"));
 
         if primary_result.is_ok() {
             self.record(
                 "diagnostics",
                 "initialized",
-                fields([
-                    ("location", Value::String("installation".to_string())),
-                    ("primaryLocationAvailable", Value::Bool(true)),
-                ]),
+                fields([("location", Value::String("installation".to_string())), ("primaryLocationAvailable", Value::Bool(true))]),
             )?;
             return Ok(());
         }
@@ -139,11 +112,7 @@ impl DiagnosticLog {
         let Some(user_log_directory) = user_log_directory else {
             return primary_result;
         };
-        let primary_error_kind = primary_result
-            .as_ref()
-            .err()
-            .map(|error| format!("{:?}", error.kind()))
-            .unwrap_or_else(|| "Unknown".to_string());
+        let primary_error_kind = primary_result.as_ref().err().map(|error| format!("{:?}", error.kind())).unwrap_or_else(|| "Unknown".to_string());
         self.activate(user_log_directory, "userFallback")?;
         self.record(
             "diagnostics",
@@ -156,12 +125,7 @@ impl DiagnosticLog {
         )
     }
 
-    pub fn record(
-        &self,
-        scope: impl Into<String>,
-        name: impl Into<String>,
-        fields: BTreeMap<String, Value>,
-    ) -> io::Result<()> {
+    pub fn record(&self, scope: impl Into<String>, name: impl Into<String>, fields: BTreeMap<String, Value>) -> io::Result<()> {
         let mut state = self.inner.lock().expect("diagnostic log lock poisoned");
         state.sequence = state.sequence.saturating_add(1);
         let entry = DiagnosticLogEntry {
@@ -174,9 +138,7 @@ impl DiagnosticLog {
             name: sanitize_name(name.into()),
             fields: sanitize_fields(fields),
         };
-        let line = serde_json::to_string(&entry).map_err(|error| {
-            io::Error::other(format!("unable to serialize diagnostic event: {error}"))
-        })?;
+        let line = serde_json::to_string(&entry).map_err(|error| io::Error::other(format!("unable to serialize diagnostic event: {error}")))?;
 
         if let Some(path) = state.path.as_deref() {
             append_line(path, &line)?;
@@ -193,10 +155,7 @@ impl DiagnosticLog {
         let state = self.inner.lock().expect("diagnostic log lock poisoned");
         DiagnosticLogInfoDto {
             enabled: state.path.is_some(),
-            path: state
-                .path
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
+            path: state.path.as_ref().map(|path| path.to_string_lossy().to_string()),
             session_id: (*self.session_id).clone(),
             location: state.location.unwrap_or("unavailable").to_string(),
         }
@@ -220,13 +179,8 @@ impl DiagnosticLog {
 }
 
 #[tauri::command]
-pub fn record_diagnostic_event(
-    request: DiagnosticEventRequest,
-    state: State<'_, DiagnosticLog>,
-) -> Result<(), crate::error::CommandErrorDto> {
-    state
-        .record(request.scope, request.name, request.fields)
-        .map_err(|_| crate::error::CommandErrorDto::io_error("Unable to write diagnostics", true))
+pub fn record_diagnostic_event(request: DiagnosticEventRequest, state: State<'_, DiagnosticLog>) -> Result<(), crate::error::CommandErrorDto> {
+    state.record(request.scope, request.name, request.fields).map_err(|_| crate::error::CommandErrorDto::io_error("Unable to write diagnostics", true))
 }
 
 #[tauri::command]
@@ -235,10 +189,7 @@ pub fn diagnostic_log_info(state: State<'_, DiagnosticLog>) -> DiagnosticLogInfo
 }
 
 pub fn fields<const N: usize>(entries: [(&str, Value); N]) -> BTreeMap<String, Value> {
-    entries
-        .into_iter()
-        .map(|(key, value)| (key.to_string(), value))
-        .collect()
+    entries.into_iter().map(|(key, value)| (key.to_string(), value)).collect()
 }
 
 fn append_line(path: &Path, line: &str) -> io::Result<()> {
@@ -250,9 +201,7 @@ fn append_line(path: &Path, line: &str) -> io::Result<()> {
 }
 
 fn rotate_if_needed(path: &Path, incoming_bytes: u64) -> io::Result<()> {
-    let current_bytes = fs::metadata(path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
+    let current_bytes = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
     if current_bytes.saturating_add(incoming_bytes) <= MAX_LOG_BYTES {
         return Ok(());
     }
@@ -297,28 +246,13 @@ fn sanitize_name(value: String) -> String {
     value
         .chars()
         .take(MAX_NAME_CHARS)
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') {
-                character
-            } else {
-                '_'
-            }
-        })
+        .map(|character| if character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-') { character } else { '_' })
         .collect()
 }
 
 fn is_sensitive_key(key: &str) -> bool {
     let normalized = normalized_key(key);
-    [
-        "password",
-        "passphrase",
-        "secret",
-        "credential",
-        "privatekey",
-        "token",
-    ]
-    .iter()
-    .any(|sensitive| normalized.contains(sensitive))
+    ["password", "passphrase", "secret", "credential", "privatekey", "token"].iter().any(|sensitive| normalized.contains(sensitive))
 }
 
 fn is_path_key(key: &str) -> bool {
@@ -327,18 +261,11 @@ fn is_path_key(key: &str) -> bool {
 }
 
 fn normalized_key(key: &str) -> String {
-    key.chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
+    key.chars().filter(|character| character.is_ascii_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
 fn unix_timestamp_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis().min(u128::from(u64::MAX)) as u64
 }
 
 #[cfg(test)]
@@ -346,22 +273,13 @@ mod tests {
     use super::*;
 
     fn unique_temp_directory(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "zmanager-diagnostics-{name}-{}-{}",
-            std::process::id(),
-            unix_timestamp_ms()
-        ))
+        std::env::temp_dir().join(format!("zmanager-diagnostics-{name}-{}-{}", std::process::id(), unix_timestamp_ms()))
     }
 
     #[test]
     fn buffers_startup_events_then_writes_json_lines() {
         let log = DiagnosticLog::new();
-        log.record(
-            "startup",
-            "classified",
-            fields([("action", Value::String("compressZip".to_string()))]),
-        )
-        .unwrap();
+        log.record("startup", "classified", fields([("action", Value::String("compressZip".to_string()))])).unwrap();
 
         let directory = unique_temp_directory("buffer");
         log.activate(&directory, "installation").unwrap();
@@ -379,10 +297,7 @@ mod tests {
         let sanitized = sanitize_fields(fields([
             ("password", Value::String("do-not-write".to_string())),
             ("requestToken", Value::String("opaque-token".to_string())),
-            (
-                "archivePath",
-                Value::String("C:/private/file.zip".to_string()),
-            ),
+            ("archivePath", Value::String("C:/private/file.zip".to_string())),
             ("metadata", serde_json::json!({ "nested": true })),
         ]));
 
@@ -390,21 +305,9 @@ mod tests {
         assert_eq!(sanitized["requestToken"], "[REDACTED]");
         assert_eq!(sanitized["archivePath"], "[REDACTED_PATH]");
         assert_eq!(sanitized["metadata"], "[UNSUPPORTED]");
-        assert!(
-            !serde_json::to_string(&sanitized)
-                .unwrap()
-                .contains("do-not-write")
-        );
-        assert!(
-            !serde_json::to_string(&sanitized)
-                .unwrap()
-                .contains("opaque-token")
-        );
-        assert!(
-            !serde_json::to_string(&sanitized)
-                .unwrap()
-                .contains("C:/private/file.zip")
-        );
+        assert!(!serde_json::to_string(&sanitized).unwrap().contains("do-not-write"));
+        assert!(!serde_json::to_string(&sanitized).unwrap().contains("opaque-token"));
+        assert!(!serde_json::to_string(&sanitized).unwrap().contains("C:/private/file.zip"));
     }
 
     #[test]
@@ -416,25 +319,12 @@ mod tests {
         let fallback_directory = root.join("user-logs");
         let log = DiagnosticLog::new();
 
-        log.initialize_with_directories(
-            Some(&blocked_install_directory),
-            Some(&fallback_directory),
-            false,
-        )
-        .unwrap();
+        log.initialize_with_directories(Some(&blocked_install_directory), Some(&fallback_directory), false).unwrap();
 
         let info = log.info();
         assert!(info.enabled);
         assert_eq!(info.location, "userFallback");
-        assert_eq!(
-            info.path,
-            Some(
-                fallback_directory
-                    .join(LOG_FILE_NAME)
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
+        assert_eq!(info.path, Some(fallback_directory.join(LOG_FILE_NAME).to_string_lossy().to_string()));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -445,21 +335,12 @@ mod tests {
         let user_directory = root.join("user-logs");
         let log = DiagnosticLog::new();
 
-        log.initialize_with_directories(Some(&install_directory), Some(&user_directory), true)
-            .unwrap();
+        log.initialize_with_directories(Some(&install_directory), Some(&user_directory), true).unwrap();
 
         let info = log.info();
         assert!(info.enabled);
         assert_eq!(info.location, "user");
-        assert_eq!(
-            info.path,
-            Some(
-                user_directory
-                    .join(LOG_FILE_NAME)
-                    .to_string_lossy()
-                    .to_string()
-            )
-        );
+        assert_eq!(info.path, Some(user_directory.join(LOG_FILE_NAME).to_string_lossy().to_string()));
         assert!(!install_directory.exists());
         fs::remove_dir_all(root).unwrap();
     }

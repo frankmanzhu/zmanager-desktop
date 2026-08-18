@@ -3,9 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 mod generated;
-pub use generated::{
-    SHELL_ACTION_POLICIES, ShellActionKind, ShellActionPolicy, ShellActionWindowDisposition,
-};
+pub use generated::{SHELL_ACTION_POLICIES, ShellActionKind, ShellActionPolicy, ShellActionWindowDisposition};
 
 pub const SHELL_ACTION_REQUEST_VERSION: u32 = 1;
 
@@ -19,37 +17,25 @@ pub struct ShellActionRequest {
 
 impl ShellActionRequest {
     pub fn new(action: ShellActionKind, paths: Vec<String>) -> Self {
-        Self {
-            version: SHELL_ACTION_REQUEST_VERSION,
-            action,
-            paths,
-        }
+        Self { version: SHELL_ACTION_REQUEST_VERSION, action, paths }
     }
 
     pub fn from_json(json: &str) -> Result<Self, ShellActionContractError> {
-        let request = serde_json::from_str::<Self>(json)
-            .map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))?;
+        let request = serde_json::from_str::<Self>(json).map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))?;
         if request.version != SHELL_ACTION_REQUEST_VERSION {
-            return Err(ShellActionContractError::UnsupportedVersion(
-                request.version,
-            ));
+            return Err(ShellActionContractError::UnsupportedVersion(request.version));
         }
         Ok(request)
     }
 
     pub fn to_json(&self) -> Result<String, ShellActionContractError> {
-        serde_json::to_string(self)
-            .map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))
+        serde_json::to_string(self).map_err(|error| ShellActionContractError::InvalidJson(error.to_string()))
     }
 }
 
 impl ShellActionKind {
     pub fn window_disposition(self) -> ShellActionWindowDisposition {
-        SHELL_ACTION_POLICIES
-            .iter()
-            .find(|policy| policy.kind == self)
-            .expect("every generated shell action must have a policy")
-            .window_disposition
+        SHELL_ACTION_POLICIES.iter().find(|policy| policy.kind == self).expect("every generated shell action must have a policy").window_disposition
     }
 }
 
@@ -75,10 +61,7 @@ impl fmt::Display for ShellActionContractError {
                 write!(formatter, "invalid shell-action request JSON: {message}")
             }
             Self::UnsupportedVersion(version) => {
-                write!(
-                    formatter,
-                    "unsupported shell-action request version: {version}"
-                )
+                write!(formatter, "unsupported shell-action request version: {version}")
             }
         }
     }
@@ -92,10 +75,7 @@ mod tests {
 
     #[test]
     fn versioned_request_round_trips_all_selected_paths() {
-        let request = ShellActionRequest::new(
-            ShellActionKind::CompressZip,
-            vec!["C:/work/folder1".to_string(), "C:/work/folder2".to_string()],
-        );
+        let request = ShellActionRequest::new(ShellActionKind::CompressZip, vec!["C:/work/folder1".to_string(), "C:/work/folder2".to_string()]);
 
         let json = request.to_json().expect("request should serialize");
         let parsed = ShellActionRequest::from_json(&json).expect("request should parse");
@@ -105,49 +85,30 @@ mod tests {
 
     #[test]
     fn unknown_contract_versions_are_rejected() {
-        let error = ShellActionRequest::from_json(
-            r#"{"version":2,"action":"compressZip","paths":["C:/work"]}"#,
-        )
-        .expect_err("unknown version should fail");
+        let error = ShellActionRequest::from_json(r#"{"version":2,"action":"compressZip","paths":["C:/work"]}"#).expect_err("unknown version should fail");
 
         assert_eq!(error, ShellActionContractError::UnsupportedVersion(2));
     }
 
     #[test]
     fn generated_actions_match_the_shared_conformance_fixture() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../fixtures/contracts/native-contracts.conformance.json"
-        ))
-        .expect("conformance fixture should parse");
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../fixtures/contracts/native-contracts.conformance.json")).expect("conformance fixture should parse");
         let expected = fixture["actionOrder"]
             .as_array()
             .expect("actionOrder should be an array")
             .iter()
             .map(|value| value.as_str().expect("action id should be text"))
             .collect::<Vec<_>>();
-        let actual = SHELL_ACTION_POLICIES
-            .iter()
-            .map(|policy| policy.id)
-            .collect::<Vec<_>>();
+        let actual = SHELL_ACTION_POLICIES.iter().map(|policy| policy.id).collect::<Vec<_>>();
         assert_eq!(actual, expected);
-        assert!(
-            SHELL_ACTION_POLICIES
-                .windows(2)
-                .all(|pair| pair[0].order < pair[1].order)
-        );
+        assert!(SHELL_ACTION_POLICIES.windows(2).all(|pair| pair[0].order < pair[1].order));
     }
 
     #[test]
     fn generated_window_dispositions_separate_main_and_disposable_actions() {
-        for kind in [
-            ShellActionKind::Open,
-            ShellActionKind::Compress,
-            ShellActionKind::Extract,
-        ] {
-            assert_eq!(
-                kind.window_disposition(),
-                ShellActionWindowDisposition::MainWindow
-            );
+        for kind in [ShellActionKind::Open, ShellActionKind::Compress, ShellActionKind::Extract] {
+            assert_eq!(kind.window_disposition(), ShellActionWindowDisposition::MainWindow);
         }
         for kind in [
             ShellActionKind::CompressZip,
@@ -159,10 +120,7 @@ mod tests {
             ShellActionKind::ExtractHere,
             ShellActionKind::ExtractToFolder,
         ] {
-            assert_eq!(
-                kind.window_disposition(),
-                ShellActionWindowDisposition::DisposableTask
-            );
+            assert_eq!(kind.window_disposition(), ShellActionWindowDisposition::DisposableTask);
         }
     }
 }

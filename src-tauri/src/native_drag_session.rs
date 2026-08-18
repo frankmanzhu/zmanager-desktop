@@ -42,30 +42,17 @@ pub struct NativeFilePromiseDescriptor {
 
 impl NativeDragSessionRegistry {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(RegistryState {
-            next_id: 1,
-            sessions: HashMap::new(),
-            shutdown: false,
-        })))
+        Self(Arc::new(Mutex::new(RegistryState { next_id: 1, sessions: HashMap::new(), shutdown: false })))
     }
 
-    pub fn create(
-        &self,
-        items: &[NativeFileDragItem],
-        stream_provider: NativeFileDragStreamProvider,
-    ) -> Result<String, NativeFileDragError> {
+    pub fn create(&self, items: &[NativeFileDragItem], stream_provider: NativeFileDragStreamProvider) -> Result<String, NativeFileDragError> {
         if items.is_empty() {
-            return Err(NativeFileDragError::invalid_request(
-                "Native drag has no items",
-            ));
+            return Err(NativeFileDragError::invalid_request("Native drag has no items"));
         }
         let mut state = self.0.lock().expect("native drag registry lock poisoned");
         state.retain_live();
         if state.shutdown || state.sessions.len() >= MAX_SESSIONS {
-            return Err(NativeFileDragError::new(
-                "Native drag session capacity is unavailable",
-                None::<String>,
-            ));
+            return Err(NativeFileDragError::new("Native drag session capacity is unavailable", None::<String>));
         }
         let id = format!("drag-{}-{}", std::process::id(), state.next_id);
         state.next_id = state.next_id.saturating_add(1);
@@ -84,17 +71,13 @@ impl NativeDragSessionRegistry {
         Ok(id)
     }
 
-    pub fn descriptors(
-        items: &[NativeFileDragItem],
-    ) -> Result<Vec<NativeFilePromiseDescriptor>, NativeFileDragError> {
+    pub fn descriptors(items: &[NativeFileDragItem]) -> Result<Vec<NativeFilePromiseDescriptor>, NativeFileDragError> {
         let promises = group_promises(items)?;
         let mut descriptors = promises
             .into_iter()
             .map(|(promise_path, members)| NativeFilePromiseDescriptor {
                 promised_name: promise_path.clone(),
-                is_directory: members
-                    .iter()
-                    .any(|member| member.display_path != promise_path),
+                is_directory: members.iter().any(|member| member.display_path != promise_path),
                 promise_path,
             })
             .collect::<Vec<_>>();
@@ -102,39 +85,22 @@ impl NativeDragSessionRegistry {
         Ok(descriptors)
     }
 
-    pub fn write_promise(
-        &self,
-        session_id: &str,
-        promise_path: &str,
-        destination: &Path,
-    ) -> Result<u64, NativeFileDragError> {
+    pub fn write_promise(&self, session_id: &str, promise_path: &str, destination: &Path) -> Result<u64, NativeFileDragError> {
         validate_destination(destination)?;
         let (members, provider, cancelled) = {
             let mut state = self.0.lock().expect("native drag registry lock poisoned");
-            let session = state.sessions.get_mut(session_id).ok_or_else(|| {
-                NativeFileDragError::invalid_request("Native drag session expired")
-            })?;
+            let session = state.sessions.get_mut(session_id).ok_or_else(|| NativeFileDragError::invalid_request("Native drag session expired"))?;
             let Some(members) = session.promises.get(promise_path) else {
-                return Err(NativeFileDragError::invalid_request(
-                    "Native drag item is unavailable",
-                ));
+                return Err(NativeFileDragError::invalid_request("Native drag item is unavailable"));
             };
             if session.completed.contains(promise_path) || session.active.contains(promise_path) {
-                return Err(NativeFileDragError::invalid_request(
-                    "Native drag item is already being written or was completed",
-                ));
+                return Err(NativeFileDragError::invalid_request("Native drag item is already being written or was completed"));
             }
             session.active.insert(promise_path.to_string());
-            (
-                members.clone(),
-                Arc::clone(&session.stream_provider),
-                Arc::clone(&session.cancelled),
-            )
+            (members.clone(), Arc::clone(&session.stream_provider), Arc::clone(&session.cancelled))
         };
 
-        let is_directory = members
-            .iter()
-            .any(|member| member.display_path != promise_path);
+        let is_directory = members.iter().any(|member| member.display_path != promise_path);
         let result = if is_directory {
             write_directory_promise(destination, promise_path, &members, &provider, &cancelled)
         } else {
@@ -155,13 +121,7 @@ impl NativeDragSessionRegistry {
     }
 
     pub fn cancel(&self, session_id: &str) {
-        if let Some(session) = self
-            .0
-            .lock()
-            .expect("native drag registry lock poisoned")
-            .sessions
-            .remove(session_id)
-        {
+        if let Some(session) = self.0.lock().expect("native drag registry lock poisoned").sessions.remove(session_id) {
             session.cancelled.store(true, Ordering::Release);
         }
     }
@@ -181,47 +141,32 @@ impl NativeDragSessionRegistry {
     }
 }
 
-fn group_promises(
-    items: &[NativeFileDragItem],
-) -> Result<HashMap<String, Vec<NativeFileDragItem>>, NativeFileDragError> {
+fn group_promises(items: &[NativeFileDragItem]) -> Result<HashMap<String, Vec<NativeFileDragItem>>, NativeFileDragError> {
     let mut normalized_promises = HashMap::<String, (String, Vec<NativeFileDragItem>)>::new();
     for item in items {
         validate_promised_path(&item.display_path)?;
         let mut components = item.display_path.split('/').filter(|part| !part.is_empty());
         let Some(root) = components.next() else {
-            return Err(NativeFileDragError::invalid_request(
-                "Native drag item has no promised name",
-            ));
+            return Err(NativeFileDragError::invalid_request("Native drag item has no promised name"));
         };
         if root == "." || root == ".." || root.len() > 255 {
-            return Err(NativeFileDragError::invalid_request(
-                "Native drag item has an invalid promised name",
-            ));
+            return Err(NativeFileDragError::invalid_request("Native drag item has an invalid promised name"));
         }
         let collision_key = root.nfd().flat_map(char::to_lowercase).collect::<String>();
-        let promise = normalized_promises
-            .entry(collision_key)
-            .or_insert_with(|| (root.to_string(), Vec::new()));
+        let promise = normalized_promises.entry(collision_key).or_insert_with(|| (root.to_string(), Vec::new()));
         if promise.0 != root {
-            return Err(NativeFileDragError::invalid_request(format!(
-                "promised top-level names collide on macOS: {} and {root}",
-                promise.0
-            )));
+            return Err(NativeFileDragError::invalid_request(format!("promised top-level names collide on macOS: {} and {root}", promise.0)));
         }
         promise.1.push(item.clone());
     }
     reject_normalized_path_collisions(items)?;
     if normalized_promises.is_empty() {
-        return Err(NativeFileDragError::invalid_request(
-            "Native drag has no promises",
-        ));
+        return Err(NativeFileDragError::invalid_request("Native drag has no promises"));
     }
     let mut promises = HashMap::new();
     for (_, (root, members)) in normalized_promises {
         if members.len() > 1 && members.iter().any(|member| member.display_path == root) {
-            return Err(NativeFileDragError::invalid_request(format!(
-                "promised name is both a file and directory: {root}"
-            )));
+            return Err(NativeFileDragError::invalid_request(format!("promised name is both a file and directory: {root}")));
         }
         promises.insert(root, members);
     }
@@ -230,39 +175,18 @@ fn group_promises(
 
 fn validate_promised_path(path: &str) -> Result<(), NativeFileDragError> {
     let components = path.split('/').collect::<Vec<_>>();
-    if components.is_empty()
-        || components
-            .iter()
-            .any(|part| part.is_empty() || *part == "." || *part == ".." || part.len() > 255)
-    {
-        return Err(NativeFileDragError::invalid_request(
-            "Native drag item has an invalid or overlong path component",
-        ));
+    if components.is_empty() || components.iter().any(|part| part.is_empty() || *part == "." || *part == ".." || part.len() > 255) {
+        return Err(NativeFileDragError::invalid_request("Native drag item has an invalid or overlong path component"));
     }
     Ok(())
 }
 
-fn reject_normalized_path_collisions(
-    items: &[NativeFileDragItem],
-) -> Result<(), NativeFileDragError> {
+fn reject_normalized_path_collisions(items: &[NativeFileDragItem]) -> Result<(), NativeFileDragError> {
     let mut paths = HashMap::<String, &str>::new();
     for item in items {
-        let key = item
-            .display_path
-            .split('/')
-            .map(|component| {
-                component
-                    .nfd()
-                    .flat_map(char::to_lowercase)
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("/");
+        let key = item.display_path.split('/').map(|component| component.nfd().flat_map(char::to_lowercase).collect::<String>()).collect::<Vec<_>>().join("/");
         if let Some(previous) = paths.insert(key, &item.display_path) {
-            return Err(NativeFileDragError::invalid_request(format!(
-                "promised paths collide on macOS: {previous} and {}",
-                item.display_path
-            )));
+            return Err(NativeFileDragError::invalid_request(format!("promised paths collide on macOS: {previous} and {}", item.display_path)));
         }
     }
     Ok(())
@@ -283,26 +207,15 @@ fn write_directory_promise(
                 .display_path
                 .strip_prefix(promise_path)
                 .and_then(|path| path.strip_prefix('/'))
-                .ok_or_else(|| {
-                    NativeFileDragError::invalid_request("Invalid promised directory member")
-                })?;
+                .ok_or_else(|| NativeFileDragError::invalid_request("Invalid promised directory member"))?;
             let relative_path = Path::new(relative);
             if relative_path.as_os_str().is_empty()
                 || relative_path.is_absolute()
-                || relative_path
-                    .components()
-                    .any(|part| matches!(part, Component::ParentDir))
+                || relative_path.components().any(|part| matches!(part, Component::ParentDir))
             {
-                return Err(NativeFileDragError::invalid_request(
-                    "Invalid promised directory member",
-                ));
+                return Err(NativeFileDragError::invalid_request("Invalid promised directory member"));
             }
-            total = total.saturating_add(write_file_promise(
-                &destination.join(relative_path),
-                &member.entry_path,
-                provider,
-                cancelled,
-            )?);
+            total = total.saturating_add(write_file_promise(&destination.join(relative_path), &member.entry_path, provider, cancelled)?);
         }
         Ok(total)
     })();
@@ -324,15 +237,8 @@ fn write_file_promise(
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent).map_err(io_drag_error)?;
     }
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(destination)
-        .map_err(io_drag_error)?;
-    let mut writer = CancellationWriter {
-        inner: &mut file,
-        cancelled,
-    };
+    let mut file = OpenOptions::new().write(true).create_new(true).open(destination).map_err(io_drag_error)?;
+    let mut writer = CancellationWriter { inner: &mut file, cancelled };
     let streamed = provider(entry_path, &mut writer);
     let result = streamed.and_then(|written| {
         if cancelled.load(Ordering::Acquire) {
@@ -355,10 +261,7 @@ struct CancellationWriter<'a> {
 impl io::Write for CancellationWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
         if self.cancelled.load(Ordering::Acquire) {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                "native drag cancelled",
-            ));
+            return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "native drag cancelled"));
         }
         self.inner.write(buffer)
     }
@@ -385,23 +288,14 @@ impl RegistryState {
 }
 
 fn validate_destination(path: &Path) -> Result<(), NativeFileDragError> {
-    if !path.is_absolute()
-        || path
-            .components()
-            .any(|component| matches!(component, Component::ParentDir))
-    {
-        return Err(NativeFileDragError::invalid_request(
-            "Finder destination is invalid",
-        ));
+    if !path.is_absolute() || path.components().any(|component| matches!(component, Component::ParentDir)) {
+        return Err(NativeFileDragError::invalid_request("Finder destination is invalid"));
     }
     Ok(())
 }
 
 fn io_drag_error(error: std::io::Error) -> NativeFileDragError {
-    NativeFileDragError::new(
-        format!("Unable to write promised Finder item: {error}"),
-        Some("Remove a conflicting item or choose another Finder destination."),
-    )
+    NativeFileDragError::new(format!("Unable to write promised Finder item: {error}"), Some("Remove a conflicting item or choose another Finder destination."))
 }
 
 #[cfg(test)]
@@ -411,12 +305,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn item(path: &str) -> NativeFileDragItem {
-        NativeFileDragItem {
-            entry_path: path.to_string(),
-            display_path: path.to_string(),
-            size: Some(7),
-            modified_unix_seconds: None,
-        }
+        NativeFileDragItem { entry_path: path.to_string(), display_path: path.to_string(), size: Some(7), modified_unix_seconds: None }
     }
 
     #[test]
@@ -434,12 +323,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("zmanager-promise-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let destination = root.join("demo.txt");
-        assert_eq!(
-            registry
-                .write_promise(&id, "demo.txt", &destination)
-                .unwrap(),
-            7
-        );
+        assert_eq!(registry.write_promise(&id, "demo.txt", &destination).unwrap(), 7);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(fs::read(&destination).unwrap(), b"payload");
         assert_eq!(registry.count(), 0);
@@ -456,11 +340,7 @@ mod tests {
         let id = registry.create(&[item("bad.txt")], provider).unwrap();
         let destination = std::env::temp_dir().join(format!("zmanager-bad-{}", std::process::id()));
         let _ = fs::remove_file(&destination);
-        assert!(
-            registry
-                .write_promise(&id, "bad.txt", &destination)
-                .is_err()
-        );
+        assert!(registry.write_promise(&id, "bad.txt", &destination).is_err());
         assert!(!destination.exists());
         registry.cancel(&id);
         registry.cancel(&id);
@@ -480,25 +360,14 @@ mod tests {
         });
         let items = vec![item("docs/a.txt"), item("docs/nested/b.txt")];
         let descriptors = NativeDragSessionRegistry::descriptors(&items).unwrap();
-        assert_eq!(
-            descriptors,
-            vec![NativeFilePromiseDescriptor {
-                promise_path: "docs".to_string(),
-                promised_name: "docs".to_string(),
-                is_directory: true,
-            }]
-        );
+        assert_eq!(descriptors, vec![NativeFilePromiseDescriptor { promise_path: "docs".to_string(), promised_name: "docs".to_string(), is_directory: true }]);
         let registry = NativeDragSessionRegistry::new();
         let id = registry.create(&items, provider).unwrap();
-        let root =
-            std::env::temp_dir().join(format!("zmanager-promise-dir-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("zmanager-promise-dir-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         assert!(registry.write_promise(&id, "docs", &root).is_ok());
         assert_eq!(fs::read(root.join("a.txt")).unwrap(), b"docs/a.txt");
-        assert_eq!(
-            fs::read(root.join("nested/b.txt")).unwrap(),
-            b"docs/nested/b.txt"
-        );
+        assert_eq!(fs::read(root.join("nested/b.txt")).unwrap(), b"docs/nested/b.txt");
         assert_eq!(calls.lock().unwrap().len(), 2);
         assert_eq!(registry.count(), 0);
         let _ = fs::remove_dir_all(root);
@@ -508,19 +377,8 @@ mod tests {
     fn rejects_case_and_unicode_equivalent_top_level_names() {
         let provider: NativeFileDragStreamProvider = Arc::new(|_, _| Ok(0));
         let registry = NativeDragSessionRegistry::new();
-        assert!(
-            registry
-                .create(
-                    &[item("Docs/a.txt"), item("docs/b.txt")],
-                    Arc::clone(&provider)
-                )
-                .is_err()
-        );
-        assert!(
-            registry
-                .create(&[item("Café/a.txt"), item("Cafe\u{301}/b.txt")], provider)
-                .is_err()
-        );
+        assert!(registry.create(&[item("Docs/a.txt"), item("docs/b.txt")], Arc::clone(&provider)).is_err());
+        assert!(registry.create(&[item("Café/a.txt"), item("Cafe\u{301}/b.txt")], provider).is_err());
     }
 
     #[test]
@@ -530,18 +388,13 @@ mod tests {
             Ok(11)
         });
         let registry = NativeDragSessionRegistry::new();
-        let root =
-            std::env::temp_dir().join(format!("zmanager-promise-conflict-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("zmanager-promise-conflict-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let destination = root.join("existing.txt");
         fs::write(&destination, b"original").unwrap();
         let id = registry.create(&[item("existing.txt")], provider).unwrap();
-        assert!(
-            registry
-                .write_promise(&id, "existing.txt", &destination)
-                .is_err()
-        );
+        assert!(registry.write_promise(&id, "existing.txt", &destination).is_err());
         assert_eq!(fs::read(&destination).unwrap(), b"original");
         registry.cancel(&id);
         let _ = fs::remove_dir_all(root);
@@ -554,27 +407,18 @@ mod tests {
             Ok(entry.len() as u64)
         });
         let registry = NativeDragSessionRegistry::new();
-        let id = registry
-            .create(&[item("one.txt"), item("two.txt")], provider)
-            .unwrap();
-        let root = std::env::temp_dir().join(format!(
-            "zmanager-promise-concurrent-{}",
-            std::process::id()
-        ));
+        let id = registry.create(&[item("one.txt"), item("two.txt")], provider).unwrap();
+        let root = std::env::temp_dir().join(format!("zmanager-promise-concurrent-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let first_registry = registry.clone();
         let first_id = id.clone();
         let first_destination = root.join("one.txt");
-        let first = std::thread::spawn(move || {
-            first_registry.write_promise(&first_id, "one.txt", &first_destination)
-        });
+        let first = std::thread::spawn(move || first_registry.write_promise(&first_id, "one.txt", &first_destination));
         let second_registry = registry.clone();
         let second_id = id.clone();
         let second_destination = root.join("two.txt");
-        let second = std::thread::spawn(move || {
-            second_registry.write_promise(&second_id, "two.txt", &second_destination)
-        });
+        let second = std::thread::spawn(move || second_registry.write_promise(&second_id, "two.txt", &second_destination));
         assert!(first.join().unwrap().is_ok());
         assert!(second.join().unwrap().is_ok());
         assert_eq!(fs::read(root.join("one.txt")).unwrap(), b"one.txt");
@@ -597,22 +441,15 @@ mod tests {
         });
         let registry = NativeDragSessionRegistry::new();
         let id = registry.create(&[item("once.txt")], provider).unwrap();
-        let root =
-            std::env::temp_dir().join(format!("zmanager-promise-claim-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("zmanager-promise-claim-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         let thread_registry = registry.clone();
         let thread_id = id.clone();
         let first_destination = root.join("once.txt");
-        let first = std::thread::spawn(move || {
-            thread_registry.write_promise(&thread_id, "once.txt", &first_destination)
-        });
+        let first = std::thread::spawn(move || thread_registry.write_promise(&thread_id, "once.txt", &first_destination));
         started.wait();
-        assert!(
-            registry
-                .write_promise(&id, "once.txt", &root.join("duplicate.txt"))
-                .is_err()
-        );
+        assert!(registry.write_promise(&id, "once.txt", &root.join("duplicate.txt")).is_err());
         release.wait();
         assert!(first.join().unwrap().is_ok());
         assert!(!root.join("duplicate.txt").exists());
@@ -629,30 +466,19 @@ mod tests {
             started.send(()).unwrap();
             let (lock, condition) = &*provider_release;
             let released = lock.lock().unwrap();
-            drop(
-                condition
-                    .wait_while(released, |released| !*released)
-                    .unwrap(),
-            );
+            drop(condition.wait_while(released, |released| !*released).unwrap());
             writer.write_all(b"after-cancel").map_err(io_drag_error)?;
             Ok(19)
         });
         let registry = NativeDragSessionRegistry::new();
         let id = registry.create(&[item("cancel.txt")], provider).unwrap();
-        let destination = std::env::temp_dir().join(format!(
-            "zmanager-promise-active-cancel-{}",
-            std::process::id()
-        ));
+        let destination = std::env::temp_dir().join(format!("zmanager-promise-active-cancel-{}", std::process::id()));
         let _ = fs::remove_file(&destination);
         let thread_registry = registry.clone();
         let thread_id = id.clone();
         let thread_destination = destination.clone();
-        let write = std::thread::spawn(move || {
-            thread_registry.write_promise(&thread_id, "cancel.txt", &thread_destination)
-        });
-        started_receiver
-            .recv_timeout(Duration::from_secs(5))
-            .expect("stream should start");
+        let write = std::thread::spawn(move || thread_registry.write_promise(&thread_id, "cancel.txt", &thread_destination));
+        started_receiver.recv_timeout(Duration::from_secs(5)).expect("stream should start");
         registry.cancel(&id);
         let (lock, condition) = &*release;
         *lock.lock().unwrap() = true;
@@ -666,14 +492,7 @@ mod tests {
     fn rejects_nested_normalization_collisions_and_overlong_components() {
         let provider: NativeFileDragStreamProvider = Arc::new(|_, _| Ok(0));
         let registry = NativeDragSessionRegistry::new();
-        assert!(
-            registry
-                .create(
-                    &[item("docs/Café.txt"), item("docs/Cafe\u{301}.txt")],
-                    Arc::clone(&provider),
-                )
-                .is_err()
-        );
+        assert!(registry.create(&[item("docs/Café.txt"), item("docs/Cafe\u{301}.txt")], Arc::clone(&provider),).is_err());
         let overlong = format!("docs/{}.txt", "x".repeat(252));
         assert!(registry.create(&[item(&overlong)], provider).is_err());
     }
@@ -682,10 +501,6 @@ mod tests {
     fn rejects_exact_duplicate_promised_paths_instead_of_dropping_an_item() {
         let provider: NativeFileDragStreamProvider = Arc::new(|_, _| Ok(0));
         let registry = NativeDragSessionRegistry::new();
-        assert!(
-            registry
-                .create(&[item("duplicate.txt"), item("duplicate.txt")], provider)
-                .is_err()
-        );
+        assert!(registry.create(&[item("duplicate.txt"), item("duplicate.txt")], provider).is_err());
     }
 }

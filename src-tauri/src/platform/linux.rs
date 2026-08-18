@@ -8,11 +8,9 @@ use gtk::prelude::*;
 use tauri::Wry;
 
 use super::{
-    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    DiagnosticLogPolicy, MainWindowConfigurator, NativeCapabilityOperationError,
-    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
-    NativeFileDragOutcome, NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector,
-    SystemFileIconProvider,
+    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest, DiagnosticLogPolicy, MainWindowConfigurator,
+    NativeCapabilityOperationError, NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragOutcome,
+    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, StagedFileDrag, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -30,29 +28,13 @@ impl DiagnosticLogPolicy for LinuxPlatform {
 }
 
 impl CapabilityInspector for LinuxPlatform {
-    fn capability_observations() -> std::collections::HashMap<
-        crate::native_integration::NativeCapabilityId,
-        crate::native_integration::NativeCapabilityObservation,
-    > {
-        use crate::native_integration::{
-            NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityRuntimeState,
-        };
-        [
-            NativeCapabilityId::ShellSelectedItemActions,
-            NativeCapabilityId::ShellBackgroundActions,
-            NativeCapabilityId::SecureLocalFileProtection,
-        ]
-        .into_iter()
-        .map(|id| {
-            (
-                id,
-                NativeCapabilityObservation {
-                    runtime_state: Some(NativeCapabilityRuntimeState::Ready),
-                    ..NativeCapabilityObservation::default()
-                },
-            )
-        })
-        .collect()
+    fn capability_observations()
+    -> std::collections::HashMap<crate::native_integration::NativeCapabilityId, crate::native_integration::NativeCapabilityObservation> {
+        use crate::native_integration::{NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityRuntimeState};
+        [NativeCapabilityId::ShellSelectedItemActions, NativeCapabilityId::ShellBackgroundActions, NativeCapabilityId::SecureLocalFileProtection]
+            .into_iter()
+            .map(|id| (id, NativeCapabilityObservation { runtime_state: Some(NativeCapabilityRuntimeState::Ready), ..NativeCapabilityObservation::default() }))
+            .collect()
     }
 }
 
@@ -78,43 +60,25 @@ impl SystemFileIconProvider for LinuxPlatform {
 }
 
 impl DefaultHandlerController for LinuxPlatform {
-    fn default_handlers(
-        _request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
-        Err(NativeCapabilityOperationError::not_applicable(
-            "defaultHandlerControl",
-        ))
+    fn default_handlers(_request: &DefaultHandlerRequest) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
+        Err(NativeCapabilityOperationError::not_applicable("defaultHandlerControl"))
     }
 }
 
 impl SecureFileProtector for LinuxPlatform {
-    fn set_owner_only_file_permissions(
-        file: &std::fs::File,
-    ) -> Result<(), NativeCapabilityOperationError> {
+    fn set_owner_only_file_permissions(file: &std::fs::File) -> Result<(), NativeCapabilityOperationError> {
         use std::os::unix::fs::PermissionsExt as _;
         file.set_permissions(std::fs::Permissions::from_mode(0o600))
-            .map_err(|_| {
-                NativeCapabilityOperationError::failed(
-                    "secureLocalFileProtection",
-                    "permissionUpdateFailed",
-                )
-            })
+            .map_err(|_| NativeCapabilityOperationError::failed("secureLocalFileProtection", "permissionUpdateFailed"))
     }
 }
 
 impl NativeFileDragAdapter for LinuxPlatform {
-    fn prepare_native_file_drag(
-        candidates: &[NativeFileDragCandidate],
-        strip_components: usize,
-    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+    fn prepare_native_file_drag(candidates: &[NativeFileDragCandidate], strip_components: usize) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
         prepare_posix_drag_items(
             candidates,
             strip_components,
-            PosixDragPathPolicy {
-                platform_label: "Linux",
-                collision_case_sensitive: true,
-                max_component_bytes: Some(255),
-            },
+            PosixDragPathPolicy { platform_label: "Linux", collision_case_sensitive: true, max_component_bytes: Some(255) },
         )
     }
 
@@ -125,25 +89,16 @@ impl NativeFileDragAdapter for LinuxPlatform {
         _registry: &crate::native_drag_session::NativeDragSessionRegistry,
     ) -> Result<NativeFileDragStart, NativeFileDragError> {
         if items.is_empty() {
-            return Err(NativeFileDragError::new(
-                "No archive files are available to drag.",
-                None::<String>,
-            ));
+            return Err(NativeFileDragError::new("No archive files are available to drag.", None::<String>));
         }
 
         let staged_drag = StagedFileDrag::create("Linux", items, stream_provider)?;
-        Ok(NativeFileDragStart::Settled {
-            outcome: linux_file_drag::start_drag(staged_drag)?,
-        })
+        Ok(NativeFileDragStart::Settled { outcome: linux_file_drag::start_drag(staged_drag)? })
     }
 }
 
 fn linux_system_file_icon_data_url(entry: &SystemFileIconRequestEntry) -> Option<String> {
-    let _lookup_key = if entry.is_directory {
-        "inode/directory"
-    } else {
-        entry.path.trim()
-    };
+    let _lookup_key = if entry.is_directory { "inode/directory" } else { entry.path.trim() };
 
     None
 }
@@ -164,9 +119,7 @@ mod linux_file_drag {
         selected_action.contains(gdk::DragAction::COPY)
     }
 
-    pub fn start_drag(
-        staged_drag: StagedFileDrag,
-    ) -> Result<NativeFileDragOutcome, NativeFileDragError> {
+    pub fn start_drag(staged_drag: StagedFileDrag) -> Result<NativeFileDragOutcome, NativeFileDragError> {
         if gtk::init().is_err() {
             return Err(NativeFileDragError::new(
                 "Unable to initialize Linux drag-out.",
@@ -174,16 +127,9 @@ mod linux_file_drag {
             ));
         }
 
-        let uris = staged_drag
-            .drag_paths()
-            .iter()
-            .map(|path| gio::File::for_path(path).uri().to_string())
-            .collect::<Vec<_>>();
+        let uris = staged_drag.drag_paths().iter().map(|path| gio::File::for_path(path).uri().to_string()).collect::<Vec<_>>();
         if uris.is_empty() {
-            return Err(NativeFileDragError::new(
-                "No staged files are available to drag.",
-                None::<String>,
-            ));
+            return Err(NativeFileDragError::new("No staged files are available to drag.", None::<String>));
         }
 
         let drag_finished = Rc::new(Cell::new(false));
@@ -203,16 +149,8 @@ mod linux_file_drag {
         source.drag_source_set(
             gdk::ModifierType::BUTTON1_MASK,
             &[
-                gtk::TargetEntry::new(
-                    URI_LIST_TARGET,
-                    gtk::TargetFlags::OTHER_APP,
-                    URI_LIST_TARGET_INFO,
-                ),
-                gtk::TargetEntry::new(
-                    GNOME_COPIED_FILES_TARGET,
-                    gtk::TargetFlags::OTHER_APP,
-                    GNOME_COPIED_FILES_TARGET_INFO,
-                ),
+                gtk::TargetEntry::new(URI_LIST_TARGET, gtk::TargetFlags::OTHER_APP, URI_LIST_TARGET_INFO),
+                gtk::TargetEntry::new(GNOME_COPIED_FILES_TARGET, gtk::TargetFlags::OTHER_APP, GNOME_COPIED_FILES_TARGET_INFO),
             ],
             gdk::DragAction::COPY,
         );
@@ -222,11 +160,7 @@ mod linux_file_drag {
         let data_uris = uris.clone();
         source.connect_drag_data_get(move |_source, _context, selection_data, info, _time| {
             if info == GNOME_COPIED_FILES_TARGET_INFO {
-                selection_data.set(
-                    &gdk::Atom::intern(GNOME_COPIED_FILES_TARGET),
-                    8,
-                    gnome_copied_files_payload(&data_uris).as_bytes(),
-                );
+                selection_data.set(&gdk::Atom::intern(GNOME_COPIED_FILES_TARGET), 8, gnome_copied_files_payload(&data_uris).as_bytes());
                 return;
             }
 
@@ -239,8 +173,7 @@ mod linux_file_drag {
         let dropped_for_end = Rc::clone(&dropped);
         let staged_drag_for_end = Rc::clone(&staged_drag);
         source.connect_drag_end(move |_source, context| {
-            let was_dropped =
-                !drag_failed_for_end.get() && drag_selected_copy_action(context.selected_action());
+            let was_dropped = !drag_failed_for_end.get() && drag_selected_copy_action(context.selected_action());
             dropped_for_end.set(was_dropped);
             drag_finished_for_end.set(true);
             if let Some(staged_drag) = staged_drag_for_end.borrow_mut().take()
@@ -261,26 +194,11 @@ mod linux_file_drag {
         });
 
         let target_list = gtk::TargetList::new(&[
-            gtk::TargetEntry::new(
-                URI_LIST_TARGET,
-                gtk::TargetFlags::OTHER_APP,
-                URI_LIST_TARGET_INFO,
-            ),
-            gtk::TargetEntry::new(
-                GNOME_COPIED_FILES_TARGET,
-                gtk::TargetFlags::OTHER_APP,
-                GNOME_COPIED_FILES_TARGET_INFO,
-            ),
+            gtk::TargetEntry::new(URI_LIST_TARGET, gtk::TargetFlags::OTHER_APP, URI_LIST_TARGET_INFO),
+            gtk::TargetEntry::new(GNOME_COPIED_FILES_TARGET, gtk::TargetFlags::OTHER_APP, GNOME_COPIED_FILES_TARGET_INFO),
         ]);
         let current_event = gtk::current_event();
-        let Some(_context) = source.drag_begin_with_coordinates(
-            &target_list,
-            gdk::DragAction::COPY,
-            1,
-            current_event.as_ref(),
-            -1,
-            -1,
-        ) else {
+        let Some(_context) = source.drag_begin_with_coordinates(&target_list, gdk::DragAction::COPY, 1, current_event.as_ref(), -1, -1) else {
             let _ = staged_drag.borrow_mut().take();
             window.close();
             return Err(NativeFileDragError::new(
@@ -296,11 +214,7 @@ mod linux_file_drag {
         let _ = staged_drag.borrow_mut().take();
         window.close();
 
-        if dropped.get() {
-            Ok(NativeFileDragOutcome::Dropped)
-        } else {
-            Ok(NativeFileDragOutcome::NoDrop)
-        }
+        if dropped.get() { Ok(NativeFileDragOutcome::Dropped) } else { Ok(NativeFileDragOutcome::NoDrop) }
     }
 
     #[cfg(test)]
@@ -316,15 +230,9 @@ mod linux_file_drag {
 
         #[test]
         fn gnome_copied_files_payload_uses_copy_header_and_uri_lines() {
-            let payload = gnome_copied_files_payload(&[
-                "file:///tmp/zmanager/a.txt".to_string(),
-                "file:///tmp/zmanager/b.txt".to_string(),
-            ]);
+            let payload = gnome_copied_files_payload(&["file:///tmp/zmanager/a.txt".to_string(), "file:///tmp/zmanager/b.txt".to_string()]);
 
-            assert_eq!(
-                payload,
-                "copy\nfile:///tmp/zmanager/a.txt\nfile:///tmp/zmanager/b.txt\n"
-            );
+            assert_eq!(payload, "copy\nfile:///tmp/zmanager/a.txt\nfile:///tmp/zmanager/b.txt\n");
         }
     }
 }
@@ -337,24 +245,12 @@ mod tests {
 
     #[test]
     fn linux_staged_drag_writes_nested_files_and_cleans_up() {
-        let payloads = Arc::new(HashMap::from([
-            ("docs/readme.txt".to_string(), b"drag payload".to_vec()),
-            ("root.txt".to_string(), b"root payload".to_vec()),
-        ]));
+        let payloads = Arc::new(HashMap::from([("docs/readme.txt".to_string(), b"drag payload".to_vec()), ("root.txt".to_string(), b"root payload".to_vec())]));
         let provider_payloads = Arc::clone(&payloads);
         let provider: NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
-            let bytes = provider_payloads.get(entry_path).ok_or_else(|| {
-                NativeFileDragError::new(
-                    format!("missing test payload for {entry_path}"),
-                    None::<String>,
-                )
-            })?;
-            writer.write_all(bytes).map_err(|error| {
-                NativeFileDragError::new(
-                    format!("unable to write test payload: {error}"),
-                    None::<String>,
-                )
-            })?;
+            let bytes =
+                provider_payloads.get(entry_path).ok_or_else(|| NativeFileDragError::new(format!("missing test payload for {entry_path}"), None::<String>))?;
+            writer.write_all(bytes).map_err(|error| NativeFileDragError::new(format!("unable to write test payload: {error}"), None::<String>))?;
             Ok(bytes.len() as u64)
         });
 
@@ -367,12 +263,7 @@ mod tests {
                     size: Some(12),
                     modified_unix_seconds: None,
                 },
-                NativeFileDragItem {
-                    entry_path: "root.txt".to_string(),
-                    display_path: "root.txt".to_string(),
-                    size: Some(12),
-                    modified_unix_seconds: None,
-                },
+                NativeFileDragItem { entry_path: "root.txt".to_string(), display_path: "root.txt".to_string(), size: Some(12), modified_unix_seconds: None },
             ],
             provider,
         )
@@ -381,18 +272,9 @@ mod tests {
         let nested_file_path = root.join("docs/readme.txt");
         let root_file_path = root.join("root.txt");
 
-        assert_eq!(
-            fs::read(&nested_file_path).expect("read staged nested file"),
-            b"drag payload"
-        );
-        assert_eq!(
-            fs::read(&root_file_path).expect("read staged root file"),
-            b"root payload"
-        );
-        assert_eq!(
-            staged.drag_paths(),
-            vec![root.join("docs"), root.join("root.txt")]
-        );
+        assert_eq!(fs::read(&nested_file_path).expect("read staged nested file"), b"drag payload");
+        assert_eq!(fs::read(&root_file_path).expect("read staged root file"), b"root payload");
+        assert_eq!(staged.drag_paths(), vec![root.join("docs"), root.join("root.txt")]);
         drop(staged);
         assert!(!root.exists(), "staged drag root should be cleaned up");
     }
@@ -400,53 +282,24 @@ mod tests {
     #[test]
     fn linux_drag_policy_rejects_traversal_but_allows_windows_specific_names() {
         let items =
-            LinuxPlatform::prepare_native_file_drag(&[candidate("root/folder/report?.txt")], 1)
-                .expect("Linux should allow question marks in file names");
+            LinuxPlatform::prepare_native_file_drag(&[candidate("root/folder/report?.txt")], 1).expect("Linux should allow question marks in file names");
         assert_eq!(items[0].display_path, "folder/report?.txt");
 
-        for (path, strip_components) in [
-            ("../escape.txt", 0),
-            ("folder/./file.txt", 0),
-            ("folder/file.txt", 2),
-            ("folder/\0file.txt", 0),
-        ] {
-            assert!(
-                LinuxPlatform::prepare_native_file_drag(&[candidate(path)], strip_components,)
-                    .is_err(),
-                "{path} should be rejected"
-            );
+        for (path, strip_components) in [("../escape.txt", 0), ("folder/./file.txt", 0), ("folder/file.txt", 2), ("folder/\0file.txt", 0)] {
+            assert!(LinuxPlatform::prepare_native_file_drag(&[candidate(path)], strip_components,).is_err(), "{path} should be rejected");
         }
     }
 
     #[test]
     fn linux_drag_policy_uses_case_sensitive_collisions() {
-        let case_distinct = LinuxPlatform::prepare_native_file_drag(
-            &[candidate("one/Foo.txt"), candidate("two/foo.txt")],
-            1,
-        )
-        .expect("case-distinct Linux paths should coexist");
-        assert_eq!(
-            case_distinct
-                .iter()
-                .map(|item| item.display_path.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Foo.txt", "foo.txt"]
-        );
+        let case_distinct = LinuxPlatform::prepare_native_file_drag(&[candidate("one/Foo.txt"), candidate("two/foo.txt")], 1)
+            .expect("case-distinct Linux paths should coexist");
+        assert_eq!(case_distinct.iter().map(|item| item.display_path.as_str()).collect::<Vec<_>>(), vec!["Foo.txt", "foo.txt"]);
 
-        assert!(
-            LinuxPlatform::prepare_native_file_drag(
-                &[candidate("one/file.txt"), candidate("two/file.txt")],
-                1,
-            )
-            .is_err()
-        );
+        assert!(LinuxPlatform::prepare_native_file_drag(&[candidate("one/file.txt"), candidate("two/file.txt")], 1,).is_err());
     }
 
     fn candidate(path: &str) -> NativeFileDragCandidate {
-        NativeFileDragCandidate {
-            entry_path: path.to_string(),
-            size: Some(1),
-            modified_unix_seconds: None,
-        }
+        NativeFileDragCandidate { entry_path: path.to_string(), size: Some(1), modified_unix_seconds: None }
     }
 }

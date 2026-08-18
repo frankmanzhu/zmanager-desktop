@@ -15,13 +15,11 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager, State};
 use zmanager_core::device_identity::generate_recipient_encryption_key;
 use zmanager_core::identity_catalog::{
-    FileTzapIdentityCatalogStore, TzapIdentityCatalog, TzapIdentityCatalogStore,
-    TzapPublicContactRecord, TzapPublicRecipientKeyRecord, TzapPublicSigningIdentityRecord,
-    TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
+    FileTzapIdentityCatalogStore, TzapIdentityCatalog, TzapIdentityCatalogStore, TzapPublicContactRecord, TzapPublicRecipientKeyRecord,
+    TzapPublicSigningIdentityRecord, TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
 };
 use zmanager_tzap_hosted::auth_client::{
-    AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback,
-    TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
+    AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback, TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
     TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
 };
 
@@ -201,29 +199,15 @@ struct AccountRuntimeState {
 }
 
 #[derive(Clone)]
-pub struct AccountRuntime(
-    Arc<Mutex<AccountRuntimeState>>,
-    Arc<Mutex<NativeTzapSecretStore>>,
-);
+pub struct AccountRuntime(Arc<Mutex<AccountRuntimeState>>, Arc<Mutex<NativeTzapSecretStore>>);
 
 impl AccountRuntime {
     pub fn new() -> Self {
-        let store = NativeTzapSecretStore::new(ACCOUNT_KEY)
-            .expect("default account secure-store scope is valid");
+        let store = NativeTzapSecretStore::new(ACCOUNT_KEY).expect("default account secure-store scope is valid");
         let session = store.load_session(ACCOUNT_KEY);
-        let auth_status = if session.is_some() {
-            "signedIn".to_string()
-        } else {
-            "signedOut".to_string()
-        };
+        let auth_status = if session.is_some() { "signedIn".to_string() } else { "signedOut".to_string() };
         Self(
-            Arc::new(Mutex::new(AccountRuntimeState {
-                pending: None,
-                auth_status,
-                session,
-                cached_user: None,
-                environment: "prod".to_string(),
-            })),
+            Arc::new(Mutex::new(AccountRuntimeState { pending: None, auth_status, session, cached_user: None, environment: "prod".to_string() })),
             Arc::new(Mutex::new(store)),
         )
     }
@@ -238,11 +222,7 @@ pub fn account_snapshot(
     let start = std::time::Instant::now();
     let result = snapshot_at(&account_state_dir(&app)?, &runtime);
     let elapsed_ms = start.elapsed().as_millis() as u64;
-    let _ = diagnostics.record(
-        "account",
-        "snapshot_fetched",
-        crate::diagnostics::fields([("elapsedMs", serde_json::json!(elapsed_ms))]),
-    );
+    let _ = diagnostics.record("account", "snapshot_fetched", crate::diagnostics::fields([("elapsedMs", serde_json::json!(elapsed_ms))]));
     result
 }
 
@@ -261,14 +241,9 @@ pub fn account_begin_hosted_auth(
         _ => TzapHostedAuthEnvironment::Prod,
     };
     let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
-    let launch_url = config
-        .launch_url(&pending)
-        .map_err(|error| account_error("account_auth_launch_failed", error))?;
-    let response = AccountHostedAuthLaunchDto {
-        launch_url,
-        state: pending.state.clone(),
-        expires_at_unix_seconds: now.saturating_add(AUTH_HANDOFF_LIFETIME_SECONDS),
-    };
+    let launch_url = config.launch_url(&pending).map_err(|error| account_error("account_auth_launch_failed", error))?;
+    let response =
+        AccountHostedAuthLaunchDto { launch_url, state: pending.state.clone(), expires_at_unix_seconds: now.saturating_add(AUTH_HANDOFF_LIFETIME_SECONDS) };
     let mut state = runtime.0.lock().expect("account runtime lock poisoned");
     state.pending = Some(pending);
     state.auth_status = "pending".to_string();
@@ -286,21 +261,14 @@ pub fn account_complete_hosted_auth(
     let mut state = runtime.0.lock().expect("account runtime lock poisoned");
     let mut store = runtime.1.lock().expect("account store lock poisoned");
 
-    let pending = state
-        .pending
-        .take()
-        .ok_or_else(|| CommandErrorDto::invalid_request("No hosted sign-in is pending"))?;
+    let pending = state.pending.take().ok_or_else(|| CommandErrorDto::invalid_request("No hosted sign-in is pending"))?;
 
     if pending.state != request.state {
-        return Err(CommandErrorDto::invalid_request(
-            "Hosted sign-in state did not match",
-        ));
+        return Err(CommandErrorDto::invalid_request("Hosted sign-in state did not match"));
     }
 
     let mut tracker = TzapOAuthStateTracker::new();
-    tracker
-        .insert_pending(pending.clone())
-        .map_err(|e| account_error("account_auth_callback_failed", e))?;
+    tracker.insert_pending(pending.clone()).map_err(|e| account_error("account_auth_callback_failed", e))?;
 
     let callback = TzapHostedAuthCallback {
         state: request.state,
@@ -311,8 +279,7 @@ pub fn account_complete_hosted_auth(
     };
 
     let session =
-        complete_hosted_auth_handoff(&mut tracker, &mut *store, ACCOUNT_KEY, &callback, now)
-            .map_err(|e| account_error("account_auth_callback_failed", e))?;
+        complete_hosted_auth_handoff(&mut tracker, &mut *store, ACCOUNT_KEY, &callback, now).map_err(|e| account_error("account_auth_callback_failed", e))?;
 
     state.session = Some(session);
     state.auth_status = "signedIn".to_string();
@@ -324,17 +291,11 @@ pub fn account_complete_hosted_auth(
 }
 
 #[tauri::command]
-pub fn account_fetch_current_user(
-    runtime: State<'_, AccountRuntime>,
-) -> Result<AccountCurrentUserDto, CommandErrorDto> {
+pub fn account_fetch_current_user(runtime: State<'_, AccountRuntime>) -> Result<AccountCurrentUserDto, CommandErrorDto> {
     let mut state = runtime.0.lock().expect("account runtime lock poisoned");
-    let session = state
-        .session
-        .as_ref()
-        .ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
+    let session = state.session.as_ref().ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
 
-    let transport = crate::hosted_transport::HostedHttpTransport::new()
-        .map_err(|e| account_error("account_http_client_failed", e))?;
+    let transport = crate::hosted_transport::HostedHttpTransport::new().map_err(|e| account_error("account_http_client_failed", e))?;
 
     let environment_str = &state.environment;
     let environment = match environment_str.as_str() {
@@ -344,16 +305,8 @@ pub fn account_fetch_current_user(
     };
     let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
 
-    let user = zmanager_tzap_hosted::auth_client::fetch_current_user(
-        &transport,
-        &config.hosted_account_base_url,
-        session,
-    )
-    .map_err(|e| {
-        if matches!(
-            e,
-            zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 }
-        ) {
+    let user = zmanager_tzap_hosted::auth_client::fetch_current_user(&transport, &config.hosted_account_base_url, session).map_err(|e| {
+        if matches!(e, zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 }) {
             let mut store = runtime.1.lock().expect("account store lock poisoned");
             let _ = store.clear_session(ACCOUNT_KEY);
             state.session = None;
@@ -375,21 +328,14 @@ pub fn account_fetch_current_user(
 }
 
 #[tauri::command]
-pub fn account_apply_hosted_callback(
-    request: AccountHostedAuthCallbackRequest,
-    runtime: State<'_, AccountRuntime>,
-) -> Result<(), CommandErrorDto> {
+pub fn account_apply_hosted_callback(request: AccountHostedAuthCallbackRequest, runtime: State<'_, AccountRuntime>) -> Result<(), CommandErrorDto> {
     validate_callback(&request)?;
     let mut state = runtime.0.lock().expect("account runtime lock poisoned");
     let Some(pending) = state.pending.as_ref() else {
-        return Err(CommandErrorDto::invalid_request(
-            "No hosted sign-in is pending",
-        ));
+        return Err(CommandErrorDto::invalid_request("No hosted sign-in is pending"));
     };
     if pending.state != request.state {
-        return Err(CommandErrorDto::invalid_request(
-            "Hosted sign-in state did not match",
-        ));
+        return Err(CommandErrorDto::invalid_request("Hosted sign-in state did not match"));
     }
     state.pending = None;
     state.auth_status = match request.result.as_str() {
@@ -403,10 +349,7 @@ pub fn account_apply_hosted_callback(
 }
 
 #[tauri::command]
-pub fn account_forget(
-    app: AppHandle,
-    runtime: State<'_, AccountRuntime>,
-) -> Result<AccountSnapshotDto, CommandErrorDto> {
+pub fn account_forget(app: AppHandle, runtime: State<'_, AccountRuntime>) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let root = account_state_dir(&app)?;
     // Forgetting the hosted-account association must not discard local signing
     // or recipient material. Destructive secret wiping is a separate action.
@@ -427,13 +370,10 @@ pub fn account_generate_recipient_key(
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
-    let material = generate_recipient_encryption_key()
-        .map_err(|error| account_error("account_key_generation_failed", error))?;
+    let material = generate_recipient_encryption_key().map_err(|error| account_error("account_key_generation_failed", error))?;
     let now = current_unix_seconds();
-    let private_key_ref = with_secret_store(&runtime, |secret_store| {
-        secret_store.put(TzapSecretPurpose::RecipientKey, material.private_key_der)
-    })
-    .map_err(|error| account_error("account_secure_store_failed", error))?;
+    let private_key_ref = with_secret_store(&runtime, |secret_store| secret_store.put(TzapSecretPurpose::RecipientKey, material.private_key_der))
+        .map_err(|error| account_error("account_secure_store_failed", error))?;
     let key_id = format!("recipient_{}", TzapSecretRef::generate().as_str());
     for existing in catalog.recipient_keys.iter_mut() {
         if existing.lifecycle == "active" {
@@ -455,9 +395,7 @@ pub fn account_generate_recipient_key(
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
     if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref)
-        });
+        let _ = with_secret_store(&runtime, |secret_store| secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref));
         return Err(account_error("account_catalog_save_failed", error));
     }
     snapshot_at(&root, &runtime)
@@ -472,37 +410,26 @@ pub fn account_generate_signing_identity(
 ) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let common_name = request.common_name.trim();
     if common_name.is_empty() || common_name.len() > 128 {
-        return Err(CommandErrorDto::invalid_request(
-            "commonName must be between 1 and 128 characters",
-        ));
+        return Err(CommandErrorDto::invalid_request("commonName must be between 1 and 128 characters"));
     }
     let _ = diagnostics.record(
         "account",
         "signing_identity_generation_started",
         crate::diagnostics::fields([("commonNameLength", serde_json::json!(common_name.len()))]),
     );
-    let material = zmanager_core::device_identity::generate_device_signing_key_and_csr(
-        &zmanager_core::device_identity::TzapDeviceCsrOptions {
-            common_name: common_name.to_owned(),
-        },
-    )
+    let material = zmanager_core::device_identity::generate_device_signing_key_and_csr(&zmanager_core::device_identity::TzapDeviceCsrOptions {
+        common_name: common_name.to_owned(),
+    })
     .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
     let private_key = PKey::private_key_from_der(material.private_key_der.expose_secret())
         .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    let mut name = X509NameBuilder::new()
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    name.append_entry_by_text("CN", common_name)
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let mut name = X509NameBuilder::new().map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    name.append_entry_by_text("CN", common_name).map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
     let name = name.build();
-    let mut serial = BigNum::new()
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    serial
-        .rand(128, MsbOption::MAYBE_ZERO, false)
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    let serial = Asn1Integer::from_bn(&serial)
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    let mut certificate = X509::builder()
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let mut serial = BigNum::new().map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    serial.rand(128, MsbOption::MAYBE_ZERO, false).map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let serial = Asn1Integer::from_bn(&serial).map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let mut certificate = X509::builder().map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
     certificate
         .set_version(2)
         .and_then(|_| certificate.set_serial_number(&serial))
@@ -520,69 +447,51 @@ pub fn account_generate_signing_identity(
         .and_then(|_| certificate.sign(&private_key, MessageDigest::sha256()))
         .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
     let certificate = certificate.build();
-    let certificate_der = certificate
-        .to_der()
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
-    let certificate_digest = certificate
-        .digest(MessageDigest::sha256())
-        .map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let certificate_der = certificate.to_der().map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
+    let certificate_digest = certificate.digest(MessageDigest::sha256()).map_err(|error| account_error("account_signing_identity_generation_failed", error))?;
     let certificate_sha256 = format!("sha256:{}", hex_bytes(certificate_digest.as_ref()));
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
     let now = current_unix_seconds();
-    let signing_key_ref = with_secret_store(&runtime, |secret_store| {
-        secret_store.put(TzapSecretPurpose::SigningKey, material.private_key_der)
-    })
-    .map_err(|error| account_error("account_secure_store_failed", error))?;
-    let _ = diagnostics.record(
-        "account",
-        "signing_identity_secret_stored",
-        crate::diagnostics::fields([]),
-    );
+    let signing_key_ref = with_secret_store(&runtime, |secret_store| secret_store.put(TzapSecretPurpose::SigningKey, material.private_key_der))
+        .map_err(|error| account_error("account_secure_store_failed", error))?;
+    let _ = diagnostics.record("account", "signing_identity_secret_stored", crate::diagnostics::fields([]));
     let identity_id = format!("signing_{}", TzapSecretRef::generate().as_str());
-    catalog
-        .signing_identities
-        .push(TzapPublicSigningIdentityRecord {
-            id: identity_id.clone(),
-            local_alias: request.label.filter(|label| !label.trim().is_empty()),
-            certificate_id: Some(certificate_sha256.clone()),
-            certificate_sha256: Some(certificate_sha256),
-            issuer_certificate_sha256: None,
-            issuer_key_identifier: None,
-            serial_number: None,
-            certificate_chain_der: vec![certificate_der],
-            not_before_unix_seconds: Some(now),
-            not_after_unix_seconds: Some(now.saturating_add(3650 * 24 * 60 * 60)),
-            public_signer_id: None,
-            public_org_id: None,
-            public_device_id: None,
-            assurance_level: Some("local_self_signed".to_owned()),
-            sign_device_id: None,
-            sign_device_routing: None,
-            signing_key_created_at_unix_seconds: Some(now),
-            legacy_key_id: None,
-            metadata_version: None,
-            policy_oid: None,
-            signing_key_ref: signing_key_ref.clone(),
-            lifecycle: "active".to_owned(),
-        });
+    catalog.signing_identities.push(TzapPublicSigningIdentityRecord {
+        id: identity_id.clone(),
+        local_alias: request.label.filter(|label| !label.trim().is_empty()),
+        certificate_id: Some(certificate_sha256.clone()),
+        certificate_sha256: Some(certificate_sha256),
+        issuer_certificate_sha256: None,
+        issuer_key_identifier: None,
+        serial_number: None,
+        certificate_chain_der: vec![certificate_der],
+        not_before_unix_seconds: Some(now),
+        not_after_unix_seconds: Some(now.saturating_add(3650 * 24 * 60 * 60)),
+        public_signer_id: None,
+        public_org_id: None,
+        public_device_id: None,
+        assurance_level: Some("local_self_signed".to_owned()),
+        sign_device_id: None,
+        sign_device_routing: None,
+        signing_key_created_at_unix_seconds: Some(now),
+        legacy_key_id: None,
+        metadata_version: None,
+        policy_oid: None,
+        signing_key_ref: signing_key_ref.clone(),
+        lifecycle: "active".to_owned(),
+    });
     if catalog.default_signing_identity_id.is_none() {
         catalog.default_signing_identity_id = Some(identity_id);
     }
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
     if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
-        });
+        let _ = with_secret_store(&runtime, |secret_store| secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref));
         return Err(account_error("account_catalog_save_failed", error));
     }
-    let _ = diagnostics.record(
-        "account",
-        "signing_identity_generation_completed",
-        crate::diagnostics::fields([]),
-    );
+    let _ = diagnostics.record("account", "signing_identity_generation_completed", crate::diagnostics::fields([]));
 
     snapshot_at(&root, &runtime)
 }
@@ -595,64 +504,30 @@ pub fn account_import_signing_identity(
 ) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let identity_path = request.identity_path.trim();
     if identity_path.is_empty() {
-        return Err(CommandErrorDto::invalid_request(
-            "identityPath must not be empty",
-        ));
+        return Err(CommandErrorDto::invalid_request("identityPath must not be empty"));
     }
-    let identity_bytes = std::fs::read(identity_path).map_err(|error| {
-        account_error(
-            "account_signing_identity_import_failed",
-            format!("unable to read {identity_path}: {error}"),
-        )
-    })?;
-    let identity = Pkcs12::from_der(&identity_bytes)
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
-    let parsed = identity
-        .parse2(request.password.as_deref().unwrap_or_default())
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
-    let private_key = parsed.pkey.ok_or_else(|| {
-        account_error(
-            "account_signing_identity_import_failed",
-            "P12/PFX bundle does not contain a private key",
-        )
-    })?;
-    let certificate = parsed.cert.ok_or_else(|| {
-        account_error(
-            "account_signing_identity_import_failed",
-            "P12/PFX bundle does not contain a signing certificate",
-        )
-    })?;
-    let now_asn1 = Asn1Time::days_from_now(0)
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let identity_bytes = std::fs::read(identity_path)
+        .map_err(|error| account_error("account_signing_identity_import_failed", format!("unable to read {identity_path}: {error}")))?;
+    let identity = Pkcs12::from_der(&identity_bytes).map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let parsed =
+        identity.parse2(request.password.as_deref().unwrap_or_default()).map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let private_key = parsed.pkey.ok_or_else(|| account_error("account_signing_identity_import_failed", "P12/PFX bundle does not contain a private key"))?;
+    let certificate =
+        parsed.cert.ok_or_else(|| account_error("account_signing_identity_import_failed", "P12/PFX bundle does not contain a signing certificate"))?;
+    let now_asn1 = Asn1Time::days_from_now(0).map_err(|error| account_error("account_signing_identity_import_failed", error))?;
     if certificate.not_before() > now_asn1.as_ref() || certificate.not_after() < now_asn1.as_ref() {
-        return Err(account_error(
-            "account_signing_identity_import_failed",
-            "P12/PFX signing certificate is outside its validity period",
-        ));
+        return Err(account_error("account_signing_identity_import_failed", "P12/PFX signing certificate is outside its validity period"));
     }
-    let certificate_key = certificate
-        .public_key()
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let certificate_key = certificate.public_key().map_err(|error| account_error("account_signing_identity_import_failed", error))?;
     if !private_key.public_eq(&certificate_key) {
-        return Err(account_error(
-            "account_signing_identity_import_failed",
-            "P12/PFX private key does not match its signing certificate",
-        ));
+        return Err(account_error("account_signing_identity_import_failed", "P12/PFX private key does not match its signing certificate"));
     }
-    let certificate_der = certificate
-        .to_der()
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
-    let certificate_digest = certificate
-        .digest(MessageDigest::sha256())
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let certificate_der = certificate.to_der().map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let certificate_digest = certificate.digest(MessageDigest::sha256()).map_err(|error| account_error("account_signing_identity_import_failed", error))?;
     let mut certificate_chain_der = vec![certificate_der];
     if let Some(chain) = parsed.ca {
         for certificate in chain.iter() {
-            certificate_chain_der.push(
-                certificate.to_der().map_err(|error| {
-                    account_error("account_signing_identity_import_failed", error)
-                })?,
-            );
+            certificate_chain_der.push(certificate.to_der().map_err(|error| account_error("account_signing_identity_import_failed", error))?);
         }
     }
     let default_label = certificate
@@ -662,57 +537,46 @@ pub fn account_import_signing_identity(
         .and_then(|entry| entry.data().to_string().ok())
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "Imported signing identity".to_owned());
-    let private_key_der = private_key
-        .private_key_to_der()
-        .map_err(|error| account_error("account_signing_identity_import_failed", error))?;
+    let private_key_der = private_key.private_key_to_der().map_err(|error| account_error("account_signing_identity_import_failed", error))?;
     let certificate_sha256 = format!("sha256:{}", hex_bytes(certificate_digest.as_ref()));
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
     let now = current_unix_seconds();
-    let signing_key_ref = with_secret_store(&runtime, |secret_store| {
-        secret_store.put(TzapSecretPurpose::SigningKey, private_key_der.into())
-    })
-    .map_err(|error| account_error("account_secure_store_failed", error))?;
+    let signing_key_ref = with_secret_store(&runtime, |secret_store| secret_store.put(TzapSecretPurpose::SigningKey, private_key_der.into()))
+        .map_err(|error| account_error("account_secure_store_failed", error))?;
     let identity_id = format!("signing_{}", TzapSecretRef::generate().as_str());
-    catalog
-        .signing_identities
-        .push(TzapPublicSigningIdentityRecord {
-            id: identity_id.clone(),
-            local_alias: request
-                .label
-                .filter(|label| !label.trim().is_empty())
-                .or(Some(default_label)),
-            certificate_id: Some(certificate_sha256.clone()),
-            certificate_sha256: Some(certificate_sha256),
-            issuer_certificate_sha256: None,
-            issuer_key_identifier: None,
-            serial_number: None,
-            certificate_chain_der,
-            not_before_unix_seconds: None,
-            not_after_unix_seconds: None,
-            public_signer_id: None,
-            public_org_id: None,
-            public_device_id: None,
-            assurance_level: Some("imported_p12".to_owned()),
-            sign_device_id: None,
-            sign_device_routing: None,
-            signing_key_created_at_unix_seconds: Some(now),
-            legacy_key_id: None,
-            metadata_version: None,
-            policy_oid: None,
-            signing_key_ref: signing_key_ref.clone(),
-            lifecycle: "active".to_owned(),
-        });
+    catalog.signing_identities.push(TzapPublicSigningIdentityRecord {
+        id: identity_id.clone(),
+        local_alias: request.label.filter(|label| !label.trim().is_empty()).or(Some(default_label)),
+        certificate_id: Some(certificate_sha256.clone()),
+        certificate_sha256: Some(certificate_sha256),
+        issuer_certificate_sha256: None,
+        issuer_key_identifier: None,
+        serial_number: None,
+        certificate_chain_der,
+        not_before_unix_seconds: None,
+        not_after_unix_seconds: None,
+        public_signer_id: None,
+        public_org_id: None,
+        public_device_id: None,
+        assurance_level: Some("imported_p12".to_owned()),
+        sign_device_id: None,
+        sign_device_routing: None,
+        signing_key_created_at_unix_seconds: Some(now),
+        legacy_key_id: None,
+        metadata_version: None,
+        policy_oid: None,
+        signing_key_ref: signing_key_ref.clone(),
+        lifecycle: "active".to_owned(),
+    });
     if catalog.default_signing_identity_id.is_none() {
         catalog.default_signing_identity_id = Some(identity_id);
     }
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
     if let Err(error) = catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog) {
-        let _ = with_secret_store(&runtime, |secret_store| {
-            secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref)
-        });
+        let _ = with_secret_store(&runtime, |secret_store| secret_store.delete(TzapSecretPurpose::SigningKey, &signing_key_ref));
         return Err(account_error("account_catalog_save_failed", error));
     }
     snapshot_at(&root, &runtime)
@@ -729,15 +593,11 @@ pub fn account_install_signing_certificate(
         || request.certificate_chain_der.is_empty()
         || request.not_before_unix_seconds >= request.not_after_unix_seconds
     {
-        return Err(CommandErrorDto::invalid_request(
-            "certificate identity, chain, and validity are required",
-        ));
+        return Err(CommandErrorDto::invalid_request("certificate identity, chain, and validity are required"));
     }
-    let leaf = X509::from_der(&request.certificate_chain_der[0])
-        .map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
+    let leaf = X509::from_der(&request.certificate_chain_der[0]).map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
     for certificate_der in request.certificate_chain_der.iter().skip(1) {
-        X509::from_der(certificate_der)
-            .map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
+        X509::from_der(certificate_der).map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
     }
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
@@ -746,37 +606,20 @@ pub fn account_install_signing_certificate(
         .signing_identities
         .iter()
         .position(|identity| identity.id == request.identity_id)
-        .ok_or_else(|| {
-            account_error(
-                "account_signing_identity_not_found",
-                "Signing identity was not found",
-            )
-        })?;
-    let signing_key_ref = catalog.signing_identities[identity_index]
-        .signing_key_ref
-        .clone();
-    let private_key_der = with_secret_store(&runtime, |secret_store| {
-        secret_store.resolve(TzapSecretPurpose::SigningKey, &signing_key_ref)
-    })
-    .map_err(|error| account_error("account_secure_store_failed", error))?;
-    let private_key = PKey::private_key_from_der(private_key_der.expose_secret())
-        .map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
-    let certificate_key = leaf
-        .public_key()
-        .map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
+        .ok_or_else(|| account_error("account_signing_identity_not_found", "Signing identity was not found"))?;
+    let signing_key_ref = catalog.signing_identities[identity_index].signing_key_ref.clone();
+    let private_key_der = with_secret_store(&runtime, |secret_store| secret_store.resolve(TzapSecretPurpose::SigningKey, &signing_key_ref))
+        .map_err(|error| account_error("account_secure_store_failed", error))?;
+    let private_key =
+        PKey::private_key_from_der(private_key_der.expose_secret()).map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
+    let certificate_key = leaf.public_key().map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
     if !private_key.public_eq(&certificate_key) {
-        return Err(account_error(
-            "account_signing_certificate_install_failed",
-            "Downloaded certificate does not match the identity private key",
-        ));
+        return Err(account_error("account_signing_certificate_install_failed", "Downloaded certificate does not match the identity private key"));
     }
-    let certificate_sha256 = leaf
-        .digest(MessageDigest::sha256())
-        .map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
+    let certificate_sha256 = leaf.digest(MessageDigest::sha256()).map_err(|error| account_error("account_signing_certificate_install_failed", error))?;
     let identity = &mut catalog.signing_identities[identity_index];
     identity.certificate_id = Some(request.certificate_id);
-    identity.certificate_sha256 =
-        Some(format!("sha256:{}", hex_bytes(certificate_sha256.as_ref())));
+    identity.certificate_sha256 = Some(format!("sha256:{}", hex_bytes(certificate_sha256.as_ref())));
     identity.issuer_certificate_sha256 = Some(request.issuer_certificate_sha256);
     identity.issuer_key_identifier = Some(request.issuer_key_identifier);
     identity.serial_number = Some(request.serial_number);
@@ -791,9 +634,7 @@ pub fn account_install_signing_certificate(
     identity.lifecycle = "active".to_owned();
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
 }
 
@@ -810,25 +651,16 @@ pub fn account_remove_signing_identity(
         .signing_identities
         .iter()
         .position(|identity| identity.id == request.id)
-        .ok_or_else(|| {
-            account_error(
-                "account_signing_identity_not_found",
-                "Signing identity was not found",
-            )
-        })?;
+        .ok_or_else(|| account_error("account_signing_identity_not_found", "Signing identity was not found"))?;
     let identity = catalog.signing_identities.remove(identity_index);
     if catalog.default_signing_identity_id.as_deref() == Some(request.id.as_str()) {
         catalog.default_signing_identity_id = None;
     }
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
 
-    let _ = with_secret_store(&runtime, |secret_store| {
-        secret_store.delete(TzapSecretPurpose::SigningKey, &identity.signing_key_ref)
-    });
+    let _ = with_secret_store(&runtime, |secret_store| secret_store.delete(TzapSecretPurpose::SigningKey, &identity.signing_key_ref));
 
     snapshot_at(&root, &runtime)
 }
@@ -842,16 +674,10 @@ pub fn account_remove_recipient_key(
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
-    if let Some(pos) = catalog
-        .recipient_keys
-        .iter()
-        .position(|key| key.id == request.id)
-    {
+    if let Some(pos) = catalog.recipient_keys.iter().position(|key| key.id == request.id) {
         if catalog.recipient_keys[pos].lifecycle == "retired" {
             let private_key_ref = catalog.recipient_keys[pos].private_key_ref.clone();
-            let _ = with_secret_store(&runtime, |secret_store| {
-                secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref)
-            });
+            let _ = with_secret_store(&runtime, |secret_store| secret_store.delete(TzapSecretPurpose::RecipientKey, &private_key_ref));
             catalog.recipient_keys.remove(pos);
         } else {
             catalog.recipient_keys[pos].lifecycle = "retired".to_owned();
@@ -859,9 +685,7 @@ pub fn account_remove_recipient_key(
         }
         let expected_revision = catalog.revision;
         catalog.revision = catalog.revision.saturating_add(1);
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-            .map_err(|error| account_error("account_catalog_save_failed", error))?;
+        catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     }
     snapshot_at(&root, &runtime)
 }
@@ -879,47 +703,29 @@ pub fn account_set_default_signing_identity(
         .signing_identities
         .iter()
         .find(|identity| identity.id == request.id && identity.lifecycle == "active")
-        .ok_or_else(|| {
-            account_error(
-                "account_signing_identity_unavailable",
-                "Only an active signing identity can be selected as the default",
-            )
-        })?;
+        .ok_or_else(|| account_error("account_signing_identity_unavailable", "Only an active signing identity can be selected as the default"))?;
     catalog.default_signing_identity_id = Some(identity.id.clone());
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
 }
 
 #[tauri::command]
-pub fn account_remove_contact(
-    request: AccountIdRequest,
-    app: AppHandle,
-    runtime: State<'_, AccountRuntime>,
-) -> Result<AccountSnapshotDto, CommandErrorDto> {
+pub fn account_remove_contact(request: AccountIdRequest, app: AppHandle, runtime: State<'_, AccountRuntime>) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
-    catalog
-        .contacts
-        .retain(|contact| contact.contact_id != request.id);
+    catalog.contacts.retain(|contact| contact.contact_id != request.id);
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
 }
 
 #[tauri::command]
-pub fn account_inspect_contact_card(
-    request: AccountContactCardRequest,
-) -> Result<AccountContactCardPreviewDto, CommandErrorDto> {
-    let verified = verify_contact_card(&request.contact_card)
-        .map_err(|error| account_error("account_contact_card_invalid", error))?;
+pub fn account_inspect_contact_card(request: AccountContactCardRequest) -> Result<AccountContactCardPreviewDto, CommandErrorDto> {
+    let verified = verify_contact_card(&request.contact_card).map_err(|error| account_error("account_contact_card_invalid", error))?;
     Ok(contact_card_preview(&verified))
 }
 
@@ -929,26 +735,18 @@ pub fn account_accept_contact_card(
     app: AppHandle,
     runtime: State<'_, AccountRuntime>,
 ) -> Result<AccountSnapshotDto, CommandErrorDto> {
-    let verified = verify_contact_card(&request.contact_card)
-        .map_err(|error| account_error("account_contact_card_invalid", error))?;
+    let verified = verify_contact_card(&request.contact_card).map_err(|error| account_error("account_contact_card_invalid", error))?;
     let recipient_public_key_der = verified
         .payload
         .get("recipient_public_key")
         .and_then(Value::as_str)
         .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
-        .ok_or_else(|| {
-            account_error(
-                "account_contact_card_invalid",
-                "Contact card recipient public key is invalid",
-            )
-        })?;
+        .ok_or_else(|| account_error("account_contact_card_invalid", "Contact card recipient public key is invalid"))?;
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
     let contact_id = verified.recipient_public_key_fingerprint.clone();
-    catalog
-        .contacts
-        .retain(|contact| contact.contact_id != contact_id);
+    catalog.contacts.retain(|contact| contact.contact_id != contact_id);
     catalog.contacts.push(TzapPublicContactRecord {
         contact_id,
         display_name: verified.display_name,
@@ -963,9 +761,7 @@ pub fn account_accept_contact_card(
     });
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
-    catalog_store
-        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
-        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+    catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
 }
 
@@ -997,38 +793,22 @@ pub fn resolve_tzap_create_inputs(
     };
     let root = account_state_dir(app)?;
     let catalog = ensure_catalog(&root, runtime)?;
-    let secret_store = runtime
-        .1
-        .lock()
-        .expect("account secure-store lock poisoned");
+    let secret_store = runtime.1.lock().expect("account secure-store lock poisoned");
 
-    let has_recipient_selection = options
-        .recipient_selection
-        .as_ref()
-        .is_some_and(|selection| {
-            !selection.recipient_key_ids.is_empty()
-                || !selection.contact_recipient_ids.is_empty()
-                || !selection.one_time_certificate_paths.is_empty()
-        });
+    let has_recipient_selection = options.recipient_selection.as_ref().is_some_and(|selection| {
+        !selection.recipient_key_ids.is_empty() || !selection.contact_recipient_ids.is_empty() || !selection.one_time_certificate_paths.is_empty()
+    });
     let (recipient_public_keys, one_time_recipient_certificate_paths) = if has_recipient_selection {
-        let selection = options
-            .recipient_selection
-            .as_ref()
-            .expect("selection presence was checked above");
+        let selection = options.recipient_selection.as_ref().expect("selection presence was checked above");
         let mut public_keys = Vec::new();
         for id in &selection.recipient_key_ids {
             let key = catalog
                 .recipient_keys
                 .iter()
                 .find(|key| &key.id == id)
-                .ok_or_else(|| {
-                    account_error("account_recipient_not_found", "Recipient key was not found")
-                })?;
+                .ok_or_else(|| account_error("account_recipient_not_found", "Recipient key was not found"))?;
             if key.lifecycle != "active" {
-                return Err(account_error(
-                    "account_recipient_unavailable",
-                    "Retired recipient keys cannot be selected for new archives",
-                ));
+                return Err(account_error("account_recipient_unavailable", "Retired recipient keys cannot be selected for new archives"));
             }
             public_keys.push(key.public_key_der.clone());
         }
@@ -1037,56 +817,29 @@ pub fn resolve_tzap_create_inputs(
                 .contacts
                 .iter()
                 .find(|contact| &contact.contact_id == id)
-                .ok_or_else(|| {
-                    account_error("account_contact_not_found", "Trusted contact was not found")
-                })?;
-            if !matches!(
-                contact.verification_state.as_str(),
-                "valid_now" | "valid_at_trusted_time" | "cryptographically_intact_offline"
-            ) {
-                return Err(account_error(
-                    "account_contact_unavailable",
-                    "Only verified trusted contacts can receive new archives",
-                ));
+                .ok_or_else(|| account_error("account_contact_not_found", "Trusted contact was not found"))?;
+            if !matches!(contact.verification_state.as_str(), "valid_now" | "valid_at_trusted_time" | "cryptographically_intact_offline") {
+                return Err(account_error("account_contact_unavailable", "Only verified trusted contacts can receive new archives"));
             }
-            let verified = verify_contact_card(&contact.contact_card_payload).map_err(|error| {
-                account_error(
-                    "account_contact_unavailable",
-                    format!("Trusted contact verification failed: {error}"),
-                )
-            })?;
+            let verified = verify_contact_card(&contact.contact_card_payload)
+                .map_err(|error| account_error("account_contact_unavailable", format!("Trusted contact verification failed: {error}")))?;
             let verified_recipient_public_key_der = verified
                 .payload
                 .get("recipient_public_key")
                 .and_then(Value::as_str)
                 .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
-                .ok_or_else(|| {
-                    account_error(
-                        "account_contact_unavailable",
-                        "Trusted contact recipient key is invalid",
-                    )
-                })?;
-            if !matches!(
-                verified.verification_state.as_str(),
-                "valid_now" | "valid_at_trusted_time" | "cryptographically_intact_offline"
-            ) || verified.recipient_public_key_fingerprint
-                != contact.recipient_public_key_fingerprint
+                .ok_or_else(|| account_error("account_contact_unavailable", "Trusted contact recipient key is invalid"))?;
+            if !matches!(verified.verification_state.as_str(), "valid_now" | "valid_at_trusted_time" | "cryptographically_intact_offline")
+                || verified.recipient_public_key_fingerprint != contact.recipient_public_key_fingerprint
                 || verified_recipient_public_key_der != contact.recipient_public_key_der
                 || verified.signing_certificate_sha256 != contact.signing_certificate_sha256
                 || verified.payload != contact.contact_card_payload
             {
-                return Err(account_error(
-                    "account_contact_unavailable",
-                    "Trusted contact metadata no longer matches its signed contact card",
-                ));
+                return Err(account_error("account_contact_unavailable", "Trusted contact metadata no longer matches its signed contact card"));
             }
             public_keys.push(contact.recipient_public_key_der.clone());
         }
-        let one_time = selection
-            .one_time_certificate_paths
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        let one_time = selection.one_time_certificate_paths.iter().map(PathBuf::from).collect::<Vec<_>>();
         (Some(public_keys), Some(one_time))
     } else {
         (None, None)
@@ -1095,34 +848,17 @@ pub fn resolve_tzap_create_inputs(
     let (signing, signing_selection_provided) = match &options.signing_selection {
         None => (None, false),
         Some(crate::dto::TzapSigningSelectionDto::None) => (None, true),
-        Some(crate::dto::TzapSigningSelectionDto::EnrolledIdentity {
-            signing_identity_id,
-        }) => {
+        Some(crate::dto::TzapSigningSelectionDto::EnrolledIdentity { signing_identity_id }) => {
             let identity = catalog
                 .signing_identities
                 .iter()
                 .find(|identity| &identity.id == signing_identity_id)
-                .ok_or_else(|| {
-                    account_error(
-                        "account_signing_identity_not_found",
-                        "Signing identity was not found",
-                    )
-                })?;
-            if identity.lifecycle != "active"
-                || identity
-                    .not_after_unix_seconds
-                    .is_some_and(|expires| expires <= current_unix_seconds())
-            {
-                return Err(account_error(
-                    "account_signing_identity_unavailable",
-                    "Signing identity is not currently usable",
-                ));
+                .ok_or_else(|| account_error("account_signing_identity_not_found", "Signing identity was not found"))?;
+            if identity.lifecycle != "active" || identity.not_after_unix_seconds.is_some_and(|expires| expires <= current_unix_seconds()) {
+                return Err(account_error("account_signing_identity_unavailable", "Signing identity is not currently usable"));
             }
             let Some(leaf) = identity.certificate_chain_der.first().cloned() else {
-                return Err(account_error(
-                    "account_signing_identity_invalid",
-                    "Signing identity certificate chain is incomplete",
-                ));
+                return Err(account_error("account_signing_identity_invalid", "Signing identity certificate chain is incomplete"));
             };
             let private_key = secret_store
                 .resolve(TzapSecretPurpose::SigningKey, &identity.signing_key_ref)
@@ -1131,12 +867,7 @@ pub fn resolve_tzap_create_inputs(
                 Some(zmanager_core::engine::TzapX509SigningOptions::InMemory {
                     signing_certificate: leaf,
                     signing_private_key: private_key,
-                    signing_chain: identity
-                        .certificate_chain_der
-                        .iter()
-                        .skip(1)
-                        .cloned()
-                        .collect(),
+                    signing_chain: identity.certificate_chain_der.iter().skip(1).cloned().collect(),
                 }),
                 true,
             )
@@ -1148,32 +879,19 @@ pub fn resolve_tzap_create_inputs(
             }),
             true,
         ),
-        Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
-            certificate_path,
-            private_key_path,
-            chain_paths,
-            password,
-        }) => {
+        Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { certificate_path, private_key_path, chain_paths, password }) => {
             if certificate_path.trim().is_empty() || private_key_path.trim().is_empty() {
-                return Err(account_error(
-                    "account_signing_identity_invalid",
-                    "TZAP signing requires both a certificate and a matching private key",
-                ));
+                return Err(account_error("account_signing_identity_invalid", "TZAP signing requires both a certificate and a matching private key"));
             }
             if password.as_ref().is_some_and(|value| !value.is_empty()) {
-                return Err(account_error(
-                    "account_signing_password_unsupported",
-                    "Encrypted one-time private-key files are not supported by this handoff",
-                ));
+                return Err(account_error("account_signing_password_unsupported", "Encrypted one-time private-key files are not supported by this handoff"));
             }
             (
-                Some(
-                    zmanager_core::engine::TzapX509SigningOptions::CertificateAndKey {
-                        signing_certificate: PathBuf::from(certificate_path),
-                        signing_private_key: PathBuf::from(private_key_path),
-                        signing_chain: chain_paths.iter().map(PathBuf::from).collect(),
-                    },
-                ),
+                Some(zmanager_core::engine::TzapX509SigningOptions::CertificateAndKey {
+                    signing_certificate: PathBuf::from(certificate_path),
+                    signing_private_key: PathBuf::from(private_key_path),
+                    signing_chain: chain_paths.iter().map(PathBuf::from).collect(),
+                }),
                 true,
             )
         }
@@ -1201,31 +919,16 @@ pub fn resolve_tzap_recipient_private_key(
         .recipient_keys
         .iter()
         .find(|key| key.id == key_id && matches!(key.lifecycle.as_str(), "active" | "retired"))
-        .ok_or_else(|| {
-            account_error("account_recipient_not_found", "Recipient key was not found")
-        })?;
-    let secret_store = runtime
-        .1
-        .lock()
-        .expect("account secure-store lock poisoned");
-    secret_store
-        .resolve(TzapSecretPurpose::RecipientKey, &key.private_key_ref)
-        .map_err(|error| account_error("account_secure_store_failed", error))
+        .ok_or_else(|| account_error("account_recipient_not_found", "Recipient key was not found"))?;
+    let secret_store = runtime.1.lock().expect("account secure-store lock poisoned");
+    secret_store.resolve(TzapSecretPurpose::RecipientKey, &key.private_key_ref).map_err(|error| account_error("account_secure_store_failed", error))
 }
 
 fn account_state_dir(app: &AppHandle) -> Result<PathBuf, CommandErrorDto> {
-    app.path()
-        .app_data_dir()
-        .map(|path| path.join("tzap-state"))
-        .map_err(|error| account_error("account_state_path_failed", error))
+    app.path().app_data_dir().map(|path| path.join("tzap-state")).map_err(|error| account_error("account_state_path_failed", error))
 }
 
-fn verify_contact_card(
-    card: &Value,
-) -> Result<
-    zmanager_core::contact_card::TzapVerifiedContactCard,
-    zmanager_core::contact_card::TzapContactCardError,
-> {
+fn verify_contact_card(card: &Value) -> Result<zmanager_core::contact_card::TzapVerifiedContactCard, zmanager_core::contact_card::TzapContactCardError> {
     let options = zmanager_core::contact_card::TzapContactCardImportOptions {
         verifier_time_unix_seconds: i64::try_from(current_unix_seconds()).unwrap_or(i64::MAX),
         official_root_pins: &zmanager_core::trust::OFFICIAL_TZAP_ROOT_PINS,
@@ -1237,9 +940,7 @@ fn verify_contact_card(
     zmanager_core::contact_card::verify_tzap_contact_card(card, &options)
 }
 
-fn contact_card_preview(
-    verified: &zmanager_core::contact_card::TzapVerifiedContactCard,
-) -> AccountContactCardPreviewDto {
+fn contact_card_preview(verified: &zmanager_core::contact_card::TzapVerifiedContactCard) -> AccountContactCardPreviewDto {
     AccountContactCardPreviewDto {
         display_name: verified.display_name.clone(),
         signing_certificate_sha256: verified.signing_certificate_sha256.clone(),
@@ -1250,10 +951,7 @@ fn contact_card_preview(
     }
 }
 
-fn snapshot_at(
-    root: &Path,
-    runtime: &AccountRuntime,
-) -> Result<AccountSnapshotDto, CommandErrorDto> {
+fn snapshot_at(root: &Path, runtime: &AccountRuntime) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let catalog = ensure_catalog(root, runtime)?;
     snapshot_from_catalog(runtime, catalog)
 }
@@ -1262,34 +960,19 @@ fn with_secret_store<T>(
     runtime: &AccountRuntime,
     operation: impl FnOnce(&mut NativeTzapSecretStore) -> Result<T, TzapSecretStoreError>,
 ) -> Result<T, TzapSecretStoreError> {
-    let mut secret_store = runtime
-        .1
-        .lock()
-        .expect("account secure-store lock poisoned");
+    let mut secret_store = runtime.1.lock().expect("account secure-store lock poisoned");
     operation(&mut secret_store)
 }
 
-fn snapshot_from_catalog(
-    runtime: &AccountRuntime,
-    catalog: TzapIdentityCatalog,
-) -> Result<AccountSnapshotDto, CommandErrorDto> {
+fn snapshot_from_catalog(runtime: &AccountRuntime, catalog: TzapIdentityCatalog) -> Result<AccountSnapshotDto, CommandErrorDto> {
     let state = runtime.0.lock().expect("account runtime lock poisoned");
-    let (auth_cap, enroll_cap, status_cap) = if state.session.is_some() {
-        ("handoff_exchange", "available", "online")
-    } else {
-        ("launch_only", "unavailable", "offline_cache_only")
-    };
+    let (auth_cap, enroll_cap, status_cap) =
+        if state.session.is_some() { ("handoff_exchange", "available", "online") } else { ("launch_only", "unavailable", "offline_cache_only") };
 
-    let assurance_level = state
-        .session
-        .as_ref()
-        .map(|s| s.identity_assurance.as_str().to_owned());
+    let assurance_level = state.session.as_ref().map(|s| s.identity_assurance.as_str().to_owned());
     let session_expires_at_unix_seconds = state.session.as_ref().map(|s| s.expires_at_unix_seconds);
     let display_name = state.cached_user.as_ref().map(|u| u.display_name.clone());
-    let public_signer_id = state
-        .cached_user
-        .as_ref()
-        .and_then(|u| u.public_signer_id.clone());
+    let public_signer_id = state.cached_user.as_ref().and_then(|u| u.public_signer_id.clone());
 
     Ok(AccountSnapshotDto {
         auth_status: state.auth_status.clone(),
@@ -1315,9 +998,7 @@ fn snapshot_from_catalog(
                     certificate_sha256: identity.certificate_sha256?,
                     label: identity.local_alias,
                     state: identity.lifecycle,
-                    assurance_level: identity
-                        .assurance_level
-                        .unwrap_or_else(|| "unknown".to_owned()),
+                    assurance_level: identity.assurance_level.unwrap_or_else(|| "unknown".to_owned()),
                     not_after_unix_seconds: identity.not_after_unix_seconds.unwrap_or_default(),
                 })
             })
@@ -1349,18 +1030,13 @@ fn snapshot_from_catalog(
     })
 }
 
-fn ensure_catalog(
-    root: &Path,
-    _runtime: &AccountRuntime,
-) -> Result<TzapIdentityCatalog, CommandErrorDto> {
+fn ensure_catalog(root: &Path, _runtime: &AccountRuntime) -> Result<TzapIdentityCatalog, CommandErrorDto> {
     let mut catalog_store = FileTzapIdentityCatalogStore::new(root);
     let catalog = match catalog_store.load_catalog(ACCOUNT_KEY) {
         Ok(Some(catalog)) => catalog,
         Ok(None) => {
             let catalog = TzapIdentityCatalog::empty();
-            catalog_store
-                .save_catalog(ACCOUNT_KEY, None, catalog.clone())
-                .map_err(|error| account_error("account_catalog_save_failed", error))?;
+            catalog_store.save_catalog(ACCOUNT_KEY, None, catalog.clone()).map_err(|error| account_error("account_catalog_save_failed", error))?;
             catalog
         }
         Err(error) => return Err(account_error("account_catalog_failed", error)),
@@ -1370,41 +1046,21 @@ fn ensure_catalog(
 
 fn validate_callback(request: &AccountHostedAuthCallbackRequest) -> Result<(), CommandErrorDto> {
     if !(16..=256).contains(&request.state.len())
-        || !request
-            .state
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
-        || !matches!(
-            request.result.as_str(),
-            "completed" | "cancelled" | "failed"
-        )
-        || request
-            .error_code
-            .as_ref()
-            .is_some_and(|code| code.len() > 128)
+        || !request.state.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        || !matches!(request.result.as_str(), "completed" | "cancelled" | "failed")
+        || request.error_code.as_ref().is_some_and(|code| code.len() > 128)
     {
-        return Err(CommandErrorDto::invalid_request(
-            "Hosted callback is invalid",
-        ));
+        return Err(CommandErrorDto::invalid_request("Hosted callback is invalid"));
     }
     Ok(())
 }
 
 fn account_error(code: &'static str, error: impl std::fmt::Display) -> CommandErrorDto {
-    CommandErrorDto::new(
-        code,
-        error.to_string(),
-        None::<String>,
-        ErrorSeverityDto::Error,
-        true,
-    )
+    CommandErrorDto::new(code, error.to_string(), None::<String>, ErrorSeverityDto::Error, true)
 }
 
 fn current_unix_seconds() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
 fn hex_bytes(bytes: &[u8]) -> String {
@@ -1418,12 +1074,8 @@ mod tests {
     #[test]
     fn callback_rejects_unknown_results_and_secret_shaped_state() {
         assert!(
-            validate_callback(&AccountHostedAuthCallbackRequest {
-                state: "state-1234567890".to_string(),
-                result: "completed".to_string(),
-                error_code: None,
-            })
-            .is_ok()
+            validate_callback(&AccountHostedAuthCallbackRequest { state: "state-1234567890".to_string(), result: "completed".to_string(), error_code: None })
+                .is_ok()
         );
         assert!(
             validate_callback(&AccountHostedAuthCallbackRequest {
@@ -1437,56 +1089,35 @@ mod tests {
 
     #[test]
     fn empty_core_inventory_maps_to_a_secret_free_snapshot() {
-        let root =
-            std::env::temp_dir().join(format!("zmanager-account-test-{}", current_unix_seconds()));
+        let root = std::env::temp_dir().join(format!("zmanager-account-test-{}", current_unix_seconds()));
         let runtime = AccountRuntime::new();
         let snapshot = snapshot_at(&root, &runtime).unwrap();
         assert_eq!(snapshot.auth_status, "signedOut");
         assert!(snapshot.certificates.is_empty());
         assert!(snapshot.recipient_keys.is_empty());
         assert!(snapshot.contacts.is_empty());
-        assert!(
-            !serde_json::to_string(&snapshot)
-                .unwrap()
-                .contains("private")
-        );
+        assert!(!serde_json::to_string(&snapshot).unwrap().contains("private"));
     }
 
     #[test]
     fn existing_public_catalog_snapshot_does_not_read_legacy_secret_file() {
-        let root = std::env::temp_dir().join(format!(
-            "zmanager-account-catalog-test-{}",
-            current_unix_seconds()
-        ));
+        let root = std::env::temp_dir().join(format!("zmanager-account-catalog-test-{}", current_unix_seconds()));
         let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
         let mut catalog = TzapIdentityCatalog::empty();
         catalog.revision = 1;
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, None, catalog)
-            .unwrap();
+        catalog_store.save_catalog(ACCOUNT_KEY, None, catalog).unwrap();
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::write(
-            root.join("default.identity.json"),
-            br#"{"private_key_der":"must-not-be-read"}"#,
-        )
-        .unwrap();
+        std::fs::write(root.join("default.identity.json"), br#"{"private_key_der":"must-not-be-read"}"#).unwrap();
 
         let snapshot = snapshot_at(&root, &AccountRuntime::new()).unwrap();
         assert!(snapshot.recipient_keys.is_empty());
-        assert!(
-            !serde_json::to_string(&snapshot)
-                .unwrap()
-                .contains("must-not-be-read")
-        );
+        assert!(!serde_json::to_string(&snapshot).unwrap().contains("must-not-be-read"));
         let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
     fn secret_store_mutation_releases_lock_before_snapshot_refresh() {
-        let root = std::env::temp_dir().join(format!(
-            "zmanager-account-lock-test-{}",
-            current_unix_seconds()
-        ));
+        let root = std::env::temp_dir().join(format!("zmanager-account-lock-test-{}", current_unix_seconds()));
         let runtime = AccountRuntime::new();
         with_secret_store(&runtime, |_store| Ok(())).unwrap();
 
@@ -1498,46 +1129,36 @@ mod tests {
     #[test]
     fn deletion_pending_is_not_an_active_signing_lifecycle() {
         let mut catalog = TzapIdentityCatalog::empty();
-        catalog
-            .signing_identities
-            .push(TzapPublicSigningIdentityRecord {
-                id: "signing-test".to_owned(),
-                local_alias: Some("Test".to_owned()),
-                certificate_id: Some("signing-test".to_owned()),
-                certificate_sha256: Some("sha256:test".to_owned()),
-                issuer_certificate_sha256: None,
-                issuer_key_identifier: None,
-                serial_number: None,
-                certificate_chain_der: vec![vec![1]],
-                not_before_unix_seconds: Some(1),
-                not_after_unix_seconds: Some(u64::MAX),
-                public_signer_id: None,
-                public_org_id: None,
-                public_device_id: None,
-                assurance_level: Some("local_self_signed".to_owned()),
-                sign_device_id: None,
-                sign_device_routing: None,
-                signing_key_created_at_unix_seconds: Some(1),
-                legacy_key_id: None,
-                metadata_version: None,
-                policy_oid: None,
-                signing_key_ref: TzapSecretRef::generate(),
-                lifecycle: "deletion_pending".to_owned(),
-            });
-        assert!(
-            !catalog
-                .signing_identities
-                .iter()
-                .any(|identity| { identity.lifecycle == "active" })
-        );
+        catalog.signing_identities.push(TzapPublicSigningIdentityRecord {
+            id: "signing-test".to_owned(),
+            local_alias: Some("Test".to_owned()),
+            certificate_id: Some("signing-test".to_owned()),
+            certificate_sha256: Some("sha256:test".to_owned()),
+            issuer_certificate_sha256: None,
+            issuer_key_identifier: None,
+            serial_number: None,
+            certificate_chain_der: vec![vec![1]],
+            not_before_unix_seconds: Some(1),
+            not_after_unix_seconds: Some(u64::MAX),
+            public_signer_id: None,
+            public_org_id: None,
+            public_device_id: None,
+            assurance_level: Some("local_self_signed".to_owned()),
+            sign_device_id: None,
+            sign_device_routing: None,
+            signing_key_created_at_unix_seconds: Some(1),
+            legacy_key_id: None,
+            metadata_version: None,
+            policy_oid: None,
+            signing_key_ref: TzapSecretRef::generate(),
+            lifecycle: "deletion_pending".to_owned(),
+        });
+        assert!(!catalog.signing_identities.iter().any(|identity| { identity.lifecycle == "active" }));
     }
 
     #[test]
     fn recipient_key_removal_retires_active_and_purges_retired() {
-        let root = std::env::temp_dir().join(format!(
-            "zmanager-account-purge-test-{}",
-            current_unix_seconds()
-        ));
+        let root = std::env::temp_dir().join(format!("zmanager-account-purge-test-{}", current_unix_seconds()));
         let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
         let mut catalog = TzapIdentityCatalog::empty();
         let key_ref = TzapSecretRef::generate();
@@ -1552,25 +1173,17 @@ mod tests {
             created_at_unix_seconds: 100,
             retired_at_unix_seconds: None,
         });
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, None, catalog)
-            .unwrap();
+        catalog_store.save_catalog(ACCOUNT_KEY, None, catalog).unwrap();
 
         let runtime = AccountRuntime::new();
         // First removal retires the active key
         let mut catalog = ensure_catalog(&root, &runtime).unwrap();
-        let key = catalog
-            .recipient_keys
-            .iter_mut()
-            .find(|k| k.id == "key-1")
-            .unwrap();
+        let key = catalog.recipient_keys.iter_mut().find(|k| k.id == "key-1").unwrap();
         key.lifecycle = "retired".to_owned();
         key.retired_at_unix_seconds = Some(200);
         let rev1 = catalog.revision;
         catalog.revision += 1;
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, Some(rev1), catalog)
-            .unwrap();
+        catalog_store.save_catalog(ACCOUNT_KEY, Some(rev1), catalog).unwrap();
 
         let snapshot = snapshot_at(&root, &runtime).unwrap();
         assert_eq!(snapshot.recipient_keys.len(), 1);
@@ -1578,17 +1191,11 @@ mod tests {
 
         // Second removal purges the retired key
         let mut catalog = ensure_catalog(&root, &runtime).unwrap();
-        let pos = catalog
-            .recipient_keys
-            .iter()
-            .position(|k| k.id == "key-1")
-            .unwrap();
+        let pos = catalog.recipient_keys.iter().position(|k| k.id == "key-1").unwrap();
         catalog.recipient_keys.remove(pos);
         let rev2 = catalog.revision;
         catalog.revision += 1;
-        catalog_store
-            .save_catalog(ACCOUNT_KEY, Some(rev2), catalog)
-            .unwrap();
+        catalog_store.save_catalog(ACCOUNT_KEY, Some(rev2), catalog).unwrap();
 
         let snapshot = snapshot_at(&root, &runtime).unwrap();
         assert!(snapshot.recipient_keys.is_empty());

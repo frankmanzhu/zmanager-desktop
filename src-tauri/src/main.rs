@@ -29,26 +29,13 @@ fn main() {
     if std::env::args_os().any(|arg| arg.to_str() == Some("--postinstall")) {
         eprintln!("ZMANAGER_POSTINSTALL: begin");
         let diagnostics = diagnostics::DiagnosticLog::new();
-        let _ = diagnostics.initialize(
-            std::env::var("ZMANAGER_DIAGNOSTICS_DIR")
-                .ok()
-                .map(std::path::PathBuf::from),
-            false,
-        );
+        let _ = diagnostics.initialize(std::env::var("ZMANAGER_DIAGNOSTICS_DIR").ok().map(std::path::PathBuf::from), false);
         let inbox = native_launch_inbox::NativeLaunchInbox::new();
         if let Err(e) = platform::initialize_native_host(inbox, diagnostics.clone()) {
-            let _ = diagnostics.record(
-                "postinstall",
-                "nativeHostFailed",
-                diagnostics::fields([("error", serde_json::Value::String(e))]),
-            );
+            let _ = diagnostics.record("postinstall", "nativeHostFailed", diagnostics::fields([("error", serde_json::Value::String(e))]));
         }
         let group_ready = platform::wait_for_app_group(std::time::Duration::from_secs(30));
-        let _ = diagnostics.record(
-            "postinstall",
-            "appGroupReady",
-            diagnostics::fields([("available", serde_json::Value::Bool(group_ready))]),
-        );
+        let _ = diagnostics.record("postinstall", "appGroupReady", diagnostics::fields([("available", serde_json::Value::Bool(group_ready))]));
         platform::ensure_macos_registration(&diagnostics);
         platform::shutdown();
         let _ = diagnostics.record("postinstall", "complete", diagnostics::fields([]));
@@ -61,17 +48,13 @@ fn main() {
     let launch_instance_mode = quick_action::LaunchInstanceMode::from_startup_env();
     let startup_window_state = quick_action::QuickActionStartupState::from_startup_env();
     record_launch_classification(&diagnostics, "primaryProcess", &startup_window_state);
-    let forwarded_startup_state =
-        startup_window_state.forward_requested_to_native_inbox(&native_launch_inbox);
-    platform::initialize_native_host(native_launch_inbox.clone(), diagnostics.clone())
-        .expect("failed to initialize native host before Tauri startup");
+    let forwarded_startup_state = startup_window_state.forward_requested_to_native_inbox(&native_launch_inbox);
+    platform::initialize_native_host(native_launch_inbox.clone(), diagnostics.clone()).expect("failed to initialize native host before Tauri startup");
     let job_registry = job_registry::JobRegistry::new();
-    let archive_index_registry =
-        archive_index::ArchiveIndexRegistry::with_diagnostics(diagnostics.clone());
+    let archive_index_registry = archive_index::ArchiveIndexRegistry::with_diagnostics(diagnostics.clone());
     let account_runtime = account::AccountRuntime::new();
     let native_drag_sessions = native_drag_session::NativeDragSessionRegistry::new();
-    let quick_action_launch_coordinator =
-        quick_action::QuickActionLaunchCoordinator::from_startup_state(forwarded_startup_state);
+    let quick_action_launch_coordinator = quick_action::QuickActionLaunchCoordinator::from_startup_state(forwarded_startup_state);
     let single_instance_coordinator = quick_action_launch_coordinator.clone();
     let single_instance_inbox = native_launch_inbox.clone();
     let setup_inbox = native_launch_inbox.clone();
@@ -94,33 +77,20 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init());
     #[cfg(debug_assertions)]
-    let builder = builder
-        .plugin(tauri_plugin_wdio::init())
-        .plugin(tauri_plugin_wdio_webdriver::init());
+    let builder = builder.plugin(tauri_plugin_wdio::init()).plugin(tauri_plugin_wdio_webdriver::init());
     let builder = if launch_instance_mode.registers_single_instance() {
-        builder.plugin(tauri_plugin_single_instance::init(
-            move |_app, argv, _cwd| {
-                record_secondary_arguments(&single_instance_diagnostics, &argv);
-                let state = single_instance_coordinator.ingest_secondary_process_args(
-                    argv.into_iter().map(std::ffi::OsString::from).collect(),
-                    &single_instance_inbox,
-                );
-                record_launch_classification(
-                    &single_instance_diagnostics,
-                    "secondaryProcess",
-                    &state,
-                );
-            },
-        ))
+        builder.plugin(tauri_plugin_single_instance::init(move |_app, argv, _cwd| {
+            record_secondary_arguments(&single_instance_diagnostics, &argv);
+            let state =
+                single_instance_coordinator.ingest_secondary_process_args(argv.into_iter().map(std::ffi::OsString::from).collect(), &single_instance_inbox);
+            record_launch_classification(&single_instance_diagnostics, "secondaryProcess", &state);
+        }))
     } else {
         builder
     };
     let app = builder
         .setup(move |app| {
-            let _ = setup_diagnostics.initialize(
-                app.path().app_log_dir().ok(),
-                platform::prefer_user_diagnostic_log_directory(),
-            );
+            let _ = setup_diagnostics.initialize(app.path().app_log_dir().ok(), platform::prefer_user_diagnostic_log_directory());
             // On macOS, ensure extensions are registered on every launch.
             // All commands are idempotent — safe to run repeatedly.
             // Run on a background thread so startup is not blocked.
@@ -133,19 +103,9 @@ fn main() {
             let emitter_app = app.handle().clone();
             setup_inbox
                 .attach_emitter(std::sync::Arc::new(move |window, event| {
-                    emitter_app
-                        .emit_to(
-                            window,
-                            native_launch_inbox::NATIVE_INBOUND_EVENT_NAME,
-                            event,
-                        )
-                        .map_err(|error| error.to_string())
+                    emitter_app.emit_to(window, native_launch_inbox::NATIVE_INBOUND_EVENT_NAME, event).map_err(|error| error.to_string())
                 }))
-                .map_err(|error| {
-                    std::io::Error::other(format!(
-                        "failed to attach native inbox emitter: {error:?}"
-                    ))
-                })?;
+                .map_err(|error| std::io::Error::other(format!("failed to attach native inbox emitter: {error:?}")))?;
             if let Some(window) = app.get_webview_window("main") {
                 platform::configure_main_window(&window)?;
             }
@@ -163,14 +123,9 @@ fn main() {
                 let _ = window.state::<diagnostics::DiagnosticLog>().record(
                     "window",
                     "destroyed",
-                    diagnostics::fields([(
-                        "windowClass",
-                        serde_json::Value::String(window_class.to_string()),
-                    )]),
+                    diagnostics::fields([("windowClass", serde_json::Value::String(window_class.to_string()))]),
                 );
-                window
-                    .state::<job_registry::JobRegistry>()
-                    .cleanup_owner_subscriptions(window.label());
+                window.state::<job_registry::JobRegistry>().cleanup_owner_subscriptions(window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -239,47 +194,25 @@ fn main() {
     });
 }
 
-fn record_launch_classification(
-    diagnostics: &diagnostics::DiagnosticLog,
-    source: &str,
-    state: &quick_action::QuickActionStartupState,
-) {
+fn record_launch_classification(diagnostics: &diagnostics::DiagnosticLog, source: &str, state: &quick_action::QuickActionStartupState) {
     let (classification, action, path_count) = match state {
         quick_action::QuickActionStartupState::NotRequested => ("normal", None, 0),
-        quick_action::QuickActionStartupState::Requested(request) => (
-            "quickAction",
-            serde_json::to_value(request.kind)
-                .ok()
-                .and_then(|value| value.as_str().map(str::to_owned)),
-            request.paths.len(),
-        ),
-        quick_action::QuickActionStartupState::ForwardedToNativeInbox(kind) => (
-            "quickActionForwarded",
-            serde_json::to_value(kind)
-                .ok()
-                .and_then(|value| value.as_str().map(str::to_owned)),
-            0,
-        ),
-        quick_action::QuickActionStartupState::Invalid(_) => ("invalid", None, 0),
-        quick_action::QuickActionStartupState::PendingMacOsQuickAction => {
-            ("pendingMacOsQuickAction", None, 0)
+        quick_action::QuickActionStartupState::Requested(request) => {
+            ("quickAction", serde_json::to_value(request.kind).ok().and_then(|value| value.as_str().map(str::to_owned)), request.paths.len())
         }
+        quick_action::QuickActionStartupState::ForwardedToNativeInbox(kind) => {
+            ("quickActionForwarded", serde_json::to_value(kind).ok().and_then(|value| value.as_str().map(str::to_owned)), 0)
+        }
+        quick_action::QuickActionStartupState::Invalid(_) => ("invalid", None, 0),
+        quick_action::QuickActionStartupState::PendingMacOsQuickAction => ("pendingMacOsQuickAction", None, 0),
     };
     let _ = diagnostics.record(
         "launch",
         "classified",
         diagnostics::fields([
             ("source", serde_json::Value::String(source.to_string())),
-            (
-                "classification",
-                serde_json::Value::String(classification.to_string()),
-            ),
-            (
-                "action",
-                action
-                    .map(serde_json::Value::String)
-                    .unwrap_or(serde_json::Value::Null),
-            ),
+            ("classification", serde_json::Value::String(classification.to_string())),
+            ("action", action.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null)),
             ("pathCount", serde_json::json!(path_count)),
         ]),
     );
@@ -293,12 +226,10 @@ fn record_secondary_arguments(diagnostics: &diagnostics::DiagnosticLog, args: &[
             ("argumentCount", serde_json::json!(args.len())),
             (
                 "hasQuickActionArgument",
-                serde_json::json!(args.iter().any(|arg| {
-                    arg == "--quick-action"
-                        || arg == "--action"
-                        || arg.starts_with("--quick-action=")
-                        || arg.starts_with("--action=")
-                })),
+                serde_json::json!(
+                    args.iter()
+                        .any(|arg| { arg == "--quick-action" || arg == "--action" || arg.starts_with("--quick-action=") || arg.starts_with("--action=") })
+                ),
             ),
             (
                 "hasRequestArgument",
@@ -309,13 +240,7 @@ fn record_secondary_arguments(diagnostics: &diagnostics::DiagnosticLog, args: &[
                         || arg.starts_with("--shell-action-request=")
                 })),
             ),
-            (
-                "hasPathArgument",
-                serde_json::json!(
-                    args.iter()
-                        .any(|arg| arg == "--path" || arg.starts_with("--path="))
-                ),
-            ),
+            ("hasPathArgument", serde_json::json!(args.iter().any(|arg| arg == "--path" || arg.starts_with("--path=")))),
         ]),
     );
 }

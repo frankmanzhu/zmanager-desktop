@@ -8,9 +8,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use super::{
-    NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStreamProvider,
-};
+use super::{NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStreamProvider};
 
 pub(super) struct PosixDragPathPolicy {
     pub platform_label: &'static str,
@@ -27,17 +25,9 @@ pub(super) fn prepare_posix_drag_items(
     let mut items = Vec::with_capacity(candidates.len());
 
     for candidate in candidates {
-        let components = candidate
-            .entry_path
-            .split(['/', '\\'])
-            .filter(|component| !component.is_empty())
-            .skip(strip_components)
-            .collect::<Vec<_>>();
+        let components = candidate.entry_path.split(['/', '\\']).filter(|component| !component.is_empty()).skip(strip_components).collect::<Vec<_>>();
         if components.is_empty() {
-            return Err(NativeFileDragError::invalid_request(format!(
-                "entry path is empty after stripping components: {}",
-                candidate.entry_path
-            )));
+            return Err(NativeFileDragError::invalid_request(format!("entry path is empty after stripping components: {}", candidate.entry_path)));
         }
 
         for component in &components {
@@ -45,15 +35,9 @@ pub(super) fn prepare_posix_drag_items(
         }
 
         let display_path = components.join("/");
-        let collision_key = if policy.collision_case_sensitive {
-            display_path.clone()
-        } else {
-            display_path.to_lowercase()
-        };
+        let collision_key = if policy.collision_case_sensitive { display_path.clone() } else { display_path.to_lowercase() };
         if !display_path_keys.insert(collision_key) {
-            return Err(NativeFileDragError::invalid_request(format!(
-                "more than one selected entry would drag out as {display_path}"
-            )));
+            return Err(NativeFileDragError::invalid_request(format!("more than one selected entry would drag out as {display_path}")));
         }
 
         items.push(NativeFileDragItem {
@@ -67,21 +51,11 @@ pub(super) fn prepare_posix_drag_items(
     Ok(items)
 }
 
-fn validate_posix_drag_component(
-    component: &str,
-    entry_path: &str,
-    policy: &PosixDragPathPolicy,
-) -> Result<(), NativeFileDragError> {
+fn validate_posix_drag_component(component: &str, entry_path: &str, policy: &PosixDragPathPolicy) -> Result<(), NativeFileDragError> {
     if component == "." || component == ".." || component.contains('\0') {
-        return Err(NativeFileDragError::unsafe_archive(format!(
-            "entry path contains an unsafe {} drag-out component: {entry_path}",
-            policy.platform_label
-        )));
+        return Err(NativeFileDragError::unsafe_archive(format!("entry path contains an unsafe {} drag-out component: {entry_path}", policy.platform_label)));
     }
-    if policy
-        .max_component_bytes
-        .is_some_and(|maximum| component.len() > maximum)
-    {
+    if policy.max_component_bytes.is_some_and(|maximum| component.len() > maximum) {
         return Err(NativeFileDragError::invalid_request(format!(
             "entry path contains a file name that is too long for {} drag-out: {entry_path}",
             policy.platform_label
@@ -118,21 +92,13 @@ impl StagedFileDrag {
             )
         })?;
 
-        let mut staged = Self {
-            root: Some(root),
-            drag_paths: Vec::new(),
-        };
+        let mut staged = Self { root: Some(root), drag_paths: Vec::new() };
         let mut drag_path_keys = HashSet::new();
         for item in items {
             let relative_path = staged_relative_path(&item.display_path)?;
             let root = staged.root.as_ref().expect("staged drag root missing");
             let output_path = root.join(relative_path);
-            record_drag_path(
-                root,
-                &output_path,
-                &mut drag_path_keys,
-                &mut staged.drag_paths,
-            )?;
+            record_drag_path(root, &output_path, &mut drag_path_keys, &mut staged.drag_paths)?;
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent).map_err(|error| {
                     NativeFileDragError::new(
@@ -184,42 +150,27 @@ impl Drop for StagedFileDrag {
 }
 
 fn unique_drag_root() -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_nanos()).unwrap_or_default();
     std::env::temp_dir().join(format!("zmanager-drag-out-{}-{nonce}", std::process::id()))
 }
 
 fn staged_relative_path(display_path: &str) -> Result<PathBuf, NativeFileDragError> {
-    let components = display_path
-        .split(['/', '\\'])
-        .filter(|component| !component.is_empty())
-        .collect::<Vec<_>>();
+    let components = display_path.split(['/', '\\']).filter(|component| !component.is_empty()).collect::<Vec<_>>();
     if components.is_empty() {
-        return Err(NativeFileDragError::invalid_request(
-            "Archive entry has no file name for drag-out.",
-        ));
+        return Err(NativeFileDragError::invalid_request("Archive entry has no file name for drag-out."));
     }
 
     let mut relative_path = PathBuf::new();
     for component in components {
         if component == "." || component == ".." || component.contains('\0') {
-            return Err(NativeFileDragError::unsafe_archive(format!(
-                "Archive entry has an unsafe drag-out path: {display_path}"
-            )));
+            return Err(NativeFileDragError::unsafe_archive(format!("Archive entry has an unsafe drag-out path: {display_path}")));
         }
         relative_path.push(component);
     }
     Ok(relative_path)
 }
 
-fn record_drag_path(
-    root: &Path,
-    output_path: &Path,
-    drag_path_keys: &mut HashSet<PathBuf>,
-    drag_paths: &mut Vec<PathBuf>,
-) -> Result<(), NativeFileDragError> {
+fn record_drag_path(root: &Path, output_path: &Path, drag_path_keys: &mut HashSet<PathBuf>, drag_paths: &mut Vec<PathBuf>) -> Result<(), NativeFileDragError> {
     let relative_path = output_path.strip_prefix(root).map_err(|error| {
         NativeFileDragError::new(
             format!("Unable to prepare native drag-out path: {error}"),
@@ -227,9 +178,7 @@ fn record_drag_path(
         )
     })?;
     let Some(top_component) = relative_path.components().next() else {
-        return Err(NativeFileDragError::invalid_request(
-            "Archive entry has no file name for drag-out.",
-        ));
+        return Err(NativeFileDragError::invalid_request("Archive entry has no file name for drag-out."));
     };
     let drag_path = root.join(top_component.as_os_str());
     if drag_path_keys.insert(drag_path.clone()) {
@@ -246,24 +195,12 @@ mod tests {
 
     #[test]
     fn staged_drag_writes_nested_files_and_cleans_up() {
-        let payloads = Arc::new(HashMap::from([
-            ("docs/readme.txt".to_string(), b"drag payload".to_vec()),
-            ("root.txt".to_string(), b"root payload".to_vec()),
-        ]));
+        let payloads = Arc::new(HashMap::from([("docs/readme.txt".to_string(), b"drag payload".to_vec()), ("root.txt".to_string(), b"root payload".to_vec())]));
         let provider_payloads = Arc::clone(&payloads);
         let provider: NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
-            let bytes = provider_payloads.get(entry_path).ok_or_else(|| {
-                NativeFileDragError::new(
-                    format!("missing test payload for {entry_path}"),
-                    None::<String>,
-                )
-            })?;
-            writer.write_all(bytes).map_err(|error| {
-                NativeFileDragError::new(
-                    format!("unable to write test payload: {error}"),
-                    None::<String>,
-                )
-            })?;
+            let bytes =
+                provider_payloads.get(entry_path).ok_or_else(|| NativeFileDragError::new(format!("missing test payload for {entry_path}"), None::<String>))?;
+            writer.write_all(bytes).map_err(|error| NativeFileDragError::new(format!("unable to write test payload: {error}"), None::<String>))?;
             Ok(bytes.len() as u64)
         });
 
@@ -276,27 +213,16 @@ mod tests {
                     size: Some(12),
                     modified_unix_seconds: None,
                 },
-                NativeFileDragItem {
-                    entry_path: "root.txt".to_string(),
-                    display_path: "root.txt".to_string(),
-                    size: Some(12),
-                    modified_unix_seconds: None,
-                },
+                NativeFileDragItem { entry_path: "root.txt".to_string(), display_path: "root.txt".to_string(), size: Some(12), modified_unix_seconds: None },
             ],
             provider,
         )
         .expect("stage drag files");
         let root = staged.root().expect("test staged root").to_path_buf();
 
-        assert_eq!(
-            fs::read(root.join("docs/readme.txt")).unwrap(),
-            b"drag payload"
-        );
+        assert_eq!(fs::read(root.join("docs/readme.txt")).unwrap(), b"drag payload");
         assert_eq!(fs::read(root.join("root.txt")).unwrap(), b"root payload");
-        assert_eq!(
-            staged.drag_paths(),
-            [root.join("docs"), root.join("root.txt")]
-        );
+        assert_eq!(staged.drag_paths(), [root.join("docs"), root.join("root.txt")]);
 
         drop(staged);
         assert!(!root.exists(), "staged drag root should be cleaned up");
@@ -305,12 +231,7 @@ mod tests {
     #[test]
     fn staged_drag_cleans_up_when_streaming_fails() {
         let root = unique_drag_root();
-        let provider: NativeFileDragStreamProvider = Arc::new(|_, _| {
-            Err(NativeFileDragError::new(
-                "intentional stream failure",
-                None::<String>,
-            ))
-        });
+        let provider: NativeFileDragStreamProvider = Arc::new(|_, _| Err(NativeFileDragError::new("intentional stream failure", None::<String>)));
 
         let result = StagedFileDrag::create_at_root(
             root.clone(),
@@ -325,9 +246,6 @@ mod tests {
         );
 
         assert!(result.is_err());
-        assert!(
-            !root.exists(),
-            "failed staging leaked its temporary drag root: {root:?}"
-        );
+        assert!(!root.exists(), "failed staging leaked its temporary drag root: {root:?}");
     }
 }

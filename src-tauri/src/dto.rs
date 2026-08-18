@@ -92,10 +92,7 @@ pub struct ValidateDirectoryResponse {
     pub accessible: bool,
 }
 
-pub use zmanager_shell_contract::{
-    ShellActionKind as QuickActionKindDto,
-    ShellActionWindowDisposition as QuickActionWindowDispositionDto,
-};
+pub use zmanager_shell_contract::{ShellActionKind as QuickActionKindDto, ShellActionWindowDisposition as QuickActionWindowDispositionDto};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

@@ -1,9 +1,6 @@
 use reqwest::blocking::Client;
 use std::time::Duration;
-use zmanager_tzap_hosted::auth_client::{
-    TzapAuthError, TzapAuthHttpMethod, TzapAuthHttpRequest, TzapAuthHttpResponse,
-    TzapAuthHttpTransport,
-};
+use zmanager_tzap_hosted::auth_client::{TzapAuthError, TzapAuthHttpMethod, TzapAuthHttpRequest, TzapAuthHttpResponse, TzapAuthHttpTransport};
 
 pub struct HostedHttpTransport {
     client: Client,
@@ -39,17 +36,10 @@ impl TzapAuthHttpTransport for HostedHttpTransport {
             req = req.json(body);
         }
 
-        let response = req.send().map_err(|e| TzapAuthError::Transport {
-            message: format!("HTTP request failed: {}", e),
-        })?;
+        let response = req.send().map_err(|e| TzapAuthError::Transport { message: format!("HTTP request failed: {}", e) })?;
 
         let status_code = response.status().as_u16();
-        let body = response
-            .bytes()
-            .map_err(|e| TzapAuthError::Transport {
-                message: format!("Failed to read HTTP response body: {}", e),
-            })?
-            .to_vec();
+        let body = response.bytes().map_err(|e| TzapAuthError::Transport { message: format!("Failed to read HTTP response body: {}", e) })?.to_vec();
 
         Ok(TzapAuthHttpResponse { status_code, body })
     }

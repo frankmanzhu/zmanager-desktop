@@ -20,20 +20,16 @@ use crate::{
     archive_index::ArchiveIndexRegistry,
     constants,
     dto::{
-        AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto,
-        CreatePlanResponse, DestinationCollisionStrategyDto, NativeFileDragOutcomeDto,
-        NativeFileDragRequest, NativeFileDragResponse, OverwritePolicyDto, PauseJobRequest,
-        PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse, ProjectContract,
-        ProjectIntegrationContract, ResumeJobRequest, StartCreateRequest, StartExtractRequest,
-        SubscribeJobRequest, SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse,
-        TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
+        AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
+        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, OverwritePolicyDto, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
+        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract, ResumeJobRequest, StartCreateRequest, StartExtractRequest, SubscribeJobRequest,
+        SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
         ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
-        JobActionKindDto, JobArtifactKindDto, JobAvailableActionDto, JobCatalogEnvelopeDto,
-        JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto, JobOutputArtifactDto,
-        JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
+        JobActionKindDto, JobArtifactKindDto, JobAvailableActionDto, JobCatalogEnvelopeDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
+        JobOutputArtifactDto, JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry, forward_latest_values},
     native_launch_inbox::NativeLaunchInbox,
@@ -41,14 +37,11 @@ use crate::{
 };
 use zmanager_core::archive_browser::{self, BrowserExtractOptions, BrowserListOptions};
 use zmanager_core::engine::{
-    AppleArchiveCreateOptions, CreateOptions, SevenZCreateOptions, TarGzCreateOptions,
-    TarZstdCreateOptions, TzapCreateOptions, TzapKeySource, TzapRestoreOptions, TzapRestorePolicy,
-    TzapX509TrustOptions, ZipCompression, ZipCreateOptions, is_tzap_archive_path,
+    AppleArchiveCreateOptions, CreateOptions, SevenZCreateOptions, TarGzCreateOptions, TarZstdCreateOptions, TzapCreateOptions, TzapKeySource,
+    TzapRestoreOptions, TzapRestorePolicy, TzapX509TrustOptions, ZipCompression, ZipCreateOptions, is_tzap_archive_path,
 };
 use zmanager_core::jobs::{CancellationToken, JobEvent, JobEventSink};
-use zmanager_core::manifest::{
-    ArchiveManifest, ManifestFileType, PlanError, PlanOptions, plan_archives,
-};
+use zmanager_core::manifest::{ArchiveManifest, ManifestFileType, PlanError, PlanOptions, plan_archives};
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
 
@@ -72,11 +65,7 @@ pub fn project_contract() -> crate::dto::ProjectContract {
     use crate::dto::SourceTableCapabilitiesDto;
 
     let package_kind = crate::native_integration::current_package_kind();
-    let capabilities = crate::native_integration::capability_snapshots(
-        std::env::consts::OS,
-        package_kind,
-        &crate::platform::capability_observations(),
-    );
+    let capabilities = crate::native_integration::capability_snapshots(std::env::consts::OS, package_kind, &crate::platform::capability_observations());
 
     // Build the Compress source-table capability set for the running platform.
     // Follows the expected platform outcomes table in the implementation plan.
@@ -94,109 +83,61 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         commands: constants::PLANNED_COMMANDS,
         platform_strategy: constants::PLATFORM_STRATEGY,
         core_dependency: constants::CORE_DEPENDENCY,
-        platform_integration: ProjectIntegrationContract {
-            platform: std::env::consts::OS,
-            package_kind,
-            capabilities,
-        },
-        source_table_capabilities: SourceTableCapabilitiesDto {
-            available_column_ids,
-        },
+        platform_integration: ProjectIntegrationContract { platform: std::env::consts::OS, package_kind, capabilities },
+        source_table_capabilities: SourceTableCapabilitiesDto { available_column_ids },
     }
 }
 
 #[tauri::command]
 pub fn system_file_icons(request: SystemFileIconRequest) -> SystemFileIconResponse {
-    SystemFileIconResponse {
-        icons: crate::platform::system_file_icons(&request.entries),
-    }
+    SystemFileIconResponse { icons: crate::platform::system_file_icons(&request.entries) }
 }
 
 #[tauri::command]
 pub fn validate_directory(request: ValidateDirectoryRequest) -> ValidateDirectoryResponse {
     let path = request.path.trim();
     if path.is_empty() {
-        return ValidateDirectoryResponse {
-            exists: false,
-            is_directory: false,
-            accessible: false,
-        };
+        return ValidateDirectoryResponse { exists: false, is_directory: false, accessible: false };
     }
 
     match std::fs::metadata(path) {
         Ok(metadata) => {
             let is_directory = metadata.is_dir();
             let accessible = is_directory && std::fs::read_dir(path).is_ok();
-            ValidateDirectoryResponse {
-                exists: true,
-                is_directory,
-                accessible,
-            }
+            ValidateDirectoryResponse { exists: true, is_directory, accessible }
         }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => ValidateDirectoryResponse {
-            exists: false,
-            is_directory: false,
-            accessible: false,
-        },
-        Err(_) => ValidateDirectoryResponse {
-            exists: true,
-            is_directory: false,
-            accessible: false,
-        },
+        Err(error) if error.kind() == io::ErrorKind::NotFound => ValidateDirectoryResponse { exists: false, is_directory: false, accessible: false },
+        Err(_) => ValidateDirectoryResponse { exists: true, is_directory: false, accessible: false },
     }
 }
 
 #[tauri::command]
-pub fn quick_action_startup_state(
-    state: State<'_, QuickActionLaunchCoordinator>,
-) -> crate::dto::QuickActionStartupStateDto {
+pub fn quick_action_startup_state(state: State<'_, QuickActionLaunchCoordinator>) -> crate::dto::QuickActionStartupStateDto {
     state.startup_state().to_dto()
 }
 
 #[tauri::command]
-pub fn native_frontend_ready(
-    window_label: String,
-    state: State<'_, NativeLaunchInbox>,
-) -> Result<usize, CommandErrorDto> {
-    state.frontend_ready(&window_label).map_err(|error| {
-        CommandErrorDto::invalid_request(format!("native inbox readiness failed: {error:?}"))
-    })
+pub fn native_frontend_ready(window_label: String, state: State<'_, NativeLaunchInbox>) -> Result<usize, CommandErrorDto> {
+    state.frontend_ready(&window_label).map_err(|error| CommandErrorDto::invalid_request(format!("native inbox readiness failed: {error:?}")))
 }
 
 #[tauri::command]
-pub fn acknowledge_native_event(
-    window_label: String,
-    event_id: String,
-    state: State<'_, NativeLaunchInbox>,
-) -> Result<(), CommandErrorDto> {
-    state
-        .acknowledge(&window_label, &event_id)
-        .map_err(|error| {
-            CommandErrorDto::invalid_request(format!(
-                "native event acknowledgement failed: {error:?}"
-            ))
-        })
+pub fn acknowledge_native_event(window_label: String, event_id: String, state: State<'_, NativeLaunchInbox>) -> Result<(), CommandErrorDto> {
+    state.acknowledge(&window_label, &event_id).map_err(|error| CommandErrorDto::invalid_request(format!("native event acknowledgement failed: {error:?}")))
 }
 
 #[cfg(test)]
-fn quick_action_startup_state_internal(
-    state: &crate::quick_action::QuickActionStartupState,
-) -> crate::dto::QuickActionStartupStateDto {
+fn quick_action_startup_state_internal(state: &crate::quick_action::QuickActionStartupState) -> crate::dto::QuickActionStartupStateDto {
     state.to_dto()
 }
 
 #[cfg(test)]
-pub fn list_archive(
-    request: crate::dto::ListArchiveRequest,
-) -> Result<ArchiveListingResponse, CommandErrorDto> {
+pub fn list_archive(request: crate::dto::ListArchiveRequest) -> Result<ArchiveListingResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
 
     let listing = archive_browser::list_entries_with_options(
         Path::new(&archive_path),
-        BrowserListOptions {
-            password: request.password.as_deref(),
-            ..Default::default()
-        },
+        BrowserListOptions { password: request.password.as_deref(), ..Default::default() },
     )
     .map_err(crate::platform::map_archive_browser_error)?;
 
@@ -235,12 +176,7 @@ pub fn list_archive(
         });
     }
 
-    Ok(ArchiveListingResponse {
-        archive_path,
-        entries,
-        entry_count,
-        total_size: if has_size { Some(total_size) } else { None },
-    })
+    Ok(ArchiveListingResponse { archive_path, entries, entry_count, total_size: if has_size { Some(total_size) } else { None } })
 }
 
 #[tauri::command]
@@ -256,11 +192,7 @@ pub async fn wait_archive_index(
     request: crate::dto::ArchiveIndexSessionRequest,
     registry: State<'_, ArchiveIndexRegistry>,
 ) -> Result<crate::dto::ArchiveIndexSnapshotDto, CommandErrorDto> {
-    registry
-        .inner()
-        .clone()
-        .wait_for_change(&request.session_id, request.after_revision.as_deref())
-        .await
+    registry.inner().clone().wait_for_change(&request.session_id, request.after_revision.as_deref()).await
 }
 
 #[tauri::command]
@@ -280,10 +212,7 @@ pub fn search_archive_index(
 }
 
 #[tauri::command]
-pub fn close_archive_index(
-    request: crate::dto::ArchiveIndexSessionRequest,
-    registry: State<'_, ArchiveIndexRegistry>,
-) -> Result<(), CommandErrorDto> {
+pub fn close_archive_index(request: crate::dto::ArchiveIndexSessionRequest, registry: State<'_, ArchiveIndexRegistry>) -> Result<(), CommandErrorDto> {
     registry.close(&request.session_id)
 }
 
@@ -291,11 +220,7 @@ pub fn close_archive_index(
 pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
 
-    let mut options = if request.clean_source {
-        PlanOptions::clean_source()
-    } else {
-        PlanOptions::default()
-    };
+    let mut options = if request.clean_source { PlanOptions::clean_source() } else { PlanOptions::default() };
     options.respect_gitignore = request.respect_gitignore;
     options.exclude_names = request.exclude_names.unwrap_or_default();
     options.exclude_archive_paths = request.exclude_archive_paths.unwrap_or_default();
@@ -305,26 +230,10 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
     let manifest = plan_archives(sources, &options).map_err(map_plan_error)?;
     let included_count = manifest.included_count();
     let excluded_count = manifest.excluded_count();
-    let plan_entries: Vec<CreatePlanEntryDto> = manifest
-        .entries
-        .iter()
-        .map(create_plan_entry_to_dto)
-        .collect();
-    let entries = manifest
-        .entries
-        .iter()
-        .map(|entry| entry.archive_path.clone())
-        .collect();
-    let excluded_entries = manifest
-        .excluded_entries
-        .into_iter()
-        .map(|entry| entry.archive_path)
-        .collect();
-    let warnings = manifest
-        .warnings
-        .into_iter()
-        .map(|warning| warning.message)
-        .collect();
+    let plan_entries: Vec<CreatePlanEntryDto> = manifest.entries.iter().map(create_plan_entry_to_dto).collect();
+    let entries = manifest.entries.iter().map(|entry| entry.archive_path.clone()).collect();
+    let excluded_entries = manifest.excluded_entries.into_iter().map(|entry| entry.archive_path).collect();
+    let warnings = manifest.warnings.into_iter().map(|warning| warning.message).collect();
 
     Ok(CreatePlanResponse {
         included_count,
@@ -339,27 +248,17 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
 }
 
 fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> CreatePlanEntryDto {
-    let link_target = entry
-        .symlink_target
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string());
+    let link_target = entry.symlink_target.as_ref().map(|p| p.to_string_lossy().to_string());
 
     // Collect platform metadata from the source path.
     // Do not follow symlinks: table metadata describes the archived object.
     let source_meta = std::fs::symlink_metadata(&entry.source_path).ok();
 
-    let created = source_meta
-        .as_ref()
-        .and_then(|m| m.created().ok())
-        .and_then(system_time_to_epoch_seconds_string);
+    let created = source_meta.as_ref().and_then(|m| m.created().ok()).and_then(system_time_to_epoch_seconds_string);
 
-    let accessed = source_meta
-        .as_ref()
-        .and_then(|m| m.accessed().ok())
-        .and_then(system_time_to_epoch_seconds_string);
+    let accessed = source_meta.as_ref().and_then(|m| m.accessed().ok()).and_then(system_time_to_epoch_seconds_string);
 
-    let platform_metadata =
-        crate::platform::source_platform_metadata(&entry.source_path, &entry.permissions);
+    let platform_metadata = crate::platform::source_platform_metadata(&entry.source_path, &entry.permissions);
 
     CreatePlanEntryDto {
         path: entry.archive_path.clone(),
@@ -389,9 +288,7 @@ fn map_manifest_file_type(file_type: ManifestFileType) -> ArchiveEntryKindDto {
 }
 
 fn system_time_to_epoch_seconds_string(time: SystemTime) -> Option<String> {
-    time.duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|duration| duration.as_secs().to_string())
+    time.duration_since(UNIX_EPOCH).ok().map(|duration| duration.as_secs().to_string())
 }
 
 #[tauri::command]
@@ -403,11 +300,7 @@ pub fn start_create(
     diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let is_tzap = request.format == crate::dto::ArchiveFormatDto::Tzap;
-    let has_signing_selection = request
-        .tzap_certificates
-        .as_ref()
-        .and_then(|options| options.signing_selection.as_ref())
-        .is_some();
+    let has_signing_selection = request.tzap_certificates.as_ref().and_then(|options| options.signing_selection.as_ref()).is_some();
     let signing_selection_kind = request
         .tzap_certificates
         .as_ref()
@@ -416,9 +309,7 @@ pub fn start_create(
             crate::dto::TzapSigningSelectionDto::None => "explicitNone",
             crate::dto::TzapSigningSelectionDto::EnrolledIdentity { .. } => "enrolledIdentity",
             crate::dto::TzapSigningSelectionDto::OneTimePkcs12 { .. } => "oneTimePkcs12",
-            crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { .. } => {
-                "oneTimeCertificateAndKey"
-            }
+            crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { .. } => "oneTimeCertificateAndKey",
         })
         .unwrap_or("notProvided");
     let _ = diagnostics.record(
@@ -427,14 +318,8 @@ pub fn start_create(
         crate::diagnostics::fields([
             ("format", serde_json::json!(format!("{:?}", request.format))),
             ("sourceCount", serde_json::json!(request.sources.len())),
-            (
-                "hasSigningSelection",
-                serde_json::json!(has_signing_selection),
-            ),
-            (
-                "signingSelectionKind",
-                serde_json::json!(signing_selection_kind),
-            ),
+            ("hasSigningSelection", serde_json::json!(has_signing_selection)),
+            ("signingSelectionKind", serde_json::json!(signing_selection_kind)),
         ]),
     );
     let app_for_worker = app.clone();
@@ -445,24 +330,11 @@ pub fn start_create(
         if !is_tzap {
             return Ok(None);
         }
+        let _ = diagnostics_for_worker.record("create", "signingResolutionStarted", crate::diagnostics::fields([]));
+        let result = crate::account::resolve_tzap_create_inputs(&app_for_worker, &runtime_for_worker, tzap_options.as_ref()).map(Some);
         let _ = diagnostics_for_worker.record(
             "create",
-            "signingResolutionStarted",
-            crate::diagnostics::fields([]),
-        );
-        let result = crate::account::resolve_tzap_create_inputs(
-            &app_for_worker,
-            &runtime_for_worker,
-            tzap_options.as_ref(),
-        )
-        .map(Some);
-        let _ = diagnostics_for_worker.record(
-            "create",
-            if result.is_ok() {
-                "signingResolutionCompleted"
-            } else {
-                "signingResolutionFailed"
-            },
+            if result.is_ok() { "signingResolutionCompleted" } else { "signingResolutionFailed" },
             crate::diagnostics::fields([]),
         );
         result
@@ -472,25 +344,15 @@ pub fn start_create(
         "jobAccepted",
         crate::diagnostics::fields([
             ("jobKind", serde_json::json!(format!("{:?}", response.kind))),
-            (
-                "status",
-                serde_json::json!(format!("{:?}", response.status)),
-            ),
+            ("status", serde_json::json!(format!("{:?}", response.status))),
         ]),
     );
     Ok(response)
 }
 
-fn create_progress_estimate_for_format(
-    manifest: &ArchiveManifest,
-    format: crate::dto::ArchiveFormatDto,
-) -> (usize, u64) {
+fn create_progress_estimate_for_format(manifest: &ArchiveManifest, format: crate::dto::ArchiveFormatDto) -> (usize, u64) {
     let total_entries = match format {
-        crate::dto::ArchiveFormatDto::Tzap => manifest
-            .entries
-            .iter()
-            .filter(|entry| matches!(entry.file_type, ManifestFileType::File))
-            .count(),
+        crate::dto::ArchiveFormatDto::Tzap => manifest.entries.iter().filter(|entry| matches!(entry.file_type, ManifestFileType::File)).count(),
         crate::dto::ArchiveFormatDto::Zip
         | crate::dto::ArchiveFormatDto::TarZst
         | crate::dto::ArchiveFormatDto::TarGz
@@ -502,64 +364,40 @@ fn create_progress_estimate_for_format(
 }
 
 fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
-    let bytes = std::fs::read(path)
-        .map_err(|error| format!("unable to read recipient certificate: {error}"))?;
-    let certificate = X509::from_pem(&bytes)
-        .or_else(|_| X509::from_der(&bytes))
-        .map_err(|error| format!("recipient certificate is invalid: {error}"))?;
-    certificate
-        .public_key()
-        .and_then(|key| key.public_key_to_der())
-        .map_err(|error| format!("recipient certificate public key is invalid: {error}"))
+    let bytes = std::fs::read(path).map_err(|error| format!("unable to read recipient certificate: {error}"))?;
+    let certificate = X509::from_pem(&bytes).or_else(|_| X509::from_der(&bytes)).map_err(|error| format!("recipient certificate is invalid: {error}"))?;
+    certificate.public_key().and_then(|key| key.public_key_to_der()).map_err(|error| format!("recipient certificate public key is invalid: {error}"))
 }
 
 #[cfg(test)]
-pub(crate) fn start_create_internal(
-    request: StartCreateRequest,
-    registry: &JobRegistry,
-) -> Result<StartJobResponseDto, CommandErrorDto> {
+pub(crate) fn start_create_internal(request: StartCreateRequest, registry: &JobRegistry) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_create_internal_with_resolver(request, registry, || Ok(None))
 }
 
 fn start_create_internal_with_resolver(
     request: StartCreateRequest,
     registry: &JobRegistry,
-    resolve_tzap: impl FnOnce() -> Result<
-        Option<crate::account::ResolvedTzapCreateInputs>,
-        CommandErrorDto,
-    > + Send
-    + 'static,
+    resolve_tzap: impl FnOnce() -> Result<Option<crate::account::ResolvedTzapCreateInputs>, CommandErrorDto> + Send + 'static,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
-    let requested_destination_path =
-        ensure_non_empty_path(request.destination_path, "destinationPath")?
-            .trim()
-            .to_string();
-    let destination_path = if !request.replace_existing
-        || request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename
-    {
+    let requested_destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?.trim().to_string();
+    let destination_path = if !request.replace_existing || request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename {
         next_available_destination_path(&requested_destination_path)
     } else {
         requested_destination_path
     };
 
     if destination_path.ends_with('/') || destination_path.ends_with('\\') {
-        return Err(CommandErrorDto::invalid_request(
-            "destinationPath must include a file name, not just a directory",
-        ));
+        return Err(CommandErrorDto::invalid_request("destinationPath must include a file name, not just a directory"));
     }
 
     let destination_path = ensure_non_empty_path(destination_path, "destinationPath")?;
     if let Ok(metadata) = std::fs::metadata(&destination_path) {
         if metadata.is_dir() {
-            return Err(CommandErrorDto::invalid_request(format!(
-                "destinationPath must be a file path, not a directory: {destination_path}"
-            )));
+            return Err(CommandErrorDto::invalid_request(format!("destinationPath must be a file path, not a directory: {destination_path}")));
         }
     } else {
-        let parent = Path::new(&destination_path)
-            .parent()
-            .unwrap_or(Path::new(""));
+        let parent = Path::new(&destination_path).parent().unwrap_or(Path::new(""));
         if !parent.exists() {
             return Err(CommandErrorDto::not_found(
                 format!("destination directory does not exist: {destination_path}"),
@@ -570,21 +408,14 @@ fn start_create_internal_with_resolver(
 
     validate_source_paths_exist(&sources)?;
 
-    let mut plan_options = if request.clean_source {
-        PlanOptions::clean_source()
-    } else {
-        PlanOptions::default()
-    };
+    let mut plan_options = if request.clean_source { PlanOptions::clean_source() } else { PlanOptions::default() };
     plan_options.exclude_names = request.exclude_names.unwrap_or_default();
     plan_options.exclude_archive_paths = request.exclude_archive_paths.unwrap_or_default();
     plan_options.include_archive_paths = request.include_archive_paths.unwrap_or_default();
     plan_options.respect_gitignore = request.respect_gitignore;
     plan_options.follow_symlinks = request.follow_symlinks;
     let plan_result = plan_archives(sources.clone(), &plan_options);
-    let create_progress_estimate = plan_result
-        .as_ref()
-        .ok()
-        .map(|manifest| create_progress_estimate_for_format(manifest, request.format));
+    let create_progress_estimate = plan_result.as_ref().ok().map(|manifest| create_progress_estimate_for_format(manifest, request.format));
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -596,37 +427,19 @@ fn start_create_internal_with_resolver(
         crate::dto::ArchiveFormatDto::AppleArchive => JobKindDto::AppleArchiveCreate,
     };
 
-    let password = request
-        .password
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
+    let password = request.password.as_deref().map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned);
     if let Some(certificates) = request.tzap_certificates.as_ref() {
-        let has_recipient_selection =
-            certificates
-                .recipient_selection
-                .as_ref()
-                .is_some_and(|selection| {
-                    !selection.recipient_key_ids.is_empty()
-                        || !selection.contact_recipient_ids.is_empty()
-                        || !selection.one_time_certificate_paths.is_empty()
-                });
+        let has_recipient_selection = certificates.recipient_selection.as_ref().is_some_and(|selection| {
+            !selection.recipient_key_ids.is_empty() || !selection.contact_recipient_ids.is_empty() || !selection.one_time_certificate_paths.is_empty()
+        });
         if has_recipient_selection && password.is_some() {
-            return Err(CommandErrorDto::invalid_request(
-                "TZAP recipient encryption cannot be combined with a password",
-            ));
+            return Err(CommandErrorDto::invalid_request("TZAP recipient encryption cannot be combined with a password"));
         }
-        if let Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
-            certificate_path,
-            private_key_path,
-            ..
-        }) = certificates.signing_selection.as_ref()
+        if let Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { certificate_path, private_key_path, .. }) =
+            certificates.signing_selection.as_ref()
             && (certificate_path.trim().is_empty() || private_key_path.trim().is_empty())
         {
-            return Err(CommandErrorDto::invalid_request(
-                "TZAP signing requires both a certificate and a matching private key",
-            ));
+            return Err(CommandErrorDto::invalid_request("TZAP signing requires both a certificate and a matching private key"));
         }
     }
 
@@ -635,16 +448,8 @@ fn start_create_internal_with_resolver(
         .configure_recovery_facts(
             &response.job_id,
             None,
-            vec![JobOutputArtifactDto {
-                artifact_id: "output".into(),
-                kind: JobArtifactKindDto::Archive,
-                path: destination_path.clone(),
-            }],
-            vec![JobAvailableActionDto {
-                action_id: "reveal-output".into(),
-                kind: JobActionKindDto::Reveal,
-                artifact_id: "output".into(),
-            }],
+            vec![JobOutputArtifactDto { artifact_id: "output".into(), kind: JobArtifactKindDto::Archive, path: destination_path.clone() }],
+            vec![JobAvailableActionDto { action_id: "reveal-output".into(), kind: JobActionKindDto::Reveal, artifact_id: "output".into() }],
         )
         .map_err(subscription_error)?;
     if let Some((total_entries, total_bytes)) = create_progress_estimate {
@@ -676,11 +481,7 @@ fn start_create_internal_with_resolver(
     let compression_level = request.compression_level;
     let volume_size = request.volume_size.filter(|value| *value > 0);
     let tzap_recovery_percentage = request.tzap_recovery_percentage.unwrap_or(5).min(100);
-    let tzap_volume_loss_tolerance = if volume_size.is_some() {
-        request.tzap_volume_loss_tolerance.unwrap_or(0).min(16)
-    } else {
-        0
-    };
+    let tzap_volume_loss_tolerance = if volume_size.is_some() { request.tzap_volume_loss_tolerance.unwrap_or(0).min(16) } else { 0 };
     let zip_compression = request.zip_compression;
     let seven_z_solid = request.seven_z_solid.unwrap_or(true);
     let seven_z_threads = request.seven_z_threads.filter(|value| *value > 0);
@@ -697,20 +498,13 @@ fn start_create_internal_with_resolver(
         let mut resolved_tzap = match resolve_tzap() {
             Ok(resolved) => resolved,
             Err(error) => {
-                registry_for_thread.emit_direct_event(
-                    &job_id,
-                    JobEventDto::failed_from_command_error(kind_for_thread, error),
-                );
+                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
                 return;
             }
         };
         if let Some(resolved) = resolved_tzap.as_mut() {
             let mut public_keys = resolved.recipient_public_keys.take().unwrap_or_default();
-            for path in resolved
-                .one_time_recipient_certificate_paths
-                .take()
-                .unwrap_or_default()
-            {
+            for path in resolved.one_time_recipient_certificate_paths.take().unwrap_or_default() {
                 match read_recipient_public_key_der(&path) {
                     Ok(public_key) => public_keys.push(public_key),
                     Err(error) => {
@@ -718,13 +512,7 @@ fn start_create_internal_with_resolver(
                             &job_id,
                             JobEventDto::failed_from_command_error(
                                 kind_for_thread,
-                                CommandErrorDto::new(
-                                    "account_recipient_certificate_invalid",
-                                    error,
-                                    None::<String>,
-                                    ErrorSeverityDto::Error,
-                                    false,
-                                ),
+                                CommandErrorDto::new("account_recipient_certificate_invalid", error, None::<String>, ErrorSeverityDto::Error, false),
                             ),
                         );
                         return;
@@ -747,65 +535,31 @@ fn start_create_internal_with_resolver(
                 volume_size,
             }),
             crate::dto::ArchiveFormatDto::TarZst => {
-                let level = compression_level
-                    .and_then(|value| i32::try_from(value).ok())
-                    .unwrap_or(TarZstdCreateOptions::default().level);
-                CreateOptions::TarZstd(TarZstdCreateOptions {
-                    level,
-                    preserve_metadata,
-                    replace_existing,
-                    ..TarZstdCreateOptions::default()
-                })
+                let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarZstdCreateOptions::default().level);
+                CreateOptions::TarZstd(TarZstdCreateOptions { level, preserve_metadata, replace_existing, ..TarZstdCreateOptions::default() })
             }
             crate::dto::ArchiveFormatDto::TarGz => {
-                let level = compression_level
-                    .and_then(|value| i32::try_from(value).ok())
-                    .unwrap_or(TarGzCreateOptions::default().level);
-                CreateOptions::TarGz(TarGzCreateOptions {
-                    level,
-                    preserve_metadata,
-                    replace_existing,
-                })
+                let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarGzCreateOptions::default().level);
+                CreateOptions::TarGz(TarGzCreateOptions { level, preserve_metadata, replace_existing })
             }
             crate::dto::ArchiveFormatDto::Tzap => {
                 let resolved = resolved_tzap;
-                let (key_source, resolved_signing, signing_selection_provided) =
-                    if let Some(resolved) = resolved {
-                        let public_keys = resolved.recipient_public_keys.unwrap_or_default();
-                        let key_source = if resolved.recipient_selection_provided {
-                            if public_keys.is_empty() {
-                                TzapKeySource::NoPassword
-                            } else {
-                                TzapKeySource::RecipientPublicKeys(public_keys)
-                            }
-                        } else {
-                            password
-                                .as_deref()
-                                .map(SecretString::from)
-                                .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
-                        };
-                        (
-                            key_source,
-                            resolved.signing,
-                            resolved.signing_selection_provided,
-                        )
+                let (key_source, resolved_signing, signing_selection_provided) = if let Some(resolved) = resolved {
+                    let public_keys = resolved.recipient_public_keys.unwrap_or_default();
+                    let key_source = if resolved.recipient_selection_provided {
+                        if public_keys.is_empty() { TzapKeySource::NoPassword } else { TzapKeySource::RecipientPublicKeys(public_keys) }
                     } else {
-                        let key_source = password
-                            .as_deref()
-                            .map(SecretString::from)
-                            .map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
-                        (key_source, None, false)
+                        password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
                     };
-                let x509_signing = if signing_selection_provided {
-                    resolved_signing
+                    (key_source, resolved.signing, resolved.signing_selection_provided)
                 } else {
-                    None
+                    let key_source = password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
+                    (key_source, None, false)
                 };
+                let x509_signing = if signing_selection_provided { resolved_signing } else { None };
                 CreateOptions::Tzap(TzapCreateOptions {
                     key_source,
-                    level: compression_level
-                        .and_then(|value| i32::try_from(value).ok())
-                        .unwrap_or(3),
+                    level: compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(3),
                     preserve_metadata,
                     replace_existing,
                     volume_size,
@@ -826,40 +580,25 @@ fn start_create_internal_with_resolver(
                 chunk_size: seven_z_chunk_size,
             }),
             crate::dto::ArchiveFormatDto::AppleArchive => {
-                CreateOptions::AppleArchive(AppleArchiveCreateOptions {
-                    preserve_metadata,
-                    replace_existing,
-                    password: password.clone(),
-                    ..Default::default()
-                })
+                CreateOptions::AppleArchive(AppleArchiveCreateOptions { preserve_metadata, replace_existing, password: password.clone(), ..Default::default() })
             }
         };
 
-        let result = zmanager_core::jobs::run_engine_create_job_from_sources(
-            &request_sources,
-            &destination,
-            &create_options,
-            &plan_options,
-            &token,
-            &mut sink,
-        )
-        .map(|report| JobTerminalSummaryDto {
-            written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
-            skipped_entries: None,
-            written_bytes: report.written_bytes,
-            warnings: report.warnings,
-        })
-        .map_err(crate::platform::archive_error::map_engine_error);
+        let result = zmanager_core::jobs::run_engine_create_job_from_sources(&request_sources, &destination, &create_options, &plan_options, &token, &mut sink)
+            .map(|report| JobTerminalSummaryDto {
+                written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
+                skipped_entries: None,
+                written_bytes: report.written_bytes,
+                warnings: report.warnings,
+            })
+            .map_err(crate::platform::archive_error::map_engine_error);
 
         match result {
             Ok(summary) => {
                 complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary);
             }
             Err(error) => {
-                registry_for_thread.emit_direct_event(
-                    &job_id,
-                    JobEventDto::failed_from_command_error(kind_for_thread, error),
-                );
+                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
             }
         }
     });
@@ -874,13 +613,8 @@ pub fn start_extract(
     account_runtime: State<'_, crate::account::AccountRuntime>,
     registry: State<'_, JobRegistry>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
-    let recipient_private_key = request
-        .recipient_key_id
-        .as_deref()
-        .map(|key_id| {
-            crate::account::resolve_tzap_recipient_private_key(&app, &account_runtime, key_id)
-        })
-        .transpose()?;
+    let recipient_private_key =
+        request.recipient_key_id.as_deref().map(|key_id| crate::account::resolve_tzap_recipient_private_key(&app, &account_runtime, key_id)).transpose()?;
     start_extract_internal_with_recipient_key(request, &registry, recipient_private_key)
 }
 
@@ -889,45 +623,24 @@ pub fn validate_tzap_signing_identity(
     request: crate::dto::ValidateTzapSigningIdentityRequest,
 ) -> Result<crate::dto::ValidateTzapSigningIdentityResponse, CommandErrorDto> {
     let identity_path = ensure_non_empty_path(request.identity_path, "identityPath")?;
-    let identity_bytes = std::fs::read(&identity_path)
-        .map_err(|error| map_io_error(identity_path.clone(), error))?;
+    let identity_bytes = std::fs::read(&identity_path).map_err(|error| map_io_error(identity_path.clone(), error))?;
     let identity = Pkcs12::from_der(&identity_bytes).map_err(map_identity_error)?;
-    let parsed = identity
-        .parse2(request.password.as_deref().unwrap_or_default())
-        .map_err(map_identity_error)?;
-    let private_key = parsed.pkey.ok_or_else(|| {
-        CommandErrorDto::invalid_request("P12/PFX bundle does not contain a private key")
-    })?;
-    let certificate = parsed.cert.ok_or_else(|| {
-        CommandErrorDto::invalid_request("P12/PFX bundle does not contain a signing certificate")
-    })?;
+    let parsed = identity.parse2(request.password.as_deref().unwrap_or_default()).map_err(map_identity_error)?;
+    let private_key = parsed.pkey.ok_or_else(|| CommandErrorDto::invalid_request("P12/PFX bundle does not contain a private key"))?;
+    let certificate = parsed.cert.ok_or_else(|| CommandErrorDto::invalid_request("P12/PFX bundle does not contain a signing certificate"))?;
     let now = Asn1Time::days_from_now(0).map_err(map_identity_error)?;
     if certificate.not_before() > now.as_ref() || certificate.not_after() < now.as_ref() {
-        return Err(CommandErrorDto::invalid_request(
-            "P12/PFX signing certificate is outside its validity period",
-        ));
+        return Err(CommandErrorDto::invalid_request("P12/PFX signing certificate is outside its validity period"));
     }
     let certificate_key = certificate.public_key().map_err(map_identity_error)?;
     if !private_key.public_eq(&certificate_key) {
-        return Err(CommandErrorDto::invalid_request(
-            "P12/PFX private key does not match its signing certificate",
-        ));
+        return Err(CommandErrorDto::invalid_request("P12/PFX private key does not match its signing certificate"));
     }
-    let certificate_sha256 = certificate
-        .digest(MessageDigest::sha256())
-        .map_err(map_identity_error)?;
-    let subject = certificate
-        .subject_name()
-        .entries()
-        .next()
-        .and_then(|entry| entry.data().to_string().ok())
-        .unwrap_or_else(|| "Unnamed signing certificate".to_owned());
+    let certificate_sha256 = certificate.digest(MessageDigest::sha256()).map_err(map_identity_error)?;
+    let subject =
+        certificate.subject_name().entries().next().and_then(|entry| entry.data().to_string().ok()).unwrap_or_else(|| "Unnamed signing certificate".to_owned());
     let chain_certificate_count = parsed.ca.as_ref().map_or(0, |chain| chain.len());
-    let warnings = if chain_certificate_count == 0 {
-        vec!["The bundle has no intermediate certificate chain.".to_owned()]
-    } else {
-        Vec::new()
-    };
+    let warnings = if chain_certificate_count == 0 { vec!["The bundle has no intermediate certificate chain.".to_owned()] } else { Vec::new() };
     Ok(crate::dto::ValidateTzapSigningIdentityResponse {
         certificate_sha256: hex_bytes(certificate_sha256.as_ref()),
         chain_certificate_count,
@@ -937,43 +650,26 @@ pub fn validate_tzap_signing_identity(
 }
 
 fn map_identity_error(error: openssl::error::ErrorStack) -> CommandErrorDto {
-    CommandErrorDto::new(
-        "certificate_error",
-        format!("Unable to create signing identity: {error}"),
-        None::<String>,
-        ErrorSeverityDto::Error,
-        false,
-    )
+    CommandErrorDto::new("certificate_error", format!("Unable to create signing identity: {error}"), None::<String>, ErrorSeverityDto::Error, false)
 }
 
 #[tauri::command]
-pub fn verify_tzap_certificate(
-    request: crate::dto::VerifyTzapCertificateRequest,
-) -> Result<crate::dto::VerifyTzapCertificateResponse, CommandErrorDto> {
+pub fn verify_tzap_certificate(request: crate::dto::VerifyTzapCertificateRequest) -> Result<crate::dto::VerifyTzapCertificateResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     if !is_tzap_archive_path(Path::new(&archive_path)) {
-        return Err(CommandErrorDto::invalid_request(
-            "certificate verification is available only for TZAP archives",
-        ));
+        return Err(CommandErrorDto::invalid_request("certificate verification is available only for TZAP archives"));
     }
 
     if request.validate_trust {
         let trust = TzapX509TrustOptions {
-            trusted_ca_certificates: request
-                .trusted_ca_certificate_paths
-                .iter()
-                .map(PathBuf::from)
-                .collect(),
+            trusted_ca_certificates: request.trusted_ca_certificate_paths.iter().map(PathBuf::from).collect(),
             trusted_system_roots: request.trusted_system_roots,
             include_official_tzap_root: request.include_official_tzap_root,
         };
         if !trust.has_trust_source() {
-            return Err(CommandErrorDto::invalid_request(
-                "trust validation requires the official TZAP root, a custom CA, or system roots",
-            ));
+            return Err(CommandErrorDto::invalid_request("trust validation requires the official TZAP root, a custom CA, or system roots"));
         }
-        let report = zmanager_core::engine::verify_tzap_x509_public_no_key(&archive_path, &trust)
-            .map_err(crate::platform::archive_error::map_engine_error)?;
+        let report = zmanager_core::engine::verify_tzap_x509_public_no_key(&archive_path, &trust).map_err(crate::platform::archive_error::map_engine_error)?;
         return Ok(crate::dto::VerifyTzapCertificateResponse {
             outcome: "trusted",
             subject: report.subject,
@@ -987,8 +683,7 @@ pub fn verify_tzap_certificate(
         });
     }
 
-    let inspection = zmanager_core::engine::inspect_tzap_x509_public_no_key_signer(&archive_path)
-        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let inspection = zmanager_core::engine::inspect_tzap_x509_public_no_key_signer(&archive_path).map_err(crate::platform::archive_error::map_engine_error)?;
     Ok(crate::dto::VerifyTzapCertificateResponse {
         outcome: "signatureValid",
         subject: inspection.subject,
@@ -1012,10 +707,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-pub(crate) fn start_extract_internal(
-    request: StartExtractRequest,
-    registry: &JobRegistry,
-) -> Result<StartJobResponseDto, CommandErrorDto> {
+pub(crate) fn start_extract_internal(request: StartExtractRequest, registry: &JobRegistry) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_extract_internal_with_spawner(request, registry, |worker| {
         thread::spawn(worker);
     })
@@ -1026,14 +718,9 @@ fn start_extract_internal_with_recipient_key(
     registry: &JobRegistry,
     recipient_private_key: Option<zmanager_core::secrets::SecretBytes>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
-    start_extract_internal_with_recipient_key_and_spawner(
-        request,
-        registry,
-        recipient_private_key,
-        |worker| {
-            thread::spawn(worker);
-        },
-    )
+    start_extract_internal_with_recipient_key_and_spawner(request, registry, recipient_private_key, |worker| {
+        thread::spawn(worker);
+    })
 }
 
 #[cfg(test)]
@@ -1052,13 +739,10 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     spawn_worker: impl FnOnce(Box<dyn FnOnce() + Send + 'static>),
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
-    let requested_destination_path =
-        ensure_non_empty_path(request.destination_path, "destinationPath")?;
-    let destination_path = if request.destination_collision_strategy
-        == DestinationCollisionStrategyDto::Rename
+    let requested_destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
+    let destination_path = if request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename
         || request.overwrite == OverwritePolicyDto::Rename
-        || (request.overwrite != OverwritePolicyDto::Replace
-            && request.destination_collision_strategy != DestinationCollisionStrategyDto::Refuse)
+        || (request.overwrite != OverwritePolicyDto::Replace && request.destination_collision_strategy != DestinationCollisionStrategyDto::Refuse)
     {
         next_available_destination_path(&requested_destination_path)
     } else {
@@ -1066,37 +750,23 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     };
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
     if recipient_private_key.is_some() && !entry_paths.is_empty() {
-        return Err(CommandErrorDto::invalid_request(
-            "Recipient-key extraction currently requires a whole-archive operation",
-        ));
+        return Err(CommandErrorDto::invalid_request("Recipient-key extraction currently requires a whole-archive operation"));
     }
-    let password = request
-        .password
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    let password = request.password.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
     let format_kind = zmanager_core::archive_format::detect_archive_format(&archive_path);
     if recipient_private_key.is_some() && password.is_some() {
-        return Err(CommandErrorDto::invalid_request(
-            "Choose either a recipient key or an archive password for extraction",
-        ));
+        return Err(CommandErrorDto::invalid_request("Choose either a recipient key or an archive password for extraction"));
     }
-    if recipient_private_key.is_some()
-        && format_kind != zmanager_core::archive_format::ArchiveFormatKind::Tzap
-    {
-        return Err(CommandErrorDto::invalid_request(
-            "Recipient-key extraction is available only for TZAP archives",
-        ));
+    if recipient_private_key.is_some() && format_kind != zmanager_core::archive_format::ArchiveFormatKind::Tzap {
+        return Err(CommandErrorDto::invalid_request("Recipient-key extraction is available only for TZAP archives"));
     }
     let kind = match format_kind {
-        zmanager_core::archive_format::ArchiveFormatKind::Zip
-        | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => JobKindDto::ZipExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::Zip | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => JobKindDto::ZipExtract,
         zmanager_core::archive_format::ArchiveFormatKind::TarZst => JobKindDto::TarZstdExtract,
         zmanager_core::archive_format::ArchiveFormatKind::SevenZ => JobKindDto::SevenZExtract,
         zmanager_core::archive_format::ArchiveFormatKind::Rar => JobKindDto::RarExtract,
         zmanager_core::archive_format::ArchiveFormatKind::Tzap => JobKindDto::TzapExtract,
-        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => {
-            JobKindDto::AppleArchiveExtract
-        }
+        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => JobKindDto::AppleArchiveExtract,
         zmanager_core::archive_format::ArchiveFormatKind::RawStream => JobKindDto::RawStreamExtract,
         _ => JobKindDto::ArchiveExtract,
     };
@@ -1118,25 +788,13 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                 tzap_allow_absolute_symlinks: request.tzap_allow_absolute_symlinks,
                 ignore_symlinks: request.ignore_symlinks,
             }),
-            vec![JobOutputArtifactDto {
-                artifact_id: "output".into(),
-                kind: JobArtifactKindDto::Directory,
-                path: destination_path.clone(),
-            }],
-            vec![JobAvailableActionDto {
-                action_id: "open-output".into(),
-                kind: JobActionKindDto::Open,
-                artifact_id: "output".into(),
-            }],
+            vec![JobOutputArtifactDto { artifact_id: "output".into(), kind: JobArtifactKindDto::Directory, path: destination_path.clone() }],
+            vec![JobAvailableActionDto { action_id: "open-output".into(), kind: JobActionKindDto::Open, artifact_id: "output".into() }],
         )
         .map_err(subscription_error)?;
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
-    let policy = extraction_policy(
-        request.overwrite,
-        request.strip_components,
-        request.ignore_symlinks,
-    );
+    let policy = extraction_policy(request.overwrite, request.strip_components, request.ignore_symlinks);
     let tzap_restore_options = TzapRestoreOptions {
         policy: map_tzap_restore_policy(request.tzap_restore_policy),
         allow_degraded: request.tzap_allow_degraded,
@@ -1154,9 +812,7 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                     JobKindDto::SevenZExtract => zmanager_core::jobs::JobKind::SevenZExtract,
                     JobKindDto::RarExtract => zmanager_core::jobs::JobKind::RarExtract,
                     JobKindDto::TzapExtract => zmanager_core::jobs::JobKind::TzapExtract,
-                    JobKindDto::AppleArchiveExtract => {
-                        zmanager_core::jobs::JobKind::AppleArchiveExtract
-                    }
+                    JobKindDto::AppleArchiveExtract => zmanager_core::jobs::JobKind::AppleArchiveExtract,
                     _ => zmanager_core::jobs::JobKind::ArchiveExtract,
                 },
                 total_bytes: None,
@@ -1164,9 +820,7 @@ fn start_extract_internal_with_recipient_key_and_spawner(
             let mut options = zmanager_core::engine::ExtractOptions {
                 destination: PathBuf::from(&destination_path),
                 policy,
-                recipient_key_bytes: recipient_private_key
-                    .as_ref()
-                    .map(|k| k.expose_secret().to_vec()),
+                recipient_key_bytes: recipient_private_key.as_ref().map(|k| k.expose_secret().to_vec()),
                 tzap_password: password.clone(),
                 tzap_restore_options: Some(tzap_restore_options),
                 cancellation: Some(token.clone()),
@@ -1177,21 +831,14 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                 Ok(engine) => {
                     let open_res = engine.open(
                         zmanager_core::engine::ArchiveSource::from_path_autodetect(&archive_path),
-                        zmanager_core::engine::OpenOptions {
-                            password: password.clone(),
-                            recipient_key: None,
-                            ..Default::default()
-                        },
+                        zmanager_core::engine::OpenOptions { password: password.clone(), recipient_key: None, ..Default::default() },
                     );
                     match open_res {
                         Ok(mut handle) => handle
                             .extract(&mut options)
                             .map(|report| JobTerminalSummaryDto {
-                                written_entries: usize::try_from(report.written_entries)
-                                    .unwrap_or(usize::MAX),
-                                skipped_entries: Some(
-                                    usize::try_from(report.skipped_entries).unwrap_or(usize::MAX),
-                                ),
+                                written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
+                                skipped_entries: Some(usize::try_from(report.skipped_entries).unwrap_or(usize::MAX)),
                                 written_bytes: report.written_bytes,
                                 warnings: report.warnings,
                             })
@@ -1202,17 +849,7 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                 Err(err) => Err(crate::platform::archive_error::map_engine_error(err)),
             }
         } else {
-            run_selected_extract_job(
-                &archive_path,
-                &destination_path,
-                &entry_paths,
-                password.as_deref(),
-                policy,
-                tzap_restore_options,
-                &token,
-                &mut sink,
-                kind,
-            )
+            run_selected_extract_job(&archive_path, &destination_path, &entry_paths, password.as_deref(), policy, tzap_restore_options, &token, &mut sink, kind)
         };
 
         match result {
@@ -1220,10 +857,7 @@ fn start_extract_internal_with_recipient_key_and_spawner(
                 complete_job_if_needed(&registry_for_thread, &job_id, kind, summary);
             }
             Err(error) => {
-                registry_for_thread.emit_direct_event(
-                    &job_id,
-                    JobEventDto::failed_from_command_error(kind, error),
-                );
+                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind, error));
             }
         }
     }));
@@ -1231,20 +865,12 @@ fn start_extract_internal_with_recipient_key_and_spawner(
     Ok(response)
 }
 
-fn complete_job_if_needed(
-    registry: &JobRegistry,
-    job_id: &str,
-    kind: JobKindDto,
-    summary: JobTerminalSummaryDto,
-) {
+fn complete_job_if_needed(registry: &JobRegistry, job_id: &str, kind: JobKindDto, summary: JobTerminalSummaryDto) {
     let _ = registry.commit_completed(job_id, kind, summary);
 }
 
 #[tauri::command]
-pub fn preview_entry(
-    request: PreviewEntryRequest,
-    registry: State<'_, JobRegistry>,
-) -> Result<PreviewEntryResponse, CommandErrorDto> {
+pub fn preview_entry(request: PreviewEntryRequest, registry: State<'_, JobRegistry>) -> Result<PreviewEntryResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_path = ensure_non_empty_path(request.entry_path, "entryPath")?;
 
@@ -1281,49 +907,20 @@ pub fn start_native_file_drag(
     let started_at = Instant::now();
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(Some(request.entry_paths))?;
-    let password = request
-        .password
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    let password = request.password.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
 
-    let (drag_items, preparation_source) =
-        match archive_index_registry.drag_entries(&archive_path, &entry_paths)? {
-            Some(entries) => (
-                native_drag_items_from_cached_entries(&entries, request.strip_components)?,
-                "archiveIndex",
-            ),
-            None => (
-                build_native_drag_items(
-                    &archive_path,
-                    &entry_paths,
-                    request.strip_components,
-                    password.as_deref(),
-                )?,
-                "coreFallback",
-            ),
-        };
+    let (drag_items, preparation_source) = match archive_index_registry.drag_entries(&archive_path, &entry_paths)? {
+        Some(entries) => (native_drag_items_from_cached_entries(&entries, request.strip_components)?, "archiveIndex"),
+        None => (build_native_drag_items(&archive_path, &entry_paths, request.strip_components, password.as_deref())?, "coreFallback"),
+    };
     let _ = diagnostics.record(
         "nativeDrag",
         "prepared",
         crate::diagnostics::fields([
-            (
-                "elapsedMs",
-                serde_json::Value::from(
-                    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                ),
-            ),
-            (
-                "preparedEntryCount",
-                serde_json::Value::from(drag_items.len()),
-            ),
-            (
-                "requestedEntryCount",
-                serde_json::Value::from(entry_paths.len()),
-            ),
-            (
-                "source",
-                serde_json::Value::String(preparation_source.to_string()),
-            ),
+            ("elapsedMs", serde_json::Value::from(u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX))),
+            ("preparedEntryCount", serde_json::Value::from(drag_items.len())),
+            ("requestedEntryCount", serde_json::Value::from(entry_paths.len())),
+            ("source", serde_json::Value::String(preparation_source.to_string())),
         ]),
     );
     let stream_archive_path = archive_path.clone();
@@ -1334,93 +931,53 @@ pub fn start_native_file_drag(
     let provider_successes = Arc::clone(&successful_streams);
     let provider_streamed_bytes = Arc::clone(&streamed_bytes);
     let provider_failure = Arc::clone(&stream_failure);
-    let stream_provider: crate::platform::NativeFileDragStreamProvider =
-        Arc::new(move |entry_path, writer| {
-            let result = stream_native_drag_entry(
-                &stream_archive_path,
-                stream_password.as_deref(),
-                entry_path,
-                writer,
-            );
-            match &result {
-                Ok(written_bytes) => {
-                    provider_successes
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .insert(entry_path.to_string());
-                    provider_streamed_bytes.fetch_add(*written_bytes, AtomicOrdering::Relaxed);
-                }
-                Err(error) => {
-                    let mut failure = provider_failure
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    if failure.is_none() {
-                        *failure = Some(error.clone());
-                    }
+    let stream_provider: crate::platform::NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
+        let result = stream_native_drag_entry(&stream_archive_path, stream_password.as_deref(), entry_path, writer);
+        match &result {
+            Ok(written_bytes) => {
+                provider_successes.lock().unwrap_or_else(|error| error.into_inner()).insert(entry_path.to_string());
+                provider_streamed_bytes.fetch_add(*written_bytes, AtomicOrdering::Relaxed);
+            }
+            Err(error) => {
+                let mut failure = provider_failure.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                if failure.is_none() {
+                    *failure = Some(error.clone());
                 }
             }
-            result.map_err(native_file_drag_error_from_command)
-        });
+        }
+        result.map_err(native_file_drag_error_from_command)
+    });
 
-    let start = crate::platform::start_native_file_drag(
-        &window,
-        &drag_items,
-        stream_provider,
-        &drag_registry,
-    )
-    .map_err(|error| {
+    let start = crate::platform::start_native_file_drag(&window, &drag_items, stream_provider, &drag_registry).map_err(|error| {
         let mapped = map_native_file_drag_error(error);
         let _ = diagnostics.record(
             "nativeDrag",
             "failed",
             crate::diagnostics::fields([
                 ("code", serde_json::Value::String(mapped.code.to_string())),
-                (
-                    "elapsedMs",
-                    serde_json::Value::from(
-                        u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                    ),
-                ),
+                ("elapsedMs", serde_json::Value::from(u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX))),
             ]),
         );
         mapped
     })?;
-    if let Some(error) = stream_failure
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
-    {
+    if let Some(error) = stream_failure.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone() {
         let _ = diagnostics.record(
             "nativeDrag",
             "streamFailed",
             crate::diagnostics::fields([
                 ("code", serde_json::Value::String(error.code.to_string())),
-                (
-                    "elapsedMs",
-                    serde_json::Value::from(
-                        u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                    ),
-                ),
+                ("elapsedMs", serde_json::Value::from(u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX))),
             ]),
         );
         return Err(error);
     }
 
-    let streamed_entry_count = successful_streams
-        .lock()
-        .unwrap_or_else(|error| error.into_inner())
-        .len();
+    let streamed_entry_count = successful_streams.lock().unwrap_or_else(|error| error.into_inner()).len();
     let (mut outcome, session_id) = match start {
-        crate::platform::NativeFileDragStart::Pending { session_id } => {
-            (NativeFileDragOutcomeDto::Pending, Some(session_id))
-        }
-        crate::platform::NativeFileDragStart::Settled { outcome } => {
-            (map_native_file_drag_outcome(outcome), None)
-        }
+        crate::platform::NativeFileDragStart::Pending { session_id } => (NativeFileDragOutcomeDto::Pending, Some(session_id)),
+        crate::platform::NativeFileDragStart::Settled { outcome } => (map_native_file_drag_outcome(outcome), None),
     };
-    if matches!(outcome, NativeFileDragOutcomeDto::Dropped)
-        && streamed_entry_count < drag_items.len()
-    {
+    if matches!(outcome, NativeFileDragOutcomeDto::Dropped) && streamed_entry_count < drag_items.len() {
         if streamed_entry_count == 0 {
             outcome = NativeFileDragOutcomeDto::NoDrop;
         } else {
@@ -1434,34 +991,13 @@ pub fn start_native_file_drag(
         "nativeDrag",
         "settled",
         crate::diagnostics::fields([
-            (
-                "elapsedMs",
-                serde_json::Value::from(
-                    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                ),
-            ),
-            (
-                "outcome",
-                serde_json::Value::String(format!("{outcome:?}").to_lowercase()),
-            ),
-            (
-                "streamedBytes",
-                serde_json::Value::from(streamed_bytes.load(AtomicOrdering::Relaxed)),
-            ),
-            (
-                "streamedEntryCount",
-                serde_json::Value::from(streamed_entry_count),
-            ),
+            ("elapsedMs", serde_json::Value::from(u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX))),
+            ("outcome", serde_json::Value::String(format!("{outcome:?}").to_lowercase())),
+            ("streamedBytes", serde_json::Value::from(streamed_bytes.load(AtomicOrdering::Relaxed))),
+            ("streamedEntryCount", serde_json::Value::from(streamed_entry_count)),
         ]),
     );
-    Ok(NativeFileDragResponse {
-        outcome,
-        session_id,
-        dragged_entries: drag_items
-            .iter()
-            .map(|item| item.entry_path.clone())
-            .collect(),
-    })
+    Ok(NativeFileDragResponse { outcome, session_id, dragged_entries: drag_items.iter().map(|item| item.entry_path.clone()).collect() })
 }
 
 #[tauri::command]
@@ -1470,25 +1006,17 @@ pub fn cleanup_preview_roots(registry: State<'_, JobRegistry>) {
 }
 
 #[tauri::command]
-pub fn test_archive(
-    request: TestArchiveRequest,
-    registry: State<'_, JobRegistry>,
-) -> Result<StartJobResponseDto, CommandErrorDto> {
+pub fn test_archive(request: TestArchiveRequest, registry: State<'_, JobRegistry>) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_test_archive_internal(request, &registry)
 }
 
-fn start_test_archive_internal(
-    request: TestArchiveRequest,
-    registry: &JobRegistry,
-) -> Result<StartJobResponseDto, CommandErrorDto> {
+fn start_test_archive_internal(request: TestArchiveRequest, registry: &JobRegistry) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_paths = normalize_optional_entry_paths(request.entry_paths)?;
     let retry_entry_paths = entry_paths.clone();
     let selected_entry_keys = Arc::new(entry_paths.into_iter().collect::<HashSet<_>>());
 
-    let (response, _token) = registry
-        .try_create_job(JobKindDto::TestArchive)
-        .map_err(subscription_error)?;
+    let (response, _token) = registry.try_create_job(JobKindDto::TestArchive).map_err(subscription_error)?;
     registry
         .configure_recovery_facts(
             &response.job_id,
@@ -1504,10 +1032,7 @@ fn start_test_archive_internal(
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
-    let password = request
-        .password
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty());
+    let password = request.password.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
 
     thread::spawn(move || {
         registry_for_thread.emit_direct_event(
@@ -1531,32 +1056,20 @@ fn start_test_archive_internal(
         );
 
         let result: Result<JobTerminalSummaryDto, CommandErrorDto> = (|| {
-            let engine = zmanager_core::engine::create_default_engine()
-                .map_err(crate::platform::archive_error::map_engine_error)?;
+            let engine = zmanager_core::engine::create_default_engine().map_err(crate::platform::archive_error::map_engine_error)?;
             let mut handle = engine
                 .open(
                     zmanager_core::engine::ArchiveSource::from_path_autodetect(&archive_path),
-                    zmanager_core::engine::OpenOptions {
-                        password: password.clone(),
-                        recipient_key: None,
-                        ..Default::default()
-                    },
+                    zmanager_core::engine::OpenOptions { password: password.clone(), recipient_key: None, ..Default::default() },
                 )
                 .map_err(crate::platform::archive_error::map_engine_error)?;
             let selected_paths = selected_entry_keys.iter().cloned().collect::<Vec<_>>();
             let report = handle
-                .test(&zmanager_core::engine::TestOptions {
-                    selected_paths,
-                    recipient_key: None,
-                    tzap_x509_trust: None,
-                    cancellation: None,
-                })
+                .test(&zmanager_core::engine::TestOptions { selected_paths, recipient_key: None, tzap_x509_trust: None, cancellation: None })
                 .map_err(crate::platform::archive_error::map_engine_error)?;
             Ok(JobTerminalSummaryDto {
                 written_entries: usize::try_from(report.tested_entries).unwrap_or(usize::MAX),
-                skipped_entries: Some(
-                    usize::try_from(report.skipped_entries).unwrap_or(usize::MAX),
-                ),
+                skipped_entries: Some(usize::try_from(report.skipped_entries).unwrap_or(usize::MAX)),
                 written_bytes: report.tested_bytes,
                 warnings: report.warnings,
             })
@@ -1564,14 +1077,10 @@ fn start_test_archive_internal(
 
         match result {
             Ok(summary) => {
-                let _ =
-                    registry_for_thread.commit_completed(&job_id, JobKindDto::TestArchive, summary);
+                let _ = registry_for_thread.commit_completed(&job_id, JobKindDto::TestArchive, summary);
             }
             Err(error) => {
-                registry_for_thread.emit_direct_event(
-                    &job_id,
-                    JobEventDto::failed_from_command_error(JobKindDto::TestArchive, error),
-                );
+                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(JobKindDto::TestArchive, error));
             }
         }
     });
@@ -1613,14 +1122,7 @@ fn run_selected_extract_job(
 
     for entry_path in entry_paths {
         if token.is_cancelled() {
-            return Ok(cancel_selected_extract_job(
-                sink,
-                kind,
-                Some(entry_path.clone()),
-                written_entries,
-                written_bytes,
-                entry_paths.len(),
-            ));
+            return Ok(cancel_selected_extract_job(sink, kind, Some(entry_path.clone()), written_entries, written_bytes, entry_paths.len()));
         }
 
         sink.emit_direct(JobEventDto {
@@ -1694,34 +1196,15 @@ fn run_selected_extract_job(
         });
 
         if token.is_cancelled() {
-            return Ok(cancel_selected_extract_job(
-                sink,
-                kind,
-                Some(entry_path.clone()),
-                written_entries,
-                written_bytes,
-                entry_paths.len(),
-            ));
+            return Ok(cancel_selected_extract_job(sink, kind, Some(entry_path.clone()), written_entries, written_bytes, entry_paths.len()));
         }
     }
 
     if token.is_cancelled() {
-        return Ok(cancel_selected_extract_job(
-            sink,
-            kind,
-            None,
-            written_entries,
-            written_bytes,
-            entry_paths.len(),
-        ));
+        return Ok(cancel_selected_extract_job(sink, kind, None, written_entries, written_bytes, entry_paths.len()));
     }
 
-    Ok(JobTerminalSummaryDto {
-        written_entries,
-        skipped_entries: None,
-        written_bytes,
-        warnings: Vec::new(),
-    })
+    Ok(JobTerminalSummaryDto { written_entries, skipped_entries: None, written_bytes, warnings: Vec::new() })
 }
 
 fn cancel_selected_extract_job(
@@ -1749,12 +1232,7 @@ fn cancel_selected_extract_job(
         message: Some("Extraction cancelled.".to_string()),
     });
 
-    JobTerminalSummaryDto {
-        written_entries,
-        skipped_entries: None,
-        written_bytes,
-        warnings: vec!["Extraction cancelled.".to_string()],
-    }
+    JobTerminalSummaryDto { written_entries, skipped_entries: None, written_bytes, warnings: vec!["Extraction cancelled.".to_string()] }
 }
 
 #[tauri::command]
@@ -1769,9 +1247,7 @@ pub fn subscribe_job(
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
     let owner = window.label().to_string();
-    let (subscription_id, snapshots, commands, shared_flow) = registry
-        .register_job_subscription(&owner, job_id)
-        .map_err(subscription_error)?;
+    let (subscription_id, snapshots, commands, shared_flow) = registry.register_job_subscription(&owner, job_id).map_err(subscription_error)?;
     let registry = registry.inner().clone();
     let task_subscription_id = subscription_id.clone();
     tauri::async_runtime::spawn(async move {
@@ -1803,9 +1279,7 @@ pub fn subscribe_job_catalog(
     registry: State<'_, JobRegistry>,
 ) -> Result<String, CommandErrorDto> {
     let owner = window.label().to_string();
-    let (subscription_id, snapshots, commands, shared_flow) = registry
-        .register_catalog_subscription(&owner)
-        .map_err(subscription_error)?;
+    let (subscription_id, snapshots, commands, shared_flow) = registry.register_catalog_subscription(&owner).map_err(subscription_error)?;
     let registry = registry.inner().clone();
     let task_subscription_id = subscription_id.clone();
     tauri::async_runtime::spawn(async move {
@@ -1831,28 +1305,14 @@ pub fn subscribe_job_catalog(
 }
 
 #[tauri::command]
-pub fn ack_subscription(
-    request: AckSubscriptionRequest,
-    window: WebviewWindow,
-    registry: State<'_, JobRegistry>,
-) -> Result<(), CommandErrorDto> {
-    let revision = request.revision.parse::<u64>().map_err(|_| {
-        CommandErrorDto::invalid_request("revision must be an unsigned decimal string")
-    })?;
-    registry
-        .acknowledge_subscription(window.label(), request.subscription_id.trim(), revision)
-        .map_err(subscription_error)
+pub fn ack_subscription(request: AckSubscriptionRequest, window: WebviewWindow, registry: State<'_, JobRegistry>) -> Result<(), CommandErrorDto> {
+    let revision = request.revision.parse::<u64>().map_err(|_| CommandErrorDto::invalid_request("revision must be an unsigned decimal string"))?;
+    registry.acknowledge_subscription(window.label(), request.subscription_id.trim(), revision).map_err(subscription_error)
 }
 
 #[tauri::command]
-pub fn unsubscribe_job(
-    request: SubscriptionRequest,
-    window: WebviewWindow,
-    registry: State<'_, JobRegistry>,
-) -> Result<(), CommandErrorDto> {
-    registry
-        .unsubscribe(window.label(), request.subscription_id.trim())
-        .map_err(subscription_error)
+pub fn unsubscribe_job(request: SubscriptionRequest, window: WebviewWindow, registry: State<'_, JobRegistry>) -> Result<(), CommandErrorDto> {
+    registry.unsubscribe(window.label(), request.subscription_id.trim()).map_err(subscription_error)
 }
 
 fn subscription_error(code: &'static str) -> CommandErrorDto {
@@ -1879,39 +1339,25 @@ pub fn cancel_job(
     ensure_task_job_owner(window.label(), &job_id)?;
 
     registry.request_cancel(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(
-            format!("job not found: {job_id}"),
-            Some("The job may have already completed and can be dismissed.".to_string()),
-        )
+        CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("The job may have already completed and can be dismissed.".to_string()))
     })
 }
 
 #[tauri::command]
-pub fn pause_job(
-    request: PauseJobRequest,
-    window: WebviewWindow,
-    registry: State<'_, JobRegistry>,
-) -> Result<JobControlResponseDto, CommandErrorDto> {
+pub fn pause_job(request: PauseJobRequest, window: WebviewWindow, registry: State<'_, JobRegistry>) -> Result<JobControlResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
     ensure_task_job_owner(window.label(), &job_id)?;
 
-    registry.request_pause(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(
-            format!("job not found: {job_id}"),
-            Some("Start a new job command before pausing.".to_string()),
-        )
-    })
+    registry
+        .request_pause(&job_id)
+        .ok_or_else(|| CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("Start a new job command before pausing.".to_string())))
 }
 
 #[tauri::command]
-pub fn resume_job(
-    request: ResumeJobRequest,
-    window: WebviewWindow,
-    registry: State<'_, JobRegistry>,
-) -> Result<JobControlResponseDto, CommandErrorDto> {
+pub fn resume_job(request: ResumeJobRequest, window: WebviewWindow, registry: State<'_, JobRegistry>) -> Result<JobControlResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
@@ -1919,19 +1365,12 @@ pub fn resume_job(
     ensure_task_job_owner(window.label(), &job_id)?;
 
     registry.request_resume(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(
-            format!("job not found: {job_id}"),
-            Some("Only jobs that still exist in this session can be resumed.".to_string()),
-        )
+        CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("Only jobs that still exist in this session can be resumed.".to_string()))
     })
 }
 
 #[tauri::command]
-pub fn dismiss_job(
-    request: crate::dto::DismissJobRequest,
-    window: WebviewWindow,
-    registry: State<'_, JobRegistry>,
-) -> Result<(), CommandErrorDto> {
+pub fn dismiss_job(request: crate::dto::DismissJobRequest, window: WebviewWindow, registry: State<'_, JobRegistry>) -> Result<(), CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
@@ -1939,32 +1378,21 @@ pub fn dismiss_job(
     ensure_task_job_owner(window.label(), &job_id)?;
 
     let snapshot = registry.snapshot(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(
-            format!("job not found: {job_id}"),
-            Some("Only dismiss jobs that still exist in this session.".to_string()),
-        )
+        CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("Only dismiss jobs that still exist in this session.".to_string()))
     })?;
 
     if !snapshot.status.is_terminal() {
-        return Err(CommandErrorDto::invalid_request(format!(
-            "cannot dismiss job {job_id} while it is {:?}",
-            snapshot.status,
-        )));
+        return Err(CommandErrorDto::invalid_request(format!("cannot dismiss job {job_id} while it is {:?}", snapshot.status,)));
     }
 
     let _ = registry.remove_job_if_terminal(&job_id);
     Ok(())
 }
 
-pub(crate) fn map_browser_entry_kind(
-    entry: zmanager_core::archive_browser::BrowserEntryKind,
-) -> ArchiveEntryKindDto {
+pub(crate) fn map_browser_entry_kind(entry: zmanager_core::archive_browser::BrowserEntryKind) -> ArchiveEntryKindDto {
     match entry {
-        zmanager_core::archive_browser::BrowserEntryKind::File
-        | zmanager_core::archive_browser::BrowserEntryKind::FileCopy => ArchiveEntryKindDto::File,
-        zmanager_core::archive_browser::BrowserEntryKind::Directory => {
-            ArchiveEntryKindDto::Directory
-        }
+        zmanager_core::archive_browser::BrowserEntryKind::File | zmanager_core::archive_browser::BrowserEntryKind::FileCopy => ArchiveEntryKindDto::File,
+        zmanager_core::archive_browser::BrowserEntryKind::Directory => ArchiveEntryKindDto::Directory,
         zmanager_core::archive_browser::BrowserEntryKind::Symlink => ArchiveEntryKindDto::Symlink,
         zmanager_core::archive_browser::BrowserEntryKind::Hardlink => ArchiveEntryKindDto::Hardlink,
         zmanager_core::archive_browser::BrowserEntryKind::Special => ArchiveEntryKindDto::Special,
@@ -1977,10 +1405,9 @@ fn map_plan_error(error: PlanError) -> CommandErrorDto {
 
 pub(crate) fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
     match source.kind() {
-        io::ErrorKind::NotFound => CommandErrorDto::not_found(
-            format!("could not find file or directory: {path}"),
-            Some("Check that the path exists and is accessible.".to_string()),
-        ),
+        io::ErrorKind::NotFound => {
+            CommandErrorDto::not_found(format!("could not find file or directory: {path}"), Some("Check that the path exists and is accessible.".to_string()))
+        }
         _ => CommandErrorDto::io_error(
             format!("I/O failed for {path}: {source}"),
             source.kind() == io::ErrorKind::TimedOut || source.kind() == io::ErrorKind::Interrupted,
@@ -1990,31 +1417,19 @@ pub(crate) fn map_io_error(path: String, source: io::Error) -> CommandErrorDto {
 
 fn map_native_file_drag_error(error: crate::platform::NativeFileDragError) -> CommandErrorDto {
     match error.kind {
-        crate::platform::NativeFileDragErrorKind::InvalidRequest => {
-            CommandErrorDto::invalid_request(error.message)
+        crate::platform::NativeFileDragErrorKind::InvalidRequest => CommandErrorDto::invalid_request(error.message),
+        crate::platform::NativeFileDragErrorKind::UnsafeArchive => CommandErrorDto::unsafe_archive(error.message),
+        crate::platform::NativeFileDragErrorKind::OperationFailed => {
+            CommandErrorDto::new(constants::COMMAND_ERROR_OPERATION_FAILED, error.message, error.hint, ErrorSeverityDto::Warning, false)
         }
-        crate::platform::NativeFileDragErrorKind::UnsafeArchive => {
-            CommandErrorDto::unsafe_archive(error.message)
-        }
-        crate::platform::NativeFileDragErrorKind::OperationFailed => CommandErrorDto::new(
-            constants::COMMAND_ERROR_OPERATION_FAILED,
-            error.message,
-            error.hint,
-            ErrorSeverityDto::Warning,
-            false,
-        ),
     }
 }
 
-fn native_file_drag_error_from_command(
-    error: CommandErrorDto,
-) -> crate::platform::NativeFileDragError {
+fn native_file_drag_error_from_command(error: CommandErrorDto) -> crate::platform::NativeFileDragError {
     crate::platform::NativeFileDragError::new(error.message, error.hint)
 }
 
-fn map_native_file_drag_outcome(
-    outcome: crate::platform::NativeFileDragOutcome,
-) -> NativeFileDragOutcomeDto {
+fn map_native_file_drag_outcome(outcome: crate::platform::NativeFileDragOutcome) -> NativeFileDragOutcomeDto {
     match outcome {
         crate::platform::NativeFileDragOutcome::Dropped => NativeFileDragOutcomeDto::Dropped,
         crate::platform::NativeFileDragOutcome::Cancelled => NativeFileDragOutcomeDto::Cancelled,
@@ -2029,17 +1444,10 @@ fn build_native_drag_items(
     password: Option<&str>,
 ) -> Result<Vec<crate::platform::NativeFileDragItem>, CommandErrorDto> {
     let mut entries = Vec::new();
-    archive_browser::visit_entries_with_options(
-        Path::new(archive_path),
-        BrowserListOptions {
-            password,
-            ..Default::default()
-        },
-        |entry| {
-            entries.push(entry);
-            true
-        },
-    )
+    archive_browser::visit_entries_with_options(Path::new(archive_path), BrowserListOptions { password, ..Default::default() }, |entry| {
+        entries.push(entry);
+        true
+    })
     .map_err(crate::platform::map_archive_browser_error)?;
 
     native_drag_items_from_listing(&entries, entry_paths, strip_components)
@@ -2054,14 +1462,10 @@ fn native_drag_items_from_cached_entries(
         .map(|entry| crate::platform::NativeFileDragCandidate {
             entry_path: entry.path.clone(),
             size: entry.size,
-            modified_unix_seconds: entry
-                .modified
-                .as_deref()
-                .and_then(|modified| modified.parse::<u64>().ok()),
+            modified_unix_seconds: entry.modified.as_deref().and_then(|modified| modified.parse::<u64>().ok()),
         })
         .collect::<Vec<_>>();
-    crate::platform::prepare_native_file_drag(&candidates, strip_components)
-        .map_err(map_native_file_drag_error)
+    crate::platform::prepare_native_file_drag(&candidates, strip_components).map_err(map_native_file_drag_error)
 }
 
 fn native_drag_items_from_listing(
@@ -2074,10 +1478,7 @@ fn native_drag_items_from_listing(
 
     for entry_path in entry_paths {
         let requested_key = archive_entry_key(entry_path);
-        let Some(selected) = entries
-            .iter()
-            .find(|entry| archive_entry_key(&entry.path) == requested_key)
-        else {
+        let Some(selected) = entries.iter().find(|entry| archive_entry_key(&entry.path) == requested_key) else {
             let before = selected_entries.len();
             let folder_key = archive_folder_key(entry_path);
             for descendant in entries {
@@ -2085,11 +1486,7 @@ fn native_drag_items_from_listing(
                     continue;
                 }
                 if entry_is_under_folder_key(&archive_entry_key(&descendant.path), &folder_key) {
-                    push_native_drag_listing_entry(
-                        descendant,
-                        &mut selected_entry_keys,
-                        &mut selected_entries,
-                    );
+                    push_native_drag_listing_entry(descendant, &mut selected_entry_keys, &mut selected_entries);
                 }
             }
             if selected_entries.len() > before {
@@ -2103,11 +1500,7 @@ fn native_drag_items_from_listing(
 
         match selected.kind {
             zmanager_core::archive_browser::BrowserEntryKind::File => {
-                push_native_drag_listing_entry(
-                    selected,
-                    &mut selected_entry_keys,
-                    &mut selected_entries,
-                );
+                push_native_drag_listing_entry(selected, &mut selected_entry_keys, &mut selected_entries);
             }
             zmanager_core::archive_browser::BrowserEntryKind::Directory => {
                 let before = selected_entries.len();
@@ -2116,27 +1509,16 @@ fn native_drag_items_from_listing(
                     if descendant.kind != zmanager_core::archive_browser::BrowserEntryKind::File {
                         continue;
                     }
-                    if entry_is_under_folder_key(&archive_entry_key(&descendant.path), &folder_key)
-                    {
-                        push_native_drag_listing_entry(
-                            descendant,
-                            &mut selected_entry_keys,
-                            &mut selected_entries,
-                        );
+                    if entry_is_under_folder_key(&archive_entry_key(&descendant.path), &folder_key) {
+                        push_native_drag_listing_entry(descendant, &mut selected_entry_keys, &mut selected_entries);
                     }
                 }
                 if selected_entries.len() == before {
-                    return Err(CommandErrorDto::unsupported_format(format!(
-                        "directory has no regular file entries to drag out: {}",
-                        selected.path
-                    )));
+                    return Err(CommandErrorDto::unsupported_format(format!("directory has no regular file entries to drag out: {}", selected.path)));
                 }
             }
             _ => {
-                return Err(CommandErrorDto::unsupported_format(format!(
-                    "entry cannot be dragged out as a virtual file: {}",
-                    selected.path
-                )));
+                return Err(CommandErrorDto::unsupported_format(format!("entry cannot be dragged out as a virtual file: {}", selected.path)));
             }
         }
     }
@@ -2146,15 +1528,11 @@ fn native_drag_items_from_listing(
         candidates.push(crate::platform::NativeFileDragCandidate {
             entry_path: entry.path.clone(),
             size: entry.size,
-            modified_unix_seconds: entry
-                .modified
-                .as_deref()
-                .and_then(|modified| modified.parse::<u64>().ok()),
+            modified_unix_seconds: entry.modified.as_deref().and_then(|modified| modified.parse::<u64>().ok()),
         });
     }
 
-    crate::platform::prepare_native_file_drag(&candidates, strip_components)
-        .map_err(map_native_file_drag_error)
+    crate::platform::prepare_native_file_drag(&candidates, strip_components).map_err(map_native_file_drag_error)
 }
 
 fn push_native_drag_listing_entry<'a>(
@@ -2168,10 +1546,7 @@ fn push_native_drag_listing_entry<'a>(
 }
 
 fn archive_entry_key(path: &str) -> String {
-    path.split(['/', '\\'])
-        .filter(|component| !component.is_empty())
-        .collect::<Vec<_>>()
-        .join("/")
+    path.split(['/', '\\']).filter(|component| !component.is_empty()).collect::<Vec<_>>().join("/")
 }
 
 fn archive_folder_key(path: &str) -> String {
@@ -2186,49 +1561,24 @@ fn entry_is_under_folder_key(entry_key: &str, folder_key: &str) -> bool {
     entry_key.starts_with(folder_key) && entry_key.len() > folder_key.len()
 }
 
-fn stream_native_drag_entry(
-    archive_path: &str,
-    password: Option<&str>,
-    entry_path: &str,
-    output: &mut dyn Write,
-) -> Result<u64, CommandErrorDto> {
+fn stream_native_drag_entry(archive_path: &str, password: Option<&str>, entry_path: &str, output: &mut dyn Write) -> Result<u64, CommandErrorDto> {
     stream_entry_to_writer(Path::new(archive_path), entry_path, output, password)
 }
 
-fn stream_entry_to_writer(
-    archive_path: &Path,
-    entry_path: &str,
-    output: &mut (dyn Write + '_),
-    password: Option<&str>,
-) -> Result<u64, CommandErrorDto> {
-    let engine = zmanager_core::engine::create_default_engine()
-        .map_err(crate::platform::archive_error::map_engine_error)?;
+fn stream_entry_to_writer(archive_path: &Path, entry_path: &str, output: &mut (dyn Write + '_), password: Option<&str>) -> Result<u64, CommandErrorDto> {
+    let engine = zmanager_core::engine::create_default_engine().map_err(crate::platform::archive_error::map_engine_error)?;
     let mut handle = engine
         .open(
             zmanager_core::engine::ArchiveSource::from_path_autodetect(archive_path),
-            zmanager_core::engine::OpenOptions {
-                password: password.map(str::to_owned),
-                ..Default::default()
-            },
+            zmanager_core::engine::OpenOptions { password: password.map(str::to_owned), ..Default::default() },
         )
         .map_err(crate::platform::archive_error::map_engine_error)?;
-    let listing = handle
-        .list()
-        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let listing = handle.list().map_err(crate::platform::archive_error::map_engine_error)?;
     let target_key = archive_entry_key(entry_path);
-    let entry = listing
-        .entries
-        .iter()
-        .find(|e| archive_entry_key(&e.path) == target_key)
-        .ok_or_else(|| {
-            CommandErrorDto::not_found(
-                format!("archive entry not found: {entry_path}"),
-                Some("Open the archive again or choose a visible entry.".to_string()),
-            )
-        })?;
-    let report = handle
-        .copy_entry(entry.id, output)
-        .map_err(crate::platform::archive_error::map_engine_error)?;
+    let entry = listing.entries.iter().find(|e| archive_entry_key(&e.path) == target_key).ok_or_else(|| {
+        CommandErrorDto::not_found(format!("archive entry not found: {entry_path}"), Some("Open the archive again or choose a visible entry.".to_string()))
+    })?;
+    let report = handle.copy_entry(entry.id, output).map_err(crate::platform::archive_error::map_engine_error)?;
     Ok(report.written_bytes)
 }
 
@@ -2250,11 +1600,7 @@ fn map_tzap_restore_policy(policy: TzapRestorePolicyDto) -> TzapRestorePolicy {
     }
 }
 
-fn extraction_policy(
-    overwrite: crate::dto::OverwritePolicyDto,
-    strip_components: usize,
-    ignore_symlinks: bool,
-) -> ExtractionPolicy {
+fn extraction_policy(overwrite: crate::dto::OverwritePolicyDto, strip_components: usize, ignore_symlinks: bool) -> ExtractionPolicy {
     ExtractionPolicy {
         overwrite: map_overwrite_policy(overwrite),
         unsafe_file: UnsafeFilePolicy::Reject,
@@ -2278,31 +1624,21 @@ fn normalize_non_empty_paths(paths: &[String]) -> Result<Vec<PathBuf>, CommandEr
     }
 
     if normalized.is_empty() {
-        return Err(CommandErrorDto::invalid_request(
-            "at least one source path is required",
-        ));
+        return Err(CommandErrorDto::invalid_request("at least one source path is required"));
     }
 
     Ok(normalized)
 }
 
-fn normalize_optional_entry_paths(
-    paths: Option<Vec<String>>,
-) -> Result<Vec<String>, CommandErrorDto> {
+fn normalize_optional_entry_paths(paths: Option<Vec<String>>) -> Result<Vec<String>, CommandErrorDto> {
     let Some(paths) = paths else {
         return Ok(Vec::new());
     };
 
-    let normalized = paths
-        .into_iter()
-        .map(|path| path.trim().to_string())
-        .filter(|path| !path.is_empty())
-        .collect::<Vec<_>>();
+    let normalized = paths.into_iter().map(|path| path.trim().to_string()).filter(|path| !path.is_empty()).collect::<Vec<_>>();
 
     if normalized.is_empty() {
-        return Err(CommandErrorDto::invalid_request(
-            "at least one selected entry path is required",
-        ));
+        return Err(CommandErrorDto::invalid_request("at least one selected entry path is required"));
     }
 
     Ok(normalized)
@@ -2314,9 +1650,7 @@ fn validate_source_paths_exist(sources: &[PathBuf]) -> Result<(), CommandErrorDt
             if source_error.kind() == io::ErrorKind::NotFound {
                 CommandErrorDto::not_found(
                     format!("source path does not exist: {}", source.to_string_lossy()),
-                    Some(
-                        "Select an existing file or folder before creating an archive.".to_string(),
-                    ),
+                    Some("Select an existing file or folder before creating an archive.".to_string()),
                 )
             } else {
                 map_io_error(source.to_string_lossy().to_string(), source_error)
@@ -2329,9 +1663,7 @@ fn validate_source_paths_exist(sources: &[PathBuf]) -> Result<(), CommandErrorDt
 fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandErrorDto> {
     let value = value.trim().to_string();
     if value.is_empty() {
-        return Err(CommandErrorDto::invalid_request(format!(
-            "{field} cannot be empty"
-        )));
+        return Err(CommandErrorDto::invalid_request(format!("{field} cannot be empty")));
     }
 
     Ok(value)
@@ -2344,10 +1676,7 @@ fn next_available_destination_path(path: &str) -> String {
     }
 
     let parent = candidate.parent().unwrap_or(Path::new(""));
-    let file_name = candidate
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or(path);
+    let file_name = candidate.file_name().and_then(|value| value.to_str()).unwrap_or(path);
     let (stem, suffix) = split_collision_name(file_name);
 
     for index in 2..10_000 {
@@ -2361,20 +1690,8 @@ fn next_available_destination_path(path: &str) -> String {
 }
 
 fn split_collision_name(name: &str) -> (&str, &str) {
-    const COMPOUND_SUFFIXES: &[&str] = &[
-        ".tar.br",
-        ".tar.bz2",
-        ".tar.gz",
-        ".tar.lz",
-        ".tar.lz4",
-        ".tar.lzma",
-        ".tar.lzo",
-        ".tar.lrz",
-        ".tar.xz",
-        ".tar.z",
-        ".tar.zst",
-        ".7z.001",
-    ];
+    const COMPOUND_SUFFIXES: &[&str] =
+        &[".tar.br", ".tar.bz2", ".tar.gz", ".tar.lz", ".tar.lz4", ".tar.lzma", ".tar.lzo", ".tar.lrz", ".tar.xz", ".tar.z", ".tar.zst", ".7z.001"];
 
     let lower_name = name.to_ascii_lowercase();
     for suffix in COMPOUND_SUFFIXES {
@@ -2393,13 +1710,9 @@ fn split_collision_name(name: &str) -> (&str, &str) {
 }
 
 #[tauri::command]
-pub fn detect_archive_format(
-    request: crate::dto::DetectArchiveFormatRequest,
-) -> crate::dto::DetectArchiveFormatResponse {
+pub fn detect_archive_format(request: crate::dto::DetectArchiveFormatRequest) -> crate::dto::DetectArchiveFormatResponse {
     let kind = zmanager_core::archive_format::detect_archive_format(&request.path);
-    crate::dto::DetectArchiveFormatResponse {
-        format: crate::dto::ArchiveFormatKindDto::from(kind),
-    }
+    crate::dto::DetectArchiveFormatResponse { format: crate::dto::ArchiveFormatKindDto::from(kind) }
 }
 
 #[cfg(test)]
@@ -2418,12 +1731,7 @@ mod tests {
     #[test]
     fn job_controls_are_scoped_to_the_matching_disposable_task_window() {
         assert!(ensure_task_job_owner("task-42", "42").is_ok());
-        assert_eq!(
-            ensure_task_job_owner("main", "42")
-                .expect_err("Main Window must not control a Job")
-                .code,
-            constants::COMMAND_ERROR_INVALID_REQUEST,
-        );
+        assert_eq!(ensure_task_job_owner("main", "42").expect_err("Main Window must not control a Job").code, constants::COMMAND_ERROR_INVALID_REQUEST,);
         assert!(ensure_task_job_owner("task-41", "42").is_err());
     }
     use std::env;
@@ -2445,10 +1753,7 @@ mod tests {
             file_type: ManifestFileType::File,
             size: 42,
             modified: None,
-            permissions: PermissionSnapshot {
-                readonly: false,
-                unix_mode: Some(0o755),
-            },
+            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o755) },
             symlink_target: None,
         };
 
@@ -2465,10 +1770,7 @@ mod tests {
             file_type: ManifestFileType::Symlink,
             size: 0,
             modified: None,
-            permissions: PermissionSnapshot {
-                readonly: false,
-                unix_mode: Some(0o777),
-            },
+            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o777) },
             symlink_target: Some(PathBuf::from("target.txt")),
         };
 
@@ -2489,10 +1791,7 @@ mod tests {
             file_type: ManifestFileType::File,
             size: 100,
             modified: None,
-            permissions: PermissionSnapshot {
-                readonly: false,
-                unix_mode: Some(0o644),
-            },
+            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o644) },
             symlink_target: None,
         };
 
@@ -2509,24 +1808,14 @@ mod tests {
         let root = env::temp_dir().join(format!(
             "zmanager-source-columns-{}-{}",
             std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
         ));
         fs::create_dir_all(&root).unwrap();
         let target = root.join("target.txt");
         let link = root.join("link.txt");
         fs::write(&target, b"target").unwrap();
         symlink("target.txt", &link).unwrap();
-        assert!(
-            std::process::Command::new("/usr/bin/chflags")
-                .arg("hidden")
-                .arg(&target)
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(std::process::Command::new("/usr/bin/chflags").arg("hidden").arg(&target).status().unwrap().success());
 
         let target_dto = create_plan_entry_to_dto(&ManifestEntry {
             archive_path: "target.txt".into(),
@@ -2534,10 +1823,7 @@ mod tests {
             file_type: ManifestFileType::File,
             size: 6,
             modified: None,
-            permissions: PermissionSnapshot {
-                readonly: false,
-                unix_mode: Some(0o644),
-            },
+            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o644) },
             symlink_target: None,
         });
         let link_dto = create_plan_entry_to_dto(&ManifestEntry {
@@ -2546,10 +1832,7 @@ mod tests {
             file_type: ManifestFileType::Symlink,
             size: 0,
             modified: None,
-            permissions: PermissionSnapshot {
-                readonly: false,
-                unix_mode: Some(0o777),
-            },
+            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o777) },
             symlink_target: Some(PathBuf::from("target.txt")),
         });
 
@@ -2557,22 +1840,8 @@ mod tests {
         assert!(target_dto.accessed.is_some());
         assert!(target_dto.uid.is_some());
         assert!(target_dto.owner.is_some());
-        assert!(
-            target_dto
-                .attributes
-                .as_deref()
-                .unwrap_or_default()
-                .iter()
-                .any(|attribute| attribute.code == "hidden")
-        );
-        assert!(
-            !link_dto
-                .attributes
-                .as_deref()
-                .unwrap_or_default()
-                .iter()
-                .any(|attribute| attribute.code == "hidden")
-        );
+        assert!(target_dto.attributes.as_deref().unwrap_or_default().iter().any(|attribute| attribute.code == "hidden"));
+        assert!(!link_dto.attributes.as_deref().unwrap_or_default().iter().any(|attribute| attribute.code == "hidden"));
 
         fs::remove_dir_all(root).unwrap();
     }
@@ -2586,30 +1855,18 @@ mod tests {
             &registry,
             &response.job_id,
             JobKindDto::TzapExtract,
-            JobTerminalSummaryDto {
-                written_entries: 2,
-                skipped_entries: None,
-                written_bytes: 42,
-                warnings: Vec::new(),
-            },
+            JobTerminalSummaryDto { written_entries: 2, skipped_entries: None, written_bytes: 42, warnings: Vec::new() },
         );
 
-        let poll = registry
-            .take_test_events(&response.job_id)
-            .expect("fallback-completed job should remain pollable");
+        let poll = registry.take_test_events(&response.job_id).expect("fallback-completed job should remain pollable");
         assert_eq!(poll.status, JobStatusDto::Completed);
         assert!(poll.can_dismiss);
-        assert_eq!(
-            poll.terminal_summary
-                .expect("terminal summary should be retained")
-                .written_bytes,
-            42
+        assert_eq!(poll.terminal_summary.expect("terminal summary should be retained").written_bytes, 42);
+        assert!(
+            poll.events
+                .iter()
+                .any(|event| { event.event_type == JobEventKindDto::Completed && event.total_bytes_processed == Some(42) && event.entries == Some(2) })
         );
-        assert!(poll.events.iter().any(|event| {
-            event.event_type == JobEventKindDto::Completed
-                && event.total_bytes_processed == Some(42)
-                && event.entries == Some(2)
-        }));
     }
 
     #[test]
@@ -2640,119 +1897,60 @@ mod tests {
             &registry,
             &response.job_id,
             JobKindDto::ZipExtract,
-            JobTerminalSummaryDto {
-                written_entries: 1,
-                skipped_entries: None,
-                written_bytes: 12,
-                warnings: Vec::new(),
-            },
+            JobTerminalSummaryDto { written_entries: 1, skipped_entries: None, written_bytes: 12, warnings: Vec::new() },
         );
 
-        let poll = registry
-            .take_test_events(&response.job_id)
-            .expect("cancelled job should remain pollable");
+        let poll = registry.take_test_events(&response.job_id).expect("cancelled job should remain pollable");
         assert_eq!(poll.status, JobStatusDto::Cancelled);
-        assert!(
-            !poll
-                .events
-                .iter()
-                .any(|event| event.event_type == JobEventKindDto::Completed)
-        );
+        assert!(!poll.events.iter().any(|event| event.event_type == JobEventKindDto::Completed));
     }
 
     #[test]
     fn native_drag_items_expand_folders_to_regular_file_descendants() {
         let entries = vec![
-            browser_entry(
-                "docs",
-                zmanager_core::archive_browser::BrowserEntryKind::Directory,
-            ),
-            browser_entry(
-                "docs/a.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
-            browser_entry(
-                "docs/nested/b.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
-            browser_entry(
-                "other.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
+            browser_entry("docs", zmanager_core::archive_browser::BrowserEntryKind::Directory),
+            browser_entry("docs/a.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
+            browser_entry("docs/nested/b.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
+            browser_entry("other.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
         ];
 
         let items = native_drag_items_from_listing(&entries, &["docs".to_string()], 1).unwrap();
 
         assert_eq!(
-            items
-                .iter()
-                .map(|item| item.display_path.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "a.txt".to_string(),
-                format!("nested{}b.txt", std::path::MAIN_SEPARATOR)
-            ]
+            items.iter().map(|item| item.display_path.as_str()).collect::<Vec<_>>(),
+            vec!["a.txt".to_string(), format!("nested{}b.txt", std::path::MAIN_SEPARATOR)]
         );
     }
 
     #[test]
     fn native_drag_items_expand_synthetic_folder_prefixes() {
         let entries = vec![
-            browser_entry(
-                "folder/alpha.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
-            browser_entry(
-                "folder/beta.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
-            browser_entry(
-                "root.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
+            browser_entry("folder/alpha.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
+            browser_entry("folder/beta.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
+            browser_entry("root.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
         ];
 
         let items = native_drag_items_from_listing(&entries, &["folder".to_string()], 0).unwrap();
 
         assert_eq!(
-            items
-                .iter()
-                .map(|item| item.display_path.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                format!("folder{}alpha.txt", std::path::MAIN_SEPARATOR),
-                format!("folder{}beta.txt", std::path::MAIN_SEPARATOR),
-            ]
+            items.iter().map(|item| item.display_path.as_str()).collect::<Vec<_>>(),
+            vec![format!("folder{}alpha.txt", std::path::MAIN_SEPARATOR), format!("folder{}beta.txt", std::path::MAIN_SEPARATOR),]
         );
     }
 
     #[test]
     fn native_drag_items_reject_duplicate_display_paths_after_stripping() {
         let entries = vec![
-            browser_entry(
-                "one/readme.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
-            browser_entry(
-                "two/readme.txt",
-                zmanager_core::archive_browser::BrowserEntryKind::File,
-            ),
+            browser_entry("one/readme.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
+            browser_entry("two/readme.txt", zmanager_core::archive_browser::BrowserEntryKind::File),
         ];
 
-        let error = native_drag_items_from_listing(
-            &entries,
-            &["one/readme.txt".to_string(), "two/readme.txt".to_string()],
-            1,
-        )
-        .unwrap_err();
+        let error = native_drag_items_from_listing(&entries, &["one/readme.txt".to_string(), "two/readme.txt".to_string()], 1).unwrap_err();
 
         assert_eq!(error.code, constants::COMMAND_ERROR_INVALID_REQUEST);
     }
 
-    fn browser_entry(
-        path: &str,
-        kind: zmanager_core::archive_browser::BrowserEntryKind,
-    ) -> zmanager_core::archive_browser::BrowserEntry {
+    fn browser_entry(path: &str, kind: zmanager_core::archive_browser::BrowserEntryKind) -> zmanager_core::archive_browser::BrowserEntry {
         zmanager_core::archive_browser::BrowserEntry {
             path: path.to_string(),
             kind,
@@ -2779,11 +1977,7 @@ mod tests {
 
     #[test]
     fn list_archive_rejects_empty_path() {
-        let error = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: "".to_string(),
-            password: None,
-        })
-        .unwrap_err();
+        let error = list_archive(crate::dto::ListArchiveRequest { archive_path: "".to_string(), password: None }).unwrap_err();
 
         assert_eq!(error.code, constants::COMMAND_ERROR_INVALID_REQUEST);
         assert!(!error.message.is_empty());
@@ -2792,132 +1986,75 @@ mod tests {
     #[test]
     fn missing_archive_maps_not_found_or_io_error() {
         let missing = env::temp_dir().join(".zmanager-does-not-exist.zip");
-        let error = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: missing.to_string_lossy().to_string(),
-            password: None,
-        })
-        .unwrap_err();
+        let error = list_archive(crate::dto::ListArchiveRequest { archive_path: missing.to_string_lossy().to_string(), password: None }).unwrap_err();
 
-        assert!(
-            error.code == constants::COMMAND_ERROR_NOT_FOUND
-                || error.code == constants::COMMAND_ERROR_IO_ERROR
-        );
+        assert!(error.code == constants::COMMAND_ERROR_NOT_FOUND || error.code == constants::COMMAND_ERROR_IO_ERROR);
     }
 
     #[test]
     fn mapping_does_not_leak_password_text() {
         let password = "super-secret-password";
         let missing = env::temp_dir().join(".zmanager-does-not-exist.zip");
-        let error = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: missing.to_string_lossy().to_string(),
-            password: Some(password.to_string()),
-        })
-        .unwrap_err();
+        let error = list_archive(crate::dto::ListArchiveRequest { archive_path: missing.to_string_lossy().to_string(), password: Some(password.to_string()) })
+            .unwrap_err();
 
         assert!(!error.message.contains(password));
-        assert!(
-            !error
-                .hint
-                .as_ref()
-                .is_some_and(|value| value.contains(password))
-        );
+        assert!(!error.hint.as_ref().is_some_and(|value| value.contains(password)));
     }
 
     #[test]
     fn mapping_password_required_is_distinct_from_invalid_password() {
-        let password_required = crate::platform::archive_error::map_engine_error(
-            zmanager_core::engine::ArchiveError::usable(
-                zmanager_core::engine::ErrorKind::PasswordRequired,
-                "Password required",
-            ),
-        );
-        let invalid_password = crate::platform::archive_error::map_engine_error(
-            zmanager_core::engine::ArchiveError::usable(
-                zmanager_core::engine::ErrorKind::WrongPassword,
-                "Invalid password",
-            ),
-        );
+        let password_required = crate::platform::archive_error::map_engine_error(zmanager_core::engine::ArchiveError::usable(
+            zmanager_core::engine::ErrorKind::PasswordRequired,
+            "Password required",
+        ));
+        let invalid_password = crate::platform::archive_error::map_engine_error(zmanager_core::engine::ArchiveError::usable(
+            zmanager_core::engine::ErrorKind::WrongPassword,
+            "Invalid password",
+        ));
 
-        assert_eq!(
-            password_required.code,
-            crate::constants::COMMAND_ERROR_PASSWORD_REQUIRED
-        );
-        assert_eq!(
-            invalid_password.code,
-            crate::constants::COMMAND_ERROR_INVALID_PASSWORD
-        );
+        assert_eq!(password_required.code, crate::constants::COMMAND_ERROR_PASSWORD_REQUIRED);
+        assert_eq!(invalid_password.code, crate::constants::COMMAND_ERROR_INVALID_PASSWORD);
         assert_ne!(password_required.code, invalid_password.code);
     }
 
     #[test]
     fn mapping_safety_errors_to_unsafe_archive() {
-        let safety_error = crate::platform::archive_error::map_engine_error(
-            zmanager_core::engine::ArchiveError::usable(
-                zmanager_core::engine::ErrorKind::SafetyViolation,
-                "blocked",
-            ),
-        );
+        let safety_error = crate::platform::archive_error::map_engine_error(zmanager_core::engine::ArchiveError::usable(
+            zmanager_core::engine::ErrorKind::SafetyViolation,
+            "blocked",
+        ));
 
-        assert_eq!(
-            safety_error.code,
-            crate::constants::COMMAND_ERROR_UNSAFE_ARCHIVE
-        );
+        assert_eq!(safety_error.code, crate::constants::COMMAND_ERROR_UNSAFE_ARCHIVE);
     }
 
     #[test]
     fn quick_action_startup_state_command_exposes_only_window_disposition() {
-        let state = QuickActionStartupState::from_args(
-            ["--quick-action", "open", "--path", "C:/tmp/one.zip"]
-                .into_iter()
-                .map(OsString::from),
-        );
+        let state = QuickActionStartupState::from_args(["--quick-action", "open", "--path", "C:/tmp/one.zip"].into_iter().map(OsString::from));
 
         let response = quick_action_startup_state_internal(&state);
 
         assert!(response.launched_for_quick_action);
         assert!(response.error.is_none());
-        assert_eq!(
-            response.window_disposition,
-            Some(crate::dto::QuickActionWindowDispositionDto::MainWindow),
-        );
+        assert_eq!(response.window_disposition, Some(crate::dto::QuickActionWindowDispositionDto::MainWindow),);
     }
 
     #[test]
     fn quick_action_startup_state_command_exposes_invalid_launch() {
-        let state = QuickActionStartupState::from_args(
-            [
-                "--quick-action",
-                "extract-to-folder",
-                "--path",
-                "one.zip",
-                "two.zip",
-            ]
-            .into_iter()
-            .map(OsString::from),
-        );
+        let state = QuickActionStartupState::from_args(["--quick-action", "extract-to-folder", "--path", "one.zip", "two.zip"].into_iter().map(OsString::from));
 
         let response = quick_action_startup_state_internal(&state);
 
         assert!(response.launched_for_quick_action);
-        let error = response
-            .error
-            .expect("invalid launch should include an error");
+        let error = response.error.expect("invalid launch should include an error");
         assert_eq!(error.code, constants::COMMAND_ERROR_INVALID_REQUEST);
-        assert_eq!(
-            error.message,
-            "extract-to-folder requires exactly one archive path"
-        );
+        assert_eq!(error.message, "extract-to-folder requires exactly one archive path");
     }
 
     #[test]
     fn normalize_non_empty_paths_trims_and_rejects_empty_values() {
-        let normalized = normalize_non_empty_paths(&[
-            "  C:/tmp/src ".to_string(),
-            "   ".to_string(),
-            "".to_string(),
-            "C:/tmp/dest".to_string(),
-        ])
-        .expect("non-empty paths should parse");
+        let normalized = normalize_non_empty_paths(&["  C:/tmp/src ".to_string(), "   ".to_string(), "".to_string(), "C:/tmp/dest".to_string()])
+            .expect("non-empty paths should parse");
 
         assert_eq!(normalized.len(), 2);
         assert_eq!(normalized[0].to_string_lossy(), "C:/tmp/src".to_string());
@@ -2932,46 +2069,24 @@ mod tests {
 
     #[test]
     fn detect_archive_format_is_case_insensitive_and_handles_windows_drive() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
-        assert_eq!(
-            detect_archive_format(r"C:\\Users\\me\\archive.ZIP"),
-            ArchiveFormatKind::Zip
-        );
-        assert_eq!(
-            detect_archive_format(r"D:\\archives\\report.TAR.ZST"),
-            ArchiveFormatKind::TarZst
-        );
-        assert_eq!(
-            detect_archive_format(r"\\\\server\\share\\bundle.TZAP"),
-            ArchiveFormatKind::Tzap
-        );
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
+        assert_eq!(detect_archive_format(r"C:\\Users\\me\\archive.ZIP"), ArchiveFormatKind::Zip);
+        assert_eq!(detect_archive_format(r"D:\\archives\\report.TAR.ZST"), ArchiveFormatKind::TarZst);
+        assert_eq!(detect_archive_format(r"\\\\server\\share\\bundle.TZAP"), ArchiveFormatKind::Tzap);
     }
 
     #[test]
     fn detect_archive_format_supports_tar_zst_double_extension_and_plain_tar() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
-        assert_eq!(
-            detect_archive_format("/tmp/archive.tar.zst"),
-            ArchiveFormatKind::TarZst
-        );
-        assert_eq!(
-            detect_archive_format("/tmp/archive.tar"),
-            ArchiveFormatKind::Tar
-        );
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
+        assert_eq!(detect_archive_format("/tmp/archive.tar.zst"), ArchiveFormatKind::TarZst);
+        assert_eq!(detect_archive_format("/tmp/archive.tar"), ArchiveFormatKind::Tar);
     }
 
     #[test]
     fn ensure_non_empty_path_trims_whitespace() {
-        assert_eq!(
-            ensure_non_empty_path("  C:/tmp/archive.zip  ".to_string(), "archivePath")
-                .expect("path should trim to valid value"),
-            "C:/tmp/archive.zip"
-        );
+        assert_eq!(ensure_non_empty_path("  C:/tmp/archive.zip  ".to_string(), "archivePath").expect("path should trim to valid value"), "C:/tmp/archive.zip");
 
-        assert!(
-            ensure_non_empty_path("   ".to_string(), "archivePath").is_err(),
-            "blank path should not pass",
-        );
+        assert!(ensure_non_empty_path("   ".to_string(), "archivePath").is_err(), "blank path should not pass",);
     }
 
     #[test]
@@ -2979,11 +2094,8 @@ mod tests {
         let very_long_leaf = format!("{}{}", "nested/", "a".repeat(1024),);
         let win_like = format!("C:\\tmp\\{very_long_leaf}.zip");
 
-        let normalized = normalize_non_empty_paths(&[
-            r"  C:\tmp\my archive.zip  ".to_string(),
-            win_like.clone(),
-        ])
-        .expect("windows-like and long-like paths should normalize");
+        let normalized = normalize_non_empty_paths(&[r"  C:\tmp\my archive.zip  ".to_string(), win_like.clone()])
+            .expect("windows-like and long-like paths should normalize");
 
         assert_eq!(normalized[0].to_string_lossy(), "C:\\tmp\\my archive.zip");
         assert_eq!(normalized[1].to_string_lossy(), win_like);
@@ -2992,71 +2104,44 @@ mod tests {
 
     #[test]
     fn map_io_error_preserves_retryability_for_non_retryable_cases() {
-        let denied = map_io_error(
-            "C:/restricted/path".to_string(),
-            Error::new(io::ErrorKind::PermissionDenied, "forbidden"),
-        );
+        let denied = map_io_error("C:/restricted/path".to_string(), Error::new(io::ErrorKind::PermissionDenied, "forbidden"));
         assert_eq!(denied.code, constants::COMMAND_ERROR_IO_ERROR);
         assert!(!denied.retryable);
     }
 
     #[test]
     fn detect_archive_format_handles_windows_backslashes_and_collision_cases() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
-        assert_eq!(
-            detect_archive_format(r"C:\temp\ARCHIVE.ZIp"),
-            ArchiveFormatKind::Zip
-        );
-        assert_eq!(
-            detect_archive_format(r"D:\\WORK\\report.TAR.ZST"),
-            ArchiveFormatKind::TarZst
-        );
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
+        assert_eq!(detect_archive_format(r"C:\temp\ARCHIVE.ZIp"), ArchiveFormatKind::Zip);
+        assert_eq!(detect_archive_format(r"D:\\WORK\\report.TAR.ZST"), ArchiveFormatKind::TarZst);
     }
 
     #[test]
     fn detect_archive_format_recognizes_aar() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
-        assert_eq!(
-            detect_archive_format("test.aar"),
-            ArchiveFormatKind::AppleArchive
-        );
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
+        assert_eq!(detect_archive_format("test.aar"), ArchiveFormatKind::AppleArchive);
     }
 
     #[test]
     fn detect_archive_format_recognizes_aea() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
-        assert_eq!(
-            detect_archive_format("test.aea"),
-            ArchiveFormatKind::AppleArchive
-        );
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
+        assert_eq!(detect_archive_format("test.aea"), ArchiveFormatKind::AppleArchive);
     }
 
     #[test]
     fn detect_archive_format_maps_registry_kinds_explicitly() {
-        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
+        use zmanager_core::archive_format::{ArchiveFormatKind, detect_archive_format};
         assert_eq!(detect_archive_format("comic.cbz"), ArchiveFormatKind::Zip);
         assert_eq!(detect_archive_format("book.epub"), ArchiveFormatKind::Zip);
         assert_eq!(detect_archive_format("archive.cb7"), ArchiveFormatKind::SevenZ);
         assert_eq!(detect_archive_format("comic.cbr"), ArchiveFormatKind::Rar);
         assert_eq!(detect_archive_format("archive.cbt"), ArchiveFormatKind::Tar);
         assert_eq!(detect_archive_format("archive.tbz"), ArchiveFormatKind::TarBz2);
-        assert_eq!(
-            detect_archive_format("archive.tlzma"),
-            ArchiveFormatKind::TarLzma
-        );
+        assert_eq!(detect_archive_format("archive.tlzma"), ArchiveFormatKind::TarLzma);
         assert_eq!(detect_archive_format("image.iso"), ArchiveFormatKind::Iso);
-        assert_eq!(
-            detect_archive_format("installer.dmg"),
-            ArchiveFormatKind::Dmg
-        );
-        assert_eq!(
-            detect_archive_format("archive.7z.001"),
-            ArchiveFormatKind::SevenZ
-        );
-        assert_eq!(
-            detect_archive_format("bundle.vol000.tzap"),
-            ArchiveFormatKind::Tzap
-        );
+        assert_eq!(detect_archive_format("installer.dmg"), ArchiveFormatKind::Dmg);
+        assert_eq!(detect_archive_format("archive.7z.001"), ArchiveFormatKind::SevenZ);
+        assert_eq!(detect_archive_format("bundle.vol000.tzap"), ArchiveFormatKind::Tzap);
         assert_eq!(detect_archive_format("archive.z01"), ArchiveFormatKind::SplitZip);
     }
 
@@ -3068,10 +2153,7 @@ mod tests {
     }
 
     fn create_temp_workspace(name: &str) -> PathBuf {
-        let now_nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let now_nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
         let base = env::temp_dir().join(format!("zmanager-command-{name}-{now_nanos}"));
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).expect("temporary workspace should be created");
@@ -3079,28 +2161,18 @@ mod tests {
     }
 
     fn write_test_p12(identity_path: &Path, certificate_path: &Path) {
-        let key = PKey::from_rsa(Rsa::generate(2048).expect("test key should generate"))
-            .expect("test key should parse");
+        let key = PKey::from_rsa(Rsa::generate(2048).expect("test key should generate")).expect("test key should parse");
         let mut name = X509NameBuilder::new().expect("test subject should build");
-        name.append_entry_by_nid(Nid::COMMONNAME, "Desktop Test Signer")
-            .expect("test subject should contain a common name");
+        name.append_entry_by_nid(Nid::COMMONNAME, "Desktop Test Signer").expect("test subject should contain a common name");
         let name = name.build();
         let mut serial = BigNum::new().expect("test serial should build");
-        serial
-            .rand(64, MsbOption::MAYBE_ZERO, false)
-            .expect("test serial should generate");
+        serial.rand(64, MsbOption::MAYBE_ZERO, false).expect("test serial should generate");
         let serial = Asn1Integer::from_bn(&serial).expect("test serial should encode");
         let mut certificate = X509::builder().expect("test certificate should build");
         certificate.set_version(2).expect("version should set");
-        certificate
-            .set_serial_number(&serial)
-            .expect("serial should set");
-        certificate
-            .set_subject_name(&name)
-            .expect("subject should set");
-        certificate
-            .set_issuer_name(&name)
-            .expect("issuer should set");
+        certificate.set_serial_number(&serial).expect("serial should set");
+        certificate.set_subject_name(&name).expect("subject should set");
+        certificate.set_issuer_name(&name).expect("issuer should set");
         certificate.set_pubkey(&key).expect("public key should set");
         let not_before = Asn1Time::days_from_now(0).expect("start should build");
         let not_after = Asn1Time::days_from_now(365).expect("end should build");
@@ -3114,19 +2186,9 @@ mod tests {
         identity.name("Desktop Test Signer");
         identity.pkey(&key);
         identity.cert(&certificate);
-        let identity = identity
-            .build2("identity-secret")
-            .expect("test identity should build");
-        fs::write(
-            identity_path,
-            identity.to_der().expect("identity should encode"),
-        )
-        .expect("identity should write");
-        fs::write(
-            certificate_path,
-            certificate.to_pem().expect("certificate should encode"),
-        )
-        .expect("certificate should write");
+        let identity = identity.build2("identity-secret").expect("test identity should build");
+        fs::write(identity_path, identity.to_der().expect("identity should encode")).expect("identity should write");
+        fs::write(certificate_path, certificate.to_pem().expect("certificate should encode")).expect("certificate should write");
     }
 
     #[test]
@@ -3136,12 +2198,11 @@ mod tests {
         let certificate_path = workspace.join("signer.crt");
         write_test_p12(&identity_path, &certificate_path);
 
-        let validation =
-            validate_tzap_signing_identity(crate::dto::ValidateTzapSigningIdentityRequest {
-                identity_path: identity_path.to_string_lossy().into_owned(),
-                password: Some("identity-secret".to_owned()),
-            })
-            .expect("identity validation should succeed");
+        let validation = validate_tzap_signing_identity(crate::dto::ValidateTzapSigningIdentityRequest {
+            identity_path: identity_path.to_string_lossy().into_owned(),
+            password: Some("identity-secret".to_owned()),
+        })
+        .expect("identity validation should succeed");
         assert_eq!(validation.subject, "Desktop Test Signer");
         assert_eq!(validation.chain_certificate_count, 0);
         assert_eq!(validation.warnings.len(), 1);
@@ -3149,16 +2210,11 @@ mod tests {
         let _ = fs::remove_dir_all(workspace);
     }
 
-    fn wait_for_job_terminal(
-        registry: &crate::job_registry::JobRegistry,
-        job_id: &str,
-    ) -> (TestJobEventsSnapshot, Vec<JobEventDto>) {
+    fn wait_for_job_terminal(registry: &crate::job_registry::JobRegistry, job_id: &str) -> (TestJobEventsSnapshot, Vec<JobEventDto>) {
         let mut all_events = Vec::new();
 
         for _ in 0..400 {
-            let poll = registry
-                .take_test_events(job_id)
-                .expect("job should stay available while waiting for terminal state");
+            let poll = registry.take_test_events(job_id).expect("job should stay available while waiting for terminal state");
             all_events.extend_from_slice(&poll.events);
             if poll.status.is_terminal() {
                 return (poll, all_events);
@@ -3214,30 +2270,16 @@ mod tests {
 
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
-        assert!(
-            destination_archive.is_file(),
-            "smoke archive should be written"
-        );
+        assert!(destination_archive.is_file(), "smoke archive should be written");
 
-        let listing = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: destination_archive.to_string_lossy().to_string(),
-            password: None,
-        })
-        .expect("smoke archive should list");
-        let listed_paths = listing
-            .entries
-            .iter()
-            .map(|entry| entry.path.as_str())
-            .collect::<Vec<_>>();
+        let listing = list_archive(crate::dto::ListArchiveRequest { archive_path: destination_archive.to_string_lossy().to_string(), password: None })
+            .expect("smoke archive should list");
+        let listed_paths = listing.entries.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>();
         assert!(listed_paths.contains(&"source/hello.txt"));
         assert!(listed_paths.contains(&"source/nested/readme.md"));
 
         let test_job = start_test_archive_internal(
-            TestArchiveRequest {
-                archive_path: destination_archive.to_string_lossy().to_string(),
-                entry_paths: None,
-                password: None,
-            },
+            TestArchiveRequest { archive_path: destination_archive.to_string_lossy().to_string(), entry_paths: None, password: None },
             &registry,
         )
         .expect("smoke test archive should start");
@@ -3264,19 +2306,9 @@ mod tests {
         .expect("smoke extract should start");
         let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(fs::read_to_string(extract_destination.join("source").join("hello.txt")).expect("extracted hello should be readable"), "hello smoke");
         assert_eq!(
-            fs::read_to_string(extract_destination.join("source").join("hello.txt"))
-                .expect("extracted hello should be readable"),
-            "hello smoke"
-        );
-        assert_eq!(
-            fs::read_to_string(
-                extract_destination
-                    .join("source")
-                    .join("nested")
-                    .join("readme.md"),
-            )
-            .expect("extracted nested file should be readable"),
+            fs::read_to_string(extract_destination.join("source").join("nested").join("readme.md"),).expect("extracted nested file should be readable"),
             "# smoke"
         );
 
@@ -3344,9 +2376,7 @@ mod tests {
         )
         .expect("extract job should be registered before its worker runs");
 
-        let snapshot = registry
-            .current_job_snapshot(&extract_job.job_id)
-            .expect("registered extract job should have a retained snapshot");
+        let snapshot = registry.current_job_snapshot(&extract_job.job_id).expect("registered extract job should have a retained snapshot");
         assert_eq!(snapshot.status, JobStatusDto::Queued);
         assert_eq!(snapshot.progress_facts.total_entries, None);
         assert_eq!(snapshot.progress_facts.total_bytes, None);
@@ -3359,8 +2389,7 @@ mod tests {
         let source = workspace.join("source");
         let destination_archive = workspace.join("protected.zip");
         fs::create_dir_all(&source).expect("password smoke source should exist");
-        fs::write(source.join("secret.txt"), b"protected smoke")
-            .expect("password smoke fixture should write");
+        fs::write(source.join("secret.txt"), b"protected smoke").expect("password smoke fixture should write");
 
         let registry = crate::job_registry::JobRegistry::new();
         let create_job = start_create_internal(
@@ -3402,21 +2431,12 @@ mod tests {
         })
         .expect("valid password should list protected archive");
 
-        assert!(
-            listing
-                .entries
-                .iter()
-                .any(|entry| entry.path == "source/secret.txt"),
-            "protected smoke archive should list expected file",
-        );
+        assert!(listing.entries.iter().any(|entry| entry.path == "source/secret.txt"), "protected smoke archive should list expected file",);
 
         let missing_password_job = start_extract_internal(
             StartExtractRequest {
                 archive_path: destination_archive.to_string_lossy().to_string(),
-                destination_path: workspace
-                    .join("missing-password")
-                    .to_string_lossy()
-                    .to_string(),
+                destination_path: workspace.join("missing-password").to_string_lossy().to_string(),
                 password: None,
                 recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
@@ -3431,23 +2451,17 @@ mod tests {
             &registry,
         )
         .expect("missing-password extract should start");
-        let (missing_password_poll, missing_password_events) =
-            wait_for_job_terminal(&registry, &missing_password_job.job_id);
+        let (missing_password_poll, missing_password_events) = wait_for_job_terminal(&registry, &missing_password_job.job_id);
         assert_eq!(missing_password_poll.status, JobStatusDto::Failed);
         assert!(
-            missing_password_events
-                .iter()
-                .any(|event| event.code == Some(constants::COMMAND_ERROR_PASSWORD_REQUIRED)),
+            missing_password_events.iter().any(|event| event.code == Some(constants::COMMAND_ERROR_PASSWORD_REQUIRED)),
             "missing password extract should fail with password_required",
         );
 
         let invalid_password_job = start_extract_internal(
             StartExtractRequest {
                 archive_path: destination_archive.to_string_lossy().to_string(),
-                destination_path: workspace
-                    .join("invalid-password")
-                    .to_string_lossy()
-                    .to_string(),
+                destination_path: workspace.join("invalid-password").to_string_lossy().to_string(),
                 password: Some("wrong-password".to_string()),
                 recipient_key_id: None,
                 overwrite: OverwritePolicyDto::Replace,
@@ -3462,26 +2476,19 @@ mod tests {
             &registry,
         )
         .expect("invalid-password extract should start");
-        let (invalid_password_poll, invalid_password_events) =
-            wait_for_job_terminal(&registry, &invalid_password_job.job_id);
+        let (invalid_password_poll, invalid_password_events) = wait_for_job_terminal(&registry, &invalid_password_job.job_id);
         assert_eq!(invalid_password_poll.status, JobStatusDto::Failed);
         assert!(
-            invalid_password_events
-                .iter()
-                .any(|event| event.code == Some(constants::COMMAND_ERROR_INVALID_PASSWORD)),
+            invalid_password_events.iter().any(|event| event.code == Some(constants::COMMAND_ERROR_INVALID_PASSWORD)),
             "invalid password extract should fail with invalid_password",
         );
         assert!(
-            invalid_password_events
-                .iter()
-                .filter_map(|event| event.message.as_deref())
-                .all(|message| !message.contains("wrong-password")),
+            invalid_password_events.iter().filter_map(|event| event.message.as_deref()).all(|message| !message.contains("wrong-password")),
             "invalid password diagnostics must not leak the attempted password",
         );
 
         let valid_extract_destination = workspace.join("valid-password");
-        fs::create_dir_all(&valid_extract_destination)
-            .expect("valid password destination should exist");
+        fs::create_dir_all(&valid_extract_destination).expect("valid password destination should exist");
         let valid_password_job = start_extract_internal(
             StartExtractRequest {
                 archive_path: destination_archive.to_string_lossy().to_string(),
@@ -3500,19 +2507,14 @@ mod tests {
             &registry,
         )
         .expect("valid-password extract should start");
-        let (valid_password_poll, valid_password_events) =
-            wait_for_job_terminal(&registry, &valid_password_job.job_id);
+        let (valid_password_poll, valid_password_events) = wait_for_job_terminal(&registry, &valid_password_job.job_id);
         assert_eq!(valid_password_poll.status, JobStatusDto::Completed);
         assert!(
-            valid_password_events
-                .iter()
-                .filter_map(|event| event.message.as_deref())
-                .all(|message| !message.contains("smoke-secret")),
+            valid_password_events.iter().filter_map(|event| event.message.as_deref()).all(|message| !message.contains("smoke-secret")),
             "valid password diagnostics must not leak the password",
         );
         assert_eq!(
-            fs::read_to_string(valid_extract_destination.join("source").join("secret.txt"))
-                .expect("valid password extraction should write protected file"),
+            fs::read_to_string(valid_extract_destination.join("source").join("secret.txt")).expect("valid password extraction should write protected file"),
             "protected smoke",
         );
 
@@ -3526,8 +2528,7 @@ mod tests {
         let destination = workspace.join("created.zip");
         fs::create_dir_all(&sources).expect("source directory should exist");
 
-        fs::write(sources.join("hello.txt"), b"hello from create")
-            .expect("fixture file should write");
+        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -3555,26 +2556,15 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("create command should start a job");
+        let create_job = start_create_internal(create_request, &registry).expect("create command should start a job");
         let (create_poll, mut create_events) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         create_events.extend_from_slice(&create_poll.events);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
         assert_eq!(create_poll.kind, JobKindDto::ZipCreate);
-        assert!(
-            create_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
-            "create lifecycle should emit a started event",
-        );
-        assert!(
-            create_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "create lifecycle should emit a completed event",
-        );
+        assert!(create_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Started)), "create lifecycle should emit a started event",);
+        assert!(create_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "create lifecycle should emit a completed event",);
         assert!(create_poll.terminal_summary.is_some());
         assert!(destination.is_file());
         let _ = fs::remove_dir_all(&workspace);
@@ -3586,8 +2576,7 @@ mod tests {
         let sources = workspace.join("sources");
         let destination = workspace.join("created.tzap");
         fs::create_dir_all(&sources).expect("source directory should exist");
-        fs::write(sources.join("hello.txt"), b"hello from create")
-            .expect("fixture file should write");
+        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
         let registry = crate::job_registry::JobRegistry::new();
         let (resolution_started_tx, resolution_started_rx) = mpsc::channel();
         let (release_resolution_tx, release_resolution_rx) = mpsc::channel();
@@ -3619,26 +2608,15 @@ mod tests {
 
         let started_at = std::time::Instant::now();
         let job = start_create_internal_with_resolver(request, &registry, move || {
-            resolution_started_tx
-                .send(())
-                .expect("resolution probe receiver should remain open");
-            release_resolution_rx
-                .recv()
-                .expect("resolution release should arrive");
+            resolution_started_tx.send(()).expect("resolution probe receiver should remain open");
+            release_resolution_rx.recv().expect("resolution release should arrive");
             Ok(None)
         })
         .expect("create command should accept the job before resolution");
 
-        assert!(
-            started_at.elapsed() < Duration::from_secs(1),
-            "start_create should not wait for secure-store resolution"
-        );
-        resolution_started_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("worker should begin TZAP input resolution");
-        release_resolution_tx
-            .send(())
-            .expect("worker should still be resolving inputs");
+        assert!(started_at.elapsed() < Duration::from_secs(1), "start_create should not wait for secure-store resolution");
+        resolution_started_rx.recv_timeout(Duration::from_secs(1)).expect("worker should begin TZAP input resolution");
+        release_resolution_tx.send(()).expect("worker should still be resolving inputs");
 
         let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
         assert_eq!(poll.status, JobStatusDto::Completed);
@@ -3654,8 +2632,7 @@ mod tests {
         let renamed_destination = workspace.join("docs 2.tzap");
         fs::create_dir_all(&sources).expect("source directory should exist");
         fs::write(sources.join("README.md"), b"# docs").expect("fixture file should write");
-        fs::write(&destination, b"existing archive should stay untouched")
-            .expect("existing destination should write");
+        fs::write(&destination, b"existing archive should stay untouched").expect("existing destination should write");
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -3683,19 +2660,12 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("create command should start a renamed-destination job");
+        let create_job = start_create_internal(create_request, &registry).expect("create command should start a renamed-destination job");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(&destination).expect("original destination should remain readable"),
-            b"existing archive should stay untouched"
-        );
-        assert!(
-            renamed_destination.is_file(),
-            "renamed archive destination should be written"
-        );
+        assert_eq!(fs::read(&destination).expect("original destination should remain readable"), b"existing archive should stay untouched");
+        assert!(renamed_destination.is_file(), "renamed archive destination should be written");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -3738,59 +2708,31 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: true,
         };
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("create command should start a job");
+        let create_job = start_create_internal(create_request, &registry).expect("create command should start a job");
         let (create_poll, mut create_events) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         create_events.extend_from_slice(&create_poll.events);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
         assert_eq!(create_poll.kind, JobKindDto::TzapCreate);
-        assert!(
-            create_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
-            "create lifecycle should emit a started event",
-        );
-        assert!(
-            create_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "create lifecycle should emit a completed event",
-        );
+        assert!(create_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Started)), "create lifecycle should emit a started event",);
+        assert!(create_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "create lifecycle should emit a completed event",);
         assert!(destination.is_file());
         let finished_event = create_events
             .iter()
-            .find(|event| {
-                matches!(event.event_type, JobEventKindDto::BytesProcessed)
-                    && event.entries.unwrap_or_default() > 0
-            })
+            .find(|event| matches!(event.event_type, JobEventKindDto::BytesProcessed) && event.entries.unwrap_or_default() > 0)
             .expect("tzap create should aggregate finished entries for file counts");
         assert!(finished_event.entries.unwrap_or_default() > 0);
-        let summary = create_poll
-            .terminal_summary
-            .as_ref()
-            .expect("tzap create should return a terminal summary");
-        let listing = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: destination.to_string_lossy().to_string(),
-            password: None,
-        })
-        .expect("created TZAP archive should expose entry metadata");
-        println!(
-            "summary.written_entries = {}, listing.entries = {:?}",
-            summary.written_entries, listing.entries
-        );
+        let summary = create_poll.terminal_summary.as_ref().expect("tzap create should return a terminal summary");
+        let listing = list_archive(crate::dto::ListArchiveRequest { archive_path: destination.to_string_lossy().to_string(), password: None })
+            .expect("created TZAP archive should expose entry metadata");
+        println!("summary.written_entries = {}, listing.entries = {:?}", summary.written_entries, listing.entries);
         assert_eq!(summary.written_entries, 3);
         assert_eq!(listing.entries.len(), 3);
         assert!(listing.entries.iter().all(|entry| entry.mode.is_some()));
         assert!(listing.entries.iter().all(|entry| entry.modified.is_some()));
         assert_ne!(summary.written_bytes, source_total_bytes);
-        assert!(
-            listing
-                .entries
-                .iter()
-                .all(|entry| entry.metadata_diagnostics.is_empty())
-        );
+        assert!(listing.entries.iter().all(|entry| entry.metadata_diagnostics.is_empty()));
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -3829,8 +2771,7 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("zero-recovery create command should start a job");
+        let create_job = start_create_internal(create_request, &registry).expect("zero-recovery create command should start a job");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
@@ -3870,14 +2811,12 @@ mod tests {
                 seven_z_chunk_size: None,
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: Some(crate::dto::TzapCertificateOptionsDto {
-                    signing_selection: Some(
-                        crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
-                            certificate_path: "C:/certs/signer.pem".to_owned(),
-                            private_key_path: "".to_owned(),
-                            chain_paths: Vec::new(),
-                            password: None,
-                        },
-                    ),
+                    signing_selection: Some(crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey {
+                        certificate_path: "C:/certs/signer.pem".to_owned(),
+                        private_key_path: "".to_owned(),
+                        chain_paths: Vec::new(),
+                        password: None,
+                    }),
                     recipient_selection: None,
                 }),
                 preserve_metadata: false,
@@ -3977,8 +2916,7 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job =
-            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
@@ -3996,33 +2934,17 @@ mod tests {
             tzap_allow_absolute_symlinks: false,
             ignore_symlinks: false,
         };
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("extract command should start a job");
-        let (extract_poll, mut extract_events) =
-            wait_for_job_terminal(&registry, &extract_job.job_id);
+        let extract_job = start_extract_internal(extract_request, &registry).expect("extract command should start a job");
+        let (extract_poll, mut extract_events) = wait_for_job_terminal(&registry, &extract_job.job_id);
         extract_events.extend_from_slice(&extract_poll.events);
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
         assert_eq!(extract_poll.kind, JobKindDto::TzapExtract);
-        assert!(
-            extract_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
-            "extract lifecycle should emit a started event",
-        );
-        assert!(
-            extract_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "extract lifecycle should emit a completed event",
-        );
+        assert!(extract_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Started)), "extract lifecycle should emit a started event",);
+        assert!(extract_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "extract lifecycle should emit a completed event",);
         assert!(extract_poll.terminal_summary.is_some());
 
-        assert_eq!(
-            fs::read_to_string(extract_destination.join("sources").join("README.md"))
-                .expect("extracted README should be readable"),
-            "# extractor"
-        );
+        assert_eq!(fs::read_to_string(extract_destination.join("sources").join("README.md")).expect("extracted README should be readable"), "# extractor");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4036,8 +2958,7 @@ mod tests {
         fs::create_dir_all(&sources).expect("source directory should exist");
         fs::create_dir_all(&extract_destination).expect("existing extract directory should exist");
         fs::write(sources.join("README.md"), b"# extractor").expect("fixture file should write");
-        fs::write(extract_destination.join("marker.txt"), b"keep")
-            .expect("existing destination marker should write");
+        fs::write(extract_destination.join("marker.txt"), b"keep").expect("existing destination marker should write");
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -4065,8 +2986,7 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job =
-            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
@@ -4084,23 +3004,12 @@ mod tests {
             tzap_allow_absolute_symlinks: false,
             ignore_symlinks: false,
         };
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("extract command should start a renamed-destination job");
+        let extract_job = start_extract_internal(extract_request, &registry).expect("extract command should start a renamed-destination job");
         let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read_to_string(extract_destination.join("marker.txt"))
-                .expect("existing destination marker should remain"),
-            "keep"
-        );
-        assert!(
-            renamed_extract_destination
-                .join("sources")
-                .join("README.md")
-                .is_file(),
-            "renamed extract destination should receive archive contents"
-        );
+        assert_eq!(fs::read_to_string(extract_destination.join("marker.txt")).expect("existing destination marker should remain"), "keep");
+        assert!(renamed_extract_destination.join("sources").join("README.md").is_file(), "renamed extract destination should receive archive contents");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4115,8 +3024,7 @@ mod tests {
         fs::write(source_dir.join("sample.txt"), b"new compressed data").expect("write sample.txt");
 
         // Pre-create xxx.zip with original marker data
-        fs::write(&pre_existing_zip, b"original existing archive marker")
-            .expect("write pre-existing zip");
+        fs::write(&pre_existing_zip, b"original existing archive marker").expect("write pre-existing zip");
 
         let registry = crate::job_registry::JobRegistry::new();
 
@@ -4147,29 +3055,18 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("quick compress command should start");
+        let create_job = start_create_internal(create_request, &registry).expect("quick compress command should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(&pre_existing_zip).expect("pre-existing zip should remain untouched"),
-            b"original existing archive marker"
-        );
-        assert!(
-            expected_auto_renamed_zip.is_file(),
-            "xxx 2.zip should be created automatically without error"
-        );
+        assert_eq!(fs::read(&pre_existing_zip).expect("pre-existing zip should remain untouched"), b"original existing archive marker");
+        assert!(expected_auto_renamed_zip.is_file(), "xxx 2.zip should be created automatically without error");
 
         // 2. Quick Extract step into existing folder (overwrite: Rename)
         let pre_existing_extract_dir = workspace.join("extract_out");
         let expected_auto_renamed_extract_dir = workspace.join("extract_out 2");
         fs::create_dir_all(&pre_existing_extract_dir).expect("create pre-existing extract dir");
-        fs::write(
-            pre_existing_extract_dir.join("old.txt"),
-            b"old extract marker",
-        )
-        .expect("write old.txt");
+        fs::write(pre_existing_extract_dir.join("old.txt"), b"old extract marker").expect("write old.txt");
 
         let extract_request = StartExtractRequest {
             archive_path: expected_auto_renamed_zip.to_string_lossy().to_string(),
@@ -4186,21 +3083,13 @@ mod tests {
             ignore_symlinks: false,
         };
 
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("quick extract command should start");
+        let extract_job = start_extract_internal(extract_request, &registry).expect("quick extract command should start");
         let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(pre_existing_extract_dir.join("old.txt"))
-                .expect("old extract marker should stay"),
-            b"old extract marker"
-        );
+        assert_eq!(fs::read(pre_existing_extract_dir.join("old.txt")).expect("old extract marker should stay"), b"old extract marker");
         assert!(
-            expected_auto_renamed_extract_dir
-                .join("xxx")
-                .join("sample.txt")
-                .is_file(),
+            expected_auto_renamed_extract_dir.join("xxx").join("sample.txt").is_file(),
             "extract_out 2/xxx/sample.txt should be created with extracted archive content"
         );
 
@@ -4222,8 +3111,7 @@ mod tests {
         // 1. Pre-existing target archive collision when compressing a folder tree
         let pre_existing_archive = workspace.join("my_project.zip");
         let expected_auto_renamed_archive = workspace.join("my_project 2.zip");
-        fs::write(&pre_existing_archive, b"existing archive marker")
-            .expect("write pre-existing my_project.zip");
+        fs::write(&pre_existing_archive, b"existing archive marker").expect("write pre-existing my_project.zip");
 
         let registry = crate::job_registry::JobRegistry::new();
 
@@ -4253,19 +3141,12 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let create_job = start_create_internal(create_request, &registry)
-            .expect("folder tree compress should start");
+        let create_job = start_create_internal(create_request, &registry).expect("folder tree compress should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(&pre_existing_archive).expect("original archive should stay untouched"),
-            b"existing archive marker"
-        );
-        assert!(
-            expected_auto_renamed_archive.is_file(),
-            "my_project 2.zip should be created automatically for folder tree"
-        );
+        assert_eq!(fs::read(&pre_existing_archive).expect("original archive should stay untouched"), b"existing archive marker");
+        assert!(expected_auto_renamed_archive.is_file(), "my_project 2.zip should be created automatically for folder tree");
 
         // 2. Pre-existing target directory collision when extracting a folder tree
         let target_extract_base = workspace.join("out_dir");
@@ -4273,11 +3154,7 @@ mod tests {
         let expected_renamed_dest_folder = target_extract_base.join("my_project 2");
 
         fs::create_dir_all(&existing_dest_folder).expect("create existing target dir");
-        fs::write(
-            existing_dest_folder.join("existing_file.txt"),
-            b"do not overwrite me",
-        )
-        .expect("write existing marker file");
+        fs::write(existing_dest_folder.join("existing_file.txt"), b"do not overwrite me").expect("write existing marker file");
 
         let extract_request = StartExtractRequest {
             archive_path: expected_auto_renamed_archive.to_string_lossy().to_string(),
@@ -4294,53 +3171,26 @@ mod tests {
             ignore_symlinks: false,
         };
 
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("folder tree extract should start");
+        let extract_job = start_extract_internal(extract_request, &registry).expect("folder tree extract should start");
         let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        assert_eq!(fs::read(existing_dest_folder.join("existing_file.txt")).expect("existing file in target dir must be untouched"), b"do not overwrite me");
+        assert!(expected_renamed_dest_folder.is_dir(), "my_project 2 directory should be created");
         assert_eq!(
-            fs::read(existing_dest_folder.join("existing_file.txt"))
-                .expect("existing file in target dir must be untouched"),
-            b"do not overwrite me"
-        );
-        assert!(
-            expected_renamed_dest_folder.is_dir(),
-            "my_project 2 directory should be created"
-        );
-        assert_eq!(
-            fs::read_to_string(
-                expected_renamed_dest_folder
-                    .join("my_project")
-                    .join("src")
-                    .join("main.rs")
-            )
-            .expect("nested main.rs should be extracted"),
+            fs::read_to_string(expected_renamed_dest_folder.join("my_project").join("src").join("main.rs")).expect("nested main.rs should be extracted"),
             "fn main() {}"
         );
         assert_eq!(
-            fs::read_to_string(
-                expected_renamed_dest_folder
-                    .join("my_project")
-                    .join("docs")
-                    .join("readme.md")
-            )
-            .expect("nested readme.md should be extracted"),
+            fs::read_to_string(expected_renamed_dest_folder.join("my_project").join("docs").join("readme.md")).expect("nested readme.md should be extracted"),
             "# My Project"
         );
 
         let _ = fs::remove_dir_all(&workspace);
     }
 
-    fn assert_create_format_auto_renames(
-        format: crate::dto::ArchiveFormatDto,
-        initial_name: &str,
-        expected_name: &str,
-    ) {
-        let workspace = create_temp_workspace(&format!(
-            "create-fmt-test-{}",
-            initial_name.replace('.', "-")
-        ));
+    fn assert_create_format_auto_renames(format: crate::dto::ArchiveFormatDto, initial_name: &str, expected_name: &str) {
+        let workspace = create_temp_workspace(&format!("create-fmt-test-{}", initial_name.replace('.', "-")));
         fs::create_dir_all(&workspace).expect("workspace dir create");
 
         let source_dir = workspace.join("src_folder");
@@ -4378,28 +3228,18 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let create_job = start_create_internal(create_request, &registry)
-            .unwrap_or_else(|err| panic!("start_create failed for format {format:?}: {err:?}"));
+        let create_job = start_create_internal(create_request, &registry).unwrap_or_else(|err| panic!("start_create failed for format {format:?}: {err:?}"));
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
 
         assert_eq!(create_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(&pre_existing_archive).expect("pre-existing archive must be untouched"),
-            b"existing marker"
-        );
-        assert!(
-            expected_auto_renamed_archive.is_file(),
-            "{expected_name} should be created automatically"
-        );
+        assert_eq!(fs::read(&pre_existing_archive).expect("pre-existing archive must be untouched"), b"existing marker");
+        assert!(expected_auto_renamed_archive.is_file(), "{expected_name} should be created automatically");
 
         let _ = fs::remove_dir_all(&workspace);
     }
 
     fn assert_extract_format_auto_renames(initial_folder_name: &str, expected_folder_name: &str) {
-        let workspace = create_temp_workspace(&format!(
-            "extract-fmt-test-{}",
-            initial_folder_name.replace(' ', "-")
-        ));
+        let workspace = create_temp_workspace(&format!("extract-fmt-test-{}", initial_folder_name.replace(' ', "-")));
         let sources = workspace.join("src_content");
         let archive_file = workspace.join("test.zip");
         let pre_existing_dest = workspace.join(initial_folder_name);
@@ -4457,71 +3297,41 @@ mod tests {
         let (e_poll, _) = wait_for_job_terminal(&registry, &e_job.job_id);
 
         assert_eq!(e_poll.status, JobStatusDto::Completed);
-        assert_eq!(
-            fs::read(pre_existing_dest.join("old.txt")).expect("old marker should stay"),
-            b"old marker"
-        );
-        assert!(
-            expected_dest.is_dir(),
-            "{expected_folder_name} should be created"
-        );
+        assert_eq!(fs::read(pre_existing_dest.join("old.txt")).expect("old marker should stay"), b"old marker");
+        assert!(expected_dest.is_dir(), "{expected_folder_name} should be created");
 
         let _ = fs::remove_dir_all(&workspace);
     }
 
     #[test]
     fn test_collision_auto_rename_create_zip() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::Zip,
-            "archive.zip",
-            "archive 2.zip",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::Zip, "archive.zip", "archive 2.zip");
     }
 
     #[test]
     fn test_collision_auto_rename_create_seven_z() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::SevenZ,
-            "archive.7z",
-            "archive 2.7z",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::SevenZ, "archive.7z", "archive 2.7z");
     }
 
     #[test]
     fn test_collision_auto_rename_create_tzap() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::Tzap,
-            "archive.tzap",
-            "archive 2.tzap",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::Tzap, "archive.tzap", "archive 2.tzap");
     }
 
     #[test]
     #[cfg(target_os = "macos")]
     fn test_collision_auto_rename_create_apple_archive() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::AppleArchive,
-            "archive.aar",
-            "archive 2.aar",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::AppleArchive, "archive.aar", "archive 2.aar");
     }
 
     #[test]
     fn test_collision_auto_rename_create_tar_gz() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::TarGz,
-            "archive.tar.gz",
-            "archive 2.tar.gz",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::TarGz, "archive.tar.gz", "archive 2.tar.gz");
     }
 
     #[test]
     fn test_collision_auto_rename_create_tar_zst() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::TarZst,
-            "archive.tar.zst",
-            "archive 2.tar.zst",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::TarZst, "archive.tar.zst", "archive 2.tar.zst");
     }
 
     #[test]
@@ -4752,11 +3562,7 @@ mod tests {
 
     #[test]
     fn test_collision_auto_rename_create_with_dots_in_filename() {
-        assert_create_format_auto_renames(
-            crate::dto::ArchiveFormatDto::Zip,
-            "my.app.v1.0.zip",
-            "my.app.v1.0 2.zip",
-        );
+        assert_create_format_auto_renames(crate::dto::ArchiveFormatDto::Zip, "my.app.v1.0.zip", "my.app.v1.0 2.zip");
     }
 
     #[test]
@@ -4800,11 +3606,7 @@ mod tests {
         let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
 
         assert_eq!(poll.status, JobStatusDto::Completed);
-        assert_ne!(
-            fs::read(&dest).expect("dest read"),
-            b"old content",
-            "replace_existing: true should overwrite existing destination file"
-        );
+        assert_ne!(fs::read(&dest).expect("dest read"), b"old content", "replace_existing: true should overwrite existing destination file");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4866,14 +3668,8 @@ mod tests {
         let (e_poll, _) = wait_for_job_terminal(&registry, &e_job.job_id);
 
         assert_eq!(e_poll.status, JobStatusDto::Completed);
-        assert!(
-            !workspace.join("extract_target 2").exists(),
-            "no auto-renamed 2-folder created on replace"
-        );
-        assert_eq!(
-            fs::read_to_string(dest.join("src").join("data.txt")).expect("read data.txt"),
-            "new extracted content"
-        );
+        assert!(!workspace.join("extract_target 2").exists(), "no auto-renamed 2-folder created on replace");
+        assert_eq!(fs::read_to_string(dest.join("src").join("data.txt")).expect("read data.txt"), "new extracted content");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4914,8 +3710,7 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job =
-            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
@@ -4933,27 +3728,17 @@ mod tests {
             tzap_allow_absolute_symlinks: false,
             ignore_symlinks: false,
         };
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("extract command should start a job");
-        let (extract_poll, mut extract_events) =
-            wait_for_job_terminal(&registry, &extract_job.job_id);
+        let extract_job = start_extract_internal(extract_request, &registry).expect("extract command should start a job");
+        let (extract_poll, mut extract_events) = wait_for_job_terminal(&registry, &extract_job.job_id);
         extract_events.extend_from_slice(&extract_poll.events);
 
         let extracted_file = extract_destination.join("sources").join("README.md");
 
         assert_eq!(extract_poll.status, JobStatusDto::Completed);
         assert_eq!(extract_poll.kind, JobKindDto::ZipExtract);
-        assert!(
-            extract_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "extract lifecycle should emit a completed event",
-        );
+        assert!(extract_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "extract lifecycle should emit a completed event",);
         assert!(extracted_file.is_file());
-        assert_eq!(
-            fs::read_to_string(&extracted_file).expect("extracted file should be readable"),
-            "# extractor"
-        );
+        assert_eq!(fs::read_to_string(&extracted_file).expect("extracted file should be readable"), "# extractor");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -4995,8 +3780,7 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job =
-            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
@@ -5014,10 +3798,8 @@ mod tests {
             tzap_allow_absolute_symlinks: false,
             ignore_symlinks: false,
         };
-        let extract_job = start_extract_internal(extract_request, &registry)
-            .expect("selected extract command should start a job");
-        let (extract_poll, mut extract_events) =
-            wait_for_job_terminal(&registry, &extract_job.job_id);
+        let extract_job = start_extract_internal(extract_request, &registry).expect("selected extract command should start a job");
+        let (extract_poll, mut extract_events) = wait_for_job_terminal(&registry, &extract_job.job_id);
         extract_events.extend_from_slice(&extract_poll.events);
 
         let extracted_file = extract_destination.join("sources").join("keep.txt");
@@ -5032,24 +3814,16 @@ mod tests {
         assert_eq!(finished_event.entries, Some(1));
         assert_eq!(finished_event.total_entries, Some(1));
         assert!(
-            extract_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
+            extract_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
             "selected extract lifecycle should emit a completed event",
         );
         assert!(
-            extract_poll
-                .terminal_summary
-                .as_ref()
-                .is_some_and(|summary| summary.written_entries == 1),
+            extract_poll.terminal_summary.as_ref().is_some_and(|summary| summary.written_entries == 1),
             "selected extract should include a one-entry terminal summary",
         );
         assert!(extracted_file.is_file());
         assert!(!skipped_file.exists());
-        assert_eq!(
-            fs::read_to_string(&extracted_file).expect("selected file should be readable"),
-            "keep me"
-        );
+        assert_eq!(fs::read_to_string(&extracted_file).expect("selected file should be readable"), "keep me");
         let _ = fs::remove_dir_all(&workspace);
     }
 
@@ -5060,8 +3834,7 @@ mod tests {
         let destination = workspace.join("destination-folder");
         fs::create_dir_all(&sources).expect("source directory should exist");
         fs::create_dir_all(&destination).expect("destination directory should exist");
-        fs::write(sources.join("hello.txt"), b"hello from create")
-            .expect("fixture file should write");
+        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
         let registry = crate::job_registry::JobRegistry::new();
 
         let create_request = StartCreateRequest {
@@ -5090,8 +3863,7 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let error = start_create_internal(create_request, &registry)
-            .expect_err("directory destination should fail");
+        let error = start_create_internal(create_request, &registry).expect_err("directory destination should fail");
         assert_eq!(error.code, crate::constants::COMMAND_ERROR_INVALID_REQUEST);
         assert!(error.message.contains("file path"));
         let _ = fs::remove_dir_all(&workspace);
@@ -5130,8 +3902,7 @@ mod tests {
             preserve_metadata: false,
         };
 
-        let error = start_create_internal(create_request, &registry)
-            .expect_err("missing source should fail");
+        let error = start_create_internal(create_request, &registry).expect_err("missing source should fail");
         assert_eq!(error.code, crate::constants::COMMAND_ERROR_NOT_FOUND);
         assert!(error.message.contains("source path does not exist"));
         let _ = fs::remove_dir_all(&workspace);
@@ -5141,13 +3912,8 @@ mod tests {
     fn selected_extract_reports_cancelled_without_completed_event_when_token_is_cancelled() {
         let registry = crate::job_registry::JobRegistry::new();
         let (response, token) = registry.create_job(JobKindDto::ZipExtract);
-        registry
-            .request_cancel(&response.job_id)
-            .expect("cancel should target the selected extract job");
-        assert!(
-            token.is_cancelled(),
-            "registry cancellation should mark the selected extract token"
-        );
+        registry.request_cancel(&response.job_id).expect("cancel should target the selected extract job");
+        assert!(token.is_cancelled(), "registry cancellation should mark the selected extract token");
 
         let mut sink = JobEventCollector::new(&registry, response.job_id.clone());
         let summary = run_selected_extract_job(
@@ -5163,26 +3929,13 @@ mod tests {
         )
         .expect("pre-cancelled selected extract should finish with a terminal summary");
 
-        let poll = registry
-            .take_test_events(&response.job_id)
-            .expect("cancelled selected extract job should be pollable");
+        let poll = registry.take_test_events(&response.job_id).expect("cancelled selected extract job should be pollable");
 
         assert_eq!(poll.status, JobStatusDto::Cancelled);
         assert_eq!(summary.written_entries, 0);
         assert_eq!(summary.written_bytes, 0);
-        assert!(
-            poll.events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Cancelled)),
-            "selected extract should emit a cancelled event",
-        );
-        assert!(
-            !poll
-                .events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "cancelled selected extract must not emit completed",
-        );
+        assert!(poll.events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Cancelled)), "selected extract should emit a cancelled event",);
+        assert!(!poll.events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "cancelled selected extract must not emit completed",);
     }
 
     #[test]
@@ -5191,8 +3944,7 @@ mod tests {
         let sources = workspace.join("sources");
         let destination_archive = workspace.join("fixture.zip");
         fs::create_dir_all(&sources).expect("source directory should exist");
-        fs::write(sources.join("hello.txt"), b"hello from test")
-            .expect("fixture file should write");
+        fs::write(sources.join("hello.txt"), b"hello from test").expect("fixture file should write");
 
         let registry = crate::job_registry::JobRegistry::new();
         let create_request = StartCreateRequest {
@@ -5220,17 +3972,12 @@ mod tests {
             tzap_certificates: None,
             preserve_metadata: false,
         };
-        let create_job =
-            start_create_internal(create_request, &registry).expect("fixture create should start");
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
         let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
         assert_eq!(create_poll.status, JobStatusDto::Completed);
 
         let test_job = start_test_archive_internal(
-            TestArchiveRequest {
-                archive_path: destination_archive.to_string_lossy().to_string(),
-                entry_paths: None,
-                password: None,
-            },
+            TestArchiveRequest { archive_path: destination_archive.to_string_lossy().to_string(), entry_paths: None, password: None },
             &registry,
         )
         .expect("test archive command should start a job");
@@ -5239,25 +3986,9 @@ mod tests {
 
         assert_eq!(test_poll.status, JobStatusDto::Completed);
         assert_eq!(test_poll.kind, JobKindDto::TestArchive);
-        assert!(
-            test_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Started)),
-            "test lifecycle should emit a started event",
-        );
-        assert!(
-            test_events
-                .iter()
-                .any(|event| matches!(event.event_type, JobEventKindDto::Completed)),
-            "test lifecycle should emit a completed event",
-        );
-        assert!(
-            test_poll
-                .terminal_summary
-                .as_ref()
-                .is_some_and(|summary| summary.written_entries > 0),
-            "successful test should include a terminal summary",
-        );
+        assert!(test_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Started)), "test lifecycle should emit a started event",);
+        assert!(test_events.iter().any(|event| matches!(event.event_type, JobEventKindDto::Completed)), "test lifecycle should emit a completed event",);
+        assert!(test_poll.terminal_summary.as_ref().is_some_and(|summary| summary.written_entries > 0), "successful test should include a terminal summary",);
 
         let _ = fs::remove_dir_all(&workspace);
     }
@@ -5266,16 +3997,11 @@ mod tests {
     fn command_boundary_test_archive_job_reports_failed_for_corrupt_zip() {
         let workspace = create_temp_workspace("test-archive-corrupt");
         let archive_path = workspace.join("corrupt.zip");
-        fs::write(&archive_path, b"this is not a valid zip archive")
-            .expect("corrupt archive fixture should write");
+        fs::write(&archive_path, b"this is not a valid zip archive").expect("corrupt archive fixture should write");
 
         let registry = crate::job_registry::JobRegistry::new();
         let test_job = start_test_archive_internal(
-            TestArchiveRequest {
-                archive_path: archive_path.to_string_lossy().to_string(),
-                entry_paths: None,
-                password: None,
-            },
+            TestArchiveRequest { archive_path: archive_path.to_string_lossy().to_string(), entry_paths: None, password: None },
             &registry,
         )
         .expect("test archive command should start a job");
@@ -5286,13 +4012,9 @@ mod tests {
         assert_eq!(test_poll.kind, JobKindDto::TestArchive);
         assert!(test_poll.terminal_summary.is_none());
         assert!(
-            test_events.iter().any(|event| {
-                matches!(event.event_type, JobEventKindDto::Failed)
-                    && event
-                        .message
-                        .as_ref()
-                        .is_some_and(|message| !message.is_empty())
-            }),
+            test_events
+                .iter()
+                .any(|event| { matches!(event.event_type, JobEventKindDto::Failed) && event.message.as_ref().is_some_and(|message| !message.is_empty()) }),
             "failed test should emit a failure event with a message",
         );
 
@@ -5306,12 +4028,9 @@ mod tests {
         let archive_path = workspace.join("locked.zip");
         fs::write(&archive_path, b"not a real archive").expect("fixture should be written");
 
-        let mut permissions = fs::metadata(&archive_path)
-            .expect("fixture metadata should be readable")
-            .permissions();
+        let mut permissions = fs::metadata(&archive_path).expect("fixture metadata should be readable").permissions();
         permissions.set_mode(0o000);
-        fs::set_permissions(&archive_path, permissions.clone())
-            .expect("permissions should be restricted");
+        fs::set_permissions(&archive_path, permissions.clone()).expect("permissions should be restricted");
 
         if fs::File::open(&archive_path).is_ok() {
             permissions.set_mode(0o644);
@@ -5320,17 +4039,10 @@ mod tests {
             return;
         }
 
-        let error = list_archive(crate::dto::ListArchiveRequest {
-            archive_path: archive_path.to_string_lossy().to_string(),
-            password: None,
-        })
-        .unwrap_err();
+        let error = list_archive(crate::dto::ListArchiveRequest { archive_path: archive_path.to_string_lossy().to_string(), password: None }).unwrap_err();
 
         assert_eq!(error.code, constants::COMMAND_ERROR_IO_ERROR);
-        assert!(
-            !error.retryable,
-            "permission denied should not be marked retryable",
-        );
+        assert!(!error.retryable, "permission denied should not be marked retryable",);
 
         permissions.set_mode(0o644);
         let _ = fs::set_permissions(&archive_path, permissions);
@@ -5339,19 +4051,13 @@ mod tests {
 
     #[test]
     fn normalize_non_empty_paths_preserves_reserved_names() {
-        let normalized = normalize_non_empty_paths(&[
-            r"C:\CON\archive.zip".to_string(),
-            r"D:\AUX\report.TAR.ZST".to_string(),
-            r"\\server\\NUL\bundle.tZAP".to_string(),
-        ])
-        .expect("reserved-looking names should parse as paths");
+        let normalized =
+            normalize_non_empty_paths(&[r"C:\CON\archive.zip".to_string(), r"D:\AUX\report.TAR.ZST".to_string(), r"\\server\\NUL\bundle.tZAP".to_string()])
+                .expect("reserved-looking names should parse as paths");
 
         assert_eq!(normalized[0].to_string_lossy(), r"C:\CON\archive.zip");
         assert_eq!(normalized[1].to_string_lossy(), r"D:\AUX\report.TAR.ZST");
-        assert_eq!(
-            normalized[2].to_string_lossy(),
-            r"\\server\\NUL\bundle.tZAP"
-        );
+        assert_eq!(normalized[2].to_string_lossy(), r"\\server\\NUL\bundle.tZAP");
     }
 
     #[cfg(windows)]
@@ -5365,19 +4071,14 @@ mod tests {
         fs::create_dir_all(&root).expect("case-collision workspace should be created");
         fs::write(&lower, b"lower-path").expect("baseline file should be written");
         let lower_canonical = lower.canonicalize().expect("canonical path should resolve");
-        let upper_canonical = upper
-            .canonicalize()
-            .expect("case variant should resolve to same file");
+        let upper_canonical = upper.canonicalize().expect("case variant should resolve to same file");
 
         assert_eq!(lower_canonical, upper_canonical);
         let read = fs::read_to_string(&upper).expect("case-variant path should resolve");
         assert_eq!(read, "lower-path");
 
-        let normalized = normalize_non_empty_paths(&[
-            lower.to_string_lossy().to_string(),
-            upper.to_string_lossy().to_string(),
-        ])
-        .expect("case-variant paths should parse");
+        let normalized =
+            normalize_non_empty_paths(&[lower.to_string_lossy().to_string(), upper.to_string_lossy().to_string()]).expect("case-variant paths should parse");
         assert_eq!(normalized.len(), 2);
         let _ = fs::remove_dir_all(&workspace);
     }
@@ -5392,30 +4093,15 @@ mod tests {
 
         fs::create_dir_all(&root).expect("case-variant workspace should be created");
         fs::write(&lower, b"lower-path").expect("lowercase baseline file should be written");
-        fs::write(&upper, b"upper-path")
-            .expect("uppercase path should be separate file on case-sensitive FS");
+        fs::write(&upper, b"upper-path").expect("uppercase path should be separate file on case-sensitive FS");
 
         assert_ne!(
-            lower
-                .canonicalize()
-                .expect("lower file path should resolve")
-                .to_string_lossy()
-                .to_string(),
-            upper
-                .canonicalize()
-                .expect("upper file path should resolve")
-                .to_string_lossy()
-                .to_string(),
+            lower.canonicalize().expect("lower file path should resolve").to_string_lossy().to_string(),
+            upper.canonicalize().expect("upper file path should resolve").to_string_lossy().to_string(),
         );
 
-        assert_eq!(
-            fs::read_to_string(&lower).expect("lowercase file should be readable"),
-            "lower-path"
-        );
-        assert_eq!(
-            fs::read_to_string(&upper).expect("uppercase file should be readable"),
-            "upper-path"
-        );
+        assert_eq!(fs::read_to_string(&lower).expect("lowercase file should be readable"), "lower-path");
+        assert_eq!(fs::read_to_string(&upper).expect("uppercase file should be readable"), "upper-path");
 
         let _ = fs::remove_dir_all(&workspace);
     }
@@ -5431,12 +4117,8 @@ mod tests {
         fs::create_dir_all(&root).expect("long-name workspace should be created");
         fs::write(&long_path, b"ok").expect("long filenames should be writable");
 
-        let normalized = normalize_non_empty_paths(&[long_path.to_string_lossy().to_string()])
-            .expect("long filename should normalize");
-        assert_eq!(
-            normalized[0].to_string_lossy(),
-            long_path.to_string_lossy().to_string()
-        );
+        let normalized = normalize_non_empty_paths(&[long_path.to_string_lossy().to_string()]).expect("long filename should normalize");
+        assert_eq!(normalized[0].to_string_lossy(), long_path.to_string_lossy().to_string());
         assert!(fs::metadata(&long_path).is_ok());
 
         let _ = fs::remove_dir_all(&workspace);
@@ -5513,11 +4195,7 @@ mod tests {
 
             let resolved = next_available_destination_path(&target.to_string_lossy());
             let expected_path = workspace.join(expected_name);
-            assert_eq!(
-                PathBuf::from(resolved),
-                expected_path,
-                "collision resolution for {name} should equal {expected_name}"
-            );
+            assert_eq!(PathBuf::from(resolved), expected_path, "collision resolution for {name} should equal {expected_name}");
         }
 
         // Sequential collision check: target, target 2, target 3 -> target 4

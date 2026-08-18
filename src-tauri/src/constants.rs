@@ -1,7 +1,6 @@
 pub const DESKTOP_SHELL_NAME: &str = "ZManager";
 pub const CORE_DEPENDENCY: &str = "zmanager-core";
-pub const PLATFORM_STRATEGY: &str =
-    "One shared Windows/Linux shell with isolated platform integration modules.";
+pub const PLATFORM_STRATEGY: &str = "One shared Windows/Linux shell with isolated platform integration modules.";
 
 pub const COMMAND_HEALTHCHECK: &str = "healthcheck";
 pub const COMMAND_PROJECT_CONTRACT: &str = "project_contract";

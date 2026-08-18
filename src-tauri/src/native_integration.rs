@@ -9,8 +9,7 @@ mod generated {
 use generated::{NATIVE_CAPABILITY_IDS, NATIVE_PACKAGE_KINDS};
 pub use generated::{NativeCapabilityId, NativePackageKind};
 
-const NATIVE_CAPABILITY_MANIFEST: &str =
-    include_str!("generated/native_capabilities.generated.json");
+const NATIVE_CAPABILITY_MANIFEST: &str = include_str!("generated/native_capabilities.generated.json");
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -156,10 +155,7 @@ struct NativeCapabilityDefinition {
 
 fn manifest() -> &'static NativeCapabilityManifest {
     static MANIFEST: OnceLock<NativeCapabilityManifest> = OnceLock::new();
-    MANIFEST.get_or_init(|| {
-        serde_json::from_str(NATIVE_CAPABILITY_MANIFEST)
-            .expect("generated native capability manifest must be valid")
-    })
+    MANIFEST.get_or_init(|| serde_json::from_str(NATIVE_CAPABILITY_MANIFEST).expect("generated native capability manifest must be valid"))
 }
 
 pub fn current_package_kind() -> NativePackageKind {
@@ -180,18 +176,11 @@ pub fn capability_snapshots(
     package_kind: NativePackageKind,
     observations: &HashMap<NativeCapabilityId, NativeCapabilityObservation>,
 ) -> Vec<NativeCapabilitySnapshot> {
-    manifest()
-        .capabilities
-        .iter()
-        .map(|definition| snapshot_for_definition(definition, platform, package_kind, observations))
-        .collect()
+    manifest().capabilities.iter().map(|definition| snapshot_for_definition(definition, platform, package_kind, observations)).collect()
 }
 
 #[cfg(test)]
-pub fn baseline_capability_snapshots(
-    platform: &str,
-    package_kind: NativePackageKind,
-) -> Vec<NativeCapabilitySnapshot> {
+pub fn baseline_capability_snapshots(platform: &str, package_kind: NativePackageKind) -> Vec<NativeCapabilitySnapshot> {
     capability_snapshots(platform, package_kind, &HashMap::new())
 }
 
@@ -221,16 +210,10 @@ fn snapshot_for_definition(
     let expected_source = required_platform_value(&definition.source_expectation, platform);
     let expected_packages = required_platform_value(&definition.package_kinds, platform);
     let installed_probe = required_platform_value(&definition.installed_probe, platform);
-    let installed_registration_required =
-        *required_platform_value(&definition.installed_registration_required, platform);
-    let user_enabled_state_required =
-        *required_platform_value(&definition.user_enabled_state, platform);
-    let runtime_probe_required =
-        *required_platform_value(&definition.runtime_probe_required, platform);
-    let observation = observations
-        .get(&definition.id)
-        .cloned()
-        .unwrap_or_default();
+    let installed_registration_required = *required_platform_value(&definition.installed_registration_required, platform);
+    let user_enabled_state_required = *required_platform_value(&definition.user_enabled_state, platform);
+    let runtime_probe_required = *required_platform_value(&definition.runtime_probe_required, platform);
+    let observation = observations.get(&definition.id).cloned().unwrap_or_default();
 
     let source_state = observation.source_state.unwrap_or(match expected_source {
         SourceExpectation::Implemented => NativeCapabilitySourceState::Supported,
@@ -246,30 +229,23 @@ fn snapshot_for_definition(
             NativeCapabilityPackageState::NotIncluded
         }
     });
-    let installed_state = observation
-        .installed_state
-        .unwrap_or(if installed_probe.is_some() {
-            NativeCapabilityInstalledState::NotInspected
-        } else {
-            NativeCapabilityInstalledState::NotApplicable
-        });
-    let user_enabled_state =
-        observation
-            .user_enabled_state
-            .unwrap_or(if user_enabled_state_required {
-                NativeCapabilityUserEnabledState::NotInspected
-            } else {
-                NativeCapabilityUserEnabledState::NotApplicable
-            });
-    let runtime_state = observation.runtime_state.unwrap_or(
-        if source_state == NativeCapabilitySourceState::Unavailable {
-            NativeCapabilityRuntimeState::Unavailable
-        } else if runtime_probe_required {
-            NativeCapabilityRuntimeState::NotInspected
-        } else {
-            NativeCapabilityRuntimeState::Ready
-        },
-    );
+    let installed_state = observation.installed_state.unwrap_or(if installed_probe.is_some() {
+        NativeCapabilityInstalledState::NotInspected
+    } else {
+        NativeCapabilityInstalledState::NotApplicable
+    });
+    let user_enabled_state = observation.user_enabled_state.unwrap_or(if user_enabled_state_required {
+        NativeCapabilityUserEnabledState::NotInspected
+    } else {
+        NativeCapabilityUserEnabledState::NotApplicable
+    });
+    let runtime_state = observation.runtime_state.unwrap_or(if source_state == NativeCapabilitySourceState::Unavailable {
+        NativeCapabilityRuntimeState::Unavailable
+    } else if runtime_probe_required {
+        NativeCapabilityRuntimeState::NotInspected
+    } else {
+        NativeCapabilityRuntimeState::Ready
+    });
 
     let availability = availability(
         source_state,
@@ -281,21 +257,10 @@ fn snapshot_for_definition(
         user_enabled_state_required,
         runtime_probe_required,
     );
-    let failure_category = if matches!(
-        availability,
-        NativeCapabilityAvailability::Available | NativeCapabilityAvailability::NotApplicable
-    ) {
+    let failure_category = if matches!(availability, NativeCapabilityAvailability::Available | NativeCapabilityAvailability::NotApplicable) {
         None
     } else {
-        observation.failure_category.or_else(|| {
-            Some(infer_failure_category(
-                source_state,
-                package_state,
-                installed_state,
-                user_enabled_state,
-                runtime_state,
-            ))
-        })
+        observation.failure_category.or_else(|| Some(infer_failure_category(source_state, package_state, installed_state, user_enabled_state, runtime_state)))
     };
 
     NativeCapabilitySnapshot {
@@ -357,13 +322,9 @@ fn infer_failure_category(
         NativeCapabilityFailureCategory::SourceMissing
     } else if package == NativeCapabilityPackageState::NotIncluded {
         NativeCapabilityFailureCategory::PackageMissing
-    } else if installed == NativeCapabilityInstalledState::NotInspected
-        || installed == NativeCapabilityInstalledState::Unregistered
-    {
+    } else if installed == NativeCapabilityInstalledState::NotInspected || installed == NativeCapabilityInstalledState::Unregistered {
         NativeCapabilityFailureCategory::NotRegistered
-    } else if user == NativeCapabilityUserEnabledState::NotInspected
-        || user == NativeCapabilityUserEnabledState::Disabled
-    {
+    } else if user == NativeCapabilityUserEnabledState::NotInspected || user == NativeCapabilityUserEnabledState::Disabled {
         NativeCapabilityFailureCategory::UserDisabled
     } else if runtime != NativeCapabilityRuntimeState::Ready {
         NativeCapabilityFailureCategory::RuntimeUnavailable
@@ -373,9 +334,7 @@ fn infer_failure_category(
 }
 
 fn required_platform_value<'a, T>(values: &'a HashMap<String, T>, platform: &str) -> &'a T {
-    values
-        .get(platform)
-        .unwrap_or_else(|| panic!("native capability catalog has no {platform} declaration"))
+    values.get(platform).unwrap_or_else(|| panic!("native capability catalog has no {platform} declaration"))
 }
 
 #[cfg(test)]
@@ -384,17 +343,11 @@ mod tests {
 
     #[test]
     fn generated_catalog_and_rust_snapshots_match_the_shared_fixture() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../fixtures/contracts/native-capabilities.conformance.json"
-        ))
-        .expect("native capability fixture should parse");
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../fixtures/contracts/native-capabilities.conformance.json"))
+            .expect("native capability fixture should parse");
 
         for platform in ["windows", "linux", "macos"] {
-            let actual = serde_json::to_value(baseline_capability_snapshots(
-                platform,
-                NativePackageKind::Development,
-            ))
-            .expect("snapshots should serialize");
+            let actual = serde_json::to_value(baseline_capability_snapshots(platform, NativePackageKind::Development)).expect("snapshots should serialize");
             assert_eq!(actual, fixture["platforms"][platform]);
         }
     }
@@ -413,28 +366,14 @@ mod tests {
             },
         );
         let snapshots = capability_snapshots("macos", NativePackageKind::MacosApp, &observations);
-        let available = snapshots
-            .iter()
-            .find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport)
-            .expect("Finder capability should exist");
-        assert_eq!(
-            available.availability,
-            NativeCapabilityAvailability::Available
-        );
+        let available = snapshots.iter().find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport).expect("Finder capability should exist");
+        assert_eq!(available.availability, NativeCapabilityAvailability::Available);
 
-        observations
-            .get_mut(&NativeCapabilityId::FinderTokenTransport)
-            .expect("observation should exist")
-            .runtime_state = Some(NativeCapabilityRuntimeState::Unavailable);
+        observations.get_mut(&NativeCapabilityId::FinderTokenTransport).expect("observation should exist").runtime_state =
+            Some(NativeCapabilityRuntimeState::Unavailable);
         let snapshots = capability_snapshots("macos", NativePackageKind::MacosApp, &observations);
-        let unavailable = snapshots
-            .iter()
-            .find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport)
-            .expect("Finder capability should exist");
-        assert_eq!(
-            unavailable.availability,
-            NativeCapabilityAvailability::Unavailable
-        );
+        let unavailable = snapshots.iter().find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport).expect("Finder capability should exist");
+        assert_eq!(unavailable.availability, NativeCapabilityAvailability::Unavailable);
     }
 
     #[test]
@@ -448,49 +387,25 @@ mod tests {
                 ..NativeCapabilityObservation::default()
             },
         );
-        let snapshots =
-            capability_snapshots("macos", NativePackageKind::Development, &observations);
-        let failed = snapshots
-            .iter()
-            .find(|snapshot| snapshot.id == NativeCapabilityId::NativeFileDrag)
-            .expect("native drag capability should exist");
+        let snapshots = capability_snapshots("macos", NativePackageKind::Development, &observations);
+        let failed = snapshots.iter().find(|snapshot| snapshot.id == NativeCapabilityId::NativeFileDrag).expect("native drag capability should exist");
         assert_eq!(failed.availability, NativeCapabilityAvailability::Failed);
-        assert_eq!(
-            failed.failure_category,
-            Some(NativeCapabilityFailureCategory::ProbeFailed)
-        );
+        assert_eq!(failed.failure_category, Some(NativeCapabilityFailureCategory::ProbeFailed));
 
-        let not_applicable = snapshots
-            .iter()
-            .find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport)
-            .expect("Finder transport capability should exist");
-        assert_eq!(
-            not_applicable.availability,
-            NativeCapabilityAvailability::Unavailable
-        );
+        let not_applicable =
+            snapshots.iter().find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport).expect("Finder transport capability should exist");
+        assert_eq!(not_applicable.availability, NativeCapabilityAvailability::Unavailable);
         let windows = baseline_capability_snapshots("windows", NativePackageKind::Development);
-        let finder_on_windows = windows
-            .iter()
-            .find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport)
-            .expect("Finder transport capability should exist");
-        assert_eq!(
-            finder_on_windows.availability,
-            NativeCapabilityAvailability::NotApplicable
-        );
+        let finder_on_windows =
+            windows.iter().find(|snapshot| snapshot.id == NativeCapabilityId::FinderTokenTransport).expect("Finder transport capability should exist");
+        assert_eq!(finder_on_windows.availability, NativeCapabilityAvailability::NotApplicable);
     }
 
     #[test]
     fn every_generated_identifier_has_one_catalog_definition() {
         assert_eq!(manifest().capabilities.len(), NATIVE_CAPABILITY_IDS.len());
         for id in NATIVE_CAPABILITY_IDS {
-            assert_eq!(
-                manifest()
-                    .capabilities
-                    .iter()
-                    .filter(|capability| capability.id == *id)
-                    .count(),
-                1
-            );
+            assert_eq!(manifest().capabilities.iter().filter(|capability| capability.id == *id).count(), 1);
         }
         assert_eq!(NATIVE_PACKAGE_KINDS.len(), 7);
     }

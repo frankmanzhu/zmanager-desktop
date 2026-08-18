@@ -10,10 +10,9 @@ use tauri::menu::MenuItem;
 use tauri::{Builder, Emitter, Manager, Wry};
 
 use super::{
-    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest,
-    DiagnosticLogPolicy, MainWindowConfigurator, NativeCapabilityOperationError,
-    NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem,
-    NativeFileDragStart, NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
+    CapabilityInspector, DefaultHandlerController, DefaultHandlerEntry, DefaultHandlerRequest, DiagnosticLogPolicy, MainWindowConfigurator,
+    NativeCapabilityOperationError, NativeFileDragAdapter, NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStart,
+    NativeFileDragStreamProvider, SecureFileProtector, SystemFileIconProvider,
     staged_file_drag::{PosixDragPathPolicy, prepare_posix_drag_items},
 };
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
@@ -29,8 +28,7 @@ impl DiagnosticLogPolicy for MacOsPlatform {
 
 static HOST_CALLBACK_RECEIVED: AtomicBool = AtomicBool::new(false);
 static APP_GROUP_AVAILABLE: AtomicBool = AtomicBool::new(false);
-static NATIVE_LAUNCH_INBOX: OnceLock<crate::native_launch_inbox::NativeLaunchInbox> =
-    OnceLock::new();
+static NATIVE_LAUNCH_INBOX: OnceLock<crate::native_launch_inbox::NativeLaunchInbox> = OnceLock::new();
 static NATIVE_DIAGNOSTICS: OnceLock<crate::diagnostics::DiagnosticLog> = OnceLock::new();
 
 const FINDER_EXTENSION_BUNDLE_ID: &str = "org.tzap-org.zmanager.finder-extension";
@@ -83,27 +81,16 @@ fn probe_extension_status() -> &'static MacOsExtensionProbes {
 
 fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
     // Use absolute path — GUI app PATH may not include /usr/bin.
-    let installed = Command::new("/usr/bin/pluginkit")
-        .args(["-m", "-A", "-i", bundle_id])
-        .output()
-        .map(|output| !output.stdout.is_empty())
-        .unwrap_or(false);
+    let installed = Command::new("/usr/bin/pluginkit").args(["-m", "-A", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false);
 
     // Check if user-enabled (without -A, only shows enabled extensions)
     let enabled = if installed {
-        Command::new("/usr/bin/pluginkit")
-            .args(["-m", "-i", bundle_id])
-            .output()
-            .map(|output| !output.stdout.is_empty())
-            .unwrap_or(false)
+        Command::new("/usr/bin/pluginkit").args(["-m", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false)
     } else {
         false
     };
 
-    MacOsExtensionProbe {
-        is_installed: installed,
-        is_enabled: enabled,
-    }
+    MacOsExtensionProbe { is_installed: installed, is_enabled: enabled }
 }
 
 fn probe_spotlight() -> MacOsExtensionProbe {
@@ -114,21 +101,14 @@ fn probe_spotlight() -> MacOsExtensionProbe {
         .map(|output| String::from_utf8_lossy(&output.stdout).contains("ZManagerSpotlight"))
         .unwrap_or(false);
 
-    MacOsExtensionProbe {
-        is_installed: installed,
-        is_enabled: true,
-    }
+    MacOsExtensionProbe { is_installed: installed, is_enabled: true }
 }
 
 fn probe_file_associations() -> bool {
     // File associations are registered via lsregister -f, not pluginkit.
     // Check if the app bundle ID appears in the Launch Services database.
     let lsregister = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
-    Command::new(lsregister)
-        .args(["-dump"])
-        .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).contains("org.tzap-org.zmanager"))
-        .unwrap_or(false)
+    Command::new(lsregister).args(["-dump"]).output().map(|output| String::from_utf8_lossy(&output.stdout).contains("org.tzap-org.zmanager")).unwrap_or(false)
 }
 
 include!("../generated/macos_ffi.generated.rs");
@@ -145,20 +125,8 @@ extern "C" fn host_callback(bytes: *const u8, length: usize, _context: *mut c_vo
     if value["kind"] == "hostStarted" && value["mainThread"] == true {
         HOST_CALLBACK_RECEIVED.store(true, Ordering::Release);
         APP_GROUP_AVAILABLE.store(value["appGroupAvailable"] == true, Ordering::Release);
-        record_shell_action_stage(
-            "nativeHostReady",
-            None,
-            None,
-            if value["appGroupAvailable"] == true {
-                None
-            } else {
-                Some("appGroupUnavailable")
-            },
-        );
-        if value["appGroupSelfTest"] == true
-            && value["filePromiseSelfTest"] == true
-            && value["iconSelfTest"] == true
-            && value["defaultHandlerSelfTest"] == true
+        record_shell_action_stage("nativeHostReady", None, None, if value["appGroupAvailable"] == true { None } else { Some("appGroupUnavailable") });
+        if value["appGroupSelfTest"] == true && value["filePromiseSelfTest"] == true && value["iconSelfTest"] == true && value["defaultHandlerSelfTest"] == true
         {
             if value["serviceSelfTest"] != true {
                 eprintln!("ZMANAGER_MACOS_INSTALLED_SERVICE_SELF_TEST_UNAVAILABLE");
@@ -167,8 +135,7 @@ extern "C" fn host_callback(bytes: *const u8, length: usize, _context: *mut c_vo
         }
         return;
     }
-    if let Ok(event) =
-        serde_json::from_value::<crate::native_launch_inbox::NativeInboundEvent>(value)
+    if let Ok(event) = serde_json::from_value::<crate::native_launch_inbox::NativeInboundEvent>(value)
         && let Some(inbox) = NATIVE_LAUNCH_INBOX.get()
     {
         ingest_macos_native_event(event, inbox);
@@ -193,37 +160,25 @@ pub(super) fn register_services(builder: Builder<Wry>) -> Builder<Wry> {
         let Some(command_id) = event.id().0.strip_prefix("command:") else {
             return;
         };
-        let _ = app.emit(
-            "zmanager-native-menu-command",
-            NativeMenuCommandEvent { command_id },
-        );
+        let _ = app.emit("zmanager-native-menu-command", NativeMenuCommandEvent { command_id });
     })
 }
 
 impl CapabilityInspector for MacOsPlatform {
-    fn capability_observations() -> std::collections::HashMap<
-        crate::native_integration::NativeCapabilityId,
-        crate::native_integration::NativeCapabilityObservation,
-    > {
+    fn capability_observations()
+    -> std::collections::HashMap<crate::native_integration::NativeCapabilityId, crate::native_integration::NativeCapabilityObservation> {
         use crate::native_integration::{
-            NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityInstalledState,
-            NativeCapabilityObservation, NativeCapabilityPackageState,
+            NativeCapabilityFailureCategory, NativeCapabilityId, NativeCapabilityInstalledState, NativeCapabilityObservation, NativeCapabilityPackageState,
             NativeCapabilityRuntimeState, NativeCapabilityUserEnabledState,
         };
-        let app_group_runtime = if APP_GROUP_AVAILABLE.load(Ordering::Acquire) {
-            NativeCapabilityRuntimeState::Ready
-        } else {
-            NativeCapabilityRuntimeState::Unavailable
-        };
+        let app_group_runtime =
+            if APP_GROUP_AVAILABLE.load(Ordering::Acquire) { NativeCapabilityRuntimeState::Ready } else { NativeCapabilityRuntimeState::Unavailable };
 
         let probes = probe_extension_status();
         let file_assoc_installed = probe_file_associations();
         let host_cb = HOST_CALLBACK_RECEIVED.load(Ordering::Acquire);
-        let finder_installed = if probes.finder.is_installed {
-            NativeCapabilityInstalledState::Registered
-        } else {
-            NativeCapabilityInstalledState::Unregistered
-        };
+        let finder_installed =
+            if probes.finder.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
         let finder_enabled = if !probes.finder.is_installed {
             NativeCapabilityUserEnabledState::NotInspected
         } else if probes.finder.is_enabled {
@@ -231,8 +186,7 @@ impl CapabilityInspector for MacOsPlatform {
         } else {
             NativeCapabilityUserEnabledState::Disabled
         };
-        let finder_failure =
-            (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let finder_failure = (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
         // Write complete diagnostics
         let pkg = crate::native_integration::current_package_kind();
@@ -242,19 +196,12 @@ impl CapabilityInspector for MacOsPlatform {
                 "PACKAGE_KIND={pkg:?}\n\
                  finder_installed={} finder_enabled={} ql_installed={} spotlight_installed={} file_assoc={} app_group={app_group_runtime:?} host_callback={host_cb}\n\
                  finder_obs: installed={finder_installed:?} user={finder_enabled:?} runtime={app_group_runtime:?} failure={finder_failure:?}\n",
-                probes.finder.is_installed,
-                probes.finder.is_enabled,
-                probes.quicklook.is_installed,
-                probes.spotlight.is_installed,
-                file_assoc_installed,
+                probes.finder.is_installed, probes.finder.is_enabled, probes.quicklook.is_installed, probes.spotlight.is_installed, file_assoc_installed,
             ),
         );
 
-        let finder_installed = if probes.finder.is_installed {
-            NativeCapabilityInstalledState::Registered
-        } else {
-            NativeCapabilityInstalledState::Unregistered
-        };
+        let finder_installed =
+            if probes.finder.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
         let finder_enabled = if !probes.finder.is_installed {
             NativeCapabilityUserEnabledState::NotInspected
         } else if probes.finder.is_enabled {
@@ -262,29 +209,25 @@ impl CapabilityInspector for MacOsPlatform {
         } else {
             NativeCapabilityUserEnabledState::Disabled
         };
-        let finder_failure =
-            (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let finder_failure = (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
-        let mut observations = [
-            NativeCapabilityId::ShellSelectedItemActions,
-            NativeCapabilityId::ShellBackgroundActions,
-            NativeCapabilityId::FinderTokenTransport,
-        ]
-        .into_iter()
-        .map(|id| {
-            (
-                id,
-                NativeCapabilityObservation {
-                    package_state: Some(NativeCapabilityPackageState::Included),
-                    installed_state: Some(finder_installed),
-                    user_enabled_state: Some(finder_enabled),
-                    runtime_state: Some(app_group_runtime),
-                    failure_category: finder_failure,
-                    ..NativeCapabilityObservation::default()
-                },
-            )
-        })
-        .collect::<std::collections::HashMap<_, _>>();
+        let mut observations =
+            [NativeCapabilityId::ShellSelectedItemActions, NativeCapabilityId::ShellBackgroundActions, NativeCapabilityId::FinderTokenTransport]
+                .into_iter()
+                .map(|id| {
+                    (
+                        id,
+                        NativeCapabilityObservation {
+                            package_state: Some(NativeCapabilityPackageState::Included),
+                            installed_state: Some(finder_installed),
+                            user_enabled_state: Some(finder_enabled),
+                            runtime_state: Some(app_group_runtime),
+                            failure_category: finder_failure,
+                            ..NativeCapabilityObservation::default()
+                        },
+                    )
+                })
+                .collect::<std::collections::HashMap<_, _>>();
 
         observations.insert(
             NativeCapabilityId::NativeHostLifecycle,
@@ -299,16 +242,12 @@ impl CapabilityInspector for MacOsPlatform {
         );
         observations.insert(
             NativeCapabilityId::SecureLocalFileProtection,
-            NativeCapabilityObservation {
-                runtime_state: Some(NativeCapabilityRuntimeState::Ready),
-                ..NativeCapabilityObservation::default()
-            },
+            NativeCapabilityObservation { runtime_state: Some(NativeCapabilityRuntimeState::Ready), ..NativeCapabilityObservation::default() },
         );
 
         // File associations are registered together with the app bundle
         // via lsregister, not pluginkit. Probe Launch Services directly.
-        let fa_failure =
-            (!file_assoc_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let fa_failure = (!file_assoc_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
         observations.insert(
             NativeCapabilityId::FileAssociations,
             NativeCapabilityObservation {
@@ -323,18 +262,10 @@ impl CapabilityInspector for MacOsPlatform {
             },
         );
 
-        let ql_installed = if probes.quicklook.is_installed {
-            NativeCapabilityInstalledState::Registered
-        } else {
-            NativeCapabilityInstalledState::Unregistered
-        };
-        let ql_runtime = if probes.quicklook.is_installed {
-            NativeCapabilityRuntimeState::Ready
-        } else {
-            NativeCapabilityRuntimeState::Unavailable
-        };
-        let ql_failure = (!probes.quicklook.is_installed)
-            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let ql_installed =
+            if probes.quicklook.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
+        let ql_runtime = if probes.quicklook.is_installed { NativeCapabilityRuntimeState::Ready } else { NativeCapabilityRuntimeState::Unavailable };
+        let ql_failure = (!probes.quicklook.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
         observations.insert(
             NativeCapabilityId::QuickLook,
@@ -347,18 +278,10 @@ impl CapabilityInspector for MacOsPlatform {
             },
         );
 
-        let sp_installed = if probes.spotlight.is_installed {
-            NativeCapabilityInstalledState::Registered
-        } else {
-            NativeCapabilityInstalledState::Unregistered
-        };
-        let sp_runtime = if probes.spotlight.is_installed {
-            NativeCapabilityRuntimeState::Ready
-        } else {
-            NativeCapabilityRuntimeState::Unavailable
-        };
-        let sp_failure = (!probes.spotlight.is_installed)
-            .then_some(NativeCapabilityFailureCategory::NotRegistered);
+        let sp_installed =
+            if probes.spotlight.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
+        let sp_runtime = if probes.spotlight.is_installed { NativeCapabilityRuntimeState::Ready } else { NativeCapabilityRuntimeState::Unavailable };
+        let sp_failure = (!probes.spotlight.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
 
         observations.insert(
             NativeCapabilityId::Spotlight,
@@ -390,14 +313,8 @@ impl SystemFileIconProvider for MacOsPlatform {
             return icon_fallback(entries);
         };
         let mut output = Vec::<u8>::new();
-        let result = unsafe {
-            zmanager_macos_system_file_icons(
-                input.as_ptr(),
-                input.len(),
-                Some(icon_operation_callback),
-                (&mut output as *mut Vec<u8>).cast(),
-            )
-        };
+        let result =
+            unsafe { zmanager_macos_system_file_icons(input.as_ptr(), input.len(), Some(icon_operation_callback), (&mut output as *mut Vec<u8>).cast()) };
         if result != 0 {
             return icon_fallback(entries);
         }
@@ -406,45 +323,23 @@ impl SystemFileIconProvider for MacOsPlatform {
 }
 
 impl DefaultHandlerController for MacOsPlatform {
-    fn default_handlers(
-        request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
-        let input = serde_json::to_vec(request).map_err(|_| {
-            NativeCapabilityOperationError::failed("defaultHandlerControl", "requestEncodingFailed")
-        })?;
+    fn default_handlers(request: &DefaultHandlerRequest) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
+        let input = serde_json::to_vec(request).map_err(|_| NativeCapabilityOperationError::failed("defaultHandlerControl", "requestEncodingFailed"))?;
         let mut output = Vec::<u8>::new();
-        let result = unsafe {
-            zmanager_macos_default_handlers(
-                input.as_ptr(),
-                input.len(),
-                Some(icon_operation_callback),
-                (&mut output as *mut Vec<u8>).cast(),
-            )
-        };
+        let result =
+            unsafe { zmanager_macos_default_handlers(input.as_ptr(), input.len(), Some(icon_operation_callback), (&mut output as *mut Vec<u8>).cast()) };
         if result != 0 {
-            return Err(NativeCapabilityOperationError::failed(
-                "defaultHandlerControl",
-                "nativeOperationFailed",
-            ));
+            return Err(NativeCapabilityOperationError::failed("defaultHandlerControl", "nativeOperationFailed"));
         }
-        serde_json::from_slice(&output).map_err(|_| {
-            NativeCapabilityOperationError::failed("defaultHandlerControl", "responseDecodeFailed")
-        })
+        serde_json::from_slice(&output).map_err(|_| NativeCapabilityOperationError::failed("defaultHandlerControl", "responseDecodeFailed"))
     }
 }
 
 impl SecureFileProtector for MacOsPlatform {
-    fn set_owner_only_file_permissions(
-        file: &std::fs::File,
-    ) -> Result<(), NativeCapabilityOperationError> {
+    fn set_owner_only_file_permissions(file: &std::fs::File) -> Result<(), NativeCapabilityOperationError> {
         use std::os::unix::fs::PermissionsExt as _;
         file.set_permissions(std::fs::Permissions::from_mode(0o600))
-            .map_err(|_| {
-                NativeCapabilityOperationError::failed(
-                    "secureLocalFileProtection",
-                    "permissionUpdateFailed",
-                )
-            })
+            .map_err(|_| NativeCapabilityOperationError::failed("secureLocalFileProtection", "permissionUpdateFailed"))
     }
 }
 
@@ -452,27 +347,17 @@ impl MacOsPlatform {
     fn consume_shell_action_request(token: &str) -> Result<Vec<u8>, String> {
         let mut output = Vec::<u8>::new();
         let result = unsafe {
-            zmanager_macos_consume_shell_action_request(
-                token.as_ptr(),
-                token.len(),
-                Some(icon_operation_callback),
-                (&mut output as *mut Vec<u8>).cast(),
-            )
+            zmanager_macos_consume_shell_action_request(token.as_ptr(), token.len(), Some(icon_operation_callback), (&mut output as *mut Vec<u8>).cast())
         };
         if result != 0 {
-            return Err(format!(
-                "macOS shell-action request could not be consumed: {result}"
-            ));
+            return Err(format!("macOS shell-action request could not be consumed: {result}"));
         }
         Ok(output)
     }
 }
 
 impl NativeFileDragAdapter for MacOsPlatform {
-    fn prepare_native_file_drag(
-        candidates: &[NativeFileDragCandidate],
-        strip_components: usize,
-    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+    fn prepare_native_file_drag(candidates: &[NativeFileDragCandidate], strip_components: usize) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
         prepare_posix_drag_items(
             candidates,
             strip_components,
@@ -493,27 +378,18 @@ impl NativeFileDragAdapter for MacOsPlatform {
         registry: &NativeDragSessionRegistry,
     ) -> Result<NativeFileDragStart, NativeFileDragError> {
         if items.is_empty() {
-            return Err(NativeFileDragError::invalid_request(
-                "No archive files are available to drag.",
-            ));
+            return Err(NativeFileDragError::invalid_request("No archive files are available to drag."));
         }
         start_macos_file_promise_drag(window, items, stream_provider, registry)
     }
 }
 
-pub(super) fn handle_run_event(
-    event: &tauri::RunEvent,
-    inbox: &crate::native_launch_inbox::NativeLaunchInbox,
-) {
+pub(super) fn handle_run_event(event: &tauri::RunEvent, inbox: &crate::native_launch_inbox::NativeLaunchInbox) {
     let tauri::RunEvent::Opened { urls } = event else {
         return;
     };
     let pid = std::process::id();
-    let timestamp_ms = SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64;
+    let timestamp_ms = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis().min(u128::from(u64::MAX)) as u64;
 
     let mut file_paths = Vec::new();
     for (index, url) in urls.iter().enumerate() {
@@ -535,9 +411,7 @@ pub(super) fn handle_run_event(
             kind: crate::native_launch_inbox::NativeInboundEventKind::OpenPaths,
             timestamp_unix_ms: timestamp_ms,
             idempotency_key: None,
-            payload: crate::native_launch_inbox::NativeInboundPayload::OpenPaths(
-                crate::native_launch_inbox::OpenPathsPayload { paths: file_paths },
-            ),
+            payload: crate::native_launch_inbox::NativeInboundPayload::OpenPaths(crate::native_launch_inbox::OpenPathsPayload { paths: file_paths }),
         };
         ingest_macos_native_event(event, inbox);
     }
@@ -573,10 +447,7 @@ fn resolve_bundle_paths() -> Option<MacOsBundlePaths> {
         finder: plugins.join("ZManagerFinderExtension.appex"),
         preview: plugins.join("ZManagerQuickLookPreview.appex"),
         thumbnail: plugins.join("ZManagerQuickLookThumbnail.appex"),
-        spotlight: contents
-            .join("Library")
-            .join("Spotlight")
-            .join("ZManagerSpotlight.mdimporter"),
+        spotlight: contents.join("Library").join("Spotlight").join("ZManagerSpotlight.mdimporter"),
     })
 }
 
@@ -597,11 +468,7 @@ fn run_registration_cmd(exe: &str, args: &[&str]) -> (bool, String, String) {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             (output.status.success(), stdout, stderr)
         }
-        Err(e) => (
-            false,
-            String::new(),
-            format!("failed to execute {exe}: {e}"),
-        ),
+        Err(e) => (false, String::new(), format!("failed to execute {exe}: {e}")),
     }
 }
 
@@ -609,13 +476,8 @@ fn run_registration_cmd(exe: &str, args: &[&str]) -> (bool, String, String) {
 /// pluginkit. This eliminates duplicate context menu entries from accumulated
 /// stale builds at different paths.
 fn remove_stale_plugin_registrations(pluginkit: &str) {
-    for bundle_id in [
-        FINDER_EXTENSION_BUNDLE_ID,
-        QUICKLOOK_PREVIEW_BUNDLE_ID,
-        QUICKLOOK_THUMBNAIL_BUNDLE_ID,
-    ] {
-        let (ok, stdout, _) =
-            run_registration_cmd(pluginkit, &["-m", "-A", "-D", "-vvv", "-i", bundle_id]);
+    for bundle_id in [FINDER_EXTENSION_BUNDLE_ID, QUICKLOOK_PREVIEW_BUNDLE_ID, QUICKLOOK_THUMBNAIL_BUNDLE_ID] {
+        let (ok, stdout, _) = run_registration_cmd(pluginkit, &["-m", "-A", "-D", "-vvv", "-i", bundle_id]);
         if !ok {
             continue;
         }
@@ -633,11 +495,7 @@ fn remove_stale_plugin_registrations(pluginkit: &str) {
 /// failures are recorded through the diagnostic log but never propagated.
 pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog) {
     let Some(paths) = resolve_bundle_paths() else {
-        let _ = diagnostics.record(
-            "macosRegistration",
-            "bundleResolveFailed",
-            std::collections::BTreeMap::new(),
-        );
+        let _ = diagnostics.record("macosRegistration", "bundleResolveFailed", std::collections::BTreeMap::new());
         return;
     };
 
@@ -683,20 +541,13 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
     }
 
     // Enable each extension.
-    for bundle_id in [
-        FINDER_EXTENSION_BUNDLE_ID,
-        QUICKLOOK_PREVIEW_BUNDLE_ID,
-        QUICKLOOK_THUMBNAIL_BUNDLE_ID,
-    ] {
+    for bundle_id in [FINDER_EXTENSION_BUNDLE_ID, QUICKLOOK_PREVIEW_BUNDLE_ID, QUICKLOOK_THUMBNAIL_BUNDLE_ID] {
         let (ok, _, err) = run_registration_cmd(&pluginkit, &["-e", "use", "-i", bundle_id]);
         let _ = diagnostics.record(
             "macosRegistration",
             "step",
             crate::diagnostics::fields([
-                (
-                    "command",
-                    serde_json::Value::String("pluginkitEnable".into()),
-                ),
+                ("command", serde_json::Value::String("pluginkitEnable".into())),
                 ("bundleId", serde_json::Value::String(bundle_id.to_string())),
                 ("ok", serde_json::Value::Bool(ok)),
                 ("error", serde_json::Value::String(err)),
@@ -740,19 +591,10 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
         "macosRegistration",
         "complete",
         crate::diagnostics::fields([
-            (
-                "finderInstalled",
-                serde_json::Value::Bool(finder.is_installed),
-            ),
+            ("finderInstalled", serde_json::Value::Bool(finder.is_installed)),
             ("finderEnabled", serde_json::Value::Bool(finder.is_enabled)),
-            (
-                "quicklookInstalled",
-                serde_json::Value::Bool(preview.is_installed || thumbnail.is_installed),
-            ),
-            (
-                "spotlightInstalled",
-                serde_json::Value::Bool(spotlight.is_installed),
-            ),
+            ("quicklookInstalled", serde_json::Value::Bool(preview.is_installed || thumbnail.is_installed)),
+            ("spotlightInstalled", serde_json::Value::Bool(spotlight.is_installed)),
         ]),
     );
     eprintln!(
@@ -764,13 +606,8 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
     );
 }
 
-fn ingest_macos_native_event(
-    event: crate::native_launch_inbox::NativeInboundEvent,
-    inbox: &crate::native_launch_inbox::NativeLaunchInbox,
-) {
-    let event = match normalize_macos_inbound_event(event, |token| {
-        MacOsPlatform::consume_shell_action_request(token)
-    }) {
+fn ingest_macos_native_event(event: crate::native_launch_inbox::NativeInboundEvent, inbox: &crate::native_launch_inbox::NativeLaunchInbox) {
+    let event = match normalize_macos_inbound_event(event, |token| MacOsPlatform::consume_shell_action_request(token)) {
         Ok(event) => event,
         Err(error_code) => {
             record_shell_action_stage("requestRejected", None, None, Some(error_code));
@@ -780,20 +617,8 @@ fn ingest_macos_native_event(
     let (action, path_count) = shell_action_diagnostic_fields(&event);
     let disposition = shell_action_disposition(&event);
     match inbox.ingest(event) {
-        Ok(()) => record_shell_action_stage_with_disposition(
-            "inboxAccepted",
-            action.as_deref(),
-            path_count,
-            None,
-            disposition,
-        ),
-        Err(error) => record_shell_action_stage_with_disposition(
-            "inboxRejected",
-            action.as_deref(),
-            path_count,
-            Some(inbox_error_code(&error)),
-            disposition,
-        ),
+        Ok(()) => record_shell_action_stage_with_disposition("inboxAccepted", action.as_deref(), path_count, None, disposition),
+        Err(error) => record_shell_action_stage_with_disposition("inboxRejected", action.as_deref(), path_count, Some(inbox_error_code(&error)), disposition),
     }
 }
 
@@ -807,15 +632,12 @@ fn normalize_macos_inbound_event(
     let request = match &event.payload {
         crate::native_launch_inbox::NativeInboundPayload::ShellActionToken(payload) => {
             record_shell_action_stage("tokenReceived", None, None, None);
-            let content =
-                consume_token(&payload.request_token).map_err(|_| "requestConsumeFailed")?;
+            let content = consume_token(&payload.request_token).map_err(|_| "requestConsumeFailed")?;
             record_shell_action_stage("requestConsumed", None, None, None);
-            crate::quick_action::parse_app_group_shell_action_request(&content)
-                .map_err(|_| "requestValidationFailed")?
+            crate::quick_action::parse_app_group_shell_action_request(&content).map_err(|_| "requestValidationFailed")?
         }
         crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => {
-            crate::quick_action::validate_ingested_shell_action_request(payload.request.clone())
-                .map_err(|_| "requestValidationFailed")?
+            crate::quick_action::validate_ingested_shell_action_request(payload.request.clone()).map_err(|_| "requestValidationFailed")?
         }
         _ => return Err("payloadKindMismatch"),
     };
@@ -827,42 +649,29 @@ fn normalize_macos_inbound_event(
         Some(request.kind.window_disposition().as_str()),
     );
     event.idempotency_key = None;
-    event.payload = crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(
-        crate::native_launch_inbox::ShellActionRequestPayload { request },
-    );
+    event.payload = crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(crate::native_launch_inbox::ShellActionRequestPayload { request });
     Ok(event)
 }
 
-fn shell_action_diagnostic_fields(
-    event: &crate::native_launch_inbox::NativeInboundEvent,
-) -> (Option<String>, Option<usize>) {
+fn shell_action_diagnostic_fields(event: &crate::native_launch_inbox::NativeInboundEvent) -> (Option<String>, Option<usize>) {
     match &event.payload {
-        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => (
-            shell_action_name(payload.request.kind),
-            Some(payload.request.paths.len()),
-        ),
-        crate::native_launch_inbox::NativeInboundPayload::OpenPaths(payload) => {
-            (Some("open".to_string()), Some(payload.paths.len()))
+        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => {
+            (shell_action_name(payload.request.kind), Some(payload.request.paths.len()))
         }
+        crate::native_launch_inbox::NativeInboundPayload::OpenPaths(payload) => (Some("open".to_string()), Some(payload.paths.len())),
         _ => (None, None),
     }
 }
 
-fn shell_action_disposition(
-    event: &crate::native_launch_inbox::NativeInboundEvent,
-) -> Option<&'static str> {
+fn shell_action_disposition(event: &crate::native_launch_inbox::NativeInboundEvent) -> Option<&'static str> {
     match &event.payload {
-        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => {
-            Some(payload.request.kind.window_disposition().as_str())
-        }
+        crate::native_launch_inbox::NativeInboundPayload::ShellActionRequest(payload) => Some(payload.request.kind.window_disposition().as_str()),
         _ => None,
     }
 }
 
 fn shell_action_name(kind: crate::dto::QuickActionKindDto) -> Option<String> {
-    serde_json::to_value(kind)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_owned))
+    serde_json::to_value(kind).ok().and_then(|value| value.as_str().map(str::to_owned))
 }
 
 fn inbox_error_code(error: &crate::native_launch_inbox::NativeLaunchInboxError) -> &'static str {
@@ -879,12 +688,7 @@ fn inbox_error_code(error: &crate::native_launch_inbox::NativeLaunchInboxError) 
     }
 }
 
-fn record_shell_action_stage(
-    name: &str,
-    action: Option<&str>,
-    path_count: Option<usize>,
-    error_code: Option<&str>,
-) {
+fn record_shell_action_stage(name: &str, action: Option<&str>, path_count: Option<usize>, error_code: Option<&str>) {
     record_shell_action_stage_with_disposition(name, action, path_count, error_code, None);
 }
 
@@ -900,38 +704,21 @@ fn record_shell_action_stage_with_disposition(
     };
     let mut fields = std::collections::BTreeMap::new();
     if let Some(action) = action {
-        fields.insert(
-            "action".to_string(),
-            serde_json::Value::String(action.to_string()),
-        );
+        fields.insert("action".to_string(), serde_json::Value::String(action.to_string()));
     }
     if let Some(path_count) = path_count {
-        fields.insert(
-            "pathCount".to_string(),
-            serde_json::Value::Number(path_count.into()),
-        );
+        fields.insert("pathCount".to_string(), serde_json::Value::Number(path_count.into()));
     }
     if let Some(error_code) = error_code {
-        fields.insert(
-            "errorCode".to_string(),
-            serde_json::Value::String(error_code.to_string()),
-        );
+        fields.insert("errorCode".to_string(), serde_json::Value::String(error_code.to_string()));
     }
     if let Some(disposition) = window_disposition {
-        fields.insert(
-            "windowDisposition".to_string(),
-            serde_json::Value::String(disposition.to_string()),
-        );
+        fields.insert("windowDisposition".to_string(), serde_json::Value::String(disposition.to_string()));
     }
     let _ = diagnostics.record("shellActionIngress", name, fields);
 }
 
-fn shell_action_event_from_url(
-    url: &tauri::Url,
-    pid: u32,
-    timestamp_ms: u64,
-    index: usize,
-) -> Option<crate::native_launch_inbox::NativeInboundEvent> {
+fn shell_action_event_from_url(url: &tauri::Url, pid: u32, timestamp_ms: u64, index: usize) -> Option<crate::native_launch_inbox::NativeInboundEvent> {
     if url.scheme() != "zmanager" || url.host_str() != Some("shell-request") {
         return None;
     }
@@ -945,11 +732,9 @@ fn shell_action_event_from_url(
         kind: crate::native_launch_inbox::NativeInboundEventKind::ShellActionRequest,
         timestamp_unix_ms: timestamp_ms,
         idempotency_key: Some(token.clone()),
-        payload: crate::native_launch_inbox::NativeInboundPayload::ShellActionToken(
-            crate::native_launch_inbox::ShellActionTokenPayload {
-                request_token: token,
-            },
-        ),
+        payload: crate::native_launch_inbox::NativeInboundPayload::ShellActionToken(crate::native_launch_inbox::ShellActionTokenPayload {
+            request_token: token,
+        }),
     })
 }
 
@@ -959,19 +744,8 @@ struct NativeMenuCommandEvent<'a> {
     command_id: &'a str,
 }
 
-fn menu_command(
-    app: &tauri::AppHandle<Wry>,
-    command_id: &str,
-    label: &str,
-    accelerator: Option<&str>,
-) -> tauri::Result<MenuItem<Wry>> {
-    MenuItem::with_id(
-        app,
-        format!("command:{command_id}"),
-        label,
-        true,
-        accelerator,
-    )
+fn menu_command(app: &tauri::AppHandle<Wry>, command_id: &str, label: &str, accelerator: Option<&str>) -> tauri::Result<MenuItem<Wry>> {
+    MenuItem::with_id(app, format!("command:{command_id}"), label, true, accelerator)
 }
 
 include!("../generated/macos_menu.generated.rs");
@@ -985,13 +759,7 @@ extern "C" fn icon_operation_callback(bytes: *const u8, length: usize, context: 
 }
 
 fn icon_fallback(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFileIconDto> {
-    entries
-        .iter()
-        .map(|entry| SystemFileIconDto {
-            key: entry.key.clone(),
-            data_url: None,
-        })
-        .collect()
+    entries.iter().map(|entry| SystemFileIconDto { key: entry.key.clone(), data_url: None }).collect()
 }
 
 #[derive(Serialize)]
@@ -1035,15 +803,10 @@ extern "C" fn promise_write_callback(
     let context = unsafe { &*context.cast::<PromiseDragContext>() };
     let entry = unsafe { std::slice::from_raw_parts(entry_bytes, entry_length) };
     let destination = unsafe { std::slice::from_raw_parts(destination_bytes, destination_length) };
-    let (Ok(entry), Ok(destination)) =
-        (std::str::from_utf8(entry), std::str::from_utf8(destination))
-    else {
+    let (Ok(entry), Ok(destination)) = (std::str::from_utf8(entry), std::str::from_utf8(destination)) else {
         return 2;
     };
-    match context
-        .registry
-        .write_promise(&context.session_id, entry, Path::new(destination))
-    {
+    match context.registry.write_promise(&context.session_id, entry, Path::new(destination)) {
         Ok(_) => 0,
         Err(_) => 3,
     }
@@ -1058,13 +821,7 @@ extern "C" fn promise_outcome_callback(outcome: i32, context: *mut c_void) {
     if outcome == "cancelled" {
         context.registry.cancel(&context.session_id);
     }
-    let _ = context.app_handle.emit(
-        "native-file-drag-outcome",
-        PromiseDragOutcomeEvent {
-            session_id: context.session_id.clone(),
-            outcome,
-        },
-    );
+    let _ = context.app_handle.emit("native-file-drag-outcome", PromiseDragOutcomeEvent { session_id: context.session_id.clone(), outcome });
 }
 
 extern "C" fn promise_release_callback(context: *mut c_void) {
@@ -1088,30 +845,13 @@ fn start_macos_file_promise_drag(
         .map(|descriptor| PromiseDragItemDto {
             entry_path: descriptor.promise_path,
             promised_name: descriptor.promised_name,
-            file_type: if descriptor.is_directory {
-                "public.folder"
-            } else {
-                "public.data"
-            },
+            file_type: if descriptor.is_directory { "public.folder" } else { "public.data" },
         })
         .collect::<Vec<_>>();
-    let item_json = serde_json::to_vec(&promise_items).map_err(|error| {
-        NativeFileDragError::new(
-            format!("Unable to describe macOS file promises: {error}"),
-            None::<String>,
-        )
-    })?;
-    let view = window.ns_view().map_err(|error| {
-        NativeFileDragError::new(
-            format!("Unable to access the macOS drag source view: {error}"),
-            None::<String>,
-        )
-    })?;
-    let context = Box::new(PromiseDragContext {
-        registry: registry.clone(),
-        session_id: session_id.clone(),
-        app_handle: window.app_handle().clone(),
-    });
+    let item_json = serde_json::to_vec(&promise_items)
+        .map_err(|error| NativeFileDragError::new(format!("Unable to describe macOS file promises: {error}"), None::<String>))?;
+    let view = window.ns_view().map_err(|error| NativeFileDragError::new(format!("Unable to access the macOS drag source view: {error}"), None::<String>))?;
+    let context = Box::new(PromiseDragContext { registry: registry.clone(), session_id: session_id.clone(), app_handle: window.app_handle().clone() });
     let context = Box::into_raw(context).cast::<c_void>();
     let result = unsafe {
         zmanager_macos_start_promise_drag(
@@ -1142,39 +882,26 @@ mod tests {
     use super::*;
 
     fn candidate(path: &str) -> NativeFileDragCandidate {
-        NativeFileDragCandidate {
-            entry_path: path.to_string(),
-            size: Some(1),
-            modified_unix_seconds: None,
-        }
+        NativeFileDragCandidate { entry_path: path.to_string(), size: Some(1), modified_unix_seconds: None }
     }
 
     #[test]
     fn macos_drag_policy_uses_posix_paths_and_allows_windows_specific_names() {
-        let items = MacOsPlatform::prepare_native_file_drag(&[candidate("docs/report?.txt")], 0)
-            .expect("macOS should allow question marks in file names");
+        let items = MacOsPlatform::prepare_native_file_drag(&[candidate("docs/report?.txt")], 0).expect("macOS should allow question marks in file names");
 
         assert_eq!(items[0].display_path, "docs/report?.txt");
     }
 
     #[test]
     fn macos_drag_policy_rejects_case_insensitive_collisions_after_stripping() {
-        assert!(
-            MacOsPlatform::prepare_native_file_drag(
-                &[candidate("one/Readme.txt"), candidate("two/README.txt")],
-                1,
-            )
-            .is_err()
-        );
+        assert!(MacOsPlatform::prepare_native_file_drag(&[candidate("one/Readme.txt"), candidate("two/README.txt")], 1,).is_err());
     }
 
     #[test]
     fn opened_shell_request_url_maps_to_the_native_inbound_contract() {
-        let url = tauri::Url::parse("zmanager://shell-request/request-token")
-            .expect("valid callback URL");
+        let url = tauri::Url::parse("zmanager://shell-request/request-token").expect("valid callback URL");
 
-        let event = shell_action_event_from_url(&url, 41, 1_234, 2)
-            .expect("shell request callback should map");
+        let event = shell_action_event_from_url(&url, 41, 1_234, 2).expect("shell request callback should map");
 
         assert_eq!(event.event_id, "tauri-url-41-1234-2");
         assert_eq!(event.timestamp_unix_ms, 1_234);
@@ -1198,10 +925,8 @@ mod tests {
 
     #[test]
     fn finder_token_is_consumed_and_validated_before_inbox_delivery() {
-        let url = tauri::Url::parse("zmanager://shell-request/request-token")
-            .expect("valid callback URL");
-        let event = shell_action_event_from_url(&url, 41, 1_234, 2)
-            .expect("shell request callback should map");
+        let url = tauri::Url::parse("zmanager://shell-request/request-token").expect("valid callback URL");
+        let event = shell_action_event_from_url(&url, 41, 1_234, 2).expect("shell request callback should map");
 
         let normalized = normalize_macos_inbound_event(event, |token| {
             assert_eq!(token, "request-token");
@@ -1221,21 +946,10 @@ mod tests {
 
     #[test]
     fn finder_token_consume_and_request_validation_fail_closed() {
-        let event = shell_action_event_from_url(
-            &tauri::Url::parse("zmanager://shell-request/request-token").unwrap(),
-            41,
-            1_234,
-            2,
-        )
-        .unwrap();
+        let event = shell_action_event_from_url(&tauri::Url::parse("zmanager://shell-request/request-token").unwrap(), 41, 1_234, 2).unwrap();
+        assert_eq!(normalize_macos_inbound_event(event.clone(), |_| Err("missing".to_string())), Err("requestConsumeFailed"));
         assert_eq!(
-            normalize_macos_inbound_event(event.clone(), |_| Err("missing".to_string())),
-            Err("requestConsumeFailed")
-        );
-        assert_eq!(
-            normalize_macos_inbound_event(event, |_| {
-                Ok(br#"{"version":1,"action":"open","paths":["/tmp/one","/tmp/two"]}"#.to_vec())
-            }),
+            normalize_macos_inbound_event(event, |_| { Ok(br#"{"version":1,"action":"open","paths":["/tmp/one","/tmp/two"]}"#.to_vec()) }),
             Err("requestValidationFailed")
         );
     }

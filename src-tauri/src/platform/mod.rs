@@ -94,8 +94,7 @@ pub enum NativeFileDragStart {
     Settled { outcome: NativeFileDragOutcome },
 }
 
-pub type NativeFileDragStreamProvider =
-    Arc<dyn Fn(&str, &mut dyn Write) -> Result<u64, NativeFileDragError> + Send + Sync>;
+pub type NativeFileDragStreamProvider = Arc<dyn Fn(&str, &mut dyn Write) -> Result<u64, NativeFileDragError> + Send + Sync>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeFileDragErrorKind {
@@ -113,27 +112,15 @@ pub struct NativeFileDragError {
 
 impl NativeFileDragError {
     pub fn new(message: impl Into<String>, hint: Option<impl Into<String>>) -> Self {
-        Self {
-            kind: NativeFileDragErrorKind::OperationFailed,
-            message: message.into(),
-            hint: hint.map(Into::into),
-        }
+        Self { kind: NativeFileDragErrorKind::OperationFailed, message: message.into(), hint: hint.map(Into::into) }
     }
 
     pub fn invalid_request(message: impl Into<String>) -> Self {
-        Self {
-            kind: NativeFileDragErrorKind::InvalidRequest,
-            message: message.into(),
-            hint: None,
-        }
+        Self { kind: NativeFileDragErrorKind::InvalidRequest, message: message.into(), hint: None }
     }
 
     pub fn unsafe_archive(message: impl Into<String>) -> Self {
-        Self {
-            kind: NativeFileDragErrorKind::UnsafeArchive,
-            message: message.into(),
-            hint: None,
-        }
+        Self { kind: NativeFileDragErrorKind::UnsafeArchive, message: message.into(), hint: None }
     }
 }
 
@@ -157,29 +144,17 @@ pub struct NativeCapabilityOperationError {
 impl NativeCapabilityOperationError {
     #[allow(dead_code)]
     pub const fn not_applicable(capability: &'static str) -> Self {
-        Self {
-            capability,
-            code: "notApplicable",
-            kind: NativeCapabilityOperationErrorKind::NotApplicable,
-        }
+        Self { capability, code: "notApplicable", kind: NativeCapabilityOperationErrorKind::NotApplicable }
     }
 
     #[allow(dead_code)]
     pub const fn unavailable(capability: &'static str, code: &'static str) -> Self {
-        Self {
-            capability,
-            code,
-            kind: NativeCapabilityOperationErrorKind::Unavailable,
-        }
+        Self { capability, code, kind: NativeCapabilityOperationErrorKind::Unavailable }
     }
 
     #[cfg_attr(target_os = "windows", allow(dead_code))]
     pub const fn failed(capability: &'static str, code: &'static str) -> Self {
-        Self {
-            capability,
-            code,
-            kind: NativeCapabilityOperationErrorKind::Failed,
-        }
+        Self { capability, code, kind: NativeCapabilityOperationErrorKind::Failed }
     }
 }
 
@@ -202,10 +177,7 @@ impl std::fmt::Display for NativeCapabilityOperationError {
 impl std::error::Error for NativeCapabilityOperationError {}
 
 pub(crate) trait CapabilityInspector {
-    fn capability_observations() -> HashMap<
-        crate::native_integration::NativeCapabilityId,
-        crate::native_integration::NativeCapabilityObservation,
-    >;
+    fn capability_observations() -> HashMap<crate::native_integration::NativeCapabilityId, crate::native_integration::NativeCapabilityObservation>;
 }
 
 pub(crate) trait MainWindowConfigurator {
@@ -217,9 +189,7 @@ pub(crate) trait SystemFileIconProvider {
 }
 
 pub(crate) trait DefaultHandlerController {
-    fn default_handlers(
-        request: &DefaultHandlerRequest,
-    ) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError>;
+    fn default_handlers(request: &DefaultHandlerRequest) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError>;
 }
 
 pub(crate) trait SecureFileProtector {
@@ -231,10 +201,7 @@ pub(crate) trait DiagnosticLogPolicy {
 }
 
 pub(crate) trait NativeFileDragAdapter {
-    fn prepare_native_file_drag(
-        candidates: &[NativeFileDragCandidate],
-        strip_components: usize,
-    ) -> Result<Vec<NativeFileDragItem>, NativeFileDragError>;
+    fn prepare_native_file_drag(candidates: &[NativeFileDragCandidate], strip_components: usize) -> Result<Vec<NativeFileDragItem>, NativeFileDragError>;
     fn start_native_file_drag(
         window: &tauri::WebviewWindow<Wry>,
         items: &[NativeFileDragItem],
@@ -261,10 +228,7 @@ pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     builder
 }
 
-pub fn initialize_native_host(
-    inbox: NativeLaunchInbox,
-    diagnostics: crate::diagnostics::DiagnosticLog,
-) -> Result<(), String> {
+pub fn initialize_native_host(inbox: NativeLaunchInbox, diagnostics: crate::diagnostics::DiagnosticLog) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         macos::initialize_native_host(inbox, diagnostics)
@@ -276,10 +240,7 @@ pub fn initialize_native_host(
     }
 }
 
-pub fn capability_observations() -> HashMap<
-    crate::native_integration::NativeCapabilityId,
-    crate::native_integration::NativeCapabilityObservation,
-> {
+pub fn capability_observations() -> HashMap<crate::native_integration::NativeCapabilityId, crate::native_integration::NativeCapabilityObservation> {
     ActivePlatform::capability_observations()
 }
 
@@ -291,25 +252,19 @@ pub fn system_file_icons(entries: &[SystemFileIconRequestEntry]) -> Vec<SystemFi
     ActivePlatform::system_file_icons(entries)
 }
 
-pub fn default_handlers(
-    request: &DefaultHandlerRequest,
-) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
+pub fn default_handlers(request: &DefaultHandlerRequest) -> Result<Vec<DefaultHandlerEntry>, NativeCapabilityOperationError> {
     ActivePlatform::default_handlers(request)
 }
 
 pub fn set_owner_only_file_permissions(file: &File) -> std::io::Result<()> {
-    ActivePlatform::set_owner_only_file_permissions(file)
-        .map_err(|error| std::io::Error::other(format!("{}:{}", error.capability, error.code)))
+    ActivePlatform::set_owner_only_file_permissions(file).map_err(|error| std::io::Error::other(format!("{}:{}", error.capability, error.code)))
 }
 
 pub fn prefer_user_diagnostic_log_directory() -> bool {
     ActivePlatform::prefer_user_log_directory()
 }
 
-pub fn prepare_native_file_drag(
-    candidates: &[NativeFileDragCandidate],
-    strip_components: usize,
-) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
+pub fn prepare_native_file_drag(candidates: &[NativeFileDragCandidate], strip_components: usize) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
     ActivePlatform::prepare_native_file_drag(candidates, strip_components)
 }
 
@@ -359,11 +314,7 @@ pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog
 }
 
 pub fn quick_action_registers_single_instance(is_normal_singleton: bool) -> bool {
-    if cfg!(target_os = "linux") {
-        true
-    } else {
-        is_normal_singleton
-    }
+    if cfg!(target_os = "linux") { true } else { is_normal_singleton }
 }
 
 #[cfg(test)]
@@ -392,22 +343,10 @@ mod tests {
     fn successful_secure_file_protection_enforces_owner_only_mode() {
         use std::os::unix::fs::PermissionsExt as _;
 
-        let path = std::env::temp_dir().join(format!(
-            "zmanager-secure-file-contract-{}",
-            std::process::id()
-        ));
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&path)
-            .expect("test file should be created");
+        let path = std::env::temp_dir().join(format!("zmanager-secure-file-contract-{}", std::process::id()));
+        let file = std::fs::OpenOptions::new().create(true).truncate(true).write(true).open(&path).expect("test file should be created");
         set_owner_only_file_permissions(&file).expect("owner-only protection should succeed");
-        let mode = std::fs::metadata(&path)
-            .expect("protected file should exist")
-            .permissions()
-            .mode()
-            & 0o777;
+        let mode = std::fs::metadata(&path).expect("protected file should exist").permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
         let _ = std::fs::remove_file(path);
     }
@@ -415,13 +354,9 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_secure_file_protection_never_reports_false_success() {
-        let path = std::env::temp_dir().join(format!(
-            "zmanager-secure-file-contract-{}",
-            std::process::id()
-        ));
+        let path = std::env::temp_dir().join(format!("zmanager-secure-file-contract-{}", std::process::id()));
         let file = std::fs::File::create(&path).expect("test file should be created");
-        let error = ActivePlatform::set_owner_only_file_permissions(&file)
-            .expect_err("missing ACL implementation must be explicit");
+        let error = ActivePlatform::set_owner_only_file_permissions(&file).expect_err("missing ACL implementation must be explicit");
         assert_eq!(error.kind, NativeCapabilityOperationErrorKind::Unavailable);
         let _ = std::fs::remove_file(path);
     }

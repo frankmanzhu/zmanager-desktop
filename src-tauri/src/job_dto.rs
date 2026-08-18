@@ -34,11 +34,7 @@ pub struct JobAvailableActionDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(
-    tag = "retryKind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
+#[serde(tag = "retryKind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum JobRetryDescriptorDto {
     ExtractArchive {
         action_id: String,
