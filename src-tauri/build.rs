@@ -51,6 +51,7 @@ fn main() {
             "start_native_file_drag",
             "cleanup_preview_roots",
             "test_archive",
+            "detect_archive_format",
             "subscribe_job",
             "subscribe_job_catalog",
             "ack_subscription",

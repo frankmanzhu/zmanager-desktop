@@ -98,7 +98,7 @@ zmanager-core
   archive planning, listing, extraction, creation, safety, format routing
 
 backend crates
-  zip, tar/zstd, TZAP, 7z, libarchive, UnRAR
+  zip, tar/zstd, TZAP, 7z, UnRAR
 ```
 
 The frontend must not implement archive parsing or extraction. It calls Tauri commands and renders command results.

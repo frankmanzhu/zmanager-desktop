@@ -50,6 +50,8 @@ import type {
   AccountCurrentUserDto,
   AccountCompleteHostedAuthRequest,
   ValidateTzapSigningIdentityResponse,
+  DetectArchiveFormatRequest,
+  DetectArchiveFormatResponse,
 } from "./types";
 
 export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
@@ -225,6 +227,12 @@ export async function searchArchiveIndex(
 
 export async function closeArchiveIndex(request: ArchiveIndexSessionRequest): Promise<void> {
   return invoke<void>("close_archive_index", { request });
+}
+
+export async function detectArchiveFormat(
+  request: DetectArchiveFormatRequest,
+): Promise<DetectArchiveFormatResponse> {
+  return invoke<DetectArchiveFormatResponse>("detect_archive_format", { request });
 }
 
 export async function runPlanCreate(request: PlanCreateRequest): Promise<CreatePlanResponse> {

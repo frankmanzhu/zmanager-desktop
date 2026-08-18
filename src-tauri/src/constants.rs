@@ -17,6 +17,7 @@ pub const COMMAND_START_EXTRACT: &str = "start_extract";
 pub const COMMAND_PREVIEW_ENTRY: &str = "preview_entry";
 pub const COMMAND_START_NATIVE_FILE_DRAG: &str = "start_native_file_drag";
 pub const COMMAND_CLEANUP_PREVIEW_ROOTS: &str = "cleanup_preview_roots";
+pub const COMMAND_DETECT_ARCHIVE_FORMAT: &str = "detect_archive_format";
 pub const COMMAND_CANCEL_JOB: &str = "cancel_job";
 pub const COMMAND_PAUSE_JOB: &str = "pause_job";
 pub const COMMAND_RESUME_JOB: &str = "resume_job";
@@ -42,6 +43,7 @@ pub const PLANNED_COMMANDS: &[&str] = &[
     COMMAND_SEARCH_ARCHIVE_INDEX,
     COMMAND_CLOSE_ARCHIVE_INDEX,
     COMMAND_TEST_ARCHIVE,
+    COMMAND_DETECT_ARCHIVE_FORMAT,
     COMMAND_PLAN_CREATE,
     COMMAND_START_CREATE,
     COMMAND_START_EXTRACT,

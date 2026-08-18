@@ -242,6 +242,51 @@ export type ArchiveIndexStatus = "indexing" | "ready" | "empty" | "failed" | "ca
 
 export type StartArchiveIndexRequest = ListArchiveRequest;
 
+export type ArchiveFormatKind =
+  | "zip"
+  | "splitZip"
+  | "sevenZ"
+  | "tarZst"
+  | "tarGz"
+  | "tar"
+  | "tarBz2"
+  | "tarXz"
+  | "tarLzma"
+  | "tarLz"
+  | "tarLzo"
+  | "tarCompress"
+  | "tarLz4"
+  | "tarUu"
+  | "iso"
+  | "cab"
+  | "cpio"
+  | "rpm"
+  | "xar"
+  | "pkg"
+  | "dmg"
+  | "lha"
+  | "ar"
+  | "warc"
+  | "mtree"
+  | "tzap"
+  | "rar"
+  | "appleArchive"
+  | "deb"
+  | "msi"
+  | "vhd"
+  | "vmdk"
+  | "udf"
+  | "rawStream"
+  | "unknown";
+
+export type DetectArchiveFormatRequest = {
+  path: string;
+};
+
+export type DetectArchiveFormatResponse = {
+  format: ArchiveFormatKind;
+};
+
 export type ArchiveIndexSnapshotDto = {
   revision: string;
   sessionId: string;
@@ -252,6 +297,7 @@ export type ArchiveIndexSnapshotDto = {
   finalEntryCount?: number;
   finalTotalBytes?: number;
   latestFailure?: CommandErrorDto;
+  format?: ArchiveFormatKind;
 };
 
 export type ArchiveIndexStartResponseDto = {

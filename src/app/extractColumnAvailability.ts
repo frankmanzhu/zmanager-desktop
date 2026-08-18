@@ -186,6 +186,22 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   mtree: [
     "size", "modified",
   ],
+
+  msi: [
+    "size", "modified",
+  ],
+
+  vhd: [
+    "size", "modified",
+  ],
+
+  vmdk: [
+    "size", "modified",
+  ],
+
+  udf: [
+    "size", "modified",
+  ],
 };
 
 // ---------------------------------------------------------------------------

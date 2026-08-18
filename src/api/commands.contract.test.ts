@@ -297,6 +297,11 @@ const COMMAND_WRAPPERS = [
     request: { archivePath: "C:/archives/demo.zip" },
     call: () => api.runTestArchive({ archivePath: "C:/archives/demo.zip" }),
   },
+  {
+    command: "detect_archive_format",
+    request: { path: "C:/archives/demo.zip" },
+    call: () => api.detectArchiveFormat({ path: "C:/archives/demo.zip" }),
+  },
   { command: "subscribe_job", args: { request: { jobId: "job-1" }, onSnapshot: null }, call: () => api.subscribeJob({ jobId: "job-1" }, null as never) },
   { command: "subscribe_job_catalog", args: { onSnapshot: null }, call: () => api.subscribeJobCatalog(null as never) },
   { command: "ack_subscription", request: { subscriptionId: "subscription-1", revision: "1" }, call: () => api.ackSubscription({ subscriptionId: "subscription-1", revision: "1" }) },

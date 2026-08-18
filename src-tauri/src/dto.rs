@@ -202,6 +202,144 @@ pub struct ArchiveIndexSnapshotDto {
     pub final_entry_count: Option<usize>,
     pub final_total_bytes: Option<u64>,
     pub latest_failure: Option<crate::error::CommandErrorDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<ArchiveFormatKindDto>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectArchiveFormatRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectArchiveFormatResponse {
+    pub format: ArchiveFormatKindDto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArchiveFormatKindDto {
+    Zip,
+    SplitZip,
+    SevenZ,
+    TarZst,
+    TarGz,
+    Tar,
+    TarBz2,
+    TarXz,
+    TarLzma,
+    TarLz,
+    TarLzo,
+    TarCompress,
+    TarLz4,
+    TarUu,
+    Iso,
+    Cab,
+    Cpio,
+    Rpm,
+    Xar,
+    Pkg,
+    Dmg,
+    Lha,
+    Ar,
+    Warc,
+    Mtree,
+    Tzap,
+    Rar,
+    AppleArchive,
+    Deb,
+    Msi,
+    Vhd,
+    Vmdk,
+    Udf,
+    RawStream,
+    Unknown,
+}
+
+impl From<zmanager_core::archive_format::ArchiveFormatKind> for ArchiveFormatKindDto {
+    fn from(kind: zmanager_core::archive_format::ArchiveFormatKind) -> Self {
+        match kind {
+            zmanager_core::archive_format::ArchiveFormatKind::Zip => Self::Zip,
+            zmanager_core::archive_format::ArchiveFormatKind::SplitZip => Self::SplitZip,
+            zmanager_core::archive_format::ArchiveFormatKind::SevenZ => Self::SevenZ,
+            zmanager_core::archive_format::ArchiveFormatKind::TarZst => Self::TarZst,
+            zmanager_core::archive_format::ArchiveFormatKind::TarGz => Self::TarGz,
+            zmanager_core::archive_format::ArchiveFormatKind::Tar => Self::Tar,
+            zmanager_core::archive_format::ArchiveFormatKind::TarBz2 => Self::TarBz2,
+            zmanager_core::archive_format::ArchiveFormatKind::TarXz => Self::TarXz,
+            zmanager_core::archive_format::ArchiveFormatKind::TarLzma => Self::TarLzma,
+            zmanager_core::archive_format::ArchiveFormatKind::TarLz => Self::TarLz,
+            zmanager_core::archive_format::ArchiveFormatKind::TarLzo => Self::TarLzo,
+            zmanager_core::archive_format::ArchiveFormatKind::TarCompress => Self::TarCompress,
+            zmanager_core::archive_format::ArchiveFormatKind::TarLz4 => Self::TarLz4,
+            zmanager_core::archive_format::ArchiveFormatKind::TarUu => Self::TarUu,
+            zmanager_core::archive_format::ArchiveFormatKind::Iso => Self::Iso,
+            zmanager_core::archive_format::ArchiveFormatKind::Cab => Self::Cab,
+            zmanager_core::archive_format::ArchiveFormatKind::Cpio => Self::Cpio,
+            zmanager_core::archive_format::ArchiveFormatKind::Rpm => Self::Rpm,
+            zmanager_core::archive_format::ArchiveFormatKind::Xar => Self::Xar,
+            zmanager_core::archive_format::ArchiveFormatKind::Pkg => Self::Pkg,
+            zmanager_core::archive_format::ArchiveFormatKind::Dmg => Self::Dmg,
+            zmanager_core::archive_format::ArchiveFormatKind::Lha => Self::Lha,
+            zmanager_core::archive_format::ArchiveFormatKind::Ar => Self::Ar,
+            zmanager_core::archive_format::ArchiveFormatKind::Warc => Self::Warc,
+            zmanager_core::archive_format::ArchiveFormatKind::Mtree => Self::Mtree,
+            zmanager_core::archive_format::ArchiveFormatKind::Tzap => Self::Tzap,
+            zmanager_core::archive_format::ArchiveFormatKind::Rar => Self::Rar,
+            zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => Self::AppleArchive,
+            zmanager_core::archive_format::ArchiveFormatKind::Deb => Self::Deb,
+            zmanager_core::archive_format::ArchiveFormatKind::Msi => Self::Msi,
+            zmanager_core::archive_format::ArchiveFormatKind::Vhd => Self::Vhd,
+            zmanager_core::archive_format::ArchiveFormatKind::Vmdk => Self::Vmdk,
+            zmanager_core::archive_format::ArchiveFormatKind::Udf => Self::Udf,
+            zmanager_core::archive_format::ArchiveFormatKind::RawStream => Self::RawStream,
+            zmanager_core::archive_format::ArchiveFormatKind::Unknown => Self::Unknown,
+        }
+    }
+}
+
+impl From<ArchiveFormatKindDto> for zmanager_core::archive_format::ArchiveFormatKind {
+    fn from(dto: ArchiveFormatKindDto) -> Self {
+        match dto {
+            ArchiveFormatKindDto::Zip => Self::Zip,
+            ArchiveFormatKindDto::SplitZip => Self::SplitZip,
+            ArchiveFormatKindDto::SevenZ => Self::SevenZ,
+            ArchiveFormatKindDto::TarZst => Self::TarZst,
+            ArchiveFormatKindDto::TarGz => Self::TarGz,
+            ArchiveFormatKindDto::Tar => Self::Tar,
+            ArchiveFormatKindDto::TarBz2 => Self::TarBz2,
+            ArchiveFormatKindDto::TarXz => Self::TarXz,
+            ArchiveFormatKindDto::TarLzma => Self::TarLzma,
+            ArchiveFormatKindDto::TarLz => Self::TarLz,
+            ArchiveFormatKindDto::TarLzo => Self::TarLzo,
+            ArchiveFormatKindDto::TarCompress => Self::TarCompress,
+            ArchiveFormatKindDto::TarLz4 => Self::TarLz4,
+            ArchiveFormatKindDto::TarUu => Self::TarUu,
+            ArchiveFormatKindDto::Iso => Self::Iso,
+            ArchiveFormatKindDto::Cab => Self::Cab,
+            ArchiveFormatKindDto::Cpio => Self::Cpio,
+            ArchiveFormatKindDto::Rpm => Self::Rpm,
+            ArchiveFormatKindDto::Xar => Self::Xar,
+            ArchiveFormatKindDto::Pkg => Self::Pkg,
+            ArchiveFormatKindDto::Dmg => Self::Dmg,
+            ArchiveFormatKindDto::Lha => Self::Lha,
+            ArchiveFormatKindDto::Ar => Self::Ar,
+            ArchiveFormatKindDto::Warc => Self::Warc,
+            ArchiveFormatKindDto::Mtree => Self::Mtree,
+            ArchiveFormatKindDto::Tzap => Self::Tzap,
+            ArchiveFormatKindDto::Rar => Self::Rar,
+            ArchiveFormatKindDto::AppleArchive => Self::AppleArchive,
+            ArchiveFormatKindDto::Deb => Self::Deb,
+            ArchiveFormatKindDto::Msi => Self::Msi,
+            ArchiveFormatKindDto::Vhd => Self::Vhd,
+            ArchiveFormatKindDto::Vmdk => Self::Vmdk,
+            ArchiveFormatKindDto::Udf => Self::Udf,
+            ArchiveFormatKindDto::RawStream => Self::RawStream,
+            ArchiveFormatKindDto::Unknown => Self::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

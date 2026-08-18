@@ -1074,25 +1074,31 @@ fn start_extract_internal_with_recipient_key_and_spawner(
         .password
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty());
-    let family = detect_archive_family(&archive_path);
+    let format_kind = zmanager_core::archive_format::detect_archive_format(&archive_path);
     if recipient_private_key.is_some() && password.is_some() {
         return Err(CommandErrorDto::invalid_request(
             "Choose either a recipient key or an archive password for extraction",
         ));
     }
-    if recipient_private_key.is_some() && family != ArchiveFamily::Tzap {
+    if recipient_private_key.is_some()
+        && format_kind != zmanager_core::archive_format::ArchiveFormatKind::Tzap
+    {
         return Err(CommandErrorDto::invalid_request(
             "Recipient-key extraction is available only for TZAP archives",
         ));
     }
-    let kind = match family {
-        ArchiveFamily::Zip => JobKindDto::ZipExtract,
-        ArchiveFamily::TarZst => JobKindDto::TarZstdExtract,
-        ArchiveFamily::SevenZ => JobKindDto::SevenZExtract,
-        ArchiveFamily::Rar => JobKindDto::RarExtract,
-        ArchiveFamily::Tzap => JobKindDto::TzapExtract,
-        ArchiveFamily::AppleArchive => JobKindDto::AppleArchiveExtract,
-        ArchiveFamily::Archive => JobKindDto::ArchiveExtract,
+    let kind = match format_kind {
+        zmanager_core::archive_format::ArchiveFormatKind::Zip
+        | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => JobKindDto::ZipExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::TarZst => JobKindDto::TarZstdExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::SevenZ => JobKindDto::SevenZExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::Rar => JobKindDto::RarExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::Tzap => JobKindDto::TzapExtract,
+        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => {
+            JobKindDto::AppleArchiveExtract
+        }
+        zmanager_core::archive_format::ArchiveFormatKind::RawStream => JobKindDto::RawStreamExtract,
+        _ => JobKindDto::ArchiveExtract,
     };
 
     let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
@@ -2386,35 +2392,13 @@ fn split_collision_name(name: &str) -> (&str, &str) {
     (name, "")
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ArchiveFamily {
-    Zip,
-    TarZst,
-    SevenZ,
-    Rar,
-    Tzap,
-    AppleArchive,
-    Archive,
-}
-
-fn detect_archive_family(path: &str) -> ArchiveFamily {
-    // Recognition delegates to the canonical core detector (CR-114) so the
-    // desktop cannot drift from zmanager's FORMAT_CAPABILITIES registry;
-    // this match only maps core kinds onto the desktop's dispatch families.
-    let kind = zmanager_core::archive_format::detect_archive_format(path);
-    match kind {
-        zmanager_core::archive_format::ArchiveFormatKind::Zip
-        | zmanager_core::archive_format::ArchiveFormatKind::SplitZip => ArchiveFamily::Zip,
-        zmanager_core::archive_format::ArchiveFormatKind::TarZst => ArchiveFamily::TarZst,
-        zmanager_core::archive_format::ArchiveFormatKind::SevenZ => ArchiveFamily::SevenZ,
-        zmanager_core::archive_format::ArchiveFormatKind::Rar => ArchiveFamily::Rar,
-        zmanager_core::archive_format::ArchiveFormatKind::Tzap => ArchiveFamily::Tzap,
-        zmanager_core::archive_format::ArchiveFormatKind::AppleArchive => {
-            ArchiveFamily::AppleArchive
-        }
-        // Everything else (raw streams, plain tars, disk images, packages,
-        // libarchive formats, unknown) dispatches to the generic Archive path.
-        _ => ArchiveFamily::Archive,
+#[tauri::command]
+pub fn detect_archive_format(
+    request: crate::dto::DetectArchiveFormatRequest,
+) -> crate::dto::DetectArchiveFormatResponse {
+    let kind = zmanager_core::archive_format::detect_archive_format(&request.path);
+    crate::dto::DetectArchiveFormatResponse {
+        format: crate::dto::ArchiveFormatKindDto::from(kind),
     }
 }
 
@@ -2947,26 +2931,32 @@ mod tests {
     }
 
     #[test]
-    fn detect_archive_family_is_case_insensitive_and_handles_windows_drive() {
+    fn detect_archive_format_is_case_insensitive_and_handles_windows_drive() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
         assert_eq!(
-            detect_archive_family(r"C:\\Users\\me\\archive.ZIP"),
-            ArchiveFamily::Zip
+            detect_archive_format(r"C:\\Users\\me\\archive.ZIP"),
+            ArchiveFormatKind::Zip
         );
         assert_eq!(
-            detect_archive_family(r"D:\\archives\\report.TAR.ZST"),
-            ArchiveFamily::TarZst
+            detect_archive_format(r"D:\\archives\\report.TAR.ZST"),
+            ArchiveFormatKind::TarZst
         );
         assert_eq!(
-            detect_archive_family(r"\\\\server\\share\\bundle.TZAP"),
-            ArchiveFamily::Tzap
+            detect_archive_format(r"\\\\server\\share\\bundle.TZAP"),
+            ArchiveFormatKind::Tzap
         );
     }
 
     #[test]
-    fn detect_archive_family_supports_tar_zst_double_extension_and_plain_tar() {
+    fn detect_archive_format_supports_tar_zst_double_extension_and_plain_tar() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
         assert_eq!(
-            detect_archive_family("/tmp/archive.tar.zst"),
-            ArchiveFamily::TarZst
+            detect_archive_format("/tmp/archive.tar.zst"),
+            ArchiveFormatKind::TarZst
+        );
+        assert_eq!(
+            detect_archive_format("/tmp/archive.tar"),
+            ArchiveFormatKind::Tar
         );
     }
 
@@ -3011,62 +3001,63 @@ mod tests {
     }
 
     #[test]
-    fn detect_archive_family_handles_windows_backslashes_and_collision_cases() {
+    fn detect_archive_format_handles_windows_backslashes_and_collision_cases() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
         assert_eq!(
-            detect_archive_family(r"C:\temp\ARCHIVE.ZIp"),
-            ArchiveFamily::Zip
+            detect_archive_format(r"C:\temp\ARCHIVE.ZIp"),
+            ArchiveFormatKind::Zip
         );
         assert_eq!(
-            detect_archive_family(r"D:\\WORK\\report.TAR.ZST"),
-            ArchiveFamily::TarZst
-        );
-    }
-
-    #[test]
-    fn detect_archive_family_recognizes_aar() {
-        assert_eq!(
-            detect_archive_family("test.aar"),
-            ArchiveFamily::AppleArchive
+            detect_archive_format(r"D:\\WORK\\report.TAR.ZST"),
+            ArchiveFormatKind::TarZst
         );
     }
 
     #[test]
-    fn detect_archive_family_recognizes_aea() {
+    fn detect_archive_format_recognizes_aar() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
         assert_eq!(
-            detect_archive_family("test.aea"),
-            ArchiveFamily::AppleArchive
+            detect_archive_format("test.aar"),
+            ArchiveFormatKind::AppleArchive
         );
     }
 
     #[test]
-    fn detect_archive_family_maps_registry_kinds_to_dispatch_families() {
-        // Recognition comes from core's FORMAT_CAPABILITIES registry; the
-        // family mapping is what dispatch consumes.
-        assert_eq!(detect_archive_family("comic.cbz"), ArchiveFamily::Zip);
-        assert_eq!(detect_archive_family("book.epub"), ArchiveFamily::Zip);
-        assert_eq!(detect_archive_family("archive.cb7"), ArchiveFamily::SevenZ);
-        assert_eq!(detect_archive_family("comic.cbr"), ArchiveFamily::Rar);
-        assert_eq!(detect_archive_family("archive.cbt"), ArchiveFamily::Archive);
-        assert_eq!(detect_archive_family("archive.tbz"), ArchiveFamily::Archive);
+    fn detect_archive_format_recognizes_aea() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
         assert_eq!(
-            detect_archive_family("archive.tlzma"),
-            ArchiveFamily::Archive
+            detect_archive_format("test.aea"),
+            ArchiveFormatKind::AppleArchive
         );
-        assert_eq!(detect_archive_family("image.iso"), ArchiveFamily::Archive);
+    }
+
+    #[test]
+    fn detect_archive_format_maps_registry_kinds_explicitly() {
+        use zmanager_core::archive_format::{detect_archive_format, ArchiveFormatKind};
+        assert_eq!(detect_archive_format("comic.cbz"), ArchiveFormatKind::Zip);
+        assert_eq!(detect_archive_format("book.epub"), ArchiveFormatKind::Zip);
+        assert_eq!(detect_archive_format("archive.cb7"), ArchiveFormatKind::SevenZ);
+        assert_eq!(detect_archive_format("comic.cbr"), ArchiveFormatKind::Rar);
+        assert_eq!(detect_archive_format("archive.cbt"), ArchiveFormatKind::Tar);
+        assert_eq!(detect_archive_format("archive.tbz"), ArchiveFormatKind::TarBz2);
         assert_eq!(
-            detect_archive_family("installer.dmg"),
-            ArchiveFamily::Archive
+            detect_archive_format("archive.tlzma"),
+            ArchiveFormatKind::TarLzma
         );
-        // Predicate-detected kinds still reach their family.
+        assert_eq!(detect_archive_format("image.iso"), ArchiveFormatKind::Iso);
         assert_eq!(
-            detect_archive_family("archive.7z.001"),
-            ArchiveFamily::SevenZ
+            detect_archive_format("installer.dmg"),
+            ArchiveFormatKind::Dmg
         );
         assert_eq!(
-            detect_archive_family("bundle.vol000.tzap"),
-            ArchiveFamily::Tzap
+            detect_archive_format("archive.7z.001"),
+            ArchiveFormatKind::SevenZ
         );
-        assert_eq!(detect_archive_family("archive.z01"), ArchiveFamily::Zip);
+        assert_eq!(
+            detect_archive_format("bundle.vol000.tzap"),
+            ArchiveFormatKind::Tzap
+        );
+        assert_eq!(detect_archive_format("archive.z01"), ArchiveFormatKind::SplitZip);
     }
 
     #[test]

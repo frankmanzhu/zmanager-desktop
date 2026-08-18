@@ -216,6 +216,7 @@ fn main() {
             commands::start_native_file_drag,
             commands::cleanup_preview_roots,
             commands::test_archive,
+            commands::detect_archive_format,
             commands::subscribe_job,
             commands::subscribe_job_catalog,
             commands::ack_subscription,

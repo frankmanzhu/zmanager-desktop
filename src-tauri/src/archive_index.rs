@@ -98,7 +98,9 @@ impl ArchiveIndexRegistry {
             state.next_session_id = state.next_session_id.checked_add(1).ok_or_else(|| {
                 CommandErrorDto::operation_failed("Archive session IDs exhausted.")
             })?;
-            let session_id = format!("archive-{}", state.next_session_id);
+            let format = Some(crate::dto::ArchiveFormatKindDto::from(
+                zmanager_core::archive_format::detect_archive_format(&archive_path),
+            ));
             let snapshot = Arc::new(ArchiveIndexSnapshotDto {
                 revision: "1".to_string(),
                 session_id: session_id.clone(),
@@ -109,6 +111,7 @@ impl ArchiveIndexRegistry {
                 final_entry_count: None,
                 final_total_bytes: None,
                 latest_failure: None,
+                format,
             });
             let (sender, _) = watch::channel(snapshot.clone());
             let cancelled = Arc::new(AtomicBool::new(false));
@@ -613,6 +616,7 @@ impl ArchiveIndexRegistry {
                     final_entry_count: Some(statistics.entry_count),
                     final_total_bytes: statistics.total_bytes,
                     latest_failure: None,
+                    format: record.snapshot.format,
                 }
             }
             Err(error) => ArchiveIndexSnapshotDto {
@@ -625,6 +629,7 @@ impl ArchiveIndexRegistry {
                 final_entry_count: None,
                 final_total_bytes: None,
                 latest_failure: Some(error),
+                format: record.snapshot.format,
             },
         };
         let snapshot = Arc::new(snapshot);
@@ -1460,6 +1465,7 @@ mod tests {
             final_entry_count: Some(stale_build.entry_count),
             final_total_bytes: stale_build.total_bytes,
             latest_failure: None,
+            format: Some(crate::dto::ArchiveFormatKindDto::Tzap),
         });
         let (stale_sender, _) = watch::channel(stale_snapshot.clone());
         let snapshot = Arc::new(ArchiveIndexSnapshotDto {
@@ -1472,6 +1478,7 @@ mod tests {
             final_entry_count: Some(build.entry_count),
             final_total_bytes: build.total_bytes,
             latest_failure: None,
+            format: Some(crate::dto::ArchiveFormatKindDto::Tzap),
         });
         let (sender, _) = watch::channel(snapshot.clone());
         registry
@@ -1541,6 +1548,7 @@ mod tests {
             final_entry_count: Some(build.entry_count),
             final_total_bytes: build.total_bytes,
             latest_failure: None,
+            format: Some(crate::dto::ArchiveFormatKindDto::Zip),
         });
         let (sender, _) = watch::channel(snapshot.clone());
         registry
@@ -1638,6 +1646,7 @@ mod tests {
             final_entry_count: None,
             final_total_bytes: None,
             latest_failure: None,
+            format: Some(crate::dto::ArchiveFormatKindDto::Zip),
         });
         let (sender, receiver) = watch::channel(snapshot.clone());
         registry

@@ -41,7 +41,11 @@ export type ArchiveFormatFamily =
   | "xar"
   | "lha"
   | "ar"
-  | "mtree";
+  | "mtree"
+  | "msi"
+  | "vhd"
+  | "vmdk"
+  | "udf";
 
 export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "zip",
@@ -81,6 +85,10 @@ export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "lha",
   "ar",
   "mtree",
+  "msi",
+  "vhd",
+  "vmdk",
+  "udf",
 ];
 
 // ---------------------------------------------------------------------------
@@ -160,13 +168,19 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "tarCompressZ",
-    physicalSuffixes: [".tar.z"],
+    physicalSuffixes: [".tar.z", ".taz"],
     displayLabelKey: "format.family.tarCompressZ",
   },
   {
     family: "tar",
-    physicalSuffixes: [".tar", ".cbt"],
+    physicalSuffixes: [".tar", ".cbt", ".pax", ".ustar", ".tar.uu", ".tar.b64"],
     displayLabelKey: "format.family.tar",
+  },
+  // -- Compound & standard CPIO (must precede raw streams) --
+  {
+    family: "cpio",
+    physicalSuffixes: [".cpio", ".cpio.gz", ".cpgz", ".cpio.bz2", ".cpio.xz", ".cpio.lzma", ".cpio.zst"],
+    displayLabelKey: "format.family.cpio",
   },
   // -- Container / multi-file formats --
   {
@@ -176,7 +190,7 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "sevenZ",
-    physicalSuffixes: [".7z", ".cb7"], // split .7z.001 matched separately below
+    physicalSuffixes: [".7z", ".cb7", ".sevenz"], // split .7z.001 matched separately below
     displayLabelKey: "format.family.sevenZ",
   },
   {
@@ -198,11 +212,6 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "cab",
     physicalSuffixes: [".cab"],
     displayLabelKey: "format.family.cab",
-  },
-  {
-    family: "cpio",
-    physicalSuffixes: [".cpio"],
-    displayLabelKey: "format.family.cpio",
   },
   {
     family: "deb",
@@ -238,6 +247,26 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "mtree",
     physicalSuffixes: [".mtree"],
     displayLabelKey: "format.family.mtree",
+  },
+  {
+    family: "msi",
+    physicalSuffixes: [".msi"],
+    displayLabelKey: "format.family.msi",
+  },
+  {
+    family: "vhd",
+    physicalSuffixes: [".vhd"],
+    displayLabelKey: "format.family.vhd",
+  },
+  {
+    family: "vmdk",
+    physicalSuffixes: [".vmdk"],
+    displayLabelKey: "format.family.vmdk",
+  },
+  {
+    family: "udf",
+    physicalSuffixes: [".udf"],
+    displayLabelKey: "format.family.udf",
   },
   // -- Raw stream formats (must follow compound families) --
   {
@@ -292,7 +321,7 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "compressZStream",
-    physicalSuffixes: [".z"],
+    physicalSuffixes: [".z", ".uu", ".b64"],
     displayLabelKey: "format.family.compressZStream",
   },
 ];

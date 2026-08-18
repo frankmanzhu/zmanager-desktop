@@ -47,6 +47,7 @@
     "allow-preview-entry",
     "allow-cleanup-preview-roots",
     "allow-test-archive",
+    "allow-detect-archive-format",
     "allow-subscribe-job-catalog",
     "allow-ack-subscription",
     "allow-unsubscribe-job",
