@@ -607,7 +607,7 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
 }
 
 fn ingest_macos_native_event(event: crate::native_launch_inbox::NativeInboundEvent, inbox: &crate::native_launch_inbox::NativeLaunchInbox) {
-    let event = match normalize_macos_inbound_event(event, |token| MacOsPlatform::consume_shell_action_request(token)) {
+    let event = match normalize_macos_inbound_event(event, MacOsPlatform::consume_shell_action_request) {
         Ok(event) => event,
         Err(error_code) => {
             record_shell_action_stage("requestRejected", None, None, Some(error_code));

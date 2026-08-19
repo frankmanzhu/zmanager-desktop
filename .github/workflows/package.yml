@@ -188,6 +188,10 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: Install Fedora prerequisites
+        shell: bash
+        run: dnf install -y python3 git ripgrep ca-certificates
+
       - name: Run Fedora packaging and architecture tests
         shell: bash
         run: |
