@@ -950,9 +950,9 @@ mod tests {
         use std::fs;
         use std::os::unix::fs::{MetadataExt as _, PermissionsExt as _};
         use std::time::{SystemTime, UNIX_EPOCH};
+        use zmanager_core::backend_test_support::tzap::{TzapCreateOptions, TzapKeySource, create_tzap_from_manifest_with_context};
         use zmanager_core::jobs::{CancellationToken, JobContext};
         use zmanager_core::manifest::{ArchiveManifest, ManifestEntry, ManifestFileType, PermissionSnapshot};
-        use zmanager_core::tzap_backend::{TzapCreateOptions, TzapKeySource, create_tzap_from_manifest_with_context};
 
         let root = std::env::temp_dir().join(format!(
             "zmanager-desktop-real-tzap-dto-{}-{}",

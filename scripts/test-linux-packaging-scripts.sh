@@ -250,8 +250,60 @@ for package_name in "${fedora_libarchive_packages[@]}"; do
   fi
 done
 
+if [[ " $fedora_install_line " == *" nodejs "* ]]; then
+  echo "Expected nodejs not to be in default Fedora build package list (handled via NodeSource)." >&2
+  exit 1
+fi
+
 if [[ ! -f /tmp/zmanager-desktop-rpm/ZManager_test_x86_64.rpm ]]; then
   echo "Expected the test .rpm to be staged under the RPM stage directory." >&2
+  exit 1
+fi
+
+: >"$log_file"
+
+write_stub node <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-p" || "${1:-}" == "-e" ]]; then
+  echo "${ZMANAGER_TEST_PRODUCT_VERSION:?}"
+  exit 0
+fi
+# Simulate node version before upgrade, then return v24 after upgrade
+if [[ -f "${ZMANAGER_TEST_NODE_UPGRADED:-}" ]]; then
+  echo "v24.0.0"
+else
+  echo "v22.0.0"
+fi
+EOF
+
+write_stub curl <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'curl %s\n' "$*" >>"${ZMANAGER_PACKAGING_TEST_LOG:?}"
+if [[ "$*" == *"setup_24.x"* ]]; then
+  echo "touch \"${ZMANAGER_TEST_NODE_UPGRADED:?}\""
+  exit 0
+fi
+exit 1
+EOF
+
+node_upgrade_marker="$test_root/node-upgraded"
+PATH="$bin_dir:$PATH" \
+HOME="$test_root/home" \
+CARGO_TARGET_DIR="$fedora_target_dir" \
+ZMANAGER_PACKAGING_TEST_LOG="$log_file" \
+ZMANAGER_TEST_PRODUCT_VERSION="$product_version" \
+ZMANAGER_TEST_NODE_UPGRADED="$node_upgrade_marker" \
+  bash scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --no-install
+
+if ! grep -q 'curl -fsSL https://rpm.nodesource.com/setup_24.x' "$log_file"; then
+  echo "Expected --install-deps to run NodeSource setup_24.x when Node.js is < 24." >&2
+  exit 1
+fi
+
+if ! grep -q '^dnf install -y nodejs' "$log_file"; then
+  echo "Expected --install-deps to install nodejs after NodeSource setup." >&2
   exit 1
 fi
 

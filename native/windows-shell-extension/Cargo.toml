@@ -18,3 +18,9 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Shell_Common",
 ] }
 windows-core = "0.61.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+

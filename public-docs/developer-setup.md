@@ -122,7 +122,7 @@ sudo apt-get install --reinstall /tmp/zmanager-desktop-deb/ZManager_<version>_am
 scripts/build-linux-fedora-rpm.sh
 ```
 
-- `--install-deps`: installs Fedora Tauri/packaging dependencies, Node.js, and Rust when needed.
+- `--install-deps`: installs Fedora Tauri/packaging dependencies, Node.js 24, and Rust via rustup when needed.
 - `--no-install`: stop before host install, leave artifacts staged.
 - Build output is staged to `/tmp/zmanager-desktop-rpm/`.
 
