@@ -22,8 +22,10 @@ Release baseline:
   names, including nautilus-python for the GNOME Files extension host.
 
 Fedora prerequisites:
-  sudo dnf install ca-certificates cmake curl file gcc gcc-c++ make pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libsoup3-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel bzip2-devel expat-devel libacl-devel lz4-devel xz-devel libzstd-devel zlib-devel libxml2-devel rpm-build patchelf nodejs nautilus-python
+  sudo dnf install ca-certificates cmake curl file gcc gcc-c++ make pkgconf-pkg-config openssl-devel webkit2gtk4.1-devel libsoup3-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel bzip2-devel expat-devel libacl-devel lz4-devel xz-devel libzstd-devel zlib-devel libxml2-devel rpm-build patchelf nautilus-python perl-IPC-Cmd
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo -E bash -
+  sudo dnf install nodejs
 
 Options:
   --install-deps  Install required Fedora build packages, Node.js, and Rust.
@@ -111,7 +113,6 @@ fedora_packages=(
   libxml2-devel
   rpm-build
   patchelf
-  nodejs
   nautilus-python
   perl-IPC-Cmd
 )
@@ -134,6 +135,14 @@ run_dnf_install() {
   fi
 }
 
+run_dnf_remove() {
+  if ((EUID == 0)); then
+    dnf remove -y "$@"
+  else
+    sudo dnf remove -y "$@"
+  fi
+}
+
 source_cargo_env() {
   if [[ -f "$HOME/.cargo/env" ]]; then
     # shellcheck disable=SC1091
@@ -149,6 +158,24 @@ version_major() {
 
 version_minor() {
   "$1" --version | sed -E 's/^[^0-9]*[0-9]+\.([0-9]+).*/\1/'
+}
+
+node_install_required() {
+  if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local node_major
+  node_major="$(version_major node)"
+  [[ -z "$node_major" || "$node_major" -lt 24 ]]
+}
+
+run_nodesource_setup() {
+  if ((EUID == 0)); then
+    curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
+  else
+    curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo -E bash -
+  fi
 }
 
 rust_install_required() {
@@ -185,19 +212,37 @@ if ((install_deps)); then
     exit 1
   fi
 
+  if ((EUID != 0)) && ! command -v sudo >/dev/null 2>&1; then
+    echo "Installing Fedora packages requires sudo or a root shell." >&2
+    echo "Run as root or install these packages first:" >&2
+    echo "  dnf install ${fedora_packages[*]}" >&2
+    exit 1
+  fi
+
   collect_missing_fedora_packages
   if ((${#missing_fedora_packages[@]})); then
-    if ((EUID != 0)) && ! command -v sudo >/dev/null 2>&1; then
-      echo "Installing Fedora packages requires sudo or a root shell." >&2
-      echo "Run as root or install these packages first:" >&2
-      echo "  dnf install ${missing_fedora_packages[*]}" >&2
-      exit 1
-    fi
-
     echo "Installing missing Fedora package(s): ${missing_fedora_packages[*]}"
     run_dnf_install "${missing_fedora_packages[@]}"
   else
     echo "Fedora build packages are already installed."
+  fi
+
+  if node_install_required; then
+    run_nodesource_setup
+    conflicting_pkgs=()
+    while IFS= read -r pkg; do
+      [[ -n "$pkg" ]] && conflicting_pkgs+=("$pkg")
+    done < <(rpm -qa "nodejs2[0-3]*" "nodejs1*" "nodejs-*" 2>/dev/null || true)
+    if ((${#conflicting_pkgs[@]})); then
+      run_dnf_remove "${conflicting_pkgs[@]}" 2>/dev/null || true
+    fi
+    if rpm -q nodejs >/dev/null 2>&1; then
+      current_node_major="$(version_major node 2>/dev/null || echo "")"
+      if [[ -n "$current_node_major" && "$current_node_major" -lt 24 ]]; then
+        run_dnf_remove nodejs npm 2>/dev/null || true
+      fi
+    fi
+    run_dnf_install nodejs
   fi
 
   if rust_install_required; then
@@ -214,6 +259,7 @@ if ((${#missing_commands[@]})); then
   echo "Or run: scripts/build-linux-fedora-rpm.sh --install-deps" >&2
   echo "Fedora packages: sudo dnf install ${fedora_packages[*]}" >&2
   echo "Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" >&2
+  echo "Node.js: curl -fsSL https://rpm.nodesource.com/setup_24.x | sudo -E bash - && sudo dnf install nodejs" >&2
   exit 1
 fi
 
