@@ -495,6 +495,8 @@ pub struct StartCreateRequest {
     #[serde(default)]
     pub tzap_certificates: Option<TzapCertificateOptionsDto>,
     #[serde(default)]
+    pub tzap_bootstrap_sidecar: Option<bool>,
+    #[serde(default)]
     pub preserve_metadata: bool,
 }
 

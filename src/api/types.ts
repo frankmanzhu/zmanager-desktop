@@ -407,6 +407,7 @@ export type StartCreateRequest = {
   sevenZChunkSize?: number;
   sevenZEncryptFileNames?: boolean;
   tzapCertificates?: TzapCertificateOptions;
+  tzapBootstrapSidecar?: boolean;
   preserveMetadata: boolean;
 };
 

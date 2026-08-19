@@ -261,6 +261,40 @@ describe("create flow helpers", () => {
     expect(single.tzapVolumeLossTolerance).toBe(0);
   });
 
+  it("passes tzapBootstrapSidecar toggle only for TZAP requests", () => {
+    const withSidecar = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapBootstrapSidecar: true,
+    });
+    const withoutSidecar = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "tzap",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapBootstrapSidecar: false,
+    });
+    const zipRequest = buildStartCreateRequest({
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      format: "zip",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      tzapBootstrapSidecar: true,
+    });
+
+    expect(withSidecar.tzapBootstrapSidecar).toBe(true);
+    expect(withoutSidecar.tzapBootstrapSidecar).toBe(false);
+    expect(zipRequest).not.toHaveProperty("tzapBootstrapSidecar");
+  });
+
   it("treats zero volume size as no split request", () => {
     expect(normalizeCreateVolumeSize(0)).toBeUndefined();
     expect(normalizeCreateVolumeSize(-1)).toBeUndefined();

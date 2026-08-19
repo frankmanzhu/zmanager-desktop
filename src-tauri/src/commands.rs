@@ -487,6 +487,7 @@ fn start_create_internal_with_resolver(
     let seven_z_threads = request.seven_z_threads.filter(|value| *value > 0);
     let seven_z_chunk_size = request.seven_z_chunk_size.filter(|value| *value > 0);
     let seven_z_encrypt_file_names = request.seven_z_encrypt_file_names.unwrap_or(true);
+    let tzap_bootstrap_sidecar = request.tzap_bootstrap_sidecar.unwrap_or(false);
     let format = request.format;
 
     let request_sources = sources;
@@ -566,6 +567,7 @@ fn start_create_internal_with_resolver(
                     recovery_percentage: tzap_recovery_percentage,
                     volume_loss_tolerance: tzap_volume_loss_tolerance,
                     x509_signing,
+                    emit_bootstrap_sidecar: tzap_bootstrap_sidecar,
                 })
             }
             crate::dto::ArchiveFormatDto::SevenZ => CreateOptions::SevenZ(SevenZCreateOptions {
@@ -2262,6 +2264,7 @@ mod tests {
                 seven_z_chunk_size: None,
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: None,
+                tzap_bootstrap_sidecar: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2348,6 +2351,7 @@ mod tests {
                 seven_z_chunk_size: None,
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: None,
+                tzap_bootstrap_sidecar: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2416,6 +2420,7 @@ mod tests {
                 seven_z_chunk_size: None,
                 seven_z_encrypt_file_names: None,
                 tzap_certificates: None,
+                tzap_bootstrap_sidecar: None,
                 preserve_metadata: false,
             },
             &registry,
@@ -2554,6 +2559,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("create command should start a job");
@@ -2603,6 +2609,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -2658,6 +2665,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("create command should start a renamed-destination job");
@@ -2706,6 +2714,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: true,
         };
         let create_job = start_create_internal(create_request, &registry).expect("create command should start a job");
@@ -2768,6 +2777,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -2819,6 +2829,7 @@ mod tests {
                     }),
                     recipient_selection: None,
                 }),
+                tzap_bootstrap_sidecar: None,
                 preserve_metadata: false,
             },
             &crate::job_registry::JobRegistry::new(),
@@ -2869,6 +2880,7 @@ mod tests {
                         one_time_certificate_paths: Vec::new(),
                     }),
                 }),
+                tzap_bootstrap_sidecar: None,
                 preserve_metadata: false,
             },
             &crate::job_registry::JobRegistry::new(),
@@ -2914,6 +2926,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
@@ -2984,6 +2997,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
@@ -3052,6 +3066,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3138,6 +3153,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3225,6 +3241,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3274,6 +3291,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let c_job = start_create_internal(create_req, &registry).expect("zip create should start");
@@ -3455,6 +3473,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let job = start_create_internal(create_req, &registry).expect("job start");
@@ -3500,6 +3519,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let job = start_create_internal(create_req, &registry).expect("job start");
@@ -3545,6 +3565,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let job = start_create_internal(create_req, &registry).expect("job start");
@@ -3599,6 +3620,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3645,6 +3667,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let c_job = start_create_internal(c_req, &registry).expect("c_job");
@@ -3708,6 +3731,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
@@ -3778,6 +3802,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
@@ -3860,6 +3885,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3899,6 +3925,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
 
@@ -3970,6 +3997,7 @@ mod tests {
             seven_z_chunk_size: None,
             seven_z_encrypt_file_names: None,
             tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
             preserve_metadata: false,
         };
         let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");

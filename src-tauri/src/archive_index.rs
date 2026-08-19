@@ -997,6 +997,7 @@ mod tests {
                 replace_existing: true,
                 key_source: TzapKeySource::NoPassword,
                 x509_signing: None,
+                emit_bootstrap_sidecar: false,
             },
             &mut context,
         )

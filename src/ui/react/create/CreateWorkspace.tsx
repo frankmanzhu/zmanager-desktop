@@ -1461,6 +1461,27 @@ function CreateOptions() {
                   }
                 />
               </label>
+              {options.format === "tzap" ? (
+                <label className="flex items-center gap-2">
+                  <input
+                    id="create-tzap-bootstrap-sidecar"
+                    type="checkbox"
+                    checked={options.tzapBootstrapSidecar}
+                    onChange={(event) =>
+                      actions.handleCreateIntent({
+                        type: "setOptions",
+                        patch: {
+                          tzapBootstrapSidecar: event.currentTarget.checked,
+                        },
+                      })
+                    }
+                  />
+                  <span className="inline-flex items-center gap-1">
+                    {i18n.t("create.tzapBootstrapSidecar")}
+                    <InfoTip content={i18n.t("create.tzapBootstrapSidecar.tooltip")} />
+                  </span>
+                </label>
+              ) : null}
             </div>
             {capabilities.sevenZAdvanced ? (
               <section className="grid gap-3 border-t border-black/10 pt-4 dark:border-white/10">

@@ -375,6 +375,8 @@ export const zhCnMessages = {
   "create.followSymlinks.tooltip": "归档符号链接的目标内容，而不是保留链接本身。",
   "create.zipCompression": "ZIP 压缩方式",
   "create.tzapVolumeLossTolerance": "分卷丢失容忍数",
+  "create.tzapBootstrapSidecar": "生成引导 Sidecar 文件 (.sidecar)",
+  "create.tzapBootstrapSidecar.tooltip": "生成辅助 .sidecar 伴生文件，用于可定位归档引导和索引恢复。",
   "create.sevenZSolid": "固实压缩",
   "create.sevenZSolid.tooltip": "将文件一起压缩以提高压缩率，但访问单个文件会更慢。",
   "create.sevenZThreads": "压缩线程数",

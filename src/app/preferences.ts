@@ -35,6 +35,7 @@ export type FormatCreateDefaults = {
   tzapVolumeLossTolerance?: number;
   tzapSigningDefault?: TzapSigningDefault;
   tzapDefaultSigningIdentityId?: string | null;
+  tzapBootstrapSidecar?: boolean;
   zipCompression?: "store" | "deflate";
   sevenZSolid?: boolean;
   sevenZThreads?: number | null;
@@ -121,6 +122,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       tzapVolumeLossTolerance: 0,
       tzapSigningDefault: "accountDefault",
       tzapDefaultSigningIdentityId: null,
+      tzapBootstrapSidecar: false,
     },
     sevenZ: {
       cleanSource: true,
@@ -339,6 +341,7 @@ function loadCreateFormatDefaults(value: string | null, cleanSourceFallback: boo
                 return mode === "identity" && !identityId ? "accountDefault" : mode;
               })(),
               tzapDefaultSigningIdentityId: storedOptionalString(raw?.tzapDefaultSigningIdentityId, fallback.tzapDefaultSigningIdentityId ?? null),
+              tzapBootstrapSidecar: storedObjectBool(raw?.tzapBootstrapSidecar, fallback.tzapBootstrapSidecar ?? false),
             } : {}),
             ...(format === "sevenZ" ? {
               sevenZSolid: storedObjectBool(raw?.sevenZSolid, fallback.sevenZSolid ?? true),

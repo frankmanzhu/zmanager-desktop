@@ -116,6 +116,7 @@ describe("preferences helpers", () => {
           tzapVolumeLossTolerance: 0,
           tzapSigningDefault: "accountDefault",
           tzapDefaultSigningIdentityId: null,
+          tzapBootstrapSidecar: false,
         },
         sevenZ: {
           cleanSource: false,

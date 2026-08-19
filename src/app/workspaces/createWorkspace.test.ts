@@ -199,6 +199,7 @@ describe("create workspace source state", () => {
         tzapSigningCertificatePath: "",
         tzapSigningPrivateKeyPath: "",
         tzapSigningChainPaths: "",
+        tzapBootstrapSidecar: false,
         submissionInFlight: false,
         password: {
           supportsPassword: false,
@@ -1544,6 +1545,7 @@ describe("create workspace start request", () => {
           chainPaths: ["C:/certs/intermediate-1.pem", "C:/certs/intermediate-2.pem"],
         },
       },
+      tzapBootstrapSidecar: false,
     });
     expect(result.snapshot.options.destinationPath).toBe("C:/out/project.tzap");
   });

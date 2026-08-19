@@ -496,6 +496,7 @@ export type BuildStartCreateRequestInput = {
   sevenZChunkSize?: number;
   sevenZEncryptFileNames?: boolean;
   tzapCertificates?: StartCreateRequest["tzapCertificates"];
+  tzapBootstrapSidecar?: boolean;
 };
 
 export function buildStartCreateRequest(input: BuildStartCreateRequestInput): StartCreateRequest {
@@ -528,6 +529,9 @@ export function buildStartCreateRequest(input: BuildStartCreateRequestInput): St
             ? 0
             : normalizeTzapVolumeLossTolerance(input.tzapVolumeLossTolerance) ?? 0,
           ...(input.tzapCertificates ? { tzapCertificates: input.tzapCertificates } : {}),
+          ...(input.tzapBootstrapSidecar !== undefined
+            ? { tzapBootstrapSidecar: input.tzapBootstrapSidecar }
+            : {}),
         }
       : {}),
     ...(input.format === "sevenZ"

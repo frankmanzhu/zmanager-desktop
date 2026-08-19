@@ -547,6 +547,8 @@ export const enMessages = {
   "create.followSymlinks.tooltip": "Archive the target content of symbolic links instead of preserving the links themselves.",
   "create.zipCompression": "ZIP method",
   "create.tzapVolumeLossTolerance": "Volume loss tolerance",
+  "create.tzapBootstrapSidecar": "Emit bootstrap sidecar (.sidecar)",
+  "create.tzapBootstrapSidecar.tooltip": "Generate an auxiliary .sidecar companion file for seekable archive bootstrap and index recovery.",
   "create.sevenZSolid": "Solid archive",
   "create.sevenZSolid.tooltip": "Compress files together for a better ratio, at the cost of slower access to individual files.",
   "create.sevenZThreads": "Compression threads",

@@ -153,6 +153,7 @@ export type CreateWorkspaceOptionsSnapshot = Readonly<{
   tzapSigningCertificatePath: string;
   tzapSigningPrivateKeyPath: string;
   tzapSigningChainPaths: string;
+  tzapBootstrapSidecar: boolean;
   submissionInFlight: boolean;
   password: CreateWorkspacePasswordOptionSnapshot;
   tzapRecovery: CreateWorkspaceTzapRecoveryOptionSnapshot;
@@ -217,6 +218,7 @@ export type CreateWorkspaceOptionPatch = Readonly<{
   tzapSigningCertificatePath?: string;
   tzapSigningPrivateKeyPath?: string;
   tzapSigningChainPaths?: string;
+  tzapBootstrapSidecar?: boolean;
 }>;
 
 export type CreateWorkspacePlanQueueResult = Readonly<{
@@ -448,6 +450,7 @@ type MutableCreateWorkspaceOptions = {
   tzapSigningCertificatePath: string;
   tzapSigningPrivateKeyPath: string;
   tzapSigningChainPaths: string;
+  tzapBootstrapSidecar: boolean;
   submissionInFlight: boolean;
 };
 
@@ -478,6 +481,7 @@ const DEFAULT_CREATE_OPTIONS: MutableCreateWorkspaceOptions = {
   tzapSigningCertificatePath: "",
   tzapSigningPrivateKeyPath: "",
   tzapSigningChainPaths: "",
+  tzapBootstrapSidecar: false,
   submissionInFlight: false,
 };
 
@@ -857,6 +861,7 @@ export function createCreateWorkspace(initialColumnSettings?: CreateSourceColumn
         ...(patch.tzapSigningCertificatePath !== undefined ? { tzapSigningCertificatePath: patch.tzapSigningCertificatePath } : {}),
         ...(patch.tzapSigningPrivateKeyPath !== undefined ? { tzapSigningPrivateKeyPath: patch.tzapSigningPrivateKeyPath } : {}),
         ...(patch.tzapSigningChainPaths !== undefined ? { tzapSigningChainPaths: patch.tzapSigningChainPaths } : {}),
+        ...(patch.tzapBootstrapSidecar !== undefined ? { tzapBootstrapSidecar: patch.tzapBootstrapSidecar } : {}),
       };
       if (state.options.format === "tzap" && patch.volumeSize !== undefined) {
         if (nextOptions.volumeSize === null) {
@@ -1435,6 +1440,7 @@ function applyDefaultsToOptions(
     tzapSigningCertificatePath: "",
     tzapSigningPrivateKeyPath: "",
     tzapSigningChainPaths: "",
+    tzapBootstrapSidecar: format === "tzap" ? (defaults.tzapBootstrapSidecar ?? false) : false,
   };
 }
 
@@ -1482,6 +1488,9 @@ function buildStartCreateRequestFromState(
       : undefined,
     tzapCertificates: state.options.format === "tzap"
       ? tzapCertificateRequestFromState(state.options, input.signingIdentityPassword)
+      : undefined,
+    tzapBootstrapSidecar: state.options.format === "tzap"
+      ? state.options.tzapBootstrapSidecar
       : undefined,
   });
 }
@@ -1655,6 +1664,7 @@ function sameOptions(left: MutableCreateWorkspaceOptions, right: MutableCreateWo
     left.tzapSigningCertificatePath === right.tzapSigningCertificatePath &&
     left.tzapSigningPrivateKeyPath === right.tzapSigningPrivateKeyPath &&
     left.tzapSigningChainPaths === right.tzapSigningChainPaths &&
+    left.tzapBootstrapSidecar === right.tzapBootstrapSidecar &&
     left.submissionInFlight === right.submissionInFlight
   );
 }
@@ -2368,6 +2378,7 @@ function createOptionsSnapshot(
     tzapSigningCertificatePath: state.options.tzapSigningCertificatePath,
     tzapSigningPrivateKeyPath: state.options.tzapSigningPrivateKeyPath,
     tzapSigningChainPaths: state.options.tzapSigningChainPaths,
+    tzapBootstrapSidecar: state.options.tzapBootstrapSidecar,
     submissionInFlight: state.options.submissionInFlight,
     password: Object.freeze({
       supportsPassword,
