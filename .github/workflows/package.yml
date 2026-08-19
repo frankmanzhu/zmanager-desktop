@@ -190,7 +190,10 @@ jobs:
 
       - name: Install Fedora prerequisites
         shell: bash
-        run: dnf install -y python3 git ripgrep ca-certificates
+        run: |
+          dnf install -y python3 git ripgrep ca-certificates
+          npm ci
+          scripts/ensure-sibling-repos.sh
 
       - name: Run Fedora packaging and architecture tests
         shell: bash
