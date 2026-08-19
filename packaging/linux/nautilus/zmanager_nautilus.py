@@ -8,10 +8,40 @@ from urllib.parse import unquote, urlparse
 
 import gi
 
-try:
-    gi.require_version("Nautilus", "4.0")
-except ValueError:
-    gi.require_version("Nautilus", "3.0")
+def _require_nautilus_version() -> None:
+    versions: list[str] = []
+    try:
+        repo = gi.Repository.get_default()
+        versions = list(repo.enumerate_versions("Nautilus"))
+    except Exception:
+        pass
+
+    def _parse_version(v: str) -> tuple[int, ...]:
+        try:
+            return tuple(int(part) for part in v.split("."))
+        except Exception:
+            return (0,)
+
+    # Support Nautilus 4.0+ and 3.0+ APIs, preferring the highest available version
+    candidate_versions = [v for v in versions if _parse_version(v) >= (3, 0)]
+    candidate_versions.sort(key=_parse_version, reverse=True)
+
+    for version in candidate_versions:
+        try:
+            gi.require_version("Nautilus", version)
+            return
+        except ValueError:
+            continue
+
+    for fallback in ("4.1", "4.0", "3.0"):
+        try:
+            gi.require_version("Nautilus", fallback)
+            return
+        except ValueError:
+            continue
+
+
+_require_nautilus_version()
 from gi.repository import GObject, Nautilus
 from zmanager_shell_actions_generated import (
     ARCHIVE_ACTIONS,

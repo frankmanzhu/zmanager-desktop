@@ -126,8 +126,8 @@ describe("Linux context menu packaging", () => {
       };
     };
 
-    expect(extension).toContain('gi.require_version("Nautilus", "4.0")');
-    expect(extension).toContain('gi.require_version("Nautilus", "3.0")');
+    expect(extension).toContain('repo.enumerate_versions("Nautilus")');
+    expect(extension).toContain('gi.require_version("Nautilus", version)');
     expect(extension).toContain("def get_file_items(self, *args)");
     expect(extension).toContain("def get_background_items(self, *args)");
     expect(extension).toContain("class ZManagerMenuProvider");

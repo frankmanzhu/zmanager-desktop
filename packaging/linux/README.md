@@ -160,7 +160,7 @@ sudo add-apt-repository universe
 sudo apt-get update
 ```
 
-The extension supports both Nautilus 4.0 and older Nautilus 3.0 Python APIs.
+The extension dynamically negotiates Nautilus 4.0+ and 3.0+ Python APIs.
 The package scripts ask running Nautilus instances to quit after install,
 upgrade, or removal because Nautilus does not reload Python extensions while it
 is running. The next time GNOME Files opens, it loads the current ZManager
