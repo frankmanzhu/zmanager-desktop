@@ -8,6 +8,7 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export MACOSX_DEPLOYMENT_TARGET=14.0
+export LZMA_API_STATIC=1
 # The extensions consume the UniFFI zmanager-ffi crate from the sibling
 # zmanager checkout (same source tree as the main application; the zmanager
 # workspace [patch] entries make tzap resolve to the sibling tzap repo).

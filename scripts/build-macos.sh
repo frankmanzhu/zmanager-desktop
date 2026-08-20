@@ -10,6 +10,7 @@ install_application=1
 bundle_kind="all"
 install_dir="${ZMANAGER_MACOS_INSTALL_DIR:-/Applications}"
 architecture="$(uname -m)"
+export LZMA_API_STATIC=1
 local_development_codesign_identity="8014C7D557DE28E3C52971362BA18A3CCC28A723"
 
 usage() {
