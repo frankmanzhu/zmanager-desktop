@@ -45,12 +45,24 @@ jobs:
         run: |
           echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
 
-      - name: Install build dependencies
+      - name: Install build and test dependencies
         run: |
           brew install cmake lz4 xz ripgrep
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
+          npx playwright install --with-deps chromium
           scripts/ensure-sibling-repos.sh
+
+      - name: Run release verification tests
+        run: |
+          npm run test:frontend
+          npm run test:architecture
+          npm run test:e2e
+          (cd src-tauri && cargo fmt --check)
+          (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
+          swift test --package-path native/macos
 
       - name: Determine macOS signing mode
         id: macos_signing

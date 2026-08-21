@@ -8242,6 +8242,7 @@ dependencies = [
  "mtree",
  "num-bigint",
  "openssl",
+ "quick-xml 0.41.0",
  "rand",
  "rayon",
  "serde",

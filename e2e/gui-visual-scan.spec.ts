@@ -120,6 +120,7 @@ test("native file icons keep clear visual spacing from file names", async ({ pag
   });
 
   await fileRow.screenshot({ path: `${auditDir}/37-native-file-icon-spacing.png` });
+  await expect(fileRow).toHaveScreenshot("37-native-file-icon-spacing.png");
   expect(spacing).toBeGreaterThanOrEqual(8);
 });
 
@@ -738,6 +739,7 @@ test("Preferences invalid output keeps scroll ownership at tall and compact size
   expect(tallAfter.surface.height).toBeGreaterThan(tallBefore.surface.height);
   expect(tallAfter.content.scrollHeight).toBeLessThanOrEqual(tallAfter.content.clientHeight + 2);
   await page.screenshot({ path: `${auditDir}/38-preferences-invalid-tall.png`, fullPage: false });
+  await expect(page).toHaveScreenshot("38-preferences-invalid-tall.png");
   await auditDesktopDialogLayout(page);
   await closeDevSurface(page);
 
@@ -751,6 +753,7 @@ test("Preferences invalid output keeps scroll ownership at tall and compact size
   expect(compact.surface.height).toBeLessThanOrEqual(492 + 2);
   expect(compact.content.overflowY).toMatch(/auto|scroll/);
   await page.screenshot({ path: `${auditDir}/39-preferences-invalid-compact.png`, fullPage: false });
+  await expect(page).toHaveScreenshot("39-preferences-invalid-compact.png");
   await auditDesktopDialogLayout(page);
 
   await closeDevSurface(page);
@@ -912,12 +915,14 @@ async function captureAndScan(page: Page, name: string) {
   if (await page.locator("[data-dialog-surface]").count()) {
     await auditDesktopDialogLayout(page);
   }
+  await expect(page).toHaveScreenshot(`${name}.png`);
 }
 
 async function captureHero(page: Page, name: string, selector: string) {
   const target = page.locator(selector);
   await expect(target).toBeVisible();
   await target.screenshot({ path: `${auditDir}/${name}.png` });
+  await expect(target).toHaveScreenshot(`${name}.png`);
 }
 
 async function captureReadmeHero(page: Page, name: string, selector: string) {

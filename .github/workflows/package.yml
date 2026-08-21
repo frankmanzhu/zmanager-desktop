@@ -44,18 +44,29 @@ jobs:
           brew install cmake lz4 xz ripgrep
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
           npm ci
+          npx playwright install --with-deps chromium
           scripts/ensure-sibling-repos.sh
           scripts/sync-uniffi-swift-bindings.sh
 
-      - name: Run macOS migration and contract tests
+      - name: Run macOS migration, E2E visual scans, and contract tests
         run: |
           npm run test:frontend
           npm run test:architecture
+          npm run test:e2e
           (cd src-tauri && cargo fmt --check)
           (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
           cargo test --manifest-path src-tauri/Cargo.toml
           cargo test --manifest-path crates/zmanager-shell-contract/Cargo.toml
           swift test --package-path native/macos
+
+      - name: Upload Playwright test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-results-macos-${{ matrix.arch }}
+          path: |
+            test-results/
+            docs/gui-audit/
 
       - name: Build and inspect ad-hoc release bundle
         env:

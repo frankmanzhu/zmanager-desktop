@@ -6,6 +6,13 @@ const browserChannel =
 export default defineConfig({
   testDir: "./e2e",
   testIgnore: "**/tauri/**",
+  snapshotPathTemplate: "{testDir}/snapshots/{testFilePath}/{arg}{ext}",
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      animations: "disabled",
+    },
+  },
   fullyParallel: true,
   reporter: [["list"]],
   use: {
