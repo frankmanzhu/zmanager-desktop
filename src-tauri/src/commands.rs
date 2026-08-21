@@ -1156,6 +1156,7 @@ fn run_selected_extract_job(
                 tzap_allow_degraded: tzap_restore_options.allow_degraded,
                 tzap_allow_absolute_symlinks: tzap_restore_options.allow_absolute_symlinks,
                 ignore_symlinks: policy.ignore_symlinks,
+                limits: None,
             },
         )
         .map_err(crate::platform::map_archive_browser_error)?;

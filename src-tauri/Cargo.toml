@@ -33,9 +33,6 @@ zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmana
 zmanager-tzap-hosted = { path = "../../zmanager/crates/zmanager-tzap-hosted" }
 reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "native-tls"] }
 tauri-plugin-deep-link = "2"
-tzap-core = { path = "../../tzap/crates/tzap-core" }
-tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
-tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }
 
 [target.'cfg(windows)'.dependencies]
 png = "0.18.1"
@@ -72,11 +69,6 @@ keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
-
-[patch.crates-io]
-tzap-core = { path = "../../tzap/crates/tzap-core" }
-tzap-plugin-keywrap = { path = "../../tzap/crates/tzap-plugin-keywrap" }
-tzap-plugin-signing = { path = "../../tzap/crates/tzap-plugin-signing" }
 
 [profile.release]
 lto = "thin"
