@@ -41,7 +41,7 @@ use zmanager_core::engine::{
     TzapRestoreOptions, TzapRestorePolicy, TzapX509TrustOptions, ZipCompression, ZipCreateOptions, is_tzap_archive_path,
 };
 use zmanager_core::jobs::{CancellationToken, JobEvent, JobEventSink};
-use zmanager_core::manifest::{ArchiveManifest, ManifestFileType, PlanError, PlanOptions, plan_archives};
+use zmanager_core::manifest::{ManifestFileType, PlanError, PlanOptions, plan_archives};
 use zmanager_core::safety::{ExtractionPolicy, OverwritePolicy, UnsafeFilePolicy};
 use zmanager_core::secrets::SecretString;
 
@@ -230,7 +230,8 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
     let manifest = plan_archives(sources, &options).map_err(map_plan_error)?;
     let included_count = manifest.included_count();
     let excluded_count = manifest.excluded_count();
-    let plan_entries: Vec<CreatePlanEntryDto> = manifest.entries.iter().map(create_plan_entry_to_dto).collect();
+    let mut identity_cache = crate::platform::IdentityCache::new();
+    let plan_entries: Vec<CreatePlanEntryDto> = manifest.entries.iter().map(|entry| create_plan_entry_to_dto(entry, &mut identity_cache)).collect();
     let entries = manifest.entries.iter().map(|entry| entry.archive_path.clone()).collect();
     let excluded_entries = manifest.excluded_entries.into_iter().map(|entry| entry.archive_path).collect();
     let warnings = manifest.warnings.into_iter().map(|warning| warning.message).collect();
@@ -247,7 +248,7 @@ pub fn plan_create(request: PlanCreateRequest) -> Result<CreatePlanResponse, Com
     })
 }
 
-fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> CreatePlanEntryDto {
+fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry, cache: &mut crate::platform::IdentityCache) -> CreatePlanEntryDto {
     let link_target = entry.symlink_target.as_ref().map(|p| p.to_string_lossy().to_string());
 
     // Collect platform metadata from the source path.
@@ -258,7 +259,7 @@ fn create_plan_entry_to_dto(entry: &zmanager_core::manifest::ManifestEntry) -> C
 
     let accessed = source_meta.as_ref().and_then(|m| m.accessed().ok()).and_then(system_time_to_epoch_seconds_string);
 
-    let platform_metadata = crate::platform::source_platform_metadata(&entry.source_path, &entry.permissions);
+    let platform_metadata = crate::platform::source_platform_metadata(&entry.source_path, source_meta.as_ref(), &entry.permissions, cache);
 
     CreatePlanEntryDto {
         path: entry.archive_path.clone(),
@@ -350,19 +351,6 @@ pub fn start_create(
     Ok(response)
 }
 
-fn create_progress_estimate_for_format(manifest: &ArchiveManifest, format: crate::dto::ArchiveFormatDto) -> (usize, u64) {
-    let total_entries = match format {
-        crate::dto::ArchiveFormatDto::Tzap => manifest.entries.iter().filter(|entry| matches!(entry.file_type, ManifestFileType::File)).count(),
-        crate::dto::ArchiveFormatDto::Zip
-        | crate::dto::ArchiveFormatDto::TarZst
-        | crate::dto::ArchiveFormatDto::TarGz
-        | crate::dto::ArchiveFormatDto::SevenZ
-        | crate::dto::ArchiveFormatDto::AppleArchive => manifest.included_count(),
-    };
-
-    (total_entries, manifest.total_bytes)
-}
-
 fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
     let bytes = std::fs::read(path).map_err(|error| format!("unable to read recipient certificate: {error}"))?;
     let certificate = X509::from_pem(&bytes).or_else(|_| X509::from_der(&bytes)).map_err(|error| format!("recipient certificate is invalid: {error}"))?;
@@ -414,8 +402,6 @@ fn start_create_internal_with_resolver(
     plan_options.include_archive_paths = request.include_archive_paths.unwrap_or_default();
     plan_options.respect_gitignore = request.respect_gitignore;
     plan_options.follow_symlinks = request.follow_symlinks;
-    let plan_result = plan_archives(sources.clone(), &plan_options);
-    let create_progress_estimate = plan_result.as_ref().ok().map(|manifest| create_progress_estimate_for_format(manifest, request.format));
     let plan_options_for_thread = plan_options;
 
     let kind = match request.format {
@@ -452,27 +438,25 @@ fn start_create_internal_with_resolver(
             vec![JobAvailableActionDto { action_id: "reveal-output".into(), kind: JobActionKindDto::Reveal, artifact_id: "output".into() }],
         )
         .map_err(subscription_error)?;
-    if let Some((total_entries, total_bytes)) = create_progress_estimate {
-        registry.emit_direct_event(
-            &response.job_id,
-            JobEventDto {
-                event_type: JobEventKindDto::Started,
-                job_kind: Some(kind),
-                phase: None,
-                code: None,
-                hint: None,
-                severity: None,
-                retryable: None,
-                path: None,
-                bytes: None,
-                total_bytes: Some(total_bytes),
-                total_bytes_processed: Some(0),
-                entries: Some(0),
-                total_entries: Some(total_entries),
-                message: Some("Planning archive.".to_string()),
-            },
-        );
-    }
+    registry.emit_direct_event(
+        &response.job_id,
+        JobEventDto {
+            event_type: JobEventKindDto::Started,
+            job_kind: Some(kind),
+            phase: None,
+            code: None,
+            hint: None,
+            severity: None,
+            retryable: None,
+            path: None,
+            bytes: None,
+            total_bytes: None,
+            total_bytes_processed: Some(0),
+            entries: Some(0),
+            total_entries: None,
+            message: Some("Starting archive creation.".to_string()),
+        },
+    );
     let registry_for_thread = registry.clone();
     let job_id = response.job_id.clone();
 
@@ -1760,7 +1744,7 @@ mod tests {
             symlink_target: None,
         };
 
-        let dto = create_plan_entry_to_dto(&entry);
+        let dto = create_plan_entry_to_dto(&entry, &mut crate::platform::IdentityCache::new());
 
         assert_eq!(dto.mode, Some(0o755));
     }
@@ -1777,7 +1761,7 @@ mod tests {
             symlink_target: Some(PathBuf::from("target.txt")),
         };
 
-        let dto = create_plan_entry_to_dto(&entry);
+        let dto = create_plan_entry_to_dto(&entry, &mut crate::platform::IdentityCache::new());
 
         assert_eq!(dto.link_target, Some("target.txt".to_string()));
         // Optional fields not yet populated remain None
@@ -1798,7 +1782,7 @@ mod tests {
             symlink_target: None,
         };
 
-        let dto = create_plan_entry_to_dto(&entry);
+        let dto = create_plan_entry_to_dto(&entry, &mut crate::platform::IdentityCache::new());
 
         assert_eq!(dto.link_target, None);
     }
@@ -1820,24 +1804,31 @@ mod tests {
         symlink("target.txt", &link).unwrap();
         assert!(std::process::Command::new("/usr/bin/chflags").arg("hidden").arg(&target).status().unwrap().success());
 
-        let target_dto = create_plan_entry_to_dto(&ManifestEntry {
-            archive_path: "target.txt".into(),
-            source_path: target.clone(),
-            file_type: ManifestFileType::File,
-            size: 6,
-            modified: None,
-            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o644) },
-            symlink_target: None,
-        });
-        let link_dto = create_plan_entry_to_dto(&ManifestEntry {
-            archive_path: "link.txt".into(),
-            source_path: link,
-            file_type: ManifestFileType::Symlink,
-            size: 0,
-            modified: None,
-            permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o777) },
-            symlink_target: Some(PathBuf::from("target.txt")),
-        });
+        let mut identity_cache = crate::platform::IdentityCache::new();
+        let target_dto = create_plan_entry_to_dto(
+            &ManifestEntry {
+                archive_path: "target.txt".into(),
+                source_path: target.clone(),
+                file_type: ManifestFileType::File,
+                size: 6,
+                modified: None,
+                permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o644) },
+                symlink_target: None,
+            },
+            &mut identity_cache,
+        );
+        let link_dto = create_plan_entry_to_dto(
+            &ManifestEntry {
+                archive_path: "link.txt".into(),
+                source_path: link,
+                file_type: ManifestFileType::Symlink,
+                size: 0,
+                modified: None,
+                permissions: PermissionSnapshot { readonly: false, unix_mode: Some(0o777) },
+                symlink_target: Some(PathBuf::from("target.txt")),
+            },
+            &mut identity_cache,
+        );
 
         assert!(target_dto.created.is_some());
         assert!(target_dto.accessed.is_some());

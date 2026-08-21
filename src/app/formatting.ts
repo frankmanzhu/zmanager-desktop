@@ -60,6 +60,41 @@ export function formatBytes(
   return `${formatNumber(scaled, fractionDigits, options.locale)} ${BYTE_UNITS[unitIndex]}`;
 }
 
+const DATE_FORMATTER_CACHE = new Map<string, Intl.DateTimeFormat>();
+const NUMBER_FORMATTER_CACHE = new Map<string, Intl.NumberFormat>();
+
+function getDateTimeFormatter(
+  locale?: string | string[],
+  dateStyle: Intl.DateTimeFormatOptions["dateStyle"] = "medium",
+  timeStyle: Intl.DateTimeFormatOptions["timeStyle"] = "short",
+): Intl.DateTimeFormat {
+  const localeKey = Array.isArray(locale) ? locale.join(",") : (locale ?? "");
+  const cacheKey = `${localeKey}|${dateStyle ?? ""}|${timeStyle ?? ""}`;
+  let formatter = DATE_FORMATTER_CACHE.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { dateStyle, timeStyle });
+    DATE_FORMATTER_CACHE.set(cacheKey, formatter);
+  }
+  return formatter;
+}
+
+function getNumberFormatter(
+  fractionDigits: number,
+  locale?: string | string[],
+): Intl.NumberFormat {
+  const localeKey = Array.isArray(locale) ? locale.join(",") : (locale ?? "");
+  const cacheKey = `${localeKey}|${fractionDigits}`;
+  let formatter = NUMBER_FORMATTER_CACHE.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: fractionDigits,
+    });
+    NUMBER_FORMATTER_CACHE.set(cacheKey, formatter);
+  }
+  return formatter;
+}
+
 export function formatDate(
   value?: string | number | Date | null,
   options: FormatDateOptions = {},
@@ -70,10 +105,11 @@ export function formatDate(
     return emptyValue;
   }
 
-  return new Intl.DateTimeFormat(options.locale, {
-    dateStyle: options.dateStyle ?? "medium",
-    timeStyle: options.timeStyle ?? "short",
-  }).format(date);
+  return getDateTimeFormatter(
+    options.locale,
+    options.dateStyle ?? "medium",
+    options.timeStyle ?? "short",
+  ).format(date);
 }
 
 export function parseDateValue(value?: string | number | Date | null): Date | null {
@@ -100,6 +136,41 @@ export function parseDateValue(value?: string | number | Date | null): Date | nu
 
   const date = new Date(trimmed);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function parseEpochTimestamp(value?: string | number | Date | null): number | null {
+  if (isUnknownDateValue(value)) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : time;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value === 0) {
+      return null;
+    }
+    return Math.abs(value) < EPOCH_SECONDS_THRESHOLD ? value * 1000 : value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (NUMERIC_DATE_PATTERN.test(trimmed)) {
+    const numeric = Number(trimmed);
+    if (!Number.isFinite(numeric) || numeric === 0) {
+      return null;
+    }
+    return Math.abs(numeric) < EPOCH_SECONDS_THRESHOLD ? numeric * 1000 : numeric;
+  }
+
+  const date = new Date(trimmed);
+  const time = date.getTime();
+  return Number.isNaN(time) ? null : time;
 }
 
 function isUnknownDateValue(value?: string | number | Date | null): boolean {
@@ -171,10 +242,7 @@ function formatNumber(
   fractionDigits: number,
   locale?: string | string[],
 ): string {
-  return new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
+  return getNumberFormatter(fractionDigits, locale).format(value);
 }
 
 export function escapeHtml(value: string | number | boolean | null | undefined): string {

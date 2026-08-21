@@ -99,6 +99,7 @@ import {
 import {
   CREATE_SOURCE_TABLE_COLUMNS,
   type CreateSourceColumnId,
+  type CreateSourceColumnSettings,
 } from "../app/createTableColumns";
 import {
   resolveCompressColumns,
@@ -107,6 +108,8 @@ import {
   resolveExtractSortKey,
   compareResolvedDefaults,
   resolveExtractFamilyFromPath,
+  archiveSettingsFromResolved,
+  createSettingsFromResolved,
   type ResolvedWorkspaceColumns,
 } from "../app/workspaceColumnResolver";
 import {
@@ -422,18 +425,6 @@ let compressCapabilitySet: readonly CompressTableColumnId[] = COMPRESS_SAFE_BASE
 // Track whether user has made local column changes (to decide clamp vs reset on contract arrival)
 let createWorkspaceHadLocalColumnMutation = false;
 
-/** Convert workspace resolver output to generic workspace column settings.
- *  Returns `any` to bridge the value-compatible but nominally-distinct column ID types
- *  (ArchiveTableColumnId / CreateSourceColumnId vs the unified TableColumnId). */
-function settingsFromResolvedColumns(
-  resolved: ResolvedWorkspaceColumns,
-): { visibleColumnIds: string[]; columnOrderIds: string[]; columnWidths: Record<string, number> } {
-  return {
-    visibleColumnIds: [...resolved.currentVisibleIds] as string[],
-    columnOrderIds: [...resolved.canonicalOrder] as string[],
-    columnWidths: {},
-  };
-}
 const shellWorkspace = createShellWorkspace();
 const pathHistoryStore = createPathHistoryStore();
 // Resolve initial archive table columns from prefs (conservative: no archive open yet)
@@ -441,13 +432,13 @@ const initialExtractResolved = resolveExtractColumns({
   familyResolution: { kind: "unknown" as const },
   visibilityPrefs: columnVisibilityPrefs,
 });
-const initialArchiveColumns = settingsFromResolvedColumns(initialExtractResolved);
+const initialArchiveColumns = archiveSettingsFromResolved(initialExtractResolved);
 const archiveWorkspace = createArchiveWorkspace({
   flatView: appPreferences.flatViewDefault,
   showParentFolderItem: appPreferences.showParentFolderItem,
   sortKey: appPreferences.tableSortKey,
   sortAscending: appPreferences.tableSortAscending,
-  tableColumns: initialArchiveColumns as ArchiveTableColumnSettings,
+  tableColumns: initialArchiveColumns,
 });
 
 // Resolve initial create table columns from prefs + safe-base capability set
@@ -455,13 +446,19 @@ const initialCompressResolved = resolveCompressColumns({
   capabilitySet: compressCapabilitySet,
   visibilityPrefs: columnVisibilityPrefs,
 });
-const initialCreateColumns = settingsFromResolvedColumns(initialCompressResolved);
-const createWorkspace = createCreateWorkspace(initialCreateColumns as any);
+const initialCreateColumns = createSettingsFromResolved(initialCompressResolved);
+const createWorkspace = createCreateWorkspace(initialCreateColumns);
 const extractWorkspace = createExtractWorkspace();
 const accountWorkspace = createAccountWorkspace();
 let displayContext = createDisplayContext(appPreferences.locale);
 let preferencesDialogDraft: AppPreferences | null = null;
 let systemIconDataUrls = new Map<string, string | null>();
+let cachedSystemIconsSnapshot: Record<string, string | null> = {};
+
+function syncSystemIconsSnapshot(): void {
+  cachedSystemIconsSnapshot = Object.fromEntries(systemIconDataUrls);
+}
+
 let systemIconRequestRevision = 0;
 let activeExtractMode: ExtractMode = "archive";
 let activeExtractDialogForm: ExtractDialogFormSnapshot = createExtractDialogFormSnapshot();
@@ -881,7 +878,7 @@ const archiveLoadController = createArchiveLoadController({
       familyResolution: familyRes,
       visibilityPrefs: columnVisibilityPrefs,
     });
-    return settingsFromResolvedColumns(resolved) as any;
+    return archiveSettingsFromResolved(resolved);
   },
 });
 const archiveOpenController = createArchiveOpenController({
@@ -1099,7 +1096,7 @@ const startupController = createStartupController({
         const availableSet = new Set(resolved.availableColumnIds);
         // Keep only locally-visible columns that are still available
         const snap = createWorkspace.getSnapshot();
-        const clampedSettings = {
+        const clampedSettings: CreateSourceColumnSettings = {
           visibleColumnIds: snap.view.columnSettings.visibleColumnIds.filter(
             (id) => availableSet.has(id as TableColumnId),
           ),
@@ -1112,15 +1109,15 @@ const startupController = createStartupController({
             ),
           ),
         };
-        publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(clampedSettings as any));
+        publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(clampedSettings));
       } else {
         // No local mutations — reset to newly resolved configured defaults
         const resolved = resolveCompressColumns({
           capabilitySet: validated,
           visibilityPrefs: columnVisibilityPrefs,
         });
-        const columns = settingsFromResolvedColumns(resolved);
-        publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(columns as any));
+        const columns = createSettingsFromResolved(resolved);
+        publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(columns));
       }
 
       compressCapabilitySet = validated;
@@ -1471,12 +1468,14 @@ function queueSystemIconRefresh() {
       for (const icon of response.icons) {
         systemIconDataUrls.set(icon.key, icon.dataUrl ?? null);
       }
+      syncSystemIconsSnapshot();
       publishReactSnapshot();
     })
     .catch(() => {
       for (const entry of entries) {
         systemIconDataUrls.set(entry.key, null);
       }
+      syncSystemIconsSnapshot();
     });
 }
 
@@ -1903,7 +1902,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     archive,
     create: createWorkspace.getSnapshot(),
     extract: extractWorkspace.getSnapshot(),
-    systemIcons: Object.fromEntries(systemIconDataUrls),
+    systemIcons: cachedSystemIconsSnapshot,
     preferences: appPreferences,
     preferencesDraft: preferencesDialogDraft,
     columnVisibilityDraft,
@@ -3082,7 +3081,7 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
         visibilityPrefs: columnVisibilityPrefs,
       });
       publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(
-        settingsFromResolvedColumns(resolved) as any,
+        createSettingsFromResolved(resolved),
       ));
       return;
     }
@@ -3109,13 +3108,13 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
         familyResolution: familyRes,
         visibilityPrefs: columnVisibilityPrefs,
       });
-      archiveWorkspace.resetColumns(settingsFromResolvedColumns(resolved) as any);
+      archiveWorkspace.resetColumns(archiveSettingsFromResolved(resolved));
       // Apply sort fallback if the configured sort key is no longer visible
       const sortSnap = archiveWorkspace.getSnapshot();
       const fallback = resolveExtractSortKey(
         appPreferences.tableSortKey,
         appPreferences.tableSortAscending,
-        resolved.currentVisibleIds as unknown as readonly TableColumnId[],
+        resolved.currentVisibleIds,
       );
       if (fallback.sortKey !== sortSnap.view.sort.key) {
         applySortDirection(fallback.sortKey as ArchiveSortKey, fallback.sortAscending);
@@ -3429,12 +3428,12 @@ async function savePreferencesFromDialog() {
 
     if (comparison.extractChanged) {
       publishArchiveSnapshot(archiveWorkspace.resetColumns(
-        settingsFromResolvedColumns(extractAfter) as any,
+        archiveSettingsFromResolved(extractAfter),
       ));
     }
     if (comparison.compressChanged) {
       publishCreateWorkspaceSnapshot(createWorkspace.resetColumns(
-        settingsFromResolvedColumns(compressAfter) as any,
+        createSettingsFromResolved(compressAfter),
       ));
     }
   }
@@ -3619,7 +3618,7 @@ function loadArchiveListingIntoState(listing: ArchiveFixture, options: ArchiveLo
     familyResolution: familyRes,
     visibilityPrefs: columnVisibilityPrefs,
   });
-  const defaultTableColumns = settingsFromResolvedColumns(resolved) as any;
+  const defaultTableColumns = archiveSettingsFromResolved(resolved);
   const snapshot = archiveWorkspace.loadSucceeded(archiveListingFromFixture(listing), {
     preserveState: preservedState,
     defaultTableColumns,
@@ -4167,6 +4166,7 @@ function runtimeDevToolsOptions() {
       loadArchiveFixture: loadArchiveListingIntoState,
       setSystemIconFixtures: (fixtures: Record<string, string | null>) => {
         systemIconDataUrls = new Map(Object.entries(fixtures));
+        syncSystemIconsSnapshot();
         renderBrowse();
       },
       setErrorSurfaceFixture: (fixture: RuntimeDevErrorSurfaceFixture) => {

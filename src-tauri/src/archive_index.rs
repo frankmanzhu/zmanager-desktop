@@ -224,27 +224,29 @@ impl ArchiveIndexRegistry {
         }
 
         let index = index_mutex.lock().unwrap_or_else(|error| error.into_inner());
-        let mut paths = index.children.get(&parent_path).map(|paths| paths.iter().cloned().collect::<Vec<_>>()).unwrap_or_default();
         let sort_key = request.sort_key.as_deref().unwrap_or("name");
         let ascending = request.sort_ascending.unwrap_or(true);
-        paths.sort_by(|left, right| compare_paths_by_sort(left, right, &index.entries, sort_key, ascending));
+        let mut child_entries: Vec<&ArchiveEntryDto> =
+            index.children.get(&parent_path).map(|paths| paths.iter().filter_map(|path| index.entries.get(path)).collect()).unwrap_or_default();
+        child_entries.sort_by(|left, right| compare_entries_by_sort(left, right, sort_key, ascending));
+        let total_count = child_entries.len();
         let cursor_scope = format!("{parent_path}\0{sort_key}\0{ascending}");
         let limit = request.limit.unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE).clamp(1, MAX_ARCHIVE_PAGE_SIZE);
         let offset = decode_cursor(request.cursor.as_deref(), &request.session_id, &cursor_scope, &revision)?;
-        if offset > paths.len() {
+        if offset > total_count {
             return Err(CommandErrorDto::invalid_request("Archive page cursor is out of range."));
         }
-        let end = offset.saturating_add(limit).min(paths.len());
-        let entries = paths[offset..end].iter().filter_map(|path| index.entries.get(path).cloned()).collect();
-        let next_cursor = (end < paths.len()).then(|| encode_cursor(&request.session_id, &cursor_scope, &revision, end));
+        let end = offset.saturating_add(limit).min(total_count);
+        let entries = child_entries[offset..end].iter().map(|&entry| entry.clone()).collect();
+        let next_cursor = (end < total_count).then(|| encode_cursor(&request.session_id, &cursor_scope, &revision, end));
         Ok(ArchiveChildrenPageDto {
             session_id: request.session_id,
             revision,
             parent_path,
             entries,
             next_cursor,
-            complete: end == paths.len(),
-            child_count: paths.len(),
+            complete: end == total_count,
+            child_count: total_count,
         })
     }
 
@@ -279,28 +281,29 @@ impl ArchiveIndexRegistry {
         }
         let index = record.index.lock().unwrap_or_else(|error| error.into_inner());
         let normalized_query = request.query.trim().to_lowercase();
-        let mut paths =
-            index.entries.keys().filter(|path| normalized_query.is_empty() || path.to_lowercase().contains(&normalized_query)).cloned().collect::<Vec<_>>();
+        let mut matching_entries: Vec<&ArchiveEntryDto> =
+            index.entries.values().filter(|entry| normalized_query.is_empty() || case_insensitive_contains(&entry.path, &normalized_query)).collect();
         let sort_key = request.sort_key.as_deref().unwrap_or("name");
         let ascending = request.sort_ascending.unwrap_or(true);
-        paths.sort_by(|left, right| compare_paths_by_sort(left, right, &index.entries, sort_key, ascending));
+        matching_entries.sort_by(|left, right| compare_entries_by_sort(left, right, sort_key, ascending));
+        let total_count = matching_entries.len();
         let cursor_scope = format!("?search={normalized_query}\0{sort_key}\0{ascending}");
         let limit = request.limit.unwrap_or(DEFAULT_ARCHIVE_PAGE_SIZE).clamp(1, MAX_ARCHIVE_PAGE_SIZE);
         let offset = decode_cursor(request.cursor.as_deref(), &request.session_id, &cursor_scope, &record.snapshot.revision)?;
-        if offset > paths.len() {
+        if offset > total_count {
             return Err(CommandErrorDto::invalid_request("Archive search cursor is out of range."));
         }
-        let end = offset.saturating_add(limit).min(paths.len());
-        let entries = paths[offset..end].iter().filter_map(|path| index.entries.get(path).cloned()).collect();
-        let next_cursor = (end < paths.len()).then(|| encode_cursor(&request.session_id, &cursor_scope, &record.snapshot.revision, end));
+        let end = offset.saturating_add(limit).min(total_count);
+        let entries = matching_entries[offset..end].iter().map(|&entry| entry.clone()).collect();
+        let next_cursor = (end < total_count).then(|| encode_cursor(&request.session_id, &cursor_scope, &record.snapshot.revision, end));
         Ok(ArchiveChildrenPageDto {
             session_id: request.session_id,
             revision: record.snapshot.revision.clone(),
             parent_path: String::new(),
             entries,
             next_cursor,
-            complete: end == paths.len(),
-            child_count: paths.len(),
+            complete: end == total_count,
+            child_count: total_count,
         })
     }
 
@@ -511,16 +514,12 @@ impl ArchiveIndex {
         if path.is_empty() {
             return Ok(());
         }
-        self.estimated_metadata_bytes = self
-            .estimated_metadata_bytes
-            .saturating_add(path.len())
-            .saturating_add(128)
-            .saturating_add(browser_entry.metadata_diagnostics.iter().map(String::len).sum::<usize>())
-            .saturating_add(estimate_ancestor_growth(&path, browser_entry.kind, &self.entries, &self.children));
+        let entry_growth = path.len().saturating_add(128).saturating_add(browser_entry.metadata_diagnostics.iter().map(String::len).sum::<usize>());
+        let ancestor_growth = ensure_ancestors(&path, browser_entry.kind, &mut self.entries, &mut self.children);
+        self.estimated_metadata_bytes = self.estimated_metadata_bytes.saturating_add(entry_growth).saturating_add(ancestor_growth);
         if self.estimated_metadata_bytes > MAX_ARCHIVE_INDEX_METADATA_BYTES {
             return Err(CommandErrorDto::operation_failed("Archive metadata exceeds the bounded browse index limit. Extract All and Test remain available."));
         }
-        ensure_ancestors(&path, browser_entry.kind, &mut self.entries, &mut self.children);
         self.entries.insert(path.clone(), browser_entry_to_dto(browser_entry, path));
         Ok(())
     }
@@ -540,11 +539,11 @@ fn build_index(listing: zmanager_core::archive_browser::BrowserListing) -> Resul
     Ok(ArchiveIndexBuild { index, entry_count: statistics.entry_count, total_bytes: statistics.total_bytes })
 }
 
-fn estimate_ancestor_growth(
+fn ensure_ancestors(
     path: &str,
     kind: zmanager_core::archive_browser::BrowserEntryKind,
-    entries: &HashMap<String, ArchiveEntryDto>,
-    children: &HashMap<String, BTreeSet<String>>,
+    entries: &mut HashMap<String, ArchiveEntryDto>,
+    children: &mut HashMap<String, BTreeSet<String>>,
 ) -> usize {
     let segments = path.split('/').collect::<Vec<_>>();
     let directory_depth =
@@ -553,56 +552,56 @@ fn estimate_ancestor_growth(
     let mut growth = 0_usize;
     for (index, segment) in segments.iter().enumerate() {
         let current = if parent.is_empty() { (*segment).to_string() } else { format!("{parent}/{segment}") };
-        if !children.get(&parent).is_some_and(|paths| paths.contains(&current)) {
+        let inserted_child = match children.get_mut(&parent) {
+            Some(set) => {
+                if !set.contains(&current) {
+                    set.insert(current.clone());
+                    true
+                } else {
+                    false
+                }
+            }
+            None => {
+                let mut set = BTreeSet::new();
+                set.insert(current.clone());
+                children.insert(parent.clone(), set);
+                true
+            }
+        };
+        if inserted_child {
             growth = growth.saturating_add(current.len()).saturating_add(32);
         }
         if index < directory_depth && !entries.contains_key(&current) {
             growth = growth.saturating_add(current.len()).saturating_add(128);
+            entries.insert(
+                current.clone(),
+                ArchiveEntryDto {
+                    path: current.clone(),
+                    kind: ArchiveEntryKindDto::Directory,
+                    size: None,
+                    compressed_size: None,
+                    modified: None,
+                    mode: None,
+                    metadata_diagnostics: Vec::new(),
+                    encrypted: None,
+                    method: None,
+                    crc: None,
+                    comment: None,
+                    created: None,
+                    accessed: None,
+                    solid: None,
+                    link_target: None,
+                    attributes: None,
+                    uid: None,
+                    gid: None,
+                    owner: None,
+                    group: None,
+                },
+            );
         }
         parent = current;
     }
     growth
-}
-
-fn ensure_ancestors(
-    path: &str,
-    kind: zmanager_core::archive_browser::BrowserEntryKind,
-    entries: &mut HashMap<String, ArchiveEntryDto>,
-    children: &mut HashMap<String, BTreeSet<String>>,
-) {
-    let segments = path.split('/').collect::<Vec<_>>();
-    let directory_depth =
-        if matches!(kind, zmanager_core::archive_browser::BrowserEntryKind::Directory) { segments.len() } else { segments.len().saturating_sub(1) };
-    let mut parent = String::new();
-    for (index, segment) in segments.iter().enumerate() {
-        let current = if parent.is_empty() { (*segment).to_string() } else { format!("{parent}/{segment}") };
-        children.entry(parent.clone()).or_default().insert(current.clone());
-        if index < directory_depth {
-            entries.entry(current.clone()).or_insert_with(|| ArchiveEntryDto {
-                path: current.clone(),
-                kind: ArchiveEntryKindDto::Directory,
-                size: None,
-                compressed_size: None,
-                modified: None,
-                mode: None,
-                metadata_diagnostics: Vec::new(),
-                encrypted: None,
-                method: None,
-                crc: None,
-                comment: None,
-                created: None,
-                accessed: None,
-                solid: None,
-                link_target: None,
-                attributes: None,
-                uid: None,
-                gid: None,
-                owner: None,
-                group: None,
-            });
-        }
-        parent = current;
-    }
 }
 
 fn browser_entry_to_dto(entry: BrowserEntry, path: String) -> ArchiveEntryDto {
@@ -630,49 +629,68 @@ fn browser_entry_to_dto(entry: BrowserEntry, path: String) -> ArchiveEntryDto {
     }
 }
 
+fn case_insensitive_contains(haystack: &str, needle_lower: &str) -> bool {
+    if needle_lower.is_empty() {
+        return true;
+    }
+    if haystack.len() < needle_lower.len() {
+        return false;
+    }
+    if haystack.is_ascii() && needle_lower.is_ascii() {
+        let needle_bytes = needle_lower.as_bytes();
+        return haystack.as_bytes().windows(needle_bytes.len()).any(|window| window.iter().zip(needle_bytes).all(|(h, n)| h.to_ascii_lowercase() == *n));
+    }
+    haystack.to_lowercase().contains(needle_lower)
+}
+
 #[cfg(test)]
 fn compare_paths(left: &str, right: &str, entries: &HashMap<String, ArchiveEntryDto>) -> Ordering {
     compare_paths_by_sort(left, right, entries, "name", true)
 }
 
+#[cfg(test)]
 fn compare_paths_by_sort(left: &str, right: &str, entries: &HashMap<String, ArchiveEntryDto>, sort_key: &str, ascending: bool) -> Ordering {
-    let left_directory = entries.get(left).is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
-    let right_directory = entries.get(right).is_some_and(|entry| entry.kind == ArchiveEntryKindDto::Directory);
-    let value_ordering = match (entries.get(left), entries.get(right)) {
-        (Some(left_entry), Some(right_entry)) => match sort_key {
-            "size" => compare_optional(&left_entry.size, &right_entry.size),
-            "compressedSize" => compare_optional(&left_entry.compressed_size, &right_entry.compressed_size),
-            "modified" => compare_optional_timestamps(&left_entry.modified, &right_entry.modified),
-            "created" => compare_optional_timestamps(&left_entry.created, &right_entry.created),
-            "accessed" => compare_optional_timestamps(&left_entry.accessed, &right_entry.accessed),
-            "mode" => compare_optional(&left_entry.mode, &right_entry.mode),
-            "uid" => compare_optional(&left_entry.uid, &right_entry.uid),
-            "gid" => compare_optional(&left_entry.gid, &right_entry.gid),
-            "kind" => archive_kind_rank(left_entry.kind).cmp(&archive_kind_rank(right_entry.kind)),
-            "ratio" => compression_ratio_order(left_entry, right_entry),
-            "encrypted" => compare_optional(&left_entry.encrypted, &right_entry.encrypted),
-            "solid" => compare_optional(&left_entry.solid, &right_entry.solid),
-            "method" => compare_optional_text(&left_entry.method, &right_entry.method),
-            "crc" => compare_optional_text(&left_entry.crc, &right_entry.crc),
-            "comment" => compare_optional_text(&left_entry.comment, &right_entry.comment),
-            "linkTarget" => compare_optional_text(&left_entry.link_target, &right_entry.link_target),
-            "attributes" => compare_optional_text(&left_entry.attributes, &right_entry.attributes),
-            "owner" => compare_optional_text(&left_entry.owner, &right_entry.owner),
-            "group" => compare_optional_text(&left_entry.group, &right_entry.group),
-            "metadataDiagnostics" => compare_optional(
-                &(!left_entry.metadata_diagnostics.is_empty()).then_some(left_entry.metadata_diagnostics.len()),
-                &(!right_entry.metadata_diagnostics.is_empty()).then_some(right_entry.metadata_diagnostics.len()),
-            ),
-            _ => natural_cmp(archive_name(left), archive_name(right)),
-        },
+    match (entries.get(left), entries.get(right)) {
+        (Some(left_entry), Some(right_entry)) => compare_entries_by_sort(left_entry, right_entry, sort_key, ascending),
         _ => Ordering::Equal,
+    }
+}
+
+fn compare_entries_by_sort(left_entry: &ArchiveEntryDto, right_entry: &ArchiveEntryDto, sort_key: &str, ascending: bool) -> Ordering {
+    let left_directory = left_entry.kind == ArchiveEntryKindDto::Directory;
+    let right_directory = right_entry.kind == ArchiveEntryKindDto::Directory;
+    let value_ordering = match sort_key {
+        "size" => compare_optional(&left_entry.size, &right_entry.size),
+        "compressedSize" => compare_optional(&left_entry.compressed_size, &right_entry.compressed_size),
+        "modified" => compare_optional_timestamps(&left_entry.modified, &right_entry.modified),
+        "created" => compare_optional_timestamps(&left_entry.created, &right_entry.created),
+        "accessed" => compare_optional_timestamps(&left_entry.accessed, &right_entry.accessed),
+        "mode" => compare_optional(&left_entry.mode, &right_entry.mode),
+        "uid" => compare_optional(&left_entry.uid, &right_entry.uid),
+        "gid" => compare_optional(&left_entry.gid, &right_entry.gid),
+        "kind" => archive_kind_rank(left_entry.kind).cmp(&archive_kind_rank(right_entry.kind)),
+        "ratio" => compression_ratio_order(left_entry, right_entry),
+        "encrypted" => compare_optional(&left_entry.encrypted, &right_entry.encrypted),
+        "solid" => compare_optional(&left_entry.solid, &right_entry.solid),
+        "method" => compare_optional_text(&left_entry.method, &right_entry.method),
+        "crc" => compare_optional_text(&left_entry.crc, &right_entry.crc),
+        "comment" => compare_optional_text(&left_entry.comment, &right_entry.comment),
+        "linkTarget" => compare_optional_text(&left_entry.link_target, &right_entry.link_target),
+        "attributes" => compare_optional_text(&left_entry.attributes, &right_entry.attributes),
+        "owner" => compare_optional_text(&left_entry.owner, &right_entry.owner),
+        "group" => compare_optional_text(&left_entry.group, &right_entry.group),
+        "metadataDiagnostics" => compare_optional(
+            &(!left_entry.metadata_diagnostics.is_empty()).then_some(left_entry.metadata_diagnostics.len()),
+            &(!right_entry.metadata_diagnostics.is_empty()).then_some(right_entry.metadata_diagnostics.len()),
+        ),
+        _ => natural_cmp(archive_name(&left_entry.path), archive_name(&right_entry.path)),
     };
     let value_ordering = if ascending { value_ordering } else { value_ordering.reverse() };
     right_directory
         .cmp(&left_directory)
         .then(value_ordering)
-        .then_with(|| natural_cmp(archive_name(left), archive_name(right)))
-        .then_with(|| left.as_bytes().cmp(right.as_bytes()))
+        .then_with(|| natural_cmp(archive_name(&left_entry.path), archive_name(&right_entry.path)))
+        .then_with(|| left_entry.path.as_bytes().cmp(right_entry.path.as_bytes()))
 }
 
 fn archive_kind_rank(kind: ArchiveEntryKindDto) -> u8 {
@@ -745,6 +763,9 @@ fn parse_epoch_timestamp(value: &str) -> Option<i128> {
 }
 
 fn natural_cmp(left: &str, right: &str) -> Ordering {
+    if left.is_ascii() && right.is_ascii() {
+        return natural_cmp_ascii(left.as_bytes(), right.as_bytes());
+    }
     let mut left_chars = left.chars().flat_map(char::to_lowercase).peekable();
     let mut right_chars = right.chars().flat_map(char::to_lowercase).peekable();
     loop {
@@ -764,30 +785,32 @@ fn natural_cmp(left: &str, right: &str) -> Ordering {
                     right_chars.next();
                 }
 
-                let mut left_digits = Vec::new();
-                while let Some(&c) = left_chars.peek() {
-                    if c.is_ascii_digit() {
-                        left_digits.push(c);
-                        left_chars.next();
-                    } else {
+                let mut first_diff = Ordering::Equal;
+                let mut left_len = 0usize;
+                let mut right_len = 0usize;
+
+                while let (Some(&c1), Some(&c2)) = (left_chars.peek(), right_chars.peek()) {
+                    if !c1.is_ascii_digit() || !c2.is_ascii_digit() {
                         break;
                     }
+                    if first_diff == Ordering::Equal && c1 != c2 {
+                        first_diff = c1.cmp(&c2);
+                    }
+                    left_len += 1;
+                    right_len += 1;
+                    left_chars.next();
+                    right_chars.next();
                 }
-                let mut right_digits = Vec::new();
-                while let Some(&c) = right_chars.peek() {
-                    if c.is_ascii_digit() {
-                        right_digits.push(c);
-                        right_chars.next();
-                    } else {
-                        break;
-                    }
+                while left_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                    left_len += 1;
+                    left_chars.next();
+                }
+                while right_chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                    right_len += 1;
+                    right_chars.next();
                 }
 
-                let ordering = left_digits
-                    .len()
-                    .cmp(&right_digits.len())
-                    .then_with(|| left_digits.cmp(&right_digits))
-                    .then_with(|| (left_digits.len() + left_zeros).cmp(&(right_digits.len() + right_zeros)));
+                let ordering = left_len.cmp(&right_len).then(first_diff).then_with(|| (left_len + left_zeros).cmp(&(right_len + right_zeros)));
                 if ordering != Ordering::Equal {
                     return ordering;
                 }
@@ -800,6 +823,59 @@ fn natural_cmp(left: &str, right: &str) -> Ordering {
             }
         }
     }
+}
+
+fn natural_cmp_ascii(left: &[u8], right: &[u8]) -> Ordering {
+    let mut i = 0;
+    let mut j = 0;
+    while i < left.len() && j < right.len() {
+        let b1 = left[i];
+        let b2 = right[j];
+        if b1.is_ascii_digit() && b2.is_ascii_digit() {
+            let mut left_zeros = 0usize;
+            while i < left.len() && left[i] == b'0' {
+                left_zeros += 1;
+                i += 1;
+            }
+            let mut right_zeros = 0usize;
+            while j < right.len() && right[j] == b'0' {
+                right_zeros += 1;
+                j += 1;
+            }
+            let mut first_diff = Ordering::Equal;
+            let mut left_len = 0usize;
+            let mut right_len = 0usize;
+            while i < left.len() && j < right.len() && left[i].is_ascii_digit() && right[j].is_ascii_digit() {
+                if first_diff == Ordering::Equal && left[i] != right[j] {
+                    first_diff = left[i].cmp(&right[j]);
+                }
+                left_len += 1;
+                right_len += 1;
+                i += 1;
+                j += 1;
+            }
+            while i < left.len() && left[i].is_ascii_digit() {
+                left_len += 1;
+                i += 1;
+            }
+            while j < right.len() && right[j].is_ascii_digit() {
+                right_len += 1;
+                j += 1;
+            }
+            let ordering = left_len.cmp(&right_len).then(first_diff).then_with(|| (left_len + left_zeros).cmp(&(right_len + right_zeros)));
+            if ordering != Ordering::Equal {
+                return ordering;
+            }
+        } else {
+            let ordering = b1.to_ascii_lowercase().cmp(&b2.to_ascii_lowercase());
+            if ordering != Ordering::Equal {
+                return ordering;
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    left.len().cmp(&right.len())
 }
 
 fn archive_name(path: &str) -> &str {

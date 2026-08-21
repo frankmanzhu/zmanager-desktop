@@ -59,6 +59,19 @@ export function normalizeArchivePath(value?: string | null): string {
     return ARCHIVE_ROOT_PATH;
   }
 
+  if (
+    !value.includes("\\")
+    && !value.includes("//")
+    && !value.startsWith("/")
+    && !value.endsWith("/")
+    && !value.includes("/./")
+    && value !== "."
+    && !value.startsWith("./")
+    && !value.endsWith("/.")
+  ) {
+    return value;
+  }
+
   return value
     .replace(ARCHIVE_PATH_SEPARATOR_PATTERN, ARCHIVE_PATH_SEPARATOR)
     .split(ARCHIVE_PATH_SEPARATOR)
@@ -76,23 +89,35 @@ export function joinArchivePath(...parts: Array<string | null | undefined>): str
 }
 
 export function getArchiveEntryName(value?: string | null): string {
-  const segments = splitArchivePath(value);
-  return segments.at(-1) ?? "";
+  if (!value) {
+    return "";
+  }
+  const normalized = normalizeArchivePath(value);
+  if (!normalized) {
+    return "";
+  }
+  const lastSlash = normalized.lastIndexOf(ARCHIVE_PATH_SEPARATOR);
+  return lastSlash === -1 ? normalized : normalized.slice(lastSlash + 1);
 }
 
 export function getArchiveEntryFolder(value?: string | null): string {
-  const segments = splitArchivePath(value);
-  segments.pop();
-  return segments.join(ARCHIVE_PATH_SEPARATOR);
+  if (!value) {
+    return "";
+  }
+  const normalized = normalizeArchivePath(value);
+  if (!normalized) {
+    return "";
+  }
+  const lastSlash = normalized.lastIndexOf(ARCHIVE_PATH_SEPARATOR);
+  return lastSlash === -1 ? "" : normalized.slice(0, lastSlash);
 }
 
 export function getParentArchivePath(value?: string | null): string | null {
-  const normalized = normalizeArchivePath(value);
-  if (!normalized) {
+  if (!value) {
     return null;
   }
-
-  return getArchiveEntryFolder(normalized);
+  const folder = getArchiveEntryFolder(value);
+  return folder || null;
 }
 
 export function isArchivePathInFolder(

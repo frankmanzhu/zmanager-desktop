@@ -245,9 +245,10 @@ export function buildArchiveHeaderContextMenuItems(input: ArchiveHeaderContextMe
     ? getExtractAvailableColumns(familyRes.family)
     : getUnknownExtractAvailableColumns();
   const availableSet = new Set(availableColumns);
-  const selectedColumn = availableSet.has(input.selectedColumnId as any)
-    ? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === input.selectedColumnId)
-    : undefined;
+  const selectedColumn =
+    input.selectedColumnId && availableSet.has(input.selectedColumnId)
+      ? ARCHIVE_TABLE_COLUMNS.find((column) => column.id === input.selectedColumnId)
+      : undefined;
   const normalizedSettings = normalizeColumnSettings(input.tableColumnSettings);
   const visibleColumnOrder = normalizedSettings.columnOrderIds.filter((id) =>
     normalizedSettings.visibleColumnIds.includes(id),

@@ -53,7 +53,10 @@ export function ArchiveTable() {
   const i18n = translatorForSnapshot(snapshot);
   const archive = snapshot.archive;
   const openCommandState = snapshot.commands.states.open;
-  const columns = visibleColumns(archive.view.tableColumns);
+  const columns = useMemo(
+    () => visibleColumns(archive.view.tableColumns),
+    [archive.view.tableColumns],
+  );
   const columnReorder = useTableColumnReorder(
     columns
       .filter((column) => column.id !== "name")

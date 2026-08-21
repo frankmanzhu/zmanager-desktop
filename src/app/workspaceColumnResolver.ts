@@ -8,6 +8,8 @@ import type {
   ExtractTableColumnId,
   TableScenario,
 } from "./tableColumnCatalogue";
+import type { ArchiveTableColumnId, ArchiveTableColumnSettings } from "./archiveTable";
+import type { CreateSourceColumnId, CreateSourceColumnSettings } from "./createTableColumns";
 import {
   CANONICAL_COLUMN_ORDER,
   COMPRESS_APPLICABLE_IDS,
@@ -274,4 +276,24 @@ export function resolveExtractFamilyFromPath(
   archivePath: string,
 ): ArchiveFormatFamilyResolution {
   return resolveArchiveFormatFamily(archivePath);
+}
+
+export function archiveSettingsFromResolved(
+  resolved: ResolvedWorkspaceColumns,
+): ArchiveTableColumnSettings {
+  return {
+    visibleColumnIds: [...resolved.currentVisibleIds] as ArchiveTableColumnId[],
+    columnOrderIds: [...resolved.canonicalOrder] as ArchiveTableColumnId[],
+    columnWidths: {},
+  };
+}
+
+export function createSettingsFromResolved(
+  resolved: ResolvedWorkspaceColumns,
+): CreateSourceColumnSettings {
+  return {
+    visibleColumnIds: [...resolved.currentVisibleIds] as CreateSourceColumnId[],
+    columnOrderIds: [...resolved.canonicalOrder] as CreateSourceColumnId[],
+    columnWidths: {},
+  };
 }

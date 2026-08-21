@@ -11,8 +11,10 @@ import {
   X,
 } from "lucide-react";
 import {
+  memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type MutableRefObject,
@@ -21,6 +23,11 @@ import {
 } from "react";
 
 import { formatBytes, getPathBasename } from "../../../app/formatting";
+import {
+  getParentArchivePath,
+  isArchivePathInFolder,
+  normalizeArchivePath,
+} from "../../../app/archiveTree";
 import {
   resolveTzapSigningIdentityId,
 } from "../../../app/preferences";
@@ -291,7 +298,10 @@ function CreateTable() {
   const [marqueeRect, setMarqueeRect] = useState<ViewportRect | null>(null);
   const columnSettings =
     snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
-  const visibleCols = visibleCreateColumns(columnSettings);
+  const visibleCols = useMemo(
+    () => visibleCreateColumns(columnSettings),
+    [columnSettings],
+  );
   const columnReorder = useTableColumnReorder(
     visibleCols
       .filter((column) => column.id !== "name")
@@ -304,12 +314,112 @@ function CreateTable() {
       });
     },
   );
-  const columnWidths = Object.fromEntries(
-    visibleCols.map((col) => [col.id, col.width]),
+  const columnWidths = useMemo(
+    () => Object.fromEntries(visibleCols.map((col) => [col.id, col.width])),
+    [visibleCols],
   );
   const i18n = translatorForSnapshot(snapshot);
   const rows = snapshot.create.view.rows;
-  const includeAll = includeAllState(snapshot);
+  const planEntries = snapshot.create.plan.current?.planEntries ?? [];
+  const sources = snapshot.create.sources;
+  const excludedPaths = snapshot.create.inclusion.excludedArchivePaths;
+  const selectedPaths = snapshot.create.selection.selectedPaths;
+  const focusedPath = snapshot.create.selection.focusedPath;
+  const singleClickOpen = snapshot.preferences.singleClickOpen;
+
+  const selectedSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
+
+  const sourcePathMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!planEntries.length || !sources.length) {
+      return map;
+    }
+    const rootEntries = planEntries
+      .filter((entry) => sources.includes(entry.sourcePath))
+      .sort((left, right) => normalizeArchivePath(right.path).length - normalizeArchivePath(left.path).length);
+
+    for (const row of rows) {
+      if (row.rowType === "parent") {
+        map.set(row.path, "");
+        continue;
+      }
+      if (row.entry?.sourcePath) {
+        map.set(row.path, row.entry.sourcePath);
+        continue;
+      }
+      const rootEntry = rootEntries.find((entry) => isArchivePathInFolder(row.path, entry.path));
+      if (rootEntry) {
+        map.set(row.path, rootEntry.sourcePath);
+        continue;
+      }
+      map.set(row.path, sourcePathForCreatePlanRow(row, planEntries, sources));
+    }
+    return map;
+  }, [rows, planEntries, sources]);
+
+  const inclusionMap = useMemo(() => {
+    const excludedSet = new Set(excludedPaths);
+    const map = new Map<string, CreatePlanInclusionState>();
+    if (!planEntries.length) {
+      for (const row of rows) {
+        map.set(row.path, excludedSet.has(row.path) ? "excluded" : "included");
+      }
+      return map;
+    }
+
+    const folderStats = new Map<string, { total: number; included: number }>();
+    for (const entry of planEntries) {
+      const isIncluded = !excludedSet.has(entry.path);
+      let folder = getParentArchivePath(entry.path);
+      while (folder !== null) {
+        let stats = folderStats.get(folder);
+        if (!stats) {
+          stats = { total: 0, included: 0 };
+          folderStats.set(folder, stats);
+        }
+        stats.total += 1;
+        if (isIncluded) {
+          stats.included += 1;
+        }
+        folder = getParentArchivePath(folder);
+      }
+    }
+
+    for (const row of rows) {
+      if (row.rowType === "parent") {
+        map.set(row.path, "included");
+        continue;
+      }
+      if (row.rowType === "entry") {
+        map.set(row.path, excludedSet.has(row.path) ? "excluded" : "included");
+        continue;
+      }
+      const stats = folderStats.get(row.path);
+      if (!stats || stats.total === 0) {
+        map.set(row.path, excludedSet.has(row.path) ? "excluded" : "included");
+      } else if (stats.included === 0) {
+        map.set(row.path, "excluded");
+      } else if (stats.included === stats.total) {
+        map.set(row.path, "included");
+      } else {
+        map.set(row.path, "partial");
+      }
+    }
+    return map;
+  }, [rows, planEntries, excludedPaths]);
+
+  const includeAll = useMemo(() => {
+    const selectableRows = rows.filter((row) => row.rowType !== "parent");
+    const includedCount = selectableRows.filter(
+      (row) => inclusionMap.get(row.path) !== "excluded",
+    ).length;
+    return {
+      checked: selectableRows.length > 0 && includedCount === selectableRows.length,
+      indeterminate: includedCount > 0 && includedCount < selectableRows.length,
+      disabled: selectableRows.length === 0,
+    };
+  }, [rows, inclusionMap]);
+
   const isRefreshing =
     snapshot.create.plan.state === "loading" &&
     snapshot.create.plan.current !== null;
@@ -454,7 +564,25 @@ function CreateTable() {
             ) : null}
             <tbody id="compress-source-body" ref={tableBodyRef}>
               {rows.length ? (
-                rows.map((row) => <CreateTableRow row={row} key={row.rowId} />)
+                rows.map((row) => {
+                  const srcPath = sourcePathMap.get(row.path) ?? "";
+                  const isFolder = row.rowType !== "entry" || row.entry.kind === "directory";
+                  return (
+                    <CreateTableRow
+                      key={row.rowId}
+                      row={row}
+                      visibleCols={visibleCols}
+                      sourcePath={srcPath}
+                      inclusion={inclusionMap.get(row.path) ?? "included"}
+                      nativeIconDataUrl={srcPath ? nativeIconDataUrlForPath(snapshot, srcPath, isFolder) : null}
+                      selected={selectedSet.has(row.path)}
+                      focused={focusedPath === row.path}
+                      singleClickOpen={singleClickOpen}
+                      i18n={i18n}
+                      actions={actions}
+                    />
+                  );
+                })
               ) : (
                 <tr>
                   <td
@@ -703,31 +831,34 @@ function clampCompressSourceColumnWidth(
   );
 }
 
-function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
-  const snapshot = useZManagerSnapshot();
-  const actions = useZManagerActions();
-  const i18n = translatorForSnapshot(snapshot);
-  const columnSettings =
-    snapshot.create.view.columnSettings ?? resetCreateColumnSettings();
-  const visibleCols = visibleCreateColumns(columnSettings);
-  const sourcePath = sourcePathForCreatePlanRow(
-    row,
-    snapshot.create.plan.current?.planEntries ?? [],
-    snapshot.create.sources,
-  );
-  const inclusion =
-    row.rowType === "parent"
-      ? "included"
-      : inclusionStateForPath(snapshot, row.path);
+type CreateTableRowProps = Readonly<{
+  row: CreatePlanRow;
+  visibleCols: readonly CreateSourceColumn[];
+  sourcePath: string;
+  inclusion: CreatePlanInclusionState;
+  nativeIconDataUrl: string | null;
+  selected: boolean;
+  focused: boolean;
+  singleClickOpen: boolean;
+  i18n: Translator;
+  actions: ZManagerReactActions;
+}>;
+
+const CreateTableRow = memo(function CreateTableRow({
+  row,
+  visibleCols,
+  sourcePath,
+  inclusion,
+  nativeIconDataUrl,
+  selected,
+  focused,
+  singleClickOpen,
+  i18n,
+  actions,
+}: CreateTableRowProps) {
   const isFolder = row.rowType !== "entry" || row.entry.kind === "directory";
-  const nativeIconDataUrl = sourcePath
-    ? nativeIconDataUrlForPath(snapshot, sourcePath, isFolder)
-    : null;
   const path = row.path;
   const selectable = row.rowType !== "parent";
-  const selected =
-    selectable && snapshot.create.selection.selectedPaths.includes(path);
-  const focused = selectable && snapshot.create.selection.focusedPath === path;
   const rowClassName =
     "group border-b border-slate-100 hover:bg-blue-50/70 aria-selected:bg-blue-100 aria-selected:text-blue-950 data-[focused=true]:ring-2 data-[focused=true]:ring-inset data-[focused=true]:ring-blue-500/50 data-[excluded=true]:opacity-50 dark:border-slate-900 dark:hover:bg-blue-950/40 dark:aria-selected:bg-blue-950 dark:aria-selected:text-blue-50";
 
@@ -769,7 +900,7 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
         if (
           isFolder &&
           (event.detail >= 2 ||
-            (snapshot.preferences.singleClickOpen && plainPrimaryClick))
+            (singleClickOpen && plainPrimaryClick))
         ) {
           actions.handleCreateIntent({
             type: "navigateToFolder",
@@ -871,7 +1002,6 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
           key={col.id}
           columnId={col.id}
           row={row}
-          snapshot={snapshot}
           i18n={i18n}
           selectable={selectable}
           inclusion={inclusion}
@@ -882,22 +1012,20 @@ function CreateTableRow({ row }: Readonly<{ row: CreatePlanRow }>) {
       ))}
     </tr>
   );
-}
+});
 
 function CreateTableCell({
   columnId,
   row,
-  snapshot,
   i18n,
   selectable,
   inclusion,
   isFolder,
   nativeIconDataUrl,
-  sourcePath,
+  sourcePath: _sourcePath,
 }: Readonly<{
   columnId: CreateSourceColumnId;
   row: CreatePlanRow;
-  snapshot: ZManagerReactSnapshot;
   i18n: Translator;
   selectable: boolean;
   inclusion: CreatePlanInclusionState;
@@ -934,7 +1062,7 @@ function CreateTableCell({
             <span
               className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${inclusion === "excluded" ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : inclusion === "partial" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"}`}
             >
-              {compressInclusionText(inclusion, snapshot)}
+              {compressInclusionText(inclusion, i18n)}
             </span>
           ) : null}
         </span>
@@ -989,9 +1117,8 @@ function createRowContextMenuPoint(
 
 function compressInclusionText(
   inclusion: "included" | "excluded" | "partial",
-  snapshot: ReturnType<typeof useZManagerSnapshot>,
+  i18n: Translator,
 ): string {
-  const i18n = translatorForSnapshot(snapshot);
   switch (inclusion) {
     case "included":
       return i18n.t("compress.inclusion.included");
@@ -1841,8 +1968,31 @@ function inclusionStateForPath(
   snapshot: ReturnType<typeof useZManagerSnapshot>,
   path: string,
 ): "included" | "excluded" | "partial" {
-  if (snapshot.create.inclusion.excludedArchivePaths.includes(path)) {
+  const excludedPaths = snapshot.create.inclusion.excludedArchivePaths;
+  const excludedSet = new Set(excludedPaths);
+  const planEntries = snapshot.create.plan.current?.planEntries;
+
+  if (!planEntries || planEntries.length === 0) {
+    return excludedSet.has(path) ? "excluded" : "included";
+  }
+
+  const affected = planEntries.filter((entry) => isArchivePathInFolder(entry.path, path));
+  if (affected.length === 0) {
+    return excludedSet.has(path) ? "excluded" : "included";
+  }
+
+  let includedCount = 0;
+  for (const entry of affected) {
+    if (!excludedSet.has(entry.path)) {
+      includedCount += 1;
+    }
+  }
+
+  if (includedCount === 0) {
     return "excluded";
   }
-  return "included";
+  if (includedCount === affected.length) {
+    return "included";
+  }
+  return "partial";
 }

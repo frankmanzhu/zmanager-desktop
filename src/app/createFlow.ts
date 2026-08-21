@@ -350,6 +350,10 @@ export function createPlanRowInclusionState(
     ? excludedPaths
     : normalizeExcludedCreatePlanPaths(excludedPaths);
 
+  if (row.rowType === "entry") {
+    return !normalizedExcluded.has(normalizeArchivePath(row.path)) ? "included" : "excluded";
+  }
+
   const affectedEntries = createPlanEntriesForPath(entries, row.path);
   if (affectedEntries.length === 0) {
     return !normalizedExcluded.has(normalizeArchivePath(row.path)) ? "included" : "excluded";

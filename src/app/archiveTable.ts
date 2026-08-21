@@ -7,6 +7,7 @@ import {
   formatUnixMode,
   getPathBasename,
   parseDateValue,
+  parseEpochTimestamp,
 } from "./formatting";
 import {
   buildHierarchicalRows,
@@ -329,8 +330,8 @@ export function compareOptionalNumbers(left?: number | null, right?: number | nu
 }
 
 export function compareOptionalDates(left?: string | null, right?: string | null): number {
-  const leftTime = parseDateValue(left)?.getTime();
-  const rightTime = parseDateValue(right)?.getTime();
+  const leftTime = parseEpochTimestamp(left);
+  const rightTime = parseEpochTimestamp(right);
   const leftKnown = typeof leftTime === "number";
   const rightKnown = typeof rightTime === "number";
 
@@ -405,11 +406,34 @@ export function compareArchiveRows(
 }
 
 function archiveSortTextValue(entry: ArchiveEntryDto, sortKey: ArchiveSortKey): string {
-  if (sortKey === "kind") {
-    return entry.kind;
+  switch (sortKey) {
+    case "kind":
+      return entry.kind;
+    case "mode":
+      return entry.mode != null ? entry.mode.toString(8) : "";
+    case "encrypted":
+      return entry.encrypted === true ? "yes" : entry.encrypted === false ? "no" : "";
+    case "solid":
+      return entry.solid === true ? "yes" : entry.solid === false ? "no" : "";
+    case "crc":
+      return entry.crc ?? "";
+    case "method":
+      return entry.method ?? "";
+    case "comment":
+      return entry.comment ?? "";
+    case "linkTarget":
+      return entry.linkTarget ?? "";
+    case "attributes":
+      return entry.attributes ?? "";
+    case "owner":
+      return entry.owner ?? "";
+    case "group":
+      return entry.group ?? "";
+    case "metadataDiagnostics":
+      return entry.metadataDiagnostics ? entry.metadataDiagnostics.join(", ") : "";
+    default:
+      return formatArchiveTableValue(entry, sortKey);
   }
-
-  return formatArchiveTableValue(entry, sortKey);
 }
 
 export function sortArchiveRows(

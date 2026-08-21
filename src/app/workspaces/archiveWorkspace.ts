@@ -1270,6 +1270,17 @@ function visibleRowsForState(state: MutableArchiveWorkspaceState): ArchiveTableR
   }), state.view.sort.key, state.view.sort.ascending);
 }
 
+const STRUCTURAL_TREE_CACHE = new WeakMap<readonly ArchiveEntryDto[], ArchiveFolderNode>();
+
+function getStructuralTree(treeEntries: readonly ArchiveEntryDto[]): ArchiveFolderNode {
+  let root = STRUCTURAL_TREE_CACHE.get(treeEntries);
+  if (!root) {
+    root = buildArchiveTree(treeEntries, { rootName: "" });
+    STRUCTURAL_TREE_CACHE.set(treeEntries, root);
+  }
+  return root;
+}
+
 function treeFoldersForState(state: MutableArchiveWorkspaceState): ArchiveWorkspaceTreeFolder[] {
   if (!state.currentArchivePath) {
     return [];
@@ -1277,7 +1288,7 @@ function treeFoldersForState(state: MutableArchiveWorkspaceState): ArchiveWorksp
 
   const expandedFolders = new Set(normalizeExpandedTreeFolders(state.view.expandedTreeFolders));
   const folders: ArchiveWorkspaceTreeFolder[] = [];
-  const root = buildArchiveTree(state.treeEntries, { rootName: "" });
+  const root = getStructuralTree(state.treeEntries);
 
   function visit(node: ArchiveFolderNode) {
     folders.push({
