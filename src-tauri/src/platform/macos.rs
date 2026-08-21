@@ -176,30 +176,6 @@ impl CapabilityInspector for MacOsPlatform {
 
         let probes = probe_extension_status();
         let file_assoc_installed = probe_file_associations();
-        let host_cb = HOST_CALLBACK_RECEIVED.load(Ordering::Acquire);
-        let finder_installed =
-            if probes.finder.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
-        let finder_enabled = if !probes.finder.is_installed {
-            NativeCapabilityUserEnabledState::NotInspected
-        } else if probes.finder.is_enabled {
-            NativeCapabilityUserEnabledState::Enabled
-        } else {
-            NativeCapabilityUserEnabledState::Disabled
-        };
-        let finder_failure = (!probes.finder.is_installed).then_some(NativeCapabilityFailureCategory::NotRegistered);
-
-        // Write complete diagnostics
-        let pkg = crate::native_integration::current_package_kind();
-        let _ = std::fs::write(
-            "/tmp/zmanager-probe-diagnostics.txt",
-            format!(
-                "PACKAGE_KIND={pkg:?}\n\
-                 finder_installed={} finder_enabled={} ql_installed={} spotlight_installed={} file_assoc={} app_group={app_group_runtime:?} host_callback={host_cb}\n\
-                 finder_obs: installed={finder_installed:?} user={finder_enabled:?} runtime={app_group_runtime:?} failure={finder_failure:?}\n",
-                probes.finder.is_installed, probes.finder.is_enabled, probes.quicklook.is_installed, probes.spotlight.is_installed, file_assoc_installed,
-            ),
-        );
-
         let finder_installed =
             if probes.finder.is_installed { NativeCapabilityInstalledState::Registered } else { NativeCapabilityInstalledState::Unregistered };
         let finder_enabled = if !probes.finder.is_installed {

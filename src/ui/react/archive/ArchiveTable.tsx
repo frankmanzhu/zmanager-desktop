@@ -1,6 +1,8 @@
 import { Archive, File, Folder, GripVertical, Search } from "lucide-react";
 import {
+  memo,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MutableRefObject,
@@ -66,6 +68,13 @@ export function ArchiveTable() {
   );
   const showStartEmpty = !archive.currentArchivePath;
   const rows = archive.view.rows;
+  const selectedPathSet = useMemo(
+    () => new Set(archive.view.selection.selectedPaths),
+    [archive.view.selection.selectedPaths],
+  );
+  const focusedPath = archive.view.selection.focusedPath;
+  const showSecondaryPath =
+    archive.view.flatView || Boolean(snapshot.archive.view.searchQuery.trim());
 
   return (
     <section
@@ -256,6 +265,12 @@ export function ArchiveTable() {
                 <ArchiveTableRowView
                   row={row}
                   columns={columns}
+                  selected={selectedPathSet.has(row.path)}
+                  focused={focusedPath === row.path}
+                  showSecondaryPath={showSecondaryPath}
+                  iconDataUrl={nativeIconDataUrlForRow(snapshot, row)}
+                  i18n={i18n}
+                  actions={actions}
                   key={row.rowId}
                 />
               ),
@@ -501,16 +516,27 @@ function finishArchiveColumnResize(
   });
 }
 
-function ArchiveTableRowView({
+type ArchiveTableRowViewProps = Readonly<{
+  row: ArchiveTableRow;
+  columns: readonly ArchiveTableColumn[];
+  selected: boolean;
+  focused: boolean;
+  showSecondaryPath: boolean;
+  iconDataUrl?: string | null;
+  i18n: ReturnType<typeof translatorForSnapshot>;
+  actions: ZManagerReactActions;
+}>;
+
+const ArchiveTableRowView = memo(function ArchiveTableRowView({
   row,
   columns,
-}: Readonly<{ row: ArchiveTableRow; columns: readonly ArchiveTableColumn[] }>) {
-  const snapshot = useZManagerSnapshot();
-  const actions = useZManagerActions();
-  const i18n = translatorForSnapshot(snapshot);
-  const selection = snapshot.archive.view.selection;
-  const selected = selection.selectedPaths.includes(row.path);
-  const focused = selection.focusedPath === row.path;
+  selected,
+  focused,
+  showSecondaryPath,
+  iconDataUrl,
+  i18n,
+  actions,
+}: ArchiveTableRowViewProps) {
   const selectable = row.rowType !== "parent";
   const nativeDragRef = useRef<{
     pointerId: number;
@@ -673,7 +699,12 @@ function ArchiveTableRowView({
       {columns.map((column) => (
         <td className={cellClassName(column)} key={column.id}>
           {column.id === "name" ? (
-            <NameCell row={row} />
+            <NameCell
+              row={row}
+              showSecondaryPath={showSecondaryPath}
+              iconDataUrl={iconDataUrl}
+              i18n={i18n}
+            />
           ) : (
             cellValue(row, column, i18n)
           )}
@@ -681,11 +712,21 @@ function ArchiveTableRowView({
       ))}
     </tr>
   );
-}
+});
 
-function NameCell({ row }: Readonly<{ row: ArchiveTableRow }>) {
-  const snapshot = useZManagerSnapshot();
-  const i18n = translatorForSnapshot(snapshot);
+type NameCellProps = Readonly<{
+  row: ArchiveTableRow;
+  showSecondaryPath: boolean;
+  iconDataUrl?: string | null;
+  i18n: ReturnType<typeof translatorForSnapshot>;
+}>;
+
+const NameCell = memo(function NameCell({
+  row,
+  showSecondaryPath,
+  iconDataUrl,
+  i18n,
+}: NameCellProps) {
   const Icon =
     row.rowType === "parent"
       ? Folder
@@ -693,12 +734,9 @@ function NameCell({ row }: Readonly<{ row: ArchiveTableRow }>) {
         ? Folder
         : File;
   const descriptor = archiveRowIconDescriptor(row, i18n);
-  const iconDataUrl = nativeIconDataUrlForRow(snapshot, row);
-  const showSecondaryPath =
-    (snapshot.archive.view.flatView ||
-      Boolean(snapshot.archive.view.searchQuery.trim())) &&
-    (row.rowType === "entry" || row.rowType === "folder");
   const secondaryPath = row.rowType === "entry" ? row.entry.path : row.path;
+  const isSecondaryVisible =
+    showSecondaryPath && (row.rowType === "entry" || row.rowType === "folder");
 
   return (
     <>
@@ -731,7 +769,7 @@ function NameCell({ row }: Readonly<{ row: ArchiveTableRow }>) {
           />
         ) : null}
       </span>
-      {showSecondaryPath ? (
+      {isSecondaryVisible ? (
         <span
           className="mt-0.5 block truncate pl-[26px] text-[10px] text-slate-500 dark:text-slate-400"
           data-row-secondary
@@ -741,7 +779,7 @@ function NameCell({ row }: Readonly<{ row: ArchiveTableRow }>) {
       ) : null}
     </>
   );
-}
+});
 
 function cellClassName(column: ArchiveTableColumn): string | undefined {
   return `px-2 py-1.5 text-xs ${column.id === "name" ? "min-w-[140px]" : "truncate tabular-nums"} ${column.align === "right" ? "text-right" : column.align === "center" ? "text-center" : ""}`;

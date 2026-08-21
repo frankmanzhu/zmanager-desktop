@@ -438,6 +438,8 @@ export const zhCnMessages = {
   "preferences.title": "选项",
   "preferences.description": "用于归档工作流的安全桌面偏好设置。",
   "preferences.close.aria": "关闭偏好设置对话框",
+  "preferences.columns.title": "列设置",
+  "preferences.advanced.title": "高级",
   "preferences.folders.title": "文件夹",
   "preferences.folders.description": "选择快速创建操作和新归档的起始位置。",
   "preferences.folders.workingOutput": "工作/输出文件夹",

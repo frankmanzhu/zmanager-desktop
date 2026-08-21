@@ -327,7 +327,14 @@ export function isCreatePlanPathIncluded(
   excludedPaths: ReadonlySet<string> | readonly string[],
   path: string,
 ): boolean {
-  return !normalizeExcludedCreatePlanPaths(excludedPaths).has(normalizeArchivePath(path));
+  const normalizedPath = normalizeArchivePath(path);
+  if (!normalizedPath) {
+    return true;
+  }
+  if (excludedPaths instanceof Set) {
+    return !excludedPaths.has(normalizedPath);
+  }
+  return !normalizeExcludedCreatePlanPaths(excludedPaths).has(normalizedPath);
 }
 
 export function createPlanRowInclusionState(
@@ -339,12 +346,22 @@ export function createPlanRowInclusionState(
     return "included";
   }
 
+  const normalizedExcluded = excludedPaths instanceof Set
+    ? excludedPaths
+    : normalizeExcludedCreatePlanPaths(excludedPaths);
+
   const affectedEntries = createPlanEntriesForPath(entries, row.path);
   if (affectedEntries.length === 0) {
-    return isCreatePlanPathIncluded(excludedPaths, row.path) ? "included" : "excluded";
+    return !normalizedExcluded.has(normalizeArchivePath(row.path)) ? "included" : "excluded";
   }
 
-  const includedCount = affectedEntries.filter((entry) => isCreatePlanPathIncluded(excludedPaths, entry.path)).length;
+  let includedCount = 0;
+  for (const entry of affectedEntries) {
+    if (!normalizedExcluded.has(normalizeArchivePath(entry.path))) {
+      includedCount += 1;
+    }
+  }
+
   if (includedCount === 0) {
     return "excluded";
   }

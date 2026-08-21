@@ -171,10 +171,14 @@ export function buildArchiveTree(
 }
 
 export function flattenArchiveTree(root: ArchiveFolderNode): ArchiveFolderNode[] {
-  const nodes: ArchiveFolderNode[] = [root];
-  for (const child of root.children) {
-    nodes.push(...flattenArchiveTree(child));
+  const nodes: ArchiveFolderNode[] = [];
+  function traverse(node: ArchiveFolderNode) {
+    nodes.push(node);
+    for (const child of node.children) {
+      traverse(child);
+    }
   }
+  traverse(root);
   return nodes;
 }
 

@@ -95,11 +95,11 @@ const PAGES: readonly Readonly<{
 }>[] = [
   { id: "folders", labelKey: "preferences.folders.title" },
   { id: "archive", labelKey: "preferences.archiveDefaults.title" },
-  { id: "columns", labelKey: "Columns" as any },
+  { id: "columns", labelKey: "preferences.columns.title" },
   { id: "extraction", labelKey: "preferences.extraction.title" },
   { id: "interface", labelKey: "preferences.interface.title" },
   { id: "safety", labelKey: "preferences.safety.title" },
-  { id: "advanced", labelKey: "Advanced" as any },
+  { id: "advanced", labelKey: "preferences.advanced.title" },
 ];
 
 export function PreferencesDialog() {
@@ -184,7 +184,7 @@ export function PreferencesDialog() {
                 onClick={() => setActivePage(page.id)}
                 key={page.id}
               >
-                {page.id === "columns" ? "Columns" : i18n.t(page.labelKey)}
+                {i18n.t(page.labelKey)}
               </PreferenceNavigationButton>
             ))}
           </nav>

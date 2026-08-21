@@ -435,11 +435,13 @@ function compressionRatio(size?: number | null, compressedSize?: number | null):
   return compressedSize / size;
 }
 
+const ARCHIVE_TABLE_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
 function compareStrings(left: string, right: string): number {
-  return left.localeCompare(right, undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
+  return ARCHIVE_TABLE_COLLATOR.compare(left, right);
 }
 
 function formatKind(kind: ArchiveEntryKind, i18n?: Translator): string {

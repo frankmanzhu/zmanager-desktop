@@ -4,8 +4,7 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use super::{NativeFileDragCandidate, NativeFileDragError, NativeFileDragItem, NativeFileDragStreamProvider};
@@ -134,10 +133,22 @@ impl StagedFileDrag {
             return;
         };
 
-        thread::spawn(move || {
-            thread::sleep(Duration::from_secs(600));
-            let _ = fs::remove_dir_all(root);
-        });
+        let mut roots = RETAINED_DRAG_ROOTS.lock().unwrap_or_else(|e| e.into_inner());
+        while roots.len() > 1 {
+            if let Some(old_root) = roots.pop() {
+                let _ = fs::remove_dir_all(old_root);
+            }
+        }
+        roots.push(root);
+    }
+}
+
+static RETAINED_DRAG_ROOTS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+pub(super) fn cleanup_retained_drag_roots() {
+    let mut roots = RETAINED_DRAG_ROOTS.lock().unwrap_or_else(|e| e.into_inner());
+    for root in roots.drain(..) {
+        let _ = fs::remove_dir_all(root);
     }
 }
 

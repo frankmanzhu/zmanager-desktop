@@ -49,7 +49,7 @@ impl NativeDragSessionRegistry {
         if items.is_empty() {
             return Err(NativeFileDragError::invalid_request("Native drag has no items"));
         }
-        let mut state = self.0.lock().expect("native drag registry lock poisoned");
+        let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
         state.retain_live();
         if state.shutdown || state.sessions.len() >= MAX_SESSIONS {
             return Err(NativeFileDragError::new("Native drag session capacity is unavailable", None::<String>));
@@ -88,7 +88,7 @@ impl NativeDragSessionRegistry {
     pub fn write_promise(&self, session_id: &str, promise_path: &str, destination: &Path) -> Result<u64, NativeFileDragError> {
         validate_destination(destination)?;
         let (members, provider, cancelled) = {
-            let mut state = self.0.lock().expect("native drag registry lock poisoned");
+            let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
             let session = state.sessions.get_mut(session_id).ok_or_else(|| NativeFileDragError::invalid_request("Native drag session expired"))?;
             let Some(members) = session.promises.get(promise_path) else {
                 return Err(NativeFileDragError::invalid_request("Native drag item is unavailable"));
@@ -107,7 +107,7 @@ impl NativeDragSessionRegistry {
             write_file_promise(destination, &members[0].entry_path, &provider, &cancelled)
         };
 
-        let mut state = self.0.lock().expect("native drag registry lock poisoned");
+        let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(session) = state.sessions.get_mut(session_id) {
             session.active.remove(promise_path);
             if result.is_ok() {
@@ -121,13 +121,13 @@ impl NativeDragSessionRegistry {
     }
 
     pub fn cancel(&self, session_id: &str) {
-        if let Some(session) = self.0.lock().expect("native drag registry lock poisoned").sessions.remove(session_id) {
+        if let Some(session) = self.0.lock().unwrap_or_else(|e| e.into_inner()).sessions.remove(session_id) {
             session.cancelled.store(true, Ordering::Release);
         }
     }
 
     pub fn shutdown(&self) {
-        let mut state = self.0.lock().expect("native drag registry lock poisoned");
+        let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
         state.shutdown = true;
         for session in state.sessions.values() {
             session.cancelled.store(true, Ordering::Release);

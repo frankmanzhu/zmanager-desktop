@@ -1303,12 +1303,29 @@ function treeFoldersForState(state: MutableArchiveWorkspaceState): ArchiveWorksp
   return folders;
 }
 
+const ENTRIES_LOOKUP_CACHE = new WeakMap<readonly ArchiveEntryDto[], Map<string, ArchiveEntryDto>>();
+
+function getEntryMap(entries: readonly ArchiveEntryDto[]): Map<string, ArchiveEntryDto> {
+  let map = ENTRIES_LOOKUP_CACHE.get(entries);
+  if (!map) {
+    map = new Map<string, ArchiveEntryDto>();
+    for (const entry of entries) {
+      map.set(normalizeArchivePath(entry.path), entry);
+    }
+    ENTRIES_LOOKUP_CACHE.set(entries, map);
+  }
+  return map;
+}
+
 function entryByPath(
   entries: readonly ArchiveEntryDto[],
   path: string | null | undefined,
 ): ArchiveEntryDto | null {
+  if (!path) {
+    return null;
+  }
   const normalized = normalizeArchivePath(path);
-  return entries.find((entry) => normalizeArchivePath(entry.path) === normalized) ?? null;
+  return getEntryMap(entries).get(normalized) ?? null;
 }
 
 function archiveEntryIsUnderFolder(entryPath: string, folderPath: string): boolean {

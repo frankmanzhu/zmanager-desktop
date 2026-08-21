@@ -633,6 +633,8 @@ export const enMessages = {
   "preferences.title": "Options",
   "preferences.description": "Safe desktop preferences for archive workflows.",
   "preferences.close.aria": "Close preferences dialog",
+  "preferences.columns.title": "Columns",
+  "preferences.advanced.title": "Advanced",
   "preferences.folders.title": "Folders",
   "preferences.folders.description": "Choose where quick create actions and new archives start.",
   "preferences.folders.workingOutput": "Working/output folder",

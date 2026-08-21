@@ -745,24 +745,49 @@ fn parse_epoch_timestamp(value: &str) -> Option<i128> {
 }
 
 fn natural_cmp(left: &str, right: &str) -> Ordering {
-    let left = left.to_lowercase();
-    let right = right.to_lowercase();
-    let mut left_chars = left.chars().peekable();
-    let mut right_chars = right.chars().peekable();
+    let mut left_chars = left.chars().flat_map(char::to_lowercase).peekable();
+    let mut right_chars = right.chars().flat_map(char::to_lowercase).peekable();
     loop {
         match (left_chars.peek(), right_chars.peek()) {
             (None, None) => return Ordering::Equal,
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
             (Some(a), Some(b)) if a.is_ascii_digit() && b.is_ascii_digit() => {
-                let left_number = take_digits(&mut left_chars);
-                let right_number = take_digits(&mut right_chars);
-                let ordering = left_number
-                    .trim_start_matches('0')
+                let mut left_zeros = 0usize;
+                while left_chars.peek() == Some(&'0') {
+                    left_zeros += 1;
+                    left_chars.next();
+                }
+                let mut right_zeros = 0usize;
+                while right_chars.peek() == Some(&'0') {
+                    right_zeros += 1;
+                    right_chars.next();
+                }
+
+                let mut left_digits = Vec::new();
+                while let Some(&c) = left_chars.peek() {
+                    if c.is_ascii_digit() {
+                        left_digits.push(c);
+                        left_chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                let mut right_digits = Vec::new();
+                while let Some(&c) = right_chars.peek() {
+                    if c.is_ascii_digit() {
+                        right_digits.push(c);
+                        right_chars.next();
+                    } else {
+                        break;
+                    }
+                }
+
+                let ordering = left_digits
                     .len()
-                    .cmp(&right_number.trim_start_matches('0').len())
-                    .then_with(|| left_number.trim_start_matches('0').cmp(right_number.trim_start_matches('0')))
-                    .then_with(|| left_number.len().cmp(&right_number.len()));
+                    .cmp(&right_digits.len())
+                    .then_with(|| left_digits.cmp(&right_digits))
+                    .then_with(|| (left_digits.len() + left_zeros).cmp(&(right_digits.len() + right_zeros)));
                 if ordering != Ordering::Equal {
                     return ordering;
                 }
@@ -775,14 +800,6 @@ fn natural_cmp(left: &str, right: &str) -> Ordering {
             }
         }
     }
-}
-
-fn take_digits(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
-    let mut output = String::new();
-    while chars.peek().is_some_and(char::is_ascii_digit) {
-        output.push(chars.next().expect("peeked digit should exist"));
-    }
-    output
 }
 
 fn archive_name(path: &str) -> &str {

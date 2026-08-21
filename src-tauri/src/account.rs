@@ -283,6 +283,7 @@ pub fn account_complete_hosted_auth(
 
     state.session = Some(session);
     state.auth_status = "signedIn".to_string();
+    drop(store);
     drop(state);
 
     let root = account_state_dir(&app)?;
@@ -292,12 +293,15 @@ pub fn account_complete_hosted_auth(
 
 #[tauri::command]
 pub fn account_fetch_current_user(runtime: State<'_, AccountRuntime>) -> Result<AccountCurrentUserDto, CommandErrorDto> {
-    let mut state = runtime.0.lock().expect("account runtime lock poisoned");
-    let session = state.session.as_ref().ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
+    let (session, environment_str) = {
+        let state = runtime.0.lock().expect("account runtime lock poisoned");
+        let session = state.session.clone().ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
+        let environment_str = state.environment.clone();
+        (session, environment_str)
+    };
 
     let transport = crate::hosted_transport::HostedHttpTransport::new().map_err(|e| account_error("account_http_client_failed", e))?;
 
-    let environment_str = &state.environment;
     let environment = match environment_str.as_str() {
         "local" => TzapHostedAuthEnvironment::Local,
         "staging" => TzapHostedAuthEnvironment::Staging,
@@ -305,26 +309,34 @@ pub fn account_fetch_current_user(runtime: State<'_, AccountRuntime>) -> Result<
     };
     let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
 
-    let user = zmanager_tzap_hosted::auth_client::fetch_current_user(&transport, &config.hosted_account_base_url, session).map_err(|e| {
-        if matches!(e, zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 }) {
-            let mut store = runtime.1.lock().expect("account store lock poisoned");
-            let _ = store.clear_session(ACCOUNT_KEY);
-            state.session = None;
-            state.auth_status = "expired".to_string();
-            CommandErrorDto::unauthorized(format!("Session expired: {}", e))
-        } else {
-            account_error("account_fetch_user_failed", e)
+    let user_result = zmanager_tzap_hosted::auth_client::fetch_current_user(&transport, &config.hosted_account_base_url, &session);
+
+    match user_result {
+        Ok(user) => {
+            let mut state = runtime.0.lock().expect("account runtime lock poisoned");
+            state.cached_user = Some(user.clone());
+            Ok(AccountCurrentUserDto {
+                display_name: user.display_name,
+                public_signer_id: user.public_signer_id,
+                assurance_level: user.assurance_level.as_str().to_string(),
+                selected_org_id: user.selected_org_id,
+            })
         }
-    })?;
-
-    state.cached_user = Some(user.clone());
-
-    Ok(AccountCurrentUserDto {
-        display_name: user.display_name,
-        public_signer_id: user.public_signer_id,
-        assurance_level: user.assurance_level.as_str().to_string(),
-        selected_org_id: user.selected_org_id,
-    })
+        Err(e) => {
+            if matches!(e, zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 }) {
+                {
+                    let mut store = runtime.1.lock().expect("account store lock poisoned");
+                    let _ = store.clear_session(ACCOUNT_KEY);
+                }
+                let mut state = runtime.0.lock().expect("account runtime lock poisoned");
+                state.session = None;
+                state.auth_status = "expired".to_string();
+                Err(CommandErrorDto::unauthorized(format!("Session expired: {}", e)))
+            } else {
+                Err(account_error("account_fetch_user_failed", e))
+            }
+        }
+    }
 }
 
 #[tauri::command]

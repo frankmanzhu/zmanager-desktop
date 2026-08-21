@@ -99,8 +99,10 @@ impl QuickActionStartupState {
         match self {
             Self::Requested(request) => {
                 let kind = request.kind;
-                inbox.ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request)).expect("startup native event should be valid");
-                Self::ForwardedToNativeInbox(kind)
+                match inbox.ingest(crate::native_launch_inbox::NativeLaunchInbox::from_quick_action(request)) {
+                    Ok(_) => Self::ForwardedToNativeInbox(kind),
+                    Err(error) => Self::Invalid(QuickActionError::invalid(format!("Failed to queue startup quick action: {error:?}"))),
+                }
             }
             other => other,
         }

@@ -835,6 +835,7 @@ impl JobRegistry {
                 return;
             }
 
+            let previous_status = record.status;
             match event {
                 JobEvent::Started { .. } => {
                     if matches!(record.status, JobStatusDto::Queued | JobStatusDto::Running) {
@@ -859,7 +860,8 @@ impl JobRegistry {
                 };
                 record.terminal_sequence = Some(sequence);
             }
-            if publish_record(record).is_ok() {
+            let status_changed = record.status != previous_status;
+            if publish_record(record).is_ok() && (status_changed || record.status.is_terminal()) {
                 let _ = publish_catalog(state);
             }
         });
@@ -891,6 +893,7 @@ impl JobRegistry {
                 event.total_entries = record.total_entries;
             }
 
+            let previous_status = record.status;
             match event.event_type {
                 JobEventKindDto::Started => {
                     if matches!(record.status, JobStatusDto::Queued | JobStatusDto::Running) {
@@ -918,7 +921,8 @@ impl JobRegistry {
                 };
                 record.terminal_sequence = Some(sequence);
             }
-            if publish_record(record).is_ok() {
+            let status_changed = record.status != previous_status;
+            if publish_record(record).is_ok() && (status_changed || record.status.is_terminal()) {
                 let _ = publish_catalog(state);
             }
         });
