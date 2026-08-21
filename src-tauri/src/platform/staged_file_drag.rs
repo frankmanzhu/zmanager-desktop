@@ -259,4 +259,41 @@ mod tests {
         assert!(result.is_err());
         assert!(!root.exists(), "failed staging leaked its temporary drag root: {root:?}");
     }
+
+    #[test]
+    fn staged_drag_retains_for_file_manager_copy_and_cleans_up() {
+        let payloads = Arc::new(HashMap::from([("root.txt".to_string(), b"root payload".to_vec())]));
+        let provider_payloads = Arc::clone(&payloads);
+        let provider: NativeFileDragStreamProvider = Arc::new(move |entry_path, writer| {
+            let bytes =
+                provider_payloads.get(entry_path).ok_or_else(|| NativeFileDragError::new(format!("missing test payload for {entry_path}"), None::<String>))?;
+            writer.write_all(bytes).map_err(|error| NativeFileDragError::new(format!("unable to write test payload: {error}"), None::<String>))?;
+            Ok(bytes.len() as u64)
+        });
+
+        let staged1 = StagedFileDrag::create(
+            "test",
+            &[NativeFileDragItem { entry_path: "root.txt".to_string(), display_path: "root.txt".to_string(), size: Some(12), modified_unix_seconds: None }],
+            Arc::clone(&provider),
+        )
+        .expect("stage drag files");
+        let root1 = staged1.root().expect("root1").to_path_buf();
+        assert!(root1.exists());
+        staged1.keep_for_file_manager_copy();
+        assert!(root1.exists(), "root1 should still exist after keep_for_file_manager_copy");
+
+        let staged2 = StagedFileDrag::create(
+            "test",
+            &[NativeFileDragItem { entry_path: "root.txt".to_string(), display_path: "root.txt".to_string(), size: Some(12), modified_unix_seconds: None }],
+            Arc::clone(&provider),
+        )
+        .expect("stage drag files");
+        let root2 = staged2.root().expect("root2").to_path_buf();
+        staged2.keep_for_file_manager_copy();
+        assert!(root2.exists());
+
+        cleanup_retained_drag_roots();
+        assert!(!root1.exists(), "root1 should be removed by cleanup_retained_drag_roots");
+        assert!(!root2.exists(), "root2 should be removed by cleanup_retained_drag_roots");
+    }
 }

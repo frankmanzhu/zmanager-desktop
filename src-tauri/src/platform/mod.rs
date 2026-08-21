@@ -287,6 +287,8 @@ pub fn handle_run_event(event: &tauri::RunEvent, inbox: &NativeLaunchInbox) {
 pub fn shutdown() {
     #[cfg(target_os = "macos")]
     macos::shutdown();
+    #[cfg(target_os = "linux")]
+    staged_file_drag::cleanup_retained_drag_roots();
 }
 
 #[allow(dead_code)]
