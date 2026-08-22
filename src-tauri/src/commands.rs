@@ -1694,11 +1694,7 @@ pub(crate) fn next_available_destination_file_path(path: &str) -> String {
 
 pub(crate) fn next_available_destination_path(path: &str) -> String {
     let candidate = Path::new(path);
-    if candidate.is_dir() {
-        next_available_destination_directory_path(path)
-    } else {
-        next_available_destination_file_path(path)
-    }
+    if candidate.is_dir() { next_available_destination_directory_path(path) } else { next_available_destination_file_path(path) }
 }
 
 fn split_file_collision_name(name: &str) -> (&str, &str) {
