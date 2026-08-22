@@ -10,3 +10,4 @@
 "shellAction.compressCleanSource" = "压缩并移除源文件";
 "shellAction.extractHere" = "解压到此处";
 "shellAction.extractToFolder" = "解压到同名文件夹";
+"shellAction.extractToFolderNamed" = "解压到 \"%@\"";

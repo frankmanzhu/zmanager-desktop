@@ -210,6 +210,8 @@
       "canonicalLabel": "Extract to Archive Folder",
       "canonicalLabelZhHans": "解压到同名文件夹",
       "displayKey": "shellAction.extractToFolder",
+      "macOSFinderNamedLabel": "Extract to \"%@\"",
+      "macOSFinderNamedLabelZhHans": "解压到 \"%@\"",
       "nativeVerb": "ExtractToFolder",
       "order": 100,
       "contextMenuOrder": 20,

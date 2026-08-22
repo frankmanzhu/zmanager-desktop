@@ -39,9 +39,21 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
     #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/archive.tar.gz")) == "archive")
     #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/split.7z.001")) == "split")
 
-    let actions = FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: { $0 })
-    let extractToFolderAction = actions.first(where: { $0.id == .extractToFolder })
-    #expect(extractToFolderAction?.title == "Extract to \"demo\"")
+    let fallbackActions = FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: { $0 })
+    let fallbackAction = fallbackActions.first(where: { $0.id == .extractToFolder })
+    #expect(fallbackAction?.title == "Extract to \"demo\"")
+
+    let englishActions = FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: {
+        $0 == "shellAction.extractToFolderNamed" ? "Extract to \"%@\"" : $0
+    })
+    let englishAction = englishActions.first(where: { $0.id == .extractToFolder })
+    #expect(englishAction?.title == "Extract to \"demo\"")
+
+    let chineseActions = FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: {
+        $0 == "shellAction.extractToFolderNamed" ? "解压到 \"%@\"" : $0
+    })
+    let chineseAction = chineseActions.first(where: { $0.id == .extractToFolder })
+    #expect(chineseAction?.title == "解压到 \"demo\"")
 }
 
 @Test func finderTransportWritesOneVersionedRequestAndOnlyExposesOpaqueTokenInURL() throws {

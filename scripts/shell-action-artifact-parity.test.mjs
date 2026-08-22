@@ -12,6 +12,12 @@ const read = (relative) => readFile(path.join(root, relative), "utf8");
 const macosFinderActionSupport = await read(
   "native/macos/Sources/ZManagerFinderExtensionSupport/FinderActionSupport.swift",
 );
+const macosFinderEnglish = await read(
+  "packaging/macos/FinderExtension/en.lproj/FinderActions.strings",
+);
+const macosFinderZhHans = await read(
+  "packaging/macos/FinderExtension/zh-Hans.lproj/FinderActions.strings",
+);
 const artifacts = {
   windowsExplorer: [
     await read("native/windows-shell-extension/src/generated.rs"),
@@ -30,7 +36,7 @@ const artifacts = {
   ],
   macosFinder: [
     await read("native/macos/Sources/ZManagerGenerated/ShellActions.generated.swift"),
-    await read("packaging/macos/FinderExtension/en.lproj/FinderActions.strings"),
+    macosFinderEnglish,
   ],
   macosServices: [
     await read("native/macos/Sources/ZManagerGenerated/ShellActions.generated.swift"),
@@ -104,4 +110,19 @@ test("macOS Finder quick actions route callback URLs to the singleton applicatio
     macosFinderActionSupport,
     /NSWorkspace\.shared\.open\(url\)/,
   );
+});
+
+test("macOS Finder named labels are generated for every declared locale", () => {
+  const namedActions = manifest.actions.filter(
+    ({ macOSFinderNamedLabel }) => typeof macOSFinderNamedLabel === "string",
+  );
+  assert.ok(namedActions.length > 0);
+  for (const action of namedActions) {
+    const key = `${action.displayKey}Named`;
+    assert.ok(macosFinderActionSupport.includes(key), `Finder support is missing ${key}`);
+    assert.ok(macosFinderEnglish.includes(JSON.stringify(key)));
+    assert.ok(macosFinderEnglish.includes(JSON.stringify(action.macOSFinderNamedLabel)));
+    assert.ok(macosFinderZhHans.includes(JSON.stringify(key)));
+    assert.ok(macosFinderZhHans.includes(JSON.stringify(action.macOSFinderNamedLabelZhHans)));
+  }
 });

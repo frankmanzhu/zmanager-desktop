@@ -10,3 +10,4 @@
 "shellAction.compressCleanSource" = "Compress and remove source";
 "shellAction.extractHere" = "Extract Here";
 "shellAction.extractToFolder" = "Extract to Archive Folder";
+"shellAction.extractToFolderNamed" = "Extract to \"%@\"";

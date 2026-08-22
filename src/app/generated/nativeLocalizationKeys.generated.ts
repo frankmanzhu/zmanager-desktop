@@ -13,6 +13,7 @@ export const NATIVE_LOCALIZATION_KEYS = [
   "shellAction.compressAppleArchive",
   "shellAction.compressCleanSource",
   "shellAction.extractHere",
-  "shellAction.extractToFolder"
+  "shellAction.extractToFolder",
+  "shellAction.extractToFolderNamed"
 ] as const;
 export type NativeLocalizationKey = (typeof NATIVE_LOCALIZATION_KEYS)[number];

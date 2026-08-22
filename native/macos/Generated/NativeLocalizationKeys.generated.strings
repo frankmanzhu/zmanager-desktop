@@ -26,3 +26,5 @@
 "shellAction.extractHere" = "shellAction.extractHere";
 /* Resolve this key in the native presentation target. */
 "shellAction.extractToFolder" = "shellAction.extractToFolder";
+/* Resolve this key in the native presentation target. */
+"shellAction.extractToFolderNamed" = "shellAction.extractToFolderNamed";
