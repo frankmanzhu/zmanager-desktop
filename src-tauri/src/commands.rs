@@ -370,7 +370,7 @@ fn start_create_internal_with_resolver(
     let sources = normalize_non_empty_paths(&request.sources)?;
     let requested_destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?.trim().to_string();
     let destination_path = if !request.replace_existing || request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename {
-        next_available_destination_path(&requested_destination_path)
+        next_available_destination_file_path(&requested_destination_path)
     } else {
         requested_destination_path
     };
@@ -726,11 +726,8 @@ fn start_extract_internal_with_recipient_key_and_spawner(
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let requested_destination_path = ensure_non_empty_path(request.destination_path, "destinationPath")?;
-    let destination_path = if request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename
-        || request.overwrite == OverwritePolicyDto::Rename
-        || (request.overwrite != OverwritePolicyDto::Replace && request.destination_collision_strategy != DestinationCollisionStrategyDto::Refuse)
-    {
-        next_available_destination_path(&requested_destination_path)
+    let destination_path = if request.destination_collision_strategy == DestinationCollisionStrategyDto::Rename {
+        next_available_destination_directory_path(&requested_destination_path)
     } else {
         requested_destination_path
     };
@@ -1656,7 +1653,26 @@ fn ensure_non_empty_path(value: String, field: &str) -> Result<String, CommandEr
     Ok(value)
 }
 
-fn next_available_destination_path(path: &str) -> String {
+pub(crate) fn next_available_destination_directory_path(path: &str) -> String {
+    let candidate = Path::new(path);
+    if !candidate.exists() {
+        return path.to_string();
+    }
+
+    let parent = candidate.parent().unwrap_or(Path::new(""));
+    let dir_name = candidate.file_name().and_then(|value| value.to_str()).unwrap_or(path);
+
+    for index in 2..10_000 {
+        let renamed = parent.join(format!("{dir_name} {index}"));
+        if !renamed.exists() {
+            return renamed.to_string_lossy().to_string();
+        }
+    }
+
+    path.to_string()
+}
+
+pub(crate) fn next_available_destination_file_path(path: &str) -> String {
     let candidate = Path::new(path);
     if !candidate.exists() {
         return path.to_string();
@@ -1664,7 +1680,7 @@ fn next_available_destination_path(path: &str) -> String {
 
     let parent = candidate.parent().unwrap_or(Path::new(""));
     let file_name = candidate.file_name().and_then(|value| value.to_str()).unwrap_or(path);
-    let (stem, suffix) = split_collision_name(file_name);
+    let (stem, suffix) = split_file_collision_name(file_name);
 
     for index in 2..10_000 {
         let renamed = parent.join(format!("{stem} {index}{suffix}"));
@@ -1676,7 +1692,16 @@ fn next_available_destination_path(path: &str) -> String {
     path.to_string()
 }
 
-fn split_collision_name(name: &str) -> (&str, &str) {
+pub(crate) fn next_available_destination_path(path: &str) -> String {
+    let candidate = Path::new(path);
+    if candidate.is_dir() {
+        next_available_destination_directory_path(path)
+    } else {
+        next_available_destination_file_path(path)
+    }
+}
+
+fn split_file_collision_name(name: &str) -> (&str, &str) {
     const COMPOUND_SUFFIXES: &[&str] =
         &[".tar.br", ".tar.bz2", ".tar.gz", ".tar.lz", ".tar.lz4", ".tar.lzma", ".tar.lzo", ".tar.lrz", ".tar.xz", ".tar.z", ".tar.zst", ".7z.001"];
 
@@ -4224,9 +4249,96 @@ mod tests {
         fs::write(workspace.join("seq 2.zip"), b"2").expect("write seq 2.zip");
         fs::write(workspace.join("seq 3.zip"), b"3").expect("write seq 3.zip");
 
-        let seq_resolved = next_available_destination_path(&seq_base.to_string_lossy());
+        let seq_resolved = next_available_destination_file_path(&seq_base.to_string_lossy());
         assert_eq!(PathBuf::from(seq_resolved), workspace.join("seq 4.zip"));
 
+        // Directory collision with dots in folder names (e.g. version numbers and installer names)
+        let dir_cases = vec![
+            ("MPC-BE.1.9.1.x64-installer", "MPC-BE.1.9.1.x64-installer 2"),
+            ("node-v20.10.0", "node-v20.10.0 2"),
+            ("my.backup.folder.tar.gz", "my.backup.folder.tar.gz 2"),
+        ];
+
+        for (dir_name, expected_name) in dir_cases {
+            let target_dir = workspace.join(dir_name);
+            fs::create_dir_all(&target_dir).expect("fixture dir create");
+            let resolved = next_available_destination_directory_path(&target_dir.to_string_lossy());
+            assert_eq!(PathBuf::from(resolved), workspace.join(expected_name));
+        }
+
+        // Sequential directory collision check
+        let seq_dir = workspace.join("MPC-BE.1.9.1.x64-installer");
+        fs::create_dir_all(workspace.join("MPC-BE.1.9.1.x64-installer 2")).expect("create dir 2");
+        let seq_dir_resolved = next_available_destination_directory_path(&seq_dir.to_string_lossy());
+        assert_eq!(PathBuf::from(seq_dir_resolved), workspace.join("MPC-BE.1.9.1.x64-installer 3"));
+
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn extract_does_not_rename_destination_folder_when_collision_strategy_is_refuse_even_with_overwrite_rename() {
+        let workspace = create_temp_workspace("extract-refuse-collision");
+        let sources = workspace.join("sources");
+        fs::create_dir_all(&sources).expect("sources workspace should be created");
+        fs::write(sources.join("README.md"), b"hello").expect("readme should be created");
+
+        let destination_archive = workspace.join("archive.tzap");
+        let registry = JobRegistry::new();
+        let create_request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination_archive.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: false,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
+            preserve_metadata: false,
+        };
+        let create_job = start_create_internal(create_request, &registry).expect("fixture create should start");
+        let (create_poll, _) = wait_for_job_terminal(&registry, &create_job.job_id);
+        assert_eq!(create_poll.status, JobStatusDto::Completed);
+
+        let extract_destination = workspace.join("Downloads");
+        fs::create_dir_all(&extract_destination).expect("Downloads folder exists");
+
+        let extract_request = StartExtractRequest {
+            archive_path: destination_archive.to_string_lossy().to_string(),
+            destination_path: extract_destination.to_string_lossy().to_string(),
+            password: None,
+            recipient_key_id: None,
+            overwrite: OverwritePolicyDto::Rename,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            entry_paths: None,
+            strip_components: 0,
+            tzap_restore_policy: TzapRestorePolicyDto::Portable,
+            tzap_allow_degraded: false,
+            tzap_allow_absolute_symlinks: false,
+            ignore_symlinks: false,
+        };
+        let extract_job = start_extract_internal(extract_request, &registry).expect("extract command should start");
+        let (extract_poll, _) = wait_for_job_terminal(&registry, &extract_job.job_id);
+
+        assert_eq!(extract_poll.status, JobStatusDto::Completed);
+        // Downloads 2 must NOT exist
+        assert!(!workspace.join("Downloads 2").exists(), "Downloads 2 must not be created");
+        // Output must be directly inside Downloads
+        assert!(extract_destination.join("sources").join("README.md").is_file(), "contents must extract directly into destination folder");
         let _ = fs::remove_dir_all(&workspace);
     }
 }

@@ -91,9 +91,7 @@ export function quickExtractDestination(
 export function quickExtractDestinationCollisionStrategy(
   action: QuickActionExtractMode,
 ): StartExtractRequest["destinationCollisionStrategy"] | undefined {
-  return action === "extractToFolder"
-    ? resolveDestinationCollisionStrategy({ isQuickAction: true })
-    : undefined;
+  return action === "extractToFolder" ? "rename" : undefined;
 }
 
 export function quickExtractSingleRootFolder(entries: QuickExtractEntry[]): string | null {
@@ -135,11 +133,10 @@ export function quickExtractDestinationPlan(
   if (action === "extractHere" && entries) {
     const rootFolder = quickExtractSingleRootFolder(entries);
     if (rootFolder) {
-      const strategy = resolveDestinationCollisionStrategy({ isQuickAction: true });
       return {
         destinationPath: pathHelpers.joinNativePath(destinationPath, rootFolder),
         stripComponents: 1,
-        ...(strategy ? { destinationCollisionStrategy: strategy } : {}),
+        destinationCollisionStrategy: "rename",
       };
     }
   }

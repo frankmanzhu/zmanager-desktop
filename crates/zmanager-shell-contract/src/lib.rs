@@ -69,6 +69,102 @@ impl fmt::Display for ShellActionContractError {
 
 impl std::error::Error for ShellActionContractError {}
 
+pub const SUPPORTED_ARCHIVE_SUFFIXES: &[&str] = &[
+    ".vol000.tzap",
+    ".cpio.lzma",
+    ".cpio.bz2",
+    ".cpio.zst",
+    ".tar.lzma",
+    ".cpio.gz",
+    ".cpio.xz",
+    ".tar.b64",
+    ".tar.bz2",
+    ".tar.lrz",
+    ".tar.lz4",
+    ".tar.lzo",
+    ".tar.zst",
+    ".7z.001",
+    ".sevenz",
+    ".tar.br",
+    ".tar.gz",
+    ".tar.lz",
+    ".tar.uu",
+    ".tar.xz",
+    ".mtree",
+    ".tar.z",
+    ".tlzma",
+    ".ustar",
+    ".appx",
+    ".cpgz",
+    ".cpio",
+    ".epub",
+    ".lzma",
+    ".tbz2",
+    ".tzap",
+    ".tzst",
+    ".vmdk",
+    ".zipx",
+    ".aar",
+    ".aea",
+    ".apk",
+    ".b64",
+    ".bz2",
+    ".cab",
+    ".cb7",
+    ".cbr",
+    ".cbt",
+    ".cbz",
+    ".deb",
+    ".ipa",
+    ".iso",
+    ".jar",
+    ".lha",
+    ".lz4",
+    ".lzh",
+    ".lzo",
+    ".msi",
+    ".pax",
+    ".rar",
+    ".rpm",
+    ".tar",
+    ".taz",
+    ".tbz",
+    ".tgz",
+    ".txz",
+    ".udf",
+    ".vhd",
+    ".war",
+    ".xar",
+    ".xpi",
+    ".zip",
+    ".zst",
+    ".7z",
+    ".ar",
+    ".br",
+    ".gz",
+    ".lz",
+    ".uu",
+    ".xz",
+    ".a",
+    ".z",
+];
+
+pub fn base_name_without_archive_extension(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let lower = name.to_lowercase();
+    for suffix in SUPPORTED_ARCHIVE_SUFFIXES {
+        if lower.ends_with(suffix) && name.len() > suffix.len() {
+            return &name[..name.len() - suffix.len()];
+        }
+    }
+    if let Some(dot_idx) = name.rfind('.')
+        && dot_idx > 0
+    {
+        return &name[..dot_idx];
+    }
+    name
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +218,16 @@ mod tests {
         ] {
             assert_eq!(kind.window_disposition(), ShellActionWindowDisposition::DisposableTask);
         }
+    }
+
+    #[test]
+    fn base_name_without_archive_extension_strips_extensions_correctly() {
+        assert_eq!(base_name_without_archive_extension("C:\\path\\to\\archive.zip"), "archive");
+        assert_eq!(base_name_without_archive_extension("C:/path/to/MPC-BE.1.9.1.x64-installer.zip"), "MPC-BE.1.9.1.x64-installer");
+        assert_eq!(base_name_without_archive_extension("/home/user/archive.tar.gz"), "archive");
+        assert_eq!(base_name_without_archive_extension("/home/user/archive.tar.zst"), "archive");
+        assert_eq!(base_name_without_archive_extension("split.7z.001"), "split");
+        assert_eq!(base_name_without_archive_extension("backup.vol000.tzap"), "backup");
+        assert_eq!(base_name_without_archive_extension("plain_file"), "plain_file");
     }
 }

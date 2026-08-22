@@ -260,21 +260,21 @@ export function createQuickActionController(
             break;
           }
 
-          const overwrite = "rename";
+          const preferences = options.preferences();
+          const overwrite = preferences.defaultExtractOverwrite === "replace" ? "replace" : "rename";
+          const destinationCollisionStrategy = overwrite === "replace"
+            ? undefined
+            : destinationPlan.destinationCollisionStrategy;
           const request = buildStartExtractRequest({
             archivePath,
             destinationPath: destinationPlan.destinationPath,
             overwrite,
-            destinationCollisionStrategy: resolveDestinationCollisionStrategy({
-              isQuickAction: true,
-              overwrite,
-              destinationCollisionStrategy: destinationPlan.destinationCollisionStrategy,
-            }),
+            destinationCollisionStrategy,
             stripComponents: destinationPlan.stripComponents,
-            tzapRestorePolicy: options.preferences().defaultTzapRestorePolicy,
-            tzapAllowDegraded: options.preferences().defaultTzapAllowDegraded,
-            tzapAllowAbsoluteSymlinks: options.preferences().defaultTzapAllowAbsoluteSymlinks,
-            ignoreSymlinks: options.preferences().defaultExtractIgnoreSymlinks,
+            tzapRestorePolicy: preferences.defaultTzapRestorePolicy,
+            tzapAllowDegraded: preferences.defaultTzapAllowDegraded,
+            tzapAllowAbsoluteSymlinks: preferences.defaultTzapAllowAbsoluteSymlinks,
+            ignoreSymlinks: preferences.defaultExtractIgnoreSymlinks,
             ...(password ? { password } : {}),
           });
           const response = await options.runStartExtract(request);

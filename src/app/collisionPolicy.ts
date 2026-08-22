@@ -31,11 +31,7 @@ export function resolveDestinationCollisionStrategy(
     return undefined;
   }
 
-  if (context.isDisposableTask || context.isQuickAction) {
-    return "rename";
-  }
-
-  if (context.overwrite === "rename") {
+  if (context.replaceExisting === false && (context.isDisposableTask || context.isQuickAction)) {
     return "rename";
   }
 

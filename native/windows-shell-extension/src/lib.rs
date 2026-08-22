@@ -34,7 +34,9 @@ use windows::{
     core::{BOOL, Error, GUID, HRESULT, Interface, PCWSTR, PWSTR, Ref, Result as WindowsResult},
 };
 use windows_core::implement;
-use zmanager_shell_contract::{ShellActionKind, ShellActionRequest};
+use zmanager_shell_contract::{
+    base_name_without_archive_extension, ShellActionKind, ShellActionRequest,
+};
 
 mod generated;
 use generated::*;
@@ -54,7 +56,7 @@ impl LiveObject {
 
 impl Drop for LiveObject {
     fn drop(&mut self) {
-        LIVE_OBJECTS.fetch_sub(1, Ordering::Release);
+        LIVE_OBJECTS.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -74,7 +76,18 @@ impl ZManagerExplorerCommand {
 }
 
 impl IExplorerCommand_Impl for ZManagerExplorerCommand_Impl {
-    fn GetTitle(&self, _selection: Ref<'_, IShellItemArray>) -> WindowsResult<PWSTR> {
+    fn GetTitle(&self, selection: Ref<'_, IShellItemArray>) -> WindowsResult<PWSTR> {
+        if self.action == ExplorerAction::ExtractToFolder
+            && let Ok(selection_ref) = selection.ok()
+            && let Ok(paths) = selected_file_system_paths(selection_ref)
+            && paths.len() == 1
+        {
+            let folder_name = base_name_without_archive_extension(&paths[0]);
+            let title = format!("Extract to \"{folder_name}\"\0");
+            let wide: Vec<u16> = title.encode_utf16().collect();
+            return unsafe { SHStrDupW(PCWSTR(wide.as_ptr())) };
+        }
+
         unsafe { SHStrDupW(self.action.title()) }
     }
 
@@ -322,7 +335,7 @@ mod tests {
         let mut factory_pointer = std::ptr::null_mut();
         let result = unsafe {
             DllGetClassObject(
-                &COMPRESS_ZIP_CLSID,
+                &ADD_TO_ZIP_CLSID,
                 &IClassFactory::IID,
                 &mut factory_pointer,
             )
@@ -338,7 +351,7 @@ mod tests {
 
         assert_eq!(
             unsafe { command.GetCanonicalName() }.expect("command should expose its canonical ID"),
-            COMPRESS_ZIP_CLSID
+            ADD_TO_ZIP_CLSID
         );
     }
 
@@ -411,6 +424,48 @@ mod tests {
         assert_eq!(paths.len(), 2);
         assert_eq!(PathBuf::from(&paths[0]), folder1);
         assert_eq!(PathBuf::from(&paths[1]), folder2);
+
+        drop(selection);
+        let _ = fs::remove_dir_all(directory);
+        unsafe { CoUninitialize() };
+    }
+
+    #[test]
+    fn extract_to_folder_command_title_is_context_aware() {
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() }
+            .expect("COM apartment should initialize");
+        let directory = std::env::temp_dir().join(format!(
+            "zmanager-shell-title-test-{}-{}",
+            std::process::id(),
+            REQUEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let archive_file = directory.join("MPC-BE.1.9.1.x64-installer.zip");
+        fs::create_dir_all(&directory).expect("dir should be created");
+        fs::write(&archive_file, b"test").expect("archive file should be written");
+
+        let wide = archive_file
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let mut pidl = std::ptr::null_mut();
+        unsafe {
+            SHParseDisplayName(PCWSTR(wide.as_ptr()), None, &mut pidl, 0, None)
+                .expect("filesystem path should become a shell item");
+        }
+
+        let borrowed_pidls = [pidl as *const ITEMIDLIST];
+        let selection = unsafe { SHCreateShellItemArrayFromIDLists(&borrowed_pidls) }
+            .expect("shell selection array should be created");
+        unsafe { CoTaskMemFree(Some(pidl.cast())) };
+
+        let command: IExplorerCommand =
+            ZManagerExplorerCommand::new(ExplorerAction::ExtractToFolder).into();
+        let title_pwstr = unsafe { command.GetTitle(&selection) }.expect("title should resolve");
+        let title = unsafe { title_pwstr.to_string() }.expect("title to string");
+        unsafe { CoTaskMemFree(Some(title_pwstr.0.cast())) };
+
+        assert_eq!(title, "Extract to \"MPC-BE.1.9.1.x64-installer\"");
 
         drop(selection);
         let _ = fs::remove_dir_all(directory);

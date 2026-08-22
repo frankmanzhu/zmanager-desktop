@@ -33,6 +33,17 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
     #expect(!FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/demo.txt")))
 }
 
+@Test func finderMenuExtractToFolderDynamicTitle() {
+    #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/demo.zip")) == "demo")
+    #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/MPC-BE.1.9.1.x64-installer.zip")) == "MPC-BE.1.9.1.x64-installer")
+    #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/archive.tar.gz")) == "archive")
+    #expect(FinderMenuBuilder.baseNameWithoutArchiveExtension(URL(filePath: "/tmp/split.7z.001")) == "split")
+
+    let actions = FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: { $0 })
+    let extractToFolderAction = actions.first(where: { $0.id == .extractToFolder })
+    #expect(extractToFolderAction?.title == "Extract to \"demo\"")
+}
+
 @Test func finderTransportWritesOneVersionedRequestAndOnlyExposesOpaqueTokenInURL() throws {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "zmanager-finder-transport-\(UUID().uuidString)")

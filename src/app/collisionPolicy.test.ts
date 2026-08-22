@@ -11,24 +11,15 @@ describe("collisionPolicy", () => {
     ).toBe("rename");
   });
 
-  it("returns rename for disposable tasks unless replace was explicitly selected", () => {
+  it("returns rename for disposable tasks when replaceExisting is false", () => {
     expect(
       resolveDestinationCollisionStrategy({ isDisposableTask: true, replaceExisting: false }),
     ).toBe("rename");
-    expect(
-      resolveDestinationCollisionStrategy({ isDisposableTask: true, overwrite: "refuse" }),
-    ).toBe("rename");
-    expect(
-      resolveDestinationCollisionStrategy({ isDisposableTask: true, overwrite: "ask" }),
-    ).toBe("rename");
   });
 
-  it("returns rename for quick actions unless replace was explicitly selected", () => {
+  it("returns rename for quick actions when replaceExisting is false", () => {
     expect(
       resolveDestinationCollisionStrategy({ isQuickAction: true, replaceExisting: false }),
-    ).toBe("rename");
-    expect(
-      resolveDestinationCollisionStrategy({ isQuickAction: true, overwrite: "rename" }),
     ).toBe("rename");
   });
 

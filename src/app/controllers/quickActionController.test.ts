@@ -418,6 +418,70 @@ describe("quick action controller", () => {
     expect(harness.calls.jobs[0]).toEqual(startJobResponse({ kind: "zipExtract" }));
   });
 
+  it("starts quick extract for extractHere without destination collision renaming on parent directory", async () => {
+    const harness = createHarness();
+    harness.runStartExtract.mockResolvedValueOnce(startJobResponse({ kind: "zipExtract" }));
+
+    await harness.controller.startQuickExtract(["C:/archives/demo.zip"], "extractHere");
+
+    expect(harness.runStartExtract).toHaveBeenCalledWith({
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives",
+      overwrite: "rename",
+      stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
+    } satisfies StartExtractRequest);
+    expect(harness.calls.extractDestinations).toEqual(["C:/archives"]);
+  });
+
+  it("uses replace for quick extract only when defaultExtractOverwrite is set to replace", async () => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      defaultExtractOverwrite: "replace",
+    });
+    harness.runStartExtract.mockResolvedValueOnce(startJobResponse({ kind: "zipExtract" }));
+
+    await harness.controller.startQuickExtract(["C:/archives/demo.zip"], "extractToFolder");
+
+    expect(harness.runStartExtract).toHaveBeenCalledWith({
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives/demo",
+      overwrite: "replace",
+      stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
+    } satisfies StartExtractRequest);
+  });
+
+  it("falls back to rename for quick extract when defaultExtractOverwrite is refuse or ask", async () => {
+    const harness = createHarness();
+    harness.setPreferences({
+      ...DEFAULT_APP_PREFERENCES,
+      defaultExtractOverwrite: "refuse",
+    });
+    harness.runStartExtract.mockResolvedValueOnce(startJobResponse({ kind: "zipExtract" }));
+
+    await harness.controller.startQuickExtract(["C:/archives/demo.zip"], "extractToFolder");
+
+    expect(harness.runStartExtract).toHaveBeenCalledWith({
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives/demo",
+      overwrite: "rename",
+      destinationCollisionStrategy: "rename",
+      stripComponents: 0,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
+    } satisfies StartExtractRequest);
+  });
+
   it("continues past unsupported quick extract paths and reports command hints", async () => {
     const harness = createHarness();
     harness.runStartExtract.mockRejectedValueOnce(commandError({

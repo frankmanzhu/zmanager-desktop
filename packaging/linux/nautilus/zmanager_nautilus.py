@@ -92,7 +92,11 @@ def build_zmanager_menu(
         for action_name, label, quick_action, accepts_multiple in ARCHIVE_ACTIONS:
             if action_name in added_actions:
                 continue
-            item = action_item(identity, action_name, label, quick_action, paths)
+            item_label = label
+            if action_name == "ExtractToFolder" and len(paths) == 1:
+                stem = base_name_without_archive_extension(paths[0])
+                item_label = f'Extract to "{stem}"'
+            item = action_item(identity, action_name, item_label, quick_action, paths)
             if not accepts_multiple and len(paths) != 1:
                 item.set_sensitive(False)
             submenu.append_item(item)
@@ -174,6 +178,22 @@ def is_tzap_volume_name(name: str) -> bool:
     base_name = stem[:marker_index]
     digits = stem[marker_index + len(".vol") :]
     return bool(base_name and digits and digits.isascii() and digits.isdigit())
+
+
+def base_name_without_archive_extension(path: str) -> str:
+    name = Path(path).name
+    lower = name.casefold()
+    if is_tzap_volume_name(lower):
+        stem = lower[: -len(".tzap")]
+        marker_index = stem.rfind(".vol")
+        if marker_index > 0:
+            return name[:marker_index]
+    for suffix in ARCHIVE_SUFFIXES:
+        if lower.endswith(suffix) and len(name) > len(suffix):
+            return name[: -len(suffix)]
+    if "." in name and not name.startswith("."):
+        return os.path.splitext(name)[0]
+    return name
 
 
 def menu_identity(context: str, paths: List[str]) -> str:

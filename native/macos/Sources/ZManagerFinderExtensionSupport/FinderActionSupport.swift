@@ -51,7 +51,19 @@ public enum FinderMenuBuilder {
                   policy.selectionShapes.contains(where: shapes.contains),
                   policy.multiplicity != "exactly-one" || items.count == 1
             else { return nil }
-            return FinderMenuAction(id: policy.id, title: localize(policy.displayKey))
+            let title: String
+            if policy.id == .extractToFolder, items.count == 1 {
+                let stem = baseNameWithoutArchiveExtension(items[0].url)
+                let template = localize("shellAction.extractToFolderNamed")
+                if template != "shellAction.extractToFolderNamed" && template.contains("%@") {
+                    title = String(format: template, stem)
+                } else {
+                    title = "Extract to \"\(stem)\""
+                }
+            } else {
+                title = localize(policy.displayKey)
+            }
+            return FinderMenuAction(id: policy.id, title: title)
         }.sorted { left, right in
             let leftOrder = ShellActionPolicy.all.first(where: { $0.id == left.id })?.contextMenuOrder
                 ?? .max
@@ -68,6 +80,29 @@ public enum FinderMenuBuilder {
             return true
         }
         return ArchiveFileTypes.singleExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    public static func baseNameWithoutArchiveExtension(_ url: URL) -> String {
+        let name = url.lastPathComponent
+        let lower = name.lowercased()
+        for suffix in ArchiveFileTypes.splitArchiveSuffixes {
+            if lower.hasSuffix(suffix) && name.count > suffix.count {
+                return String(name.dropLast(suffix.count))
+            }
+        }
+        for compound in ArchiveFileTypes.compoundExtensions {
+            let suffix = ".\(compound)"
+            if lower.hasSuffix(suffix) && name.count > suffix.count {
+                return String(name.dropLast(suffix.count))
+            }
+        }
+        for ext in ArchiveFileTypes.singleExtensions {
+            let suffix = ".\(ext)"
+            if lower.hasSuffix(suffix) && name.count > suffix.count {
+                return String(name.dropLast(suffix.count))
+            }
+        }
+        return url.deletingPathExtension().lastPathComponent
     }
 
     /// Determine whether a URL is likely a directory using only path properties.
