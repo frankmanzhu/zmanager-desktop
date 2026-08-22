@@ -21,10 +21,9 @@ use crate::{
     constants,
     dto::{
         AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
-        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, OverwritePolicyDto, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest,
-        PreviewEntryResponse, ProjectContract, ProjectIntegrationContract, ResumeJobRequest, StartCreateRequest, StartExtractRequest, SubscribeJobRequest,
-        SubscriptionRequest, SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest,
-        ValidateDirectoryResponse,
+        NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse,
+        ProjectContract, ProjectIntegrationContract, ResumeJobRequest, StartCreateRequest, StartExtractRequest, SubscribeJobRequest, SubscriptionRequest,
+        SystemFileIconRequest, SystemFileIconResponse, TestArchiveRequest, TzapRestorePolicyDto, ValidateDirectoryRequest, ValidateDirectoryResponse,
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
@@ -1692,6 +1691,7 @@ pub(crate) fn next_available_destination_file_path(path: &str) -> String {
     path.to_string()
 }
 
+#[cfg(test)]
 pub(crate) fn next_available_destination_path(path: &str) -> String {
     let candidate = Path::new(path);
     if candidate.is_dir() { next_available_destination_directory_path(path) } else { next_available_destination_file_path(path) }
