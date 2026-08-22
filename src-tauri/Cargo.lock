@@ -8244,7 +8244,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-desktop"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "base64 0.23.1",
  "gdk",
@@ -8279,7 +8279,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-shell-contract"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "serde",
  "serde_json",
