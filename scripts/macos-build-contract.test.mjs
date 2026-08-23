@@ -25,3 +25,12 @@ test("macOS package CI syncs UniFFI Swift sources before Cargo validation", () =
   assert.notEqual(sync, -1, "package CI must sync UniFFI Swift sources");
   assert.ok(sync < cargo, "package CI sync must precede Cargo validation");
 });
+
+test("macOS release CI syncs UniFFI Swift sources before Cargo validation", () => {
+  const workflow = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
+  const sync = workflow.indexOf("scripts/sync-uniffi-swift-bindings.sh");
+  const cargo = workflow.indexOf("cargo clippy");
+
+  assert.notEqual(sync, -1, "release CI must sync UniFFI Swift sources");
+  assert.ok(sync < cargo, "release CI sync must precede Cargo validation");
+});

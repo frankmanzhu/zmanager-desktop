@@ -52,6 +52,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           scripts/ensure-sibling-repos.sh
+          scripts/sync-uniffi-swift-bindings.sh
 
       - name: Run release verification tests
         run: |
