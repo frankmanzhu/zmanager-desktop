@@ -10,7 +10,7 @@ Ensures all required sibling repositories exist and are kept up to date.
 
 .DESCRIPTION
 Clones and updates sibling repositories (tzap, zmanager, forensic-vfs-engine,
-ntfs-forensic, udf-forensic, dpp) into the parent directory of this repo so
+iso9660-forensic, ntfs-forensic, udf-forensic, dpp) into the parent directory of this repo so
 that Cargo path dependencies and bindings resolve.
 
 Override defaults via environment variables:
@@ -23,6 +23,9 @@ Override defaults via environment variables:
   ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
   ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
   ZMANAGER_FORENSIC_VFS_ENGINE_DIR   – absolute path for forensic-vfs-engine clone
+  ZMANAGER_ISO9660_FORENSIC_REPO     – iso9660-forensic repository URL
+  ZMANAGER_ISO9660_FORENSIC_REF      – branch or tag to check out (default: PR branch)
+  ZMANAGER_ISO9660_FORENSIC_DIR      – absolute path for iso9660-forensic clone
   ZMANAGER_NTFS_FORENSIC_REPO        – ntfs-forensic repository URL
   ZMANAGER_NTFS_FORENSIC_REF         – branch or tag to check out (default: main)
   ZMANAGER_NTFS_FORENSIC_DIR         – absolute path for ntfs-forensic clone
@@ -62,6 +65,10 @@ $zmanagerDir = if ($env:ZMANAGER_ZMANAGER_DIR) { $env:ZMANAGER_ZMANAGER_DIR } el
 $forensicVfsEngineRepo = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO } else { "https://github.com/frankmanzhu/forensic-vfs-engine" }
 $forensicVfsEngineRef = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REF) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REF } else { "main" }
 $forensicVfsEngineDir = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_DIR) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_DIR } else { Join-Path $parentDir "forensic-vfs-engine" }
+
+$iso9660ForensicRepo = if ($env:ZMANAGER_ISO9660_FORENSIC_REPO) { $env:ZMANAGER_ISO9660_FORENSIC_REPO } else { "https://github.com/frankmanzhu/iso9660-forensic" }
+$iso9660ForensicRef = if ($env:ZMANAGER_ISO9660_FORENSIC_REF) { $env:ZMANAGER_ISO9660_FORENSIC_REF } else { "macos/fix-hybrid-session-selection" }
+$iso9660ForensicDir = if ($env:ZMANAGER_ISO9660_FORENSIC_DIR) { $env:ZMANAGER_ISO9660_FORENSIC_DIR } else { Join-Path $parentDir "iso9660-forensic" }
 
 $ntfsForensicRepo = if ($env:ZMANAGER_NTFS_FORENSIC_REPO) { $env:ZMANAGER_NTFS_FORENSIC_REPO } else { "https://github.com/frankmanzhu/ntfs-forensic" }
 $ntfsForensicRef = if ($env:ZMANAGER_NTFS_FORENSIC_REF) { $env:ZMANAGER_NTFS_FORENSIC_REF } else { "main" }
@@ -168,6 +175,9 @@ if (-not $SkipZmanager) {
 
 # ── forensic-vfs-engine ────────────────────────────────────────────────
 Ensure-SiblingRepo -Name "forensic-vfs-engine" -Directory $forensicVfsEngineDir -RepoUrl $forensicVfsEngineRepo -BranchRef $forensicVfsEngineRef
+
+# ── iso9660-forensic ────────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "iso9660-forensic" -Directory $iso9660ForensicDir -RepoUrl $iso9660ForensicRepo -BranchRef $iso9660ForensicRef
 
 # ── ntfs-forensic ──────────────────────────────────────────────────────
 Ensure-SiblingRepo -Name "ntfs-forensic" -Directory $ntfsForensicDir -RepoUrl $ntfsForensicRepo -BranchRef $ntfsForensicRef

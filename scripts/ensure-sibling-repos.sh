@@ -8,6 +8,7 @@ set -euo pipefail
 #   - tzap (https://github.com/tzap-org/tzap)
 #   - zmanager (https://github.com/tzap-org/zmanager)
 #   - forensic-vfs-engine (https://github.com/frankmanzhu/forensic-vfs-engine)
+#   - iso9660-forensic (https://github.com/frankmanzhu/iso9660-forensic)
 #   - ntfs-forensic (https://github.com/frankmanzhu/ntfs-forensic)
 #   - udf-forensic (https://github.com/frankmanzhu/udf-forensic)
 #   - dpp (https://github.com/frankmanzhu/dpp)
@@ -19,6 +20,9 @@ set -euo pipefail
 #   ZMANAGER_ZMANAGER_REF              – branch or tag to check out (default: main)
 #   ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
 #   ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
+#   ZMANAGER_ISO9660_FORENSIC_REPO     – iso9660-forensic repository URL
+#   ZMANAGER_ISO9660_FORENSIC_REF      – branch or tag to check out (default: PR branch)
+#   ZMANAGER_ISO9660_FORENSIC_DIR      – absolute path for iso9660-forensic clone
 #   ZMANAGER_NTFS_FORENSIC_REPO        – ntfs-forensic repository URL
 #   ZMANAGER_NTFS_FORENSIC_REF         – branch or tag to check out (default: main)
 #   ZMANAGER_UDF_FORENSIC_REPO         – udf-forensic repository URL
@@ -42,6 +46,10 @@ zmanager_dir="${ZMANAGER_ZMANAGER_DIR:-$parent_dir/zmanager}"
 forensic_vfs_engine_repo="${ZMANAGER_FORENSIC_VFS_ENGINE_REPO:-https://github.com/frankmanzhu/forensic-vfs-engine}"
 forensic_vfs_engine_ref="${ZMANAGER_FORENSIC_VFS_ENGINE_REF:-main}"
 forensic_vfs_engine_dir="${ZMANAGER_FORENSIC_VFS_ENGINE_DIR:-$parent_dir/forensic-vfs-engine}"
+
+iso9660_forensic_repo="${ZMANAGER_ISO9660_FORENSIC_REPO:-https://github.com/frankmanzhu/iso9660-forensic}"
+iso9660_forensic_ref="${ZMANAGER_ISO9660_FORENSIC_REF:-macos/fix-hybrid-session-selection}"
+iso9660_forensic_dir="${ZMANAGER_ISO9660_FORENSIC_DIR:-$parent_dir/iso9660-forensic}"
 
 ntfs_forensic_repo="${ZMANAGER_NTFS_FORENSIC_REPO:-https://github.com/frankmanzhu/ntfs-forensic}"
 ntfs_forensic_ref="${ZMANAGER_NTFS_FORENSIC_REF:-main}"
@@ -133,6 +141,9 @@ fi
 
 # ── forensic-vfs-engine ────────────────────────────────────────────────
 ensure_sibling_repo "forensic-vfs-engine" "$forensic_vfs_engine_dir" "$forensic_vfs_engine_repo" "$forensic_vfs_engine_ref"
+
+# ── iso9660-forensic ────────────────────────────────────────────────────
+ensure_sibling_repo "iso9660-forensic" "$iso9660_forensic_dir" "$iso9660_forensic_repo" "$iso9660_forensic_ref"
 
 # ── ntfs-forensic ──────────────────────────────────────────────────────
 ensure_sibling_repo "ntfs-forensic" "$ntfs_forensic_dir" "$ntfs_forensic_repo" "$ntfs_forensic_ref"
