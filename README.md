@@ -27,6 +27,9 @@ and download the installers from [GitHub Releases](https://github.com/frankmanzh
 - Security-first handling stays in the Rust core (`zmanager-core`): path checks, overwrite policy, and normalization.
 - Password input is handled in app state and is not logged.
 - Every release includes checksums for verification.
+- Every release includes a `zmanager-desktop-<version>-third-party-licenses.zip`
+  asset containing generated notices and copied Rust, frontend, vendored, and
+  native dependency license texts.
 
 ## Get started in 60 seconds
 
@@ -90,3 +93,7 @@ and download the installers from [GitHub Releases](https://github.com/frankmanzh
 - [Developer setup and build details](./public-docs/developer-setup.md)
 - [Architecture overview](./public-docs/ARCHITECTURE.md)
 - [Requirements](./public-docs/REQUIREMENTS.md)
+
+To regenerate the license inventory locally, run
+`npm run generate:third-party-licenses`. The CI license gate also runs the Rust
+`cargo-deny` policy and validates production npm license expressions.

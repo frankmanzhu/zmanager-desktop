@@ -216,6 +216,12 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: Install Python
+        if: matrix.arch == 'x64'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
       - name: Prepare and build Windows package
         shell: pwsh
         # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
@@ -230,6 +236,23 @@ jobs:
             -InstallNodeModules `
             -Build
 
+      - name: Generate release third-party license bundle
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $stage = Join-Path $env:RUNNER_TEMP "zmanager-third-party-licenses"
+          $archive = Join-Path $env:RUNNER_TEMP "zmanager-desktop-$version-third-party-licenses.zip"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          python scripts/generate-third-party-notices.py `
+            --out-notices (Join-Path $stage "THIRD_PARTY_NOTICES.md") `
+            --license-dir (Join-Path $stage "third-party-licenses") `
+            --vcpkg-root "C:\vcpkg" `
+            --vcpkg-triplet "x64-windows-static-md" `
+            --check-npm
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -Force
+          Write-Host "Generated release license bundle: $archive"
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -238,6 +261,7 @@ jobs:
           path: |
             ${{ runner.temp }}\zmbuild\*\release\zmanager-desktop.exe
             ${{ runner.temp }}\zmbuild\*\release\bundle\nsis\*.exe
+            ${{ runner.temp }}\zmanager-desktop-*-third-party-licenses.zip
 
   package-deb:
     name: Linux DEB ${{ matrix.arch }} package
@@ -349,7 +373,9 @@ jobs:
             case "$artifact_dir" in
               zmanager-windows-x64)
                 arch="x64"
-                if [[ "$src" == *"/bundle/nsis/"* ]] || [[ "$file_name" == *setup*.exe ]]; then
+                if [[ "$file_name" == "zmanager-desktop-${release_version}-third-party-licenses.zip" ]]; then
+                  normalized_name="$file_name"
+                elif [[ "$src" == *"/bundle/nsis/"* ]] || [[ "$file_name" == *setup*.exe ]]; then
                   normalized_name="zmanager-desktop-${release_version}-windows-${arch}-installer.exe"
                 elif [[ "$file_name" == "zmanager-desktop.exe" ]]; then
                   normalized_name="zmanager-desktop-${release_version}-windows-${arch}-portable.exe"
@@ -431,6 +457,12 @@ jobs:
             fi
           done
 
+          license_bundle="release-bundles/zmanager-desktop-${release_version}-third-party-licenses.zip"
+          if [[ ! -f "$license_bundle" ]]; then
+            echo "Required third-party license bundle is missing: $license_bundle" >&2
+            exit 1
+          fi
+
           sha256_file="release-bundles/zmanager-desktop-${release_version}-SHA256SUMS.txt"
           tmp_sha256="$(mktemp)"
           find release-bundles -type f -print0 \
@@ -449,6 +481,7 @@ jobs:
 
             - Built from pinned zmanager dependency tag.
             - Includes macOS arm64/x86_64 ZIP and DMG artifacts, Windows portable and installer binaries, and Linux DEB/RPM packages.
+            - Includes a generated third-party license bundle with Rust, frontend, vendored, and Windows vcpkg notices.
             - macOS artifacts are Developer ID signed and notarized when release credentials are configured; otherwise they are ad-hoc-signed testing artifacts and are not suitable for public Gatekeeper distribution.
             - SHA256SUMS file is included for artifact verification.
           files: |

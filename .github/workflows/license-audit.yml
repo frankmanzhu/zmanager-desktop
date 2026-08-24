@@ -1,0 +1,53 @@
+name: License Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  licenses:
+    name: Third-party license gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Ensure Cargo path dependencies
+        run: scripts/ensure-sibling-repos.sh
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check Rust dependency licenses
+        working-directory: src-tauri
+        run: cargo deny check licenses
+
+      - name: Generate and validate the release license bundle
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/zmanager-third-party-licenses"
+          python3 scripts/generate-third-party-notices.py \
+            --out-notices "$stage/THIRD_PARTY_NOTICES.md" \
+            --license-dir "$stage/third-party-licenses" \
+            --check-npm
+          test -s "$stage/THIRD_PARTY_NOTICES.md"
+          test -d "$stage/third-party-licenses"
