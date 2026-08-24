@@ -41,11 +41,14 @@ export type ArchiveFormatFamily =
   | "xar"
   | "lha"
   | "ar"
+  | "warc"
   | "mtree"
   | "msi"
   | "vhd"
   | "vmdk"
-  | "udf";
+  | "udf"
+  | "dmg"
+  | "pkg";
 
 export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "zip",
@@ -84,11 +87,14 @@ export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "xar",
   "lha",
   "ar",
+  "warc",
   "mtree",
   "msi",
   "vhd",
   "vmdk",
   "udf",
+  "dmg",
+  "pkg",
 ];
 
 // ---------------------------------------------------------------------------
@@ -240,8 +246,13 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
   },
   {
     family: "ar",
-    physicalSuffixes: [".a", ".ar"],
+    physicalSuffixes: [".a", ".ar", ".lib"],
     displayLabelKey: "format.family.ar",
+  },
+  {
+    family: "warc",
+    physicalSuffixes: [".warc"],
+    displayLabelKey: "format.family.warc",
   },
   {
     family: "mtree",
@@ -267,6 +278,16 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "udf",
     physicalSuffixes: [".udf"],
     displayLabelKey: "format.family.udf",
+  },
+  {
+    family: "dmg",
+    physicalSuffixes: [".dmg"],
+    displayLabelKey: "format.family.dmg",
+  },
+  {
+    family: "pkg",
+    physicalSuffixes: [".pkg"],
+    displayLabelKey: "format.family.pkg",
   },
   // -- Raw stream formats (must follow compound families) --
   {

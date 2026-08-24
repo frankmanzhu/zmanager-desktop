@@ -41,6 +41,11 @@ describe("WP1 — Archive format family normalization", () => {
       expect(resolveArchiveFormatFamily("bundle.aar")).toEqual({ kind: "known", family: "appleArchive" });
       expect(resolveArchiveFormatFamily("bundle.aea")).toEqual({ kind: "known", family: "appleArchive" });
     });
+
+    it("resolves DMG and PKG to their own families", () => {
+      expect(resolveArchiveFormatFamily("installer.dmg")).toEqual({ kind: "known", family: "dmg" });
+      expect(resolveArchiveFormatFamily("installer.pkg")).toEqual({ kind: "known", family: "pkg" });
+    });
   });
 
   describe("alias equivalence", () => {
@@ -176,6 +181,11 @@ describe("WP1 — Archive format family normalization", () => {
       // .7z.002 is not in the supported suffixes, so getKnownArchiveSuffix returns null
       // and we get unknown
       expect(result.kind).toBe("unknown");
+    });
+
+    it("resolves WARC and AR library suffixes", () => {
+      expect(resolveArchiveFormatFamily("capture.warc")).toEqual({ kind: "known", family: "warc" });
+      expect(resolveArchiveFormatFamily("library.lib")).toEqual({ kind: "known", family: "ar" });
     });
   });
 });

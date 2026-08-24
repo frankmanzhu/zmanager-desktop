@@ -45,6 +45,28 @@ describe("drop intent classifier", () => {
     });
   });
 
+  it("opens DMG and PKG archives from drops", () => {
+    expect(classifyDropIntent(["C:/tmp/installer.dmg"], "global")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/installer.dmg",
+    });
+    expect(classifyDropIntent(["C:/tmp/installer.pkg"], "browse")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/installer.pkg",
+    });
+  });
+
+  it("opens WARC and AR library archives from drops", () => {
+    expect(classifyDropIntent(["C:/tmp/capture.warc"], "global")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/capture.warc",
+    });
+    expect(classifyDropIntent(["C:/tmp/library.lib"], "browse")).toMatchObject({
+      kind: "openArchive",
+      archivePath: "C:/tmp/library.lib",
+    });
+  });
+
   it("rejects ordinary source drops on the browse surface", () => {
     expect(classifyDropIntent([{ path: "C:/work/photos", kind: "directory" }], "browse")).toEqual({
       kind: "rejectUnsupportedDrop",

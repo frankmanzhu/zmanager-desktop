@@ -183,6 +183,10 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
     "size", "modified",
   ],
 
+  warc: [
+    "size", "modified",
+  ],
+
   mtree: [
     "size", "modified",
   ],
@@ -200,6 +204,14 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   ],
 
   udf: [
+    "size", "modified",
+  ],
+
+  dmg: [
+    "size", "modified",
+  ],
+
+  pkg: [
     "size", "modified",
   ],
 };

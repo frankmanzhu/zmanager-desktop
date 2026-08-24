@@ -67,6 +67,29 @@ test("generated runtime and package artifacts cover compound and split formats",
   }
 });
 
+test("DMG and PKG are exposed as supported archive associations", async () => {
+  assert.ok(manifest.singleExtensions.includes("dmg"));
+  assert.ok(manifest.singleExtensions.includes("pkg"));
+  assert.ok(manifest.associationTypes.find((type) => type.id === "genericPackages").primaryExtensions.includes("dmg"));
+  assert.ok(manifest.associationTypes.find((type) => type.id === "genericPackages").primaryExtensions.includes("pkg"));
+
+  const macos = await json("packaging/macos/archive-types.generated.json");
+  assert.ok(macos.associatedExtensions.includes("dmg"));
+  assert.ok(macos.associatedExtensions.includes("pkg"));
+
+  const nsis = await text("packaging/windows/nsis-context-menu.nsh");
+  assert.ok(nsis.includes('ZM_REGISTER_ARCHIVE_EXTENSION ".dmg"'));
+  assert.ok(nsis.includes('ZM_REGISTER_ARCHIVE_EXTENSION ".pkg"'));
+});
+
+test("all core archive extensions remain association-visible", async () => {
+  assert.ok(manifest.singleExtensions.includes("warc"));
+  assert.ok(manifest.singleExtensions.includes("lib"));
+  const generic = manifest.associationTypes.find((type) => type.id === "genericPackages");
+  assert.ok(generic.primaryExtensions.includes("warc"));
+  assert.ok(generic.primaryExtensions.includes("lib"));
+});
+
 test("Linux custom MIME types declare icons and map mimetype assets in package configs", async () => {
   const xdgMime = await text("packaging/linux/xdg-mime.xml");
   const tauriConfig = await json("src-tauri/tauri.conf.json");
@@ -103,4 +126,3 @@ test("Linux custom MIME types declare icons and map mimetype assets in package c
     );
   }
 });
-

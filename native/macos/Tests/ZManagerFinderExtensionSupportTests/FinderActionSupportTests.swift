@@ -30,6 +30,8 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
     #expect(FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/demo.tar.gz")))
     #expect(FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/demo.7z.001")))
     #expect(FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/demo.vol000.tzap")))
+    #expect(FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/installer.dmg")))
+    #expect(FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/installer.pkg")))
     #expect(!FinderMenuBuilder.isSupportedArchive(URL(filePath: "/tmp/demo.txt")))
 }
 

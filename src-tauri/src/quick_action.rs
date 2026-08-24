@@ -871,6 +871,8 @@ mod tests {
             "archive.rar",
             "archive.deb",
             "archive.iso",
+            "archive.warc",
+            "archive.lib",
             r"C:\tmp\bundle.TAR.GZ",
         ] {
             assert!(is_supported_archive_path(path), "{path} should be supported");

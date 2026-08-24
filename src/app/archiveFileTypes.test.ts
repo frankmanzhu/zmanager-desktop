@@ -16,6 +16,10 @@ describe("archive file type helpers", () => {
     expect(isSupportedArchivePath("C:/tmp/report.ZIPX")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/app.apk")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/image.iso")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/installer.dmg")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/installer.PKG")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/capture.WARC")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/library.LIB")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/notes.txt")).toBe(false);
   });
 
@@ -66,7 +70,7 @@ describe("archive file type helpers", () => {
       extensions: SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS,
     });
     expect(SUPPORTED_ARCHIVE_DIALOG_EXTENSIONS).toEqual(
-      expect.arrayContaining(["7z", "7z.001", "tar.gz", "tar.zst", "tzap", "zip", "zipx"]),
+      expect.arrayContaining(["7z", "7z.001", "dmg", "pkg", "tar.gz", "tar.zst", "tzap", "zip", "zipx"]),
     );
   });
 });

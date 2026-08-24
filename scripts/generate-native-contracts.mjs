@@ -19,9 +19,8 @@ const archive = readJson("manifests/archive-file-types.json");
 // contracts/archive-formats.json, the output of `zm formats --contract`), so
 // recognition cannot drift from zmanager-core's FORMAT_CAPABILITIES registry.
 // The mapping tables below are local *policy*: which association type owns a
-// kind's suffixes, which kinds the desktop does not associate yet, and which
-// raw-codec suffixes belong to which type. New contract kinds fail the
-// coverage validation until assigned here or denylisted deliberately.
+// kind's suffixes, and which raw-codec suffixes belong to which type. New
+// contract kinds fail the coverage validation until assigned here.
 const contractPath = resolve(root, "../zmanager/crates/zmanager-cli/contracts/archive-formats.json");
 let contract;
 try {
@@ -60,19 +59,17 @@ const KIND_OWNERS = {
   Xar: "genericPackages",
   Lha: "genericPackages",
   Ar: "genericPackages",
+  Warc: "genericPackages",
   Mtree: "genericPackages",
   Msi: "genericPackages",
   Vhd: "genericPackages",
   Vmdk: "genericPackages",
   Udf: "genericPackages",
+  Dmg: "genericPackages",
+  Pkg: "genericPackages",
   Tzap: null,
   SplitZip: null,
 };
-// Kinds the desktop recognizes but does not associate until a core-backed
-// extract path exists. Each name is validated against the contract below.
-const DENYLISTED_KINDS = ["Dmg", "Pkg", "Warc"];
-// Ambiguous extension excluded from associations (Windows context menus).
-const DENYLISTED_EXTENSIONS = [".lib"];
 // RawStream carries every raw codec suffix in one row; this assigns each
 // suffix to its codec association type. A new codec suffix fails the build
 // until it gets an explicit owner.
@@ -103,14 +100,9 @@ const SYNTHETIC_COMPOUNDS = {
 // Tzap is predicate-detected in core and carries no extension row.
 const LOCAL_PRIMARY_EXTENSIONS = { tzap: ["tzap"] };
 
-for (const kind of [...Object.keys(KIND_OWNERS), ...DENYLISTED_KINDS]) {
+for (const kind of Object.keys(KIND_OWNERS)) {
   if (!contractKinds.has(kind)) {
     throw new Error(`format contract is missing kind ${kind} (referenced by generator policy)`);
-  }
-}
-for (const suffix of DENYLISTED_EXTENSIONS) {
-  if (!contract.formats.some((row) => row.extensions.includes(suffix))) {
-    throw new Error(`format contract is missing denylisted extension ${suffix}`);
   }
 }
 for (const owner of [...Object.values(RAW_SUFFIX_OWNERS), ...Object.keys(LOCAL_PRIMARY_EXTENSIONS)]) {
@@ -137,12 +129,10 @@ for (const row of contract.formats) {
   }
   const owner = KIND_OWNERS[row.kind];
   if (owner === undefined) {
-    if (DENYLISTED_KINDS.includes(row.kind)) continue;
-    throw new Error(`contract kind ${row.kind} has no association owner and is not denylisted; update KIND_OWNERS`);
+    throw new Error(`contract kind ${row.kind} has no association owner; update KIND_OWNERS`);
   }
   if (owner === null) continue;
   for (const suffix of row.extensions) {
-    if (DENYLISTED_EXTENSIONS.includes(suffix)) continue;
     const name = stripDot(suffix);
     if (name.includes(".")) extensionsFor(owner).compound.add(name);
     else extensionsFor(owner).primary.add(name);
