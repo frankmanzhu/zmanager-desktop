@@ -58,7 +58,7 @@ sync_bundle_identity() {
 
 ffi_link_args=(
   "$ffi_library"
-  -lc++ -lpthread -framework CoreFoundation -framework Security
+  -lc++ -lpthread -framework CoreFoundation -framework Security -framework SystemConfiguration
   -lz -lbz2
   -liconv -lxml2 -lAppleArchive
 )

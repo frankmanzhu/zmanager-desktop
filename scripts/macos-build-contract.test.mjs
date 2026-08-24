@@ -34,3 +34,19 @@ test("macOS release CI syncs UniFFI Swift sources before Cargo validation", () =
   assert.notEqual(sync, -1, "release CI must sync UniFFI Swift sources");
   assert.ok(sync < cargo, "release CI sync must precede Cargo validation");
 });
+
+test("macOS linkers include SystemConfiguration for system proxy support", () => {
+  const rustBuild = readFileSync(resolve(root, "src-tauri/build.rs"), "utf8");
+  const nativeBuild = readFileSync(resolve(root, "scripts/build-macos-native-targets.sh"), "utf8");
+
+  assert.match(
+    rustBuild,
+    /cargo:rustc-link-lib=framework=SystemConfiguration/,
+    "Tauri's macOS final link must include SystemConfiguration",
+  );
+  assert.match(
+    nativeBuild,
+    /-framework CoreFoundation -framework Security -framework SystemConfiguration/,
+    "UniFFI extension linkers must include SystemConfiguration",
+  );
+});
