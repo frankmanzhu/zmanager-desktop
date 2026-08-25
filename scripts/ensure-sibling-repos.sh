@@ -114,7 +114,21 @@ ensure_sibling_repo() {
     echo "$name sibling found at: $dir"
     if [[ -d "$dir/.git" ]]; then
       echo "Updating $name repository at: $dir"
-      git -C "$dir" pull || echo "Warning: git pull failed for $name at $dir"
+      if ! (
+        git -C "$dir" fetch origin --tags &&
+        if git -C "$dir" show-ref --verify --quiet "refs/remotes/origin/$ref"; then
+          if git -C "$dir" show-ref --verify --quiet "refs/heads/$ref"; then
+            git -C "$dir" checkout "$ref"
+          else
+            git -C "$dir" checkout -b "$ref" --track "origin/$ref"
+          fi &&
+          git -C "$dir" pull --ff-only origin "$ref"
+        else
+          git -C "$dir" checkout "$ref"
+        fi
+      ); then
+        echo "Warning: git update failed for $name at $dir"
+      fi
     fi
   else
     echo "Cloning $name ($ref) into: $dir"

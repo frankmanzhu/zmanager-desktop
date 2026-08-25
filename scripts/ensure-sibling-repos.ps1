@@ -134,9 +134,38 @@ function Ensure-SiblingRepo {
         if (Test-Path (Join-Path $Directory ".git")) {
             Write-Host "Updating $Name repository at: $Directory"
             try {
-                Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "pull")
+                Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "fetch", "origin", "--tags")
+
+                $remoteBranchRef = "refs/remotes/origin/$BranchRef"
+                $localBranchRef = "refs/heads/$BranchRef"
+                $isRemoteBranch = $false
+                try {
+                    Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "show-ref", "--verify", "--quiet", $remoteBranchRef)
+                    $isRemoteBranch = $true
+                } catch {
+                    # The requested ref may be a tag or commit rather than a remote branch.
+                }
+
+                if ($isRemoteBranch) {
+                    $isLocalBranch = $false
+                    try {
+                        Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "show-ref", "--verify", "--quiet", $localBranchRef)
+                        $isLocalBranch = $true
+                    } catch {
+                        # Create a local tracking branch below when one does not exist.
+                    }
+
+                    if ($isLocalBranch) {
+                        Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "checkout", $BranchRef)
+                    } else {
+                        Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "checkout", "-b", $BranchRef, "--track", "origin/$BranchRef")
+                    }
+                    Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "pull", "--ff-only", "origin", $BranchRef)
+                } else {
+                    Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "checkout", $BranchRef)
+                }
             } catch {
-                Write-Host "Warning: git pull failed for $Name at ${Directory}: $_"
+                Write-Host "Warning: git update failed for $Name at ${Directory}: $_"
             }
         }
     } else {
