@@ -7,6 +7,7 @@ set -euo pipefail
 # Sibling repositories:
 #   - tzap (https://github.com/tzap-org/tzap)
 #   - zmanager (https://github.com/tzap-org/zmanager)
+#   - localsend-rs (https://github.com/frankmanzhu/localsend-rs)
 #   - forensic-vfs-engine (https://github.com/frankmanzhu/forensic-vfs-engine)
 #   - iso9660-forensic (https://github.com/frankmanzhu/iso9660-forensic)
 #   - ntfs-forensic (https://github.com/frankmanzhu/ntfs-forensic)
@@ -18,6 +19,9 @@ set -euo pipefail
 #   ZMANAGER_TZAP_REF                  – branch or tag to check out (default: main)
 #   ZMANAGER_ZMANAGER_REPO             – zmanager repository URL
 #   ZMANAGER_ZMANAGER_REF              – branch or tag to check out (default: main)
+#   ZMANAGER_LOCALSEND_REPO            – localsend-rs repository URL
+#   ZMANAGER_LOCALSEND_REF             – branch or tag to check out (default: main)
+#   ZMANAGER_LOCALSEND_DIR             – absolute path for localsend-rs clone
 #   ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
 #   ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
 #   ZMANAGER_ISO9660_FORENSIC_REPO     – iso9660-forensic repository URL
@@ -42,6 +46,10 @@ tzap_dir="${ZMANAGER_TZAP_DIR:-$parent_dir/tzap}"
 zmanager_repo="${ZMANAGER_ZMANAGER_REPO:-https://github.com/tzap-org/zmanager}"
 zmanager_ref="${ZMANAGER_ZMANAGER_REF:-main}"
 zmanager_dir="${ZMANAGER_ZMANAGER_DIR:-$parent_dir/zmanager}"
+
+localsend_repo="${ZMANAGER_LOCALSEND_REPO:-https://github.com/frankmanzhu/localsend-rs}"
+localsend_ref="${ZMANAGER_LOCALSEND_REF:-main}"
+localsend_dir="${ZMANAGER_LOCALSEND_DIR:-$parent_dir/localsend-rs}"
 
 forensic_vfs_engine_repo="${ZMANAGER_FORENSIC_VFS_ENGINE_REPO:-https://github.com/frankmanzhu/forensic-vfs-engine}"
 forensic_vfs_engine_ref="${ZMANAGER_FORENSIC_VFS_ENGINE_REF:-main}"
@@ -138,6 +146,9 @@ if ((skip_zmanager)); then
 else
   ensure_sibling_repo "zmanager" "$zmanager_dir" "$zmanager_repo" "$zmanager_ref"
 fi
+
+# ── localsend-rs ────────────────────────────────────────────────────────
+ensure_sibling_repo "localsend-rs" "$localsend_dir" "$localsend_repo" "$localsend_ref"
 
 # ── forensic-vfs-engine ────────────────────────────────────────────────
 ensure_sibling_repo "forensic-vfs-engine" "$forensic_vfs_engine_dir" "$forensic_vfs_engine_repo" "$forensic_vfs_engine_ref"

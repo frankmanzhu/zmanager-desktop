@@ -28,7 +28,7 @@ if not defined CARGO_TARGET_DIR (
 if not exist "%CARGO_TARGET_DIR%" mkdir "%CARGO_TARGET_DIR%"
 echo Cargo target directory: %CARGO_TARGET_DIR%
 
-echo [1/4] Ensuring sibling repositories (tzap, zmanager)...
+echo [1/4] Ensuring sibling repositories (tzap, zmanager, localsend-rs)...
 powershell -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\ensure-sibling-repos.ps1"
 if %ERRORLEVEL% neq 0 (
     echo Error: Failed to ensure sibling repositories.

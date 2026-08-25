@@ -10,7 +10,7 @@ Ensures all required sibling repositories exist and are kept up to date.
 
 .DESCRIPTION
 Clones and updates sibling repositories (tzap, zmanager, forensic-vfs-engine,
-iso9660-forensic, ntfs-forensic, udf-forensic, dpp) into the parent directory of this repo so
+localsend-rs, iso9660-forensic, ntfs-forensic, udf-forensic, dpp) into the parent directory of this repo so
 that Cargo path dependencies and bindings resolve.
 
 Override defaults via environment variables:
@@ -20,6 +20,9 @@ Override defaults via environment variables:
   ZMANAGER_ZMANAGER_REPO             – zmanager repository URL
   ZMANAGER_ZMANAGER_REF              – branch or tag to check out (default: main)
   ZMANAGER_ZMANAGER_DIR              – absolute path for zmanager clone
+  ZMANAGER_LOCALSEND_REPO            – localsend-rs repository URL
+  ZMANAGER_LOCALSEND_REF             – branch or tag to check out (default: main)
+  ZMANAGER_LOCALSEND_DIR             – absolute path for localsend-rs clone
   ZMANAGER_FORENSIC_VFS_ENGINE_REPO  – forensic-vfs-engine repository URL
   ZMANAGER_FORENSIC_VFS_ENGINE_REF   – branch or tag to check out (default: main)
   ZMANAGER_FORENSIC_VFS_ENGINE_DIR   – absolute path for forensic-vfs-engine clone
@@ -61,6 +64,10 @@ $tzapDir = if ($env:ZMANAGER_TZAP_DIR) { $env:ZMANAGER_TZAP_DIR } else { Join-Pa
 $zmanagerRepo = if ($env:ZMANAGER_ZMANAGER_REPO) { $env:ZMANAGER_ZMANAGER_REPO } else { "https://github.com/tzap-org/zmanager" }
 $zmanagerRef = if ($env:ZMANAGER_ZMANAGER_REF) { $env:ZMANAGER_ZMANAGER_REF } else { "main" }
 $zmanagerDir = if ($env:ZMANAGER_ZMANAGER_DIR) { $env:ZMANAGER_ZMANAGER_DIR } else { Join-Path $parentDir "zmanager" }
+
+$localsendRepo = if ($env:ZMANAGER_LOCALSEND_REPO) { $env:ZMANAGER_LOCALSEND_REPO } else { "https://github.com/frankmanzhu/localsend-rs" }
+$localsendRef = if ($env:ZMANAGER_LOCALSEND_REF) { $env:ZMANAGER_LOCALSEND_REF } else { "main" }
+$localsendDir = if ($env:ZMANAGER_LOCALSEND_DIR) { $env:ZMANAGER_LOCALSEND_DIR } else { Join-Path $parentDir "localsend-rs" }
 
 $forensicVfsEngineRepo = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REPO } else { "https://github.com/frankmanzhu/forensic-vfs-engine" }
 $forensicVfsEngineRef = if ($env:ZMANAGER_FORENSIC_VFS_ENGINE_REF) { $env:ZMANAGER_FORENSIC_VFS_ENGINE_REF } else { "main" }
@@ -172,6 +179,9 @@ if (-not $SkipZmanager) {
 } else {
     Write-Host "Skipping zmanager sibling (-SkipZmanager)."
 }
+
+# ── localsend-rs ────────────────────────────────────────────────────────
+Ensure-SiblingRepo -Name "localsend-rs" -Directory $localsendDir -RepoUrl $localsendRepo -BranchRef $localsendRef
 
 # ── forensic-vfs-engine ────────────────────────────────────────────────
 Ensure-SiblingRepo -Name "forensic-vfs-engine" -Directory $forensicVfsEngineDir -RepoUrl $forensicVfsEngineRepo -BranchRef $forensicVfsEngineRef
