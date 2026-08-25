@@ -74,3 +74,25 @@ test("release workflow requires and publishes the generated license bundle", asy
   assert.match(workflow, /zmanager-desktop-\$\{release_version\}-third-party-licenses\.zip/);
   assert.match(workflow, /Required third-party license bundle is missing/);
 });
+
+test("license gate covers every shipped target and does not globally allow CDLA", async () => {
+  const deny = await readFile(path.join(root, "deny.toml"), "utf8");
+  const workflow = await readFile(path.join(root, ".github", "workflows", "license-audit.yml"), "utf8");
+  const expectedTargets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+  ];
+  const graph = deny.match(/\[graph\][\s\S]*?(?=\n\[[^\[]|$)/)?.[0] ?? "";
+
+  assert.match(graph, /all-features\s*=\s*true/);
+  for (const target of expectedTargets) {
+    assert.match(graph, new RegExp(`"${target}"`), `missing license target ${target}`);
+  }
+  assert.match(deny, /unused-allowed-license\s*=\s*"deny"/);
+  assert.doesNotMatch(deny, /^\s+"CDLA-Permissive-2\.0",\s*$/m);
+  assert.match(workflow, /cargo deny --all-features check licenses/);
+});

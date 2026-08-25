@@ -1,14 +1,31 @@
 # License policy for the Rust dependency closure used by ZManager Desktop.
 #
-# Run locally with: (cd src-tauri && cargo deny check licenses)
+# Run locally with: (cd src-tauri && cargo deny --all-features check licenses)
 # A newly introduced license must be reviewed and added here intentionally.
 
+[graph]
+# Audit every target shipped by the package and release workflows. Keeping the
+# list here makes target-specific dependencies part of the license contract even
+# though the gate itself runs on one Linux runner.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "aarch64-pc-windows-msvc",
+    "x86_64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-gnu",
+]
+all-features = true
+
 [licenses]
+# Check workspace dev dependencies too; they are not shipped, but should not
+# silently introduce an unreviewed license into the repository.
+include-dev = true
+unused-allowed-license = "deny"
 allow = [
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
-    "BSD-1-Clause",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
@@ -21,8 +38,6 @@ allow = [
     "Unicode-3.0",
     "bzip2-1.0.6",
     "MPL-2.0",
-    "CDLA-Permissive-2.0",
-    "LGPL-2.1-or-later",
 ]
 
 # The archive engine uses UnRAR only for extraction. Its license is carried by

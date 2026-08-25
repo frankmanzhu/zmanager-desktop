@@ -39,7 +39,7 @@ jobs:
 
       - name: Check Rust dependency licenses
         working-directory: src-tauri
-        run: cargo deny check licenses
+        run: cargo deny --all-features check licenses
 
       - name: Generate and validate the release license bundle
         run: |
