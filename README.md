@@ -12,13 +12,15 @@ A fast, open-source archive manager for Windows, Linux, and macOS, built on
 extracting, and creating archives, with native shell integration on each
 desktop platform.
 
-## Latest release: 1.2.2
+## Latest release: 1.2.3
 
-This release adds Apple Archive and TGZ creation, configurable archive columns,
-Simplified Chinese localization, TZAP account management, improved task
-windows, and broader Windows, Linux, and macOS integration.
+The latest release packages the cross-platform desktop app for macOS arm64 and
+x86_64, Windows x64 and ARM64, and Linux x64 and ARM64. Release assets include
+macOS DMG and ZIP packages, Windows installer and portable binaries, Linux DEB
+and RPM packages, a generated third-party license bundle, and SHA256 checksums
+for verification.
 
-See the [full release notes](https://github.com/frankmanzhu/zmanager-desktop/releases/tag/v1.2.2)
+See the [full release notes](https://github.com/frankmanzhu/zmanager-desktop/releases/tag/v1.2.3)
 and download the installers from [GitHub Releases](https://github.com/frankmanzhu/zmanager-desktop/releases/latest).
 
 ## Why this feels trustworthy
