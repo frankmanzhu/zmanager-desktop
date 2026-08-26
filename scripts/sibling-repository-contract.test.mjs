@@ -32,3 +32,10 @@ test("LocalSend Cargo path dependency has a matching sibling bootstrap entry", (
   assert.match(shellBootstrap, /ensure_sibling_repo\s+"localsend-rs"/);
   assert.match(powershellBootstrap, /Ensure-SiblingRepo\s+-Name\s+"localsend-rs"/);
 });
+
+test("sibling bootstrap does not fetch unrelated release tags during branch updates", () => {
+  assert.match(shellBootstrap, /fetch --prune --no-tags origin/);
+  assert.match(shellBootstrap, /pull --ff-only --no-tags origin/);
+  assert.match(powershellBootstrap, /"fetch", "--prune", "--no-tags", "origin"/);
+  assert.match(powershellBootstrap, /"pull", "--ff-only", "--no-tags", "origin"/);
+});

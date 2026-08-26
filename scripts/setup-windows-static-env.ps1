@@ -5,6 +5,7 @@ param(
     [ValidateSet("Auto", "x64", "arm64")]
     [string]$Architecture = "Auto",
     [string]$Triplet = "",
+    [switch]$InstallClang,
     [string]$Run
 )
 
@@ -89,6 +90,133 @@ function Resolve-CargoBin {
     }
 
     throw "Rust Cargo was not found on PATH or at $defaultCargo. Install Rust with the MSVC toolchain, then reopen the shell."
+}
+
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Resolve-WingetCommand {
+    foreach ($name in @("winget.exe", "winget")) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($command) {
+            return $command.Source
+        }
+    }
+
+    return $null
+}
+
+function Test-Executable {
+    param([string]$Path)
+
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $false
+    }
+
+    try {
+        & $Path --version *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-ClangPath {
+    $command = Get-Command "clang.exe" -ErrorAction SilentlyContinue
+    if ($command -and (Test-Executable -Path $command.Source)) {
+        return (Resolve-Path -LiteralPath $command.Source).Path
+    }
+
+    $candidates = @(
+        (Join-Path $env:ProgramFiles "LLVM\bin\clang.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "LLVM\bin\clang.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\LLVM\bin\clang.exe")
+    )
+
+    $vswherePaths = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+        "$env:ProgramFiles\Microsoft Visual Studio\Installer\vswhere.exe"
+    )
+    $vswhere = $vswherePaths | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if ($vswhere) {
+        $installations = & $vswhere -products * -property installationPath 2>$null
+        foreach ($installation in $installations) {
+            $candidates += Join-Path $installation "VC\Tools\Llvm\bin\clang.exe"
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Executable -Path $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    return $null
+}
+
+function Ensure-Arm64Clang {
+    param([string]$ResolvedArchitecture)
+
+    if ($ResolvedArchitecture -ne "arm64") {
+        return
+    }
+
+    $clang = Resolve-ClangPath
+    if (-not $clang) {
+        if (-not $InstallClang) {
+            throw "Clang is required to build ring for Windows ARM64, but clang.exe was not found. Install LLVM (winget package LLVM.LLVM), or rerun with -InstallClang."
+        }
+
+        $winget = Resolve-WingetCommand
+        if (-not $winget) {
+            throw "Clang is required to build ring for Windows ARM64, but winget.exe was not found. Install LLVM manually from https://llvm.org/ or install winget, then retry."
+        }
+
+        Write-Host "Clang was not found; installing LLVM with winget..."
+        $arguments = @(
+            "install",
+            "--id",
+            "LLVM.LLVM",
+            "--exact",
+            "--silent",
+            "--accept-package-agreements",
+            "--accept-source-agreements"
+        )
+        if (Test-IsAdministrator) {
+            & $winget @arguments
+            $installExitCode = $LASTEXITCODE
+        } else {
+            Write-Host "The LLVM installer requires elevation; requesting a UAC prompt..."
+            try {
+                $installer = Start-Process `
+                    -FilePath $winget `
+                    -ArgumentList $arguments `
+                    -Verb RunAs `
+                    -Wait `
+                    -PassThru `
+                    -WindowStyle Normal
+                $installExitCode = $installer.ExitCode
+            } catch {
+                throw "Could not start the elevated LLVM installer. Approve the UAC prompt or install clang.exe manually, then retry. $($_.Exception.Message)"
+            }
+        }
+        if ($installExitCode -ne 0) {
+            throw "LLVM installation failed with exit code $installExitCode. Install clang.exe manually, then retry."
+        }
+
+        $clang = Resolve-ClangPath
+    }
+
+    if (-not $clang) {
+        throw "LLVM installation completed, but clang.exe could not be located. Reopen the shell or install LLVM manually, then retry."
+    }
+
+    $clangBin = Split-Path $clang -Parent
+    $env:PATH = "$clangBin;$env:PATH"
+    Write-Host "Clang configured for Windows ARM64: $clang"
 }
 
 function Import-MsvcEnvironment {
@@ -197,6 +325,7 @@ $resolvedPerlBin = Resolve-PerlBin -RequestedPerlBin $PerlBin
 $resolvedCargoBin = Resolve-CargoBin
 
 Import-MsvcEnvironment -TargetArchitecture $resolvedArchitecture
+Ensure-Arm64Clang -ResolvedArchitecture $resolvedArchitecture
 
 $toolchainFile = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
 $debugLib = Join-Path $VcpkgRoot "installed\$Triplet\debug\lib"

@@ -134,7 +134,10 @@ function Ensure-SiblingRepo {
         if (Test-Path (Join-Path $Directory ".git")) {
             Write-Host "Updating $Name repository at: $Directory"
             try {
-                Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "fetch", "origin", "--tags")
+                # Sibling builds track branches by default. Do not fetch every
+                # release tag: tags may be intentionally recreated upstream,
+                # and Git rejects overwriting an existing local tag by default.
+                Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "fetch", "--prune", "--no-tags", "origin")
 
                 $remoteBranchRef = "refs/remotes/origin/$BranchRef"
                 $localBranchRef = "refs/heads/$BranchRef"
@@ -160,7 +163,7 @@ function Ensure-SiblingRepo {
                     } else {
                         Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "checkout", "-b", $BranchRef, "--track", "origin/$BranchRef")
                     }
-                    Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "pull", "--ff-only", "origin", $BranchRef)
+                    Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "pull", "--ff-only", "--no-tags", "origin", $BranchRef)
                 } else {
                     Invoke-Native -FilePath $git -Arguments @("-C", $Directory, "checkout", $BranchRef)
                 }

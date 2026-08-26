@@ -5,6 +5,7 @@ param(
     [string]$Architecture = "Auto",
     [string]$Triplet = "",
     [string]$NodePath = "",
+    [switch]$InstallClang,
     [switch]$Install,
     [string]$InstallDir = ""
 )
@@ -255,6 +256,7 @@ exit /b 1
     -PerlBin $PerlBin `
     -Architecture $Architecture `
     -Triplet $Triplet `
+    -InstallClang:$InstallClang `
     -Run $runCommand
 
 $buildExitCode = $LASTEXITCODE

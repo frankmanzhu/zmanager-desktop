@@ -115,14 +115,17 @@ ensure_sibling_repo() {
     if [[ -d "$dir/.git" ]]; then
       echo "Updating $name repository at: $dir"
       if ! (
-        git -C "$dir" fetch origin --tags &&
+        # Sibling builds track branches by default. Do not fetch every release
+        # tag: tags may be intentionally recreated upstream, and Git rejects
+        # overwriting an existing local tag by default.
+        git -C "$dir" fetch --prune --no-tags origin &&
         if git -C "$dir" show-ref --verify --quiet "refs/remotes/origin/$ref"; then
           if git -C "$dir" show-ref --verify --quiet "refs/heads/$ref"; then
             git -C "$dir" checkout "$ref"
           else
             git -C "$dir" checkout -b "$ref" --track "origin/$ref"
           fi &&
-          git -C "$dir" pull --ff-only origin "$ref"
+          git -C "$dir" pull --ff-only --no-tags origin "$ref"
         else
           git -C "$dir" checkout "$ref"
         fi

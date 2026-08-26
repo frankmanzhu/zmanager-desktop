@@ -462,6 +462,7 @@ Invoke-Step "Verify configured build environment" {
         -PerlBin $script:resolvedPerlBin `
         -Architecture $resolvedArchitecture `
         -Triplet $resolvedTriplet `
+        -InstallClang:$InstallMissing `
         -Run "Write-Host 'Windows static build environment is ready.'"
     if ($LASTEXITCODE -ne 0) {
         throw "Environment verification failed with exit code $LASTEXITCODE."
@@ -484,7 +485,8 @@ if ($Build) {
             -PerlBin $script:resolvedPerlBin `
             -Architecture $resolvedArchitecture `
             -Triplet $resolvedTriplet `
-            -NodePath $script:resolvedNodePath
+            -NodePath $script:resolvedNodePath `
+            -InstallClang:$InstallMissing
         if ($LASTEXITCODE -ne 0) {
             throw "Windows artifact build failed with exit code $LASTEXITCODE."
         }

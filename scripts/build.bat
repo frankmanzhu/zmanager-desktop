@@ -50,7 +50,7 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo [4/4] Running static Windows build and installation...
-powershell -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\build-windows-static.ps1" -Install
+powershell -ExecutionPolicy Bypass -File "%REPO_ROOT%\scripts\build-windows-static.ps1" -InstallClang -Install
 if %ERRORLEVEL% neq 0 (
     echo Error: Build or installation failed.
     exit /b 1
