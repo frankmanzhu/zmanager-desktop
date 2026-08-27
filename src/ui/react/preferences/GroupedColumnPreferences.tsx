@@ -167,12 +167,15 @@ export function GroupedColumnPreferences({ visibility, onChange, i18n }: Props) 
         </p>
 
         <div className="flex items-center gap-2 mb-3">
-          <Select value={selectedFamily} onValueChange={setSelectedFamily}>
+          <Select
+            value={selectedFamily || "none"}
+            onValueChange={(val) => setSelectedFamily(val === "none" ? "" : val)}
+          >
             <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Select format family..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None (use global defaults)</SelectItem>
+              <SelectItem value="none">None (use global defaults)</SelectItem>
               {ALL_ARCHIVE_FORMAT_FAMILIES.map((family: ArchiveFormatFamily) => (
                 <SelectItem key={family} value={family}>
                   {family} ({preferredSuffixForFamily(family)})

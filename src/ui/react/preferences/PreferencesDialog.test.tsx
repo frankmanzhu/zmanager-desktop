@@ -12,7 +12,7 @@ import {
   noopZManagerReactActions,
   type ZManagerReactSnapshot,
 } from "../appRuntime";
-import { PreferencesDialog } from "./PreferencesDialog";
+import { PreferencesDialog, ArchiveDefaultsPage } from "./PreferencesDialog";
 
 describe("React preferences dialog", () => {
   it("renders preference pages and draft controls", () => {
@@ -77,11 +77,17 @@ describe("React preferences dialog", () => {
       ...noopZManagerReactActions,
       handleDialogIntent,
     });
+
     render(
       createElement(
         ZManagerAppRuntimeProvider,
         { store },
-        createElement(PreferencesDialog),
+        createElement(ArchiveDefaultsPage, {
+          draft: snapshot.preferencesDraft!,
+          active: true,
+          selectedCreateFormat: "tzap",
+          setSelectedCreateFormat: vi.fn(),
+        }),
       ),
     );
 

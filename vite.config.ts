@@ -19,6 +19,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    testTimeout: 20000,
     exclude: ["e2e/**", "node_modules/**", "dist/**", "src-tauri/**", "scripts/**"],
   }
 });

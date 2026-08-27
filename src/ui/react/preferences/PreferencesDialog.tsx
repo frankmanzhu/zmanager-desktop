@@ -439,7 +439,7 @@ function FoldersPage({
   );
 }
 
-function ArchiveDefaultsPage({
+export function ArchiveDefaultsPage({
   draft,
   active,
   selectedCreateFormat,
