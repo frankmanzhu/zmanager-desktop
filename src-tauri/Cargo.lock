@@ -186,7 +186,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 [[package]]
 name = "apfs"
 version = "0.2.4"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "byteorder",
  "thiserror 2.0.19",
@@ -960,7 +960,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes 3.0.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -977,7 +977,7 @@ dependencies = [
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
  "winx",
 ]
 
@@ -1739,7 +1739,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1840,7 +1840,7 @@ dependencies = [
 [[package]]
 name = "dpp"
 version = "0.4.2"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "apfs",
  "hfsplus",
@@ -2029,7 +2029,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2266,7 +2266,7 @@ dependencies = [
  "forensic-vfs",
  "forensic-vfs-resolver",
  "hfsplus-forensic",
- "iso9660-forensic 0.8.0",
+ "iso9660-forensic",
  "luks-core",
  "ntfs-core",
  "qcow2-core",
@@ -2639,7 +2639,7 @@ dependencies = [
  "gobject-sys 0.21.5",
  "libc",
  "system-deps 7.0.8",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2893,7 +2893,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "hfsplus"
 version = "0.2.4"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "byteorder",
  "thiserror 2.0.19",
@@ -3357,21 +3357,10 @@ dependencies = [
 [[package]]
 name = "iso9660-forensic"
 version = "0.8.0"
+source = "git+https://github.com/frankmanzhu/iso9660-forensic?rev=2e8619d#2e8619d6cc39e4741bdc8c17812d76470a76c8ab"
 dependencies = [
  "forensicnomicon",
- "iso9660-forensic-core 0.1.0",
- "safe-read 0.1.0",
- "sha1 0.10.7",
- "sha2 0.10.9",
-]
-
-[[package]]
-name = "iso9660-forensic"
-version = "0.8.0"
-source = "git+https://github.com/SecurityRonin/iso9660-forensic?rev=589a93c5c058070426471cf4d39c8d5c12162fc1#589a93c5c058070426471cf4d39c8d5c12162fc1"
-dependencies = [
- "forensicnomicon",
- "iso9660-forensic-core 0.1.0 (git+https://github.com/SecurityRonin/iso9660-forensic?rev=589a93c5c058070426471cf4d39c8d5c12162fc1)",
+ "iso9660-forensic-core",
  "safe-read 0.1.0",
  "sha1 0.10.7",
  "sha2 0.10.9",
@@ -3380,19 +3369,9 @@ dependencies = [
 [[package]]
 name = "iso9660-forensic-core"
 version = "0.1.0"
+source = "git+https://github.com/frankmanzhu/iso9660-forensic?rev=2e8619d#2e8619d6cc39e4741bdc8c17812d76470a76c8ab"
 dependencies = [
  "forensic-vfs",
- "safe-read 0.1.0",
- "sha1 0.10.7",
- "sha2 0.10.9",
- "thiserror 2.0.19",
-]
-
-[[package]]
-name = "iso9660-forensic-core"
-version = "0.1.0"
-source = "git+https://github.com/SecurityRonin/iso9660-forensic?rev=589a93c5c058070426471cf4d39c8d5c12162fc1#589a93c5c058070426471cf4d39c8d5c12162fc1"
-dependencies = [
  "safe-read 0.1.0",
  "sha1 0.10.7",
  "sha2 0.10.9",
@@ -3952,7 +3931,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.19",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4037,7 +4016,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4590,7 +4569,7 @@ dependencies = [
 [[package]]
 name = "pbzx"
 version = "0.3.1"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "byteorder",
  "thiserror 2.0.19",
@@ -5239,7 +5218,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5887,7 +5866,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6585,10 +6564,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7033,7 +7012,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "thiserror 2.0.19",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7154,7 +7133,7 @@ dependencies = [
 [[package]]
 name = "udif"
 version = "0.3.4"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "base64 0.22.1",
  "byteorder",
@@ -7176,7 +7155,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -7667,7 +7646,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -8255,7 +8234,7 @@ dependencies = [
 [[package]]
 name = "xara"
 version = "0.3.2"
-source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#92081c1fde11264b0427879d949aee76dbc50c76"
+source = "git+https://github.com/frankmanzhu/dpp?branch=zmanager-integration#05cc5125c18eae1fd8ea5a20d3cb704cd9e118b2"
 dependencies = [
  "byteorder",
  "flate2",
@@ -8606,14 +8585,14 @@ checksum = "b142a20ec14a91d5bc708c1dc21b080c550113d8aa77afa29635673a65dd02c5"
 
 [[package]]
 name = "zmanager-apple-archive"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "zmanager-core"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "adler2",
  "base64 0.22.1",
@@ -8628,7 +8607,7 @@ dependencies = [
  "forensic-vfs",
  "forensic-vfs-engine",
  "hex",
- "iso9660-forensic 0.8.0 (git+https://github.com/SecurityRonin/iso9660-forensic?rev=589a93c5c058070426471cf4d39c8d5c12162fc1)",
+ "iso9660-forensic",
  "libc",
  "lz4_flex 0.14.0",
  "lzma-rust2",
@@ -8697,7 +8676,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-localsend"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "localsend-rs",
  "serde",
@@ -8716,7 +8695,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-tzap-hosted"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "base64 0.22.1",
  "num-bigint",
@@ -8732,7 +8711,7 @@ dependencies = [
 
 [[package]]
 name = "zmanager-unrar"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "cc",
  "zeroize",
