@@ -7,10 +7,13 @@
 [![Downloads](https://img.shields.io/github/downloads/frankmanzhu/zmanager-desktop/total)](https://github.com/frankmanzhu/zmanager-desktop/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A fast, open-source archive manager for Windows, Linux, and macOS, built on
-`zmanager-core`. ZManager provides one workflow for browsing, testing,
-extracting, and creating archives, with native shell integration on each
-desktop platform.
+A fast, open-source archive manager for Windows, Linux, and macOS. ZManager
+gives you one simple place to open, test, extract, and create archives, with
+native desktop integration on each platform.
+
+If someone sends you an archive and you are not sure which tool to use, start
+with ZManager. It can open a very broad range of existing files, while keeping
+new archive creation focused on formats that are fast, compatible, or secure.
 
 ## Latest release: 1.2.4
 
@@ -22,6 +25,84 @@ for verification.
 
 See the [full release notes](https://github.com/frankmanzhu/zmanager-desktop/releases/tag/v1.2.4)
 and download the installers from [GitHub Releases](https://github.com/frankmanzhu/zmanager-desktop/releases/latest).
+
+## What can I do with it?
+
+- Open and extract archives, packages, disk images, and compressed files.
+- Create ZIP, TZST, TGZ, TZAP, 7z, and Apple Archive files.
+- Test an archive before extracting it.
+- Work from Finder, Explorer, or your Linux file manager.
+- Run each archive job in its own window with progress, cancellation, and
+  recovery support.
+
+## Supported formats
+
+ZManager keeps two jobs separate: **open and extract broadly**, then **create
+deliberately**. That means you can open files from many ecosystems without
+being encouraged to create new archives in outdated formats.
+
+### Create archives
+
+| Format | Best for |
+|---|---|
+| `.zip` | Everyday sharing and maximum compatibility; Deflate/store and AES-256 encryption are supported. |
+| `.tzst` (`.tar.zst`) | Fast compression for projects, backups, and large folders. |
+| `.tgz` (`.tar.gz`) | Compatibility with Unix tools and older systems. |
+| `.tzap` | Encrypted, signed, recoverable archives for long-lived data. |
+| `.7z` | High-compression archives with AES-256 encryption. |
+| `.aar` / `.aea` | Apple Archive files, including encrypted Apple Archive on macOS. |
+
+### Open and extract
+
+ZManager can open the following format families through the same desktop
+workflow:
+
+<details>
+<summary>See the full compatibility list</summary>
+
+#### ZIP family
+
+`.zip`, `.zipx`, `.jar`, `.war`, `.ipa`, `.apk`, `.appx`, `.xpi`, `.cbz`,
+`.epub`, split `.z01`… volumes, and ZIP-content `.exe` files.
+
+#### 7z family
+
+`.7z`, `.cb7`, `.sevenz`, encrypted 7z archives, and numbered `.7z.001`
+volumes.
+
+#### RAR family
+
+`.rar`, `.cbr`, split `.partN.rar` volumes, RAR4/RAR5, passworded RAR, and
+encrypted RAR5 archives.
+
+#### TAR and variants
+
+`.tar`, `.cbt`, `.ustar`, `.pax`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`,
+`.tbz`, `.tar.xz`, `.txz`, `.tar.lzma`, `.tlzma`, `.tzst`, `.tar.zst`,
+`.tar.lz`, `.tar.lzo`, `.tar.Z`, `.taz`, `.tar.lz4`, `.tar.uu`, and
+`.tar.b64`.
+
+#### TZAP and raw compression
+
+`.tzap`, `.zst`, `.gz`, `.bz2`, `.xz`, `.lzma`, `.lz`, `.br`, `.lz4`, `.lzo`,
+`.Z`, `.uu`, and `.b64`.
+
+#### Packages and containers
+
+`.deb`, `.rpm`, `.a`, `.ar`, `.lib`, `.cpio`, `.cpio.gz`, `.cpio.bz2`,
+`.cpio.xz`, `.cpio.lzma`, `.cpio.zst`, `.cpgz`, `.spk`, `.iso`, `.xar`,
+`.cab`, `.msi`, `.pkg`, `.lha`, `.lzh`, `.warc`, and `.mtree`.
+
+#### Disk images and Apple Archive
+
+`.dmg` (Apple Disk Image), `.vhd` (Virtual PC/Hyper-V), `.vmdk` (VMware),
+`.udf` (optical), `.aar`, and encrypted `.aea` Apple Archives.
+
+</details>
+
+TZAP is the cross-platform format ZManager targets for fast, secure, and
+resilient workflows. Password-protected ZIP, 7z, TZAP, Apple Archive, and RAR
+list, test, and extract through a prompt or standard input.
 
 ## Why this feels trustworthy
 
@@ -54,15 +135,6 @@ and download the installers from [GitHub Releases](https://github.com/frankmanzh
 | Linux ARM64 | `zmanager-desktop-<version>-linux-arm64.deb` or `.rpm` | - |
 | macOS ARM64 | `ZManager-<version>-macos-arm64.dmg` | `.zip` |
 | macOS x86_64 | `ZManager-<version>-macos-x86_64.dmg` | `.zip` |
-
-## Archive formats
-
-- Browse and extract supported archive formats through the shared Rust engine,
-  including ZIP, 7z, TZST, TZAP, and common tar-based formats.
-- Create ZIP, 7z, TZST, TZAP, and TGZ archives on supported platforms.
-- Create Apple Archive (`.aar`, or encrypted `.aea`) archives on macOS.
-- `TZAP` is the cross-platform format this project targets for resilient,
-  secure, and fast workflows.
 
 ## Platform integration
 
