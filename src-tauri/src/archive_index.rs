@@ -1328,6 +1328,28 @@ mod tests {
         assert_eq!(metadata_error.code, "operation_failed");
     }
 
+    #[tokio::test]
+    async fn unicode_archive_path_indexes_archive_without_panicking() {
+        let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../zmanager/fixtures/archives/basic.zip");
+        assert!(source.is_file(), "archive fixture should exist: {}", source.display());
+        let archive = std::env::temp_dir().join(format!("zmanager-desktop-游戏存档管理器-{}.zip", std::process::id()));
+        let _ = std::fs::remove_file(&archive);
+        std::fs::copy(&source, &archive).expect("Unicode archive fixture should be copied");
+
+        let registry = ArchiveIndexRegistry::new();
+        let started = registry
+            .start(StartArchiveIndexRequest { archive_path: archive.to_string_lossy().into_owned(), password: None })
+            .expect("index request should be accepted");
+        let terminal = tokio::time::timeout(Duration::from_secs(3), registry.wait_for_change(&started.session_id, Some(&started.snapshot.revision)))
+            .await
+            .expect("index worker should publish a terminal state")
+            .expect("index state should remain available");
+        assert_eq!(terminal.status, ArchiveIndexStatusDto::Ready);
+        assert!(terminal.final_entry_count.is_some_and(|count| count > 0));
+        registry.close(&started.session_id).expect("index session should close");
+        std::fs::remove_file(archive).expect("Unicode archive fixture should be cleaned up");
+    }
+
     #[test]
     #[ignore = "performance characterization harness; run explicitly on release hardware"]
     fn characterize_one_hundred_thousand_entry_index() {
