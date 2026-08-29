@@ -1543,6 +1543,7 @@ function AdvancedPage({
   active: boolean;
 }) {
   const actions = useZManagerActions();
+  const isOfficialRelease = !import.meta.env.DEV;
 
   return (
     <div className={PREFERENCE_PAGE_CLASS} hidden={!active}>
@@ -1555,26 +1556,32 @@ function AdvancedPage({
         <div className={SETTING_ROW_CLASS}>
           <label>TZAP Server Environment</label>
           <div className={SETTING_CONTROL_CLASS}>
-            <Select
-              value={draft.tzapEnvironment}
-              onValueChange={(val: "prod" | "staging") => {
-                actions.handleDialogIntent({
-                  type: "preferencesPatch",
-                  patch: { tzapEnvironment: val },
-                });
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="prod">Production</SelectItem>
-                <SelectItem value="staging">Staging</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className={SETTING_DESCRIPTION_CLASS}>
-              Controls which backend environment the application connects to for TZAP hosted features.
-            </p>
+            {isOfficialRelease ? (
+              <p className={SETTING_DESCRIPTION_CLASS}>Production</p>
+            ) : (
+              <>
+                <Select
+                  value={draft.tzapEnvironment}
+                  onValueChange={(val: "prod" | "staging") => {
+                    actions.handleDialogIntent({
+                      type: "preferencesPatch",
+                      patch: { tzapEnvironment: val },
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="prod">Production</SelectItem>
+                    <SelectItem value="staging">Staging</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className={SETTING_DESCRIPTION_CLASS}>
+                  Controls which backend environment the application connects to for TZAP hosted features.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </section>
