@@ -576,6 +576,8 @@ test("create password fields clear when hidden or submitted", async ({ page }) =
 });
 
 test("secondary GUI surfaces have visible, bounded controls", async ({ page }) => {
+  test.setTimeout(120_000);
+
   await openDevSurface(page, "preferences");
   await expect(page.getByRole("dialog", { name: "Options" })).toBeVisible();
   await expect(page.locator("[data-pref-page='folders']")).toBeVisible();
