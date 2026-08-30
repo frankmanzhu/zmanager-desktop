@@ -190,6 +190,100 @@ export async function collectAllEntries(sessionId: string, pageLimit = 50): Prom
   return collected;
 }
 
+export type JobOutcome = {
+  jobId: string;
+  status: "completed" | "failed" | "cancelled" | string;
+};
+
+/**
+ * Starts a job and waits for it to reach a terminal state.
+ *
+ * The whole subscribe/start/await cycle runs inside one page-context call
+ * because a Tauri `Channel` cannot cross the WebDriver bridge — it is a live
+ * object with an `onmessage` callback, so it must be created, used, and
+ * disposed of on the page side.
+ *
+ * Observation goes through `subscribe_job_catalog` rather than `subscribe_job`
+ * because the main window is not granted the latter (see the capability note
+ * at the top of this file). The catalog reports terminal status but not the
+ * failure code, so callers asserting *why* a job failed need a `task-*`
+ * window instead.
+ *
+ * The catalog is subscribed *before* the job starts, so a job that finishes
+ * immediately cannot complete in the gap before anyone is listening.
+ */
+export async function runJobToCompletion(command: string, request: Record<string, unknown>, timeoutMs = 120_000): Promise<JobOutcome> {
+  const outcome = (await browser.tauri.execute(
+    async ({ core }, startCommand: string, startRequest: Record<string, unknown>, budgetMs: number) => {
+      const tauriCore = (globalThis as unknown as { __TAURI__: { core: { Channel: new () => { onmessage: (message: unknown) => void } } } }).__TAURI__.core;
+
+      type CatalogDescriptor = { jobId: string; status: string; terminal: boolean };
+      type CatalogEnvelope = { subscriptionId: string; revision: string; payload: { jobs: CatalogDescriptor[] } };
+
+      let settle: (value: { jobId: string; status: string } | { error: string }) => void = () => undefined;
+      const finished = new Promise<{ jobId: string; status: string } | { error: string }>((resolve) => {
+        settle = resolve;
+      });
+
+      let startedJobId: string | null = null;
+      // Terminal states seen before the job id is known are retained, so a job
+      // that finishes between subscribing and starting is not missed.
+      const terminalByJobId = new Map<string, string>();
+
+      const channel = new tauriCore.Channel();
+      channel.onmessage = (message: unknown) => {
+        const envelope = message as CatalogEnvelope;
+        for (const descriptor of envelope.payload?.jobs ?? []) {
+          if (descriptor.terminal) {
+            terminalByJobId.set(descriptor.jobId, descriptor.status);
+          }
+        }
+        // Acknowledging keeps the backend feed flowing.
+        void core.invoke("ack_subscription", { request: { subscriptionId: envelope.subscriptionId, revision: envelope.revision } }).catch(() => undefined);
+        if (startedJobId !== null && terminalByJobId.has(startedJobId)) {
+          settle({ jobId: startedJobId, status: terminalByJobId.get(startedJobId) as string });
+        }
+      };
+
+      const subscriptionId = (await core.invoke("subscribe_job_catalog", { onSnapshot: channel })) as string;
+      try {
+        const started = (await core.invoke(startCommand, { request: startRequest })) as { jobId: string };
+        startedJobId = started.jobId;
+        if (terminalByJobId.has(started.jobId)) {
+          settle({ jobId: started.jobId, status: terminalByJobId.get(started.jobId) as string });
+        }
+
+        const timer = setTimeout(() => settle({ error: `job ${started.jobId} did not finish within ${budgetMs}ms` }), budgetMs);
+        const result = await finished;
+        clearTimeout(timer);
+        return result;
+      } catch (error) {
+        const code = error !== null && typeof error === "object" && "code" in error ? (error as { code: string; message: string }) : null;
+        return { error: code ? `${code.code} — ${code.message}` : String(error) };
+      } finally {
+        await core.invoke("unsubscribe_job", { request: { subscriptionId } }).catch(() => undefined);
+      }
+    },
+    command,
+    request,
+    timeoutMs,
+  )) as { jobId: string; status: string } | { error: string };
+
+  if ("error" in outcome) {
+    throw new Error(`${command} failed: ${outcome.error}`);
+  }
+  return outcome;
+}
+
+/** Runs a job and asserts it completed successfully. */
+export async function runJobExpectingSuccess(command: string, request: Record<string, unknown>, timeoutMs?: number): Promise<JobOutcome> {
+  const outcome = await runJobToCompletion(command, request, timeoutMs);
+  if (outcome.status !== "completed") {
+    throw new Error(`${command} finished with status ${outcome.status}, expected completed`);
+  }
+  return outcome;
+}
+
 /**
  * Asserts every expected entry is present with the expected kind.
  *

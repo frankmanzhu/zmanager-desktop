@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -141,6 +141,116 @@ export function payloadTree(symlinkKind: ExpectedEntry["kind"]): ExpectedEntry[]
 export function isGenerationArtifact(entryPath: string): boolean {
   const leaf = entryPath.split("/").pop() ?? "";
   return leaf.startsWith("._");
+}
+
+export type DiskEntry = {
+  path: string;
+  kind: "file" | "directory" | "symlink";
+  /** File contents; omitted for directories and symlinks. */
+  contents?: string;
+  /** Symlink target, verbatim; omitted otherwise. */
+  target?: string;
+};
+
+/**
+ * Reads a directory tree into a comparable map, keyed by path relative to
+ * `root` with forward slashes on every platform.
+ *
+ * Uses `lstat`, never `stat`: following links would make a symlink and its
+ * target indistinguishable, which is exactly the distinction several format
+ * expectations turn on. Generation artifacts are skipped so a corpus built on
+ * macOS compares equal to one built on Linux.
+ */
+export function readTree(root: string): Map<string, DiskEntry> {
+  const entries = new Map<string, DiskEntry>();
+
+  const walk = (directory: string, prefix: string): void => {
+    for (const child of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const relativePath = prefix.length > 0 ? `${prefix}/${child.name}` : child.name;
+      const absolutePath = path.join(directory, child.name);
+      if (isGenerationArtifact(relativePath)) {
+        continue;
+      }
+
+      const stats = lstatSync(absolutePath);
+      if (stats.isSymbolicLink()) {
+        entries.set(relativePath, { path: relativePath, kind: "symlink", target: readlinkSync(absolutePath) });
+        continue;
+      }
+      if (stats.isDirectory()) {
+        entries.set(relativePath, { path: relativePath, kind: "directory" });
+        walk(absolutePath, relativePath);
+        continue;
+      }
+      entries.set(relativePath, { path: relativePath, kind: "file", contents: readFileSync(absolutePath, "utf8") });
+    }
+  };
+
+  walk(root, "");
+  return entries;
+}
+
+/**
+ * Compares two on-disk trees and returns human-readable differences.
+ *
+ * Returns every difference rather than the first, because a format that
+ * mangles one name usually mangles several and fixing them one run at a time
+ * is slow.
+ */
+export function diffTrees(expected: Map<string, DiskEntry>, actual: Map<string, DiskEntry>): string[] {
+  const differences: string[] = [];
+
+  for (const [entryPath, expectedEntry] of expected) {
+    const actualEntry = actual.get(entryPath);
+    if (!actualEntry) {
+      differences.push(`missing ${entryPath}`);
+      continue;
+    }
+    if (actualEntry.kind !== expectedEntry.kind) {
+      differences.push(`${entryPath}: kind ${actualEntry.kind}, expected ${expectedEntry.kind}`);
+      continue;
+    }
+    if (expectedEntry.kind === "file" && actualEntry.contents !== expectedEntry.contents) {
+      differences.push(`${entryPath}: contents ${JSON.stringify(actualEntry.contents)}, expected ${JSON.stringify(expectedEntry.contents)}`);
+    }
+    if (expectedEntry.kind === "symlink" && actualEntry.target !== expectedEntry.target) {
+      differences.push(`${entryPath}: link target ${JSON.stringify(actualEntry.target)}, expected ${JSON.stringify(expectedEntry.target)}`);
+    }
+  }
+
+  for (const entryPath of actual.keys()) {
+    if (!expected.has(entryPath)) {
+      differences.push(`unexpected ${entryPath}`);
+    }
+  }
+
+  return differences;
+}
+
+/**
+ * Builds a source tree mirroring the fixture corpus payload, for round-trip
+ * tests that create an archive and read it back.
+ *
+ * Built at test time rather than copied from the corpus so the round trip
+ * owns its input: it stays valid while the corpus is being cleaned up in the
+ * zmanager repository.
+ */
+export function writePayloadSourceTree(root: string, options: { withSymlink: boolean } = { withSymlink: true }): string {
+  const payload = path.join(root, "payload");
+  mkdirSync(path.join(payload, "nested", "empty-dir"), { recursive: true });
+  mkdirSync(path.join(payload, "dir with spaces"), { recursive: true });
+  mkdirSync(path.join(payload, "unicode"), { recursive: true });
+
+  writeFileSync(path.join(payload, "README.txt"), "ZManager fixture payload\n");
+  writeFileSync(path.join(payload, "nested", "file.txt"), "nested fixture file\n");
+  writeFileSync(path.join(payload, "dir with spaces", "file with spaces.txt"), "spaces in path\n");
+  writeFileSync(path.join(payload, "unicode", "こんにちは.txt"), "unicode path fixture\n");
+
+  if (options.withSymlink) {
+    symlinkSync("../README.txt", path.join(payload, "nested", "readme-link.txt"));
+  }
+
+  return payload;
 }
 
 /** Creates an isolated temporary directory, returning it with a disposer. */
