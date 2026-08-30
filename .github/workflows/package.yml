@@ -68,6 +68,9 @@ jobs:
             test-results/
             docs/gui-audit/
 
+      - name: Run native macOS GUI tests
+        run: npm run test:gui:macos
+
       - name: Build and inspect ad-hoc release bundle
         env:
           ZMANAGER_BUILD_NUMBER: ${{ github.run_number }}
@@ -129,6 +132,12 @@ jobs:
             -InstallNodeModules `
             -Build
 
+      - name: Run native Windows GUI tests
+        shell: pwsh
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
+        run: .\scripts\test-windows-gui.ps1 -Architecture ${{ matrix.arch }}
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -164,6 +173,12 @@ jobs:
       - name: Build Debian package
         shell: bash
         run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
+
+      - name: Run native Linux GUI tests
+        shell: bash
+        run: |
+          sudo apt-get install -y xvfb
+          xvfb-run -a npm run test:gui:linux
 
       - name: Upload Debian artifacts
         uses: actions/upload-artifact@v6
