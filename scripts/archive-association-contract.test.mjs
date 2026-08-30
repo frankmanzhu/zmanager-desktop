@@ -90,6 +90,14 @@ test("all core archive extensions remain association-visible", async () => {
   assert.ok(generic.primaryExtensions.includes("lib"));
 });
 
+test("new virtual-disk and forensic formats are association-visible", async () => {
+  const generic = manifest.associationTypes.find((type) => type.id === "genericPackages");
+  for (const extension of ["vhdx", "qcow2", "qcow", "e01", "ex01", "ad1", "dar", "aff4", "raw", "dd", "dsk", "img"]) {
+    assert.ok(manifest.singleExtensions.includes(extension), `${extension} missing from supported extensions`);
+    assert.ok(generic.primaryExtensions.includes(extension), `${extension} missing from generic package associations`);
+  }
+});
+
 test("Linux custom MIME types declare icons and map mimetype assets in package configs", async () => {
   const xdgMime = await text("packaging/linux/xdg-mime.xml");
   const tauriConfig = await json("src-tauri/tauri.conf.json");

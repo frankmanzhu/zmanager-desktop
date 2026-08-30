@@ -261,6 +261,13 @@ pub enum ArchiveFormatKindDto {
     Isz,
     Ccd,
     Cue,
+    Vhdx,
+    Qcow2,
+    Ewf,
+    Ad1,
+    Dar,
+    Aff4,
+    RawDisk,
     RawStream,
     Unknown,
 }
@@ -311,6 +318,13 @@ impl From<zmanager_core::archive_format::ArchiveFormatKind> for ArchiveFormatKin
             zmanager_core::archive_format::ArchiveFormatKind::Isz => Self::Isz,
             zmanager_core::archive_format::ArchiveFormatKind::Ccd => Self::Ccd,
             zmanager_core::archive_format::ArchiveFormatKind::Cue => Self::Cue,
+            zmanager_core::archive_format::ArchiveFormatKind::Vhdx => Self::Vhdx,
+            zmanager_core::archive_format::ArchiveFormatKind::Qcow2 => Self::Qcow2,
+            zmanager_core::archive_format::ArchiveFormatKind::Ewf => Self::Ewf,
+            zmanager_core::archive_format::ArchiveFormatKind::Ad1 => Self::Ad1,
+            zmanager_core::archive_format::ArchiveFormatKind::Dar => Self::Dar,
+            zmanager_core::archive_format::ArchiveFormatKind::Aff4 => Self::Aff4,
+            zmanager_core::archive_format::ArchiveFormatKind::RawDisk => Self::RawDisk,
             zmanager_core::archive_format::ArchiveFormatKind::RawStream => Self::RawStream,
             zmanager_core::archive_format::ArchiveFormatKind::Unknown => Self::Unknown,
         }
@@ -363,6 +377,13 @@ impl From<ArchiveFormatKindDto> for zmanager_core::archive_format::ArchiveFormat
             ArchiveFormatKindDto::Isz => Self::Isz,
             ArchiveFormatKindDto::Ccd => Self::Ccd,
             ArchiveFormatKindDto::Cue => Self::Cue,
+            ArchiveFormatKindDto::Vhdx => Self::Vhdx,
+            ArchiveFormatKindDto::Qcow2 => Self::Qcow2,
+            ArchiveFormatKindDto::Ewf => Self::Ewf,
+            ArchiveFormatKindDto::Ad1 => Self::Ad1,
+            ArchiveFormatKindDto::Dar => Self::Dar,
+            ArchiveFormatKindDto::Aff4 => Self::Aff4,
+            ArchiveFormatKindDto::RawDisk => Self::RawDisk,
             ArchiveFormatKindDto::RawStream => Self::RawStream,
             ArchiveFormatKindDto::Unknown => Self::Unknown,
         }
@@ -768,7 +789,7 @@ pub enum TzapRestorePolicyDto {
 
 #[cfg(test)]
 mod tests {
-    use super::TzapSigningSelectionDto;
+    use super::{ArchiveFormatKindDto, TzapSigningSelectionDto};
 
     #[test]
     fn enrolled_signing_selection_accepts_frontend_camel_case_field() {
@@ -783,5 +804,24 @@ mod tests {
             TzapSigningSelectionDto::EnrolledIdentity { signing_identity_id }
                 if signing_identity_id == "signing_identity_1"
         ));
+    }
+
+    #[test]
+    fn new_archive_format_kinds_round_trip_through_the_desktop_dto() {
+        let cases = [
+            (ArchiveFormatKindDto::Vhdx, "vhdx"),
+            (ArchiveFormatKindDto::Qcow2, "qcow2"),
+            (ArchiveFormatKindDto::Ewf, "ewf"),
+            (ArchiveFormatKindDto::Ad1, "ad1"),
+            (ArchiveFormatKindDto::Dar, "dar"),
+            (ArchiveFormatKindDto::Aff4, "aff4"),
+            (ArchiveFormatKindDto::RawDisk, "rawDisk"),
+        ];
+
+        for (dto, expected_json) in cases {
+            assert_eq!(serde_json::to_string(&dto).unwrap(), format!("\"{expected_json}\""));
+            let core_kind: zmanager_core::archive_format::ArchiveFormatKind = dto.into();
+            assert_eq!(ArchiveFormatKindDto::from(core_kind), dto);
+        }
     }
 }

@@ -20,6 +20,13 @@ describe("archive file type helpers", () => {
     expect(isSupportedArchivePath("C:/tmp/installer.PKG")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/capture.WARC")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/library.LIB")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/disk.VHDX")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/disk.QCOW2")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/evidence.E01")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/evidence.AD1")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/backup.DAR")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/container.AFF4")).toBe(true);
+    expect(isSupportedArchivePath("C:/tmp/disk.RAW")).toBe(true);
     expect(isSupportedArchivePath("C:/tmp/notes.txt")).toBe(false);
   });
 

@@ -187,6 +187,25 @@ describe("WP1 — Archive format family normalization", () => {
       expect(resolveArchiveFormatFamily("capture.warc")).toEqual({ kind: "known", family: "warc" });
       expect(resolveArchiveFormatFamily("library.lib")).toEqual({ kind: "known", family: "ar" });
     });
+
+    it("resolves newly supported disk and forensic formats", () => {
+      for (const path of [
+        "disk.vhdx",
+        "disk.qcow2",
+        "disk.qcow",
+        "evidence.e01",
+        "evidence.ex01",
+        "evidence.ad1",
+        "backup.dar",
+        "container.aff4",
+        "disk.raw",
+        "disk.dd",
+        "disk.dsk",
+        "disk.img",
+      ]) {
+        expect(resolveArchiveFormatFamily(path)).toEqual({ kind: "known", family: "genericPackage" });
+      }
+    });
   });
 });
 

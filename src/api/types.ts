@@ -286,6 +286,13 @@ export type ArchiveFormatKind =
   | "isz"
   | "ccd"
   | "cue"
+  | "vhdx"
+  | "qcow2"
+  | "ewf"
+  | "ad1"
+  | "dar"
+  | "aff4"
+  | "rawDisk"
   | "rawStream"
   | "unknown";
 

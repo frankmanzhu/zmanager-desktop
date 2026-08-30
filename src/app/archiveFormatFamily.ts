@@ -298,7 +298,9 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "genericPackage",
     physicalSuffixes: [
       ".appimage", ".squashfs", ".sqfs", ".ccd", ".cdi", ".cue",
-      ".esd", ".img", ".isz", ".mdf", ".mds", ".nrg", ".swm", ".wim", ".vdi",
+      ".ad1", ".aff4", ".dar", ".dd", ".e01", ".ex01", ".img", ".isz",
+      ".mdf", ".mds", ".nrg", ".qcow", ".qcow2", ".raw", ".swm", ".vdi",
+      ".vhdx", ".wim", ".dsk",
     ],
     displayLabelKey: "format.family.genericPackage",
   },
