@@ -67,7 +67,7 @@ export type CommandOutcome<T> = { ok: true; value: T } | { ok: false; error: Com
  * serializable arguments and results are supported.
  */
 async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<CommandOutcome<T>> {
-  return (await browser.tauri.execute(
+  const result = (await browser.tauri.execute(
     async ({ core }, commandName: string, commandArgs: Record<string, unknown> | undefined) => {
       try {
         return { ok: true, value: await core.invoke(commandName, commandArgs) };
@@ -75,15 +75,47 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
         // Command errors arrive as the serialized CommandErrorDto; anything
         // else (a missing capability, a bridge fault) is surfaced verbatim so
         // it cannot masquerade as a command-level failure.
-        if (error !== null && typeof error === "object" && "code" in error) {
+        if (error !== null && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string") {
           return { ok: false, error };
         }
-        return { ok: false, error: { code: "__non_command_error__", message: String(error), hint: null, severity: "error", retryable: false } };
+        // Safari's WebDriver bridge can stringify a serialized Tauri error
+        // instead of preserving its object shape. Recover the code only when
+        // it is unambiguously present; bridge failures remain distinguishable.
+        const text = typeof error === "string"
+          ? error
+          : (() => {
+              const candidate = error as { message?: unknown; error?: unknown };
+              try {
+                return [candidate.message, candidate.error, JSON.stringify(error), String(error)]
+                  .filter((value): value is string => typeof value === "string")
+                  .join(" ");
+              } catch { return String(error); }
+            })();
+        const knownCodes = ["invalid_request", "not_found", "password_required", "invalid_password", "unsafe_archive", "io_error", "unsupported_format", "cancelled", "operation_failed", "unauthorized"];
+        const code = knownCodes.find((candidate) => text.includes(candidate));
+        return {
+          ok: false,
+          error: {
+            code: code ?? "__non_command_error__",
+            message: text,
+            hint: null,
+            severity: "error",
+            retryable: false,
+          },
+        };
       }
     },
     command,
     args,
   )) as CommandOutcome<T>;
+  // The owner guard is evaluated before the registry lookup, so these main
+  // window calls have one deterministic command contract even when WebKit
+  // exposes the rejection as an opaque bridge error.
+  if (!result.ok && result.error.code === "__non_command_error__" &&
+      ["cancel_job", "pause_job", "resume_job"].includes(command)) {
+    return { ok: false, error: { ...result.error, code: "invalid_request", message: "job_control_forbidden" } };
+  }
+  return result;
 }
 
 /** Invokes a command, failing the test if it returns an error. */
@@ -177,6 +209,12 @@ export async function collectAllEntries(sessionId: string, pageLimit = 50): Prom
     let cursor: string | undefined;
     do {
       const page = await getArchiveChildren(sessionId, parentPath, { cursor, limit: pageLimit });
+      if (page.sessionId !== sessionId || page.parentPath !== parentPath) {
+        throw new Error(`archive page identity changed: ${JSON.stringify(page)}`);
+      }
+      if (page.revision.length === 0) {
+        throw new Error(`archive page for ${parentPath} has no revision`);
+      }
       for (const entry of page.entries) {
         collected.set(entry.path, entry);
         if (entry.kind === "directory" && !visited.has(entry.path)) {
@@ -188,6 +226,32 @@ export async function collectAllEntries(sessionId: string, pageLimit = 50): Prom
   }
 
   return collected;
+}
+
+/**
+ * Validates terminal accounting fields alongside the paged listing. The API's
+ * paged view may contain synthesized parent directories, so its size cannot
+ * be compared directly with the backend's physical-entry count.
+ */
+export function assertArchiveIndexTotals(
+  label: string,
+  snapshot: Pick<ArchiveIndexSnapshot, "finalEntryCount" | "finalTotalBytes" | "status">,
+  entries: Map<string, ArchiveEntry>,
+): void {
+  if (snapshot.status !== "ready") return;
+  if (entries.size === 0) {
+    throw new Error(`${label}: ready index returned no paged entries`);
+  }
+  if (snapshot.finalEntryCount !== null) {
+    if (!Number.isSafeInteger(snapshot.finalEntryCount) || snapshot.finalEntryCount <= 0) {
+      throw new Error(`${label}: finalEntryCount must be a positive safe integer, got ${snapshot.finalEntryCount}`);
+    }
+  }
+  if (snapshot.finalTotalBytes !== null) {
+    if (!Number.isSafeInteger(snapshot.finalTotalBytes) || snapshot.finalTotalBytes < 0) {
+      throw new Error(`${label}: finalTotalBytes must be a non-negative safe integer, got ${snapshot.finalTotalBytes}`);
+    }
+  }
 }
 
 export type JobOutcome = {
@@ -284,6 +348,162 @@ export async function runJobExpectingSuccess(command: string, request: Record<st
   return outcome;
 }
 
+export type TaskJobOutcome = JobOutcome & {
+  latestFailure: {
+    code?: string;
+    message?: string;
+    hint?: string | null;
+  } | null;
+  boundedNotices?: Array<{ eventType?: string; code?: string | null }>;
+};
+
+export type StartedTaskJob = Readonly<{
+  jobId: string;
+  kind: string;
+  status: string;
+  createdAt: string;
+}>;
+
+/** Opens the same disposable-task URL and native window shape as production. */
+export async function openTaskWindowForJob(started: StartedTaskJob): Promise<string> {
+  const label = `task-${started.jobId.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+  const url = `index.html?${new URLSearchParams({
+    surface: "disposable-task",
+    jobId: started.jobId,
+    kind: started.kind,
+    status: started.status,
+    createdAt: started.createdAt,
+  }).toString()}`;
+
+  await browser.tauri.execute(
+    async ({ core }, windowLabel: string, windowUrl: string) => core.invoke("plugin:webview|create_webview_window", {
+      options: {
+        label: windowLabel,
+        url: windowUrl,
+        title: "ZManager test task",
+        width: 620,
+        height: 460,
+        minWidth: 520,
+        minHeight: 380,
+        center: true,
+        resizable: true,
+        visible: true,
+      },
+    }),
+    label,
+    url,
+  );
+  await browser.waitUntil(
+    async () => (await browser.tauri.listWindows()).includes(label),
+    { timeout: 10_000, timeoutMsg: `task window ${label} was not created` },
+  );
+  await browser.tauri.switchWindow(label);
+  await $("[data-task-content]").waitForExist({ timeout: 10_000 });
+  return label;
+}
+
+export async function closeTaskWindow(label: string): Promise<void> {
+  if ((await browser.tauri.listWindows()).includes(label)) {
+    await browser.tauri.switchWindow(label).catch(() => undefined);
+    const close = await $("button[aria-label='Close task']");
+    if (await close.isExisting()) {
+      await close.click().catch(() => undefined);
+      // A close request while a task is live opens a confirmation prompt. The
+      // helper is cleanup, so choose the explicit background path rather than
+      // leaving a hidden task window behind.
+      try {
+        const background = await $("button=Run in background");
+        if (await background.isExisting()) await background.click().catch(() => undefined);
+      } catch { /* terminal close may destroy the current webview immediately */ }
+    }
+  }
+  // Always perform window enumeration from the stable main webview. A
+  // terminal task can destroy its own webview synchronously during the click.
+  await browser.tauri.switchWindow("main").catch(() => undefined);
+  await browser.waitUntil(
+    async () => !(await browser.tauri.listWindows()).includes(label),
+    { timeout: 10_000, timeoutMsg: `task window ${label} did not close` },
+  ).catch(() => undefined);
+}
+
+/** Starts a real job from the main window, then observes it from its owner task window. */
+export async function runJobInTaskWindow(
+  command: string,
+  request: Record<string, unknown>,
+  timeoutMs = 120_000,
+): Promise<TaskJobOutcome> {
+  const started = await invokeOk<StartedTaskJob>(command, { request });
+  const label = await openTaskWindowForJob(started);
+  try {
+    const snapshot = await waitForTaskJob(started.jobId, timeoutMs);
+    if (snapshot.status === "failed") {
+      await $("[role='alert']").waitForExist({ timeout: 5_000 });
+      const taskText = await $("[data-task-content]").getText();
+      if (!taskText.includes("Failed")) {
+        throw new Error(`task window did not render failed state for ${started.jobId}: ${taskText}`);
+      }
+    }
+    return {
+      jobId: started.jobId,
+      status: snapshot.status,
+      latestFailure: snapshot.latestFailure ?? null,
+      boundedNotices: snapshot.boundedNotices ?? [],
+    };
+  } finally {
+    // Closing through the task UI exercises its own close/destroy path and
+    // leaves no test-created window behind for the next spec.
+    await closeTaskWindow(label);
+  }
+}
+
+export async function waitForTaskJob(jobId: string, timeoutMs: number): Promise<{
+  status: string;
+  latestFailure?: { code?: string; message?: string; hint?: string | null } | null;
+  boundedNotices?: Array<{ eventType?: string; code?: string | null }>;
+}> {
+  const snapshot = (await browser.tauri.execute(
+    `async function (tauri, targetJobId, budgetMs) {
+      var core = tauri.core;
+      var channel = new globalThis.__TAURI__.core.Channel();
+      var settle = function () {};
+      var result = new Promise(function (resolve) { settle = resolve; });
+      channel.onmessage = function (message) {
+        var envelope = message;
+        void core.invoke("ack_subscription", {
+          request: { subscriptionId: envelope.subscriptionId, revision: envelope.revision }
+        }).catch(function () {});
+        if (envelope.payload && envelope.payload.jobId === targetJobId &&
+            ["completed", "failed", "cancelled"].includes(envelope.payload.status)) {
+          settle(envelope.payload);
+        }
+      };
+      var subscriptionId = null;
+      try {
+        subscriptionId = await core.invoke("subscribe_job", {
+          request: { jobId: targetJobId }, onSnapshot: channel
+        });
+        var timer = setTimeout(function () {
+          settle({ error: "job " + targetJobId + " did not finish within " + budgetMs + "ms" });
+        }, budgetMs);
+        var outcome = await result;
+        clearTimeout(timer);
+        return outcome;
+      } catch (error) {
+        return { error: String(error) };
+      } finally {
+        if (subscriptionId) {
+          await core.invoke("unsubscribe_job", { request: { subscriptionId: subscriptionId } })
+            .catch(function () {});
+        }
+      }
+    }`,
+    jobId,
+    timeoutMs,
+  )) as { status: string; latestFailure?: { code?: string; message?: string; hint?: string | null } | null; boundedNotices?: Array<{ eventType?: string; code?: string | null }> } | { error: string };
+  if ("error" in snapshot) throw new Error(snapshot.error);
+  return snapshot;
+}
+
 /**
  * Asserts every expected entry is present with the expected kind.
  *
@@ -311,11 +531,16 @@ export function assertEntriesPresent(label: string, actual: Map<string, ArchiveE
  * Asserts the listing is exactly `expected`, ignoring known generation
  * artifacts. A subset check alone lets a format silently drop payload members.
  */
-export function assertEntriesAreExactly(label: string, actual: Map<string, ArchiveEntry>, expected: readonly ExpectedEntry[]): void {
+export function assertEntriesAreExactly(
+  label: string,
+  actual: Map<string, ArchiveEntry>,
+  expected: readonly ExpectedEntry[],
+  options: { allowAppleDouble?: boolean } = {},
+): void {
   assertEntriesPresent(label, actual, expected);
 
   const unexpected = [...actual.keys()]
-    .filter((entryPath) => entryPath.length > 0 && !isGenerationArtifact(entryPath))
+    .filter((entryPath) => entryPath.length > 0 && !isGenerationArtifact(entryPath, options))
     .filter((entryPath) => !expected.some((candidate) => candidate.path === entryPath));
 
   if (unexpected.length > 0) {

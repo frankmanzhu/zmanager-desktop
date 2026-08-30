@@ -20,6 +20,7 @@ import {
   suggestedCreateArchiveName,
   withCreateArchiveExtension,
 } from "./createFlow";
+import { createFormatCapabilities, supportedCreateFormats } from "./createFormatCapabilities";
 import type { CreatePlanEntryDto, CreatePlanResponse } from "../api/types";
 
 const pathHelpers = {
@@ -328,7 +329,59 @@ describe("create flow helpers", () => {
 
     expect(request.destinationCollisionStrategy).toBe("rename");
   });
+
+  it("drops every create option that is unsupported by the selected format", () => {
+    const common = {
+      sources: ["C:/work/source"],
+      destinationPath: "C:/tmp/output",
+      cleanSource: false,
+      replaceExisting: true,
+      preserveMetadata: false,
+      password: "secret",
+      volumeSize: 1024,
+      compressionLevel: 9,
+      zipCompression: "store" as const,
+      tzapRecoveryPercentage: 12,
+      tzapVolumeLossTolerance: 4,
+      sevenZSolid: false,
+      sevenZThreads: 2,
+      sevenZChunkSize: 1024,
+      sevenZEncryptFileNames: false,
+      tzapBootstrapSidecar: true,
+    };
+
+    for (const format of ["zip", "tarZst", "tzap", "sevenZ", "tarGz", "appleArchive"] as const) {
+      const request = buildStartCreateRequest({ ...common, format });
+      const capabilities = createFormatCapabilities(format);
+      assertOptionPresence(request, "password", capabilities.password);
+      assertOptionPresence(request, "volumeSize", capabilities.splitVolumes);
+      assertOptionPresence(request, "zipCompression", capabilities.zipCompression);
+      assertOptionPresence(request, "tzapRecoveryPercentage", capabilities.tzapRecovery);
+      assertOptionPresence(request, "tzapVolumeLossTolerance", capabilities.tzapVolumeLossTolerance);
+      assertOptionPresence(request, "sevenZSolid", capabilities.sevenZAdvanced);
+      assertOptionPresence(request, "sevenZThreads", capabilities.sevenZAdvanced);
+      assertOptionPresence(request, "sevenZChunkSize", capabilities.sevenZAdvanced);
+      assertOptionPresence(request, "sevenZEncryptFileNames", capabilities.sevenZAdvanced);
+      assertOptionPresence(request, "tzapBootstrapSidecar", format === "tzap");
+      expect(request.compressionLevel).toBe(9);
+      if (format === "tzap") expect(request.tzapVolumeLossTolerance).toBe(4);
+      if (format !== "tzap" && !capabilities.tzapVolumeLossTolerance) expect(request).not.toHaveProperty("tzapVolumeLossTolerance");
+    }
+  });
+
+  it("keeps Apple Archive out of the picker when the native capability is absent", () => {
+    expect(supportedCreateFormats(false)).not.toContain("appleArchive");
+    expect(supportedCreateFormats(true)).toContain("appleArchive");
+  });
 });
+
+function assertOptionPresence(
+  request: object,
+  option: string,
+  expected: boolean,
+): void {
+  expect(Object.prototype.hasOwnProperty.call(request, option), `${option} capability mismatch`).toBe(expected);
+}
 
 describe("create plan rows", () => {
   const sources = [

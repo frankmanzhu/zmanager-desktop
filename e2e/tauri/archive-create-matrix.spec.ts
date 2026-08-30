@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -347,6 +347,76 @@ if (!hasFixtureCorpus()) {
       );
 
       it(
+        "re-includes an explicitly selected path from the clean-source exclusions",
+        async () => {
+          const temp = makeTempDir("create-include-paths");
+          try {
+            const source = path.join(temp.dir, "source");
+            const payload = writePayloadSourceTree(source, { withSymlink: false });
+            mkdirSync(path.join(payload, "node_modules", "kept"), { recursive: true });
+            mkdirSync(path.join(payload, "node_modules", "drop"), { recursive: true });
+            writeFileSync(path.join(payload, "node_modules", "kept", "index.js"), "keep\n");
+            writeFileSync(path.join(payload, "node_modules", "drop", "index.js"), "drop\n");
+            const destination = path.join(temp.dir, "included.zip");
+
+            await runJobExpectingSuccess("start_create", {
+              ...CREATE_DEFAULTS,
+              cleanSource: true,
+              sources: [payload],
+              destinationPath: destination,
+              format: "zip",
+              includeArchivePaths: ["payload/node_modules/kept/index.js"],
+            });
+
+            const opened = await openArchiveIndex(destination);
+            try {
+              const entries = await collectAllEntries(opened.sessionId);
+              assert.ok(entries.has("payload/node_modules/kept/index.js"));
+              assert.ok(!entries.has("payload/node_modules/drop/index.js"));
+            } finally {
+              await closeArchiveIndex(opened.sessionId);
+            }
+          } finally {
+            temp.cleanup(false);
+          }
+        },
+        CREATE_TIMEOUT_MS,
+      );
+
+      if (process.platform !== "win32") {
+        it(
+          "follows source symlinks only when followSymlinks is enabled",
+          async () => {
+            const temp = makeTempDir("create-follow-symlinks");
+            try {
+              const source = path.join(temp.dir, "source");
+              const payload = writePayloadSourceTree(source, { withSymlink: true });
+              const destination = path.join(temp.dir, "followed.zip");
+
+              await runJobExpectingSuccess("start_create", {
+                ...CREATE_DEFAULTS,
+                sources: [payload],
+                destinationPath: destination,
+                format: "zip",
+                followSymlinks: true,
+              });
+
+              const opened = await openArchiveIndex(destination);
+              try {
+                const entries = await collectAllEntries(opened.sessionId);
+                assert.ok(entries.has("payload/nested/readme-link.txt"), "followSymlinks should retain the linked path");
+              } finally {
+                await closeArchiveIndex(opened.sessionId);
+              }
+            } finally {
+              temp.cleanup(false);
+            }
+          },
+          CREATE_TIMEOUT_MS,
+        );
+      }
+
+      it(
         "deletes the source directory after creation when cleanSource is enabled",
         async () => {
           const temp = makeTempDir("create-clean-source");
@@ -366,6 +436,7 @@ if (!hasFixtureCorpus()) {
             });
 
             assert.ok(existsSync(destination), "output archive must exist");
+            assert.ok(!existsSync(payload), "cleanSource must remove the selected source tree after a successful create");
             const { sessionId, snapshot } = await openArchiveIndex(destination);
             try {
               assert.equal(snapshot.status, "ready");

@@ -32,6 +32,10 @@ export const config: WebdriverIO.Config = {
     appBinaryPath,
     driverProvider: "embedded",
     embeddedPort: 4445,
+    // The repository app may already be open while GUI tests run locally.
+    // Debug-only test mode disables the normal macOS singleton registration
+    // for this spawned process, without changing release behavior.
+    env: { ZMANAGER_GUI_TEST_MODE: "1" },
   }]],
   capabilities: [tauriCapabilities],
   framework: "jasmine",

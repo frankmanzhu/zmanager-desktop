@@ -27,7 +27,8 @@ pub enum LaunchInstanceMode {
 
 impl LaunchInstanceMode {
     pub fn from_startup_env() -> Self {
-        Self::from_args(std::env::args_os().skip(1), std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok())
+        let test_mode = cfg!(debug_assertions) && std::env::var("ZMANAGER_GUI_TEST_MODE").is_ok();
+        Self::from_args(std::env::args_os().skip(1), std::env::var("ZMANAGER_MACOS_QUICK_ACTION").is_ok() || test_mode)
     }
 
     fn from_args(args: impl IntoIterator<Item = OsString>, pending_macos_quick_action: bool) -> Self {

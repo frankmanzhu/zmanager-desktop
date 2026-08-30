@@ -214,6 +214,10 @@ const EXTRACT_AVAILABILITY: Readonly<Record<ArchiveFormatFamily, readonly Extrac
   pkg: [
     "size", "modified",
   ],
+
+  genericPackage: [
+    "size", "modified",
+  ],
 };
 
 // ---------------------------------------------------------------------------

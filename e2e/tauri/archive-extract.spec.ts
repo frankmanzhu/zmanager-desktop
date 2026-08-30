@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { closeArchiveIndex, collectAllEntries, openArchiveIndex, runJobExpectingSuccess } from "./helpers/archiveCommands.ts";
+import { closeArchiveIndex, collectAllEntries, openArchiveIndex, runJobExpectingSuccess, runJobToCompletion } from "./helpers/archiveCommands.ts";
 import type { DiskEntry } from "./helpers/archiveFixtures.ts";
 import {
   diffTrees,
   fixturePath,
+  fixtureManifest,
+  fixtureSupportedOnPlatform,
   hasFixtureCorpus,
   makeTempDir,
   missingCorpusReason,
   readTree,
   writePayloadSourceTree,
+  symlinkFixturesSupported,
 } from "./helpers/archiveFixtures.ts";
 
 /**
@@ -77,13 +81,6 @@ type RoundTripFormat = {
   format: string;
   extension: string;
   symlinks: SymlinkHandling;
-  /**
-   * Set when the format is known to round trip the symlink incorrectly. The
-   * link is then excluded from this test's comparison and asserted by its own
-   * pending test below, so the defect stays visible in the report instead of
-   * being quietly encoded as expected behaviour.
-   */
-  symlinkTargetDefect?: string;
 };
 
 const ROUND_TRIP_FORMATS: ReadonlyArray<RoundTripFormat> = [
@@ -91,10 +88,6 @@ const ROUND_TRIP_FORMATS: ReadonlyArray<RoundTripFormat> = [
     format: "zip",
     extension: "zip",
     symlinks: "preserved",
-    symlinkTargetDefect:
-      "the ZIP writer stores a relative symlink target with its leading '../' stripped " +
-      "('../README.txt' is written as 'README.txt'), so extraction produces a broken link. " +
-      "Reproducible outside this app: zmanager-cli create --preserve-symlinks.",
   },
   { format: "sevenZ", extension: "7z", symlinks: "dropped" },
   { format: "tzap", extension: "tzap", symlinks: "dropped" },
@@ -109,18 +102,20 @@ const ROUND_TRIP_FORMATS: ReadonlyArray<RoundTripFormat> = [
  * the source-tree builder or the tree reader would make every round trip pass
  * while proving nothing. Pinning the baseline makes that failure loud.
  */
-function assertPayloadBaseline(tree: Map<string, DiskEntry>): void {
+function assertPayloadBaseline(tree: Map<string, DiskEntry>, requireSymlink = symlinkFixturesSupported()): void {
   for (const required of [
     "payload/README.txt",
     "payload/nested/file.txt",
     "payload/dir with spaces/file with spaces.txt",
     "payload/unicode/こんにちは.txt",
     "payload/nested/empty-dir",
-    "payload/nested/readme-link.txt",
   ]) {
     assert.ok(tree.has(required), `source baseline is missing ${required}; saw ${JSON.stringify([...tree.keys()])}`);
   }
-  assert.equal(tree.get("payload/nested/readme-link.txt")?.kind, "symlink", "source baseline should contain a real symlink");
+  if (requireSymlink) {
+    assert.ok(tree.has("payload/nested/readme-link.txt"), "source baseline should contain a real symlink");
+    assert.equal(tree.get("payload/nested/readme-link.txt")?.kind, "symlink", "source baseline should contain a real symlink");
+  }
 }
 
 /** Adjusts an expected tree for a writer that omits symlinks entirely. */
@@ -133,41 +128,64 @@ function withSymlinksDropped(tree: Map<string, DiskEntry>): Map<string, DiskEntr
       removed += 1;
     }
   }
-  assert.ok(removed > 0, "expected the source tree to contain a symlink to drop");
-  return adjusted;
-}
-
-/** Removes symlink entries from both sides of a comparison. */
-function withoutSymlinks(tree: Map<string, DiskEntry>): Map<string, DiskEntry> {
-  const adjusted = new Map(tree);
-  for (const [entryPath, entry] of tree) {
-    if (entry.kind === "symlink") {
-      adjusted.delete(entryPath);
-    }
+  if (tree.size > 0 && symlinkFixturesSupported()) {
+    assert.ok(removed > 0, "expected the source tree to contain a symlink to drop");
   }
   return adjusted;
 }
 
 /** Builds the expected extracted tree for a format's symlink handling. */
-function expectedTreeFor(sourceTree: Map<string, DiskEntry>, format: Pick<RoundTripFormat, "symlinks" | "symlinkTargetDefect">): Map<string, DiskEntry> {
+function expectedTreeFor(sourceTree: Map<string, DiskEntry>, format: Pick<RoundTripFormat, "symlinks">): Map<string, DiskEntry> {
   if (format.symlinks === "dropped") {
     return withSymlinksDropped(sourceTree);
   }
-  // The link is asserted by the format's own pending defect test instead.
-  return format.symlinkTargetDefect ? withoutSymlinks(sourceTree) : sourceTree;
+  return sourceTree;
 }
 
-/**
- * Compares an extracted tree against expectations, excluding the symlink from
- * both sides when the format has a known symlink defect. Excluding it from the
- * expectation alone would simply move the failure to "unexpected entry".
- */
-function diffRoundTrip(expected: Map<string, DiskEntry>, extracted: Map<string, DiskEntry>, format: Pick<RoundTripFormat, "symlinkTargetDefect">): string[] {
-  return diffTrees(expected, format.symlinkTargetDefect ? withoutSymlinks(extracted) : extracted);
+function diffRoundTrip(expected: Map<string, DiskEntry>, extracted: Map<string, DiskEntry>): string[] {
+  return diffTrees(expected, extracted);
 }
 
 if (!hasFixtureCorpus()) {
   describe("Archive extraction and creation in the native shell", () => {
+    it(
+      "extracts every supported corpus fixture and preserves its indexed shape",
+      async () => {
+        const failures: string[] = [];
+        for (const fixture of fixtureManifest().filter(fixtureSupportedOnPlatform).filter((candidate) => candidate.extract)) {
+          const temp = makeTempDir(`extract-${fixture.filename.replace(/[^a-zA-Z0-9]+/g, "-")}`);
+          let sessionId: string | null = null;
+          try {
+            const opened = await openArchiveIndex(fixturePath(fixture.filename));
+            sessionId = opened.sessionId;
+            const listed = await collectAllEntries(sessionId);
+            if (listed.size === 0) {
+              throw new Error("index contained no entries");
+            }
+            await closeArchiveIndex(sessionId);
+            sessionId = null;
+
+            await runJobExpectingSuccess("start_extract", {
+              ...EXTRACT_DEFAULTS,
+              archivePath: fixturePath(fixture.filename),
+              destinationPath: temp.dir,
+            });
+            const extracted = readTree(temp.dir);
+            assert.ok(extracted.size > 0, `${fixture.filename} extracted no filesystem entries`);
+            assertIndexedShapeExtracted(fixture.filename, listed, extracted);
+            temp.cleanup(false);
+          } catch (error) {
+            failures.push(`${fixture.filename} (${fixture.format}): ${String(error)}`);
+            temp.cleanup(true);
+          } finally {
+            if (sessionId) await closeArchiveIndex(sessionId).catch(() => undefined);
+          }
+        }
+        assert.deepEqual(failures, [], `fixture extraction failures:\n  ${failures.join("\n  ")}`);
+      },
+      240_000,
+    );
+
     it("requires the sibling fixture corpus", () => {
       pending(missingCorpusReason());
     });
@@ -288,6 +306,64 @@ if (!hasFixtureCorpus()) {
       EXTRACT_TIMEOUT_MS,
     );
 
+    it(
+      "honors replace, refuse, and rename overwrite policies",
+      async () => {
+        const temp = makeTempDir("extract-overwrite-policies");
+        try {
+          const replaceDestination = path.join(temp.dir, "replace");
+          const replaceTarget = path.join(replaceDestination, "payload", "README.txt");
+          await runJobExpectingSuccess("start_extract", {
+            ...EXTRACT_DEFAULTS,
+            archivePath: fixturePath("basic.tar.gz"),
+            destinationPath: replaceDestination,
+          });
+          writeFileSync(replaceTarget, "old contents\n");
+          await runJobExpectingSuccess("start_extract", {
+            ...EXTRACT_DEFAULTS,
+            archivePath: fixturePath("basic.tar.gz"),
+            destinationPath: replaceDestination,
+            overwrite: "replace",
+          });
+          assert.equal(readTree(replaceDestination).get("payload/README.txt")?.contents, "ZManager fixture payload\n");
+
+          const refuseDestination = path.join(temp.dir, "refuse");
+          const refuseTarget = path.join(refuseDestination, "payload", "README.txt");
+          mkdirForFile(refuseTarget);
+          writeFileSync(refuseTarget, "must survive\n");
+          const refused = await runJobToCompletion("start_extract", {
+            ...EXTRACT_DEFAULTS,
+            archivePath: fixturePath("basic.tar.gz"),
+            destinationPath: refuseDestination,
+            overwrite: "refuse",
+          });
+          // Refuse is a safety failure, not a successful no-op.  The job must
+          // leave the pre-existing destination untouched and surface the
+          // collision through its terminal status.
+          assert.equal(refused.status, "failed");
+          assert.equal(readTree(refuseDestination).get("payload/README.txt")?.contents, "must survive\n");
+
+          const renameDestination = path.join(temp.dir, "rename");
+          const renameTarget = path.join(renameDestination, "payload", "README.txt");
+          mkdirForFile(renameTarget);
+          writeFileSync(renameTarget, "must survive\n");
+          await runJobExpectingSuccess("start_extract", {
+            ...EXTRACT_DEFAULTS,
+            archivePath: fixturePath("basic.tar.gz"),
+            destinationPath: renameDestination,
+            overwrite: "rename",
+          });
+          const renamedFiles = [...readTree(renameDestination).values()]
+            .filter((entry) => entry.kind === "file" && entry.contents === "ZManager fixture payload\n");
+          assert.equal(readTree(renameDestination).get("payload/README.txt")?.contents, "must survive\n");
+          assert.equal(renamedFiles.length, 1, "rename must preserve the original and create one renamed archive member");
+        } finally {
+          temp.cleanup(false);
+        }
+      },
+      EXTRACT_TIMEOUT_MS * 2,
+    );
+
     describe("round trips", () => {
       const formats = [...ROUND_TRIP_FORMATS];
       if (process.platform === "darwin") {
@@ -303,7 +379,7 @@ if (!hasFixtureCorpus()) {
             let failed = true;
             try {
               const source = path.join(temp.dir, "source");
-              const payload = writePayloadSourceTree(source);
+              const payload = writePayloadSourceTree(source, { withSymlink: symlinkFixturesSupported() });
               const sourceTree = readTree(source);
               // A tree comparison passes vacuously if both sides are empty, so
               // pin the baseline before relying on it.
@@ -336,7 +412,7 @@ if (!hasFixtureCorpus()) {
                 destinationPath: extractedInto,
               });
 
-              const differences = diffRoundTrip(expected, readTree(extractedInto), roundTrip);
+              const differences = diffRoundTrip(expected, readTree(extractedInto));
               assert.deepEqual(differences, [], `${format} round trip lost data:\n  ${differences.join("\n  ")}`);
               failed = false;
             } finally {
@@ -346,11 +422,6 @@ if (!hasFixtureCorpus()) {
           ROUND_TRIP_TIMEOUT_MS,
         );
 
-        if (roundTrip.symlinkTargetDefect) {
-          it(`preserves relative symlink targets through a ${format} round trip`, () => {
-            pending(roundTrip.symlinkTargetDefect as string);
-          });
-        }
       }
 
       it(
@@ -360,11 +431,10 @@ if (!hasFixtureCorpus()) {
           let failed = true;
           try {
             const source = path.join(temp.dir, "source");
-            const payload = writePayloadSourceTree(source);
+              const payload = writePayloadSourceTree(source, { withSymlink: symlinkFixturesSupported() });
             const sourceTree = readTree(source);
             assertPayloadBaseline(sourceTree);
-            // Uses the same ZIP handling as the plain zip round trip above,
-            // including its known symlink-target defect.
+            // Uses the same ZIP handling as the plain ZIP round trip above.
             const zipFormat = ROUND_TRIP_FORMATS.find((candidate) => candidate.format === "zip") as RoundTripFormat;
             const expected = expectedTreeFor(sourceTree, zipFormat);
             const destination = path.join(temp.dir, "secret.zip");
@@ -386,7 +456,7 @@ if (!hasFixtureCorpus()) {
               password,
             });
 
-            const differences = diffRoundTrip(expected, readTree(extractedInto), zipFormat);
+            const differences = diffRoundTrip(expected, readTree(extractedInto));
             assert.deepEqual(differences, [], `encrypted round trip lost data:\n  ${differences.join("\n  ")}`);
             failed = false;
           } finally {
@@ -397,4 +467,45 @@ if (!hasFixtureCorpus()) {
       );
     });
   });
+}
+
+function assertIndexedShapeExtracted(
+  label: string,
+  indexed: Map<string, { path: string; kind: string }>,
+  extracted: Map<string, DiskEntry>,
+): void {
+  const problems: string[] = [];
+  for (const [entryPath, entry] of indexed) {
+    if (entryPath.startsWith("/") || entryPath.split("/").includes("..")) {
+      problems.push(`${entryPath}: unsafe indexed path`);
+      continue;
+    }
+    // A symlink-bearing archive is not portable to Windows without developer
+    // mode. The Unix run asserts the exact link kind; Windows still asserts
+    // that the member is not silently written outside the destination.
+    if (entry.kind === "symlink" && !symlinkFixturesSupported()) continue;
+    const actual = extracted.get(entryPath);
+    if (!actual) {
+      problems.push(`missing extracted ${entryPath}`);
+      continue;
+    }
+    if (entry.kind === "directory" && actual.kind !== "directory") {
+      problems.push(`${entryPath}: extracted as ${actual.kind}, expected directory`);
+    }
+    if (entry.kind === "symlink" && actual.kind !== "symlink") {
+      problems.push(`${entryPath}: extracted as ${actual.kind}, expected symlink`);
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(`${label}: indexed/extracted shape mismatch:\n  ${problems.join("\n  ")}`);
+  }
+}
+
+function mkdirForFile(filePath: string): void {
+  const directory = path.dirname(filePath);
+  if (!existsSync(directory)) {
+    // The parent is intentionally created through the same filesystem path
+    // used by the extraction request, so collision behavior is not masked.
+    mkdirSync(directory, { recursive: true });
+  }
 }

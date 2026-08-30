@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   assertEntriesAreExactly,
   assertEntriesPresent,
+  assertArchiveIndexTotals,
   closeArchiveIndex,
   collectAllEntries,
   detectArchiveFormat,
@@ -15,6 +16,7 @@ import {
 import {
   fixtureManifest,
   fixturePath,
+  assertFixtureIntegrity,
   fixtureSupportedOnPlatform,
   hasFixtureCorpus,
   makeTempDir,
@@ -35,21 +37,6 @@ import {
 const CORPUS_SWEEP_TIMEOUT_MS = 180_000;
 const MULTI_ARCHIVE_TIMEOUT_MS = 120_000;
 const SINGLE_ARCHIVE_TIMEOUT_MS = 60_000;
-
-/** Extension aliases that must resolve to one detected format. */
-const FORMAT_ALIASES: ReadonlyArray<{ format: string; filenames: readonly string[] }> = [
-  { format: "zip", filenames: ["basic.zip", "basic.zipx", "basic.jar", "basic.war", "basic.ipa", "basic.apk", "basic.appx", "basic.xpi", "basic.cbz", "basic.epub"] },
-  { format: "sevenZ", filenames: ["basic.7z", "basic.cb7", "basic.sevenz"] },
-  { format: "rar", filenames: ["basic.rar", "basic.cbr"] },
-  { format: "tar", filenames: ["basic.tar", "basic.cbt", "basic.pax", "basic.ustar"] },
-  { format: "tarGz", filenames: ["basic.tar.gz", "basic.tgz"] },
-  { format: "tarBz2", filenames: ["basic.tar.bz2", "basic.tbz2", "basic.tbz"] },
-  { format: "tarXz", filenames: ["basic.tar.xz", "basic.txz"] },
-  { format: "tarLzma", filenames: ["basic.tar.lzma", "basic.tlzma"] },
-  { format: "tarCompress", filenames: ["basic.tar.Z", "basic-lowercase.tar.z", "basic.taz"] },
-  { format: "tarZst", filenames: ["basic.tar.zst", "basic.tzst"] },
-  { format: "ar", filenames: ["basic.ar", "basic.a", "basic.lib"] },
-];
 
 /**
  * Formats carrying the complete shared payload tree, with the kind each is
@@ -88,10 +75,19 @@ if (!hasFixtureCorpus()) {
           const archivePath = fixturePath(fixture.filename);
           let session: string | null = null;
           try {
+            assertFixtureIntegrity(fixture);
             const { sessionId, snapshot } = await openArchiveIndex(archivePath);
             session = sessionId;
             if (snapshot.status !== "ready" && snapshot.status !== "empty") {
               failures.push(`${fixture.filename} (${fixture.format}) reached status ${snapshot.status}: ${snapshot.latestFailure?.code ?? "no failure recorded"}`);
+            } else {
+              const detected = await detectArchiveFormat(archivePath);
+              const expected = manifestFormatToDto(fixture.format);
+              if (detected !== expected || snapshot.format !== expected) {
+                failures.push(`${fixture.filename}: detected=${detected}, snapshot=${snapshot.format ?? "missing"}, expected=${expected}`);
+              }
+              const entries = await collectAllEntries(sessionId);
+              assertArchiveIndexTotals(fixture.filename, snapshot, entries);
             }
           } catch (error) {
             failures.push(`${fixture.filename} (${fixture.format}) threw: ${String(error)}`);
@@ -111,12 +107,12 @@ if (!hasFixtureCorpus()) {
       "detects one format across every spelling of its extension",
       async () => {
         const mismatches: string[] = [];
-        for (const { format, filenames } of FORMAT_ALIASES) {
-          for (const filename of filenames) {
-            const detected = await detectArchiveFormat(fixturePath(filename));
-            if (detected !== format) {
-              mismatches.push(`${filename} detected as ${detected}, expected ${format}`);
-            }
+        for (const fixture of fixtureManifest().filter(fixtureSupportedOnPlatform)) {
+          assertFixtureIntegrity(fixture);
+          const detected = await detectArchiveFormat(fixturePath(fixture.filename));
+          const expected = manifestFormatToDto(fixture.format);
+          if (detected !== expected) {
+            mismatches.push(`${fixture.filename} detected as ${detected}, expected ${expected}`);
           }
         }
 
@@ -154,6 +150,11 @@ if (!hasFixtureCorpus()) {
           const firstPage = await getArchiveChildren(sessionId, "payload", { limit: 2 });
           assert.ok(firstPage.entries.length <= 2, "limit must bound the page size");
           assert.ok(firstPage.childCount >= 4, `expected several children under payload, saw ${firstPage.childCount}`);
+          assert.deepEqual(
+            firstPage.entries.map((entry) => entry.path),
+            [...firstPage.entries].map((entry) => entry.path).sort((left, right) => left.localeCompare(right)),
+            "children must be naturally ordered by name",
+          );
 
           const paged = new Map(firstPage.entries.map((entry) => [entry.path, entry]));
           let cursor = firstPage.nextCursor ?? undefined;
@@ -163,6 +164,23 @@ if (!hasFixtureCorpus()) {
               paged.set(entry.path, entry);
             }
             cursor = page.nextCursor ?? undefined;
+          }
+
+          if (firstPage.nextCursor) {
+            const wrongParent = await invokeExpectingError("get_archive_children", {
+              request: { sessionId, parentPath: "payload/nested", cursor: firstPage.nextCursor, limit: 2 },
+            });
+            assert.equal(wrongParent.code, "invalid_request", "a cursor must be scoped to its parent");
+
+            const second = await openArchiveIndex(fixturePath("basic.tar.gz"));
+            try {
+              const wrongRevision = await invokeExpectingError("get_archive_children", {
+                request: { sessionId: second.sessionId, parentPath: "payload", cursor: firstPage.nextCursor, limit: 2 },
+              });
+              assert.equal(wrongRevision.code, "invalid_request", "a cursor must be scoped to its session/revision");
+            } finally {
+              await closeArchiveIndex(second.sessionId);
+            }
           }
 
           assertEntriesPresent("basic.tar.gz paged children", paged, [
@@ -181,8 +199,8 @@ if (!hasFixtureCorpus()) {
       SINGLE_ARCHIVE_TIMEOUT_MS,
     );
 
-    it(
-      "surfaces the spanning file when opening a multi-volume RAR set",
+      it(
+        "surfaces the spanning file when opening a multi-volume RAR set",
       async () => {
         const { sessionId, snapshot } = await openArchiveIndex(fixturePath("rar5-multipart.part1.rar"));
         try {
@@ -205,17 +223,12 @@ if (!hasFixtureCorpus()) {
           const empty = await invokeExpectingError("start_archive_index", { request: { archivePath: "", password: null } });
           assert.equal(empty.code, "invalid_request", `empty path: ${empty.message}`);
 
-          // A path that does not exist reports `io_error`, not `not_found`:
-          // `not_found` is reserved for an entry missing *inside* an archive.
           const missing = await openExpectingFailure(fixturePath("definitely-not-here.zip"));
-          assert.equal(missing.code, "io_error", `missing archive: ${missing.message}`);
+          assert.equal(missing.code, "not_found", `missing archive: ${missing.message}`);
 
           // A real file that is not an archive: the corpus README is plain text.
           const notAnArchive = await openExpectingFailure(fixturePath("README.md"));
-          assert.ok(
-            ["unsupported_format", "operation_failed"].includes(notAnArchive.code),
-            `non-archive should be rejected as unsupported, got ${notAnArchive.code}: ${notAnArchive.message}`,
-          );
+          assert.equal(notAnArchive.code, "unsupported_format", `non-archive should be rejected as unsupported, got ${notAnArchive.code}: ${notAnArchive.message}`);
 
           // A directory passed where an archive file is expected.
           const temp = makeTempDir("dir-as-archive");
@@ -233,6 +246,29 @@ if (!hasFixtureCorpus()) {
       );
 
       it(
+        "fails a multi-volume RAR set when a middle volume is missing",
+        async () => {
+          const temp = makeTempDir("rar-missing-volume");
+          try {
+            for (const part of [1, 2, 3, 4]) {
+              const source = fixturePath(`rar5-multipart.part${part}.rar`);
+              const target = path.join(temp.dir, `rar5-multipart.part${part}.rar`);
+              copyFileSync(source, target);
+            }
+            unlinkSync(path.join(temp.dir, "rar5-multipart.part2.rar"));
+            const outcome = await openExpectingFailure(path.join(temp.dir, "rar5-multipart.part1.rar"));
+            assert.ok(
+              ["io_error", "operation_failed", "not_found"].includes(outcome.code),
+              `missing RAR volume should fail with a storage/archive error, got ${outcome.code}: ${outcome.message}`,
+            );
+          } finally {
+            temp.cleanup(false);
+          }
+        },
+        SINGLE_ARCHIVE_TIMEOUT_MS,
+      );
+
+      it(
         "reports an error when opening a truncated or header-corrupted archive",
         async () => {
           const temp = makeTempDir("corrupt-archive");
@@ -241,10 +277,7 @@ if (!hasFixtureCorpus()) {
             // Write invalid/truncated bytes
             writeFileSync(corruptZip, Buffer.from("PK\x03\x04corrupted_header_data_garbage"));
             const outcome = await openExpectingFailure(corruptZip);
-            assert.ok(
-              ["operation_failed", "unsupported_format", "io_error"].includes(outcome.code),
-              `corrupt archive should fail indexing, got ${outcome.code}: ${outcome.message}`,
-            );
+            assert.equal(outcome.code, "operation_failed", `corrupt archive should fail indexing, got ${outcome.code}: ${outcome.message}`);
           } finally {
             temp.cleanup(false);
           }
@@ -358,4 +391,47 @@ async function openExpectingFailure(archivePath: string, password?: string): Pro
       await closeArchiveIndex(sessionId);
     }
   }
+}
+
+function manifestFormatToDto(format: string): string {
+  const normalized = format.toUpperCase();
+  const mapping: Record<string, string> = {
+    ZIP: "zip",
+    "7Z": "sevenZ",
+    RAR: "rar",
+    TAR: "tar",
+    "TAR.GZ": "tarGz",
+    "TAR.BZ2": "tarBz2",
+    "TAR.XZ": "tarXz",
+    "TAR.LZMA": "tarLzma",
+    "TAR.LZ": "tarLz",
+    "TAR.LZO": "tarLzo",
+    "TAR.Z": "tarCompress",
+    "TAR.LZ4": "tarLz4",
+    "TAR.ZST": "tarZst",
+    CPIO: "cpio",
+    CAB: "cab",
+    LHA: "lha",
+    RPM: "rpm",
+    XAR: "xar",
+    WARC: "warc",
+    ISO: "iso",
+    DEB: "deb",
+    AR: "ar",
+    DMG: "dmg",
+    PKG: "pkg",
+    MSI: "msi",
+    VHD: "vhd",
+    VMDK: "vmdk",
+    UDF: "udf",
+    MTREE: "mtree",
+    TZAP: "tzap",
+    AAR: "appleArchive",
+    RAW: "rawStream",
+    "TAR.UU": "tarUu",
+    "TAR.B64": "tarUu",
+  };
+  const result = mapping[normalized];
+  if (!result) throw new Error(`no DTO mapping for fixture format ${format}`);
+  return result;
 }

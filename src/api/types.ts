@@ -276,6 +276,16 @@ export type ArchiveFormatKind =
   | "vhd"
   | "vmdk"
   | "udf"
+  | "squashfs"
+  | "appImage"
+  | "wim"
+  | "vdi"
+  | "nrg"
+  | "mdf"
+  | "cdi"
+  | "isz"
+  | "ccd"
+  | "cue"
   | "rawStream"
   | "unknown";
 

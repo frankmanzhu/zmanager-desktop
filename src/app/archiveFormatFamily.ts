@@ -48,7 +48,8 @@ export type ArchiveFormatFamily =
   | "vmdk"
   | "udf"
   | "dmg"
-  | "pkg";
+  | "pkg"
+  | "genericPackage";
 
 export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "zip",
@@ -95,6 +96,7 @@ export const ALL_ARCHIVE_FORMAT_FAMILIES: readonly ArchiveFormatFamily[] = [
   "udf",
   "dmg",
   "pkg",
+  "genericPackage",
 ];
 
 // ---------------------------------------------------------------------------
@@ -288,6 +290,17 @@ const FAMILY_REGISTRY: readonly FamilyEntry[] = [
     family: "pkg",
     physicalSuffixes: [".pkg"],
     displayLabelKey: "format.family.pkg",
+  },
+  {
+    // Formats exposed by the core as generic package/disk containers share
+    // the same conservative Extract metadata surface until a format-specific
+    // column contract exists.
+    family: "genericPackage",
+    physicalSuffixes: [
+      ".appimage", ".squashfs", ".sqfs", ".ccd", ".cdi", ".cue",
+      ".esd", ".img", ".isz", ".mdf", ".mds", ".nrg", ".swm", ".wim", ".vdi",
+    ],
+    displayLabelKey: "format.family.genericPackage",
   },
   // -- Raw stream formats (must follow compound families) --
   {

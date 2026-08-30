@@ -68,6 +68,19 @@ impl ArchiveIndexRegistry {
         if archive_path.is_empty() {
             return Err(CommandErrorDto::invalid_request("archivePath cannot be empty"));
         }
+        // Detecting a format is intentionally tolerant and maps a missing
+        // path to `Unknown`; that would otherwise make an absent archive look
+        // like a generic asynchronous I/O failure. Establish the command
+        // contract at the boundary while preserving the worker's handling of
+        // existing but unreadable paths.
+        if let Err(error) = std::fs::metadata(&archive_path)
+            && error.kind() == std::io::ErrorKind::NotFound
+        {
+            return Err(CommandErrorDto::not_found(
+                format!("could not find archive: {archive_path}"),
+                Some("Check that the archive path exists and is accessible.".to_string()),
+            ));
+        }
         let password = request.password.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
 
         let (session_id, snapshot, cancelled, index) = {
