@@ -597,6 +597,7 @@ dependencies = [
  "flate2",
  "lz4_flex 0.12.2",
  "no_std_io2",
+ "rayon",
  "solana-nohash-hasher",
  "thiserror 2.0.19",
  "tracing",
@@ -5302,12 +5303,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-lzxpress"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2f7b90d4fecd61a206fbe34d91919cba50673838d3442b4d24cc9ee93023f7f"
-
-[[package]]
 name = "rustc-hash"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8414,6 +8409,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
+name = "xpress-huffman"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ca9e40826ae2b2be66854381e4f5d4745aed3c295d7977ccfe8f405bc992b8f"
+
+[[package]]
 name = "xts-mode"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8757,7 +8758,6 @@ dependencies = [
  "lz4_flex 0.14.0",
  "lzma-rust2",
  "lzo",
- "lzxd",
  "memchr",
  "msi",
  "mtree",
@@ -8765,11 +8765,11 @@ dependencies = [
  "openssl",
  "rand",
  "rayon",
- "rust-lzxpress",
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
  "sevenz-rust2",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "tar",
  "time",
@@ -8782,6 +8782,7 @@ dependencies = [
  "zip",
  "zmanager-apple-archive",
  "zmanager-unrar",
+ "zmanager-wim",
  "zstd",
 ]
 
@@ -8862,6 +8863,15 @@ version = "2.1.2"
 dependencies = [
  "cc",
  "zeroize",
+]
+
+[[package]]
+name = "zmanager-wim"
+version = "2.1.2"
+dependencies = [
+ "hex",
+ "sha1 0.10.7",
+ "xpress-huffman",
 ]
 
 [[package]]

@@ -53,8 +53,6 @@ ARCHIVE_SUFFIXES = (
     ".cue",
     ".deb",
     ".dmg",
-    ".esd",
-    ".img",
     ".ipa",
     ".iso",
     ".isz",
