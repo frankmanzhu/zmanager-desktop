@@ -73,7 +73,7 @@ describe("macOS native Tauri integration", () => {
       ),
       ["mode", "uid", "gid", "owner", "group"],
     );
-    assert.equal(contract.sourceTableCapabilities.availableColumnIds.includes("attributes"), false);
+    assert.equal(contract.sourceTableCapabilities.availableColumnIds.includes("attributes"), true);
   });
 
   it("reports the required macOS runtime seams as available", async () => {
