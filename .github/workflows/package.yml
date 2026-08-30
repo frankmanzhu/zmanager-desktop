@@ -177,8 +177,14 @@ jobs:
       - name: Run native Linux GUI tests
         shell: bash
         run: |
-          sudo apt-get install -y xvfb
-          xvfb-run -a npm run test:gui:linux
+          # openbox: without a window manager the X server has no EWMH support,
+          # so GTK window-state calls (minimize, maximize) silently do nothing.
+          sudo apt-get install -y xvfb openbox x11-utils
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          timeout 30 bash -c 'until xdpyinfo -display :99 >/dev/null 2>&1; do sleep 1; done'
+          openbox &
+          npm run test:gui:linux
 
       - name: Upload Debian artifacts
         uses: actions/upload-artifact@v6

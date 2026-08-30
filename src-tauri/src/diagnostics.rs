@@ -252,7 +252,10 @@ fn sanitize_name(value: String) -> String {
 
 fn is_sensitive_key(key: &str) -> bool {
     let normalized = normalized_key(key);
-    ["password", "passphrase", "secret", "credential", "privatekey", "token"].iter().any(|sensitive| normalized.contains(sensitive))
+    // "key" subsumes the narrower "privatekey"/"apikey" spellings, and "auth"
+    // catches bearer tokens arriving as `auth`/`authorization`. Over-redacting a
+    // diagnostic field is cheap; leaking a credential into a log file is not.
+    ["password", "passphrase", "secret", "credential", "key", "token", "auth"].iter().any(|sensitive| normalized.contains(sensitive))
 }
 
 fn is_path_key(key: &str) -> bool {
@@ -297,12 +300,16 @@ mod tests {
         let sanitized = sanitize_fields(fields([
             ("password", Value::String("do-not-write".to_string())),
             ("requestToken", Value::String("opaque-token".to_string())),
+            ("auth", Value::String("bearer-credential".to_string())),
+            ("key", Value::String("api-key-material".to_string())),
             ("archivePath", Value::String("C:/private/file.zip".to_string())),
             ("metadata", serde_json::json!({ "nested": true })),
         ]));
 
         assert_eq!(sanitized["password"], "[REDACTED]");
         assert_eq!(sanitized["requestToken"], "[REDACTED]");
+        assert_eq!(sanitized["auth"], "[REDACTED]");
+        assert_eq!(sanitized["key"], "[REDACTED]");
         assert_eq!(sanitized["archivePath"], "[REDACTED_PATH]");
         assert_eq!(sanitized["metadata"], "[UNSUPPORTED]");
         assert!(!serde_json::to_string(&sanitized).unwrap().contains("do-not-write"));

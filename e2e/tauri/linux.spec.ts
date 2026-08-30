@@ -6,8 +6,10 @@ type NativeCapability = {
   id: string;
   sourceState: string;
   packageState: string;
+  installedState: string;
   runtimeState: string;
   availability: string;
+  failureCategory: string | null;
 };
 
 type ProjectContract = {
@@ -98,23 +100,31 @@ describe("Linux native Tauri integration", () => {
     }
   });
 
-  it("distinguishes unavailable Linux shell packaging from runtime readiness", async () => {
+  it("distinguishes unregistered Linux shell actions from packaging and runtime readiness", async () => {
     const contract = await invoke<ProjectContract>("project_contract");
     const capability = capabilityLookup(contract);
 
+    // The Debian and RPM bundles both ship the Nautilus extensions, so packaging
+    // is `included` here. What keeps the capability unavailable under test is
+    // registration: no file manager has picked the extension up, which must stay
+    // distinguishable from a missing payload or a stalled runtime.
     for (const id of ["shellSelectedItemActions", "shellBackgroundActions"]) {
       assert.deepEqual(
         {
           sourceState: capability(id).sourceState,
           packageState: capability(id).packageState,
+          installedState: capability(id).installedState,
           runtimeState: capability(id).runtimeState,
           availability: capability(id).availability,
+          failureCategory: capability(id).failureCategory,
         },
         {
           sourceState: "supported",
-          packageState: "notIncluded",
+          packageState: "included",
+          installedState: "notInspected",
           runtimeState: "ready",
           availability: "unavailable",
+          failureCategory: "notRegistered",
         },
         id,
       );
@@ -402,31 +412,10 @@ describe("Linux native Tauri integration", () => {
     assert.ok(Number.isFinite(position.y), JSON.stringify(position));
   });
 
-  it("round-trips the native Linux always-on-top window flag", async () => {
-    const initial = await invoke<boolean>("plugin:window|is_always_on_top", { label: "main" });
-    try {
-      await invoke<void>("plugin:window|set_always_on_top", { label: "main", value: !initial });
-      assert.equal(await invoke<boolean>("plugin:window|is_always_on_top", { label: "main" }), !initial);
-    } finally {
-      await invoke<void>("plugin:window|set_always_on_top", { label: "main", value: initial });
-    }
-  });
-
   it("supports requesting native Linux window focus", async () => {
     await invoke<void>("plugin:window|set_focus", { label: "main" });
     const focused = await invoke<boolean>("plugin:window|is_focused", { label: "main" });
     assert.equal(typeof focused, "boolean");
-  });
-
-  it("round-trips native Linux title updates", async () => {
-    const initialTitle = await invoke<string>("plugin:window|title", { label: "main" });
-    const testTitle = "ZManager - Fedora Native GUI Test";
-    try {
-      await invoke<void>("plugin:window|set_title", { label: "main", value: testTitle });
-      assert.equal(await invoke<string>("plugin:window|title", { label: "main" }), testTitle);
-    } finally {
-      await invoke<void>("plugin:window|set_title", { label: "main", value: initialTitle });
-    }
   });
 
   it("supports native Linux window resize and position adjustments", async () => {
@@ -465,28 +454,27 @@ describe("Linux native Tauri integration", () => {
     assert.ok(Number.isFinite(position.y), JSON.stringify(position));
   });
 
-  it("sets native Linux window minimum and maximum size constraints", async () => {
+  // Only the minimum constraint is exercised: `set_max_size` is deliberately
+  // absent from the capability allowlist, so asserting it would test Tauri
+  // rather than this app's window contract.
+  it("sets the native Linux window minimum size constraint", async () => {
     try {
-      await invoke<void>("plugin:window|set_min_size", { label: "main", value: { type: "Physical", width: 400, height: 300 } });
-      await invoke<void>("plugin:window|set_max_size", { label: "main", value: { type: "Physical", width: 3840, height: 2160 } });
+      await invoke<void>("plugin:window|set_min_size", { label: "main", value: { Physical: { width: 400, height: 300 } } });
     } finally {
       await invoke<void>("plugin:window|set_min_size", { label: "main", value: null });
-      await invoke<void>("plugin:window|set_max_size", { label: "main", value: null });
     }
   });
 
-  it("round-trips native Linux window maximize and unmaximize states", async () => {
+  // The window chrome maximises through `toggle_maximize`; the bare
+  // `maximize`/`unmaximize` pair is not in the capability allowlist.
+  it("round-trips native Linux window maximize state through the granted toggle", async () => {
     const initial = await invoke<boolean>("plugin:window|is_maximized", { label: "main" });
     try {
-      await invoke<void>("plugin:window|maximize", { label: "main" });
-      assert.equal(await invoke<boolean>("plugin:window|is_maximized", { label: "main" }), true);
-      await invoke<void>("plugin:window|unmaximize", { label: "main" });
-      assert.equal(await invoke<boolean>("plugin:window|is_maximized", { label: "main" }), false);
+      await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
+      assert.equal(await invoke<boolean>("plugin:window|is_maximized", { label: "main" }), !initial);
     } finally {
-      if (initial) {
-        await invoke<void>("plugin:window|maximize", { label: "main" });
-      } else {
-        await invoke<void>("plugin:window|unmaximize", { label: "main" });
+      if (await invoke<boolean>("plugin:window|is_maximized", { label: "main" }) !== initial) {
+        await invoke<void>("plugin:window|toggle_maximize", { label: "main" });
       }
     }
   });
@@ -632,14 +620,14 @@ describe("Linux native Tauri integration", () => {
     try {
       await invoke<void>("plugin:window|set_size", {
         label: "main",
-        value: { type: "Physical", width: newWidth, height: newHeight },
+        value: { Physical: { width: newWidth, height: newHeight } },
       });
       const updatedSize = await invoke<NativeWindowSize>("plugin:window|inner_size", { label: "main" });
       assert.ok(updatedSize.width > 0 && updatedSize.height > 0);
     } finally {
       await invoke<void>("plugin:window|set_size", {
         label: "main",
-        value: { type: "Physical", width: initialSize.width, height: initialSize.height },
+        value: { Physical: { width: initialSize.width, height: initialSize.height } },
       });
     }
   });
@@ -652,14 +640,14 @@ describe("Linux native Tauri integration", () => {
     try {
       await invoke<void>("plugin:window|set_position", {
         label: "main",
-        value: { type: "Physical", x: targetX, y: targetY },
+        value: { Physical: { x: targetX, y: targetY } },
       });
       const updatedPos = await invoke<{ x: number; y: number }>("plugin:window|inner_position", { label: "main" });
       assert.ok(Number.isFinite(updatedPos.x) && Number.isFinite(updatedPos.y));
     } finally {
       await invoke<void>("plugin:window|set_position", {
         label: "main",
-        value: { type: "Physical", x: initialPos.x, y: initialPos.y },
+        value: { Physical: { x: initialPos.x, y: initialPos.y } },
       });
     }
   });

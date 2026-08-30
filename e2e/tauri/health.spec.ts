@@ -36,6 +36,12 @@ describe("ZManager packaged application", () => {
   });
 
   it("keeps Preferences validation inline and restores menu focus after Escape", async () => {
+    // Where the native application menu drives the menus, the in-window menu bar
+    // is `display: none` and can never hold focus, so Escape returns focus to
+    // whatever was focused before the dialog instead of to the menu group.
+    const usesNativeMenuBar = await browser.execute(() =>
+      document.body.classList.contains("native-menu-bar"),
+    );
     const toolsMenu = await $('[data-menu-group-label="Tools"]');
     await toolsMenu.click();
     const optionsCommand = await $("#menu-command-options");
@@ -74,8 +80,11 @@ describe("ZManager packaged application", () => {
     });
     assert.ok(["SUMMARY", "BUTTON", "BODY"].includes(focusedElement.tagName));
     if (focusedElement.tagName === "BUTTON" || focusedElement.tagName === "SUMMARY") {
-      assert.equal(focusedElement.menuGroup, "Tools");
+      // Whatever takes focus back has to be something the user can actually see.
       assert.equal(focusedElement.visible, true);
+      if (!usesNativeMenuBar) {
+        assert.equal(focusedElement.menuGroup, "Tools");
+      }
     }
   });
 

@@ -217,7 +217,11 @@ if (!hasFixtureCorpus()) {
               { path: "payload/nested/readme-link.txt", kind: "symlink" as const, target: "../README.txt" },
               { path: "payload/unicode", kind: "directory" as const },
               { path: "payload/unicode/こんにちは.txt", kind: "file" as const, contents: "unicode path fixture\n" },
-            ].map((entry) => [entry.path, entry]),
+            ]
+              // Windows cannot materialise the link without elevation, so the
+              // extractor legitimately omits it there.
+              .filter((entry) => entry.kind !== "symlink" || symlinkFixturesSupported())
+              .map((entry) => [entry.path, entry]),
           );
 
           const differences = diffTrees(expected, extracted);
