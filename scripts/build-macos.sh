@@ -317,7 +317,7 @@ cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 bundle_root="$cargo_target_dir/$rust_triple/release/bundle"
 rm -rf "$bundle_root/macos"
 
-build_number=$(git rev-list --count HEAD)
+build_number="${ZMANAGER_BUILD_NUMBER:-$(git rev-list --count HEAD)}"
 os_label="MacOS"
 build_id="${os_label}-${architecture}-${build_number}"
 export ZMANAGER_BUILD_NUMBER="$build_number"

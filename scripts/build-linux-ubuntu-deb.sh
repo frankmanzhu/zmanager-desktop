@@ -305,7 +305,7 @@ fi
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
 rm -rf "$cargo_target_dir/release/bundle/deb"
 
-build_number=$(git rev-list --count HEAD 2>/dev/null || echo "${ZMANAGER_BUILD_NUMBER:-1}")
+build_number="${ZMANAGER_BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 architecture="$(uname -m)"
 os_label="Linux"
 build_id="${os_label}-${architecture}-${build_number}"

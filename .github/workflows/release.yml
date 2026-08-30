@@ -225,6 +225,11 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Bind release version
+        shell: bash
+        run: |
+          echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+
       - name: Prepare and build Windows package
         shell: pwsh
         # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
@@ -232,6 +237,7 @@ jobs:
         # below must mirror this location.
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
+          ZMANAGER_BUILD_NUMBER: ${{ env.ZMANAGER_RELEASE_BUILD_NUMBER }}
         run: |
           .\scripts\prepare-windows-static-build.ps1 `
             -Architecture ${{ matrix.arch }} `
@@ -290,8 +296,14 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: Bind release version
+        run: |
+          echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+
       - name: Build Debian package
         shell: bash
+        env:
+          ZMANAGER_BUILD_NUMBER: ${{ env.ZMANAGER_RELEASE_BUILD_NUMBER }}
         run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
 
       - name: Upload Debian artifacts
@@ -328,8 +340,14 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
+      - name: Bind release version
+        run: |
+          echo "ZMANAGER_RELEASE_BUILD_NUMBER=${{ github.run_number }}" >> "$GITHUB_ENV"
+
       - name: Build RPM package
         shell: bash
+        env:
+          ZMANAGER_BUILD_NUMBER: ${{ env.ZMANAGER_RELEASE_BUILD_NUMBER }}
         run: scripts/build-linux-fedora-rpm.sh --install-deps --no-install
 
       - name: Upload RPM artifacts

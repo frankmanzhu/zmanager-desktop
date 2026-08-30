@@ -30,10 +30,19 @@ impl DiagnosticLogPolicy for LinuxPlatform {
 impl CapabilityInspector for LinuxPlatform {
     fn capability_observations()
     -> std::collections::HashMap<crate::native_integration::NativeCapabilityId, crate::native_integration::NativeCapabilityObservation> {
-        use crate::native_integration::{NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityRuntimeState};
+        use crate::native_integration::{NativeCapabilityId, NativeCapabilityObservation, NativeCapabilityPackageState, NativeCapabilityRuntimeState};
         [NativeCapabilityId::ShellSelectedItemActions, NativeCapabilityId::ShellBackgroundActions, NativeCapabilityId::SecureLocalFileProtection]
             .into_iter()
-            .map(|id| (id, NativeCapabilityObservation { runtime_state: Some(NativeCapabilityRuntimeState::Ready), ..NativeCapabilityObservation::default() }))
+            .map(|id| {
+                (
+                    id,
+                    NativeCapabilityObservation {
+                        package_state: Some(NativeCapabilityPackageState::Included),
+                        runtime_state: Some(NativeCapabilityRuntimeState::Ready),
+                        ..NativeCapabilityObservation::default()
+                    },
+                )
+            })
             .collect()
     }
 }
