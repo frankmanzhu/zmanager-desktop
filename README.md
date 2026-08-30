@@ -28,7 +28,8 @@ and download the installers from [GitHub Releases](https://github.com/frankmanzh
 
 ## What can I do with it?
 
-- Open and extract archives, packages, disk images, and compressed files.
+- Open and extract archives, packages, disk images, filesystem images, and
+  compressed files.
 - Create ZIP, TZST, TGZ, TZAP, 7z, and Apple Archive files.
 - Test an archive before extracting it.
 - Work from Finder, Explorer, or your Linux file manager.
@@ -93,10 +94,33 @@ encrypted RAR5 archives.
 `.cpio.xz`, `.cpio.lzma`, `.cpio.zst`, `.cpgz`, `.spk`, `.iso`, `.xar`,
 `.cab`, `.msi`, `.pkg`, `.lha`, `.lzh`, `.warc`, and `.mtree`.
 
-#### Disk images and Apple Archive
+#### Disk images and filesystems
 
-`.dmg` (Apple Disk Image), `.vhd` (Virtual PC/Hyper-V), `.vmdk` (VMware),
-`.udf` (optical), `.aar`, and encrypted `.aea` Apple Archives.
+`.dmg` (Apple Disk Image), `.vhd` (Virtual PC/Hyper-V), `.vmdk` (VMware), and
+`.vdi` (VirtualBox). Disk partitions and inner filesystems are resolved for
+supported images, including NTFS, FAT/exFAT, ext4, and UDF.
+
+`.squashfs` and `.sqfs` Linux filesystem images, plus type-2 `.appimage`
+files. SquashFS gzip, XZ, LZO, LZ4, and Zstandard blocks are supported, with
+Unix modes and modification times restored.
+
+#### Optical images
+
+`.iso` and `.udf` optical images, `.nrg` (Nero), `.mds`/`.mdf` (Alcohol 120%),
+`.cdi` (DiscJuggler), `.isz` (UltraISO Compressed ISO), `.ccd` with its `.img`
+companion (CloneCD), and `.cue` with its `.bin` companion (CUE/BIN). Raw
+2352/2448 and Mode 2 sectors are mapped to logical 2048-byte sectors.
+
+#### Windows imaging
+
+`.wim` images and `.swm` split sets support stored, XPRESS-Huffman, and WIM-LZX
+resources, multiple images, sibling-part resolution, and reparse-point
+symlinks. LZMS-compressed `.esd` distribution images are intentionally not
+supported.
+
+#### Apple Archive
+
+`.aar` and encrypted `.aea` Apple Archives on supported Apple platforms.
 
 </details>
 
