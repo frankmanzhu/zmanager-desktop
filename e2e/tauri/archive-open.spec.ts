@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { chmodSync, copyFileSync, unlinkSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   assertEntriesAreExactly,
@@ -15,6 +17,7 @@ import {
   fixturePath,
   fixtureSupportedOnPlatform,
   hasFixtureCorpus,
+  makeTempDir,
   missingCorpusReason,
   payloadTree,
 } from "./helpers/archiveFixtures.ts";
@@ -213,9 +216,62 @@ if (!hasFixtureCorpus()) {
             ["unsupported_format", "operation_failed"].includes(notAnArchive.code),
             `non-archive should be rejected as unsupported, got ${notAnArchive.code}: ${notAnArchive.message}`,
           );
+
+          // A directory passed where an archive file is expected.
+          const temp = makeTempDir("dir-as-archive");
+          try {
+            const dirOutcome = await openExpectingFailure(temp.dir);
+            assert.ok(
+              ["io_error", "invalid_request", "unsupported_format", "operation_failed"].includes(dirOutcome.code),
+              `directory passed as archive should be rejected, got ${dirOutcome.code}: ${dirOutcome.message}`,
+            );
+          } finally {
+            temp.cleanup(false);
+          }
         },
         SINGLE_ARCHIVE_TIMEOUT_MS,
       );
+
+      it(
+        "reports an error when opening a truncated or header-corrupted archive",
+        async () => {
+          const temp = makeTempDir("corrupt-archive");
+          try {
+            const corruptZip = path.join(temp.dir, "corrupt.zip");
+            // Write invalid/truncated bytes
+            writeFileSync(corruptZip, Buffer.from("PK\x03\x04corrupted_header_data_garbage"));
+            const outcome = await openExpectingFailure(corruptZip);
+            assert.ok(
+              ["operation_failed", "unsupported_format", "io_error"].includes(outcome.code),
+              `corrupt archive should fail indexing, got ${outcome.code}: ${outcome.message}`,
+            );
+          } finally {
+            temp.cleanup(false);
+          }
+        },
+        SINGLE_ARCHIVE_TIMEOUT_MS,
+      );
+
+      if (process.platform !== "win32") {
+        it(
+          "reports io_error when opening a file with unreadable permissions",
+          async () => {
+            const temp = makeTempDir("unreadable-archive");
+            const unreadable = path.join(temp.dir, "unreadable.tar.gz");
+            copyFileSync(fixturePath("basic.tar.gz"), unreadable);
+            chmodSync(unreadable, 0o000);
+            try {
+              const outcome = await openExpectingFailure(unreadable);
+              assert.equal(outcome.code, "io_error", `unreadable file should report io_error, got ${outcome.code}: ${outcome.message}`);
+            } finally {
+              chmodSync(unreadable, 0o644);
+              temp.cleanup(false);
+            }
+          },
+          SINGLE_ARCHIVE_TIMEOUT_MS,
+        );
+      }
+
 
       it(
         "requires the correct password for an encrypted archive",
