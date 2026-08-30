@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 
 import { closeArchiveIndex, collectAllEntries, openArchiveIndex, runJobExpectingSuccess } from "./helpers/archiveCommands.ts";
+import type { DiskEntry } from "./helpers/archiveFixtures.ts";
 import {
   diffTrees,
   fixturePath,
@@ -32,7 +33,7 @@ const EXTRACT_DEFAULTS = {
   entryPaths: null,
   stripComponents: 0,
   tzapRestorePolicy: "content",
-  tzapAllowDegraded: true,
+  tzapAllowDegraded: false,
   tzapAllowAbsoluteSymlinks: false,
   ignoreSymlinks: false,
 } as const;
@@ -45,21 +46,39 @@ const CREATE_DEFAULTS = {
 } as const;
 
 /**
- * Formats that both write and read the shared payload tree, with whether the
- * writer preserves symlinks.
+ * What a create format does with a symlink in the source tree, with
+ * `followSymlinks` left unset (the request default).
+ *
+ * `"preserved"` writes it back as a symlink. `"dropped"` omits the entry
+ * entirely — silent data loss from a user's point of view, so it is asserted
+ * explicitly rather than avoided.
+ *
+ * Every round trip puts a real symlink in its source tree and adjusts the
+ * expectation to match. Omitting the symlink from the source instead — the
+ * easier option — would mean a writer that changed its handling, in either
+ * direction, would go unnoticed.
+ */
+type SymlinkHandling = "preserved" | "dropped";
+
+/**
+ * Formats that both write and read the shared payload tree, and what each does
+ * with the symlink.
+ *
+ * These values record measured behaviour, not intent. Notably the committed
+ * `basic.7z` and `basic.tzap` fixtures carry the link as a regular *file*,
+ * because the CLI that generated them followed it; the application's create
+ * path drops it instead. Deliberately covering `followSymlinks: true` belongs
+ * with the rest of the create-option matrix.
  *
  * `appleArchive` is macOS-only and is added below at runtime rather than being
  * gated with a skip, so the list stays honest about what actually ran.
  */
-const ROUND_TRIP_FORMATS: ReadonlyArray<{ format: string; extension: string; preservesSymlinks: boolean }> = [
-  // The ZIP, 7z and TZAP v1 writers materialize a symlink as a regular file,
-  // so those round trips use a source tree without one — otherwise the
-  // comparison would be asserting a known, deliberate lossy conversion.
-  { format: "zip", extension: "zip", preservesSymlinks: false },
-  { format: "sevenZ", extension: "7z", preservesSymlinks: false },
-  { format: "tzap", extension: "tzap", preservesSymlinks: false },
-  { format: "tarGz", extension: "tar.gz", preservesSymlinks: true },
-  { format: "tarZst", extension: "tar.zst", preservesSymlinks: true },
+const ROUND_TRIP_FORMATS: ReadonlyArray<{ format: string; extension: string; symlinks: SymlinkHandling }> = [
+  { format: "zip", extension: "zip", symlinks: "preserved" },
+  { format: "sevenZ", extension: "7z", symlinks: "dropped" },
+  { format: "tzap", extension: "tzap", symlinks: "dropped" },
+  { format: "tarGz", extension: "tar.gz", symlinks: "preserved" },
+  { format: "tarZst", extension: "tar.zst", symlinks: "preserved" },
 ];
 
 /**
@@ -69,11 +88,37 @@ const ROUND_TRIP_FORMATS: ReadonlyArray<{ format: string; extension: string; pre
  * the source-tree builder or the tree reader would make every round trip pass
  * while proving nothing. Pinning the baseline makes that failure loud.
  */
-function assertPayloadBaseline(tree: Map<string, { kind: string }>, withSymlink: boolean): void {
-  for (const required of ["payload/README.txt", "payload/nested/file.txt", "payload/dir with spaces/file with spaces.txt", "payload/unicode/こんにちは.txt", "payload/nested/empty-dir"]) {
+function assertPayloadBaseline(tree: Map<string, DiskEntry>): void {
+  for (const required of [
+    "payload/README.txt",
+    "payload/nested/file.txt",
+    "payload/dir with spaces/file with spaces.txt",
+    "payload/unicode/こんにちは.txt",
+    "payload/nested/empty-dir",
+    "payload/nested/readme-link.txt",
+  ]) {
     assert.ok(tree.has(required), `source baseline is missing ${required}; saw ${JSON.stringify([...tree.keys()])}`);
   }
-  assert.equal(tree.has("payload/nested/readme-link.txt"), withSymlink, `source baseline symlink presence should be ${withSymlink}`);
+  assert.equal(tree.get("payload/nested/readme-link.txt")?.kind, "symlink", "source baseline should contain a real symlink");
+}
+
+/** Adjusts an expected tree for a writer that omits symlinks entirely. */
+function withSymlinksDropped(tree: Map<string, DiskEntry>): Map<string, DiskEntry> {
+  const adjusted = new Map(tree);
+  let removed = 0;
+  for (const [entryPath, entry] of tree) {
+    if (entry.kind === "symlink") {
+      adjusted.delete(entryPath);
+      removed += 1;
+    }
+  }
+  assert.ok(removed > 0, "expected the source tree to contain a symlink to drop");
+  return adjusted;
+}
+
+/** Builds the expected extracted tree for a format's symlink handling. */
+function expectedTreeFor(sourceTree: Map<string, DiskEntry>, symlinks: SymlinkHandling): Map<string, DiskEntry> {
+  return symlinks === "dropped" ? withSymlinksDropped(sourceTree) : sourceTree;
 }
 
 if (!hasFixtureCorpus()) {
@@ -201,10 +246,10 @@ if (!hasFixtureCorpus()) {
     describe("round trips", () => {
       const formats = [...ROUND_TRIP_FORMATS];
       if (process.platform === "darwin") {
-        formats.push({ format: "appleArchive", extension: "aar", preservesSymlinks: true });
+        formats.push({ format: "appleArchive", extension: "aar", symlinks: "preserved" });
       }
 
-      for (const { format, extension, preservesSymlinks } of formats) {
+      for (const { format, extension, symlinks } of formats) {
         it(
           `creates and reads back a ${format} archive without losing the payload tree`,
           async () => {
@@ -212,11 +257,12 @@ if (!hasFixtureCorpus()) {
             let failed = true;
             try {
               const source = path.join(temp.dir, "source");
-              const payload = writePayloadSourceTree(source, { withSymlink: preservesSymlinks });
-              const expected = readTree(source);
+              const payload = writePayloadSourceTree(source);
+              const sourceTree = readTree(source);
               // A tree comparison passes vacuously if both sides are empty, so
               // pin the baseline before relying on it.
-              assertPayloadBaseline(expected, preservesSymlinks);
+              assertPayloadBaseline(sourceTree);
+              const expected = expectedTreeFor(sourceTree, symlinks);
               const destination = path.join(temp.dir, `archive.${extension}`);
 
               await runJobExpectingSuccess("start_create", {
@@ -262,9 +308,12 @@ if (!hasFixtureCorpus()) {
           let failed = true;
           try {
             const source = path.join(temp.dir, "source");
-            const payload = writePayloadSourceTree(source, { withSymlink: false });
-            const expected = readTree(source);
-            assertPayloadBaseline(expected, false);
+            const payload = writePayloadSourceTree(source);
+            const sourceTree = readTree(source);
+            assertPayloadBaseline(sourceTree);
+            // The ZIP writer preserves symlinks, so the encrypted round trip
+            // expects the source tree unchanged.
+            const expected = expectedTreeFor(sourceTree, "preserved");
             const destination = path.join(temp.dir, "secret.zip");
             const password = "round-trip-password";
 
