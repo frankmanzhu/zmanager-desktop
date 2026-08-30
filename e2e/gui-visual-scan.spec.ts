@@ -23,21 +23,6 @@ type ArchiveFixture = {
   totalSize: number;
 };
 
-declare global {
-  interface Window {
-    __zmanagerDev?: {
-      loadArchiveFixture: (fixture: ArchiveFixture) => void;
-      setSystemIconFixtures: (fixtures: Record<string, string | null>) => void;
-      openSurface: (surface: "about" | "preferences" | "info") => void;
-      closeModal: () => void;
-    };
-    __TAURI_EVENT_PLUGIN_INTERNALS__?: {
-      unregisterListener: (event: string, id: number) => void;
-    };
-    __TAURI_INTERNALS__?: Record<string, unknown>;
-    isTauri?: boolean;
-  }
-}
 
 const auditDir = "docs/gui-audit";
 

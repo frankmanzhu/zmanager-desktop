@@ -83,7 +83,7 @@ describe("ZManager packaged application", () => {
     const dialog = await $('[role="dialog"][aria-labelledby="account-title"]');
     await dialog.waitForDisplayed();
 
-    const tabs = await dialog.$$('[role="tab"]');
+    const tabs = await dialog.$$('[role="tab"]').getElements();
     assert.ok(tabs.length >= 2);
     const contactsTab = tabs[tabs.length - 1];
     await contactsTab.click();
@@ -139,7 +139,7 @@ describe("ZManager packaged application", () => {
 
   it("recovers Preferences validation without leaving a stale error or disabled Save", async () => {
     const dialog = await openOptionsDialog();
-    const outputLocation = await $("#pref-output-location");
+    const outputLocation = await $("#pref-output-location").getElement();
 
     await chooseCustomOutputWithKeyboard(outputLocation);
     assert.equal(await $("#pref-custom-output").getAttribute("aria-invalid"), "true");
@@ -164,7 +164,7 @@ describe("ZManager packaged application", () => {
 
   it("keeps the native Preferences error surface inside the viewport", async () => {
     const dialog = await openOptionsDialog();
-    await chooseCustomOutputWithKeyboard(await $("#pref-output-location"));
+    await chooseCustomOutputWithKeyboard(await $("#pref-output-location").getElement());
 
     const layout = await browser.execute(() => {
       const surface = document.querySelector<HTMLElement>("[data-dialog-surface]");
@@ -206,7 +206,7 @@ describe("ZManager packaged application", () => {
     await dialog.waitForDisplayed();
     const diagnostics = await $("#about-diagnostics");
     assert.equal(await diagnostics.isDisplayed(), true);
-    assert.ok((await dialog.$$('[data-diagnostics-group]')).length >= 3);
+    assert.ok((await dialog.$$("[data-diagnostics-group]").getElements()).length >= 3);
 
     const layout = await browser.execute(() => {
       const surface = document.querySelector<HTMLElement>("[data-dialog-surface]");

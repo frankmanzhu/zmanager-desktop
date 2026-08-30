@@ -29,18 +29,6 @@ type QuickActionStubOptions = {
   nativeInboundEvents?: NativeInboundEvent[];
 };
 
-declare global {
-  interface Window {
-    __zmanagerE2E?: {
-      ipcCalls: IpcCall[];
-    };
-    __TAURI_EVENT_PLUGIN_INTERNALS__?: {
-      unregisterListener: (event: string, id: number) => void;
-    };
-    __TAURI_INTERNALS__?: Record<string, unknown>;
-    isTauri?: boolean;
-  }
-}
 
 const notRequestedState: QuickActionStartupState = {
   launchedForQuickAction: false,

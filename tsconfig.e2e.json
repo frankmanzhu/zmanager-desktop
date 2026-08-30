@@ -1,0 +1,15 @@
+{
+  // Playwright browser end-to-end tests.
+  //
+  // Playwright specs import `test`/`expect` explicitly rather than relying on
+  // globals, so this config deliberately provides no test globals: a spec that
+  // reaches for a WebdriverIO global such as `browser` must fail here. The
+  // native GUI specs under e2e/tauri live in tsconfig.gui.json instead, because
+  // they run under a different runner with a different ambient environment.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["e2e/*.spec.ts", "e2e/helpers/**/*.ts", "e2e/e2e-globals.d.ts"]
+}

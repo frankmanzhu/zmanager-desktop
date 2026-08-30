@@ -1,11 +1,25 @@
 import { resolve } from "node:path";
 
+import type { TauriCapabilities } from "@wdio/native-types";
+
 const appBinaryPath = process.env.ZMANAGER_GUI_APP_PATH ?? resolve(
   "src-tauri",
   "target",
   "debug",
   process.platform === "win32" ? "zmanager-desktop.exe" : "zmanager-desktop",
 );
+
+// Declared separately, and typed as TauriCapabilities, because `tauri:options`
+// is a vendor-prefixed capability that the Tauri service reads to resolve the
+// application binary. The standalone W3C capability type does not model it, so
+// writing this inline would trip excess-property checking.
+const tauriCapabilities: TauriCapabilities = {
+  browserName: "tauri",
+  "wdio:maxInstances": 1,
+  "tauri:options": {
+    application: appBinaryPath,
+  },
+};
 
 export const config: WebdriverIO.Config = {
   runner: "local",
@@ -19,13 +33,7 @@ export const config: WebdriverIO.Config = {
     driverProvider: "embedded",
     embeddedPort: 4445,
   }]],
-  capabilities: [{
-    browserName: "tauri",
-    "wdio:maxInstances": 1,
-    "tauri:options": {
-      application: appBinaryPath,
-    },
-  }],
+  capabilities: [tauriCapabilities],
   framework: "jasmine",
   reporters: ["spec"],
   jasmineOpts: {

@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run check:generated-contracts && tsc --noEmit && vite build",
+    "build": "npm run check:generated-contracts && npm run check:types && vite build",
+    "check:types": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.e2e.json && tsc --noEmit -p tsconfig.gui.json",
     "generate:archive-types": "npm run generate:contracts",
     "generate:contracts": "node scripts/generate-native-contracts.mjs",
     "generate:third-party-licenses": "python3 scripts/generate-third-party-notices.py",

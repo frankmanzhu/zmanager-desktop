@@ -1,0 +1,21 @@
+{
+  // Native GUI tests driven by WebdriverIO against the compiled Tauri binary.
+  //
+  // These rely on ambient globals rather than imports, from two sources:
+  //   - jasmine (`describe`, `it`, `pending`) — the framework set in wdio.conf.ts
+  //   - @wdio/globals (`browser`, `$`) and @wdio/native-types, which augments
+  //     WebdriverIO.Browser with the Tauri extension so `browser.tauri.execute`
+  //     is typed rather than `any`
+  //
+  // Kept separate from tsconfig.e2e.json so these globals are not visible to
+  // the Playwright specs, which run under a different runner.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "jasmine", "@wdio/globals/types", "@wdio/native-types"],
+    // Specs import each other with explicit .ts extensions (see all.spec.ts),
+    // which the WebdriverIO loader resolves directly.
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["e2e/tauri/**/*.ts", "wdio.conf.ts"]
+}

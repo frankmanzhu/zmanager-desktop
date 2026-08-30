@@ -1,0 +1,13 @@
+{
+  // Node-context tooling: the build/test config files at the repository root.
+  // These run under Node, not in the browser and not under a test runner, so
+  // they get Node types and no test globals.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  // wdio.conf.ts is covered by tsconfig.gui.json instead: it is typed against
+  // the WebdriverIO namespace, which only that config's types provide.
+  "include": ["vite.config.ts", "playwright.config.ts"]
+}

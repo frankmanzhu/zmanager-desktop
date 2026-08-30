@@ -22,22 +22,6 @@ type IpcCall = {
   args: Record<string, unknown>;
 };
 
-declare global {
-  interface Window {
-    __zmanagerDev?: {
-      loadArchiveFixture: (fixture: ArchiveFixture) => void;
-      setSystemIconFixtures?: (fixtures: Record<string, string | null>) => void;
-    };
-    __zmanagerE2E?: {
-      ipcCalls: IpcCall[];
-    };
-    __TAURI_EVENT_PLUGIN_INTERNALS__?: {
-      unregisterListener: (event: string, id: number) => void;
-    };
-    __TAURI_INTERNALS__?: Record<string, unknown>;
-    isTauri?: boolean;
-  }
-}
 
 const archiveFixture: ArchiveFixture = {
   archivePath: "C:/fixtures/drag-proof.zip",
