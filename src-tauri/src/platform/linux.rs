@@ -49,8 +49,35 @@ impl CapabilityInspector for LinuxPlatform {
 
 impl MainWindowConfigurator for LinuxPlatform {
     fn configure_main_window(window: &tauri::WebviewWindow<Wry>) -> Result<(), tauri::Error> {
+        install_lenient_x11_error_handler();
         window.set_decorations(false)
     }
+}
+
+/// GDK's default X11 error handler treats any unhandled error as fatal and
+/// aborts the process. Some window managers and X servers (observed with the
+/// Xvfb build on GitHub's Linux arm64 runners) reply BadImplementation to
+/// otherwise-benign property queries GDK issues for window-state round trips
+/// (resizable flag, position, min-size). Replacing the handler after GTK has
+/// opened the display keeps a single noncompliant X reply from crashing the
+/// whole app; the request that failed simply has no effect.
+fn install_lenient_x11_error_handler() {
+    use std::sync::Once;
+
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| unsafe {
+        x11::xlib::XSetErrorHandler(Some(log_and_ignore_x11_error));
+    });
+}
+
+unsafe extern "C" fn log_and_ignore_x11_error(_display: *mut x11::xlib::Display, event: *mut x11::xlib::XErrorEvent) -> std::os::raw::c_int {
+    if let Some(event) = unsafe { event.as_ref() } {
+        eprintln!(
+            "Ignoring X11 error from the display server (request {}, minor {}, error code {}) instead of aborting",
+            event.request_code, event.minor_code, event.error_code
+        );
+    }
+    0
 }
 
 impl SystemFileIconProvider for LinuxPlatform {

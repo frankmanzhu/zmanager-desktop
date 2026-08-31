@@ -8816,6 +8816,7 @@ dependencies = [
  "windows",
  "windows-core 0.61.2",
  "windows-sys 0.61.2",
+ "x11",
  "zmanager-core",
  "zmanager-localsend",
  "zmanager-shell-contract",

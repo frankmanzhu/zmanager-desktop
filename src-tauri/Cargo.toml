@@ -67,6 +67,7 @@ gio = "0.18.4"
 glib = "0.18.5"
 gtk = "0.18.2"
 keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
+x11 = { version = "2.21", features = ["xlib"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "4.1.6", default-features = false, features = ["v1"] }
