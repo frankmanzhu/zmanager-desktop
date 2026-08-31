@@ -298,8 +298,8 @@ scripts/ensure-sibling-repos.sh
 if ((!skip_tests)); then
   npm run test:frontend
   (cd src-tauri && cargo fmt --check)
-  (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
-  (cd src-tauri && cargo test)
+  (cd src-tauri && cargo clippy --release --all-targets --all-features -- -D warnings)
+  (cd src-tauri && cargo test --release)
 fi
 
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"

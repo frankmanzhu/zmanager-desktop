@@ -62,3 +62,23 @@ test("macOS artifact packaging reports and validates every post-build boundary",
   assert.match(build, /macOS ZIP was not created/);
   assert.match(build, /macOS DMG was not created/);
 });
+
+test("release packaging scripts validate Rust in the release profile", () => {
+  const scripts = [
+    "scripts/build-macos.sh",
+    "scripts/build-linux-ubuntu-deb.sh",
+    "scripts/build-linux-fedora-rpm.sh",
+  ];
+
+  for (const scriptPath of scripts) {
+    const script = readFileSync(resolve(root, scriptPath), "utf8");
+    assert.match(script, /cargo test --release\)/, `${scriptPath} must run release tests`);
+    if (!scriptPath.endsWith("build-macos.sh")) {
+      assert.match(
+        script,
+        /cargo clippy --release --all-targets --all-features/,
+        `${scriptPath} must run release clippy`,
+      );
+    }
+  }
+});

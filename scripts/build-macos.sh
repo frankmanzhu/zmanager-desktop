@@ -310,7 +310,9 @@ scripts/sync-uniffi-swift-bindings.sh
 
 if ((!skip_tests)); then
   npm run test:frontend
-  (cd src-tauri && cargo test)
+  # Keep packaging validation in the same profile as the artifact build. GUI
+  # tests remain explicitly debug-only in scripts/test-macos-gui.sh.
+  (cd src-tauri && cargo test --release)
 fi
 
 cargo_target_dir="${CARGO_TARGET_DIR:-$repo_root/src-tauri/target}"
