@@ -347,22 +347,62 @@ zip_artifact="$stage_dir/$artifact_base.zip"
 dmg_artifact="$stage_dir/$artifact_base.dmg"
 rm -rf "$staged_app"
 rm -f "$zip_artifact" "$dmg_artifact"
-ditto "$application" "$staged_app"
+
+report_packaging_state() {
+  echo "macOS packaging diagnostics:" >&2
+  df -h "$stage_dir" "$bundle_root" 2>/dev/null || true
+  for path in "$application" "$staged_app" "$zip_artifact" "$dmg_artifact"; do
+    if [[ -e "$path" ]]; then
+      du -sh "$path" 2>/dev/null || true
+    fi
+  done
+}
+
+run_packaging_step() {
+  local name="$1"
+  shift
+  echo "macOS packaging: ${name}"
+  if "$@"; then
+    echo "macOS packaging complete: ${name}"
+  else
+    local status=$?
+    echo "macOS packaging failed: ${name} (exit ${status})" >&2
+    report_packaging_state
+    return "$status"
+  fi
+}
+
+run_packaging_step "stage application" ditto "$application" "$staged_app"
+[[ -d "$staged_app/Contents" && -f "$staged_app/Contents/Info.plist" ]] || {
+  echo "Staged macOS application is incomplete: $staged_app" >&2
+  report_packaging_state
+  exit 1
+}
 
 create_zip() {
   rm -f "$zip_artifact"
-  ditto -c -k --sequesterRsrc --keepParent "$staged_app" "$zip_artifact"
+  run_packaging_step "create ZIP" ditto -c -k --sequesterRsrc --keepParent "$staged_app" "$zip_artifact"
+  [[ -s "$zip_artifact" ]] || {
+    echo "macOS ZIP was not created: $zip_artifact" >&2
+    report_packaging_state
+    exit 1
+  }
 }
 
 create_dmg() {
   local image_root="$stage_dir/.$artifact_base-dmg-root"
   rm -rf "$image_root"
   mkdir -p "$image_root"
-  ditto "$staged_app" "$image_root/ZManager.app"
+  run_packaging_step "stage application for DMG" ditto "$staged_app" "$image_root/ZManager.app"
   ln -s /Applications "$image_root/Applications"
-  hdiutil create -quiet -volname "ZManager" -srcfolder "$image_root" \
+  run_packaging_step "create DMG" hdiutil create -volname "ZManager" -srcfolder "$image_root" \
     -ov -format UDZO "$dmg_artifact"
   rm -rf "$image_root"
+  [[ -s "$dmg_artifact" ]] || {
+    echo "macOS DMG was not created: $dmg_artifact" >&2
+    report_packaging_state
+    exit 1
+  }
   if [[ ${ZMANAGER_CODESIGN_IDENTITY:--} != - ]]; then
     codesign --force --timestamp --sign "$ZMANAGER_CODESIGN_IDENTITY" "$dmg_artifact"
   fi

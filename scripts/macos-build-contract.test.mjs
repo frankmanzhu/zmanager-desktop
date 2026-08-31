@@ -50,3 +50,15 @@ test("macOS linkers include SystemConfiguration for system proxy support", () =>
     "UniFFI extension linkers must include SystemConfiguration",
   );
 });
+
+test("macOS artifact packaging reports and validates every post-build boundary", () => {
+  const build = readFileSync(resolve(root, "scripts/build-macos.sh"), "utf8");
+
+  assert.match(build, /run_packaging_step "stage application" ditto/);
+  assert.match(build, /run_packaging_step "create ZIP" ditto/);
+  assert.match(build, /run_packaging_step "stage application for DMG" ditto/);
+  assert.match(build, /run_packaging_step "create DMG" hdiutil/);
+  assert.match(build, /Staged macOS application is incomplete/);
+  assert.match(build, /macOS ZIP was not created/);
+  assert.match(build, /macOS DMG was not created/);
+});

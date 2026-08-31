@@ -403,23 +403,22 @@ export async function openTaskWindowForJob(started: StartedTaskJob): Promise<str
 }
 
 export async function closeTaskWindow(label: string): Promise<void> {
-  if ((await browser.tauri.listWindows()).includes(label)) {
-    await browser.tauri.switchWindow(label).catch(() => undefined);
-    const close = await $("button[aria-label='Close task']");
-    if (await close.isExisting()) {
-      await close.click().catch(() => undefined);
-      // A close request while a task is live opens a confirmation prompt. The
-      // helper is cleanup, so choose the explicit background path rather than
-      // leaving a hidden task window behind.
-      try {
-        const background = await $("button=Run in background");
-        if (await background.isExisting()) await background.click().catch(() => undefined);
-      } catch { /* terminal close may destroy the current webview immediately */ }
-    }
-  }
-  // Always perform window enumeration from the stable main webview. A
-  // terminal task can destroy its own webview synchronously during the click.
+  // Do not click the task's close button here. For a terminal task that click
+  // destroys the current webview synchronously; on Linux arm64 the embedded
+  // WebDriver can then lose its active webview and the next command receives
+  // ECONNREFUSED. Cleanup is not the close-button behavior under test, so
+  // destroy the task from the stable main webview instead. A destroyed task
+  // window leaves the job in the registry, which is the same background-work
+  // disposition needed by this helper.
   await browser.tauri.switchWindow("main").catch(() => undefined);
+  if ((await browser.tauri.listWindows()).includes(label)) {
+    await browser.tauri.execute(
+      async ({ core }, windowLabel: string) => {
+        await core.invoke("plugin:window|destroy", { label: windowLabel });
+      },
+      label,
+    ).catch(() => undefined);
+  }
   await browser.waitUntil(
     async () => !(await browser.tauri.listWindows()).includes(label),
     { timeout: 10_000, timeoutMsg: `task window ${label} did not close` },

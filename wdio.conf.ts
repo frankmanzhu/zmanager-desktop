@@ -32,6 +32,11 @@ export const config: WebdriverIO.Config = {
     appBinaryPath,
     driverProvider: "embedded",
     embeddedPort: 4445,
+    // Preserve the app's last backend messages in CI when the embedded
+    // server disappears. This is especially useful for native-arm failures,
+    // where the WebDriver connection otherwise only reports ECONNREFUSED.
+    captureBackendLogs: true,
+    backendLogLevel: "info",
     // The repository app may already be open while GUI tests run locally.
     // Debug-only test mode disables the normal macOS singleton registration
     // for this spawned process, without changing release behavior.
