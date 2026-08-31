@@ -8,10 +8,11 @@ install_deps=0
 skip_tests=0
 allow_non_baseline=0
 install_package=1
+deps_only=0
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests] [--allow-non-baseline] [--no-install]
+Usage: scripts/build-linux-ubuntu-deb.sh [--install-deps] [--skip-tests] [--allow-non-baseline] [--no-install] [--deps-only]
 
 Builds the Ubuntu/Debian .deb distribution package with Tauri, stages it under
 /tmp/zmanager-desktop-deb, and reinstalls the staged package through apt.
@@ -33,6 +34,8 @@ Options:
   --allow-non-baseline
                   Allow local/test builds outside Ubuntu 22.04 jammy (retained for compatibility).
   --no-install    Build and stage the .deb without reinstalling it.
+  --deps-only     Install prerequisites and sync sibling repos, then exit
+                   before running tests or building the package.
   -h, --help      Show this help.
 EOF
 }
@@ -50,6 +53,9 @@ while (($#)); do
       ;;
     --no-install)
       install_package=0
+      ;;
+    --deps-only)
+      deps_only=1
       ;;
     -h|--help)
       usage
@@ -294,6 +300,11 @@ if npm_install_required; then
 fi
 
 scripts/ensure-sibling-repos.sh
+
+if ((deps_only)); then
+  echo "Dependencies installed and sibling repos synced; skipping tests and build (--deps-only)."
+  exit 0
+fi
 
 if ((!skip_tests)); then
   npm run test:frontend

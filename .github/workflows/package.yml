@@ -15,19 +15,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos:
-    name: macOS ${{ matrix.arch }}
+  test:
+    name: Test ${{ matrix.flavor }} ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
+          - flavor: macos
+            arch: arm64
             runner: macos-15
-            artifact-name: zmanager-macos-arm64-ci
-          - arch: x86_64
+          - flavor: macos
+            arch: x86_64
             runner: macos-15-intel
-            artifact-name: zmanager-macos-x86_64-ci
+          - flavor: windows
+            arch: x64
+            runner: windows-2022
+          - flavor: windows
+            arch: arm64
+            runner: windows-11-arm
+          - flavor: linux-deb
+            arch: x64
+            runner: ubuntu-22.04
+          - flavor: linux-deb
+            arch: arm64
+            runner: ubuntu-22.04-arm
+          - flavor: linux-rpm
+            arch: x64
+            runner: ubuntu-22.04
+            container: fedora:latest
+          - flavor: linux-rpm
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            container: fedora:latest
 
     steps:
       - name: Checkout
@@ -39,7 +60,9 @@ jobs:
           node-version-file: .node-version
           cache: npm
 
-      - name: Install Rust target and frontend dependencies
+      # ---- macOS ----
+      - name: Install Rust target and frontend dependencies (macOS)
+        if: matrix.flavor == 'macos'
         run: |
           brew install cmake lz4 xz ripgrep
           rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
@@ -49,6 +72,7 @@ jobs:
           scripts/sync-uniffi-swift-bindings.sh
 
       - name: Run macOS migration, E2E visual scans, and contract tests
+        if: matrix.flavor == 'macos'
         run: |
           npm run test:frontend
           npm run test:architecture
@@ -60,7 +84,7 @@ jobs:
           swift test --package-path native/macos
 
       - name: Upload Playwright test results on failure
-        if: failure()
+        if: failure() && matrix.flavor == 'macos'
         uses: actions/upload-artifact@v6
         with:
           name: playwright-results-macos-${{ matrix.arch }}
@@ -69,9 +93,150 @@ jobs:
             docs/gui-audit/
 
       - name: Run native macOS GUI tests
+        if: matrix.flavor == 'macos'
         run: npm run test:gui:macos
 
+      # ---- Windows ----
+      - name: Prepare Windows build environment
+        if: matrix.flavor == 'windows'
+        shell: pwsh
+        run: |
+          .\scripts\prepare-windows-static-build.ps1 `
+            -Architecture ${{ matrix.arch }} `
+            -InstallMissing `
+            -InstallNodeModules
+
+      - name: Ensure sibling repositories
+        if: matrix.flavor == 'windows'
+        shell: pwsh
+        run: .\scripts\ensure-sibling-repos.ps1
+
+      - name: Run native Windows GUI tests
+        if: matrix.flavor == 'windows'
+        shell: pwsh
+        run: .\scripts\test-windows-gui.ps1 -Architecture ${{ matrix.arch }}
+
+      # ---- Linux DEB (Ubuntu) ----
+      - name: Install Ubuntu build dependencies
+        if: matrix.flavor == 'linux-deb'
+        shell: bash
+        run: scripts/build-linux-ubuntu-deb.sh --install-deps --deps-only
+
+      - name: Run Ubuntu frontend and Rust tests
+        if: matrix.flavor == 'linux-deb'
+        shell: bash
+        run: |
+          npm run test:frontend
+          (cd src-tauri && cargo fmt --check)
+          (cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings)
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Run native Linux GUI tests
+        if: matrix.flavor == 'linux-deb'
+        shell: bash
+        run: |
+          # openbox: without a window manager the X server has no EWMH support,
+          # so GTK window-state calls (minimize, maximize) silently do nothing.
+          sudo apt-get install -y xvfb openbox x11-utils
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          timeout 30 bash -c 'until xdpyinfo -display :99 >/dev/null 2>&1; do sleep 1; done'
+          openbox &
+          npm run test:gui:linux
+
+      - name: Upload Linux GUI diagnostics
+        if: always() && matrix.flavor == 'linux-deb'
+        uses: actions/upload-artifact@v6
+        with:
+          name: zmanager-linux-gui-diagnostics-${{ matrix.arch }}
+          if-no-files-found: ignore
+          path: |
+            src-tauri/target/debug/logs/
+            logs/
+            test-results/
+
+      # ---- Linux RPM (Fedora) ----
+      - name: Install Fedora prerequisites
+        if: matrix.flavor == 'linux-rpm'
+        shell: bash
+        run: |
+          dnf install -y python3 git ripgrep ca-certificates
+          npm ci
+          scripts/ensure-sibling-repos.sh
+
+      - name: Run Fedora packaging and architecture tests
+        if: matrix.flavor == 'linux-rpm'
+        shell: bash
+        run: |
+          scripts/test-linux-packaging-scripts.sh
+          npm run test:architecture
+
+  package:
+    name: Package ${{ matrix.flavor }} ${{ matrix.arch }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: macos
+            arch: arm64
+            runner: macos-15
+            artifact-name: zmanager-macos-arm64-ci
+          - flavor: macos
+            arch: x86_64
+            runner: macos-15-intel
+            artifact-name: zmanager-macos-x86_64-ci
+          - flavor: windows
+            arch: x64
+            runner: windows-2022
+            artifact-name: zmanager-windows-x64
+          - flavor: windows
+            arch: arm64
+            runner: windows-11-arm
+            artifact-name: zmanager-windows-arm64
+          - flavor: linux-deb
+            arch: x64
+            runner: ubuntu-22.04
+            artifact-name: zmanager-linux-x64-deb
+          - flavor: linux-deb
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            artifact-name: zmanager-linux-arm64-deb
+          - flavor: linux-rpm
+            arch: x64
+            runner: ubuntu-22.04
+            container: fedora:latest
+            artifact-name: zmanager-linux-x64-rpm
+          - flavor: linux-rpm
+            arch: arm64
+            runner: ubuntu-22.04-arm
+            container: fedora:latest
+            artifact-name: zmanager-linux-arm64-rpm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      # ---- macOS ----
+      - name: Install Rust target and frontend dependencies (macOS)
+        if: matrix.flavor == 'macos'
+        run: |
+          brew install cmake lz4 xz ripgrep
+          rustup target add "${{ matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          npm ci
+          scripts/ensure-sibling-repos.sh
+          scripts/sync-uniffi-swift-bindings.sh
+
       - name: Build and inspect ad-hoc release bundle
+        if: matrix.flavor == 'macos'
         env:
           ZMANAGER_BUILD_NUMBER: ${{ github.run_number }}
           ZMANAGER_MACOS_STAGE_DIR: /tmp/zmanager-macos-ci
@@ -84,6 +249,7 @@ jobs:
           scripts/test-release-gate-macos.sh "$app" "${{ matrix.arch }}"
 
       - name: Upload macOS inspection and test artifact
+        if: matrix.flavor == 'macos'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
@@ -95,7 +261,7 @@ jobs:
             /tmp/zmanager-macos-ci/inspection-*.json
 
       - name: Upload macOS packaging diagnostics
-        if: failure()
+        if: failure() && matrix.flavor == 'macos'
         uses: actions/upload-artifact@v6
         with:
           name: zmanager-macos-packaging-diagnostics-${{ matrix.arch }}
@@ -106,31 +272,9 @@ jobs:
             /tmp/zmanager-macos-ci/*.dmg
             /tmp/zmanager-macos-ci/.*-dmg-root/
 
-  windows:
-    name: Windows ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: windows-2022
-            artifact-name: zmanager-windows-x64
-          - arch: arm64
-            runner: windows-11-arm
-            artifact-name: zmanager-windows-arm64
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-
+      # ---- Windows ----
       - name: Prepare and build Windows package
+        if: matrix.flavor == 'windows'
         shell: pwsh
         # The Windows build scripts redirect cargo output to a short CARGO_TARGET_DIR
         # (avoids MAX_PATH issues with deeply nested target paths); the upload paths
@@ -144,13 +288,8 @@ jobs:
             -InstallNodeModules `
             -Build
 
-      - name: Run native Windows GUI tests
-        shell: pwsh
-        env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}\zmbuild
-        run: .\scripts\test-windows-gui.ps1 -Architecture ${{ matrix.arch }}
-
       - name: Upload Windows artifacts
+        if: matrix.flavor == 'windows'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
@@ -158,58 +297,14 @@ jobs:
           path: |
             ${{ runner.temp }}\zmbuild\*\release\bundle\nsis\*.exe
 
-  linux-deb:
-    name: Linux DEB ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: ubuntu-22.04
-            artifact-name: zmanager-linux-x64-deb
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-            artifact-name: zmanager-linux-arm64-deb
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-
+      # ---- Linux DEB (Ubuntu) ----
       - name: Build Debian package
+        if: matrix.flavor == 'linux-deb'
         shell: bash
-        run: scripts/build-linux-ubuntu-deb.sh --install-deps --no-install
-
-      - name: Run native Linux GUI tests
-        shell: bash
-        run: |
-          # openbox: without a window manager the X server has no EWMH support,
-          # so GTK window-state calls (minimize, maximize) silently do nothing.
-          sudo apt-get install -y xvfb openbox x11-utils
-          Xvfb :99 -screen 0 1920x1080x24 &
-          export DISPLAY=:99
-          timeout 30 bash -c 'until xdpyinfo -display :99 >/dev/null 2>&1; do sleep 1; done'
-          openbox &
-          npm run test:gui:linux
-
-      - name: Upload Linux GUI diagnostics
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: zmanager-linux-gui-diagnostics-${{ matrix.arch }}
-          if-no-files-found: ignore
-          path: |
-            src-tauri/target/debug/logs/
-            logs/
-            test-results/
+        run: scripts/build-linux-ubuntu-deb.sh --install-deps --skip-tests --no-install
 
       - name: Upload Debian artifacts
+        if: matrix.flavor == 'linux-deb'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
@@ -217,50 +312,22 @@ jobs:
           path: |
             /tmp/zmanager-desktop-deb/*.deb
 
-  linux-rpm:
-    name: Linux RPM ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    container:
-      image: fedora:latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: ubuntu-22.04
-            artifact-name: zmanager-linux-x64-rpm
-          - arch: arm64
-            runner: ubuntu-22.04-arm
-            artifact-name: zmanager-linux-arm64-rpm
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-
+      # ---- Linux RPM (Fedora) ----
       - name: Install Fedora prerequisites
+        if: matrix.flavor == 'linux-rpm'
         shell: bash
         run: |
           dnf install -y python3 git ripgrep ca-certificates
           npm ci
           scripts/ensure-sibling-repos.sh
 
-      - name: Run Fedora packaging and architecture tests
-        shell: bash
-        run: |
-          scripts/test-linux-packaging-scripts.sh
-          npm run test:architecture
-
       - name: Build RPM package
+        if: matrix.flavor == 'linux-rpm'
         shell: bash
-        run: scripts/build-linux-fedora-rpm.sh --install-deps --no-install
+        run: scripts/build-linux-fedora-rpm.sh --install-deps --skip-tests --no-install
 
       - name: Upload RPM artifacts
+        if: matrix.flavor == 'linux-rpm'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
