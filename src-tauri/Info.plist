@@ -4,5 +4,7 @@
 <dict>
     <key>NSRequiresAquaSystemAppearance</key>
     <false/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>ZManager uses your local network to discover and share archives with other devices on the same Wi-Fi or LAN via Share on LAN.</string>
 </dict>
 </plist>

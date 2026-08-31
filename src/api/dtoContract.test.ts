@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import rustDtoSource from "../../src-tauri/src/dto.rs?raw";
+import rustLocalsendSource from "../../src-tauri/src/localsend.rs?raw";
 import typeScriptApiTypesSource from "./types.ts?raw";
 
-const REQUEST_DTO_TYPES = [
+const rustSource = `${rustDtoSource}\n${rustLocalsendSource}`;
+
+// Most Rust request structs and their TypeScript counterparts share one
+// name; a bare string checks that. `localsend.rs` DTOs are suffixed `Dto`
+// on the Rust side (matching this codebase's other localsend_* commands)
+// but not on the TypeScript side, so those use the two-name form instead.
+const REQUEST_DTO_TYPES: readonly (string | Readonly<{ typeScriptName: string; rustName: string }>)[] = [
   "SystemFileIconRequest",
   "SystemFileIconRequestEntry",
   "ValidateDirectoryRequest",
@@ -20,13 +27,20 @@ const REQUEST_DTO_TYPES = [
   "PauseJobRequest",
   "ResumeJobRequest",
   "DismissJobRequest",
+  { typeScriptName: "LocalSendDiscoverRequest", rustName: "LocalSendDiscoverRequestDto" },
+  { typeScriptName: "LocalSendStartReceiverRequest", rustName: "LocalSendStartReceiverRequestDto" },
+  { typeScriptName: "LocalSendRespondToTransferRequest", rustName: "LocalSendRespondToTransferRequestDto" },
+  { typeScriptName: "LocalSendSendFileRequest", rustName: "LocalSendSendFileRequestDto" },
+  { typeScriptName: "LocalSendCancelSendRequest", rustName: "LocalSendCancelSendRequestDto" },
 ] as const;
 
 describe("Rust and TypeScript request DTO contracts", () => {
   it("keeps request DTO field names aligned", () => {
-    for (const typeName of REQUEST_DTO_TYPES) {
-      expect(typeScriptTypeFields(typeScriptApiTypesSource, typeName), typeName).toEqual(
-        rustStructFields(rustDtoSource, typeName),
+    for (const entry of REQUEST_DTO_TYPES) {
+      const typeScriptName = typeof entry === "string" ? entry : entry.typeScriptName;
+      const rustName = typeof entry === "string" ? entry : entry.rustName;
+      expect(typeScriptTypeFields(typeScriptApiTypesSource, typeScriptName), typeScriptName).toEqual(
+        rustStructFields(rustSource, rustName),
       );
     }
   });

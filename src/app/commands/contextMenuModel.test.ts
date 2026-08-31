@@ -26,9 +26,17 @@ describe("context menu model", () => {
       buildStartupContextMenuItems({ translator, canPastePath: true, recentArchiveHistory: ["C:/archives/demo.zip"] }),
       buildAddSourcesContextMenuItems(translator),
       buildArchiveFolderContextMenuItems({ translator, folderPath: "docs", entryPath: "docs", selectedCount: 1, hasArchive: true }),
+      buildArchiveFolderContextMenuItems({
+        translator,
+        folderPath: "",
+        selectedCount: 1,
+        hasArchive: true,
+        archivePath: "C:/archives/demo.zip",
+        localSendAvailable: true,
+      }),
       buildArchiveEntryContextMenuItems({ translator, entryPath: "docs/readme.txt", canOpenInside: false, canOpenOutside: true, selectedCount: 1, selectedEntryCount: 1, hasArchive: true }),
       buildArchiveHeaderContextMenuItems({ translator, tableColumnSettings: resetColumnSettings(), selectedColumnId: "size", archivePath: "archive.zip" }),
-      buildCompressRowContextMenuItems({ translator, rowPath: "src/app", folderPath: "src", sourcePath: "C:/work/source", contextRowCount: 1, removableSourceCount: 1, canInclude: true, canExclude: true, hasSources: true }),
+      buildCompressRowContextMenuItems({ translator, rowPath: "src/app", folderPath: "src", sourcePath: "C:/work/source", contextRowCount: 1, removableSourceCount: 1, canInclude: true, canExclude: true, hasSources: true, localSendAvailable: true }),
       buildSourceContextMenuItems({ translator, sourcePath: "C:/work/source" }),
     ];
     const emittedActions = new Set(menus.flatMap((items) => [
@@ -118,6 +126,95 @@ describe("context menu model", () => {
 
     expect(folderItems.filter((item) => item.payload.action === "open-folder")).toHaveLength(1);
     expect(selectedItems.find((item) => item.payload.action === "test")?.label).toBe("Test");
+  });
+
+  it("offers Share on LAN only on a background click of an open archive, gated on availability", () => {
+    const backgroundClick = actionItems(buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "",
+      selectedCount: 1,
+      hasArchive: true,
+      archivePath: "C:/archives/demo.zip",
+      localSendAvailable: true,
+    }));
+    expect(backgroundClick.find((item) => item.payload.action === "share-on-lan")?.payload).toEqual({
+      action: "share-on-lan",
+      archivePath: "C:/archives/demo.zip",
+    });
+
+    const folderEntryClick = actionItems(buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "docs",
+      entryPath: "docs",
+      selectedCount: 1,
+      hasArchive: true,
+      archivePath: "C:/archives/demo.zip",
+      localSendAvailable: true,
+    }));
+    expect(folderEntryClick.find((item) => item.payload.action === "share-on-lan")).toBeUndefined();
+
+    const capabilityUnavailable = actionItems(buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "",
+      selectedCount: 1,
+      hasArchive: true,
+      archivePath: "C:/archives/demo.zip",
+      localSendAvailable: false,
+    }));
+    expect(capabilityUnavailable.find((item) => item.payload.action === "share-on-lan")).toBeUndefined();
+
+    const noOpenArchive = actionItems(buildArchiveFolderContextMenuItems({
+      translator,
+      folderPath: "",
+      selectedCount: 1,
+      hasArchive: false,
+      archivePath: undefined,
+      localSendAvailable: true,
+    }));
+    expect(noOpenArchive.find((item) => item.payload.action === "share-on-lan")).toBeUndefined();
+  });
+
+  it("offers Compress and Share on LAN as a whole-list action, gated on sources and availability", () => {
+    const withSources = actionItems(buildCompressRowContextMenuItems({
+      translator,
+      rowPath: "src/app",
+      sourcePath: "C:/work/source",
+      contextRowCount: 1,
+      removableSourceCount: 1,
+      canInclude: true,
+      canExclude: true,
+      hasSources: true,
+      localSendAvailable: true,
+    }));
+    const withSourcesItem = withSources.find((item) => item.payload.action === "compress-share-on-lan");
+    expect(withSourcesItem?.payload).toEqual({ action: "compress-share-on-lan" });
+    expect(withSourcesItem?.disabled).toBeFalsy();
+
+    const noSources = actionItems(buildCompressRowContextMenuItems({
+      translator,
+      rowPath: "src/app",
+      sourcePath: "C:/work/source",
+      contextRowCount: 1,
+      removableSourceCount: 0,
+      canInclude: true,
+      canExclude: true,
+      hasSources: false,
+      localSendAvailable: true,
+    }));
+    expect(noSources.find((item) => item.payload.action === "compress-share-on-lan")?.disabled).toBe(true);
+
+    const capabilityUnavailable = actionItems(buildCompressRowContextMenuItems({
+      translator,
+      rowPath: "src/app",
+      sourcePath: "C:/work/source",
+      contextRowCount: 1,
+      removableSourceCount: 1,
+      canInclude: true,
+      canExclude: true,
+      hasSources: true,
+      localSendAvailable: false,
+    }));
+    expect(capabilityUnavailable.find((item) => item.payload.action === "compress-share-on-lan")).toBeUndefined();
   });
 
   it("builds archive header sort, visibility, and reset actions", () => {

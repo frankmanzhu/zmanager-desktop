@@ -66,6 +66,8 @@ import {
 import { createAccountController } from "../app/controllers/accountController";
 import { initializeDeepLinkAdapter } from "../desktop/deepLinkAdapter";
 import { createDefaultHandlerController } from "../app/controllers/defaultHandlerController";
+import { createLocalSendTrustController } from "../app/controllers/localSendTrustController";
+import { createLocalSendShareController } from "../app/controllers/localSendShareController";
 import {
   createNativeInboundController,
 } from "../app/controllers/nativeInboundController";
@@ -157,6 +159,7 @@ import {
   normalizeArchivePath,
 } from "../app/archiveTree";
 import {
+  createFormatSupportsPassword,
   getArchiveName,
   sourcePathForCreatePlanRow,
   type CreateArchiveFormat,
@@ -243,6 +246,7 @@ import {
   type ZManagerReactRuntimeAdapter,
   type ZManagerReactSnapshot,
 } from "../ui/react/appRuntime";
+import type { LocalSendIncomingTransferSnapshot } from "../app/controllers/localSendIncomingTransfer";
 import {
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
@@ -278,6 +282,10 @@ import {
   acceptAccountContactCard,
   removeAccountRecipientKey,
   setDefaultAccountSigningIdentity,
+  runLocalSendRespondToTransfer,
+  runLocalSendStartReceiver,
+  runLocalSendStopReceiver,
+  runLocalSendTrustDevice,
   runPlanCreate,
   runPreviewEntry,
   runStartCreate,
@@ -295,6 +303,7 @@ import type {
   DiagnosticLogInfoDto,
   HealthcheckResponse,
   ListArchiveRequest,
+  LocalSendEventDto,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -335,6 +344,9 @@ import {
 import { listenNativeInboundEvents } from "../desktop/nativeInboundEvents";
 import { listenNativeMenuCommands } from "../desktop/nativeMenu";
 import { defaultHandlerDesktopAdapter } from "../desktop/defaultHandlers";
+import { localSendTrustDesktopAdapter } from "../desktop/localSendTrust";
+import { localSendShareDesktopAdapter } from "../desktop/localSendShare";
+import { listenLocalSendEvents } from "../desktop/localSendEvents";
 import {
   listenNativeFileDragOutcomes,
   startNativeFileDrag,
@@ -803,6 +815,12 @@ const createStartController = createCreateStartController({
       },
     });
     recordCreateDestinationHistory(request.destinationPath);
+    if (pendingCompressAndShareOnLan) {
+      pendingCompressAndShareOnLan = false;
+      void awaitCreateJobThenShareOnLan(response.jobId).catch((error) => {
+        setOperationalStatus(unknownErrorMessage(error, "Unable to open Share on LAN for the compressed archive."));
+      });
+    }
   },
   toCommandError: asCommandError,
 });
@@ -1205,6 +1223,178 @@ const defaultHandlerController = createDefaultHandlerController({
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Unable to update macOS default handlers."),
 });
+
+const localSendTrustController = createLocalSendTrustController({
+  ...localSendTrustDesktopAdapter,
+  publish: publishReactSnapshot,
+  errorMessage: (error) => unknownErrorMessage(error, "Unable to update trusted LAN devices."),
+});
+
+const localSendShareController = createLocalSendShareController({
+  ...localSendShareDesktopAdapter,
+  publish: publishReactSnapshot,
+  errorMessage: (error) => unknownErrorMessage(error, "Unable to share on LAN."),
+  createSendId: () => crypto.randomUUID(),
+});
+
+function localSendAliasOrDefault(): string {
+  return appPreferences.lanShareAlias.trim() || "ZManager Desktop";
+}
+
+type LocalSendReceiverConfigKey = string | null;
+
+function localSendReceiverConfigKey(): LocalSendReceiverConfigKey {
+  if (!appPreferences.lanShareEnableReceiving) {
+    return null;
+  }
+  return JSON.stringify([
+    localSendAliasOrDefault(),
+    appPreferences.lanShareReceiveFolderPath,
+    appPreferences.lanShareAutoExtract,
+  ]);
+}
+
+let appliedLocalSendReceiverConfigKey: LocalSendReceiverConfigKey | undefined;
+
+/**
+ * Applies the current `lanShareEnableReceiving`/`lanShareAlias`/
+ * `lanShareReceiveFolderPath`/`lanShareAutoExtract` preferences to the
+ * running receiver. A no-op when none of those fields changed since the
+ * last call, so saving an unrelated preference (theme, sort order, ...)
+ * doesn't rebind the socket or interrupt an in-flight transfer. Otherwise
+ * stops first (a harmless no-op error if nothing was running) so the
+ * change takes effect immediately rather than only on the next app
+ * launch. Called once at startup and again every time preferences are
+ * saved.
+ */
+function syncLocalSendReceiverWithPreferences() {
+  if (!latestContract?.localSendAvailable) {
+    return;
+  }
+  const nextConfigKey = localSendReceiverConfigKey();
+  if (nextConfigKey === appliedLocalSendReceiverConfigKey) {
+    return;
+  }
+  appliedLocalSendReceiverConfigKey = nextConfigKey;
+  void runLocalSendStopReceiver()
+    .catch(() => {})
+    .then(() => {
+      if (!appPreferences.lanShareEnableReceiving) {
+        return;
+      }
+      return runLocalSendStartReceiver({
+        alias: localSendAliasOrDefault(),
+        receiveFolderPath: appPreferences.lanShareReceiveFolderPath,
+        autoExtract: appPreferences.lanShareAutoExtract,
+      }).catch((error) => {
+        // Let the next sync retry instead of treating this config as
+        // already applied.
+        appliedLocalSendReceiverConfigKey = undefined;
+        setOperationalStatus(unknownErrorMessage(error, "Unable to start LAN receiving."));
+      });
+    });
+}
+
+function openShareOnLanDialog(archivePath: string) {
+  localSendShareController.open(archivePath, localSendAliasOrDefault());
+  void localSendShareController.discover();
+}
+
+/**
+ * Set right before triggering a compress run that should open the Share on
+ * LAN dialog once the job succeeds, and always cleared once that run either
+ * starts a job (consumed inside `onCreateStarted`) or fails to (consumed by
+ * the `finally` in `startCompressAndShareOnLan`). A plain module flag is
+ * safe here because `createStartController`'s own submission guard already
+ * prevents a second compress run from overlapping this one.
+ */
+let pendingCompressAndShareOnLan = false;
+
+function startCompressAndShareOnLan() {
+  const format = createWorkspace.getSnapshot().options.format;
+  const defaults = createDefaultsForFormat(appPreferences, format);
+
+  let password = "";
+  if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
+    const promptedPassword = jobPasswordPrompts.promptForNewArchivePassword();
+    if (!promptedPassword) {
+      setOperationalMessage("shareOnLan.compressCancelled");
+      return;
+    }
+    password = promptedPassword;
+  }
+
+  pendingCompressAndShareOnLan = true;
+  void runCreate({ passwordInput: { password, passwordConfirm: password } }).finally(() => {
+    pendingCompressAndShareOnLan = false;
+  });
+}
+
+/**
+ * Waits for a specific create job to reach a terminal state and, on
+ * success, opens the Share on LAN dialog with its output archive. Runs
+ * alongside the normal job-handoff/disposable-task-window flow (which
+ * already shows compress progress) rather than replacing it.
+ */
+async function awaitCreateJobThenShareOnLan(jobId: string) {
+  let subscription: JobFeedSubscription | null = null;
+  let settled = false;
+  const finish = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    void subscription?.unsubscribe();
+  };
+  subscription = await jobFeed.subscribeJob(jobId, (jobSnapshot) => {
+    if (jobSnapshot.status === "completed") {
+      const archiveArtifact = jobSnapshot.outputArtifacts.find((artifact) => artifact.kind === "archive");
+      if (archiveArtifact) {
+        openShareOnLanDialog(archiveArtifact.path);
+      }
+      finish();
+    } else if (jobSnapshot.status === "failed" || jobSnapshot.status === "cancelled") {
+      finish();
+    }
+  });
+  if (settled) {
+    void subscription.unsubscribe();
+  }
+}
+
+let localSendIncomingTransfers: LocalSendIncomingTransferSnapshot[] = [];
+
+function handleLocalSendEvent(event: LocalSendEventDto) {
+  localSendShareController.handleEvent(event);
+  if (event.type === "transferRequest") {
+    // Reaching the frontend at all means the sender's fingerprint was not
+    // in the trust store — see handle_queued_event in src-tauri/src/localsend.rs,
+    // which auto-accepts trusted senders before this event is ever emitted.
+    localSendIncomingTransfers = [
+      ...localSendIncomingTransfers,
+      { requestId: event.requestId, sender: event.sender, files: event.files },
+    ];
+    publishReactSnapshot();
+  }
+}
+
+async function respondToLocalSendIncomingTransfer(
+  requestId: string,
+  decision: "accept" | "decline",
+  alwaysAccept: boolean,
+) {
+  const transfer = localSendIncomingTransfers.find((candidate) => candidate.requestId === requestId);
+  localSendIncomingTransfers = localSendIncomingTransfers.filter((candidate) => candidate.requestId !== requestId);
+  publishReactSnapshot();
+  try {
+    await runLocalSendRespondToTransfer({ requestId, decision });
+    if (decision === "accept" && alwaysAccept && transfer) {
+      await runLocalSendTrustDevice(transfer.sender.fingerprint);
+    }
+  } catch (error) {
+    setOperationalStatus(unknownErrorMessage(error, "Unable to respond to the LAN transfer request."));
+  }
+}
 
 function persistPreferencePatch(patch: AppPreferencePatch): AppPreferences {
   appPreferences = preferencesWithPatch(appPreferences, patch);
@@ -1891,6 +2081,10 @@ function isMacOsFromContract(): boolean {
   );
 }
 
+function isLocalSendAvailableFromContract(): boolean {
+  return latestContract?.localSendAvailable ?? false;
+}
+
 function createCurrentReactSnapshot(): ZManagerReactSnapshot {
   const archive = archiveWorkspace.getSnapshot();
   const commandClassState = currentCommandClassState(archive.command.hasArchive);
@@ -1898,6 +2092,9 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
   return createZManagerReactSnapshot({
     account: accountWorkspace.getSnapshot(),
     defaultHandlers: defaultHandlerController.getSnapshot(),
+    localSendTrustedDevices: localSendTrustController.getSnapshot(),
+    localSendShare: localSendShareController.getSnapshot(),
+    localSendIncomingTransfers,
     shell: shellWorkspace.getSnapshot(),
     archive,
     create: createWorkspace.getSnapshot(),
@@ -1921,6 +2118,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     runtime: {
       isDesktop: isDesktopRuntime(),
       isMacOs: isMacOsFromContract(),
+      isLocalSendAvailable: isLocalSendAvailableFromContract(),
     },
     dialog: reactDialogSnapshot,
   });
@@ -2035,6 +2233,33 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "preferencesChooseExtractOutput":
       void onSelectReactPreferenceExtractFolder();
+      break;
+    case "preferencesChooseLanShareReceiveFolder":
+      void onSelectReactPreferenceLanShareReceiveFolder();
+      break;
+    case "localSendTrustRefresh":
+      void localSendTrustController.refresh();
+      break;
+    case "localSendTrustForget":
+      void localSendTrustController.forget(intent.fingerprint);
+      break;
+    case "localSendShareClose":
+      localSendShareController.close();
+      break;
+    case "localSendShareDiscover":
+      void localSendShareController.discover();
+      break;
+    case "localSendShareSelectTarget":
+      localSendShareController.selectTarget(intent.fingerprint);
+      break;
+    case "localSendShareSend":
+      void localSendShareController.send();
+      break;
+    case "localSendShareCancelSend":
+      void localSendShareController.cancelSend();
+      break;
+    case "localSendIncomingRespond":
+      void respondToLocalSendIncomingTransfer(intent.requestId, intent.decision, intent.alwaysAccept);
       break;
     case "defaultHandlersRefresh":
       void defaultHandlerController.refresh();
@@ -2922,6 +3147,8 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
     entryPath,
     selectedCount: getSelectedEntryPaths().length,
     hasArchive: Boolean(archiveCurrentPath()),
+    archivePath: archiveCurrentPath() || undefined,
+    localSendAvailable: isLocalSendAvailableFromContract(),
   }));
 }
 
@@ -3003,6 +3230,7 @@ function showCompressRowContextMenuForPath(
     canInclude,
     canExclude,
     hasSources: snapshot.hasSources,
+    localSendAvailable: isLocalSendAvailableFromContract(),
   }));
 }
 
@@ -3031,6 +3259,14 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
   });
   if (routedContextCommand) {
     runRoutedCommand(routedContextCommand.commandId, routedContextCommand.payload);
+    return;
+  }
+  if (action === "share-on-lan" && archivePath) {
+    openShareOnLanDialog(archivePath);
+    return;
+  }
+  if (action === "compress-share-on-lan") {
+    startCompressAndShareOnLan();
     return;
   }
   if (action === "add-source-files") {
@@ -3390,6 +3626,7 @@ async function savePreferencesFromDialog() {
   }
   persistPreferencePatch(draft);
   preferencesDialogDraft = null;
+  syncLocalSendReceiverWithPreferences();
 
   // Save column visibility preferences if changed
   if (columnVisibilityDraft) {
@@ -3462,6 +3699,9 @@ function openPreferencesDialog() {
   ) {
     void defaultHandlerController.refresh();
   }
+  if (latestContract?.localSendAvailable) {
+    void localSendTrustController.refresh();
+  }
 }
 
 async function onSelectReactPreferenceOutputFolder() {
@@ -3490,6 +3730,18 @@ async function onSelectReactPreferenceExtractFolder() {
     return;
   }
   updateReactPreferencesDraft({ customExtractFolderPath: selected });
+}
+
+async function onSelectReactPreferenceLanShareReceiveFolder() {
+  const selected = await openNativeDialog({
+    title: displayContext.translator.t("nativeDialog.chooseDefaultOutput"),
+    directory: true,
+    multiple: false,
+  });
+  if (!selected || Array.isArray(selected)) {
+    return;
+  }
+  updateReactPreferencesDraft({ lanShareReceiveFolderPath: selected });
 }
 
 async function saveReactPreferencesDraft() {
@@ -3747,6 +3999,9 @@ async function initializeDesktopRuntime() {
       setOperationalStatus(unknownErrorMessage(error, "Unable to open the task output."));
     });
   });
+  await listenLocalSendEvents(({ payload }) => {
+    handleLocalSendEvent(payload);
+  });
   await listenNativeMenuCommands((commandId) => runRoutedCommand(commandId));
   await listenNativeFileDragOutcomes(({ payload }) => {
     const count = pendingNativeDragCounts.get(payload.sessionId) ?? 0;
@@ -3767,7 +4022,8 @@ async function initializeDesktopRuntime() {
     });
   });
   await startupController.initializeDesktopRuntime();
-  
+  syncLocalSendReceiverWithPreferences();
+
   initializeDeepLinkAdapter(accountController).catch(error => {
     console.error("Failed to initialize deep link adapter", error);
   });

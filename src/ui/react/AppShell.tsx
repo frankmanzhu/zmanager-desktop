@@ -22,6 +22,7 @@ import { ContextMenuRoot } from "./context-menu/ContextMenuRoot";
 import { CreatePasswordProvider } from "./create/CreatePasswordContext";
 import { CreateWorkspace } from "./create/CreateWorkspace";
 import { DialogRoot } from "./dialogs/DialogRoot";
+import { LocalSendIncomingTransferBanner } from "./dialogs/LocalSendIncomingTransferBanner";
 import { useBrowserFileDropHandlers } from "./interaction/BrowserFileDropAdapter";
 import { ShellInteractionProvider } from "./interaction/ShellInteractionContext";
 import { useShellKeyboardShortcutHandler } from "./interaction/ShellKeyboardShortcuts";
@@ -141,6 +142,7 @@ function AppShellSurface({
             <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
             <ContextMenuRoot />
             <DialogRoot />
+            <LocalSendIncomingTransferBanner />
             <AccountWorkspace />
           </AppFrame>
         </ExtractPasswordProvider>

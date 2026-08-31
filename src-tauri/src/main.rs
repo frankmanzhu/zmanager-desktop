@@ -12,6 +12,7 @@ mod error;
 mod hosted_transport;
 mod job_dto;
 mod job_registry;
+mod localsend;
 mod native_drag_session;
 mod native_integration;
 mod native_launch_inbox;
@@ -108,6 +109,8 @@ fn main() {
                     emitter_app.emit_to(window, native_launch_inbox::NATIVE_INBOUND_EVENT_NAME, event).map_err(|error| error.to_string())
                 }))
                 .map_err(|error| std::io::Error::other(format!("failed to attach native inbox emitter: {error:?}")))?;
+            let app_data_dir = app.path().app_data_dir().map_err(|error| std::io::Error::other(format!("failed to resolve app data dir: {error}")))?;
+            app.manage(localsend::LocalSendState::new(app_data_dir));
             if let Some(window) = app.get_webview_window("main") {
                 platform::configure_main_window(&window)?;
             }
@@ -181,16 +184,26 @@ fn main() {
             commands::cancel_job,
             commands::pause_job,
             commands::resume_job,
-            commands::dismiss_job
+            commands::dismiss_job,
+            localsend::localsend_discover,
+            localsend::localsend_send_file,
+            localsend::localsend_cancel_send,
+            localsend::localsend_respond_to_transfer,
+            localsend::localsend_start_receiver,
+            localsend::localsend_stop_receiver,
+            localsend::localsend_list_trusted_devices,
+            localsend::localsend_trust_device,
+            localsend::localsend_untrust_device
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ZManager desktop");
-    app.run(move |_app_handle, event| {
+    app.run(move |app_handle, event| {
         platform::handle_run_event(&event, &native_launch_inbox);
         if let tauri::RunEvent::Exit = event {
             let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
             exit_inbox.shutdown();
             native_drag_sessions.shutdown();
+            app_handle.state::<localsend::LocalSendState>().shutdown();
             platform::shutdown();
         }
     });

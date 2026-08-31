@@ -6,6 +6,7 @@ import {
   Monitor,
   ShieldCheck,
   Sparkles,
+  Wifi,
   X,
 } from "lucide-react";
 
@@ -47,7 +48,7 @@ import {
 } from "../../components/ui/field-message";
 
 type PreferencePage =
-  "folders" | "archive" | "columns" | "extraction" | "interface" | "safety" | "advanced";
+  "folders" | "archive" | "columns" | "extraction" | "interface" | "lanSharing" | "safety" | "advanced";
 type CreateFormat = AppPreferences["defaultArchiveFormat"];
 
 const FORMAT_LABELS: Record<CreateFormat, string> = {
@@ -65,6 +66,7 @@ const PAGE_ICONS: Record<PreferencePage, typeof FolderOpen> = {
   columns: Columns,
   extraction: Sparkles,
   interface: Monitor,
+  lanSharing: Wifi,
   safety: ShieldCheck,
   advanced: Sparkles, // reusing Sparkles or maybe Settings if imported, but let's use Sparkles for now
 };
@@ -98,6 +100,7 @@ const PAGES: readonly Readonly<{
   { id: "columns", labelKey: "preferences.columns.title" },
   { id: "extraction", labelKey: "preferences.extraction.title" },
   { id: "interface", labelKey: "preferences.interface.title" },
+  { id: "lanSharing", labelKey: "preferences.lanSharing.title" },
   { id: "safety", labelKey: "preferences.safety.title" },
   { id: "advanced", labelKey: "preferences.advanced.title" },
 ];
@@ -127,6 +130,11 @@ export function PreferencesDialog() {
   const customOutputSelected = draft.defaultOutputLocation === "customFolder";
   const customOutputMissing =
     customOutputSelected && !draft.customOutputFolderPath.trim();
+  const visiblePages = PAGES.filter(
+    (page) => page.id !== "lanSharing" || snapshot.runtime.isLocalSendAvailable,
+  );
+  const effectiveActivePage =
+    activePage === "lanSharing" && !snapshot.runtime.isLocalSendAvailable ? "folders" : activePage;
 
   return (
     <DesktopDialog
@@ -175,12 +183,12 @@ export function PreferencesDialog() {
             className="flex flex-col gap-1 border-r border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/45 max-md:flex-row max-md:overflow-x-auto max-md:border-b max-md:border-r-0"
             aria-label="Preference categories"
           >
-            {PAGES.map((page) => (
+            {visiblePages.map((page) => (
               <PreferenceNavigationButton
                 icon={PAGE_ICONS[page.id]}
                 type="button"
                 data-pref-page-target={page.id}
-                aria-selected={activePage === page.id}
+                aria-selected={effectiveActivePage === page.id}
                 onClick={() => setActivePage(page.id)}
                 key={page.id}
               >
@@ -192,28 +200,31 @@ export function PreferencesDialog() {
             <div className="mx-auto max-w-3xl">
               <FoldersPage
                 draft={draft}
-                active={activePage === "folders"}
+                active={effectiveActivePage === "folders"}
                 customOutputFocused={customOutputFocused}
                 customOutputMissing={customOutputMissing}
                 setCustomOutputFocused={setCustomOutputFocused}
               />
               <ArchiveDefaultsPage
                 draft={draft}
-                active={activePage === "archive"}
+                active={effectiveActivePage === "archive"}
                 selectedCreateFormat={selectedCreateFormat}
                 setSelectedCreateFormat={setSelectedCreateFormat}
               />
               <ExtractionPage
                 draft={draft}
-                active={activePage === "extraction"}
+                active={effectiveActivePage === "extraction"}
               />
               <InterfacePage
                 draft={draft}
-                active={activePage === "interface"}
+                active={effectiveActivePage === "interface"}
               />
+              {snapshot.runtime.isLocalSendAvailable ? (
+                <LanSharingPage draft={draft} active={effectiveActivePage === "lanSharing"} />
+              ) : null}
               <ColumnsPage
                 draft={draft}
-                active={activePage === "columns"}
+                active={effectiveActivePage === "columns"}
               />
               <SafetyPage draft={draft} active={activePage === "safety"} />
               <AdvancedPage draft={draft} active={activePage === "advanced"} />
@@ -1275,6 +1286,175 @@ function InterfacePage({
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LanSharingPage({
+  draft,
+  active,
+}: Readonly<{ draft: AppPreferences; active: boolean }>) {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const trustedDevices = snapshot.localSendTrustedDevices;
+
+  return (
+    <section
+      className={PREFERENCE_PAGE_CLASS}
+      data-pref-page="lanSharing"
+      hidden={!active}
+    >
+      <h3>{i18n.t("preferences.lanSharing.title")}</h3>
+      <p className={DESCRIPTION_CLASS}>
+        {i18n.t("preferences.lanSharing.description")}
+      </p>
+      <div className={SETTING_ROW_CLASS}>
+        <label htmlFor="pref-lan-share-alias">
+          {i18n.t("preferences.lanSharing.alias")}
+        </label>
+        <div className={SETTING_CONTROL_CLASS}>
+          <input
+            id="pref-lan-share-alias"
+            className="path-input"
+            type="text"
+            placeholder={i18n.t("preferences.lanSharing.aliasPlaceholder")}
+            value={draft.lanShareAlias}
+            onChange={(event) =>
+              actions.handleDialogIntent({
+                type: "preferencesPatch",
+                patch: { lanShareAlias: event.currentTarget.value },
+              })
+            }
+          />
+          <p className={SETTING_DESCRIPTION_CLASS}>
+            {i18n.t("preferences.lanSharing.aliasHelp")}
+          </p>
+        </div>
+      </div>
+      <div className={TOGGLE_GRID_CLASS}>
+        <PreferenceCheckbox
+          id="pref-lan-share-enable-receiving"
+          label={i18n.t("preferences.lanSharing.enableReceiving")}
+          tooltip={i18n.t("preferences.lanSharing.enableReceivingHelp")}
+          checked={draft.lanShareEnableReceiving}
+          onChange={(checked) =>
+            actions.handleDialogIntent({
+              type: "preferencesPatch",
+              patch: { lanShareEnableReceiving: checked },
+            })
+          }
+        />
+        <PreferenceCheckbox
+          id="pref-lan-share-auto-extract"
+          label={i18n.t("preferences.lanSharing.autoExtract")}
+          tooltip={i18n.t("preferences.lanSharing.autoExtractHelp")}
+          checked={draft.lanShareAutoExtract}
+          disabled={!draft.lanShareEnableReceiving}
+          onChange={(checked) =>
+            actions.handleDialogIntent({
+              type: "preferencesPatch",
+              patch: { lanShareAutoExtract: checked },
+            })
+          }
+        />
+      </div>
+      <div className={SETTING_ROW_CLASS}>
+        <label htmlFor="pref-lan-share-receive-folder">
+          {i18n.t("preferences.lanSharing.receiveFolder")}
+        </label>
+        <div className={SETTING_CONTROL_CLASS}>
+          <div className={INLINE_FIELD_CLASS}>
+            <input
+              id="pref-lan-share-receive-folder"
+              className="path-input"
+              type="text"
+              placeholder={i18n.t("preferences.lanSharing.receiveFolderPlaceholder")}
+              value={draft.lanShareReceiveFolderPath}
+              disabled={!draft.lanShareEnableReceiving}
+              onChange={(event) =>
+                actions.handleDialogIntent({
+                  type: "preferencesPatch",
+                  patch: { lanShareReceiveFolderPath: event.currentTarget.value },
+                })
+              }
+            />
+            <Button
+              id="pref-choose-lan-share-receive-folder"
+              type="button"
+              variant="dialog"
+              size="unset"
+              disabled={!draft.lanShareEnableReceiving}
+              onClick={() =>
+                actions.handleDialogIntent({
+                  type: "preferencesChooseLanShareReceiveFolder",
+                })
+              }
+            >
+              {i18n.t("common.browse")}
+            </Button>
+          </div>
+          <p className={SETTING_DESCRIPTION_CLASS}>
+            {i18n.t("preferences.lanSharing.receiveFolderHelp")}
+          </p>
+        </div>
+      </div>
+      <div className={SETTING_ROW_CLASS}>
+        <label>{i18n.t("preferences.lanSharing.trustedDevices")}</label>
+        <div className={SETTING_CONTROL_CLASS}>
+          <p className={SETTING_DESCRIPTION_CLASS}>
+            {i18n.t("preferences.lanSharing.trustedDevicesHelp")}
+          </p>
+          {trustedDevices.status === "error" ? (
+            <div className={SETTING_DESCRIPTION_CLASS}>
+              <p role="alert">
+                {trustedDevices.error ?? i18n.t("preferences.lanSharing.trustedDevicesLoadFailed")}
+              </p>
+              <Button
+                type="button"
+                variant="dialog"
+                size="unset"
+                onClick={() =>
+                  actions.handleDialogIntent({ type: "localSendTrustRefresh" })
+                }
+              >
+                {i18n.t("common.refresh")}
+              </Button>
+            </div>
+          ) : trustedDevices.status !== "loading" && trustedDevices.fingerprints.length === 0 ? (
+            <p className={SETTING_DESCRIPTION_CLASS}>
+              {i18n.t("preferences.lanSharing.trustedDevicesEmpty")}
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {trustedDevices.fingerprints.map((fingerprint) => (
+                <li
+                  key={fingerprint}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/70"
+                >
+                  <span className="min-w-0 truncate font-mono" title={fingerprint}>
+                    {fingerprint}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="dialog"
+                    size="unset"
+                    disabled={trustedDevices.status === "loading"}
+                    onClick={() =>
+                      actions.handleDialogIntent({
+                        type: "localSendTrustForget",
+                        fingerprint,
+                      })
+                    }
+                  >
+                    {i18n.t("common.remove")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </section>

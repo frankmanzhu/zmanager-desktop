@@ -181,6 +181,10 @@ describe("preferences helpers", () => {
       tableSortKey: "size",
       tableSortAscending: false,
       tzapEnvironment: "prod",
+      lanShareAlias: DEFAULT_APP_PREFERENCES.lanShareAlias,
+      lanShareEnableReceiving: DEFAULT_APP_PREFERENCES.lanShareEnableReceiving,
+      lanShareReceiveFolderPath: DEFAULT_APP_PREFERENCES.lanShareReceiveFolderPath,
+      lanShareAutoExtract: DEFAULT_APP_PREFERENCES.lanShareAutoExtract,
     });
   });
 
@@ -286,6 +290,9 @@ describe("preferences helpers", () => {
       "zmanager.tableSortKey": "size",
       "zmanager.tableSortAscending": "false",
       "zmanager.tzapEnvironment": "prod",
+      "zmanager.lanShareAlias": "",
+      "zmanager.lanShareEnableReceiving": "true",
+      "zmanager.lanShareAutoExtract": "true",
     });
   });
 
@@ -407,5 +414,48 @@ describe("preferences helpers", () => {
 
   it("declares locale storage through the tracked preference key map", () => {
     expect(PREFERENCE_KEYS.locale).toBe("zmanager.locale");
+  });
+
+  it("round-trips LAN Sharing preferences and trims the receive folder path", () => {
+    const storage = memoryStorage();
+
+    saveAppPreferences(
+      {
+        ...DEFAULT_APP_PREFERENCES,
+        lanShareAlias: "Frank's Desktop",
+        lanShareEnableReceiving: false,
+        lanShareReceiveFolderPath: "  /tmp/lan-received  ",
+        lanShareAutoExtract: false,
+      },
+      storage,
+    );
+
+    expect(storage.values.get(PREFERENCE_KEYS.lanShareAlias)).toBe("Frank's Desktop");
+    expect(storage.values.get(PREFERENCE_KEYS.lanShareEnableReceiving)).toBe("false");
+    expect(storage.values.get(PREFERENCE_KEYS.lanShareReceiveFolderPath)).toBe("/tmp/lan-received");
+    expect(storage.values.get(PREFERENCE_KEYS.lanShareAutoExtract)).toBe("false");
+
+    const loaded = loadAppPreferences(storage);
+    expect(loaded.lanShareAlias).toBe("Frank's Desktop");
+    expect(loaded.lanShareEnableReceiving).toBe(false);
+    expect(loaded.lanShareReceiveFolderPath).toBe("/tmp/lan-received");
+    expect(loaded.lanShareAutoExtract).toBe(false);
+  });
+
+  it("removes the LAN Sharing receive folder key when blank, like the other custom folder paths", () => {
+    const storage = memoryStorage({ [PREFERENCE_KEYS.lanShareReceiveFolderPath]: "/tmp/old-receive-folder" });
+
+    saveAppPreferences({ ...DEFAULT_APP_PREFERENCES, lanShareReceiveFolderPath: "   " }, storage);
+
+    expect(storage.values.has(PREFERENCE_KEYS.lanShareReceiveFolderPath)).toBe(false);
+    expect(loadAppPreferences(storage).lanShareReceiveFolderPath).toBe("");
+  });
+
+  it("trims the LAN Sharing receive folder path when patched", () => {
+    const preferences = preferencesWithPatch(DEFAULT_APP_PREFERENCES, {
+      lanShareReceiveFolderPath: "  /tmp/patched-lan-folder  ",
+    });
+
+    expect(preferences.lanShareReceiveFolderPath).toBe("/tmp/patched-lan-folder");
   });
 });

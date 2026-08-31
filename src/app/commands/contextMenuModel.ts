@@ -44,7 +44,9 @@ export const CONTEXT_MENU_ACTIONS = [
   "remove-source",
   "reset-columns",
   "reveal-source",
+  "compress-share-on-lan",
   "select-by-type",
+  "share-on-lan",
   "sort-ascending",
   "sort-descending",
   "test",
@@ -110,6 +112,8 @@ export type ArchiveFolderContextMenuInput = Readonly<{
   entryPath?: string;
   selectedCount: number;
   hasArchive: boolean;
+  archivePath?: string;
+  localSendAvailable?: boolean;
 }>;
 
 export type ArchiveEntryContextMenuInput = Readonly<{
@@ -147,6 +151,7 @@ export type CompressRowContextMenuInput = Readonly<{
   canInclude: boolean;
   canExclude: boolean;
   hasSources: boolean;
+  localSendAvailable?: boolean;
 }>;
 
 export type SourceContextMenuInput = Readonly<{
@@ -215,6 +220,19 @@ export function buildArchiveFolderContextMenuItems(input: ArchiveFolderContextMe
     }),
     actionItem(input.translator.t("command.properties"), entryPayload("info", input.entryPath)),
   );
+
+  // "Share on LAN" sends the whole open archive, so it only makes sense on a
+  // background click (no specific entry under the cursor) — a folder-entry
+  // click represents a location inside the archive, not the archive itself.
+  if (!input.entryPath && input.hasArchive && input.archivePath && input.localSendAvailable) {
+    items.push(
+      separatorItem(),
+      actionItem(input.translator.t("command.shareOnLan"), {
+        action: "share-on-lan",
+        archivePath: input.archivePath,
+      }),
+    );
+  }
 
   return items;
 }
@@ -383,6 +401,15 @@ export function buildCompressRowContextMenuItems(input: CompressRowContextMenuIn
   items.push(actionItem(input.translator.t("command.clearAllSources"), { action: "clear-sources" }, {
     disabled: !input.hasSources,
   }));
+
+  // Whole-list action, like "Clear all sources" above — compresses every
+  // currently staged source, then offers to share the result, mirroring
+  // "compress and email" in classic archive managers.
+  if (input.localSendAvailable) {
+    items.push(separatorItem(), actionItem(input.translator.t("command.compressShareOnLan"), { action: "compress-share-on-lan" }, {
+      disabled: !input.hasSources,
+    }));
+  }
 
   return items;
 }

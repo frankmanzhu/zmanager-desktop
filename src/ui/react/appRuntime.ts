@@ -57,6 +57,9 @@ import {
   type AccountWorkspaceSnapshot,
 } from "../../app/workspaces/accountWorkspace";
 import type { DefaultHandlerSnapshot } from "../../app/controllers/defaultHandlerController";
+import type { LocalSendTrustSnapshot } from "../../app/controllers/localSendTrustController";
+import type { LocalSendShareSnapshot } from "../../app/controllers/localSendShareController";
+import type { LocalSendIncomingTransferSnapshot } from "../../app/controllers/localSendIncomingTransfer";
 
 export type {
   ZManagerDialogAction,
@@ -80,6 +83,7 @@ export type ZManagerReactCommandSnapshot = Readonly<{
 export type ZManagerRuntimeSnapshot = Readonly<{
   isDesktop: boolean;
   isMacOs: boolean;
+  isLocalSendAvailable: boolean;
 }>;
 
 export type ZManagerContextMenuSnapshot =
@@ -98,6 +102,9 @@ export type ZManagerContextMenuActionPayload = ContextMenuActionPayload;
 export type ZManagerReactSnapshot = Readonly<{
   account: AccountWorkspaceSnapshot;
   defaultHandlers: DefaultHandlerSnapshot;
+  localSendTrustedDevices: LocalSendTrustSnapshot;
+  localSendShare: LocalSendShareSnapshot | null;
+  localSendIncomingTransfers: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -324,6 +331,20 @@ export type ZManagerDialogIntent =
     }>
   | Readonly<{ type: "preferencesChooseOutput" }>
   | Readonly<{ type: "preferencesChooseExtractOutput" }>
+  | Readonly<{ type: "preferencesChooseLanShareReceiveFolder" }>
+  | Readonly<{ type: "localSendTrustRefresh" }>
+  | Readonly<{ type: "localSendTrustForget"; fingerprint: string }>
+  | Readonly<{ type: "localSendShareClose" }>
+  | Readonly<{ type: "localSendShareDiscover" }>
+  | Readonly<{ type: "localSendShareSelectTarget"; fingerprint: string }>
+  | Readonly<{ type: "localSendShareSend" }>
+  | Readonly<{ type: "localSendShareCancelSend" }>
+  | Readonly<{
+      type: "localSendIncomingRespond";
+      requestId: string;
+      decision: "accept" | "decline";
+      alwaysAccept: boolean;
+    }>
   | Readonly<{ type: "defaultHandlersRefresh" }>
   | Readonly<{ type: "defaultHandlersSet" }>
   | Readonly<{ type: "defaultHandlersRestore" }>
@@ -413,6 +434,9 @@ export type ZManagerReactRuntimeAdapter = Readonly<{
 export type CreateZManagerReactSnapshotInput = Readonly<{
   account?: AccountWorkspaceSnapshot;
   defaultHandlers?: DefaultHandlerSnapshot;
+  localSendTrustedDevices?: LocalSendTrustSnapshot;
+  localSendShare?: LocalSendShareSnapshot | null;
+  localSendIncomingTransfers?: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
   create: CreateWorkspaceSnapshot;
@@ -473,6 +497,13 @@ export function createZManagerReactSnapshot(
       canRestore: false,
       error: null,
     },
+    localSendTrustedDevices: input.localSendTrustedDevices ?? {
+      status: "idle",
+      fingerprints: [],
+      error: null,
+    },
+    localSendShare: input.localSendShare ?? null,
+    localSendIncomingTransfers: [...(input.localSendIncomingTransfers ?? [])],
     shell: input.shell,
     archive: input.archive,
     create: input.create,
@@ -503,6 +534,7 @@ export function createZManagerReactSnapshot(
     runtime: {
       isDesktop: Boolean(input.runtime?.isDesktop),
       isMacOs: Boolean(input.runtime?.isMacOs),
+      isLocalSendAvailable: Boolean(input.runtime?.isLocalSendAvailable),
     },
     dialog: cloneDialogSnapshot(input.dialog ?? { kind: "none" }),
   });
@@ -542,7 +574,7 @@ export function createInitialZManagerReactSnapshot(): ZManagerReactSnapshot {
       secondaryCommandIds: ["refresh"],
     },
     contextMenu: { visible: false, id: 0 },
-    runtime: { isDesktop: false, isMacOs: false },
+    runtime: { isDesktop: false, isMacOs: false, isLocalSendAvailable: false },
     dialog: { kind: "none" },
   });
 }

@@ -84,6 +84,7 @@ pub fn project_contract() -> crate::dto::ProjectContract {
         core_dependency: constants::CORE_DEPENDENCY,
         platform_integration: ProjectIntegrationContract { platform: std::env::consts::OS, package_kind, capabilities },
         source_table_capabilities: SourceTableCapabilitiesDto { available_column_ids },
+        local_send_available: true,
     }
 }
 
@@ -706,7 +707,7 @@ pub(crate) fn start_extract_internal(request: StartExtractRequest, registry: &Jo
     })
 }
 
-fn start_extract_internal_with_recipient_key(
+pub(crate) fn start_extract_internal_with_recipient_key(
     request: StartExtractRequest,
     registry: &JobRegistry,
     recipient_private_key: Option<zmanager_core::secrets::SecretBytes>,

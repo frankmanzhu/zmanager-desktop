@@ -46,6 +46,16 @@ pub struct ProjectContract {
     pub core_dependency: &'static str,
     pub platform_integration: ProjectIntegrationContract,
     pub source_table_capabilities: SourceTableCapabilitiesDto,
+    /// Whether LAN sharing (LocalSend) commands are available in this build.
+    /// Not part of `platform_integration.capabilities` — that registry
+    /// models native OS shell-integration install/registration state
+    /// (Explorer/Finder/Nautilus context menus, file associations), which
+    /// LocalSend has nothing to do with; it's a plain runtime/network
+    /// feature. Always `true` today, since `zmanager-localsend` is an
+    /// unconditional dependency of this crate with no feature-flag split —
+    /// this field exists so the frontend never has to hardcode that
+    /// assumption if an offline desktop build variant is added later.
+    pub local_send_available: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

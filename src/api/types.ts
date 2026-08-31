@@ -28,6 +28,8 @@ export type ProjectContract = {
   sourceTableCapabilities: {
     availableColumnIds: string[];
   };
+  /** Optional for backward compatibility with existing test fixtures; always present on the real Rust response. */
+  localSendAvailable?: boolean;
 };
 
 export type SystemFileIconRequestEntry = {
@@ -727,3 +729,94 @@ export type JobStatus = "queued" | "running" | "paused" | "cancelling" | "comple
 
 export type BrowseState = "idle" | "loading" | "loaded" | "empty" | "error";
 export type CreateState = "idle" | "loading" | "ready" | "error";
+
+// ---------------------------------------------------------------------
+// LAN sharing (LocalSend) — mirrors src-tauri/src/localsend.rs's DTOs.
+// ---------------------------------------------------------------------
+
+export type LocalSendDeviceInfoDto = {
+  alias: string;
+  fingerprint: string;
+  port: number;
+  protocol: string;
+  ip: string | null;
+  deviceModel: string | null;
+};
+
+export type LocalSendTransferFileDto = {
+  id: string;
+  fileName: string;
+  size: number;
+  fileType: string;
+};
+
+export type LocalSendTransferDecision = "accept" | "acceptFiles" | "decline" | "refuse";
+
+export type LocalSendEventDto =
+  | Readonly<{ type: "peerRegistered"; device: LocalSendDeviceInfoDto }>
+  | Readonly<{ type: "transferRequest"; requestId: string; sender: LocalSendDeviceInfoDto; files: LocalSendTransferFileDto[] }>
+  | Readonly<{ type: "textReceived"; sessionId: string; text: string; senderAlias: string }>
+  | Readonly<{
+      type: "fileReceiveProgress";
+      sessionId: string;
+      fileId: string;
+      fileName: string;
+      senderAlias: string;
+      bytesReceived: number;
+      totalBytes: number;
+      fileCount: number;
+    }>
+  | Readonly<{ type: "fileReceived"; sessionId: string; fileId: string; fileName: string; path: string }>
+  | Readonly<{ type: "sessionDone"; sessionId: string }>
+  | Readonly<{
+      type: "fileSendProgress";
+      sendId: string;
+      sessionId: string;
+      fileId: string;
+      fileName: string;
+      bytesSent: number;
+      totalBytes: number;
+      rateBytesPerSecond: number;
+    }>;
+
+export type LocalSendDiscoverRequest = {
+  alias: string;
+  port?: number;
+  https?: boolean;
+  timeoutMs?: number;
+};
+
+export type LocalSendStartReceiverRequest = {
+  alias: string;
+  port?: number;
+  https?: boolean;
+  pin?: string | null;
+  receiveFolderPath: string;
+  autoExtract?: boolean;
+};
+
+export type LocalSendRespondToTransferRequest = {
+  requestId: string;
+  decision: LocalSendTransferDecision;
+  fileIds?: string[];
+  reason?: string | null;
+};
+
+export type LocalSendSendFileRequest = {
+  sendId: string;
+  alias: string;
+  selfPort?: number;
+  https?: boolean;
+  target: LocalSendDeviceInfoDto;
+  filePath: string;
+  pin?: string | null;
+};
+
+export type LocalSendSendFileResult = {
+  sessionId: string;
+  fileId: string;
+};
+
+export type LocalSendCancelSendRequest = {
+  sendId: string;
+};

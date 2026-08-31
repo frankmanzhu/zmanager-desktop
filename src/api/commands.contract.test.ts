@@ -326,6 +326,54 @@ const COMMAND_WRAPPERS = [
     request: { jobId: "job-1" },
     call: () => api.dismissJob({ jobId: "job-1" }),
   },
+  {
+    command: "localsend_discover",
+    request: { alias: "ZManager Desktop", timeoutMs: 3000 },
+    call: () => api.runLocalSendDiscover({ alias: "ZManager Desktop", timeoutMs: 3000 }),
+  },
+  {
+    command: "localsend_send_file",
+    request: {
+      sendId: "send-1",
+      alias: "ZManager Desktop",
+      target: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null },
+      filePath: "C:/output/archive.zip",
+    },
+    call: () =>
+      api.runLocalSendSendFile({
+        sendId: "send-1",
+        alias: "ZManager Desktop",
+        target: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null },
+        filePath: "C:/output/archive.zip",
+      }),
+  },
+  {
+    command: "localsend_cancel_send",
+    request: { sendId: "send-1" },
+    call: () => api.runLocalSendCancelSend({ sendId: "send-1" }),
+  },
+  {
+    command: "localsend_respond_to_transfer",
+    request: { requestId: "request-1", decision: "accept" },
+    call: () => api.runLocalSendRespondToTransfer({ requestId: "request-1", decision: "accept" }),
+  },
+  {
+    command: "localsend_start_receiver",
+    request: { alias: "ZManager Desktop", receiveFolderPath: "C:/receive" },
+    call: () => api.runLocalSendStartReceiver({ alias: "ZManager Desktop", receiveFolderPath: "C:/receive" }),
+  },
+  { command: "localsend_stop_receiver", call: () => api.runLocalSendStopReceiver() },
+  { command: "localsend_list_trusted_devices", call: () => api.runLocalSendListTrustedDevices() },
+  {
+    command: "localsend_trust_device",
+    args: { fingerprint: "fingerprint-1" },
+    call: () => api.runLocalSendTrustDevice("fingerprint-1"),
+  },
+  {
+    command: "localsend_untrust_device",
+    args: { fingerprint: "fingerprint-1" },
+    call: () => api.runLocalSendUntrustDevice("fingerprint-1"),
+  },
 ] as const;
 
 describe("Tauri command contracts", () => {
@@ -357,5 +405,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|migration)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|migration|localsend)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }

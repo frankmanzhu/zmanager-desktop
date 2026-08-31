@@ -33,7 +33,11 @@ export type PreferenceStorageKey =
   | "flatViewDefault"
   | "tableSortKey"
   | "tableSortAscending"
-  | "tzapEnvironment";
+  | "tzapEnvironment"
+  | "lanShareAlias"
+  | "lanShareEnableReceiving"
+  | "lanShareReceiveFolderPath"
+  | "lanShareAutoExtract";
 
 export const PREFERENCE_KEYS = {
   locale: "zmanager.locale",
@@ -65,6 +69,10 @@ export const PREFERENCE_KEYS = {
   tableSortKey: "zmanager.tableSortKey",
   tableSortAscending: "zmanager.tableSortAscending",
   tzapEnvironment: "zmanager.tzapEnvironment",
+  lanShareAlias: "zmanager.lanShareAlias",
+  lanShareEnableReceiving: "zmanager.lanShareEnableReceiving",
+  lanShareReceiveFolderPath: "zmanager.lanShareReceiveFolderPath",
+  lanShareAutoExtract: "zmanager.lanShareAutoExtract",
 };
 
 export function resolvePreferenceStorage(): PreferenceStorage | null {

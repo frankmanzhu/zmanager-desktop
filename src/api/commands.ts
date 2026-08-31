@@ -52,6 +52,13 @@ import type {
   ValidateTzapSigningIdentityResponse,
   DetectArchiveFormatRequest,
   DetectArchiveFormatResponse,
+  LocalSendCancelSendRequest,
+  LocalSendDeviceInfoDto,
+  LocalSendDiscoverRequest,
+  LocalSendRespondToTransferRequest,
+  LocalSendSendFileRequest,
+  LocalSendSendFileResult,
+  LocalSendStartReceiverRequest,
 } from "./types";
 
 export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
@@ -324,6 +331,42 @@ export async function dismissJob(request: DismissJobRequest): Promise<void> {
   return invoke<void>("dismiss_job", {
     request,
   });
+}
+
+export async function runLocalSendDiscover(request: LocalSendDiscoverRequest): Promise<LocalSendDeviceInfoDto[]> {
+  return invoke<LocalSendDeviceInfoDto[]>("localsend_discover", { request });
+}
+
+export async function runLocalSendSendFile(request: LocalSendSendFileRequest): Promise<LocalSendSendFileResult> {
+  return invoke<LocalSendSendFileResult>("localsend_send_file", { request });
+}
+
+export async function runLocalSendCancelSend(request: LocalSendCancelSendRequest): Promise<void> {
+  return invoke<void>("localsend_cancel_send", { request });
+}
+
+export async function runLocalSendRespondToTransfer(request: LocalSendRespondToTransferRequest): Promise<void> {
+  return invoke<void>("localsend_respond_to_transfer", { request });
+}
+
+export async function runLocalSendStartReceiver(request: LocalSendStartReceiverRequest): Promise<void> {
+  return invoke<void>("localsend_start_receiver", { request });
+}
+
+export async function runLocalSendStopReceiver(): Promise<void> {
+  return invoke<void>("localsend_stop_receiver");
+}
+
+export async function runLocalSendListTrustedDevices(): Promise<string[]> {
+  return invoke<string[]>("localsend_list_trusted_devices");
+}
+
+export async function runLocalSendTrustDevice(fingerprint: string): Promise<void> {
+  return invoke<void>("localsend_trust_device", { fingerprint });
+}
+
+export async function runLocalSendUntrustDevice(fingerprint: string): Promise<void> {
+  return invoke<void>("localsend_untrust_device", { fingerprint });
 }
 
 export function asCommandError(value: unknown): CommandErrorDto | null {

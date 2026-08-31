@@ -77,6 +77,10 @@ export type AppPreferences = {
   tableSortKey: ArchiveSortKey;
   tableSortAscending: boolean;
   tzapEnvironment: "prod" | "staging";
+  lanShareAlias: string;
+  lanShareEnableReceiving: boolean;
+  lanShareReceiveFolderPath: string;
+  lanShareAutoExtract: boolean;
 };
 
 export type AppPreferencePatch = Partial<AppPreferences>;
@@ -187,6 +191,10 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   tableSortKey: "name",
   tableSortAscending: true,
   tzapEnvironment: "prod",
+  lanShareAlias: "",
+  lanShareEnableReceiving: true,
+  lanShareReceiveFolderPath: "",
+  lanShareAutoExtract: true,
 };
 
 const ARCHIVE_FORMATS = ["zip", "tarZst", "tzap", "sevenZ", "tarGz", "appleArchive"] as const;
@@ -495,6 +503,16 @@ export function loadAppPreferences(storage = resolvePreferenceStorage()): AppPre
       DEFAULT_APP_PREFERENCES.tableSortAscending,
     ),
     tzapEnvironment: (storage.getItem(PREFERENCE_KEYS.tzapEnvironment) as "prod" | "staging") || DEFAULT_APP_PREFERENCES.tzapEnvironment,
+    lanShareAlias: storage.getItem(PREFERENCE_KEYS.lanShareAlias) ?? DEFAULT_APP_PREFERENCES.lanShareAlias,
+    lanShareEnableReceiving: storedBool(
+      storage.getItem(PREFERENCE_KEYS.lanShareEnableReceiving),
+      DEFAULT_APP_PREFERENCES.lanShareEnableReceiving,
+    ),
+    lanShareReceiveFolderPath: cleanPath(storage.getItem(PREFERENCE_KEYS.lanShareReceiveFolderPath)),
+    lanShareAutoExtract: storedBool(
+      storage.getItem(PREFERENCE_KEYS.lanShareAutoExtract),
+      DEFAULT_APP_PREFERENCES.lanShareAutoExtract,
+    ),
   };
 }
 
@@ -530,6 +548,9 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
   storage.setItem(PREFERENCE_KEYS.tableSortKey, preferences.tableSortKey);
   storage.setItem(PREFERENCE_KEYS.tableSortAscending, String(preferences.tableSortAscending));
   storage.setItem(PREFERENCE_KEYS.tzapEnvironment, preferences.tzapEnvironment);
+  storage.setItem(PREFERENCE_KEYS.lanShareAlias, preferences.lanShareAlias);
+  storage.setItem(PREFERENCE_KEYS.lanShareEnableReceiving, String(preferences.lanShareEnableReceiving));
+  storage.setItem(PREFERENCE_KEYS.lanShareAutoExtract, String(preferences.lanShareAutoExtract));
 
   const customOutputFolderPath = preferences.customOutputFolderPath.trim();
   if (customOutputFolderPath) {
@@ -542,6 +563,12 @@ export function saveAppPreferences(preferences: AppPreferences, storage = resolv
     storage.setItem(PREFERENCE_KEYS.customExtractFolderPath, customExtractFolderPath);
   } else {
     storage.removeItem(PREFERENCE_KEYS.customExtractFolderPath);
+  }
+  const lanShareReceiveFolderPath = preferences.lanShareReceiveFolderPath.trim();
+  if (lanShareReceiveFolderPath) {
+    storage.setItem(PREFERENCE_KEYS.lanShareReceiveFolderPath, lanShareReceiveFolderPath);
+  } else {
+    storage.removeItem(PREFERENCE_KEYS.lanShareReceiveFolderPath);
   }
 }
 
@@ -567,6 +594,10 @@ export function preferencesWithPatch(
       patch.customExtractFolderPath !== undefined
         ? patch.customExtractFolderPath.trim()
         : preferences.customExtractFolderPath,
+    lanShareReceiveFolderPath:
+      patch.lanShareReceiveFolderPath !== undefined
+        ? patch.lanShareReceiveFolderPath.trim()
+        : preferences.lanShareReceiveFolderPath,
     defaultTzapRestorePolicy: isOneOf(
       TZAP_RESTORE_POLICIES,
       patch.defaultTzapRestorePolicy ?? preferences.defaultTzapRestorePolicy,
