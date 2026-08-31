@@ -219,6 +219,13 @@ type ActivePlatform = linux::LinuxPlatform;
 #[cfg(target_os = "macos")]
 type ActivePlatform = macos::MacOsPlatform;
 
+/// Must run before any X11 display connection is opened. See
+/// [`linux::init_x11_threading`] for why.
+pub fn prepare_process() {
+    #[cfg(target_os = "linux")]
+    linux::init_x11_threading();
+}
+
 pub fn register_platform_services(builder: Builder<Wry>) -> Builder<Wry> {
     #[cfg(target_os = "macos")]
     {

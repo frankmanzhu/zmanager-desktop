@@ -22,6 +22,8 @@ mod secure_store;
 use tauri::{Emitter, Manager};
 
 fn main() {
+    platform::prepare_process();
+
     // --postinstall is used by build scripts and PKG postinstall to trigger
     // extension registration and App Group provisioning without showing UI.
     // This must be checked BEFORE any Tauri state initialization so the

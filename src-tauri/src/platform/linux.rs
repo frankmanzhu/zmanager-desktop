@@ -54,13 +54,30 @@ impl MainWindowConfigurator for LinuxPlatform {
     }
 }
 
+/// Xlib assumes single-threaded use of a display connection unless told
+/// otherwise. Tauri drives X11 from more than one thread (the GTK main loop
+/// alongside the WebKitGTK and embedded-WebDriver threads), so once an X
+/// error handler returns instead of aborting, a reply that was already in
+/// flight on another thread can land out of order. libX11's XCB layer
+/// treats that as unrecoverable and hard-aborts the process itself ("Unknown
+/// sequence number while processing queue... XInitThreads has not been
+/// called"), bypassing any error handler entirely. Must run before the X11
+/// display is opened, so this is called at process startup rather than from
+/// [`MainWindowConfigurator::configure_main_window`].
+pub(crate) fn init_x11_threading() {
+    unsafe {
+        x11::xlib::XInitThreads();
+    }
+}
+
 /// GDK's default X11 error handler treats any unhandled error as fatal and
 /// aborts the process. Some window managers and X servers (observed with the
-/// Xvfb build on GitHub's Linux arm64 runners) reply BadImplementation to
+/// Xvfb builds on GitHub's Linux runners) reply BadImplementation to
 /// otherwise-benign property queries GDK issues for window-state round trips
 /// (resizable flag, position, min-size). Replacing the handler after GTK has
 /// opened the display keeps a single noncompliant X reply from crashing the
-/// whole app; the request that failed simply has no effect.
+/// whole app; the request that failed simply has no effect. Safe to do this
+/// only because [`init_x11_threading`] has already run.
 fn install_lenient_x11_error_handler() {
     use std::sync::Once;
 
