@@ -1143,19 +1143,6 @@ function CreateOptions() {
   const i18n = translatorForSnapshot(snapshot);
   const options = snapshot.create.options;
 
-  const defaultRecipientKeyId = snapshot.account.recipientKeys.find(
-    (key) => key.lifecycle === "active",
-  )?.keyId ?? "";
-  useEffect(() => {
-    if (options.format !== "tzap") return;
-    if (!options.tzapRecipientKeyIds && defaultRecipientKeyId) {
-      actions.handleCreateIntent({
-        type: "setOptions",
-        patch: { tzapRecipientKeyIds: defaultRecipientKeyId },
-      });
-    }
-  }, [options.format, defaultRecipientKeyId]);
-
   useEffect(() => {
     if (options.format !== "tzap") return;
     const tzapDefaults = snapshot.preferences.createFormatDefaults.tzap;

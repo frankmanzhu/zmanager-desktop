@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { render } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_APP_PREFERENCES } from "../../../app/preferences";
 import { toggleCreateColumnVisibility } from "../../../app/createTableColumns";
@@ -21,6 +22,44 @@ import { CreateWorkspace } from "./CreateWorkspace";
 type CreatePlan = NonNullable<CreateWorkspaceSnapshot["plan"]["current"]>;
 
 describe("React create workspace", () => {
+  it("does not auto-select a local recipient for TZAP creation", () => {
+    const initial = createSnapshot("tzap");
+    const snapshot = createZManagerReactSnapshot({
+      ...initial,
+      account: {
+        ...initial.account,
+        recipientKeys: [
+          {
+            keyId: "recipient-local",
+            algorithm: "x25519",
+            publicKeyFingerprint: "sha256:recipient-local",
+            createdAtUnixSeconds: 1,
+            label: "This device",
+            lifecycle: "active",
+          },
+        ],
+      },
+    });
+    const handleCreateIntent = vi.fn();
+    const store = createZManagerAppStore(snapshot, {
+      ...noopZManagerReactActions,
+      handleCreateIntent,
+    });
+
+    render(
+      createElement(
+        ZManagerAppRuntimeProvider,
+        { store },
+        createElement(CreateWorkspace),
+      ),
+    );
+
+    expect(handleCreateIntent).not.toHaveBeenCalledWith({
+      type: "setOptions",
+      patch: { tzapRecipientKeyIds: "recipient-local" },
+    });
+  });
+
   it("centers the empty state without rendering a scrollable source table", () => {
     const initial = createInitialZManagerReactSnapshot();
     const html = renderCreateWorkspace({

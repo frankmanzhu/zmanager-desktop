@@ -1474,6 +1474,21 @@ describe("create workspace option and readiness state", () => {
 });
 
 describe("create workspace start request", () => {
+  it("leaves TZAP unencrypted when no recipient or password is selected", () => {
+    const workspace = readyWorkspace();
+    workspace.changeFormat("tzap", formatDefaults({}));
+    workspace.setDestinationPath("C:/out/unencrypted");
+
+    const result = workspace.buildStartCreateRequest();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("Expected start create request to be available");
+    }
+    expect(result.request.password).toBeUndefined();
+    expect(result.request.tzapCertificates).toBeUndefined();
+  });
+
   it("hydrates the persisted TZAP signing default while keeping no-signing explicit", () => {
     const workspace = readyWorkspace();
     const signed = workspace.changeFormat("tzap", formatDefaults({
