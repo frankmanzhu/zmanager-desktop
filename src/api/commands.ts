@@ -18,6 +18,7 @@ import type {
   CommandErrorDto,
   CreatePlanResponse,
   DefaultHandlerSnapshotDto,
+  DesktopJobSnapshotDto,
   DiagnosticEventRequest,
   DiagnosticLogInfoDto,
   DismissJobRequest,
@@ -298,6 +299,9 @@ export async function runTestArchive(request: TestArchiveRequest): Promise<Start
 
 export function subscribeJob(request: { jobId: string }, onSnapshot: Channel<JobSnapshotEnvelopeDto>): Promise<string> {
   return invoke<string>("subscribe_job", { request, onSnapshot });
+}
+export function getJobSnapshot(request: { jobId: string }): Promise<DesktopJobSnapshotDto> {
+  return invoke<DesktopJobSnapshotDto>("get_job_snapshot", { request });
 }
 export function subscribeJobCatalog(onSnapshot: Channel<JobCatalogEnvelopeDto>): Promise<string> {
   return invoke<string>("subscribe_job_catalog", { onSnapshot });

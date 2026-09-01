@@ -27,8 +27,8 @@ use crate::{
     },
     error::{CommandErrorDto, ErrorSeverityDto},
     job_dto::{
-        JobActionKindDto, JobArtifactKindDto, JobAvailableActionDto, JobCatalogEnvelopeDto, JobControlResponseDto, JobEventDto, JobEventKindDto, JobKindDto,
-        JobOutputArtifactDto, JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
+        DesktopJobSnapshotDto, JobActionKindDto, JobArtifactKindDto, JobAvailableActionDto, JobCatalogEnvelopeDto, JobControlResponseDto, JobEventDto,
+        JobEventKindDto, JobKindDto, JobOutputArtifactDto, JobRetryDescriptorDto, JobSnapshotEnvelopeDto, JobTerminalSummaryDto, StartJobResponseDto,
     },
     job_registry::{JobEventCollector, JobRegistry, forward_latest_values},
     native_launch_inbox::NativeLaunchInbox,
@@ -1302,6 +1302,19 @@ pub fn subscribe_job(
         registry.cleanup_subscription(&task_subscription_id);
     });
     Ok(subscription_id)
+}
+
+/// One-shot read of a Job's snapshot. Unlike `subscribe_job`, this does not
+/// open a live subscription or require the calling window to own the Job, so
+/// the Main Window can use it to read a single fact (e.g. output artifacts)
+/// about a Job it has already handed off to a task window.
+#[tauri::command]
+pub fn get_job_snapshot(request: SubscribeJobRequest, registry: State<'_, JobRegistry>) -> Result<DesktopJobSnapshotDto, CommandErrorDto> {
+    let job_id = request.job_id.trim();
+    if job_id.is_empty() {
+        return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
+    }
+    registry.current_job_snapshot(job_id).map(|snapshot| (*snapshot).clone()).ok_or_else(|| CommandErrorDto::invalid_request("job_not_found"))
 }
 
 #[tauri::command]

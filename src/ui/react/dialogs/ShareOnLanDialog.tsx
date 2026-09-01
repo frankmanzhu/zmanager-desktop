@@ -41,14 +41,12 @@ export function ShareOnLanDialog({
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 {i18n.t("shareOnLan.sendingTo", { device: selected?.alias ?? "" })}
               </p>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                <div
-                  className="h-full rounded-full bg-blue-600 transition-[width]"
-                  style={{
-                    width: share.totalBytes > 0 ? `${Math.min(100, Math.round((share.bytesSent / share.totalBytes) * 100))}%` : "8%",
-                  }}
-                />
-              </div>
+              <progress
+                className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+                aria-label="Share on LAN progress"
+                value={share.totalBytes > 0 ? Math.min(100, Math.round((share.bytesSent / share.totalBytes) * 100)) : undefined}
+                max={100}
+              />
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {share.totalBytes > 0
                   ? `${formatVolumeSize(share.bytesSent)} / ${formatVolumeSize(share.totalBytes)}`

@@ -330,7 +330,10 @@ impl JobRegistry {
         })
     }
 
-    #[cfg(test)]
+    /// One-shot read of a Job's current full snapshot, without opening a live
+    /// subscription. Lets a window that does not own the Job's subscription
+    /// (e.g. the Main Window, after handing a Job off to its task window)
+    /// read a single fact about it, such as its output artifacts.
     pub fn current_job_snapshot(&self, job_id: &str) -> Option<Arc<DesktopJobSnapshotDto>> {
         self.with_lock(|state| state.jobs.get(job_id).map(|record| record.snapshot_sender.borrow().clone()))
     }

@@ -52,6 +52,7 @@ fn main() {
         "test_archive",
         "detect_archive_format",
         "subscribe_job",
+        "get_job_snapshot",
         "subscribe_job_catalog",
         "ack_subscription",
         "unsubscribe_job",

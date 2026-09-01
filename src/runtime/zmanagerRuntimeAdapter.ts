@@ -264,6 +264,7 @@ import {
   fetchDiagnosticLogInfo,
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
+  getJobSnapshot,
   validateTzapSigningIdentity as validateTzapSigningIdentityCommand,
   generateAccountRecipientKey,
   generateAccountSigningIdentity,
@@ -302,6 +303,7 @@ import type {
   CreatePlanResponse,
   DiagnosticLogInfoDto,
   HealthcheckResponse,
+  JobStatus,
   ListArchiveRequest,
   LocalSendEventDto,
   ProjectContract,
@@ -838,10 +840,31 @@ const jobFeed = createTauriJobFeed({
 });
 let catalogSubscription: JobFeedSubscription | null = null;
 
+/**
+ * Lets code in the Main Window learn when a specific Job it started (and
+ * already handed off to a task window) reaches a terminal state, without
+ * opening its own per-Job subscription. Resolved from the Job catalog feed
+ * the Main Window already subscribes to below.
+ */
+const jobTerminationWatchers = new Map<string, (status: JobStatus) => void>();
+
+function awaitJobTermination(jobId: string): Promise<JobStatus> {
+  return new Promise((resolve) => {
+    jobTerminationWatchers.set(jobId, resolve);
+  });
+}
+
 async function subscribeToJobCatalog(): Promise<void> {
   if (catalogSubscription) return;
   catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
     processJobs.reconcileCatalog(catalog);
+    for (const job of catalog.jobs) {
+      if (!job.terminal) continue;
+      const watcher = jobTerminationWatchers.get(job.jobId);
+      if (!watcher) continue;
+      jobTerminationWatchers.delete(job.jobId);
+      watcher(job.status);
+    }
     maybeCloseQuickActionOnlyCoordinator();
   });
 }
@@ -1335,30 +1358,20 @@ function startCompressAndShareOnLan() {
  * success, opens the Share on LAN dialog with its output archive. Runs
  * alongside the normal job-handoff/disposable-task-window flow (which
  * already shows compress progress) rather than replacing it.
+ *
+ * Learns about termination from the Job catalog the Main Window already
+ * subscribes to, then reads the finished Job's snapshot once, rather than
+ * opening its own per-Job subscription (task windows own those).
  */
 async function awaitCreateJobThenShareOnLan(jobId: string) {
-  let subscription: JobFeedSubscription | null = null;
-  let settled = false;
-  const finish = () => {
-    if (settled) {
-      return;
-    }
-    settled = true;
-    void subscription?.unsubscribe();
-  };
-  subscription = await jobFeed.subscribeJob(jobId, (jobSnapshot) => {
-    if (jobSnapshot.status === "completed") {
-      const archiveArtifact = jobSnapshot.outputArtifacts.find((artifact) => artifact.kind === "archive");
-      if (archiveArtifact) {
-        openShareOnLanDialog(archiveArtifact.path);
-      }
-      finish();
-    } else if (jobSnapshot.status === "failed" || jobSnapshot.status === "cancelled") {
-      finish();
-    }
-  });
-  if (settled) {
-    void subscription.unsubscribe();
+  const status = await awaitJobTermination(jobId);
+  if (status !== "completed") {
+    return;
+  }
+  const jobSnapshot = await getJobSnapshot({ jobId });
+  const archiveArtifact = jobSnapshot.outputArtifacts.find((artifact) => artifact.kind === "archive");
+  if (archiveArtifact) {
+    openShareOnLanDialog(archiveArtifact.path);
   }
 }
 

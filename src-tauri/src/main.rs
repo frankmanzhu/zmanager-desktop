@@ -178,6 +178,7 @@ fn main() {
             commands::test_archive,
             commands::detect_archive_format,
             commands::subscribe_job,
+            commands::get_job_snapshot,
             commands::subscribe_job_catalog,
             commands::ack_subscription,
             commands::unsubscribe_job,

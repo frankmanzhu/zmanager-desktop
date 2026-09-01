@@ -303,6 +303,7 @@ const COMMAND_WRAPPERS = [
     call: () => api.detectArchiveFormat({ path: "C:/archives/demo.zip" }),
   },
   { command: "subscribe_job", args: { request: { jobId: "job-1" }, onSnapshot: null }, call: () => api.subscribeJob({ jobId: "job-1" }, null as never) },
+  { command: "get_job_snapshot", request: { jobId: "job-1" }, call: () => api.getJobSnapshot({ jobId: "job-1" }) },
   { command: "subscribe_job_catalog", args: { onSnapshot: null }, call: () => api.subscribeJobCatalog(null as never) },
   { command: "ack_subscription", request: { subscriptionId: "subscription-1", revision: "1" }, call: () => api.ackSubscription({ subscriptionId: "subscription-1", revision: "1" }) },
   { command: "unsubscribe_job", request: { subscriptionId: "subscription-1" }, call: () => api.unsubscribeJob({ subscriptionId: "subscription-1" }) },
