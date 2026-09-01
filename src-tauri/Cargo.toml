@@ -4,6 +4,12 @@ resolver = "2"
 [workspace.package]
 version = "1.2.4"
 
+# Use the checked-out TZAP core until the Unicode-safe volume-name fix is
+# released. The published 0.2.3 parser can panic when it checks an unrelated
+# non-ASCII filename while discovering sibling volumes.
+[patch.crates-io]
+tzap-core = { path = "../../tzap/crates/tzap-core" }
+
 [package]
 name = "zmanager-desktop"
 version.workspace = true
@@ -32,7 +38,8 @@ zmanager-shell-contract = { path = "../crates/zmanager-shell-contract" }
 zmanager-core = { path = "../../zmanager/crates/zmanager-core", package = "zmanager-core" }
 zmanager-tzap-hosted = { path = "../../zmanager/crates/zmanager-tzap-hosted" }
 zmanager-localsend = { path = "../../zmanager/crates/zmanager-localsend" }
-reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "native-tls"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "rustls-no-provider"] }
+rustls = { version = "0.23.36", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 tauri-plugin-deep-link = "2"
 
 [target.'cfg(windows)'.dependencies]

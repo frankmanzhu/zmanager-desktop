@@ -19,6 +19,10 @@ describe("dialog helpers", () => {
     expect(unknownErrorMessage(null, "fallback")).toBe("fallback");
   });
 
+  it("preserves a structured command error message", () => {
+    expect(unknownErrorMessage({ code: "operationFailed", message: "receiver rejected the transfer" }, "fallback")).toBe("receiver rejected the transfer");
+  });
+
   it("only uses the browser preview message outside desktop mode", () => {
     expect(nativeDialogErrorMessage(false, new Error("denied"), dialogMessages)).toBe(
       "Native dialogs are unavailable in browser preview.",

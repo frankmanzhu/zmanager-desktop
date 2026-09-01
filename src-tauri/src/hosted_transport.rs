@@ -8,6 +8,11 @@ pub struct HostedHttpTransport {
 
 impl HostedHttpTransport {
     pub fn new() -> Result<Self, String> {
+        // The desktop crate uses reqwest/rustls for both hosted HTTPS and
+        // LocalSend. Install the explicit provider before any client is built;
+        // the reqwest `rustls-no-provider` feature intentionally leaves this
+        // application-level choice to the caller.
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let client = Client::builder()
             .timeout(Duration::from_secs(3))
             .connect_timeout(Duration::from_secs(2))

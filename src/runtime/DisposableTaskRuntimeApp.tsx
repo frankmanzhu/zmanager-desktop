@@ -16,6 +16,7 @@ import {
   reduceDisposableTask,
 } from "../app/workspaces/disposableTask";
 import type { DisposableTaskState } from "../app/workspaces/disposableTask";
+import { unknownErrorMessage } from "../app/dialogs";
 import {
   announceDisposableTaskReady,
   closeDisposableTaskWindow,
@@ -140,7 +141,18 @@ function DisposableTaskRuntime({ bootstrap }: Readonly<{ bootstrap: DisposableTa
     dispatch({ type: "cancelRequested" });
     try {
       await cancelJob({ jobId: state.job.jobId });
-    } catch {
+    } catch (error) {
+      const commandError = asCommandError(error);
+      void persistDiagnosticEvent({
+        scope: "jobControl",
+        name: "cancelFailed",
+        fields: {
+          jobId: state.job.jobId,
+          errorCode: commandError?.code ?? "invokeFailed",
+          errorMessage: commandError?.message ?? unknownErrorMessage(error, "cancel_job failed"),
+        },
+      }).catch(() => {});
+      setSurfaceError(commandError?.message ?? unknownErrorMessage(error, "Unable to cancel the task."));
       dispatch({ type: "controlRejected" });
     }
   };

@@ -40,6 +40,13 @@ export function unknownErrorMessage(error: unknown, fallback: string): string {
     return error;
   }
 
+  if (typeof error === "object" && error !== null) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+
   return fallback;
 }
 

@@ -406,8 +406,49 @@ pub fn localsend_discover(request: LocalSendDiscoverRequestDto, state: State<'_,
 }
 
 #[tauri::command]
-pub fn localsend_send_file(request: LocalSendSendFileRequestDto, state: State<'_, LocalSendState>) -> Result<LocalSendSendFileResultDto, CommandErrorDto> {
-    state.registry.send_file(request.into()).map(Into::into).map_err(map_localsend_error)
+pub fn localsend_send_file(
+    request: LocalSendSendFileRequestDto,
+    state: State<'_, LocalSendState>,
+    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
+) -> Result<LocalSendSendFileResultDto, CommandErrorDto> {
+    let target = &request.target;
+    let _ = diagnostics.record(
+        "localSend",
+        "sendStarted",
+        crate::diagnostics::fields([
+            ("sendId", serde_json::Value::String(request.send_id.clone())),
+            ("targetAlias", serde_json::Value::String(target.alias.clone())),
+            ("targetIp", serde_json::Value::String(target.ip.clone().unwrap_or_default())),
+            ("targetPort", serde_json::json!(target.port)),
+            ("targetProtocol", serde_json::Value::String(target.protocol.clone())),
+        ]),
+    );
+
+    let result = state.registry.send_file(request.into()).map(LocalSendSendFileResultDto::from).map_err(map_localsend_error);
+    match &result {
+        Ok(response) => {
+            let _ = diagnostics.record(
+                "localSend",
+                "sendCompleted",
+                crate::diagnostics::fields([
+                    ("sessionId", serde_json::Value::String(response.session_id.clone())),
+                    ("fileId", serde_json::Value::String(response.file_id.clone())),
+                ]),
+            );
+        }
+        Err(error) => {
+            let _ = diagnostics.record(
+                "localSend",
+                "sendFailed",
+                crate::diagnostics::fields([
+                    ("errorCode", serde_json::Value::String(error.code.to_owned())),
+                    ("errorMessage", serde_json::Value::String(error.message.clone())),
+                    ("retryable", serde_json::Value::Bool(error.retryable)),
+                ]),
+            );
+        }
+    }
+    result
 }
 
 #[tauri::command]

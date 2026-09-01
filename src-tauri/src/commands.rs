@@ -327,7 +327,7 @@ pub fn start_create(
     let runtime_for_worker = account_runtime.inner().clone();
     let diagnostics_for_worker = diagnostics.inner().clone();
     let tzap_options = request.tzap_certificates.clone();
-    let response = start_create_internal_with_resolver(request, &registry, move || {
+    let response = start_create_internal_with_resolver(request, &registry, Some(diagnostics.inner().clone()), move || {
         if !is_tzap {
             return Ok(None);
         }
@@ -359,12 +359,13 @@ fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 pub(crate) fn start_create_internal(request: StartCreateRequest, registry: &JobRegistry) -> Result<StartJobResponseDto, CommandErrorDto> {
-    start_create_internal_with_resolver(request, registry, || Ok(None))
+    start_create_internal_with_resolver(request, registry, None, || Ok(None))
 }
 
 fn start_create_internal_with_resolver(
     request: StartCreateRequest,
     registry: &JobRegistry,
+    diagnostics: Option<crate::diagnostics::DiagnosticLog>,
     resolve_tzap: impl FnOnce() -> Result<Option<crate::account::ResolvedTzapCreateInputs>, CommandErrorDto> + Send + 'static,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
     let sources = normalize_non_empty_paths(&request.sources)?;
@@ -479,121 +480,165 @@ fn start_create_internal_with_resolver(
     let clean_source = request.clean_source;
     let kind_for_thread = kind;
     let plan_options = plan_options_for_thread;
+    let diagnostics_for_worker_lifecycle = diagnostics.clone();
     thread::spawn(move || {
-        let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
-        let mut resolved_tzap = match resolve_tzap() {
-            Ok(resolved) => resolved,
-            Err(error) => {
-                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
-                return;
+        let worker_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
+                let _ = diagnostics.record("create", "workerStarted", crate::diagnostics::fields([("jobId", serde_json::json!(job_id))]));
             }
-        };
-        if let Some(resolved) = resolved_tzap.as_mut() {
-            let mut public_keys = resolved.recipient_public_keys.take().unwrap_or_default();
-            for path in resolved.one_time_recipient_certificate_paths.take().unwrap_or_default() {
-                match read_recipient_public_key_der(&path) {
-                    Ok(public_key) => public_keys.push(public_key),
-                    Err(error) => {
-                        registry_for_thread.emit_direct_event(
-                            &job_id,
-                            JobEventDto::failed_from_command_error(
-                                kind_for_thread,
-                                CommandErrorDto::new("account_recipient_certificate_invalid", error, None::<String>, ErrorSeverityDto::Error, false),
-                            ),
-                        );
-                        return;
+            let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
+            let mut resolved_tzap = match resolve_tzap() {
+                Ok(resolved) => resolved,
+                Err(error) => {
+                    registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
+                    return;
+                }
+            };
+            if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
+                let _ = diagnostics.record("create", "workerInputsResolved", crate::diagnostics::fields([]));
+            }
+            if let Some(resolved) = resolved_tzap.as_mut() {
+                let mut public_keys = resolved.recipient_public_keys.take().unwrap_or_default();
+                for path in resolved.one_time_recipient_certificate_paths.take().unwrap_or_default() {
+                    match read_recipient_public_key_der(&path) {
+                        Ok(public_key) => public_keys.push(public_key),
+                        Err(error) => {
+                            registry_for_thread.emit_direct_event(
+                                &job_id,
+                                JobEventDto::failed_from_command_error(
+                                    kind_for_thread,
+                                    CommandErrorDto::new("account_recipient_certificate_invalid", error, None::<String>, ErrorSeverityDto::Error, false),
+                                ),
+                            );
+                            return;
+                        }
                     }
                 }
+                resolved.recipient_public_keys = Some(public_keys);
+                resolved.one_time_recipient_certificate_paths = Some(Vec::new());
             }
-            resolved.recipient_public_keys = Some(public_keys);
-            resolved.one_time_recipient_certificate_paths = Some(Vec::new());
-        }
-        let create_options = match format {
-            crate::dto::ArchiveFormatDto::Zip => CreateOptions::Zip(ZipCreateOptions {
-                compression: match zip_compression {
-                    Some(crate::dto::ZipCompressionDto::Store) => ZipCompression::Store,
-                    _ => ZipCompression::Deflate,
-                },
-                level: compression_level.map(i64::from),
-                preserve_metadata,
-                replace_existing,
-                password: password.as_deref().map(SecretString::from),
-                volume_size,
-            }),
-            crate::dto::ArchiveFormatDto::TarZst => {
-                let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarZstdCreateOptions::default().level);
-                CreateOptions::TarZstd(TarZstdCreateOptions { level, preserve_metadata, replace_existing, ..TarZstdCreateOptions::default() })
-            }
-            crate::dto::ArchiveFormatDto::TarGz => {
-                let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarGzCreateOptions::default().level);
-                CreateOptions::TarGz(TarGzCreateOptions { level, preserve_metadata, replace_existing })
-            }
-            crate::dto::ArchiveFormatDto::Tzap => {
-                let resolved = resolved_tzap;
-                let (key_source, resolved_signing, signing_selection_provided) = if let Some(resolved) = resolved {
-                    let public_keys = resolved.recipient_public_keys.unwrap_or_default();
-                    let key_source = if resolved.recipient_selection_provided {
-                        if public_keys.is_empty() { TzapKeySource::NoPassword } else { TzapKeySource::RecipientPublicKeys(public_keys) }
-                    } else {
-                        password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
-                    };
-                    (key_source, resolved.signing, resolved.signing_selection_provided)
-                } else {
-                    let key_source = password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
-                    (key_source, None, false)
-                };
-                let x509_signing = if signing_selection_provided { resolved_signing } else { None };
-                CreateOptions::Tzap(TzapCreateOptions {
-                    key_source,
-                    level: compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(3),
+            let create_options = match format {
+                crate::dto::ArchiveFormatDto::Zip => CreateOptions::Zip(ZipCreateOptions {
+                    compression: match zip_compression {
+                        Some(crate::dto::ZipCompressionDto::Store) => ZipCompression::Store,
+                        _ => ZipCompression::Deflate,
+                    },
+                    level: compression_level.map(i64::from),
                     preserve_metadata,
                     replace_existing,
+                    password: password.as_deref().map(SecretString::from),
                     volume_size,
-                    recovery_percentage: tzap_recovery_percentage,
-                    volume_loss_tolerance: tzap_volume_loss_tolerance,
-                    x509_signing,
-                    emit_bootstrap_sidecar: tzap_bootstrap_sidecar,
-                })
-            }
-            crate::dto::ArchiveFormatDto::SevenZ => CreateOptions::SevenZ(SevenZCreateOptions {
-                solid: seven_z_solid,
-                level: compression_level,
-                preserve_metadata,
-                password: password.as_deref().map(SecretString::from),
-                encrypt_file_names: seven_z_encrypt_file_names,
-                replace_existing,
-                volume_size,
-                threads: seven_z_threads,
-                chunk_size: seven_z_chunk_size,
-            }),
-            crate::dto::ArchiveFormatDto::AppleArchive => {
-                CreateOptions::AppleArchive(AppleArchiveCreateOptions { preserve_metadata, replace_existing, password: password.clone(), ..Default::default() })
-            }
-        };
+                }),
+                crate::dto::ArchiveFormatDto::TarZst => {
+                    let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarZstdCreateOptions::default().level);
+                    CreateOptions::TarZstd(TarZstdCreateOptions { level, preserve_metadata, replace_existing, ..TarZstdCreateOptions::default() })
+                }
+                crate::dto::ArchiveFormatDto::TarGz => {
+                    let level = compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(TarGzCreateOptions::default().level);
+                    CreateOptions::TarGz(TarGzCreateOptions { level, preserve_metadata, replace_existing })
+                }
+                crate::dto::ArchiveFormatDto::Tzap => {
+                    let resolved = resolved_tzap;
+                    let (key_source, resolved_signing, signing_selection_provided) = if let Some(resolved) = resolved {
+                        let public_keys = resolved.recipient_public_keys.unwrap_or_default();
+                        let key_source = if resolved.recipient_selection_provided {
+                            if public_keys.is_empty() { TzapKeySource::NoPassword } else { TzapKeySource::RecipientPublicKeys(public_keys) }
+                        } else {
+                            password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase)
+                        };
+                        (key_source, resolved.signing, resolved.signing_selection_provided)
+                    } else {
+                        let key_source = password.as_deref().map(SecretString::from).map_or(TzapKeySource::NoPassword, TzapKeySource::Passphrase);
+                        (key_source, None, false)
+                    };
+                    let x509_signing = if signing_selection_provided { resolved_signing } else { None };
+                    CreateOptions::Tzap(TzapCreateOptions {
+                        key_source,
+                        level: compression_level.and_then(|value| i32::try_from(value).ok()).unwrap_or(3),
+                        preserve_metadata,
+                        replace_existing,
+                        volume_size,
+                        recovery_percentage: tzap_recovery_percentage,
+                        volume_loss_tolerance: tzap_volume_loss_tolerance,
+                        x509_signing,
+                        emit_bootstrap_sidecar: tzap_bootstrap_sidecar,
+                    })
+                }
+                crate::dto::ArchiveFormatDto::SevenZ => CreateOptions::SevenZ(SevenZCreateOptions {
+                    solid: seven_z_solid,
+                    level: compression_level,
+                    preserve_metadata,
+                    password: password.as_deref().map(SecretString::from),
+                    encrypt_file_names: seven_z_encrypt_file_names,
+                    replace_existing,
+                    volume_size,
+                    threads: seven_z_threads,
+                    chunk_size: seven_z_chunk_size,
+                }),
+                crate::dto::ArchiveFormatDto::AppleArchive => CreateOptions::AppleArchive(AppleArchiveCreateOptions {
+                    preserve_metadata,
+                    replace_existing,
+                    password: password.clone(),
+                    ..Default::default()
+                }),
+            };
 
-        let result = zmanager_core::jobs::run_engine_create_job_from_sources(&request_sources, &destination, &create_options, &plan_options, &token, &mut sink)
-            .map(|report| JobTerminalSummaryDto {
-                written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
-                skipped_entries: None,
-                written_bytes: report.written_bytes,
-                warnings: report.warnings,
-            })
-            .map_err(crate::platform::archive_error::map_engine_error);
+            if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
+                let _ = diagnostics.record("create", "engineStarted", crate::diagnostics::fields([]));
+            }
+            let result =
+                zmanager_core::jobs::run_engine_create_job_from_sources(&request_sources, &destination, &create_options, &plan_options, &token, &mut sink)
+                    .map(|report| JobTerminalSummaryDto {
+                        written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
+                        skipped_entries: None,
+                        written_bytes: report.written_bytes,
+                        warnings: report.warnings,
+                    })
+                    .map_err(crate::platform::archive_error::map_engine_error);
 
-        match result {
-            Ok(summary) => {
-                if clean_source {
-                    match remove_created_source_paths(&request_sources, &destination) {
-                        Ok(()) => complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary),
-                        Err(error) => registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error)),
+            match result {
+                Ok(summary) => {
+                    if clean_source {
+                        match remove_created_source_paths(&request_sources, &destination) {
+                            Ok(()) => complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary),
+                            Err(error) => registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error)),
+                        }
+                    } else {
+                        complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary);
                     }
-                } else {
-                    complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary);
+                }
+                Err(error) => {
+                    registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
                 }
             }
-            Err(error) => {
-                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
+            if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
+                let _ = diagnostics.record("create", "workerFinished", crate::diagnostics::fields([]));
             }
+        }));
+
+        if let Err(payload) = worker_result {
+            let panic_message = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("archive worker panicked without a message")
+                .to_owned();
+            if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
+                let _ = diagnostics.record("create", "workerPanicked", crate::diagnostics::fields([("message", serde_json::json!(panic_message))]));
+            }
+            registry_for_thread.emit_direct_event(
+                &job_id,
+                JobEventDto::failed_from_command_error(
+                    kind_for_thread,
+                    CommandErrorDto::new(
+                        "archive_worker_panicked",
+                        format!("Archive worker terminated unexpectedly: {panic_message}"),
+                        None::<String>,
+                        ErrorSeverityDto::Error,
+                        false,
+                    ),
+                ),
+            );
         }
     });
 
@@ -1376,16 +1421,28 @@ pub fn cancel_job(
     request: crate::dto::CancelJobRequest,
     window: WebviewWindow,
     registry: State<'_, JobRegistry>,
+    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<crate::job_dto::CancelJobResponseDto, CommandErrorDto> {
     let job_id = request.job_id.trim().to_string();
     if job_id.is_empty() {
         return Err(CommandErrorDto::invalid_request("jobId cannot be empty"));
     }
-    ensure_task_job_owner(window.label(), &job_id)?;
-
-    registry.request_cancel(&job_id).ok_or_else(|| {
-        CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("The job may have already completed and can be dismissed.".to_string()))
-    })
+    let owner = window.label().to_string();
+    let result = ensure_task_job_owner(&owner, &job_id).and_then(|()| {
+        registry.request_cancel(&job_id).ok_or_else(|| {
+            CommandErrorDto::not_found(format!("job not found: {job_id}"), Some("The job may have already completed and can be dismissed.".to_string()))
+        })
+    });
+    let _ = diagnostics.record(
+        "jobControl",
+        if result.is_ok() { "cancelRequested" } else { "cancelRejected" },
+        crate::diagnostics::fields([
+            ("jobId", serde_json::Value::String(job_id)),
+            ("owner", serde_json::Value::String(owner)),
+            ("errorCode", serde_json::Value::String(result.as_ref().err().map(|error| error.code.to_owned()).unwrap_or_default())),
+        ]),
+    );
+    result
 }
 
 #[tauri::command]
@@ -2689,6 +2746,53 @@ mod tests {
     }
 
     #[test]
+    fn create_worker_panic_is_published_as_terminal_failure() {
+        let workspace = create_temp_workspace("start-create-worker-panic");
+        let source = workspace.join("source.txt");
+        let destination = workspace.join("created.zip");
+        fs::write(&source, b"panic boundary").expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+        let job = start_create_internal_with_resolver(
+            StartCreateRequest {
+                sources: vec![source.to_string_lossy().into_owned()],
+                destination_path: destination.to_string_lossy().into_owned(),
+                format: crate::dto::ArchiveFormatDto::Zip,
+                clean_source: false,
+                exclude_names: None,
+                exclude_archive_paths: None,
+                include_archive_paths: None,
+                respect_gitignore: false,
+                follow_symlinks: false,
+                replace_existing: true,
+                destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+                password: None,
+                compression_level: None,
+                volume_size: None,
+                tzap_recovery_percentage: None,
+                tzap_volume_loss_tolerance: None,
+                zip_compression: None,
+                seven_z_solid: None,
+                seven_z_threads: None,
+                seven_z_chunk_size: None,
+                seven_z_encrypt_file_names: None,
+                tzap_certificates: None,
+                tzap_bootstrap_sidecar: None,
+                preserve_metadata: false,
+            },
+            &registry,
+            None,
+            || panic!("test worker panic"),
+        )
+        .expect("create command should accept the job before worker execution");
+
+        let (poll, events) = wait_for_job_terminal(&registry, &job.job_id);
+        assert_eq!(poll.status, JobStatusDto::Failed);
+        assert!(events.iter().any(|event| event.code.as_deref() == Some("archive_worker_panicked")));
+        assert!(events.iter().filter_map(|event| event.message.as_deref()).any(|message| message.contains("test worker panic")));
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
     fn start_create_returns_job_before_tzap_inputs_are_resolved() {
         let workspace = create_temp_workspace("start-create-deferred-tzap-resolution");
         let sources = workspace.join("sources");
@@ -2726,7 +2830,7 @@ mod tests {
         };
 
         let started_at = std::time::Instant::now();
-        let job = start_create_internal_with_resolver(request, &registry, move || {
+        let job = start_create_internal_with_resolver(request, &registry, None, move || {
             resolution_started_tx.send(()).expect("resolution probe receiver should remain open");
             release_resolution_rx.recv().expect("resolution release should arrive");
             Ok(None)
