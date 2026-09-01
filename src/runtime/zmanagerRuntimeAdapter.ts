@@ -725,6 +725,7 @@ const createRuntimeActions = createCreateRuntimeActions({
       signingIdentityPassword,
     },
   }),
+  compressAndShareOnLan: startCompressAndShareOnLan,
 });
 
 const appTimers = createAppTimers({
@@ -3160,8 +3161,6 @@ function showFolderContextMenu(folderPath: string, x: number, y: number, entryPa
     entryPath,
     selectedCount: getSelectedEntryPaths().length,
     hasArchive: Boolean(archiveCurrentPath()),
-    archivePath: archiveCurrentPath() || undefined,
-    localSendAvailable: isLocalSendAvailableFromContract(),
   }));
 }
 
@@ -3243,7 +3242,6 @@ function showCompressRowContextMenuForPath(
     canInclude,
     canExclude,
     hasSources: snapshot.hasSources,
-    localSendAvailable: isLocalSendAvailableFromContract(),
   }));
 }
 
@@ -3272,14 +3270,6 @@ function handleContextMenuAction(payload: ContextMenuActionPayload) {
   });
   if (routedContextCommand) {
     runRoutedCommand(routedContextCommand.commandId, routedContextCommand.payload);
-    return;
-  }
-  if (action === "share-on-lan" && archivePath) {
-    openShareOnLanDialog(archivePath);
-    return;
-  }
-  if (action === "compress-share-on-lan") {
-    startCompressAndShareOnLan();
     return;
   }
   if (action === "add-source-files") {

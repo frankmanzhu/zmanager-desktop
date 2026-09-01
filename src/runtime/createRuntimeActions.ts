@@ -34,6 +34,7 @@ export type CreateRuntimeActionEffects = Readonly<{
   setColumnWidth(columnId: CreateSourceColumnId, width: number): void;
   reorderColumn(sourceColumnId: CreateSourceColumnId, targetColumnId: CreateSourceColumnId): void;
   runCreate(password: string, passwordConfirm: string, signingIdentityPassword: string): void | Promise<void>;
+  compressAndShareOnLan(): void;
 }>;
 
 export function createCreateRuntimeActions(
@@ -125,6 +126,9 @@ export function createCreateRuntimeActions(
           break;
         case "runCreate":
           void effects.runCreate(intent.password, intent.passwordConfirm, intent.signingIdentityPassword);
+          break;
+        case "compressAndShareOnLan":
+          effects.compressAndShareOnLan();
           break;
       }
     },

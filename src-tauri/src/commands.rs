@@ -357,6 +357,40 @@ fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
     certificate.public_key().and_then(|key| key.public_key_to_der()).map_err(|error| format!("recipient certificate public key is invalid: {error}"))
 }
 
+enum TzapResolutionOutcome {
+    Resolved(Option<crate::account::ResolvedTzapCreateInputs>),
+    Cancelled,
+    Failed(CommandErrorDto),
+}
+
+/// Runs `resolve_tzap` on its own thread and races it against `token`, so
+/// Cancel always unblocks the create job even when the resolver itself has
+/// no way to notice cancellation (e.g. it is blocked on a lock or a hosted
+/// network call). If cancellation wins the race, the resolver thread is
+/// abandoned rather than joined; its eventual result, if any, is discarded.
+fn resolve_tzap_with_cancellation(
+    resolve_tzap: impl FnOnce() -> Result<Option<crate::account::ResolvedTzapCreateInputs>, CommandErrorDto> + Send + 'static,
+    token: &CancellationToken,
+) -> TzapResolutionOutcome {
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(resolve_tzap());
+    });
+    loop {
+        if token.is_cancelled() {
+            return TzapResolutionOutcome::Cancelled;
+        }
+        match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            Ok(Ok(resolved)) => return TzapResolutionOutcome::Resolved(resolved),
+            Ok(Err(error)) => return TzapResolutionOutcome::Failed(error),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return TzapResolutionOutcome::Failed(CommandErrorDto::operation_failed("TZAP input resolution ended unexpectedly."));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn start_create_internal(request: StartCreateRequest, registry: &JobRegistry) -> Result<StartJobResponseDto, CommandErrorDto> {
     start_create_internal_with_resolver(request, registry, || Ok(None))
@@ -481,9 +515,28 @@ fn start_create_internal_with_resolver(
     let plan_options = plan_options_for_thread;
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
-        let mut resolved_tzap = match resolve_tzap() {
-            Ok(resolved) => resolved,
-            Err(error) => {
+        let mut resolved_tzap = match resolve_tzap_with_cancellation(resolve_tzap, &token) {
+            TzapResolutionOutcome::Resolved(resolved) => resolved,
+            TzapResolutionOutcome::Cancelled => {
+                sink.emit_direct(JobEventDto {
+                    event_type: JobEventKindDto::Cancelled,
+                    job_kind: Some(kind_for_thread),
+                    phase: None,
+                    code: Some(constants::COMMAND_ERROR_CANCELLED),
+                    hint: None,
+                    severity: None,
+                    retryable: Some(true),
+                    path: None,
+                    bytes: None,
+                    total_bytes: None,
+                    total_bytes_processed: None,
+                    entries: None,
+                    total_entries: None,
+                    message: Some("Archive creation cancelled.".to_string()),
+                });
+                return;
+            }
+            TzapResolutionOutcome::Failed(error) => {
                 registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
                 return;
             }
@@ -2740,6 +2793,62 @@ mod tests {
         let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
         assert_eq!(poll.status, JobStatusDto::Completed);
         assert!(destination.is_file());
+        let _ = fs::remove_dir_all(&workspace);
+    }
+
+    #[test]
+    fn start_create_cancel_during_tzap_resolution_marks_job_cancelled() {
+        let workspace = create_temp_workspace("start-create-cancel-during-tzap-resolution");
+        let sources = workspace.join("sources");
+        let destination = workspace.join("created.tzap");
+        fs::create_dir_all(&sources).expect("source directory should exist");
+        fs::write(sources.join("hello.txt"), b"hello from create").expect("fixture file should write");
+        let registry = crate::job_registry::JobRegistry::new();
+        let (resolution_started_tx, resolution_started_rx) = mpsc::channel();
+        let (_never_released_tx, never_released_rx) = mpsc::channel::<()>();
+        let request = StartCreateRequest {
+            sources: vec![sources.to_string_lossy().to_string()],
+            destination_path: destination.to_string_lossy().to_string(),
+            format: crate::dto::ArchiveFormatDto::Tzap,
+            clean_source: false,
+            exclude_names: None,
+            exclude_archive_paths: None,
+            include_archive_paths: None,
+            respect_gitignore: false,
+            follow_symlinks: false,
+            replace_existing: true,
+            destination_collision_strategy: DestinationCollisionStrategyDto::Refuse,
+            password: None,
+            compression_level: None,
+            volume_size: None,
+            tzap_recovery_percentage: None,
+            tzap_volume_loss_tolerance: None,
+            zip_compression: None,
+            seven_z_solid: None,
+            seven_z_threads: None,
+            seven_z_chunk_size: None,
+            seven_z_encrypt_file_names: None,
+            tzap_certificates: None,
+            tzap_bootstrap_sidecar: None,
+            preserve_metadata: false,
+        };
+
+        let job = start_create_internal_with_resolver(request, &registry, move || {
+            resolution_started_tx.send(()).expect("resolution probe receiver should remain open");
+            // Never sends on this channel: simulates a resolver that hangs
+            // forever (a deadlocked lock, an unresponsive hosted network
+            // call, ...) instead of returning or erroring. Cancel must still
+            // win the race regardless of what the resolver is stuck on.
+            let _ = never_released_rx.recv();
+            Ok(None)
+        })
+        .expect("create command should accept the job before resolution");
+
+        resolution_started_rx.recv_timeout(Duration::from_secs(1)).expect("worker should begin TZAP input resolution");
+        registry.request_cancel(&job.job_id).expect("cancel should target the create job while it is resolving TZAP inputs");
+
+        let (poll, _) = wait_for_job_terminal(&registry, &job.job_id);
+        assert_eq!(poll.status, JobStatusDto::Cancelled, "cancel must win even when the resolver never returns");
         let _ = fs::remove_dir_all(&workspace);
     }
 

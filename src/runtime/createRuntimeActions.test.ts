@@ -52,6 +52,15 @@ describe("create runtime actions", () => {
     expect(effects.runCreate).toHaveBeenCalledWith("one", "two", "identity");
   });
 
+  it("routes compressAndShareOnLan to its effect", () => {
+    const effects = createEffects();
+    const actions = createCreateRuntimeActions(effects);
+
+    actions.handleIntent({ type: "compressAndShareOnLan" });
+
+    expect(effects.compressAndShareOnLan).toHaveBeenCalledOnce();
+  });
+
   it("routes column context menu, width, and reorder intents to their effects", () => {
     const effects = createEffects();
     const actions = createCreateRuntimeActions(effects);
@@ -98,6 +107,7 @@ function createEffects(
     setColumnWidth: vi.fn(),
     reorderColumn: vi.fn(),
     runCreate: vi.fn(),
+    compressAndShareOnLan: vi.fn(),
     ...overrides,
   };
 }

@@ -278,6 +278,7 @@ export type ZManagerCreateIntent =
       passwordConfirm: string;
       signingIdentityPassword: string;
     }>
+  | Readonly<{ type: "compressAndShareOnLan" }>
 ;
 
 export type ZManagerDialogIntent =

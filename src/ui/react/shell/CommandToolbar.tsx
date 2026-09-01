@@ -3,6 +3,7 @@ import {
   CheckSquare,
   FileArchive,
   FolderOpen,
+  Share2,
   SquareMinus,
   Trash2,
   UserRound,
@@ -228,6 +229,7 @@ function CompressToolbarGroups() {
         <ToolbarButton commandId="add" />
         <CompressDestinationToolbarButton />
         <CreateArchiveToolbarButton />
+        <CompressAndShareOnLanToolbarButton />
       </div>
       <div
         className="h-full w-px bg-slate-200 dark:bg-slate-700"
@@ -305,6 +307,32 @@ function CreateArchiveToolbarButton() {
         });
         createPassword.reset();
       }}
+    />
+  );
+}
+
+function CompressAndShareOnLanToolbarButton() {
+  const snapshot = useZManagerSnapshot();
+  const actions = useZManagerActions();
+  const i18n = translatorForSnapshot(snapshot);
+  const canShare = !snapshot.create.isEmpty;
+
+  if (snapshot.shell.activeMode !== "compress" || !snapshot.runtime.isLocalSendAvailable) {
+    return null;
+  }
+
+  return (
+    <ToolbarActionButton
+      id="compress-share-on-lan"
+      label={i18n.t("command.compressShareOnLan")}
+      title={
+        canShare
+          ? i18n.t("command.compressShareOnLan")
+          : i18n.t("create.status.needsSources")
+      }
+      Icon={Share2}
+      disabled={!canShare}
+      onClick={() => actions.handleCreateIntent({ type: "compressAndShareOnLan" })}
     />
   );
 }
