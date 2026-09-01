@@ -57,6 +57,7 @@ import {
   createExtractStartController,
 } from "../app/controllers/extractStartController";
 import { createJobHandoffController } from "../app/controllers/jobHandoffController";
+import { createJobTerminationWatcher } from "../app/controllers/jobTerminationWatcher";
 import {
   createQuickActionController,
 } from "../app/controllers/quickActionController";
@@ -844,28 +845,21 @@ let catalogSubscription: JobFeedSubscription | null = null;
 /**
  * Lets code in the Main Window learn when a specific Job it started (and
  * already handed off to a task window) reaches a terminal state, without
- * opening its own per-Job subscription. Resolved from the Job catalog feed
- * the Main Window already subscribes to below.
+ * opening its own per-Job subscription. The watcher is fed by the Job catalog
+ * feed the Main Window already subscribes to below and retains terminal
+ * catalog state for fast jobs.
  */
-const jobTerminationWatchers = new Map<string, (status: JobStatus) => void>();
+const jobTerminationWatcher = createJobTerminationWatcher();
 
 function awaitJobTermination(jobId: string): Promise<JobStatus> {
-  return new Promise((resolve) => {
-    jobTerminationWatchers.set(jobId, resolve);
-  });
+  return jobTerminationWatcher.wait(jobId);
 }
 
 async function subscribeToJobCatalog(): Promise<void> {
   if (catalogSubscription) return;
   catalogSubscription = await jobFeed.subscribeCatalog((catalog) => {
     processJobs.reconcileCatalog(catalog);
-    for (const job of catalog.jobs) {
-      if (!job.terminal) continue;
-      const watcher = jobTerminationWatchers.get(job.jobId);
-      if (!watcher) continue;
-      jobTerminationWatchers.delete(job.jobId);
-      watcher(job.status);
-    }
+    jobTerminationWatcher.observe(catalog);
     maybeCloseQuickActionOnlyCoordinator();
   });
 }

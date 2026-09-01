@@ -13,7 +13,7 @@ const DEVICE: LocalSendDeviceInfoDto = {
 };
 
 describe("LAN Sharing (send) controller", () => {
-  it("opens, discovers, selects a target, and sends with progress reaching sent", async () => {
+  it("opens, discovers, selects a target, and sends successfully", async () => {
     const publish = vi.fn();
     const discover = vi.fn().mockResolvedValue([DEVICE]);
     const sendFile = vi.fn().mockResolvedValue({ sessionId: "session-1" });
@@ -44,7 +44,29 @@ describe("LAN Sharing (send) controller", () => {
       target: DEVICE,
       filePath: "/tmp/archives/vacation.zip",
     });
-    expect(controller.getSnapshot()?.send).toBe("sending");
+    expect(controller.getSnapshot()?.send).toBe("sent");
+    expect(publish).toHaveBeenCalled();
+  });
+
+  it("marks a blocking send command complete when its session events arrive before the command resolves", async () => {
+    let resolveSend: ((result: { sessionId: string }) => void) | undefined;
+    const sendFile = vi.fn(() => new Promise<{ sessionId: string }>((resolve) => {
+      resolveSend = resolve;
+    }));
+    const controller = createLocalSendShareController({
+      discover: vi.fn().mockResolvedValue([DEVICE]),
+      sendFile,
+      cancelSend: vi.fn(),
+      publish: vi.fn(),
+      errorMessage: String,
+      createSendId: () => "send-1",
+    });
+
+    controller.open("/tmp/archives/vacation.zip", "ZManager Desktop");
+    await controller.discover();
+    controller.selectTarget(DEVICE.fingerprint);
+    const sendPromise = controller.send();
+    await Promise.resolve();
 
     controller.handleEvent({
       type: "fileSendProgress",
@@ -52,21 +74,29 @@ describe("LAN Sharing (send) controller", () => {
       sessionId: "session-1",
       fileId: "file-1",
       fileName: "vacation.zip",
-      bytesSent: 512,
+      bytesSent: 1024,
       totalBytes: 1024,
       rateBytesPerSecond: 1024,
     });
-    expect(controller.getSnapshot()?.bytesSent).toBe(512);
-
     controller.handleEvent({ type: "sessionDone", sessionId: "session-1" });
-    expect(controller.getSnapshot()?.send).toBe("sent");
-    expect(publish).toHaveBeenCalled();
+
+    resolveSend?.({ sessionId: "session-1" });
+    await sendPromise;
+
+    expect(controller.getSnapshot()).toMatchObject({
+      send: "sent",
+      bytesSent: 1024,
+      totalBytes: 1024,
+    });
   });
 
   it("ignores progress and completion events for a different session", async () => {
+    let resolveSend: ((result: { sessionId: string }) => void) | undefined;
     const controller = createLocalSendShareController({
       discover: vi.fn().mockResolvedValue([DEVICE]),
-      sendFile: vi.fn().mockResolvedValue({ sessionId: "session-1" }),
+      sendFile: vi.fn(() => new Promise<{ sessionId: string }>((resolve) => {
+        resolveSend = resolve;
+      })),
       cancelSend: vi.fn(),
       publish: vi.fn(),
       errorMessage: String,
@@ -75,10 +105,14 @@ describe("LAN Sharing (send) controller", () => {
     controller.open("/tmp/archives/vacation.zip", "ZManager Desktop");
     await controller.discover();
     controller.selectTarget(DEVICE.fingerprint);
-    await controller.send();
+    const sendPromise = controller.send();
+    await Promise.resolve();
 
     controller.handleEvent({ type: "sessionDone", sessionId: "unrelated-session" });
     expect(controller.getSnapshot()?.send).toBe("sending");
+
+    resolveSend?.({ sessionId: "session-1" });
+    await sendPromise;
   });
 
   it("moves to an error state when the transfer fails to start", async () => {
@@ -100,6 +134,33 @@ describe("LAN Sharing (send) controller", () => {
 
   it("cancels an in-flight send", async () => {
     const cancelSend = vi.fn().mockResolvedValue(undefined);
+    let resolveSend: ((result: { sessionId: string }) => void) | undefined;
+    const controller = createLocalSendShareController({
+      discover: vi.fn().mockResolvedValue([DEVICE]),
+      sendFile: vi.fn(() => new Promise<{ sessionId: string }>((resolve) => {
+        resolveSend = resolve;
+      })),
+      cancelSend,
+      publish: vi.fn(),
+      errorMessage: String,
+      createSendId: () => "send-1",
+    });
+    controller.open("/tmp/archives/vacation.zip", "ZManager Desktop");
+    await controller.discover();
+    controller.selectTarget(DEVICE.fingerprint);
+    const sendPromise = controller.send();
+    await Promise.resolve();
+
+    await controller.cancelSend();
+    expect(cancelSend).toHaveBeenCalledWith("send-1");
+    expect(controller.getSnapshot()?.send).toBe("cancelled");
+
+    resolveSend?.({ sessionId: "session-1" });
+    await sendPromise;
+  });
+
+  it("does not turn a completed send into cancelled", async () => {
+    const cancelSend = vi.fn().mockResolvedValue(undefined);
     const controller = createLocalSendShareController({
       discover: vi.fn().mockResolvedValue([DEVICE]),
       sendFile: vi.fn().mockResolvedValue({ sessionId: "session-1" }),
@@ -114,8 +175,9 @@ describe("LAN Sharing (send) controller", () => {
     await controller.send();
 
     await controller.cancelSend();
-    expect(cancelSend).toHaveBeenCalledWith("send-1");
-    expect(controller.getSnapshot()?.send).toBe("cancelled");
+
+    expect(cancelSend).not.toHaveBeenCalled();
+    expect(controller.getSnapshot()?.send).toBe("sent");
   });
 
   it("resets to a clean idle state on close and re-open", async () => {

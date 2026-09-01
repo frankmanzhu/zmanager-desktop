@@ -357,36 +357,58 @@ fn read_recipient_public_key_der(path: &Path) -> Result<Vec<u8>, String> {
     certificate.public_key().and_then(|key| key.public_key_to_der()).map_err(|error| format!("recipient certificate public key is invalid: {error}"))
 }
 
-enum TzapResolutionOutcome {
-    Resolved(Option<crate::account::ResolvedTzapCreateInputs>),
+enum RaceOutcome<T> {
+    Finished(T),
     Cancelled,
-    Failed(CommandErrorDto),
+    WorkerPanicked,
 }
 
-/// Runs `resolve_tzap` on its own thread and races it against `token`, so
-/// Cancel always unblocks the create job even when the resolver itself has
-/// no way to notice cancellation (e.g. it is blocked on a lock or a hosted
-/// network call). If cancellation wins the race, the resolver thread is
+/// Runs `work` on its own thread and races it against `token`, polling
+/// every 100ms. This makes ANY blocking call cancellable, even one with no
+/// cancellation awareness of its own — a lock, a network call, a directory
+/// scan — because Cancel only needs to win the race, not actually interrupt
+/// whatever `work` is doing. If cancellation wins, `work`'s thread is
 /// abandoned rather than joined; its eventual result, if any, is discarded.
-fn resolve_tzap_with_cancellation(
-    resolve_tzap: impl FnOnce() -> Result<Option<crate::account::ResolvedTzapCreateInputs>, CommandErrorDto> + Send + 'static,
-    token: &CancellationToken,
-) -> TzapResolutionOutcome {
+/// Two call sites in the create-job pipeline need exactly this: TZAP
+/// signing/recipient resolution (`resolve_tzap_create_inputs`, no token
+/// parameter at all) and the archive engine's own source-tree enumeration
+/// (`run_engine_create_job_from_sources` calls `plan_archives` before
+/// emitting any progress event or checking cancellation).
+fn emit_create_cancelled_event(registry: &JobRegistry, job_id: &str, kind: JobKindDto) {
+    registry.emit_direct_event(
+        job_id,
+        JobEventDto {
+            event_type: JobEventKindDto::Cancelled,
+            job_kind: Some(kind),
+            phase: None,
+            code: Some(constants::COMMAND_ERROR_CANCELLED),
+            hint: None,
+            severity: None,
+            retryable: Some(true),
+            path: None,
+            bytes: None,
+            total_bytes: None,
+            total_bytes_processed: None,
+            entries: None,
+            total_entries: None,
+            message: Some("Archive creation cancelled.".to_string()),
+        },
+    );
+}
+
+fn race_against_cancellation<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static, token: &CancellationToken) -> RaceOutcome<T> {
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
-        let _ = tx.send(resolve_tzap());
+        let _ = tx.send(work());
     });
     loop {
         if token.is_cancelled() {
-            return TzapResolutionOutcome::Cancelled;
+            return RaceOutcome::Cancelled;
         }
         match rx.recv_timeout(std::time::Duration::from_millis(100)) {
-            Ok(Ok(resolved)) => return TzapResolutionOutcome::Resolved(resolved),
-            Ok(Err(error)) => return TzapResolutionOutcome::Failed(error),
+            Ok(result) => return RaceOutcome::Finished(result),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return TzapResolutionOutcome::Failed(CommandErrorDto::operation_failed("TZAP input resolution ended unexpectedly."));
-            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return RaceOutcome::WorkerPanicked,
         }
     }
 }
@@ -515,29 +537,21 @@ fn start_create_internal_with_resolver(
     let plan_options = plan_options_for_thread;
     thread::spawn(move || {
         let mut sink = JobEventCollector::new(&registry_for_thread, job_id.clone());
-        let mut resolved_tzap = match resolve_tzap_with_cancellation(resolve_tzap, &token) {
-            TzapResolutionOutcome::Resolved(resolved) => resolved,
-            TzapResolutionOutcome::Cancelled => {
-                sink.emit_direct(JobEventDto {
-                    event_type: JobEventKindDto::Cancelled,
-                    job_kind: Some(kind_for_thread),
-                    phase: None,
-                    code: Some(constants::COMMAND_ERROR_CANCELLED),
-                    hint: None,
-                    severity: None,
-                    retryable: Some(true),
-                    path: None,
-                    bytes: None,
-                    total_bytes: None,
-                    total_bytes_processed: None,
-                    entries: None,
-                    total_entries: None,
-                    message: Some("Archive creation cancelled.".to_string()),
-                });
+        let mut resolved_tzap = match race_against_cancellation(resolve_tzap, &token) {
+            RaceOutcome::Finished(Ok(resolved)) => resolved,
+            RaceOutcome::Finished(Err(error)) => {
+                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
                 return;
             }
-            TzapResolutionOutcome::Failed(error) => {
-                registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
+            RaceOutcome::Cancelled => {
+                emit_create_cancelled_event(&registry_for_thread, &job_id, kind_for_thread);
+                return;
+            }
+            RaceOutcome::WorkerPanicked => {
+                registry_for_thread.emit_direct_event(
+                    &job_id,
+                    JobEventDto::failed_from_command_error(kind_for_thread, CommandErrorDto::operation_failed("TZAP input resolution ended unexpectedly.")),
+                );
                 return;
             }
         };
@@ -624,17 +638,32 @@ fn start_create_internal_with_resolver(
             }
         };
 
-        let result = zmanager_core::jobs::run_engine_create_job_from_sources(&request_sources, &destination, &create_options, &plan_options, &token, &mut sink)
-            .map(|report| JobTerminalSummaryDto {
-                written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
-                skipped_entries: None,
-                written_bytes: report.written_bytes,
-                warnings: report.warnings,
-            })
-            .map_err(crate::platform::archive_error::map_engine_error);
+        let engine_sources = request_sources.clone();
+        let engine_destination = destination.clone();
+        let engine_token = token.clone();
+        let outcome = race_against_cancellation(
+            move || {
+                zmanager_core::jobs::run_engine_create_job_from_sources(
+                    &engine_sources,
+                    &engine_destination,
+                    &create_options,
+                    &plan_options,
+                    &engine_token,
+                    &mut sink,
+                )
+                .map(|report| JobTerminalSummaryDto {
+                    written_entries: usize::try_from(report.written_entries).unwrap_or(usize::MAX),
+                    skipped_entries: None,
+                    written_bytes: report.written_bytes,
+                    warnings: report.warnings,
+                })
+                .map_err(crate::platform::archive_error::map_engine_error)
+            },
+            &token,
+        );
 
-        match result {
-            Ok(summary) => {
+        match outcome {
+            RaceOutcome::Finished(Ok(summary)) => {
                 if clean_source {
                     match remove_created_source_paths(&request_sources, &destination) {
                         Ok(()) => complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary),
@@ -644,8 +673,17 @@ fn start_create_internal_with_resolver(
                     complete_job_if_needed(&registry_for_thread, &job_id, kind_for_thread, summary);
                 }
             }
-            Err(error) => {
+            RaceOutcome::Finished(Err(error)) => {
                 registry_for_thread.emit_direct_event(&job_id, JobEventDto::failed_from_command_error(kind_for_thread, error));
+            }
+            RaceOutcome::Cancelled => {
+                emit_create_cancelled_event(&registry_for_thread, &job_id, kind_for_thread);
+            }
+            RaceOutcome::WorkerPanicked => {
+                registry_for_thread.emit_direct_event(
+                    &job_id,
+                    JobEventDto::failed_from_command_error(kind_for_thread, CommandErrorDto::operation_failed("Archive engine ended unexpectedly.")),
+                );
             }
         }
     });
@@ -2390,6 +2428,43 @@ mod tests {
         }
 
         panic!("timed out while waiting for job to complete");
+    }
+
+    #[test]
+    fn race_against_cancellation_lets_cancel_win_even_when_work_never_returns() {
+        let token = CancellationToken::new();
+        let (started_tx, started_rx) = mpsc::channel();
+        // Kept alive (never sent on, never dropped) for the rest of this
+        // test so `release_rx.recv()` inside `work` blocks indefinitely —
+        // the same shape as a stuck lock, an unresponsive network call, or
+        // a slow directory scan: nothing `work` itself can do about
+        // cancellation.
+        let (_release_tx, release_rx) = mpsc::channel::<()>();
+        let work = move || {
+            started_tx.send(()).expect("cancellation probe receiver should remain open");
+            let _ = release_rx.recv();
+            "unreachable outcome"
+        };
+
+        let cancel_token = token.clone();
+        let canceller = thread::spawn(move || {
+            started_rx.recv_timeout(Duration::from_secs(1)).expect("work should signal it started");
+            cancel_token.cancel();
+        });
+
+        let started_at = std::time::Instant::now();
+        let outcome = race_against_cancellation(work, &token);
+        canceller.join().expect("canceller thread should not panic");
+
+        assert!(matches!(outcome, RaceOutcome::Cancelled), "cancel must win even when work never returns");
+        assert!(started_at.elapsed() < Duration::from_secs(2), "cancellation should be observed within a couple of poll intervals, not require work to finish");
+    }
+
+    #[test]
+    fn race_against_cancellation_returns_the_result_when_work_finishes_first() {
+        let token = CancellationToken::new();
+        let outcome = race_against_cancellation(|| 42, &token);
+        assert!(matches!(outcome, RaceOutcome::Finished(42)));
     }
 
     #[test]

@@ -106,8 +106,17 @@ export function createLocalSendShareController(options: Options): LocalSendShare
     try {
       const result = await options.sendFile({ sendId, alias: snapshot.alias, target, filePath: snapshot.archivePath });
       activeSessionId = result.sessionId;
+      // The desktop adapter calls a synchronous Rust command: its promise
+      // resolves only after the upload has completed. The corresponding
+      // sessionDone event may therefore have been delivered while the
+      // command was still pending, before activeSessionId was available.
+      // Treat a successful command result as authoritative completion, while
+      // preserving a close/cancel/reopen that happened during the transfer.
+      if (snapshot?.sendId === sendId && snapshot.send === "sending") {
+        update({ ...snapshot, send: "sent" });
+      }
     } catch (error) {
-      if (!snapshot) {
+      if (!snapshot || snapshot.sendId !== sendId || snapshot.send !== "sending") {
         return;
       }
       update({ ...snapshot, send: "error", sendError: options.errorMessage(error) });
@@ -115,15 +124,16 @@ export function createLocalSendShareController(options: Options): LocalSendShare
   }
 
   async function cancelSend(): Promise<void> {
-    if (!snapshot?.sendId) {
+    if (!snapshot?.sendId || snapshot.send !== "sending") {
       return;
     }
+    const sendId = snapshot.sendId;
     try {
-      await options.cancelSend(snapshot.sendId);
+      await options.cancelSend(sendId);
     } catch {
       // The send may have already finished; treat cancellation as best-effort.
     }
-    if (!snapshot) {
+    if (!snapshot || snapshot.sendId !== sendId || snapshot.send !== "sending") {
       return;
     }
     update({ ...snapshot, send: "cancelled" });
