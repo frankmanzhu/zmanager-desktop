@@ -2787,7 +2787,7 @@ mod tests {
 
         let (poll, events) = wait_for_job_terminal(&registry, &job.job_id);
         assert_eq!(poll.status, JobStatusDto::Failed);
-        assert!(events.iter().any(|event| event.code.as_deref() == Some("archive_worker_panicked")));
+        assert!(events.iter().any(|event| event.code == Some("archive_worker_panicked")));
         assert!(events.iter().filter_map(|event| event.message.as_deref()).any(|message| message.contains("test worker panic")));
         let _ = fs::remove_dir_all(&workspace);
     }
