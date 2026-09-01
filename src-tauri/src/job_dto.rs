@@ -215,7 +215,7 @@ pub struct JobEventDto {
 impl JobEventDto {
     pub fn failed_from_command_error(job_kind: JobKindDto, error: CommandErrorDto) -> Self {
         Self {
-            event_type: JobEventKindDto::Failed,
+            event_type: if error.code == crate::constants::COMMAND_ERROR_CANCELLED { JobEventKindDto::Cancelled } else { JobEventKindDto::Failed },
             job_kind: Some(job_kind),
             phase: None,
             code: Some(error.code),

@@ -8,6 +8,8 @@ use std::{
 };
 use tokio::sync::{mpsc, watch};
 
+use crate::constants;
+use crate::error::ErrorSeverityDto;
 #[cfg(test)]
 use crate::job_dto::TestJobEventsSnapshot;
 use crate::job_dto::{
@@ -880,6 +882,26 @@ impl JobRegistry {
             }
 
             let mut event = event;
+            if record.status == JobStatusDto::Cancelling && matches!(event.event_type, JobEventKindDto::Completed | JobEventKindDto::Failed) {
+                let job_kind = event.job_kind;
+                record.terminal_summary = None;
+                event = JobEventDto {
+                    event_type: JobEventKindDto::Cancelled,
+                    job_kind,
+                    phase: None,
+                    code: Some(constants::COMMAND_ERROR_CANCELLED),
+                    hint: None,
+                    severity: Some(ErrorSeverityDto::Info),
+                    retryable: Some(true),
+                    path: None,
+                    bytes: None,
+                    total_bytes: None,
+                    total_bytes_processed: None,
+                    entries: None,
+                    total_entries: None,
+                    message: Some("Archive job cancelled.".to_string()),
+                };
+            }
             if matches!(event.event_type, JobEventKindDto::EntryFinished) {
                 record.processed_entries = record.processed_entries.saturating_add(1);
             }
@@ -907,7 +929,10 @@ impl JobRegistry {
                     record.status = JobStatusDto::Completed;
                 }
                 JobEventKindDto::Failed if !record.status.is_terminal() => record.status = JobStatusDto::Failed,
-                JobEventKindDto::Cancelled if !record.status.is_terminal() => record.status = JobStatusDto::Cancelled,
+                JobEventKindDto::Cancelled if !record.status.is_terminal() => {
+                    record.terminal_summary = None;
+                    record.status = JobStatusDto::Cancelled;
+                }
                 JobEventKindDto::Paused => record.status = JobStatusDto::Paused,
                 JobEventKindDto::Resumed if record.status == JobStatusDto::Paused => {
                     record.status = JobStatusDto::Running;
@@ -940,26 +965,29 @@ impl JobRegistry {
             if record.publication_closed {
                 return Err("revision_exhausted");
             }
+            let cancellation_requested = record.status == JobStatusDto::Cancelling;
             let event = JobEventDto {
-                event_type: JobEventKindDto::Completed,
+                event_type: if cancellation_requested { JobEventKindDto::Cancelled } else { JobEventKindDto::Completed },
                 job_kind: Some(kind),
                 phase: None,
-                code: None,
+                code: cancellation_requested.then_some(constants::COMMAND_ERROR_CANCELLED),
                 hint: None,
-                severity: None,
-                retryable: None,
+                severity: cancellation_requested.then_some(ErrorSeverityDto::Info),
+                retryable: cancellation_requested.then_some(true),
                 path: None,
-                bytes: Some(summary.written_bytes),
+                bytes: (!cancellation_requested).then_some(summary.written_bytes),
                 total_bytes: None,
-                total_bytes_processed: Some(summary.written_bytes),
-                entries: Some(summary.written_entries),
-                total_entries: Some(summary.written_entries),
-                message: None,
+                total_bytes_processed: (!cancellation_requested).then_some(summary.written_bytes),
+                entries: (!cancellation_requested).then_some(summary.written_entries),
+                total_entries: (!cancellation_requested).then_some(summary.written_entries),
+                message: cancellation_requested.then(|| "Archive job cancelled.".to_string()),
             };
-            record.terminal_summary = Some(summary);
-            record.status = JobStatusDto::Completed;
+            record.terminal_summary = (!cancellation_requested).then_some(summary);
+            record.status = if cancellation_requested { JobStatusDto::Cancelled } else { JobStatusDto::Completed };
             record.processed_entries = record.processed_entries.max(event.entries.unwrap_or(0));
-            record.total_entries = event.total_entries;
+            if event.total_entries.is_some() {
+                record.total_entries = event.total_entries;
+            }
             apply_event_to_progress(record, &event);
             record_test_event(record, event);
             record.terminal_sequence = Some(allocate_terminal_sequence()?);
@@ -1419,6 +1447,57 @@ mod tests {
 
         assert!(matches!(cancel_response.status, JobStatusDto::Cancelling));
         assert!(token.is_cancelled(), "cancel request should set the job cancellation token");
+    }
+
+    #[test]
+    fn completion_after_cancel_request_is_committed_as_cancelled() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry.request_cancel(&response.job_id).expect("cancel should target an existing job");
+        registry
+            .commit_completed(
+                &response.job_id,
+                JobKindDto::ZipExtract,
+                JobTerminalSummaryDto { written_entries: 1, skipped_entries: None, written_bytes: 10, warnings: Vec::new() },
+            )
+            .expect("cancellation should still finalize the job");
+
+        let terminal = registry.take_test_events(&response.job_id).expect("cancelled job should remain pollable");
+        assert_eq!(terminal.status, JobStatusDto::Cancelled);
+        assert!(terminal.terminal_summary.is_none());
+        assert!(!terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Completed));
+        assert!(terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Cancelled));
+    }
+
+    #[test]
+    fn direct_completion_after_cancel_request_is_committed_as_cancelled() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry.request_cancel(&response.job_id).expect("cancel should target an existing job");
+        registry.emit_direct_event(&response.job_id, JobEventDto::new(JobEventKindDto::Completed));
+
+        let terminal = registry.take_test_events(&response.job_id).expect("cancelled job should remain pollable");
+        assert_eq!(terminal.status, JobStatusDto::Cancelled);
+        assert!(terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Cancelled));
+        assert!(!terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Completed));
+    }
+
+    #[test]
+    fn cancellation_command_error_is_published_as_cancelled() {
+        let registry = JobRegistry::new();
+        let (response, _) = registry.create_job(JobKindDto::ZipExtract);
+
+        registry.emit_direct_event(
+            &response.job_id,
+            JobEventDto::failed_from_command_error(JobKindDto::ZipExtract, crate::error::CommandErrorDto::cancelled("cancelled")),
+        );
+
+        let terminal = registry.take_test_events(&response.job_id).expect("cancelled job should remain pollable");
+        assert_eq!(terminal.status, JobStatusDto::Cancelled);
+        assert!(terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Cancelled));
+        assert!(!terminal.events.iter().any(|event| event.event_type == JobEventKindDto::Failed));
     }
 
     #[test]
