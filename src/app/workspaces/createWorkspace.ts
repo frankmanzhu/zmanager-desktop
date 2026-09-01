@@ -458,8 +458,8 @@ const CREATE_PLAN_ROOT_PATH = "";
 const DEFAULT_CREATE_OPTIONS: MutableCreateWorkspaceOptions = {
   destinationPath: "",
   format: "tarZst",
-  cleanSource: true,
-  respectGitignore: false,
+  cleanSource: false,
+  respectGitignore: true,
   followSymlinks: false,
   replaceExisting: false,
   preserveMetadata: true,

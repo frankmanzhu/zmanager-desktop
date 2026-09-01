@@ -15,6 +15,7 @@ import {
   DEFAULT_APP_PREFERENCES,
   type AppPreferences,
 } from "../preferences";
+import type { QuickExtractEntry } from "../quickActions";
 import { createCreateWorkspace, type CreateWorkspace } from "../workspaces/createWorkspace";
 import { createQuickActionController, type QuickActionControllerOptions } from "./quickActionController";
 
@@ -75,6 +76,7 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     currentArchives: [] as string[],
     loadedArchives: [] as string[],
     browseErrors: [] as string[],
+    archiveEntries: [] as QuickExtractEntry[],
     extractDialogs: [] as string[],
     promptedNewPasswords: 0,
     promptedRetryCodes: [] as string[],
@@ -177,6 +179,9 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     readBrowseState() {
       return browseState;
     },
+    readArchiveEntries() {
+      return calls.archiveEntries;
+    },
     setBrowseError(message) {
       calls.browseErrors.push(message);
     },
@@ -196,6 +201,9 @@ function createHarness(overrides: Partial<QuickActionControllerOptions> = {}) {
     },
     setPreferences(next: AppPreferences) {
       preferences = next;
+    },
+    setArchiveEntries(next: QuickExtractEntry[]) {
+      calls.archiveEntries = next;
     },
     workspace,
   };
@@ -233,7 +241,7 @@ describe("quick action controller", () => {
       preserveMetadata: true,
       password: "new-secret",
       compressionLevel: 5,
-      respectGitignore: false,
+      respectGitignore: true,
       followSymlinks: false,
       zipCompression: "deflate",
     } satisfies StartCreateRequest);
@@ -435,6 +443,28 @@ describe("quick action controller", () => {
       ignoreSymlinks: false,
     } satisfies StartExtractRequest);
     expect(harness.calls.extractDestinations).toEqual(["C:/archives"]);
+  });
+
+  it("strips an archive wrapper for direct quick extract here", async () => {
+    const harness = createHarness();
+    harness.setArchiveEntries([
+      { path: "demo", kind: "directory" },
+      { path: "demo/readme.txt", kind: "file" },
+    ]);
+
+    await harness.controller.startQuickExtract(["C:/archives/demo.zip"], "extractHere");
+
+    expect(harness.calls.loadedArchives).toEqual(["C:/archives/demo.zip"]);
+    expect(harness.runStartExtract).toHaveBeenCalledWith({
+      archivePath: "C:/archives/demo.zip",
+      destinationPath: "C:/archives",
+      overwrite: "rename",
+      stripComponents: 1,
+      tzapRestorePolicy: "portable",
+      tzapAllowDegraded: false,
+      tzapAllowAbsoluteSymlinks: false,
+      ignoreSymlinks: false,
+    } satisfies StartExtractRequest);
   });
 
   it("uses replace for quick extract only when defaultExtractOverwrite is set to replace", async () => {

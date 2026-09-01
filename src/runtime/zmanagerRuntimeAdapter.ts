@@ -177,6 +177,10 @@ import {
   type ExtractStartInput,
 } from "../app/extractFlow";
 import {
+  archiveExtractionPolicy,
+  extractHerePathOptions,
+} from "../app/extractionPolicy";
+import {
   createExtractDialogFormSnapshot,
   extractStartInputFromDialogForm,
   patchExtractDialogFormSnapshot,
@@ -1096,6 +1100,7 @@ const quickActionController = createQuickActionController({
   setCurrentArchivePath: () => {},
   loadArchive: (request) => loadArchive(request),
   readBrowseState: archiveBrowseState,
+  readArchiveEntries: archiveEntries,
   setBrowseError: (text) => setBrowseState("error", text),
   openExtractDialog,
   diagnostics,
@@ -1728,7 +1733,10 @@ function extractionDefaultsForArchive(archivePath: string): ExtractWorkspaceDefa
   const folderName = suffix && archiveName.toLowerCase().endsWith(suffix.toLowerCase())
     ? archiveName.slice(0, -suffix.length)
     : archiveName;
-  const destinationPath = appPreferences.defaultExtractionBehavior === "extractHere"
+  const extractionAction = appPreferences.defaultExtractionBehavior === "extractHere"
+    ? "extractHere"
+    : "extractToFolder";
+  const destinationPath = archiveExtractionPolicy(extractionAction).destination === "archiveParent"
     ? parent
     : joinNativePath(configuredBase, folderName || APP_TITLE);
 
@@ -2018,8 +2026,17 @@ const commandRouter = createCommandRouter({
     extract: (mode, destination) => {
       if (destination === "here") {
         const parent = nativeParentPath(archiveCurrentPath());
+        const selectedEntries = mode === "selection" ? getSelectedEntryDtos() : [];
+        const selectedFilePath = selectedEntries.length === 1 && selectedEntries[0]?.kind !== "directory"
+          ? selectedEntries[0].path
+          : undefined;
+        const herePathOptions = extractHerePathOptions(extractWorkspace.buildStartInput(), {
+          mode,
+          selectedFilePath,
+        });
         void startExtract(mode, {
           ...extractWorkspace.buildStartInput(),
+          ...herePathOptions,
           destinationBasePath: parent,
         });
         return;

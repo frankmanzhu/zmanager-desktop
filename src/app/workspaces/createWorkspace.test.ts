@@ -176,8 +176,8 @@ describe("create workspace source state", () => {
       options: {
         destinationPath: "",
         format: "tarZst",
-        cleanSource: true,
-        respectGitignore: false,
+        cleanSource: false,
+        respectGitignore: true,
         followSymlinks: false,
         replaceExisting: false,
         preserveMetadata: true,

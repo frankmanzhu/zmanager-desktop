@@ -88,11 +88,11 @@ export type AppPreferencePatch = Partial<AppPreferences>;
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   locale: SYSTEM_LOCALE_PREFERENCE,
   defaultArchiveFormat: "tarZst",
-  defaultCleanSourceEnabled: true,
+  defaultCleanSourceEnabled: false,
   createFormatDefaults: {
     zip: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
@@ -103,8 +103,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       zipCompression: "deflate",
     },
     tarZst: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
@@ -114,8 +114,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       promptForPassword: false,
     },
     tzap: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
@@ -129,8 +129,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       tzapBootstrapSidecar: false,
     },
     sevenZ: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
@@ -144,8 +144,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       sevenZEncryptFileNames: true,
     },
     tarGz: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,
@@ -155,8 +155,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
       promptForPassword: false,
     },
     appleArchive: {
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
       compressionLevel: null,
       volumeSize: null,

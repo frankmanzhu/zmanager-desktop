@@ -468,7 +468,7 @@ function CreateTable() {
         <div
           ref={tableShellRef}
           data-create-table-shell
-          className="relative h-full min-h-0 select-none overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40"
+          className={`relative h-full min-h-0 select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40 ${rows.length ? "overflow-auto" : "overflow-hidden"}`}
           tabIndex={0}
           onDragStart={(event) => event.preventDefault()}
           onPointerDownCapture={(event) => {
@@ -511,18 +511,18 @@ function CreateTable() {
             aria-hidden="true"
           />
           {marqueeRect ? <MarqueeSelectionOverlay rect={marqueeRect} /> : null}
-          <table
-            id="compress-source-table"
-            className={createTableClassName(snapshot)}
-            width={compressSourceTableWidth(columnWidths, visibleCols.map((col) => col.id))}
-          >
-            <colgroup>
-              <col width={COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX} />
-              {visibleCols.map((col) => (
-                <col width={columnWidths[col.id] ?? col.width} key={col.id} />
-              ))}
-            </colgroup>
-            {rows.length ? (
+          {rows.length ? (
+            <table
+              id="compress-source-table"
+              className={createTableClassName(snapshot)}
+              width={compressSourceTableWidth(columnWidths, visibleCols.map((col) => col.id))}
+            >
+              <colgroup>
+                <col width={COMPRESS_SOURCE_INCLUDE_COLUMN_WIDTH_PX} />
+                {visibleCols.map((col) => (
+                  <col width={columnWidths[col.id] ?? col.width} key={col.id} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
                   <th className="sticky top-0 z-10 w-9 border-b border-slate-200 bg-slate-50 p-2 text-center dark:border-slate-800 dark:bg-slate-900">
@@ -561,10 +561,8 @@ function CreateTable() {
                   ))}
                 </tr>
               </thead>
-            ) : null}
-            <tbody id="compress-source-body" ref={tableBodyRef}>
-              {rows.length ? (
-                rows.map((row) => {
+              <tbody id="compress-source-body" ref={tableBodyRef}>
+                {rows.map((row) => {
                   const srcPath = sourcePathMap.get(row.path) ?? "";
                   const isFolder = row.rowType !== "entry" || row.entry.kind === "directory";
                   return (
@@ -582,22 +580,22 @@ function CreateTable() {
                       actions={actions}
                     />
                   );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan={1 + visibleCols.length}
-                    className="h-32 p-6 text-center text-sm text-slate-500 dark:text-slate-400"
-                  >
-                    <div className="grid gap-1">
-                      <strong>{i18n.t("compress.emptyTable")}</strong>
-                      <span>{i18n.t("compress.dragSourcesHint")}</span>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div
+              id="compress-empty-state"
+              className="absolute inset-0 z-10 grid place-items-center p-6 text-center text-sm text-slate-500 dark:text-slate-400"
+            >
+              <div className="grid gap-1">
+                <strong className="font-semibold text-slate-700 dark:text-slate-200">
+                  {i18n.t("compress.emptyTable")}
+                </strong>
+                <span>{i18n.t("compress.dragSourcesHint")}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

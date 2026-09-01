@@ -21,6 +21,24 @@ import { CreateWorkspace } from "./CreateWorkspace";
 type CreatePlan = NonNullable<CreateWorkspaceSnapshot["plan"]["current"]>;
 
 describe("React create workspace", () => {
+  it("centers the empty state without rendering a scrollable source table", () => {
+    const initial = createInitialZManagerReactSnapshot();
+    const html = renderCreateWorkspace({
+      ...initial,
+      shell: {
+        ...initial.shell,
+        activeMode: "compress",
+      },
+    });
+
+    expect(html).toContain('id="compress-empty-state"');
+    expect(html).toMatch(
+      /data-create-table-shell[^>]*class="[^"]*overflow-hidden[^"]*"/,
+    );
+    expect(html).toContain("grid place-items-center");
+    expect(html).not.toContain('id="compress-source-table"');
+  });
+
   it("renders create sources, plan rows, and options", () => {
     const html = renderCreateWorkspace(createSnapshot());
 

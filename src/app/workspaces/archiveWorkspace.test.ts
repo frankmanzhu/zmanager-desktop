@@ -928,7 +928,7 @@ describe("archive workspace load state", () => {
     });
   });
 
-  it("builds native drag requests for selected and unselected rows with workspace strip depth", () => {
+  it("builds native drag requests with a direct name for one dragged item", () => {
     const emptyWorkspace = createArchiveWorkspace();
 
     expect(reasonOf(emptyWorkspace.buildNativeDragRequest({ entryPath: "docs/readme.txt" }))).toBe("noArchive");
@@ -946,7 +946,7 @@ describe("archive workspace load state", () => {
     expect(unselectedFile).toEqual({
       archivePath: "C:/tmp/project.zip",
       entryPaths: ["docs/readme.txt"],
-      stripComponents: 0,
+      stripComponents: 1,
     });
 
     selectPaths(workspace, ["docs/readme.txt", "src/main.rs"]);
@@ -977,13 +977,13 @@ describe("archive workspace load state", () => {
     workspace.setFlatView(true);
     const flatRequest = requestOf(workspace.buildNativeDragRequest({ entryPath: "docs/guides/intro.txt" }));
 
-    expect(flatRequest.stripComponents).toBe(0);
+    expect(flatRequest.stripComponents).toBe(2);
 
     workspace.setFlatView(false);
     workspace.setSearchQuery("intro");
     const searchRequest = requestOf(workspace.buildNativeDragRequest({ entryPath: "docs/guides/intro.txt" }));
 
-    expect(searchRequest.stripComponents).toBe(0);
+    expect(searchRequest.stripComponents).toBe(2);
     expect(reasonOf(workspace.buildNativeDragRequest({ entryPath: "missing" }))).toBe("noEntryPaths");
   });
 

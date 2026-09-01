@@ -46,6 +46,7 @@ import {
   selectableHierarchicalRowPaths,
   type HierarchicalTableSelectionResult,
 } from "../hierarchicalTable";
+import { nativeDragStripComponents as nativeDragStripComponentsPolicy } from "../extractionPolicy";
 
 const MAX_ARCHIVE_TREE_SUMMARIES = 10_000;
 
@@ -753,7 +754,12 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
         request: {
           archivePath: state.currentArchivePath,
           entryPaths,
-          stripComponents: nativeDragStripComponents(state),
+          stripComponents: nativeDragStripComponentsPolicy({
+            entryPaths,
+            currentFolder: state.view.currentFolder,
+            flatView: state.view.flatView,
+            searchQuery: state.view.searchQuery,
+          }),
           ...(input.password ? { password: input.password } : {}),
         },
       };
@@ -1427,14 +1433,6 @@ function nativeDragEntryPaths(
   return archiveFolderHasFileDescendants(state.entries, normalizedEntryPath)
     ? [normalizedEntryPath]
     : [];
-}
-
-function nativeDragStripComponents(state: MutableArchiveWorkspaceState): number {
-  if (state.view.flatView || state.view.searchQuery.trim() || !state.view.currentFolder) {
-    return 0;
-  }
-
-  return normalizeArchivePath(state.view.currentFolder).split("/").filter(Boolean).length;
 }
 
 function isSelectableRow(row: ArchiveTableRow): row is SelectableArchiveWorkspaceRow {

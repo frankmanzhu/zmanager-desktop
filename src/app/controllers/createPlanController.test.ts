@@ -144,8 +144,8 @@ describe("create plan controller", () => {
 
     expect(harness.runPlanCreate).toHaveBeenCalledWith({
       sources: ["C:/work/project"],
-      cleanSource: true,
-      respectGitignore: false,
+      cleanSource: false,
+      respectGitignore: true,
       followSymlinks: false,
     });
     expect(harness.workspace.getSnapshot().plan.current?.totalBytes).toBe(99);

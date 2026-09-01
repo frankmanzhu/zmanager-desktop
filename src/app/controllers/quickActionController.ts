@@ -24,6 +24,7 @@ import {
   uniqueQuickActionPaths,
   type QuickActionExtractMode,
   type QuickActionPathHelpers,
+  type QuickExtractEntry,
 } from "../quickActions";
 import {
   buildQuickCreateStartRequest,
@@ -59,6 +60,7 @@ export type QuickActionControllerOptions = Readonly<{
   setCurrentArchivePath(archivePath: string): void;
   loadArchive(request: ListArchiveRequest): Promise<void>;
   readBrowseState(): BrowseState;
+  readArchiveEntries(): readonly QuickExtractEntry[];
   setBrowseError(message: string): void;
   openExtractDialog(mode: "archive"): void;
   diagnostics?: DiagnosticRecorder;
@@ -247,6 +249,24 @@ export function createQuickActionController(
         continue;
       }
 
+      let entries: readonly QuickExtractEntry[] | undefined;
+      if (action === "extractHere") {
+        try {
+          await options.loadArchive({ archivePath });
+          const browseState = options.readBrowseState();
+          if (browseState === "loaded" || browseState === "empty") {
+            entries = options.readArchiveEntries();
+          }
+        } catch (error) {
+          const commandError = options.toCommandError(error);
+          diagnostics.record({
+            scope: "quickAction",
+            name: "extractPlanningFailed",
+            fields: { action, errorCode: commandError?.code ?? "unknown" },
+          });
+        }
+      }
+
       let password: string | undefined;
       while (true) {
         try {
@@ -254,6 +274,7 @@ export function createQuickActionController(
             archivePath,
             action,
             options.pathHelpers,
+            entries,
           );
           if (!destinationPlan.destinationPath) {
             options.setOperationalMessage("quickExtract.chooseDestination", { archivePath });

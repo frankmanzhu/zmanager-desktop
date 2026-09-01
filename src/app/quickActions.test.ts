@@ -102,16 +102,15 @@ describe("quick action helpers", () => {
     expect(quickExtractSingleRootFolder([{ path: "../escape.txt" }])).toBeNull();
   });
 
-  it("plans extract-here folder-wrapped archives as a renamed root destination", () => {
+  it("plans extract-here folder-wrapped archives directly in the current directory", () => {
     expect(
       quickExtractDestinationPlan("/tmp/photos.zip", "extractHere", pathHelpers, [
         { path: "photos/", kind: "directory" },
         { path: "photos/raw/image.jpg" },
-      ]),
+    ]),
     ).toEqual({
-      destinationPath: "/tmp/photos",
+      destinationPath: "/tmp",
       stripComponents: 1,
-      destinationCollisionStrategy: "rename",
     });
 
     expect(
@@ -231,11 +230,11 @@ describe("quick action helpers", () => {
       handlers,
     );
 
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", true);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", true);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", true);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", true);
-    expect(handlers.startCreate).toHaveBeenNthCalledWith(5, ["/tmp/source"], "tarGz", true);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(1, ["/tmp/source"], "tzap", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(2, ["/tmp/source"], "zip", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(3, ["/tmp/source"], "sevenZ", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(4, ["/tmp/source"], "tarZst", false);
+    expect(handlers.startCreate).toHaveBeenNthCalledWith(5, ["/tmp/source"], "tarGz", false);
   });
 
   it("routes associated archive opens to browsing regardless of extraction defaults", async () => {

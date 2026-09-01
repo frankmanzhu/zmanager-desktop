@@ -31,6 +31,16 @@ describe("preferences helpers", () => {
     expect(loadAppPreferences(null)).toEqual(DEFAULT_APP_PREFERENCES);
   });
 
+  it("uses safe archive creation defaults for every supported format", () => {
+    expect(DEFAULT_APP_PREFERENCES.defaultCleanSourceEnabled).toBe(false);
+
+    for (const defaults of Object.values(DEFAULT_APP_PREFERENCES.createFormatDefaults)) {
+      expect(defaults.cleanSource).toBe(false);
+      expect(defaults.respectGitignore).toBe(true);
+      expect(defaults.preserveMetadata).toBe(true);
+    }
+  });
+
   it("loads valid stored preferences", () => {
     const storage = memoryStorage({
       "zmanager.locale": "en",
@@ -94,7 +104,7 @@ describe("preferences helpers", () => {
         },
         tarZst: {
           cleanSource: false,
-          respectGitignore: false,
+          respectGitignore: true,
           followSymlinks: false,
           compressionLevel: null,
           volumeSize: null,
@@ -105,7 +115,7 @@ describe("preferences helpers", () => {
         },
         tzap: {
           cleanSource: false,
-          respectGitignore: false,
+          respectGitignore: true,
           followSymlinks: false,
           compressionLevel: null,
           volumeSize: null,
@@ -120,7 +130,7 @@ describe("preferences helpers", () => {
         },
         sevenZ: {
           cleanSource: false,
-          respectGitignore: false,
+          respectGitignore: true,
           followSymlinks: false,
           compressionLevel: null,
           volumeSize: null,
@@ -135,7 +145,7 @@ describe("preferences helpers", () => {
         },
         tarGz: {
           cleanSource: false,
-          respectGitignore: false,
+          respectGitignore: true,
           followSymlinks: false,
           compressionLevel: null,
           volumeSize: null,
@@ -146,7 +156,7 @@ describe("preferences helpers", () => {
         },
         appleArchive: {
           cleanSource: false,
-          respectGitignore: false,
+          respectGitignore: true,
           followSymlinks: false,
           compressionLevel: null,
           volumeSize: null,

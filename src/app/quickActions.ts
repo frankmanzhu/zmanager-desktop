@@ -13,10 +13,15 @@ import {
   createDefaultsForFormat,
   defaultCreateDirectory,
   type AppPreferences,
-  type DefaultExtractionBehavior,
 } from "./preferences";
+import {
+  archiveExtractionPolicy,
+  quickExtractPathPolicy,
+  singleArchiveRootFolder,
+  type ArchiveExtractionAction,
+} from "./extractionPolicy";
 
-export type QuickActionExtractMode = Exclude<DefaultExtractionBehavior, "askEveryTime">;
+export type QuickActionExtractMode = ArchiveExtractionAction;
 export type QuickActionWindowDisposition = "mainWindow" | "disposableTask";
 
 export type QuickActionPathHelpers = CreatePathHelpers & {
@@ -80,7 +85,8 @@ export function quickExtractDestination(
   pathHelpers: QuickActionPathHelpers,
 ): string {
   const parent = pathHelpers.nativeParentPath(archivePath);
-  if (action === "extractHere") {
+  const policy = archiveExtractionPolicy(action);
+  if (policy.destination === "archiveParent") {
     return parent;
   }
 
@@ -91,72 +97,29 @@ export function quickExtractDestination(
 export function quickExtractDestinationCollisionStrategy(
   action: QuickActionExtractMode,
 ): StartExtractRequest["destinationCollisionStrategy"] | undefined {
-  return action === "extractToFolder" ? "rename" : undefined;
+  return archiveExtractionPolicy(action).destinationCollisionStrategy;
 }
 
-export function quickExtractSingleRootFolder(entries: QuickExtractEntry[]): string | null {
-  let root: string | null = null;
-  let hasChildBelowRoot = false;
-  let hasRootDirectoryEntry = false;
-
-  for (const entry of entries) {
-    const parts = entry.path.replace(/\\/g, "/").split("/").filter(Boolean);
-    if (!parts.length) {
-      continue;
-    }
-    const entryRoot = parts[0];
-    if (!isSafeArchiveRootName(entryRoot)) {
-      return null;
-    }
-    if (root === null) {
-      root = entryRoot;
-    } else if (root !== entryRoot) {
-      return null;
-    }
-    if (parts.length > 1) {
-      hasChildBelowRoot = true;
-    } else if (entry.kind === "directory") {
-      hasRootDirectoryEntry = true;
-    }
-  }
-
-  return root && (hasChildBelowRoot || hasRootDirectoryEntry) ? root : null;
+export function quickExtractSingleRootFolder(entries: readonly QuickExtractEntry[]): string | null {
+  return singleArchiveRootFolder(entries);
 }
 
 export function quickExtractDestinationPlan(
   archivePath: string,
   action: QuickActionExtractMode,
   pathHelpers: QuickActionPathHelpers,
-  entries?: QuickExtractEntry[],
+  entries?: readonly QuickExtractEntry[],
 ): QuickExtractDestinationPlan {
   const destinationPath = quickExtractDestination(archivePath, action, pathHelpers);
-  if (action === "extractHere" && entries) {
-    const rootFolder = quickExtractSingleRootFolder(entries);
-    if (rootFolder) {
-      return {
-        destinationPath: pathHelpers.joinNativePath(destinationPath, rootFolder),
-        stripComponents: 1,
-        destinationCollisionStrategy: "rename",
-      };
-    }
-  }
-
-  const destinationCollisionStrategy = quickExtractDestinationCollisionStrategy(action);
+  const rootFolder = entries ? quickExtractSingleRootFolder(entries) : null;
+  const pathPolicy = quickExtractPathPolicy(
+    action,
+    Boolean(rootFolder),
+  );
   return {
     destinationPath,
-    stripComponents: 0,
-    ...(destinationCollisionStrategy ? { destinationCollisionStrategy } : {}),
+    ...pathPolicy,
   };
-}
-
-function isSafeArchiveRootName(name: string): boolean {
-  return Boolean(
-    name &&
-      name !== "." &&
-      name !== ".." &&
-      !name.includes("/") &&
-      !name.includes("\\"),
-  );
 }
 
 export function unsupportedQuickExtractPath(paths: string[]): string | null {

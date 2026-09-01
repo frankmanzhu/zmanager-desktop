@@ -4,8 +4,35 @@ import {
   buildStartExtractRequest,
   resolveExtractStartInput,
 } from "./extractFlow";
+import { extractHerePathOptions } from "./extractionPolicy";
 
 describe("extract flow helpers", () => {
+  it("prepares Extract Here to remove a wrapper root while preserving archive paths", () => {
+    const input = {
+      destinationBasePath: "C:/tmp",
+      useSubfolder: false,
+      subfolder: "",
+      pathMode: "none" as const,
+      overwrite: "rename" as const,
+      stripComponents: "0",
+      deduplicateRoot: false,
+    };
+
+    expect(extractHerePathOptions(input, { mode: "archive" })).toMatchObject({
+      pathMode: "full",
+      stripComponents: 0,
+      deduplicateRoot: true,
+    });
+    expect(extractHerePathOptions(input, {
+      mode: "selection",
+      selectedFilePath: "docs/releases/readme.txt",
+    })).toMatchObject({
+      pathMode: "full",
+      stripComponents: 2,
+      deduplicateRoot: false,
+    });
+  });
+
   it("builds full archive extract requests without selected entry paths", () => {
     expect(
       buildStartExtractRequest({

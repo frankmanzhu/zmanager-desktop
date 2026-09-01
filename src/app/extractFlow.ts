@@ -1,5 +1,6 @@
 import type { StartExtractRequest } from "../api/types";
 import { normalizeArchivePath } from "./archiveTree";
+import { hasSingleArchiveRootFolder } from "./extractionPolicy";
 
 export type ExtractMode = "archive" | "selection";
 export type ExtractPathMode = "full" | "current" | "none";
@@ -148,7 +149,7 @@ export function resolveExtractStripComponents(input: Readonly<{
     stripComponents = Math.max(stripComponents, maxDepth);
   }
 
-  if (input.deduplicateRoot && hasSingleRootFolder(references)) {
+  if (input.deduplicateRoot && hasSingleArchiveRootFolder(references)) {
     stripComponents += 1;
   }
 
@@ -171,15 +172,4 @@ function numberOrZero(value: string | number): number {
 
 function archivePathDepth(entryPath: string): number {
   return normalizeArchivePath(entryPath).split("/").filter(Boolean).length;
-}
-
-function hasSingleRootFolder(entryPaths: readonly string[]): boolean {
-  const normalized = entryPaths
-    .map((entryPath) => normalizeArchivePath(entryPath).split("/").filter(Boolean))
-    .filter((parts) => parts.length > 0);
-  if (!normalized.length) {
-    return false;
-  }
-  const root = normalized[0][0];
-  return root ? normalized.every((parts) => parts[0] === root) : false;
 }

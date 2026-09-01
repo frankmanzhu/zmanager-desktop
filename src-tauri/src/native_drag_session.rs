@@ -331,6 +331,22 @@ mod tests {
     }
 
     #[test]
+    fn treats_a_nested_single_file_after_path_stripping_as_a_file_promise() {
+        let descriptors = NativeDragSessionRegistry::descriptors(&[NativeFileDragItem {
+            entry_path: "docs/readme.txt".to_string(),
+            display_path: "readme.txt".to_string(),
+            size: Some(7),
+            modified_unix_seconds: None,
+        }])
+        .unwrap();
+
+        assert_eq!(
+            descriptors,
+            vec![NativeFilePromiseDescriptor { promise_path: "readme.txt".to_string(), promised_name: "readme.txt".to_string(), is_directory: false }]
+        );
+    }
+
+    #[test]
     fn failure_cleans_partial_output_and_cancel_shutdown_are_idempotent() {
         let provider: NativeFileDragStreamProvider = Arc::new(move |_, writer| {
             writer.write_all(b"partial").unwrap();
