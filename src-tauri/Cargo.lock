@@ -3731,6 +3731,7 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 [[package]]
 name = "localsend-rs"
 version = "0.1.2"
+source = "git+https://github.com/frankmanzhu/localsend-rs.git?rev=08e337e#08e337e2921f5fcc639cb49cee359c7ba9bdc0e4"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3747,7 +3748,6 @@ dependencies = [
  "rcgen",
  "reqwest",
  "rustls",
- "rustls-pemfile",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -5371,15 +5371,6 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
-dependencies = [
- "rustls-pki-types",
 ]
 
 [[package]]
