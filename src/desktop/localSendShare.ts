@@ -8,7 +8,7 @@ export type LocalSendShareDesktopAdapter = Readonly<{
 }>;
 
 export const localSendShareDesktopAdapter: LocalSendShareDesktopAdapter = {
-  discover: (alias) => runLocalSendDiscover({ alias }),
-  sendFile: (request) => runLocalSendSendFile(request),
+  discover: (alias) => runLocalSendDiscover({ alias, https: true }),
+  sendFile: (request) => runLocalSendSendFile({ ...request, https: true }),
   cancelSend: (sendId) => runLocalSendCancelSend({ sendId }),
 };

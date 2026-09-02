@@ -118,8 +118,19 @@ pub struct LocalSendState {
 
 impl LocalSendState {
     pub fn new(app_data_dir: PathBuf) -> Self {
+        let registry = zmanager_localsend::registry();
+        // A LocalSend device is its certificate fingerprint, so this identity
+        // has to outlive the process: without it we are a new device to every
+        // peer on every launch, and the trust store beside it — which is keyed
+        // by fingerprint — would never match after a restart. A failure here
+        // is not fatal; the registry falls back to a per-process identity and
+        // LocalSend still works, minus the stable identity.
+        if let Err(error) = registry.set_identity_dir(&app_data_dir) {
+            eprintln!("zmanager-localsend: LocalSend identity will not persist across restarts: {error}");
+        }
+
         Self {
-            registry: zmanager_localsend::registry(),
+            registry,
             trust_store: TrustStore::new(app_data_dir),
             receive_config: Arc::new(Mutex::new(None)),
             poll_stop: Arc::new(Mutex::new(None)),

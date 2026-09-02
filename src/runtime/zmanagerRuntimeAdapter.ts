@@ -1307,6 +1307,7 @@ function syncLocalSendReceiverWithPreferences() {
       }
       return runLocalSendStartReceiver({
         alias: localSendAliasOrDefault(),
+        https: true,
         receiveFolderPath: appPreferences.lanShareReceiveFolderPath,
         autoExtract: appPreferences.lanShareAutoExtract,
       }).catch((error) => {
