@@ -129,12 +129,7 @@ impl LocalSendState {
             eprintln!("zmanager-localsend: LocalSend identity will not persist across restarts: {error}");
         }
 
-        Self {
-            registry,
-            trust_store: TrustStore::new(app_data_dir),
-            receive_config: Arc::new(Mutex::new(None)),
-            poll_stop: Arc::new(Mutex::new(None)),
-        }
+        Self { registry, trust_store: TrustStore::new(app_data_dir), receive_config: Arc::new(Mutex::new(None)), poll_stop: Arc::new(Mutex::new(None)) }
     }
 
     /// Stops the event pump and the receiver, if either is running. Safe to
