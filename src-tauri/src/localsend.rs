@@ -423,8 +423,16 @@ fn map_localsend_error(error: zmanager_localsend::LocalSendBridgeError) -> Comma
 // ---------------------------------------------------------------------
 
 #[tauri::command]
-pub fn localsend_discover(request: LocalSendDiscoverRequestDto, state: State<'_, LocalSendState>) -> Result<Vec<LocalSendDeviceInfoDto>, CommandErrorDto> {
-    state.registry.discover(request.into()).map(|devices| devices.into_iter().map(Into::into).collect()).map_err(map_localsend_error)
+pub async fn localsend_discover(
+    request: LocalSendDiscoverRequestDto,
+    state: State<'_, LocalSendState>,
+) -> Result<Vec<LocalSendDeviceInfoDto>, CommandErrorDto> {
+    let local_send = state.inner().clone();
+    tokio::task::spawn_blocking(move || {
+        local_send.registry.discover(request.into()).map(|devices| devices.into_iter().map(Into::into).collect()).map_err(map_localsend_error)
+    })
+    .await
+    .map_err(|error| CommandErrorDto::operation_failed(format!("LAN discovery task failed: {error}")))?
 }
 
 #[tauri::command]

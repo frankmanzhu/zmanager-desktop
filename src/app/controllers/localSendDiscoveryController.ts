@@ -25,6 +25,7 @@ const EMPTY: LocalSendDiscoverySnapshot = Object.freeze({
 
 export function createLocalSendDiscoveryController(options: Options): LocalSendDiscoveryController {
   let snapshot = EMPTY;
+  let refreshGeneration = 0;
 
   function update(next: LocalSendDiscoverySnapshot): LocalSendDiscoverySnapshot {
     snapshot = Object.freeze({ ...next, devices: Object.freeze([...next.devices]) });
@@ -35,11 +36,18 @@ export function createLocalSendDiscoveryController(options: Options): LocalSendD
   return {
     getSnapshot: () => snapshot,
     refresh: async (alias) => {
+      const generation = ++refreshGeneration;
       update({ ...snapshot, status: "loading", error: null });
       try {
         const devices = await options.discover(alias);
+        if (generation !== refreshGeneration) {
+          return snapshot;
+        }
         return update({ status: "ready", devices, error: null });
       } catch (error) {
+        if (generation !== refreshGeneration) {
+          return snapshot;
+        }
         return update({ ...snapshot, status: "error", error: options.errorMessage(error) });
       }
     },
