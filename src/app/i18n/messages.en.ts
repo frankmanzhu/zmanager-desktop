@@ -737,7 +737,7 @@ export const enMessages = {
   "preferences.lanSharing.description": "Send archives to other devices on your local network, and receive files with LocalSend.",
   "preferences.lanSharing.alias": "Device name",
   "preferences.lanSharing.aliasPlaceholder": "e.g. Frank's Desktop",
-  "preferences.lanSharing.aliasHelp": "Shown to other devices when they receive a transfer from this computer.",
+  "preferences.lanSharing.aliasHelp": "Leave blank for an automatic name using this platform, user, and computer. The name is shown to other devices.",
   "preferences.lanSharing.enableReceiving": "Receive files on this network",
   "preferences.lanSharing.enableReceivingHelp": "Only active while ZManager is open. Other devices can discover and send to this computer while enabled.",
   "preferences.lanSharing.autoExtract": "Automatically extract received archives",

@@ -25,6 +25,7 @@ use crate::job_registry::JobRegistry;
 
 const LOCALSEND_EVENT_NAME: &str = "zmanager-localsend-event";
 const TRUST_STORE_FILE_NAME: &str = "localsend-trusted-fingerprints.json";
+const LEGACY_DEFAULT_ALIAS: &str = "ZManager Desktop";
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(150);
 
 type LocalSendEventSink = Arc<dyn Fn(LocalSendEventDto) + Send + Sync>;
@@ -113,6 +114,7 @@ struct ReceiveConfig {
 #[derive(Clone)]
 pub struct LocalSendState {
     registry: Arc<zmanager_localsend::LocalSendRegistry>,
+    default_alias: String,
     trust_store: TrustStore,
     receive_config: Arc<Mutex<Option<ReceiveConfig>>>,
     poll_stop: Arc<Mutex<Option<Arc<AtomicBool>>>>,
@@ -123,6 +125,7 @@ pub struct LocalSendState {
 impl LocalSendState {
     pub fn new(app_data_dir: PathBuf) -> Self {
         let registry = zmanager_localsend::registry();
+        let default_alias = default_device_alias();
         // A LocalSend device is its certificate fingerprint, so this identity
         // has to outlive the process: without it we are a new device to every
         // peer on every launch, and the trust store beside it — which is keyed
@@ -135,6 +138,7 @@ impl LocalSendState {
 
         Self {
             registry,
+            default_alias,
             trust_store: TrustStore::new(app_data_dir),
             receive_config: Arc::new(Mutex::new(None)),
             poll_stop: Arc::new(Mutex::new(None)),
@@ -172,7 +176,7 @@ impl LocalSendState {
         }
         let request = zmanager_localsend::SendFileRequest {
             send_id: send_id.to_string(),
-            alias: alias.to_string(),
+            alias: self.advertised_alias(alias),
             self_port: default_localsend_port(),
             https: true,
             target: target.into(),
@@ -180,6 +184,11 @@ impl LocalSendState {
             pin: None,
         };
         self.registry.send_file(request).map(LocalSendSendFileResultDto::from).map_err(map_localsend_error)
+    }
+
+    fn advertised_alias(&self, alias: &str) -> String {
+        let alias = alias.trim();
+        if alias.is_empty() || alias.eq_ignore_ascii_case(LEGACY_DEFAULT_ALIAS) { self.default_alias.clone() } else { alias.to_owned() }
     }
 
     pub(crate) fn cancel_send_for_share(&self, send_id: &str) -> Result<(), CommandErrorDto> {
@@ -353,9 +362,40 @@ fn default_discover_timeout_ms() -> u64 {
     3_000
 }
 
-impl From<LocalSendDiscoverRequestDto> for zmanager_localsend::DiscoverRequest {
-    fn from(value: LocalSendDiscoverRequestDto) -> Self {
-        Self { alias: value.alias, port: value.port, https: value.https, timeout_ms: value.timeout_ms }
+fn environment_value(names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| std::env::var(name).ok().and_then(|value| clean_alias_component(&value)))
+}
+
+fn clean_alias_component(value: &str) -> Option<String> {
+    let normalized = value
+        .chars()
+        .map(|character| if character.is_control() { ' ' } else { character })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let component = normalized.trim();
+    (!component.is_empty()).then(|| component.chars().take(32).collect())
+}
+
+fn default_device_alias() -> String {
+    let username = environment_value(&["USER", "USERNAME"]);
+    let hostname = environment_value(&["HOSTNAME", "COMPUTERNAME"]);
+    default_device_alias_for(std::env::consts::OS, username.as_deref(), hostname.as_deref())
+}
+
+fn default_device_alias_for(platform: &str, username: Option<&str>, hostname: Option<&str>) -> String {
+    let platform = match platform {
+        "macos" => "macOS",
+        "windows" => "Windows",
+        "linux" => "Linux",
+        other => other,
+    };
+    match (username, hostname) {
+        (Some(username), Some(hostname)) => format!("ZManager {platform} · {username} · {hostname}"),
+        (Some(username), None) => format!("ZManager {platform} · {username}"),
+        (None, Some(hostname)) => format!("ZManager {platform} · {hostname}"),
+        (None, None) => format!("ZManager {platform}"),
     }
 }
 
@@ -429,7 +469,9 @@ pub async fn localsend_discover(
 ) -> Result<Vec<LocalSendDeviceInfoDto>, CommandErrorDto> {
     let local_send = state.inner().clone();
     tokio::task::spawn_blocking(move || {
-        local_send.registry.discover(request.into()).map(|devices| devices.into_iter().map(Into::into).collect()).map_err(map_localsend_error)
+        let LocalSendDiscoverRequestDto { alias, port, https, timeout_ms } = request;
+        let request = zmanager_localsend::DiscoverRequest { alias: local_send.advertised_alias(&alias), port, https, timeout_ms };
+        local_send.registry.discover(request).map(|devices| devices.into_iter().map(Into::into).collect()).map_err(map_localsend_error)
     })
     .await
     .map_err(|error| CommandErrorDto::operation_failed(format!("LAN discovery task failed: {error}")))?
@@ -466,7 +508,7 @@ pub fn localsend_start_receiver(
     state
         .registry
         .start_receiver(zmanager_localsend::StartReceiverRequest {
-            alias: request.alias,
+            alias: state.advertised_alias(&request.alias),
             port: request.port,
             https: request.https,
             save_dir: receive_folder.clone(),
@@ -610,6 +652,14 @@ fn build_auto_extract_request(config: &ReceiveConfig, received_path: &Path) -> O
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_device_alias_identifies_platform_user_and_host_without_control_characters() {
+        assert_eq!(default_device_alias_for("macos", Some("Frank"), Some("Frank's MacBook")), "ZManager macOS · Frank · Frank's MacBook");
+        assert_eq!(default_device_alias_for("linux", Some("frank"), None), "ZManager Linux · frank");
+        assert_eq!(default_device_alias_for("windows", None, Some("Office-PC")), "ZManager Windows · Office-PC");
+        assert_eq!(clean_alias_component("  Frank\n\tDesktop  "), Some("Frank Desktop".to_owned()));
+    }
 
     #[test]
     fn trust_store_round_trip_is_sorted_and_deduplicated() {

@@ -542,7 +542,7 @@ export const zhCnMessages = {
   "preferences.lanSharing.description": "通过 LocalSend 向局域网内的其他设备发送归档文件，或接收文件。",
   "preferences.lanSharing.alias": "设备名称",
   "preferences.lanSharing.aliasPlaceholder": "例如：Frank 的桌面",
-  "preferences.lanSharing.aliasHelp": "其他设备收到来自本机的传输请求时会显示此名称。",
+  "preferences.lanSharing.aliasHelp": "留空时将根据本机系统、用户和计算机自动生成名称。其他设备会看到此名称。",
   "preferences.lanSharing.enableReceiving": "在此网络上接收文件",
   "preferences.lanSharing.enableReceivingHelp": "仅在 ZManager 打开时生效。启用后，其他设备可以发现并向本机发送文件。",
   "preferences.lanSharing.autoExtract": "自动解压收到的归档文件",
