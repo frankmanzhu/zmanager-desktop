@@ -20,7 +20,7 @@ pub const SHARE_QUEUE_CHANGED_EVENT: &str = "zmanager-share-queue-changed";
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "mode", rename_all = "camelCase", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum EnqueueShareRequest {
-    CompressAndShare { client_request_id: String, sender_alias: String, create_request: StartCreateRequest, receiver: Option<LocalSendDeviceInfoDto> },
+    CompressAndShare { client_request_id: String, sender_alias: String, create_request: Box<StartCreateRequest>, receiver: Option<LocalSendDeviceInfoDto> },
     DirectShare { client_request_id: String, sender_alias: String, artifact_path: String, receiver: Option<LocalSendDeviceInfoDto> },
 }
 
@@ -350,6 +350,7 @@ impl ShareRegistry {
                 (ShareMode::DirectShare, vec![path.clone()], Some(path), None)
             }
             EnqueueShareRequest::CompressAndShare { create_request, .. } => {
+                let create_request = *create_request;
                 if create_request.volume_size.is_some_and(|value| value > 0) {
                     return Err(error("multi_file_output_not_supported", "Compressed sharing requires one output file", false));
                 }

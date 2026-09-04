@@ -27,6 +27,8 @@ const LOCALSEND_EVENT_NAME: &str = "zmanager-localsend-event";
 const TRUST_STORE_FILE_NAME: &str = "localsend-trusted-fingerprints.json";
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(150);
 
+type LocalSendEventSink = Arc<dyn Fn(LocalSendEventDto) + Send + Sync>;
+
 // ---------------------------------------------------------------------
 // Trust store — a small, LocalSend-specific fingerprint allowlist. Mirrors
 // the design already proven in the sibling zmanager-mobile repo's
@@ -115,7 +117,7 @@ pub struct LocalSendState {
     receive_config: Arc<Mutex<Option<ReceiveConfig>>>,
     poll_stop: Arc<Mutex<Option<Arc<AtomicBool>>>>,
     poll_thread: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
-    outgoing_event_sink: Arc<Mutex<Option<Arc<dyn Fn(LocalSendEventDto) + Send + Sync>>>>,
+    outgoing_event_sink: Arc<Mutex<Option<LocalSendEventSink>>>,
 }
 
 impl LocalSendState {
@@ -141,7 +143,7 @@ impl LocalSendState {
         }
     }
 
-    pub(crate) fn register_outgoing_event_sink(&self, sink: Arc<dyn Fn(LocalSendEventDto) + Send + Sync>) {
+    pub(crate) fn register_outgoing_event_sink(&self, sink: LocalSendEventSink) {
         *self.outgoing_event_sink.lock().unwrap_or_else(|error| error.into_inner()) = Some(sink);
     }
 
