@@ -131,7 +131,14 @@ impl LocalSendState {
             eprintln!("zmanager-localsend: LocalSend identity will not persist across restarts: {error}");
         }
 
-        Self { registry, trust_store: TrustStore::new(app_data_dir), receive_config: Arc::new(Mutex::new(None)), poll_stop: Arc::new(Mutex::new(None)), poll_thread: Arc::new(Mutex::new(None)), outgoing_event_sink: Arc::new(Mutex::new(None)) }
+        Self {
+            registry,
+            trust_store: TrustStore::new(app_data_dir),
+            receive_config: Arc::new(Mutex::new(None)),
+            poll_stop: Arc::new(Mutex::new(None)),
+            poll_thread: Arc::new(Mutex::new(None)),
+            outgoing_event_sink: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub(crate) fn register_outgoing_event_sink(&self, sink: Arc<dyn Fn(LocalSendEventDto) + Send + Sync>) {
@@ -382,35 +389,6 @@ impl From<LocalSendRespondToTransferRequestDto> for zmanager_localsend::RespondT
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalSendSendFileRequestDto {
-    pub send_id: String,
-    pub alias: String,
-    #[serde(default = "default_localsend_port")]
-    pub self_port: u16,
-    #[serde(default)]
-    pub https: bool,
-    pub target: LocalSendDeviceInfoDto,
-    pub file_path: String,
-    #[serde(default)]
-    pub pin: Option<String>,
-}
-
-impl From<LocalSendSendFileRequestDto> for zmanager_localsend::SendFileRequest {
-    fn from(value: LocalSendSendFileRequestDto) -> Self {
-        Self {
-            send_id: value.send_id,
-            alias: value.alias,
-            self_port: value.self_port,
-            https: value.https,
-            target: value.target.into(),
-            file_path: PathBuf::from(value.file_path),
-            pin: value.pin,
-        }
-    }
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalSendSendFileResultDto {
@@ -421,18 +399,6 @@ pub struct LocalSendSendFileResultDto {
 impl From<zmanager_localsend::SendFileResult> for LocalSendSendFileResultDto {
     fn from(value: zmanager_localsend::SendFileResult) -> Self {
         Self { session_id: value.session_id, file_id: value.file_id }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalSendCancelSendRequestDto {
-    pub send_id: String,
-}
-
-impl From<LocalSendCancelSendRequestDto> for zmanager_localsend::CancelSendRequest {
-    fn from(value: LocalSendCancelSendRequestDto) -> Self {
-        Self { send_id: value.send_id }
     }
 }
 
@@ -539,10 +505,19 @@ fn spawn_event_pump(app: AppHandle, shared: LocalSendState, job_registry: JobReg
     while !stop_flag.load(Ordering::Relaxed) {
         let drained = shared.registry.poll_events();
         for event in drained.events {
-            if let zmanager_localsend::QueuedEvent::FileSendProgress { send_id, session_id, file_id, file_name, bytes_sent, total_bytes, rate_bytes_per_second } = &event
+            if let zmanager_localsend::QueuedEvent::FileSendProgress { send_id, session_id, file_id, file_name, bytes_sent, total_bytes, rate_bytes_per_second } =
+                &event
                 && let Some(sink) = shared.outgoing_event_sink.lock().unwrap_or_else(|error| error.into_inner()).clone()
             {
-                sink(LocalSendEventDto::FileSendProgress { send_id: send_id.clone(), session_id: session_id.clone(), file_id: file_id.clone(), file_name: file_name.clone(), bytes_sent: *bytes_sent, total_bytes: *total_bytes, rate_bytes_per_second: *rate_bytes_per_second });
+                sink(LocalSendEventDto::FileSendProgress {
+                    send_id: send_id.clone(),
+                    session_id: session_id.clone(),
+                    file_id: file_id.clone(),
+                    file_name: file_name.clone(),
+                    bytes_sent: *bytes_sent,
+                    total_bytes: *total_bytes,
+                    rate_bytes_per_second: *rate_bytes_per_second,
+                });
             }
             handle_queued_event(&app, &shared, &job_registry, event);
         }

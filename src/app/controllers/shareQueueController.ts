@@ -1,5 +1,3 @@
-import type { Event } from "@tauri-apps/api/event";
-
 import {
   cancelShare,
   enqueueShare,
@@ -17,10 +15,12 @@ import type {
   ShareRegistrySnapshot,
 } from "../../api/types";
 
+export type { LocalSendDeviceInfoDto, ShareRecordSnapshot, ShareRegistrySnapshot } from "../../api/types";
+
 export type ShareQueueController = Readonly<{
   getSnapshot(): ShareRegistrySnapshot;
   initialize(): Promise<void>;
-  handleQueueHint(event: Event<string>): void;
+  handleQueueHint(): void;
   enqueue(request: EnqueueShareRequest): Promise<EnqueueShareResponse>;
   setReceiver(shareId: string, receiver: LocalSendDeviceInfoDto): Promise<void>;
   start(shareId: string, acknowledgeDeliveryUncertainty?: boolean): Promise<void>;
@@ -30,7 +30,7 @@ export type ShareQueueController = Readonly<{
 }>;
 
 type Options = Readonly<{
-  listen(listener: (event: Event<string>) => void): Promise<() => void>;
+  listen(listener: () => void): Promise<() => void>;
   publish(): void;
   reportError(error: unknown): void;
 }>;

@@ -10,20 +10,29 @@ private func item(_ path: String, directory: Bool = false) -> FinderSelectionIte
 
 @Test func finderMenusFollowGeneratedSelectionShapesAndOrdering() {
     #expect(FinderMenuBuilder.actions(for: [item("/tmp/demo.zip")], localize: { $0 }).map(\.id)
-        == [.extractHere, .extractToFolder, .open, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
+        == [.extractHere, .extractToFolder, .open, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan, .shareOnLan])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/one.zip"), item("/tmp/two.tar.gz")], localize: { $0 }
-    ).map(\.id) == [.extractHere, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
+    ).map(\.id) == [.extractHere, .compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan])
     #expect(FinderMenuBuilder.actions(for: [item("/tmp/folder", directory: true)], localize: { $0 }).map(\.id)
-        == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
+        == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/folder", directory: true), item("/tmp/readme.txt")], localize: { $0 }
-    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
+    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan])
     #expect(FinderMenuBuilder.actions(
         for: [item("/tmp/folder", directory: true)],
         context: .container,
         localize: { $0 }
-    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive])
+    ).map(\.id) == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan])
+}
+
+@Test func finderDirectShareIsAvailableOnlyForOneRegularFile() {
+    #expect(FinderMenuBuilder.actions(for: [item("/tmp/readme.txt")], localize: { $0 }).map(\.id)
+        == [.compress, .compressTzap, .compressZip, .compressSevenZ, .compressTarZst, .compressTarGz, .compressAppleArchive, .compressShareOnLan, .shareOnLan])
+    #expect(FinderMenuBuilder.actions(
+        for: [item("/tmp/one.txt"), item("/tmp/two.txt")], localize: { $0 }
+    ).map(\.id).contains(.shareOnLan) == false)
+    #expect(FinderMenuBuilder.actions(for: [item("/tmp/folder", directory: true)], localize: { $0 }).map(\.id).contains(.shareOnLan) == false)
 }
 
 @Test func finderArchiveClassificationCoversCompoundSplitAndUnsupportedPaths() {

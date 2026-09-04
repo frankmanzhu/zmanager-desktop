@@ -11,9 +11,9 @@
     "compressTarZst",
     "compressTarGz",
     "compressAppleArchive",
+    "compressCleanSource",
     "compressShareOnLan",
     "shareOnLan",
-    "compressCleanSource",
     "extractHere",
     "extractToFolder"
   ],
@@ -292,6 +292,23 @@
       ]
     },
     {
+      "id": "compressCleanSource",
+      "canonicalLabel": "Compress and remove source",
+      "nativeVerb": "CompressCleanSource",
+      "order": 80,
+      "contextMenuOrder": null,
+      "contextMenuContexts": [],
+      "selectionShapes": [
+        "single-folder"
+      ],
+      "multiplicity": "exactly-one",
+      "nativeSurfaces": [],
+      "compatibilityAliases": [
+        "compress-clean-source",
+        "clean-source"
+      ]
+    },
+    {
       "id": "compressShareOnLan",
       "canonicalLabel": "Compress and Share on LAN",
       "nativeVerb": "CompressShareOnLan",
@@ -316,8 +333,7 @@
         "linuxDesktop",
         "linuxNautilus",
         "linuxKde",
-        "macosFinder",
-        "macosServices"
+        "macosFinder"
       ],
       "compatibilityAliases": [
         "compress-share-on-lan"
@@ -331,10 +347,10 @@
       "contextMenuOrder": 105,
       "contextMenuContexts": [
         "archiveSingle",
-        "creation",
-        "container"
+        "creation"
       ],
       "selectionShapes": [
+        "single-archive",
         "files"
       ],
       "multiplicity": "exactly-one",
@@ -343,28 +359,10 @@
         "linuxDesktop",
         "linuxNautilus",
         "linuxKde",
-        "macosFinder",
-        "macosServices"
+        "macosFinder"
       ],
       "compatibilityAliases": [
         "share-lan"
-      ]
-    },
-    {
-      "id": "compressCleanSource",
-      "canonicalLabel": "Compress and remove source",
-      "nativeVerb": "CompressCleanSource",
-      "order": 80,
-      "contextMenuOrder": null,
-      "contextMenuContexts": [],
-      "selectionShapes": [
-        "single-folder"
-      ],
-      "multiplicity": "exactly-one",
-      "nativeSurfaces": [],
-      "compatibilityAliases": [
-        "compress-clean-source",
-        "clean-source"
       ]
     },
     {

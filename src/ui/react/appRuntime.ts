@@ -22,6 +22,7 @@ import type {
 import type { ArchiveTableColumnId } from "../../app/archiveTable";
 import type { CreateSourceColumnId } from "../../app/createTableColumns";
 import type { TableColumnVisibilityPreferences } from "../../app/tableColumnPreferences";
+import type { LocalSendDiscoverySnapshot } from "../../app/controllers/localSendDiscoveryController";
 import {
   DEFAULT_APP_PREFERENCES,
   preferencesWithPatch,
@@ -59,7 +60,7 @@ import {
 import type { DefaultHandlerSnapshot } from "../../app/controllers/defaultHandlerController";
 import type { LocalSendTrustSnapshot } from "../../app/controllers/localSendTrustController";
 import type { LocalSendIncomingTransferSnapshot } from "../../app/controllers/localSendIncomingTransfer";
-import type { ShareRegistrySnapshot } from "../../api/types";
+import type { LocalSendDeviceInfoDto, ShareRegistrySnapshot } from "../../app/controllers/shareQueueController";
 
 export type {
   ZManagerDialogAction,
@@ -103,6 +104,7 @@ export type ZManagerReactSnapshot = Readonly<{
   account: AccountWorkspaceSnapshot;
   defaultHandlers: DefaultHandlerSnapshot;
   localSendTrustedDevices: LocalSendTrustSnapshot;
+  localSendDiscovery: LocalSendDiscoverySnapshot;
   shareQueue: ShareRegistrySnapshot;
   localSendIncomingTransfers: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
@@ -334,8 +336,9 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "preferencesChooseExtractOutput" }>
   | Readonly<{ type: "preferencesChooseLanShareReceiveFolder" }>
   | Readonly<{ type: "localSendTrustRefresh" }>
+  | Readonly<{ type: "shareQueueRefreshReceivers" }>
   | Readonly<{ type: "localSendTrustForget"; fingerprint: string }>
-  | Readonly<{ type: "shareQueueSetReceiver"; shareId: string; receiver: import("../../api/types").LocalSendDeviceInfoDto }>
+  | Readonly<{ type: "shareQueueSetReceiver"; shareId: string; receiver: LocalSendDeviceInfoDto }>
   | Readonly<{ type: "shareQueueStart"; shareId: string; acknowledgeDeliveryUncertainty?: boolean }>
   | Readonly<{ type: "shareQueueSkip"; shareId: string }>
   | Readonly<{ type: "shareQueueCancel"; shareId: string }>
@@ -436,6 +439,7 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   account?: AccountWorkspaceSnapshot;
   defaultHandlers?: DefaultHandlerSnapshot;
   localSendTrustedDevices?: LocalSendTrustSnapshot;
+  localSendDiscovery?: LocalSendDiscoverySnapshot;
   shareQueue?: ShareRegistrySnapshot;
   localSendIncomingTransfers?: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
@@ -501,6 +505,11 @@ export function createZManagerReactSnapshot(
     localSendTrustedDevices: input.localSendTrustedDevices ?? {
       status: "idle",
       fingerprints: [],
+      error: null,
+    },
+    localSendDiscovery: input.localSendDiscovery ?? {
+      status: "idle",
+      devices: [],
       error: null,
     },
     shareQueue: input.shareQueue ?? { queueRevision: "0", items: [] },

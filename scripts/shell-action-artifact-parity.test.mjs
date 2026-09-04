@@ -61,6 +61,8 @@ test("canonical context matrices have one stable generated order", () => {
     "compressTarZst",
     "compressTarGz",
     "compressAppleArchive",
+    "compressShareOnLan",
+    "shareOnLan",
   ]);
   assert.deepEqual(ordered("archiveMultiple"), [
     "extractHere",
@@ -71,6 +73,7 @@ test("canonical context matrices have one stable generated order", () => {
     "compressTarZst",
     "compressTarGz",
     "compressAppleArchive",
+    "compressShareOnLan",
   ]);
   assert.deepEqual(ordered("creation"), [
     "compress",
@@ -80,8 +83,10 @@ test("canonical context matrices have one stable generated order", () => {
     "compressTarZst",
     "compressTarGz",
     "compressAppleArchive",
+    "compressShareOnLan",
+    "shareOnLan",
   ]);
-  assert.deepEqual(ordered("container"), ordered("creation"));
+  assert.deepEqual(ordered("container"), ["compress", "compressTzap", "compressZip", "compressSevenZ", "compressTarZst", "compressTarGz", "compressAppleArchive", "compressShareOnLan"]);
 });
 
 test("every declared native surface contains generated action identity and label", () => {

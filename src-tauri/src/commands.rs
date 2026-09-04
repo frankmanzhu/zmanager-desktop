@@ -18,8 +18,7 @@ use crate::dto::ArchiveListingResponse;
 use crate::job_dto::TestJobEventsSnapshot;
 use crate::{
     archive_index::ArchiveIndexRegistry,
-    constants,
-    destination_reservation,
+    constants, destination_reservation,
     dto::{
         AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
         NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse,
@@ -358,14 +357,14 @@ pub(crate) fn start_create_service(
         result
     })?;
     if let Some(diagnostics) = diagnostics.as_ref() {
-      let _ = diagnostics.record(
-        "create",
-        "jobAccepted",
-        crate::diagnostics::fields([
-            ("jobKind", serde_json::json!(format!("{:?}", response.kind))),
-            ("status", serde_json::json!(format!("{:?}", response.status))),
-        ]),
-      );
+        let _ = diagnostics.record(
+            "create",
+            "jobAccepted",
+            crate::diagnostics::fields([
+                ("jobKind", serde_json::json!(format!("{:?}", response.kind))),
+                ("status", serde_json::json!(format!("{:?}", response.status))),
+            ]),
+        );
     }
     Ok(response)
 }

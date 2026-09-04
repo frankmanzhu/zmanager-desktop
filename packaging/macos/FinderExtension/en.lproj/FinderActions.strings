@@ -7,9 +7,9 @@
 "shellAction.compressTarZst" = "Add to .tzst";
 "shellAction.compressTarGz" = "Add to .tgz";
 "shellAction.compressAppleArchive" = "Add to .aar";
+"shellAction.compressCleanSource" = "Compress and remove source";
 "shellAction.compressShareOnLan" = "Compress and Share on LAN";
 "shellAction.shareOnLan" = "Share on LAN";
-"shellAction.compressCleanSource" = "Compress and remove source";
 "shellAction.extractHere" = "Extract Here";
 "shellAction.extractToFolder" = "Extract to Archive Folder";
 "shellAction.extractToFolderNamed" = "Extract to \"%@\"";

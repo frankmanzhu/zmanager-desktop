@@ -10,9 +10,9 @@ export const SHELL_ACTION_IDS = [
   "compressTarZst",
   "compressTarGz",
   "compressAppleArchive",
+  "compressCleanSource",
   "compressShareOnLan",
   "shareOnLan",
-  "compressCleanSource",
   "extractHere",
   "extractToFolder"
 ] as const;
@@ -310,6 +310,25 @@ export const SHELL_ACTION_POLICIES = [
     "windowDisposition": "disposableTask"
   },
   {
+    "id": "compressCleanSource",
+    "canonicalLabel": "Compress and remove source",
+    "displayKey": "shellAction.compressCleanSource",
+    "nativeVerb": "CompressCleanSource",
+    "order": 80,
+    "contextMenuOrder": null,
+    "contextMenuContexts": [],
+    "selectionShapes": [
+      "single-folder"
+    ],
+    "multiplicity": "exactly-one",
+    "nativeSurfaces": [],
+    "compatibilityAliases": [
+      "compress-clean-source",
+      "clean-source"
+    ],
+    "windowDisposition": "disposableTask"
+  },
+  {
     "id": "compressShareOnLan",
     "canonicalLabel": "Compress and Share on LAN",
     "displayKey": "shellAction.compressShareOnLan",
@@ -335,8 +354,7 @@ export const SHELL_ACTION_POLICIES = [
       "linuxDesktop",
       "linuxNautilus",
       "linuxKde",
-      "macosFinder",
-      "macosServices"
+      "macosFinder"
     ],
     "compatibilityAliases": [
       "compress-share-on-lan"
@@ -352,10 +370,10 @@ export const SHELL_ACTION_POLICIES = [
     "contextMenuOrder": 105,
     "contextMenuContexts": [
       "archiveSingle",
-      "creation",
-      "container"
+      "creation"
     ],
     "selectionShapes": [
+      "single-archive",
       "files"
     ],
     "multiplicity": "exactly-one",
@@ -364,32 +382,12 @@ export const SHELL_ACTION_POLICIES = [
       "linuxDesktop",
       "linuxNautilus",
       "linuxKde",
-      "macosFinder",
-      "macosServices"
+      "macosFinder"
     ],
     "compatibilityAliases": [
       "share-lan"
     ],
     "windowDisposition": "mainWindow"
-  },
-  {
-    "id": "compressCleanSource",
-    "canonicalLabel": "Compress and remove source",
-    "displayKey": "shellAction.compressCleanSource",
-    "nativeVerb": "CompressCleanSource",
-    "order": 80,
-    "contextMenuOrder": null,
-    "contextMenuContexts": [],
-    "selectionShapes": [
-      "single-folder"
-    ],
-    "multiplicity": "exactly-one",
-    "nativeSurfaces": [],
-    "compatibilityAliases": [
-      "compress-clean-source",
-      "clean-source"
-    ],
-    "windowDisposition": "disposableTask"
   },
   {
     "id": "extractHere",

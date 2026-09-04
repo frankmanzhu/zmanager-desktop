@@ -29,6 +29,8 @@ describe("quick action helpers", () => {
     expect(quickActionWindowDisposition("open")).toBe("mainWindow");
     expect(quickActionWindowDisposition("compress")).toBe("mainWindow");
     expect(quickActionWindowDisposition("extract")).toBe("mainWindow");
+    expect(quickActionWindowDisposition("compressShareOnLan")).toBe("mainWindow");
+    expect(quickActionWindowDisposition("shareOnLan")).toBe("mainWindow");
     expect(quickActionWindowDisposition("compressTzap")).toBe("disposableTask");
     expect(quickActionWindowDisposition("extractHere")).toBe("disposableTask");
   });

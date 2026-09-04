@@ -91,13 +91,13 @@ impl IExplorerCommand_Impl for ZManagerExplorerCommand_Impl {
     }
 
     fn GetState(&self, selection: Ref<'_, IShellItemArray>, _ok_to_be_slow: BOOL) -> WindowsResult<u32> {
-        let count = unsafe { selection.ok()?.GetCount()? };
-        Ok(if self.action.supports_count(count) { ECS_ENABLED.0 as u32 } else { ECS_HIDDEN.0 as u32 })
+        let paths = selected_file_system_paths(selection.ok()?)?;
+        Ok(if self.action.supports_paths(&paths) { ECS_ENABLED.0 as u32 } else { ECS_HIDDEN.0 as u32 })
     }
 
     fn Invoke(&self, selection: Ref<'_, IShellItemArray>, _bind_context: Ref<'_, IBindCtx>) -> WindowsResult<()> {
         let paths = selected_file_system_paths(selection.ok()?)?;
-        if paths.is_empty() || !self.action.supports_count(paths.len() as u32) {
+        if !self.action.supports_paths(&paths) {
             return Err(Error::from_hresult(E_INVALIDARG));
         }
 
@@ -327,6 +327,28 @@ mod tests {
         let parsed = ShellActionRequest::from_json(&fs::read_to_string(&path).expect("request file should be readable")).expect("request should parse");
 
         assert_eq!(parsed, request);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn share_on_lan_requires_one_regular_file_but_compress_share_accepts_directories() {
+        let directory = std::env::temp_dir().join(format!(
+            "zmanager-shell-share-shape-test-{}-{}",
+            std::process::id(),
+            REQUEST_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let folder = directory.join("folder");
+        let file = directory.join("file.txt");
+        fs::create_dir_all(&folder).expect("test folder should be created");
+        fs::write(&file, b"test").expect("test file should be created");
+
+        let file_path = file.to_string_lossy().into_owned();
+        let folder_path = folder.to_string_lossy().into_owned();
+        assert!(ExplorerAction::ShareOnLan.supports_paths(std::slice::from_ref(&file_path)));
+        assert!(!ExplorerAction::ShareOnLan.supports_paths(std::slice::from_ref(&folder_path)));
+        assert!(!ExplorerAction::ShareOnLan.supports_paths(&[file_path.clone(), file_path.clone()]));
+        assert!(ExplorerAction::CompressShareOnLan.supports_paths(&[file_path, folder_path]));
+
         let _ = fs::remove_dir_all(directory);
     }
 

@@ -30,8 +30,6 @@ const REQUEST_DTO_TYPES: readonly (string | Readonly<{ typeScriptName: string; r
   { typeScriptName: "LocalSendDiscoverRequest", rustName: "LocalSendDiscoverRequestDto" },
   { typeScriptName: "LocalSendStartReceiverRequest", rustName: "LocalSendStartReceiverRequestDto" },
   { typeScriptName: "LocalSendRespondToTransferRequest", rustName: "LocalSendRespondToTransferRequestDto" },
-  { typeScriptName: "LocalSendSendFileRequest", rustName: "LocalSendSendFileRequestDto" },
-  { typeScriptName: "LocalSendCancelSendRequest", rustName: "LocalSendCancelSendRequestDto" },
 ] as const;
 
 describe("Rust and TypeScript request DTO contracts", () => {

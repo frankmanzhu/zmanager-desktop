@@ -71,7 +71,7 @@ describe("native inbound controller", () => {
     expect(test.options.handleQuickAction).toHaveBeenCalledWith({
       kind: "open",
       paths: ["/tmp/archive.zip"],
-    });
+    }, { eventId: first.eventId, idempotencyKey: null });
     expect(test.options.acknowledge).toHaveBeenCalledWith("main", first.eventId);
   });
 
@@ -119,11 +119,26 @@ describe("native inbound controller", () => {
     expect(test.options.handleQuickAction).toHaveBeenCalledWith({
       kind: "compressZip",
       paths: ["/tmp/source"],
-    });
+    }, { eventId: "shell-event-123456", idempotencyKey: null });
     expect(test.options.handleHostedAuthCallback).toHaveBeenCalledWith({
       state: "state-1234567890",
       result: "completed",
     });
+  });
+
+  it("preserves native envelope identity for LAN share admission", async () => {
+    const test = harness();
+    await test.controller.process(event({
+      eventId: "lan-share-event-123456",
+      idempotencyKey: "lan-request-token",
+      kind: "shellActionRequest",
+      payload: { request: { kind: "compressShareOnLan", paths: ["/tmp/one", "/tmp/two"] } },
+    }));
+
+    expect(test.options.handleQuickAction).toHaveBeenCalledWith({
+      kind: "compressShareOnLan",
+      paths: ["/tmp/one", "/tmp/two"],
+    }, { eventId: "lan-share-event-123456", idempotencyKey: "lan-request-token" });
   });
 
   it("does nothing in browser preview", async () => {

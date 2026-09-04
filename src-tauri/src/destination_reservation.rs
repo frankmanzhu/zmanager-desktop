@@ -15,8 +15,7 @@ fn identity(path: &Path) -> String {
     } else {
         path.to_path_buf()
     };
-    let value = path.to_string_lossy().replace('\\', "/");
-    if cfg!(windows) { value.to_lowercase() } else { value }
+    crate::platform::destination_identity(&path)
 }
 
 #[derive(Debug)]
@@ -50,6 +49,33 @@ pub(crate) fn try_reserve(path: impl Into<PathBuf>) -> Option<DestinationReserva
 }
 
 #[cfg(test)]
-pub(crate) fn is_reserved(path: &Path) -> bool {
-    reservations().lock().unwrap().contains(&identity(path))
+mod tests {
+    use super::*;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn unique_path() -> PathBuf {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        PathBuf::from(format!("/tmp/zmanager-destination-reservation-{}-{}.zip", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)))
+    }
+
+    #[test]
+    fn reservation_is_exclusive_until_guard_drops() {
+        let path = unique_path();
+        let first = try_reserve(path.clone()).expect("first reservation should succeed");
+        assert!(try_reserve(path.clone()).is_none());
+        drop(first);
+        assert!(try_reserve(path).is_some());
+    }
+
+    #[test]
+    fn reservation_releases_during_unwind() {
+        let path = unique_path();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let _reservation = try_reserve(path.clone()).expect("reservation should succeed");
+            panic!("test panic");
+        }));
+        assert!(result.is_err());
+        assert!(try_reserve(path).is_some());
+    }
 }

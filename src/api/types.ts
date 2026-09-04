@@ -857,22 +857,3 @@ export type LocalSendRespondToTransferRequest = {
   fileIds?: string[];
   reason?: string | null;
 };
-
-export type LocalSendSendFileRequest = {
-  sendId: string;
-  alias: string;
-  selfPort?: number;
-  https?: boolean;
-  target: LocalSendDeviceInfoDto;
-  filePath: string;
-  pin?: string | null;
-};
-
-export type LocalSendSendFileResult = {
-  sessionId: string;
-  fileId: string;
-};
-
-export type LocalSendCancelSendRequest = {
-  sendId: string;
-};

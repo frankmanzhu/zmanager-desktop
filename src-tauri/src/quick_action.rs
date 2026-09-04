@@ -682,6 +682,14 @@ mod tests {
         let compress_tgz = requested(&["--quick-action", "compress-tgz", "--path", "C:/tmp/source"]);
         assert_eq!(compress_tgz.kind, QuickActionKindDto::CompressTarGz);
 
+        let compress_share_on_lan = requested(&["--quick-action", "compress-share-on-lan", "--path", "C:/tmp/one", "C:/tmp/two"]);
+        assert_eq!(compress_share_on_lan.kind, QuickActionKindDto::CompressShareOnLan);
+        assert_eq!(compress_share_on_lan.paths, ["C:/tmp/one", "C:/tmp/two"]);
+
+        let share_on_lan = requested(&["--quick-action", "share-lan", "--path", "C:/tmp/file.txt"]);
+        assert_eq!(share_on_lan.kind, QuickActionKindDto::ShareOnLan);
+        assert_eq!(share_on_lan.paths, ["C:/tmp/file.txt"]);
+
         let unknown_option_compress = requested(&["--quick-action", "compress-tzap", "--ignored-shell-option", "--path", "C:/tmp/source"]);
         assert_eq!(unknown_option_compress.kind, QuickActionKindDto::CompressTzap);
         assert_eq!(unknown_option_compress.paths, ["C:/tmp/source"]);
@@ -697,6 +705,13 @@ mod tests {
 
         assert_eq!(request.kind, QuickActionKindDto::ExtractHere);
         assert_eq!(request.paths, ["C:/tmp/one.zip", "C:/tmp/two.tzap"]);
+    }
+
+    #[test]
+    fn direct_share_rejects_multiple_paths() {
+        let error = invalid(&["--quick-action", "share-lan", "--path", "C:/tmp/one.txt", "C:/tmp/two.txt"]);
+
+        assert_eq!(error.message, "share-on-lan requires exactly one file path");
     }
 
     #[test]

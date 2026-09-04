@@ -68,7 +68,9 @@ import { createAccountController } from "../app/controllers/accountController";
 import { initializeDeepLinkAdapter } from "../desktop/deepLinkAdapter";
 import { createDefaultHandlerController } from "../app/controllers/defaultHandlerController";
 import { createLocalSendTrustController } from "../app/controllers/localSendTrustController";
+import { createLocalSendDiscoveryController } from "../app/controllers/localSendDiscoveryController";
 import { createShareQueueController } from "../app/controllers/shareQueueController";
+import { localSendDiscoveryDesktopAdapter } from "../desktop/localSendDiscovery";
 import {
   createNativeInboundController,
 } from "../app/controllers/nativeInboundController";
@@ -1258,6 +1260,12 @@ const localSendTrustController = createLocalSendTrustController({
   errorMessage: (error) => unknownErrorMessage(error, "Unable to update trusted LAN devices."),
 });
 
+const localSendDiscoveryController = createLocalSendDiscoveryController({
+  ...localSendDiscoveryDesktopAdapter,
+  publish: publishReactSnapshot,
+  errorMessage: (error) => unknownErrorMessage(error, "Unable to discover LAN receivers."),
+});
+
 const shareQueueController = createShareQueueController({
   listen: listenShareQueueChanged,
   publish: publishReactSnapshot,
@@ -2121,6 +2129,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     account: accountWorkspace.getSnapshot(),
     defaultHandlers: defaultHandlerController.getSnapshot(),
     localSendTrustedDevices: localSendTrustController.getSnapshot(),
+    localSendDiscovery: localSendDiscoveryController.getSnapshot(),
     shareQueue: shareQueueController.getSnapshot(),
     localSendIncomingTransfers,
     shell: shellWorkspace.getSnapshot(),
@@ -2267,6 +2276,9 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "localSendTrustRefresh":
       void localSendTrustController.refresh();
+      break;
+    case "shareQueueRefreshReceivers":
+      void localSendDiscoveryController.refresh(localSendAliasOrDefault());
       break;
     case "localSendTrustForget":
       void localSendTrustController.forget(intent.fingerprint);

@@ -29,6 +29,8 @@ const createActions: ExpectedAction[] = [
   { action: "AddToSevenZ", label: "Add to .7z", quickAction: "compress-7z", pathToken: "%F" },
   { action: "AddToTzst", label: "Add to .tzst", quickAction: "compress-tzst", pathToken: "%F" },
   { action: "AddToTgz", label: "Add to .tgz", quickAction: "compress-tgz", pathToken: "%F" },
+  { action: "CompressShareOnLan", label: "Compress and Share on LAN", quickAction: "compress-share-on-lan", pathToken: "%F" },
+  { action: "ShareOnLan", label: "Share on LAN", quickAction: "share-lan", pathToken: "%f" },
 ];
 
 const archiveActions: ExpectedAction[] = [

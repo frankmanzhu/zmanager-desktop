@@ -66,5 +66,4 @@
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "05AddToTzst" "Add to .tzst" "compress-tzst" "%V"
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "06AddToTgz" "Add to .tgz" "compress-tgz" "%V"
   !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "07CompressShareOnLan" "Compress and Share on LAN" "compress-share-on-lan" "%V"
-  !insertmacro ZM_WRITE_COMMAND_SUBCOMMAND_VERB "${ZM_CREATE_BACKGROUND_SUBCOMMANDS_KEY}" "08ShareOnLan" "Share on LAN" "share-lan" "%V"
 !macroend

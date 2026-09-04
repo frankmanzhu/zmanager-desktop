@@ -11,9 +11,9 @@ export const NATIVE_LOCALIZATION_KEYS = [
   "shellAction.compressTarZst",
   "shellAction.compressTarGz",
   "shellAction.compressAppleArchive",
+  "shellAction.compressCleanSource",
   "shellAction.compressShareOnLan",
   "shellAction.shareOnLan",
-  "shellAction.compressCleanSource",
   "shellAction.extractHere",
   "shellAction.extractToFolder",
   "shellAction.extractToFolderNamed"

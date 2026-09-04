@@ -123,12 +123,12 @@ ARCHIVE_ACTIONS = (
 )
 
 CREATE_ACTIONS = (
-    ("AddToArchive", "Add to archive...", "compress"),
-    ("AddToTzap", "Add to .tzap", "compress-tzap"),
-    ("AddToZip", "Add to .zip", "compress-zip"),
-    ("AddToSevenZ", "Add to .7z", "compress-7z"),
-    ("AddToTzst", "Add to .tzst", "compress-tzst"),
-    ("AddToTgz", "Add to .tgz", "compress-tgz"),
-    ("CompressShareOnLan", "Compress and Share on LAN", "compress-share-on-lan"),
-    ("ShareOnLan", "Share on LAN", "share-lan"),
+    ("AddToArchive", "Add to archive...", "compress", True),
+    ("AddToTzap", "Add to .tzap", "compress-tzap", True),
+    ("AddToZip", "Add to .zip", "compress-zip", True),
+    ("AddToSevenZ", "Add to .7z", "compress-7z", True),
+    ("AddToTzst", "Add to .tzst", "compress-tzst", True),
+    ("AddToTgz", "Add to .tgz", "compress-tgz", True),
+    ("CompressShareOnLan", "Compress and Share on LAN", "compress-share-on-lan", True),
+    ("ShareOnLan", "Share on LAN", "share-lan", False),
 )

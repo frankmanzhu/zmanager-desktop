@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -107,6 +108,35 @@ class NautilusExtensionTests(unittest.TestCase):
         )
         self.assertEqual(extract.label, "Extract to Archive Folder")
         self.assertFalse(extract.sensitive)
+
+    def test_direct_share_requires_one_regular_file(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            first = Path(root) / "one.txt"
+            second = Path(root) / "two.txt"
+            folder = Path(root) / "folder"
+            first.write_text("one", encoding="utf-8")
+            second.write_text("two", encoding="utf-8")
+            folder.mkdir()
+
+            single = NAUTILUS.build_zmanager_menu([str(first)], False, "File")
+            self.assertIn(
+                "ShareOnLan",
+                [item.name.rsplit("_", 1)[-1] for item in single.submenu.items],
+            )
+
+            multiple = NAUTILUS.build_zmanager_menu(
+                [str(first), str(second)], False, "File"
+            )
+            self.assertNotIn(
+                "ShareOnLan",
+                [item.name.rsplit("_", 1)[-1] for item in multiple.submenu.items],
+            )
+
+            directory = NAUTILUS.build_zmanager_menu([str(folder)], False, "Background")
+            self.assertNotIn(
+                "ShareOnLan",
+                [item.name.rsplit("_", 1)[-1] for item in directory.submenu.items],
+            )
 
 
 if __name__ == "__main__":

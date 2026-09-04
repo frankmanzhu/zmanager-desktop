@@ -6,8 +6,8 @@ mod archive_index;
 mod commands;
 mod constants;
 mod default_handlers;
-mod diagnostics;
 mod destination_reservation;
+mod diagnostics;
 mod dto;
 mod error;
 mod hosted_transport;
@@ -121,10 +121,10 @@ fn main() {
                 setup_diagnostics.clone(),
             );
             let share_queue_for_events = share_queue.clone();
+            app.manage(local_send.clone());
+            app.manage(share_queue.clone());
             local_send.register_outgoing_event_sink(std::sync::Arc::new(move |event| share_queue_for_events.on_localsend_event(event)));
             local_send.start_event_pump(app.handle().clone(), app.state::<job_registry::JobRegistry>().inner().clone());
-            app.manage(local_send);
-            app.manage(share_queue);
             if let Some(window) = app.get_webview_window("main") {
                 platform::configure_main_window(&window)?;
             }
@@ -223,8 +223,10 @@ fn main() {
             let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
             exit_inbox.shutdown();
             native_drag_sessions.shutdown();
-            app_handle.state::<share_queue::ShareRegistry>().shutdown();
+            let share_queue = app_handle.state::<share_queue::ShareRegistry>();
+            share_queue.request_shutdown();
             app_handle.state::<localsend::LocalSendState>().shutdown();
+            share_queue.join_workers();
             platform::shutdown();
         }
     });

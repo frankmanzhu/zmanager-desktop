@@ -17,8 +17,8 @@ $nsisClassIds = [regex]::Matches($nsis, '!define ZM_[A-Z_]+_CLSID "\{([0-9A-Fa-f
     ForEach-Object { $_.Groups[1].Value.Replace('-', '').ToLowerInvariant() } |
     Sort-Object -Unique
 
-if ($rustClassIds.Count -ne 9) {
-    throw "Expected 9 COM class IDs in the shell extension, found $($rustClassIds.Count)."
+if ($rustClassIds.Count -ne 11) {
+    throw "Expected 11 COM class IDs in the shell extension, found $($rustClassIds.Count)."
 }
 if (Compare-Object $rustClassIds $nsisClassIds) {
     throw "Shell extension and NSIS COM class IDs have drifted."

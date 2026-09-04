@@ -26,11 +26,24 @@ compile_error!("ZManager Desktop requires a NativePlatform adapter for this oper
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{Builder, Wry};
 
 use crate::dto::{SystemFileIconDto, SystemFileIconRequestEntry};
 use crate::native_launch_inbox::NativeLaunchInbox;
+
+pub(crate) fn destination_identity(path: &Path) -> String {
+    let value = path.to_string_lossy().replace('\\', "/");
+    #[cfg(target_os = "windows")]
+    {
+        value.to_lowercase()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        value
+    }
+}
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

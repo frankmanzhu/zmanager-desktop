@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
 use crate::account::AccountRuntime;
 use crate::commands;
 use crate::diagnostics::DiagnosticLog;
-use crate::dto::{JobEventDto, JobStatusDto, StartCreateRequest};
+use crate::dto::StartCreateRequest;
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
+use crate::job_dto::{JobEventDto, JobStatusDto};
 use crate::job_registry::JobRegistry;
 use crate::localsend::{LocalSendDeviceInfoDto, LocalSendEventDto, LocalSendState};
 
@@ -20,18 +20,8 @@ pub const SHARE_QUEUE_CHANGED_EVENT: &str = "zmanager-share-queue-changed";
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "mode", rename_all = "camelCase", rename_all_fields = "camelCase", deny_unknown_fields)]
 pub enum EnqueueShareRequest {
-    CompressAndShare {
-        client_request_id: String,
-        sender_alias: String,
-        create_request: StartCreateRequest,
-        receiver: Option<LocalSendDeviceInfoDto>,
-    },
-    DirectShare {
-        client_request_id: String,
-        sender_alias: String,
-        artifact_path: String,
-        receiver: Option<LocalSendDeviceInfoDto>,
-    },
+    CompressAndShare { client_request_id: String, sender_alias: String, create_request: StartCreateRequest, receiver: Option<LocalSendDeviceInfoDto> },
+    DirectShare { client_request_id: String, sender_alias: String, artifact_path: String, receiver: Option<LocalSendDeviceInfoDto> },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,12 +182,50 @@ impl ShareRecord {
     }
 }
 
+fn mark_waiting_items(state: &mut QueueState) -> bool {
+    let mut changed = false;
+    for item in &mut state.items {
+        let ready = is_send_eligible(item);
+        if ready && item.transfer_state != TransferState::Waiting {
+            item.transfer_state = TransferState::Waiting;
+            item.updated_at = timestamp();
+            changed = true;
+        }
+    }
+    changed
+}
+
+fn is_send_eligible(item: &ShareRecord) -> bool {
+    item.lifecycle == ShareLifecycle::Active
+        && item.sharing_intent == SharingIntent::Pending
+        && item.receiver.is_some()
+        && item.artifact_path.is_some()
+        && matches!(item.transfer_state, TransferState::NotStarted | TransferState::Waiting)
+}
+
+fn next_eligible_index(items: &[ShareRecord]) -> Option<usize> {
+    items.iter().enumerate().filter(|(_, item)| is_send_eligible(item)).min_by_key(|(_, item)| item.enqueue_sequence).map(|(index, _)| index)
+}
+
+fn resolve_transfer_result(was_cancelled: bool, completed: bool, cancelled: bool) -> (TransferState, bool) {
+    if was_cancelled {
+        (TransferState::Cancelled, true)
+    } else if completed {
+        (TransferState::Sent, false)
+    } else if cancelled {
+        (TransferState::Cancelled, true)
+    } else {
+        (TransferState::Failed, true)
+    }
+}
+
 struct QueueState {
     next_sequence: u64,
     revision: u64,
     next_id: u64,
     items: Vec<ShareRecord>,
     active_send: Option<(String, String, u64)>,
+    last_progress_emit: Option<Instant>,
     shutting_down: bool,
 }
 
@@ -208,29 +236,69 @@ pub struct ShareRegistry {
     account: AccountRuntime,
     app: tauri::AppHandle,
     diagnostics: DiagnosticLog,
+    send_workers: Arc<Mutex<Vec<thread::JoinHandle<()>>>>,
 }
 
 impl Clone for ShareRegistry {
     fn clone(&self) -> Self {
-        Self { state: self.state.clone(), jobs: self.jobs.clone(), localsend: self.localsend.clone(), account: self.account.clone(), app: self.app.clone(), diagnostics: self.diagnostics.clone() }
+        Self {
+            state: self.state.clone(),
+            jobs: self.jobs.clone(),
+            localsend: self.localsend.clone(),
+            account: self.account.clone(),
+            app: self.app.clone(),
+            diagnostics: self.diagnostics.clone(),
+            send_workers: self.send_workers.clone(),
+        }
     }
 }
 
 impl ShareRegistry {
     pub fn new(jobs: JobRegistry, localsend: LocalSendState, account: AccountRuntime, app: tauri::AppHandle, diagnostics: DiagnosticLog) -> Self {
-        Self { state: Arc::new(Mutex::new(QueueState { next_sequence: 0, revision: 0, next_id: 0, items: Vec::new(), active_send: None, shutting_down: false })), jobs, localsend, account, app, diagnostics }
+        Self {
+            state: Arc::new(Mutex::new(QueueState {
+                next_sequence: 0,
+                revision: 0,
+                next_id: 0,
+                items: Vec::new(),
+                active_send: None,
+                last_progress_emit: None,
+                shutting_down: false,
+            })),
+            jobs,
+            localsend,
+            account,
+            app,
+            diagnostics,
+            send_workers: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
-    pub fn shutdown(&self) {
+    pub(crate) fn request_shutdown(&self) {
         let (send_id, job_ids) = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
             state.shutting_down = true;
             let send_id = state.active_send.as_ref().map(|active| active.1.clone());
-            let job_ids = state.items.iter().filter_map(|item| (item.lifecycle == ShareLifecycle::Active).then_some(item.compression_job_id.clone()).flatten()).collect::<Vec<_>>();
+            let job_ids = state
+                .items
+                .iter()
+                .filter_map(|item| (item.lifecycle == ShareLifecycle::Active).then_some(item.compression_job_id.clone()).flatten())
+                .collect::<Vec<_>>();
             (send_id, job_ids)
         };
-        if let Some(send_id) = send_id { let _ = self.localsend.cancel_send_for_share(&send_id); }
-        for job_id in job_ids { let _ = self.jobs.request_cancel(&job_id); }
+        if let Some(send_id) = send_id {
+            let _ = self.localsend.cancel_send_for_share(&send_id);
+        }
+        for job_id in job_ids {
+            let _ = self.jobs.request_cancel(&job_id);
+        }
+    }
+
+    pub(crate) fn join_workers(&self) {
+        let workers = std::mem::take(&mut *self.send_workers.lock().unwrap_or_else(|error| error.into_inner()));
+        for worker in workers {
+            let _ = worker.join();
+        }
     }
 
     pub fn snapshot(&self) -> ShareRegistrySnapshot {
@@ -240,19 +308,39 @@ impl ShareRegistry {
 
     pub fn enqueue(&self, request: EnqueueShareRequest) -> Result<EnqueueShareResponse, CommandErrorDto> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        if state.shutting_down { return Err(error("share_invalid_state", "Share queue is shutting down", false)); }
+        if state.shutting_down {
+            return Err(error("share_invalid_state", "Share queue is shutting down", false));
+        }
         let (client_request_id, sender_alias, receiver) = match &request {
-            EnqueueShareRequest::CompressAndShare { client_request_id, sender_alias, receiver, .. } => (client_request_id.clone(), sender_alias.clone(), receiver.clone()),
-            EnqueueShareRequest::DirectShare { client_request_id, sender_alias, receiver, .. } => (client_request_id.clone(), sender_alias.clone(), receiver.clone()),
+            EnqueueShareRequest::CompressAndShare { client_request_id, sender_alias, receiver, .. } => {
+                (client_request_id.clone(), sender_alias.clone(), receiver.clone())
+            }
+            EnqueueShareRequest::DirectShare { client_request_id, sender_alias, receiver, .. } => {
+                (client_request_id.clone(), sender_alias.clone(), receiver.clone())
+            }
         };
         validate_client_request_id(&client_request_id)?;
         let sender_alias = sender_alias.trim().to_owned();
-        if sender_alias.is_empty() { return Err(error("share_invalid_state", "sender alias must not be blank", false)); }
-        if let Some(existing) = state.items.iter().find(|item| item.client_request_id == client_request_id) {
-            return Ok(EnqueueShareResponse { item: existing.snapshot(), deduplicated: true });
+        if sender_alias.is_empty() {
+            return Err(error("share_invalid_state", "sender alias must not be blank", false));
         }
-        if state.items.len() >= MAX_SHARE_RECORDS { return Err(error("share_queue_full", "The share queue is full", false)); }
-        if let Some(receiver) = receiver.as_ref() && receiver.fingerprint.trim().is_empty() { return Err(error("share_invalid_state", "receiver fingerprint must not be blank", false)); }
+        if let Some(existing) = state.items.iter().find(|item| item.client_request_id == client_request_id) {
+            let snapshot = existing.snapshot();
+            drop(state);
+            self.record_diagnostic(
+                "deduplicated",
+                [("clientRequestId", serde_json::json!(client_request_id)), ("shareId", serde_json::json!(snapshot.share_id))],
+            );
+            return Ok(EnqueueShareResponse { item: snapshot, deduplicated: true });
+        }
+        if state.items.len() >= MAX_SHARE_RECORDS {
+            return Err(error("share_queue_full", "The share queue is full", false));
+        }
+        if let Some(receiver) = receiver.as_ref()
+            && receiver.fingerprint.trim().is_empty()
+        {
+            return Err(error("share_invalid_state", "receiver fingerprint must not be blank", false));
+        }
 
         let (mode, source_paths, artifact_path, job_response) = match request {
             EnqueueShareRequest::DirectShare { artifact_path, .. } => {
@@ -260,8 +348,12 @@ impl ShareRegistry {
                 (ShareMode::DirectShare, vec![path.clone()], Some(path), None)
             }
             EnqueueShareRequest::CompressAndShare { create_request, .. } => {
-                if create_request.volume_size.is_some_and(|value| value > 0) { return Err(error("multi_file_output_not_supported", "Compressed sharing requires one output file", false)); }
-                if create_request.sources.is_empty() { return Err(error("share_invalid_state", "at least one source is required", false)); }
+                if create_request.volume_size.is_some_and(|value| value > 0) {
+                    return Err(error("multi_file_output_not_supported", "Compressed sharing requires one output file", false));
+                }
+                if create_request.sources.is_empty() {
+                    return Err(error("share_invalid_state", "at least one source is required", false));
+                }
                 let source_paths = create_request.sources.iter().map(PathBuf::from).collect::<Vec<_>>();
                 let response = commands::start_create_service(create_request, &self.app, &self.account, &self.jobs, Some(self.diagnostics.clone()))?;
                 (ShareMode::CompressAndShare, source_paths, None, Some(response))
@@ -271,22 +363,64 @@ impl ShareRegistry {
         state.next_id = state.next_id.saturating_add(1);
         let now = timestamp();
         let receiver_generation = u64::from(receiver.is_some());
-        let response = ShareRecord { share_id: format!("share-{}", state.next_id), client_request_id, enqueue_sequence: state.next_sequence, mode, source_paths, sender_alias, compression_job_id: job_response.as_ref().map(|job| job.job_id.clone()), artifact_path, receiver, receiver_generation, send_id: None, compression_state: if mode == ShareMode::DirectShare { CompressionState::NotRequired } else { CompressionState::Compressing }, compression_progress: None, transfer_state: TransferState::NotStarted, sharing_intent: SharingIntent::Pending, lifecycle: ShareLifecycle::Active, attempt: 0, bytes_sent: 0, total_bytes: None, delivery_uncertain: false, created_at: now.clone(), updated_at: now, last_error: None };
+        let response = ShareRecord {
+            share_id: format!("share-{}", state.next_id),
+            client_request_id,
+            enqueue_sequence: state.next_sequence,
+            mode,
+            source_paths,
+            sender_alias,
+            compression_job_id: job_response.as_ref().map(|job| job.job_id.clone()),
+            artifact_path,
+            receiver,
+            receiver_generation,
+            send_id: None,
+            compression_state: if mode == ShareMode::DirectShare { CompressionState::NotRequired } else { CompressionState::Compressing },
+            compression_progress: None,
+            transfer_state: TransferState::NotStarted,
+            sharing_intent: SharingIntent::Pending,
+            lifecycle: ShareLifecycle::Active,
+            attempt: 0,
+            bytes_sent: 0,
+            total_bytes: None,
+            delivery_uncertain: false,
+            created_at: now.clone(),
+            updated_at: now,
+            last_error: None,
+        };
         let item = response.snapshot();
         let job_id = response.compression_job_id.clone();
         state.items.push(response);
         self.bump_and_publish_locked(&mut state, true);
         drop(state);
-        if let Some(job_id) = job_id { self.watch_job(item.share_id.clone(), job_id); }
+        if let Some(job_id) = job_id {
+            self.watch_job(item.share_id.clone(), job_id);
+        }
+        self.record_diagnostic(
+            "admitted",
+            [
+                ("shareId", serde_json::json!(item.share_id)),
+                ("mode", serde_json::json!(format!("{:?}", item.mode))),
+                ("sourceCount", serde_json::json!(item.source_paths.len())),
+                ("hasReceiver", serde_json::json!(item.receiver.is_some())),
+            ],
+        );
         self.schedule();
         Ok(EnqueueShareResponse { item, deduplicated: false })
     }
 
     pub fn set_receiver(&self, share_id: &str, receiver: LocalSendDeviceInfoDto) -> Result<ShareRecordSnapshot, CommandErrorDto> {
-        if receiver.fingerprint.trim().is_empty() { return Err(error("share_invalid_state", "receiver fingerprint must not be blank", false)); }
+        if receiver.fingerprint.trim().is_empty() {
+            return Err(error("share_invalid_state", "receiver fingerprint must not be blank", false));
+        }
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id) {
+            return Err(error("share_busy", "The transfer is already sending", true));
+        }
         let item = find_item_mut(&mut state, share_id)?;
-        if item.transfer_state == TransferState::Sending { return Err(error("share_busy", "The transfer is already sending", true)); }
+        if item.transfer_state == TransferState::Sending {
+            return Err(error("share_busy", "The transfer is already sending", true));
+        }
         item.receiver = Some(receiver);
         item.receiver_generation = item.receiver_generation.saturating_add(1).max(1);
         item.last_error = None;
@@ -294,16 +428,29 @@ impl ShareRegistry {
         let snapshot = item.snapshot();
         self.bump_and_publish_locked(&mut state, true);
         drop(state);
+        self.record_diagnostic("receiverSelected", [("shareId", serde_json::json!(share_id))]);
         self.schedule();
         Ok(snapshot)
     }
 
     pub fn start_share(&self, share_id: &str, acknowledge_delivery_uncertainty: bool) -> Result<ShareRecordSnapshot, CommandErrorDto> {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id) {
+            return Err(error("share_busy", "The transfer is still stopping", true));
+        }
         let item = find_item_mut(&mut state, share_id)?;
-        if item.lifecycle == ShareLifecycle::Cancelled { return Err(error("share_invalid_state", "Cancelled shares cannot be restarted", false)); }
-        if item.transfer_state == TransferState::Sent { return Err(error("share_already_completed", "This share has already completed", false)); }
-        if item.delivery_uncertain && !acknowledge_delivery_uncertainty { return Err(error("delivery_confirmation_required", "The receiver may already contain this file", true)); }
+        if item.lifecycle == ShareLifecycle::Cancelled {
+            return Err(error("share_invalid_state", "Cancelled shares cannot be restarted", false));
+        }
+        if item.transfer_state == TransferState::Sent {
+            return Err(error("share_already_completed", "This share has already completed", false));
+        }
+        if item.delivery_uncertain && !acknowledge_delivery_uncertainty {
+            return Err(error("delivery_confirmation_required", "The receiver may already contain this file", true));
+        }
+        if item.receiver.is_none() {
+            return Err(error("share_invalid_state", "Select a receiver before sharing", true));
+        }
         validate_item_artifact(item)?;
         item.sharing_intent = SharingIntent::Pending;
         item.transfer_state = TransferState::NotStarted;
@@ -313,6 +460,9 @@ impl ShareRegistry {
         let snapshot = item.snapshot();
         self.bump_and_publish_locked(&mut state, true);
         drop(state);
+        if snapshot.attempt > 0 {
+            self.record_diagnostic("retryRequested", [("shareId", serde_json::json!(share_id))]);
+        }
         self.schedule();
         Ok(snapshot)
     }
@@ -320,17 +470,28 @@ impl ShareRegistry {
     pub fn skip_share(&self, share_id: &str) -> Result<ShareRecordSnapshot, CommandErrorDto> {
         let (send_id, snapshot) = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            let active_send_id =
+                state.active_send.as_ref().and_then(|(active_share_id, active_send_id, _)| (active_share_id == share_id).then_some(active_send_id.clone()));
             let item = find_item_mut(&mut state, share_id)?;
-            if item.transfer_state == TransferState::Sent { return Err(error("share_already_completed", "This share has already completed", false)); }
+            if item.transfer_state == TransferState::Sent {
+                return Err(error("share_already_completed", "This share has already completed", false));
+            }
             item.sharing_intent = SharingIntent::Skipped;
-            let send_id = if item.transfer_state == TransferState::Sending { item.send_id.clone() } else { None };
-            if send_id.is_some() { item.transfer_state = TransferState::Cancelled; item.delivery_uncertain = true; }
+            let send_id = active_send_id.or_else(|| item.send_id.clone().filter(|_| item.transfer_state == TransferState::Sending));
+            if send_id.is_some() {
+                item.transfer_state = TransferState::Cancelled;
+                item.delivery_uncertain = true;
+            } else if item.transfer_state == TransferState::Waiting {
+                item.transfer_state = TransferState::NotStarted;
+            }
             item.updated_at = timestamp();
             let snapshot = item.snapshot();
             self.bump_and_publish_locked(&mut state, true);
             (send_id, snapshot)
         };
-        if let Some(send_id) = send_id { let _ = self.localsend.cancel_send_for_share(&send_id); }
+        if let Some(send_id) = send_id {
+            let _ = self.localsend.cancel_send_for_share(&send_id);
+        }
         self.schedule();
         Ok(snapshot)
     }
@@ -338,20 +499,35 @@ impl ShareRegistry {
     pub fn cancel_share(&self, share_id: &str) -> Result<ShareRecordSnapshot, CommandErrorDto> {
         let (send_id, job_id, snapshot) = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+            let active_send_id =
+                state.active_send.as_ref().and_then(|(active_share_id, active_send_id, _)| (active_share_id == share_id).then_some(active_send_id.clone()));
             let item = find_item_mut(&mut state, share_id)?;
-            if item.lifecycle == ShareLifecycle::Cancelled { return Ok(item.snapshot()); }
+            if item.lifecycle == ShareLifecycle::Cancelled {
+                return Ok(item.snapshot());
+            }
             item.lifecycle = ShareLifecycle::Cancelled;
-            let send_id = item.send_id.clone().filter(|_| item.transfer_state == TransferState::Sending);
+            let send_id = active_send_id.or_else(|| item.send_id.clone().filter(|_| item.transfer_state == TransferState::Sending));
             let job_id = item.compression_job_id.clone().filter(|_| !item.compression_state_is_terminal());
             item.transfer_state = TransferState::Cancelled;
-            item.compression_state = if item.mode == ShareMode::CompressAndShare && !item.compression_state_is_terminal() { CompressionState::Cancelled } else { item.compression_state };
+            if send_id.is_some() {
+                item.delivery_uncertain = true;
+            }
+            item.compression_state = if item.mode == ShareMode::CompressAndShare && !item.compression_state_is_terminal() {
+                CompressionState::Cancelled
+            } else {
+                item.compression_state
+            };
             item.updated_at = timestamp();
             let snapshot = item.snapshot();
             self.bump_and_publish_locked(&mut state, true);
             (send_id, job_id, snapshot)
         };
-        if let Some(send_id) = send_id { let _ = self.localsend.cancel_send_for_share(&send_id); }
-        if let Some(job_id) = job_id { let _ = self.jobs.request_cancel(&job_id); }
+        if let Some(send_id) = send_id {
+            let _ = self.localsend.cancel_send_for_share(&send_id);
+        }
+        if let Some(job_id) = job_id {
+            let _ = self.jobs.request_cancel(&job_id);
+        }
         self.schedule();
         Ok(snapshot)
     }
@@ -360,18 +536,35 @@ impl ShareRegistry {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let index = state.items.iter().position(|item| item.share_id == share_id).ok_or_else(|| error("share_not_found", "Share was not found", false))?;
         let item = &state.items[index];
-        if item.transfer_state == TransferState::Sending || item.compression_state == CompressionState::Compressing { return Err(error("share_busy", "The share is still active", true)); }
+        if item.transfer_state == TransferState::Sending
+            || state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id)
+            || item.compression_state == CompressionState::Compressing
+        {
+            return Err(error("share_busy", "The share is still active", true));
+        }
         state.items.remove(index);
         self.bump_and_publish_locked(&mut state, true);
         Ok(())
     }
 
     pub(crate) fn on_localsend_event(&self, event: LocalSendEventDto) {
-        let LocalSendEventDto::FileSendProgress { send_id, bytes_sent, total_bytes, .. } = event else { return; };
+        let LocalSendEventDto::FileSendProgress { send_id, bytes_sent, total_bytes, .. } = event else {
+            return;
+        };
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let Some((share_id, active_send_id, generation)) = state.active_send.clone() else { return; };
-        if active_send_id != send_id { return; }
-        let Some(item) = state.items.iter_mut().find(|item| item.share_id == share_id && item.send_id.as_deref() == Some(send_id.as_str()) && item.receiver_generation == generation) else { return; };
+        let Some((share_id, active_send_id, generation)) = state.active_send.clone() else {
+            return;
+        };
+        if active_send_id != send_id {
+            return;
+        }
+        let Some(item) = state
+            .items
+            .iter_mut()
+            .find(|item| item.share_id == share_id && item.send_id.as_deref() == Some(send_id.as_str()) && item.receiver_generation == generation)
+        else {
+            return;
+        };
         item.bytes_sent = bytes_sent;
         item.total_bytes = Some(total_bytes);
         item.updated_at = timestamp();
@@ -379,38 +572,80 @@ impl ShareRegistry {
     }
 
     fn watch_job(&self, share_id: String, job_id: String) {
-        let Some(mut receiver) = self.jobs.subscribe_job_snapshot(&job_id) else { return; };
+        let Some(mut receiver) = self.jobs.subscribe_job_snapshot(&job_id) else {
+            return;
+        };
         let registry = self.clone();
         thread::spawn(move || {
             loop {
                 let snapshot = receiver.borrow_and_update().clone();
                 registry.on_job_snapshot(&share_id, &job_id, &snapshot);
-                if snapshot.status.is_terminal() { break; }
-                if receiver.changed().is_err() { break; }
+                if snapshot.status.is_terminal() {
+                    break;
+                }
+                loop {
+                    match receiver.has_changed() {
+                        Ok(true) => break,
+                        Ok(false) => thread::sleep(Duration::from_millis(25)),
+                        Err(_) => return,
+                    }
+                }
             }
         });
     }
 
     fn on_job_snapshot(&self, share_id: &str, job_id: &str, snapshot: &crate::job_dto::DesktopJobSnapshotDto) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let Some(item) = state.items.iter_mut().find(|item| item.share_id == share_id && item.compression_job_id.as_deref() == Some(job_id)) else { return; };
-        if item.lifecycle == ShareLifecycle::Cancelled { return; }
-        item.compression_progress = Some(CompressionProgressSummary { processed_bytes: snapshot.progress_facts.processed_bytes, total_bytes: snapshot.progress_facts.total_bytes, processed_entries: snapshot.progress_facts.processed_entries, total_entries: snapshot.progress_facts.total_entries });
+        let Some(item) = state.items.iter_mut().find(|item| item.share_id == share_id && item.compression_job_id.as_deref() == Some(job_id)) else {
+            return;
+        };
+        if item.lifecycle == ShareLifecycle::Cancelled {
+            return;
+        }
+        item.compression_progress = Some(CompressionProgressSummary {
+            processed_bytes: snapshot.progress_facts.processed_bytes,
+            total_bytes: snapshot.progress_facts.total_bytes,
+            processed_entries: snapshot.progress_facts.processed_entries,
+            total_entries: snapshot.progress_facts.total_entries,
+        });
         match snapshot.status {
             JobStatusDto::Completed => {
-                let Some(artifact) = snapshot.output_artifacts.iter().find(|artifact| artifact.artifact_id == "output" && matches!(&artifact.kind, crate::job_dto::JobArtifactKindDto::Archive)) else {
+                let Some(artifact) = snapshot
+                    .output_artifacts
+                    .iter()
+                    .find(|artifact| artifact.artifact_id == "output" && matches!(&artifact.kind, crate::job_dto::JobArtifactKindDto::Archive))
+                else {
                     item.compression_state = CompressionState::Failed;
-                    item.last_error = Some(ShareErrorSummary { code: "share_artifact_missing".into(), message: "The archive output was not found".into(), hint: None });
+                    item.last_error =
+                        Some(ShareErrorSummary { code: "share_artifact_missing".into(), message: "The archive output was not found".into(), hint: None });
                     item.updated_at = timestamp();
                     self.bump_and_publish_locked(&mut state, true);
                     return;
                 };
                 let path = PathBuf::from(&artifact.path);
-                if !path.is_file() { item.compression_state = CompressionState::Failed; item.last_error = Some(ShareErrorSummary { code: "share_artifact_invalid".into(), message: "The archive output is not a regular file".into(), hint: None }); }
-                else { item.artifact_path = Some(path); item.compression_state = CompressionState::Complete; }
+                if !path.is_file() {
+                    item.compression_state = CompressionState::Failed;
+                    item.last_error = Some(ShareErrorSummary {
+                        code: "share_artifact_invalid".into(),
+                        message: "The archive output is not a regular file".into(),
+                        hint: None,
+                    });
+                } else {
+                    item.artifact_path = Some(path);
+                    item.compression_state = CompressionState::Complete;
+                }
             }
-            JobStatusDto::Failed => { item.compression_state = CompressionState::Failed; item.last_error = snapshot.latest_failure.as_ref().map(job_error_summary).or_else(|| Some(ShareErrorSummary { code: "create_failed".into(), message: "Archive creation failed".into(), hint: None })); }
-            JobStatusDto::Cancelled => { item.compression_state = CompressionState::Cancelled; }
+            JobStatusDto::Failed => {
+                item.compression_state = CompressionState::Failed;
+                item.last_error = snapshot
+                    .latest_failure
+                    .as_ref()
+                    .map(job_error_summary)
+                    .or_else(|| Some(ShareErrorSummary { code: "create_failed".into(), message: "Archive creation failed".into(), hint: None }));
+            }
+            JobStatusDto::Cancelled => {
+                item.compression_state = CompressionState::Cancelled;
+            }
             _ => {}
         }
         item.updated_at = timestamp();
@@ -422,8 +657,18 @@ impl ShareRegistry {
     fn schedule(&self) {
         let send = {
             let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-            if state.shutting_down || state.active_send.is_some() { return; }
-            let Some(index) = state.items.iter().enumerate().filter(|(_, item)| item.lifecycle == ShareLifecycle::Active && item.sharing_intent == SharingIntent::Pending && item.receiver.is_some() && item.artifact_path.is_some() && item.transfer_state != TransferState::Sent && item.transfer_state != TransferState::Sending).min_by_key(|(_, item)| item.enqueue_sequence).map(|(index, _)| index) else { return; };
+            if state.shutting_down {
+                return;
+            }
+            if state.active_send.is_some() {
+                if mark_waiting_items(&mut state) {
+                    self.bump_and_publish_locked(&mut state, true);
+                }
+                return;
+            }
+            let Some(index) = next_eligible_index(&state.items) else {
+                return;
+            };
             let item = &mut state.items[index];
             let send_id = format!("send-{}", uuid_like());
             item.send_id = Some(send_id.clone());
@@ -436,40 +681,94 @@ impl ShareRegistry {
             let path = item.artifact_path.clone().expect("eligible share has artifact");
             let generation = item.receiver_generation;
             let share_id = item.share_id.clone();
+            let alias = item.sender_alias.clone();
             state.active_send = Some((share_id.clone(), send_id.clone(), generation));
+            mark_waiting_items(&mut state);
             self.bump_and_publish_locked(&mut state, true);
-            Some((share_id, send_id, generation, item.sender_alias.clone(), target, path))
+            Some((share_id, send_id, generation, alias, target, path))
         };
-        let Some((share_id, send_id, generation, alias, target, path)) = send else { return; };
+        let Some((share_id, send_id, generation, alias, target, path)) = send else {
+            return;
+        };
+        let diagnostic_share_id = share_id.clone();
         let registry = self.clone();
-        thread::spawn(move || {
+        let mut workers = self.send_workers.lock().unwrap_or_else(|error| error.into_inner());
+        let worker = thread::spawn(move || {
             let result = registry.localsend.send_file_for_share(&send_id, &alias, target, &path);
             registry.finish_send(&share_id, &send_id, generation, result);
         });
+        workers.push(worker);
+        drop(workers);
+        self.record_diagnostic(
+            "sendStarted",
+            [
+                ("shareId", serde_json::json!(diagnostic_share_id)),
+                ("attempt", serde_json::json!(self.snapshot().items.iter().find(|item| item.share_id == diagnostic_share_id).map_or(0, |item| item.attempt))),
+            ],
+        );
     }
 
     fn finish_send(&self, share_id: &str, send_id: &str, generation: u64, result: Result<crate::localsend::LocalSendSendFileResultDto, CommandErrorDto>) {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        let Some((active_share_id, active_send_id, active_generation)) = state.active_send.clone() else { return; };
-        if active_share_id != share_id || active_send_id != send_id || active_generation != generation { return; }
-        let Some(item) = state.items.iter_mut().find(|item| item.share_id == share_id && item.send_id.as_deref() == Some(send_id) && item.receiver_generation == generation) else { return; };
-        match result { Ok(_) => { item.transfer_state = TransferState::Sent; item.delivery_uncertain = false; item.last_error = None; }, Err(error) => { item.transfer_state = if error.code == "cancelled" { TransferState::Cancelled } else { TransferState::Failed }; item.delivery_uncertain = true; item.last_error = Some(ShareErrorSummary { code: error.code.to_string(), message: error.message, hint: error.hint }); } }
+        let Some((active_share_id, active_send_id, active_generation)) = state.active_send.clone() else {
+            return;
+        };
+        if active_share_id != share_id || active_send_id != send_id || active_generation != generation {
+            return;
+        }
+        let Some(item) =
+            state.items.iter_mut().find(|item| item.share_id == share_id && item.send_id.as_deref() == Some(send_id) && item.receiver_generation == generation)
+        else {
+            return;
+        };
+        let was_cancelled = item.transfer_state == TransferState::Cancelled;
+        let completed = result.is_ok();
+        let cancelled = result.as_ref().is_err_and(|error| error.code == "cancelled");
+        let (next_state, uncertain) = resolve_transfer_result(was_cancelled, completed, cancelled);
+        if was_cancelled {
+            item.delivery_uncertain = true;
+            if let Err(error) = result {
+                item.last_error = Some(ShareErrorSummary { code: error.code.to_string(), message: error.message, hint: error.hint });
+            }
+        } else {
+            item.transfer_state = next_state;
+            item.delivery_uncertain = uncertain;
+            match result {
+                Ok(_) => {
+                    item.last_error = None;
+                }
+                Err(error) => {
+                    item.last_error = Some(ShareErrorSummary { code: error.code.to_string(), message: error.message, hint: error.hint });
+                }
+            }
+        }
         item.updated_at = timestamp();
         state.active_send = None;
         self.bump_and_publish_locked(&mut state, true);
         drop(state);
+        self.record_diagnostic("sendFinished", [("shareId", serde_json::json!(share_id)), ("sendId", serde_json::json!(send_id))]);
         self.schedule();
     }
 
-    fn bump_and_publish_locked(&self, state: &mut QueueState, _immediate: bool) {
+    fn bump_and_publish_locked(&self, state: &mut QueueState, immediate: bool) {
         state.revision = state.revision.saturating_add(1);
-        let revision = state.revision.to_string();
-        let _ = tauri::Emitter::emit(&self.app, SHARE_QUEUE_CHANGED_EVENT, revision);
+        let should_emit = immediate || state.last_progress_emit.is_none_or(|last| last.elapsed() >= Duration::from_millis(75));
+        if should_emit {
+            state.last_progress_emit = Some(Instant::now());
+            let revision = state.revision.to_string();
+            let _ = tauri::Emitter::emit(&self.app, SHARE_QUEUE_CHANGED_EVENT, revision);
+        }
+    }
+
+    fn record_diagnostic<const N: usize>(&self, name: &str, fields: [(&str, serde_json::Value); N]) {
+        let _ = self.diagnostics.record("shareQueue", name, crate::diagnostics::fields(fields));
     }
 }
 
 impl ShareRecord {
-    fn compression_state_is_terminal(&self) -> bool { matches!(self.compression_state, CompressionState::Complete | CompressionState::Failed | CompressionState::Cancelled | CompressionState::NotRequired) }
+    fn compression_state_is_terminal(&self) -> bool {
+        matches!(self.compression_state, CompressionState::Complete | CompressionState::Failed | CompressionState::Cancelled | CompressionState::NotRequired)
+    }
 }
 
 fn find_item_mut<'a>(state: &'a mut QueueState, share_id: &str) -> Result<&'a mut ShareRecord, CommandErrorDto> {
@@ -477,25 +776,39 @@ fn find_item_mut<'a>(state: &'a mut QueueState, share_id: &str) -> Result<&'a mu
 }
 
 fn validate_client_request_id(value: &str) -> Result<(), CommandErrorDto> {
-    if value.is_empty() || value.len() > 256 || value.chars().any(char::is_control) { return Err(error("share_invalid_state", "client request id is invalid", false)); }
+    if value.is_empty() || value.chars().count() > 256 || value.chars().any(char::is_control) {
+        return Err(error("share_invalid_state", "client request id is invalid", false));
+    }
     Ok(())
 }
 
 fn validate_direct_artifact(value: &str) -> Result<PathBuf, CommandErrorDto> {
     let path = PathBuf::from(value.trim());
-    if path.as_os_str().is_empty() || path.to_string_lossy().contains('\0') { return Err(error("share_invalid_state", "artifact path is invalid", false)); }
-    if !path.is_file() { return Err(CommandErrorDto::not_found(format!("artifact is not a regular file: {path:?}"), None)); }
+    if path.as_os_str().is_empty() || path.to_string_lossy().contains('\0') {
+        return Err(error("share_invalid_state", "artifact path is invalid", false));
+    }
+    if !path.is_file() {
+        return Err(CommandErrorDto::not_found(format!("artifact is not a regular file: {path:?}"), None));
+    }
     Ok(path)
 }
 
 fn validate_item_artifact(item: &ShareRecord) -> Result<(), CommandErrorDto> {
-    let Some(path) = &item.artifact_path else { return Err(error("share_invalid_state", "share artifact is not ready", true)); };
-    if !path.is_file() { return Err(CommandErrorDto::not_found("share artifact is no longer a regular file", None)); }
+    let Some(path) = &item.artifact_path else {
+        return Err(error("share_invalid_state", "share artifact is not ready", true));
+    };
+    if !path.is_file() {
+        return Err(CommandErrorDto::not_found("share artifact is no longer a regular file", None));
+    }
     Ok(())
 }
 
 fn job_error_summary(event: &JobEventDto) -> ShareErrorSummary {
-    ShareErrorSummary { code: event.code.unwrap_or("create_failed").to_string(), message: event.message.clone().unwrap_or_else(|| "Archive creation failed".into()), hint: event.hint.map(str::to_owned) }
+    ShareErrorSummary {
+        code: event.code.unwrap_or("create_failed").to_string(),
+        message: event.message.clone().unwrap_or_else(|| "Archive creation failed".into()),
+        hint: event.hint.as_deref().map(str::to_owned),
+    }
 }
 
 fn error(code: &'static str, message: impl Into<String>, retryable: bool) -> CommandErrorDto {
@@ -510,8 +823,6 @@ fn uuid_like() -> String {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     format!("{}-{}", std::process::id(), NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
 }
-
-pub(crate) fn command_get_share_queue(state: &ShareRegistry) -> ShareRegistrySnapshot { state.snapshot() }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -567,4 +878,93 @@ pub fn cancel_share(request: ShareIdRequest, state: tauri::State<'_, ShareRegist
 #[tauri::command]
 pub fn remove_share(request: ShareIdRequest, state: tauri::State<'_, ShareRegistry>) -> Result<(), CommandErrorDto> {
     state.remove_share(&request.share_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn receiver() -> LocalSendDeviceInfoDto {
+        LocalSendDeviceInfoDto {
+            alias: "Peer".into(),
+            fingerprint: "fingerprint".into(),
+            port: 53317,
+            protocol: "https".into(),
+            ip: Some("192.168.1.20".into()),
+            device_model: None,
+        }
+    }
+
+    fn record(sequence: u64, transfer_state: TransferState, with_receiver: bool, with_artifact: bool) -> ShareRecord {
+        ShareRecord {
+            share_id: format!("share-{sequence}"),
+            client_request_id: format!("request-{sequence}"),
+            enqueue_sequence: sequence,
+            mode: ShareMode::DirectShare,
+            source_paths: vec![PathBuf::from("artifact.zip")],
+            sender_alias: "ZManager Desktop".into(),
+            compression_job_id: None,
+            artifact_path: with_artifact.then(|| PathBuf::from("artifact.zip")),
+            receiver: with_receiver.then(receiver),
+            receiver_generation: u64::from(with_receiver),
+            send_id: None,
+            compression_state: CompressionState::NotRequired,
+            compression_progress: None,
+            transfer_state,
+            sharing_intent: SharingIntent::Pending,
+            lifecycle: ShareLifecycle::Active,
+            attempt: 0,
+            bytes_sent: 0,
+            total_bytes: None,
+            delivery_uncertain: false,
+            created_at: "0".into(),
+            updated_at: "0".into(),
+            last_error: None,
+        }
+    }
+
+    #[test]
+    fn waiting_state_marks_only_ready_pending_records() {
+        let mut state = QueueState {
+            next_sequence: 0,
+            revision: 0,
+            next_id: 0,
+            items: vec![
+                record(1, TransferState::NotStarted, true, true),
+                record(2, TransferState::NotStarted, false, true),
+                record(3, TransferState::Failed, true, true),
+            ],
+            active_send: None,
+            last_progress_emit: None,
+            shutting_down: false,
+        };
+
+        assert!(mark_waiting_items(&mut state));
+        assert_eq!(state.items[0].transfer_state, TransferState::Waiting);
+        assert_eq!(state.items[1].transfer_state, TransferState::NotStarted);
+        assert_eq!(state.items[2].transfer_state, TransferState::Failed);
+    }
+
+    #[test]
+    fn scheduler_selects_fifo_and_does_not_auto_retry_failed_transfers() {
+        let items =
+            vec![record(1, TransferState::Failed, true, true), record(2, TransferState::Waiting, true, true), record(3, TransferState::NotStarted, true, true)];
+
+        assert_eq!(next_eligible_index(&items), Some(1));
+    }
+
+    #[test]
+    fn cancelled_completion_cannot_overwrite_skip_or_cancel() {
+        assert_eq!(resolve_transfer_result(true, true, false), (TransferState::Cancelled, true));
+        assert_eq!(resolve_transfer_result(true, false, true), (TransferState::Cancelled, true));
+        assert_eq!(resolve_transfer_result(false, true, false), (TransferState::Sent, false));
+        assert_eq!(resolve_transfer_result(false, false, false), (TransferState::Failed, true));
+    }
+
+    #[test]
+    fn client_request_id_limit_counts_unicode_characters() {
+        assert!(validate_client_request_id(&"界".repeat(256)).is_ok());
+        assert!(validate_client_request_id(&"界".repeat(257)).is_err());
+        assert!(validate_client_request_id("request\nreplayed").is_err());
+    }
 }

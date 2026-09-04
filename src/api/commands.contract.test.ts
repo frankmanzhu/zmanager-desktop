@@ -404,5 +404,5 @@ describe("Tauri command contracts", () => {
 
 function rustInvokeHandlerCommands(): string[] {
   const handlerBlock = rustMainSource.match(/tauri::generate_handler!\[\s*([\s\S]*?)\s*\]/)?.[1] ?? "";
-  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|migration|localsend)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
+  return [...handlerBlock.matchAll(/(?:commands|account|default_handlers|diagnostics|migration|localsend|share_queue)::([a-zA-Z0-9_]+)/g)].map((match) => match[1]);
 }
