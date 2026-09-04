@@ -53,13 +53,14 @@ import type {
   ValidateTzapSigningIdentityResponse,
   DetectArchiveFormatRequest,
   DetectArchiveFormatResponse,
-  LocalSendCancelSendRequest,
   LocalSendDeviceInfoDto,
   LocalSendDiscoverRequest,
   LocalSendRespondToTransferRequest,
-  LocalSendSendFileRequest,
-  LocalSendSendFileResult,
   LocalSendStartReceiverRequest,
+  EnqueueShareRequest,
+  EnqueueShareResponse,
+  ShareRecordSnapshot,
+  ShareRegistrySnapshot,
 } from "./types";
 
 export async function fetchAccountSnapshot(): Promise<AccountSnapshotDto> {
@@ -341,12 +342,32 @@ export async function runLocalSendDiscover(request: LocalSendDiscoverRequest): P
   return invoke<LocalSendDeviceInfoDto[]>("localsend_discover", { request });
 }
 
-export async function runLocalSendSendFile(request: LocalSendSendFileRequest): Promise<LocalSendSendFileResult> {
-  return invoke<LocalSendSendFileResult>("localsend_send_file", { request });
+export async function enqueueShare(request: EnqueueShareRequest): Promise<EnqueueShareResponse> {
+  return invoke<EnqueueShareResponse>("enqueue_share", { request });
 }
 
-export async function runLocalSendCancelSend(request: LocalSendCancelSendRequest): Promise<void> {
-  return invoke<void>("localsend_cancel_send", { request });
+export async function setShareReceiver(request: { shareId: string; receiver: LocalSendDeviceInfoDto }): Promise<ShareRecordSnapshot> {
+  return invoke<ShareRecordSnapshot>("set_share_receiver", { request });
+}
+
+export async function startShare(request: { shareId: string; acknowledgeDeliveryUncertainty?: boolean }): Promise<ShareRecordSnapshot> {
+  return invoke<ShareRecordSnapshot>("start_share", { request });
+}
+
+export async function getShareQueue(): Promise<ShareRegistrySnapshot> {
+  return invoke<ShareRegistrySnapshot>("get_share_queue");
+}
+
+export async function skipShare(request: { shareId: string }): Promise<ShareRecordSnapshot> {
+  return invoke<ShareRecordSnapshot>("skip_share", { request });
+}
+
+export async function cancelShare(request: { shareId: string }): Promise<ShareRecordSnapshot> {
+  return invoke<ShareRecordSnapshot>("cancel_share", { request });
+}
+
+export async function removeShare(request: { shareId: string }): Promise<void> {
+  return invoke<void>("remove_share", { request });
 }
 
 export async function runLocalSendRespondToTransfer(request: LocalSendRespondToTransferRequest): Promise<void> {

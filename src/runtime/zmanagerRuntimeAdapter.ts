@@ -68,7 +68,7 @@ import { createAccountController } from "../app/controllers/accountController";
 import { initializeDeepLinkAdapter } from "../desktop/deepLinkAdapter";
 import { createDefaultHandlerController } from "../app/controllers/defaultHandlerController";
 import { createLocalSendTrustController } from "../app/controllers/localSendTrustController";
-import { createLocalSendShareController } from "../app/controllers/localSendShareController";
+import { createShareQueueController } from "../app/controllers/shareQueueController";
 import {
   createNativeInboundController,
 } from "../app/controllers/nativeInboundController";
@@ -96,6 +96,7 @@ import {
 } from "../app/workspaces/archiveWorkspace";
 import {
   createCreateWorkspace,
+  buildQuickCreateStartRequest,
   type CreateWorkspacePlanStatus,
   type CreateWorkspaceSnapshot,
 } from "../app/workspaces/createWorkspace";
@@ -254,6 +255,7 @@ import {
 import type { LocalSendIncomingTransferSnapshot } from "../app/controllers/localSendIncomingTransfer";
 import {
   uniqueQuickActionPaths,
+  quickCreateDestination,
   type QuickActionExtractMode,
 } from "../app/quickActions";
 import {
@@ -269,6 +271,13 @@ import {
   fetchDiagnosticLogInfo,
   fetchQuickActionStartupState,
   fetchSystemFileIcons,
+  enqueueShare,
+  getShareQueue,
+  setShareReceiver,
+  startShare,
+  skipShare,
+  cancelShare,
+  removeShare,
   getJobSnapshot,
   validateTzapSigningIdentity as validateTzapSigningIdentityCommand,
   generateAccountRecipientKey,
@@ -311,6 +320,8 @@ import type {
   JobStatus,
   ListArchiveRequest,
   LocalSendEventDto,
+  LocalSendDeviceInfoDto,
+  EnqueueShareRequest,
   ProjectContract,
   QuickActionRequestDto,
   QuickActionStartupStateDto,
@@ -352,8 +363,8 @@ import { listenNativeInboundEvents } from "../desktop/nativeInboundEvents";
 import { listenNativeMenuCommands } from "../desktop/nativeMenu";
 import { defaultHandlerDesktopAdapter } from "../desktop/defaultHandlers";
 import { localSendTrustDesktopAdapter } from "../desktop/localSendTrust";
-import { localSendShareDesktopAdapter } from "../desktop/localSendShare";
 import { listenLocalSendEvents } from "../desktop/localSendEvents";
+import { listenShareQueueChanged } from "../desktop/shareQueueEvents";
 import {
   listenNativeFileDragOutcomes,
   startNativeFileDrag,
@@ -823,12 +834,6 @@ const createStartController = createCreateStartController({
       },
     });
     recordCreateDestinationHistory(request.destinationPath);
-    if (pendingCompressAndShareOnLan) {
-      pendingCompressAndShareOnLan = false;
-      void awaitCreateJobThenShareOnLan(response.jobId).catch((error) => {
-        setOperationalStatus(unknownErrorMessage(error, "Unable to open Share on LAN for the compressed archive."));
-      });
-    }
   },
   toCommandError: asCommandError,
 });
@@ -1253,11 +1258,10 @@ const localSendTrustController = createLocalSendTrustController({
   errorMessage: (error) => unknownErrorMessage(error, "Unable to update trusted LAN devices."),
 });
 
-const localSendShareController = createLocalSendShareController({
-  ...localSendShareDesktopAdapter,
+const shareQueueController = createShareQueueController({
+  listen: listenShareQueueChanged,
   publish: publishReactSnapshot,
-  errorMessage: (error) => unknownErrorMessage(error, "Unable to share on LAN."),
-  createSendId: () => crypto.randomUUID(),
+  reportError: (error) => setOperationalStatus(unknownErrorMessage(error, "Unable to load the LAN share queue.")),
 });
 
 function localSendAliasOrDefault(): string {
@@ -1319,11 +1323,6 @@ function syncLocalSendReceiverWithPreferences() {
     });
 }
 
-function openShareOnLanDialog(archivePath: string) {
-  localSendShareController.open(archivePath, localSendAliasOrDefault());
-  void localSendShareController.discover();
-}
-
 /**
  * Set right before triggering a compress run that should open the Share on
  * LAN dialog once the job succeeds, and always cleared once that run either
@@ -1332,13 +1331,11 @@ function openShareOnLanDialog(archivePath: string) {
  * safe here because `createStartController`'s own submission guard already
  * prevents a second compress run from overlapping this one.
  */
-let pendingCompressAndShareOnLan = false;
-
 function startCompressAndShareOnLan() {
   const format = createWorkspace.getSnapshot().options.format;
   const defaults = createDefaultsForFormat(appPreferences, format);
 
-  let password = "";
+  let password: string | undefined;
   if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
     const promptedPassword = jobPasswordPrompts.promptForNewArchivePassword();
     if (!promptedPassword) {
@@ -1348,38 +1345,43 @@ function startCompressAndShareOnLan() {
     password = promptedPassword;
   }
 
-  pendingCompressAndShareOnLan = true;
-  void runCreate({ passwordInput: { password, passwordConfirm: password } }).finally(() => {
-    pendingCompressAndShareOnLan = false;
+  const workspace = createWorkspace.getSnapshot();
+  const requestResult = buildQuickCreateStartRequest({
+    sources: [...workspace.sources],
+    destinationPath: workspace.options.destinationPath,
+    format,
+    cleanSource: workspace.options.cleanSource,
+    replaceExisting: defaults.replaceExisting,
+    preserveMetadata: defaults.preserveMetadata,
+    password,
+    compressionLevel: defaults.compressionLevel ?? undefined,
+    volumeSize: defaults.volumeSize ?? undefined,
+    respectGitignore: defaults.respectGitignore,
+    followSymlinks: defaults.followSymlinks,
+    tzapRecoveryPercentage: defaults.tzapRecoveryPercentage ?? undefined,
+    tzapVolumeLossTolerance: defaults.tzapVolumeLossTolerance,
+    zipCompression: defaults.zipCompression,
+    sevenZSolid: defaults.sevenZSolid,
+    sevenZThreads: defaults.sevenZThreads ?? undefined,
+    sevenZChunkSize: defaults.sevenZChunkSize ?? undefined,
+    sevenZEncryptFileNames: defaults.sevenZEncryptFileNames,
   });
-}
-
-/**
- * Waits for a specific create job to reach a terminal state and, on
- * success, opens the Share on LAN dialog with its output archive. Runs
- * alongside the normal job-handoff/disposable-task-window flow (which
- * already shows compress progress) rather than replacing it.
- *
- * Learns about termination from the Job catalog the Main Window already
- * subscribes to, then reads the finished Job's snapshot once, rather than
- * opening its own per-Job subscription (task windows own those).
- */
-async function awaitCreateJobThenShareOnLan(jobId: string) {
-  const status = await awaitJobTermination(jobId);
-  if (status !== "completed") {
+  if (!requestResult.ok) {
+    setOperationalMessage(requestResult.reason === "needsSources" ? "quickCreate.needsSource" : "quickCreate.needsDestination");
     return;
   }
-  const jobSnapshot = await getJobSnapshot({ jobId });
-  const archiveArtifact = jobSnapshot.outputArtifacts.find((artifact) => artifact.kind === "archive");
-  if (archiveArtifact) {
-    openShareOnLanDialog(archiveArtifact.path);
-  }
+  void shareQueueController.enqueue({
+    mode: "compressAndShare",
+    clientRequestId: crypto.randomUUID(),
+    senderAlias: localSendAliasOrDefault(),
+    createRequest: requestResult.request,
+    receiver: null,
+  }).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to queue Share on LAN.")));
 }
 
 let localSendIncomingTransfers: LocalSendIncomingTransferSnapshot[] = [];
 
 function handleLocalSendEvent(event: LocalSendEventDto) {
-  localSendShareController.handleEvent(event);
   if (event.type === "transferRequest") {
     // Reaching the frontend at all means the sender's fingerprint was not
     // in the trust store — see handle_queued_event in src-tauri/src/localsend.rs,
@@ -2119,7 +2121,7 @@ function createCurrentReactSnapshot(): ZManagerReactSnapshot {
     account: accountWorkspace.getSnapshot(),
     defaultHandlers: defaultHandlerController.getSnapshot(),
     localSendTrustedDevices: localSendTrustController.getSnapshot(),
-    localSendShare: localSendShareController.getSnapshot(),
+    shareQueue: shareQueueController.getSnapshot(),
     localSendIncomingTransfers,
     shell: shellWorkspace.getSnapshot(),
     archive,
@@ -2269,20 +2271,20 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
     case "localSendTrustForget":
       void localSendTrustController.forget(intent.fingerprint);
       break;
-    case "localSendShareClose":
-      localSendShareController.close();
+    case "shareQueueSetReceiver":
+      void shareQueueController.setReceiver(intent.shareId, intent.receiver).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to select the LAN receiver.")));
       break;
-    case "localSendShareDiscover":
-      void localSendShareController.discover();
+    case "shareQueueStart":
+      void shareQueueController.start(intent.shareId, intent.acknowledgeDeliveryUncertainty).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to start the LAN share.")));
       break;
-    case "localSendShareSelectTarget":
-      localSendShareController.selectTarget(intent.fingerprint);
+    case "shareQueueSkip":
+      void shareQueueController.skip(intent.shareId).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to skip the LAN share.")));
       break;
-    case "localSendShareSend":
-      void localSendShareController.send();
+    case "shareQueueCancel":
+      void shareQueueController.cancel(intent.shareId).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to cancel the LAN share.")));
       break;
-    case "localSendShareCancelSend":
-      void localSendShareController.cancelSend();
+    case "shareQueueRemove":
+      void shareQueueController.remove(intent.shareId).catch((error) => setOperationalStatus(unknownErrorMessage(error, "Unable to remove the LAN share.")));
       break;
     case "localSendIncomingRespond":
       void respondToLocalSendIncomingTransfer(intent.requestId, intent.decision, intent.alwaysAccept);
@@ -3951,11 +3953,66 @@ async function startQuickExtract(paths: string[], action: QuickActionExtractMode
   await quickActionController.startQuickExtract(paths, action);
 }
 
-async function executeQuickActionRequest(request: QuickActionRequestDto) {
+async function enqueueNativeCompressShare(paths: string[], clientRequestId: string) {
+  const sources = uniqueQuickActionPaths(paths);
+  const format = appPreferences.defaultArchiveFormat;
+  const defaults = createDefaultsForFormat(appPreferences, format);
+  let password: string | undefined;
+  if (defaults.promptForPassword && createFormatSupportsPassword(format)) {
+    password = jobPasswordPrompts.promptForNewArchivePassword() ?? undefined;
+    if (!password) {
+      throw new Error(message("quickCreate.cancelled"));
+    }
+  }
+  const destinationPath = quickCreateDestination(sources, format, appPreferences, { nativeParentPath, joinNativePath });
+  const requestResult = buildQuickCreateStartRequest({
+    sources,
+    destinationPath,
+    format,
+    cleanSource: defaults.cleanSource,
+    replaceExisting: defaults.replaceExisting,
+    preserveMetadata: defaults.preserveMetadata,
+    password,
+    compressionLevel: defaults.compressionLevel ?? undefined,
+    volumeSize: defaults.volumeSize ?? undefined,
+    respectGitignore: defaults.respectGitignore,
+    followSymlinks: defaults.followSymlinks,
+    tzapRecoveryPercentage: defaults.tzapRecoveryPercentage ?? undefined,
+    tzapVolumeLossTolerance: defaults.tzapVolumeLossTolerance,
+    zipCompression: defaults.zipCompression,
+    sevenZSolid: defaults.sevenZSolid,
+    sevenZThreads: defaults.sevenZThreads ?? undefined,
+    sevenZChunkSize: defaults.sevenZChunkSize ?? undefined,
+    sevenZEncryptFileNames: defaults.sevenZEncryptFileNames,
+  });
+  if (!requestResult.ok) {
+    throw new Error(message(requestResult.reason === "needsSources" ? "quickCreate.needsSource" : "quickCreate.needsDestination"));
+  }
+  await shareQueueController.enqueue({ mode: "compressAndShare", clientRequestId, senderAlias: localSendAliasOrDefault(), createRequest: requestResult.request, receiver: null });
+}
+
+async function enqueueNativeDirectShare(paths: string[], clientRequestId: string) {
+  const sources = uniqueQuickActionPaths(paths);
+  if (sources.length !== 1) {
+    throw new Error(message("command.singleFileRequired"));
+  }
+  await shareQueueController.enqueue({ mode: "directShare", clientRequestId, senderAlias: localSendAliasOrDefault(), artifactPath: sources[0], receiver: null });
+}
+
+async function executeQuickActionRequest(request: QuickActionRequestDto, identity?: Readonly<{ eventId: string; idempotencyKey: string | null }>) {
+  const clientRequestId = identity?.idempotencyKey?.trim() || identity?.eventId || crypto.randomUUID();
+  if (request.kind === "compressShareOnLan") {
+    await enqueueNativeCompressShare(request.paths, clientRequestId);
+    return;
+  }
+  if (request.kind === "shareOnLan") {
+    await enqueueNativeDirectShare(request.paths, clientRequestId);
+    return;
+  }
   await quickActionController.handleQuickActionRequest(request);
 }
 
-async function routeQuickActionRequest(request: QuickActionRequestDto) {
+async function routeQuickActionRequest(request: QuickActionRequestDto, identity?: Readonly<{ eventId: string; idempotencyKey: string | null }>) {
   diagnostics.record({
     scope: "quickActionRouting",
     name: "requestArrived",
@@ -3984,7 +4041,7 @@ async function routeQuickActionRequest(request: QuickActionRequestDto) {
         },
       });
     },
-    execute: executeQuickActionRequest,
+    execute: (nextRequest) => executeQuickActionRequest(nextRequest, identity),
     onDisposableTaskRequestSettled: maybeCloseQuickActionOnlyCoordinator,
   });
 }
@@ -4017,6 +4074,7 @@ async function initializeDesktopRuntime() {
   await listenLocalSendEvents(({ payload }) => {
     handleLocalSendEvent(payload);
   });
+  await shareQueueController.initialize();
   await listenNativeMenuCommands((commandId) => runRoutedCommand(commandId));
   await listenNativeFileDragOutcomes(({ payload }) => {
     const count = pendingNativeDragCounts.get(payload.sessionId) ?? 0;

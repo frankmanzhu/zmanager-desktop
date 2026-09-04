@@ -427,6 +427,16 @@ fn validate_request_with_known_kind(kind: QuickActionKindDto, paths: Vec<String>
                 return Err(QuickActionError::invalid("compress quick actions require at least one path"));
             }
         }
+        QuickActionKindDto::CompressShareOnLan => {
+            if paths.is_empty() {
+                return Err(QuickActionError::invalid("compress-share-on-lan requires at least one path"));
+            }
+        }
+        QuickActionKindDto::ShareOnLan => {
+            if paths.len() != 1 {
+                return Err(QuickActionError::invalid("share-on-lan requires exactly one file path"));
+            }
+        }
         QuickActionKindDto::Extract => {
             if paths.is_empty() {
                 return Err(QuickActionError::invalid("extract quick actions require at least one archive path"));

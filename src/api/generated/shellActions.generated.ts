@@ -10,6 +10,8 @@ export const SHELL_ACTION_IDS = [
   "compressTarZst",
   "compressTarGz",
   "compressAppleArchive",
+  "compressShareOnLan",
+  "shareOnLan",
   "compressCleanSource",
   "extractHere",
   "extractToFolder"
@@ -306,6 +308,69 @@ export const SHELL_ACTION_POLICIES = [
       "add-to-apple-archive"
     ],
     "windowDisposition": "disposableTask"
+  },
+  {
+    "id": "compressShareOnLan",
+    "canonicalLabel": "Compress and Share on LAN",
+    "displayKey": "shellAction.compressShareOnLan",
+    "nativeVerb": "CompressShareOnLan",
+    "order": 82,
+    "contextMenuOrder": 100,
+    "contextMenuContexts": [
+      "archiveSingle",
+      "archiveMultiple",
+      "creation",
+      "container"
+    ],
+    "selectionShapes": [
+      "single-archive",
+      "multiple-archives",
+      "files",
+      "folders",
+      "mixed"
+    ],
+    "multiplicity": "one-or-more",
+    "nativeSurfaces": [
+      "windowsExplorer",
+      "linuxDesktop",
+      "linuxNautilus",
+      "linuxKde",
+      "macosFinder",
+      "macosServices"
+    ],
+    "compatibilityAliases": [
+      "compress-share-on-lan"
+    ],
+    "windowDisposition": "mainWindow"
+  },
+  {
+    "id": "shareOnLan",
+    "canonicalLabel": "Share on LAN",
+    "displayKey": "shellAction.shareOnLan",
+    "nativeVerb": "ShareOnLan",
+    "order": 83,
+    "contextMenuOrder": 105,
+    "contextMenuContexts": [
+      "archiveSingle",
+      "creation",
+      "container"
+    ],
+    "selectionShapes": [
+      "files"
+    ],
+    "multiplicity": "exactly-one",
+    "nativeSurfaces": [
+      "windowsExplorer",
+      "linuxDesktop",
+      "linuxNautilus",
+      "linuxKde",
+      "macosFinder",
+      "macosServices"
+    ],
+    "compatibilityAliases": [
+      "share-lan"
+    ],
+    "windowDisposition": "mainWindow"
   },
   {
     "id": "compressCleanSource",

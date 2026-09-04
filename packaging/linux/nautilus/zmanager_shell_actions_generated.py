@@ -118,6 +118,8 @@ ARCHIVE_ACTIONS = (
     ("AddToSevenZ", "Add to .7z", "compress-7z", True),
     ("AddToTzst", "Add to .tzst", "compress-tzst", True),
     ("AddToTgz", "Add to .tgz", "compress-tgz", True),
+    ("CompressShareOnLan", "Compress and Share on LAN", "compress-share-on-lan", True),
+    ("ShareOnLan", "Share on LAN", "share-lan", False),
 )
 
 CREATE_ACTIONS = (
@@ -127,4 +129,6 @@ CREATE_ACTIONS = (
     ("AddToSevenZ", "Add to .7z", "compress-7z"),
     ("AddToTzst", "Add to .tzst", "compress-tzst"),
     ("AddToTgz", "Add to .tgz", "compress-tgz"),
+    ("CompressShareOnLan", "Compress and Share on LAN", "compress-share-on-lan"),
+    ("ShareOnLan", "Share on LAN", "share-lan"),
 )

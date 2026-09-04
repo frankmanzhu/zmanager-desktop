@@ -114,6 +114,8 @@ pub struct LocalSendState {
     trust_store: TrustStore,
     receive_config: Arc<Mutex<Option<ReceiveConfig>>>,
     poll_stop: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+    poll_thread: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
+    outgoing_event_sink: Arc<Mutex<Option<Arc<dyn Fn(LocalSendEventDto) + Send + Sync>>>>,
 }
 
 impl LocalSendState {
@@ -129,7 +131,50 @@ impl LocalSendState {
             eprintln!("zmanager-localsend: LocalSend identity will not persist across restarts: {error}");
         }
 
-        Self { registry, trust_store: TrustStore::new(app_data_dir), receive_config: Arc::new(Mutex::new(None)), poll_stop: Arc::new(Mutex::new(None)) }
+        Self { registry, trust_store: TrustStore::new(app_data_dir), receive_config: Arc::new(Mutex::new(None)), poll_stop: Arc::new(Mutex::new(None)), poll_thread: Arc::new(Mutex::new(None)), outgoing_event_sink: Arc::new(Mutex::new(None)) }
+    }
+
+    pub(crate) fn register_outgoing_event_sink(&self, sink: Arc<dyn Fn(LocalSendEventDto) + Send + Sync>) {
+        *self.outgoing_event_sink.lock().unwrap_or_else(|error| error.into_inner()) = Some(sink);
+    }
+
+    pub(crate) fn start_event_pump(&self, app: AppHandle, job_registry: JobRegistry) {
+        let mut stop_guard = self.poll_stop.lock().unwrap_or_else(|error| error.into_inner());
+        if stop_guard.is_some() {
+            return;
+        }
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        *stop_guard = Some(stop_flag.clone());
+        drop(stop_guard);
+        let shared = self.clone();
+        let thread = thread::spawn(move || spawn_event_pump(app, shared, job_registry, stop_flag));
+        *self.poll_thread.lock().unwrap_or_else(|error| error.into_inner()) = Some(thread);
+    }
+
+    pub(crate) fn send_file_for_share(
+        &self,
+        send_id: &str,
+        alias: &str,
+        target: LocalSendDeviceInfoDto,
+        file_path: &Path,
+    ) -> Result<LocalSendSendFileResultDto, CommandErrorDto> {
+        if !file_path.is_file() {
+            return Err(CommandErrorDto::not_found("share artifact is no longer a regular file", None));
+        }
+        let request = zmanager_localsend::SendFileRequest {
+            send_id: send_id.to_string(),
+            alias: alias.to_string(),
+            self_port: default_localsend_port(),
+            https: true,
+            target: target.into(),
+            file_path: file_path.to_path_buf(),
+            pin: None,
+        };
+        self.registry.send_file(request).map(LocalSendSendFileResultDto::from).map_err(map_localsend_error)
+    }
+
+    pub(crate) fn cancel_send_for_share(&self, send_id: &str) -> Result<(), CommandErrorDto> {
+        self.registry.cancel_send(&zmanager_localsend::CancelSendRequest { send_id: send_id.to_string() }).map_err(map_localsend_error)
     }
 
     /// Stops the event pump and the receiver, if either is running. Safe to
@@ -137,6 +182,9 @@ impl LocalSendState {
     pub fn shutdown(&self) {
         if let Some(stop_flag) = self.poll_stop.lock().unwrap_or_else(|error| error.into_inner()).take() {
             stop_flag.store(true, Ordering::Relaxed);
+        }
+        if let Some(thread) = self.poll_thread.lock().unwrap_or_else(|error| error.into_inner()).take() {
+            let _ = thread.join();
         }
         let _ = self.registry.stop_receiver();
     }
@@ -412,57 +460,6 @@ pub fn localsend_discover(request: LocalSendDiscoverRequestDto, state: State<'_,
 }
 
 #[tauri::command]
-pub fn localsend_send_file(
-    request: LocalSendSendFileRequestDto,
-    state: State<'_, LocalSendState>,
-    diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
-) -> Result<LocalSendSendFileResultDto, CommandErrorDto> {
-    let target = &request.target;
-    let _ = diagnostics.record(
-        "localSend",
-        "sendStarted",
-        crate::diagnostics::fields([
-            ("sendId", serde_json::Value::String(request.send_id.clone())),
-            ("targetAlias", serde_json::Value::String(target.alias.clone())),
-            ("targetIp", serde_json::Value::String(target.ip.clone().unwrap_or_default())),
-            ("targetPort", serde_json::json!(target.port)),
-            ("targetProtocol", serde_json::Value::String(target.protocol.clone())),
-        ]),
-    );
-
-    let result = state.registry.send_file(request.into()).map(LocalSendSendFileResultDto::from).map_err(map_localsend_error);
-    match &result {
-        Ok(response) => {
-            let _ = diagnostics.record(
-                "localSend",
-                "sendCompleted",
-                crate::diagnostics::fields([
-                    ("sessionId", serde_json::Value::String(response.session_id.clone())),
-                    ("fileId", serde_json::Value::String(response.file_id.clone())),
-                ]),
-            );
-        }
-        Err(error) => {
-            let _ = diagnostics.record(
-                "localSend",
-                "sendFailed",
-                crate::diagnostics::fields([
-                    ("errorCode", serde_json::Value::String(error.code.to_owned())),
-                    ("errorMessage", serde_json::Value::String(error.message.clone())),
-                    ("retryable", serde_json::Value::Bool(error.retryable)),
-                ]),
-            );
-        }
-    }
-    result
-}
-
-#[tauri::command]
-pub fn localsend_cancel_send(request: LocalSendCancelSendRequestDto, state: State<'_, LocalSendState>) -> Result<(), CommandErrorDto> {
-    state.registry.cancel_send(&request.into()).map_err(map_localsend_error)
-}
-
-#[tauri::command]
 pub fn localsend_respond_to_transfer(request: LocalSendRespondToTransferRequestDto, state: State<'_, LocalSendState>) -> Result<(), CommandErrorDto> {
     state.registry.respond_to_transfer(request.into()).map_err(map_localsend_error)
 }
@@ -485,7 +482,7 @@ pub fn localsend_start_receiver(
     request: LocalSendStartReceiverRequestDto,
     app: AppHandle,
     state: State<'_, LocalSendState>,
-    job_registry: State<'_, JobRegistry>,
+    _job_registry: State<'_, JobRegistry>,
 ) -> Result<(), CommandErrorDto> {
     let receive_folder = resolve_receive_folder(&app, request.receive_folder_path.trim())?;
     fs::create_dir_all(&receive_folder).map_err(|error| crate::commands::map_io_error(receive_folder.to_string_lossy().into_owned(), error))?;
@@ -508,18 +505,11 @@ pub fn localsend_start_receiver(
 
     *state.receive_config.lock().unwrap_or_else(|error| error.into_inner()) = Some(ReceiveConfig { receive_folder, auto_extract: request.auto_extract });
 
-    let stop_flag = Arc::new(AtomicBool::new(false));
-    *state.poll_stop.lock().unwrap_or_else(|error| error.into_inner()) = Some(stop_flag.clone());
-    spawn_event_pump(app, state.inner().clone(), job_registry.inner().clone(), stop_flag);
-
     Ok(())
 }
 
 #[tauri::command]
 pub fn localsend_stop_receiver(state: State<'_, LocalSendState>) -> Result<(), CommandErrorDto> {
-    if let Some(stop_flag) = state.poll_stop.lock().unwrap_or_else(|error| error.into_inner()).take() {
-        stop_flag.store(true, Ordering::Relaxed);
-    }
     *state.receive_config.lock().unwrap_or_else(|error| error.into_inner()) = None;
     state.registry.stop_receiver().map_err(map_localsend_error)
 }
@@ -546,15 +536,18 @@ pub fn localsend_untrust_device(fingerprint: String, state: State<'_, LocalSendS
 // ---------------------------------------------------------------------
 
 fn spawn_event_pump(app: AppHandle, shared: LocalSendState, job_registry: JobRegistry, stop_flag: Arc<AtomicBool>) {
-    thread::spawn(move || {
-        while !stop_flag.load(Ordering::Relaxed) {
-            let drained = shared.registry.poll_events();
-            for event in drained.events {
-                handle_queued_event(&app, &shared, &job_registry, event);
+    while !stop_flag.load(Ordering::Relaxed) {
+        let drained = shared.registry.poll_events();
+        for event in drained.events {
+            if let zmanager_localsend::QueuedEvent::FileSendProgress { send_id, session_id, file_id, file_name, bytes_sent, total_bytes, rate_bytes_per_second } = &event
+                && let Some(sink) = shared.outgoing_event_sink.lock().unwrap_or_else(|error| error.into_inner()).clone()
+            {
+                sink(LocalSendEventDto::FileSendProgress { send_id: send_id.clone(), session_id: session_id.clone(), file_id: file_id.clone(), file_name: file_name.clone(), bytes_sent: *bytes_sent, total_bytes: *total_bytes, rate_bytes_per_second: *rate_bytes_per_second });
             }
-            thread::sleep(EVENT_POLL_INTERVAL);
+            handle_queued_event(&app, &shared, &job_registry, event);
         }
-    });
+        thread::sleep(EVENT_POLL_INTERVAL);
+    }
 }
 
 fn handle_queued_event(app: &AppHandle, shared: &LocalSendState, job_registry: &JobRegistry, event: zmanager_localsend::QueuedEvent) {

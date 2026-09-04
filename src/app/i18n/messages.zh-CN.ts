@@ -61,6 +61,8 @@ export const zhCnMessages = {
   "command.properties": "属性",
   "command.shareOnLan": "局域网共享...",
   "command.compressShareOnLan": "压缩并局域网共享...",
+  "shellAction.compressShareOnLan": "压缩并局域网共享",
+  "shellAction.shareOnLan": "局域网共享",
   "shareOnLan.title": "局域网共享",
   "shareOnLan.description": "将“{name}”发送到局域网内的设备。",
   "shareOnLan.discovering": "正在查找网络中的设备…",

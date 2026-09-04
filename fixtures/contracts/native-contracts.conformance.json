@@ -11,6 +11,8 @@
     "compressTarZst",
     "compressTarGz",
     "compressAppleArchive",
+    "compressShareOnLan",
+    "shareOnLan",
     "compressCleanSource",
     "extractHere",
     "extractToFolder"
@@ -287,6 +289,65 @@
         "compress-apple-archive",
         "add-to-aar",
         "add-to-apple-archive"
+      ]
+    },
+    {
+      "id": "compressShareOnLan",
+      "canonicalLabel": "Compress and Share on LAN",
+      "nativeVerb": "CompressShareOnLan",
+      "order": 82,
+      "contextMenuOrder": 100,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "archiveMultiple",
+        "creation",
+        "container"
+      ],
+      "selectionShapes": [
+        "single-archive",
+        "multiple-archives",
+        "files",
+        "folders",
+        "mixed"
+      ],
+      "multiplicity": "one-or-more",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder",
+        "macosServices"
+      ],
+      "compatibilityAliases": [
+        "compress-share-on-lan"
+      ]
+    },
+    {
+      "id": "shareOnLan",
+      "canonicalLabel": "Share on LAN",
+      "nativeVerb": "ShareOnLan",
+      "order": 83,
+      "contextMenuOrder": 105,
+      "contextMenuContexts": [
+        "archiveSingle",
+        "creation",
+        "container"
+      ],
+      "selectionShapes": [
+        "files"
+      ],
+      "multiplicity": "exactly-one",
+      "nativeSurfaces": [
+        "windowsExplorer",
+        "linuxDesktop",
+        "linuxNautilus",
+        "linuxKde",
+        "macosFinder",
+        "macosServices"
+      ],
+      "compatibilityAliases": [
+        "share-lan"
       ]
     },
     {

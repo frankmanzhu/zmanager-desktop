@@ -9,7 +9,7 @@ StartupWMClass=zmanager-desktop
 StartupNotify=true
 Terminal=false
 Type=Application
-Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;
+Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;CompressShareOnLan;ShareOnLan;
 
 [Desktop Action ExtractHere]
 Name=Extract Here
@@ -54,4 +54,14 @@ Icon=zmanager-desktop
 [Desktop Action AddToTgz]
 Name=Add to .tgz
 Exec=zmanager-desktop --quick-action compress-tgz --path %F
+Icon=zmanager-desktop
+
+[Desktop Action CompressShareOnLan]
+Name=Compress and Share on LAN
+Exec=zmanager-desktop --quick-action compress-share-on-lan --path %F
+Icon=zmanager-desktop
+
+[Desktop Action ShareOnLan]
+Name=Share on LAN
+Exec=zmanager-desktop --quick-action share-lan --path %f
 Icon=zmanager-desktop

@@ -67,6 +67,8 @@ export const enMessages = {
   "command.properties": "Properties",
   "command.shareOnLan": "Share on LAN...",
   "command.compressShareOnLan": "Compress and Share on LAN...",
+  "shellAction.compressShareOnLan": "Compress and Share on LAN",
+  "shellAction.shareOnLan": "Share on LAN",
   "shareOnLan.title": "Share on LAN",
   "shareOnLan.description": "Send \"{name}\" to a device on your local network.",
   "shareOnLan.discovering": "Looking for devices on your network...",

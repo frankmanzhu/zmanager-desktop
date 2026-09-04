@@ -518,7 +518,7 @@ pub enum DestinationCollisionStrategyDto {
     Rename,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartCreateRequest {
     pub sources: Vec<String>,

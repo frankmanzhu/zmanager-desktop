@@ -21,6 +21,10 @@
 /* Resolve this key in the native presentation target. */
 "shellAction.compressAppleArchive" = "shellAction.compressAppleArchive";
 /* Resolve this key in the native presentation target. */
+"shellAction.compressShareOnLan" = "shellAction.compressShareOnLan";
+/* Resolve this key in the native presentation target. */
+"shellAction.shareOnLan" = "shellAction.shareOnLan";
+/* Resolve this key in the native presentation target. */
 "shellAction.compressCleanSource" = "shellAction.compressCleanSource";
 /* Resolve this key in the native presentation target. */
 "shellAction.extractHere" = "shellAction.extractHere";

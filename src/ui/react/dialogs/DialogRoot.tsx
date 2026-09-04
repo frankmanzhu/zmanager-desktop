@@ -16,7 +16,6 @@ import type { ZManagerDialogSnapshot } from "../appRuntime";
 import { PreferencesDialog } from "../preferences/PreferencesDialog";
 import { translatorForSnapshot } from "../shell/shellHelpers";
 import { DesktopDialog } from "./DesktopDialog";
-import { ShareOnLanDialog } from "./ShareOnLanDialog";
 
 export function DialogRoot() {
   const snapshot = useZManagerSnapshot();
@@ -29,10 +28,6 @@ export function DialogRoot() {
 
   if (snapshot.preferencesDraft) {
     return <PreferencesDialog />;
-  }
-
-  if (snapshot.localSendShare) {
-    return <ShareOnLanDialog share={snapshot.localSendShare} />;
   }
 
   if (snapshot.dialog.kind === "none") {

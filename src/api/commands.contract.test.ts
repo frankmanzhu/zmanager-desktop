@@ -333,26 +333,24 @@ const COMMAND_WRAPPERS = [
     call: () => api.runLocalSendDiscover({ alias: "ZManager Desktop", timeoutMs: 3000 }),
   },
   {
-    command: "localsend_send_file",
-    request: {
-      sendId: "send-1",
-      alias: "ZManager Desktop",
-      target: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null },
-      filePath: "C:/output/archive.zip",
-    },
-    call: () =>
-      api.runLocalSendSendFile({
-        sendId: "send-1",
-        alias: "ZManager Desktop",
-        target: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null },
-        filePath: "C:/output/archive.zip",
-      }),
+    command: "enqueue_share",
+    request: { mode: "directShare", clientRequestId: "request-1", senderAlias: "ZManager Desktop", artifactPath: "C:/output/archive.zip", receiver: null },
+    call: () => api.enqueueShare({ mode: "directShare", clientRequestId: "request-1", senderAlias: "ZManager Desktop", artifactPath: "C:/output/archive.zip", receiver: null }),
   },
   {
-    command: "localsend_cancel_send",
-    request: { sendId: "send-1" },
-    call: () => api.runLocalSendCancelSend({ sendId: "send-1" }),
+    command: "set_share_receiver",
+    request: { shareId: "share-1", receiver: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null } },
+    call: () => api.setShareReceiver({ shareId: "share-1", receiver: { alias: "Peer", fingerprint: "fingerprint-1", port: 53317, protocol: "http", ip: "192.168.1.20", deviceModel: null } }),
   },
+  {
+    command: "start_share",
+    request: { shareId: "share-1", acknowledgeDeliveryUncertainty: false },
+    call: () => api.startShare({ shareId: "share-1", acknowledgeDeliveryUncertainty: false }),
+  },
+  { command: "get_share_queue", call: () => api.getShareQueue() },
+  { command: "skip_share", request: { shareId: "share-1" }, call: () => api.skipShare({ shareId: "share-1" }) },
+  { command: "cancel_share", request: { shareId: "share-1" }, call: () => api.cancelShare({ shareId: "share-1" }) },
+  { command: "remove_share", request: { shareId: "share-1" }, call: () => api.removeShare({ shareId: "share-1" }) },
   {
     command: "localsend_respond_to_transfer",
     request: { requestId: "request-1", decision: "accept" },

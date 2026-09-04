@@ -11,7 +11,7 @@ export type NativeInboundControllerOptions = Readonly<{
   listen(listener: (event: Readonly<{ payload: NativeInboundEvent }>) => void): Promise<unknown>;
   markFrontendReady(windowLabel: string): Promise<number>;
   acknowledge(windowLabel: string, eventId: string): Promise<void>;
-  handleQuickAction(request: QuickActionRequestDto): Promise<void>;
+  handleQuickAction(request: QuickActionRequestDto, identity?: Readonly<{ eventId: string; idempotencyKey: string | null }>): Promise<void>;
   handleHostedAuthCallback(payload: NativeInboundHostedAuthEvent["payload"]): Promise<void>;
   revealApplication(): Promise<void>;
   reportFailure(error: unknown): void;
@@ -65,10 +65,10 @@ export function createNativeInboundController(
 
     switch (event.kind) {
       case "openPaths":
-        await options.handleQuickAction({ kind: "open", paths: event.payload.paths });
+        await options.handleQuickAction({ kind: "open", paths: event.payload.paths }, { eventId: event.eventId, idempotencyKey: event.idempotencyKey ?? null });
         break;
       case "shellActionRequest":
-        await options.handleQuickAction(event.payload.request);
+        await options.handleQuickAction(event.payload.request, { eventId: event.eventId, idempotencyKey: event.idempotencyKey ?? null });
         break;
       case "hostedAuthCallback":
         await options.handleHostedAuthCallback(event.payload);

@@ -19,6 +19,7 @@ use crate::job_dto::TestJobEventsSnapshot;
 use crate::{
     archive_index::ArchiveIndexRegistry,
     constants,
+    destination_reservation,
     dto::{
         AckSubscriptionRequest, ArchiveEntryDto, ArchiveEntryKindDto, CreatePlanEntryDto, CreatePlanResponse, DestinationCollisionStrategyDto,
         NativeFileDragOutcomeDto, NativeFileDragRequest, NativeFileDragResponse, PauseJobRequest, PlanCreateRequest, PreviewEntryRequest, PreviewEntryResponse,
@@ -300,6 +301,16 @@ pub fn start_create(
     registry: State<'_, JobRegistry>,
     diagnostics: State<'_, crate::diagnostics::DiagnosticLog>,
 ) -> Result<StartJobResponseDto, CommandErrorDto> {
+    start_create_service(request, &app, account_runtime.inner(), &registry, Some(diagnostics.inner().clone()))
+}
+
+pub(crate) fn start_create_service(
+    request: StartCreateRequest,
+    app: &AppHandle,
+    account_runtime: &crate::account::AccountRuntime,
+    registry: &JobRegistry,
+    diagnostics: Option<crate::diagnostics::DiagnosticLog>,
+) -> Result<StartJobResponseDto, CommandErrorDto> {
     let is_tzap = request.format == crate::dto::ArchiveFormatDto::Tzap;
     let has_signing_selection = request.tzap_certificates.as_ref().and_then(|options| options.signing_selection.as_ref()).is_some();
     let signing_selection_kind = request
@@ -313,41 +324,49 @@ pub fn start_create(
             crate::dto::TzapSigningSelectionDto::OneTimeCertificateAndKey { .. } => "oneTimeCertificateAndKey",
         })
         .unwrap_or("notProvided");
-    let _ = diagnostics.record(
-        "create",
-        "requested",
-        crate::diagnostics::fields([
-            ("format", serde_json::json!(format!("{:?}", request.format))),
-            ("sourceCount", serde_json::json!(request.sources.len())),
-            ("hasSigningSelection", serde_json::json!(has_signing_selection)),
-            ("signingSelectionKind", serde_json::json!(signing_selection_kind)),
-        ]),
-    );
+    if let Some(diagnostics) = diagnostics.as_ref() {
+        let _ = diagnostics.record(
+            "create",
+            "requested",
+            crate::diagnostics::fields([
+                ("format", serde_json::json!(format!("{:?}", request.format))),
+                ("sourceCount", serde_json::json!(request.sources.len())),
+                ("hasSigningSelection", serde_json::json!(has_signing_selection)),
+                ("signingSelectionKind", serde_json::json!(signing_selection_kind)),
+            ]),
+        );
+    }
     let app_for_worker = app.clone();
-    let runtime_for_worker = account_runtime.inner().clone();
-    let diagnostics_for_worker = diagnostics.inner().clone();
+    let runtime_for_worker = account_runtime.clone();
+    let diagnostics_for_worker = diagnostics.clone();
     let tzap_options = request.tzap_certificates.clone();
-    let response = start_create_internal_with_resolver(request, &registry, Some(diagnostics.inner().clone()), move || {
+    let response = start_create_internal_with_resolver(request, registry, diagnostics.clone(), move || {
         if !is_tzap {
             return Ok(None);
         }
-        let _ = diagnostics_for_worker.record("create", "signingResolutionStarted", crate::diagnostics::fields([]));
+        if let Some(diagnostics) = diagnostics_for_worker.as_ref() {
+            let _ = diagnostics.record("create", "signingResolutionStarted", crate::diagnostics::fields([]));
+        }
         let result = crate::account::resolve_tzap_create_inputs(&app_for_worker, &runtime_for_worker, tzap_options.as_ref()).map(Some);
-        let _ = diagnostics_for_worker.record(
-            "create",
-            if result.is_ok() { "signingResolutionCompleted" } else { "signingResolutionFailed" },
-            crate::diagnostics::fields([]),
-        );
+        if let Some(diagnostics) = diagnostics_for_worker.as_ref() {
+            let _ = diagnostics.record(
+                "create",
+                if result.is_ok() { "signingResolutionCompleted" } else { "signingResolutionFailed" },
+                crate::diagnostics::fields([]),
+            );
+        }
         result
     })?;
-    let _ = diagnostics.record(
+    if let Some(diagnostics) = diagnostics.as_ref() {
+      let _ = diagnostics.record(
         "create",
         "jobAccepted",
         crate::diagnostics::fields([
             ("jobKind", serde_json::json!(format!("{:?}", response.kind))),
             ("status", serde_json::json!(format!("{:?}", response.status))),
         ]),
-    );
+      );
+    }
     Ok(response)
 }
 
@@ -430,6 +449,21 @@ fn start_create_internal_with_resolver(
         }
     }
 
+    let reservation = if request.replace_existing && request.destination_collision_strategy != DestinationCollisionStrategyDto::Rename {
+        destination_reservation::try_reserve(PathBuf::from(&destination_path)).ok_or_else(|| {
+            CommandErrorDto::new("destination_busy", "The destination is already being created", None::<String>, ErrorSeverityDto::Warning, true)
+        })?
+    } else {
+        let mut candidate = PathBuf::from(&destination_path);
+        loop {
+            if let Some(reservation) = destination_reservation::try_reserve(candidate.clone()) {
+                break reservation;
+            }
+            candidate = PathBuf::from(next_available_destination_file_path(&candidate.to_string_lossy()));
+        }
+    };
+    let destination_path = reservation.path().to_string_lossy().into_owned();
+
     let (response, token) = registry.try_create_job(kind).map_err(subscription_error)?;
     registry
         .configure_recovery_facts(
@@ -482,6 +516,7 @@ fn start_create_internal_with_resolver(
     let plan_options = plan_options_for_thread;
     let diagnostics_for_worker_lifecycle = diagnostics.clone();
     thread::spawn(move || {
+        let _destination_reservation = reservation;
         let worker_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if let Some(diagnostics) = diagnostics_for_worker_lifecycle.as_ref() {
                 let _ = diagnostics.record("create", "workerStarted", crate::diagnostics::fields([("jobId", serde_json::json!(job_id))]));

@@ -28,6 +28,7 @@ import { ShellInteractionProvider } from "./interaction/ShellInteractionContext"
 import { useShellKeyboardShortcutHandler } from "./interaction/ShellKeyboardShortcuts";
 import { AppFrame } from "./shell/AppFrame";
 import { AccountWorkspace } from "./account/AccountWorkspace";
+import { ShareQueuePanel } from "./shell/ShareQueuePanel";
 
 type RuntimeBridgeState = "loading" | "ready" | "failed";
 
@@ -140,6 +141,7 @@ function AppShellSurface({
         <ExtractPasswordProvider>
           <AppFrame runtimeBridgeReady={runtimeBridgeState === "ready"}>
             <ReactWorkspaceSurfaces runtimeBridgeState={runtimeBridgeState} />
+            <ShareQueuePanel />
             <ContextMenuRoot />
             <DialogRoot />
             <LocalSendIncomingTransferBanner />

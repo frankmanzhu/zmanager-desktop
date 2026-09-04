@@ -7,6 +7,7 @@ mod commands;
 mod constants;
 mod default_handlers;
 mod diagnostics;
+mod destination_reservation;
 mod dto;
 mod error;
 mod hosted_transport;
@@ -19,6 +20,7 @@ mod native_launch_inbox;
 mod platform;
 mod quick_action;
 mod secure_store;
+mod share_queue;
 
 use tauri::{Emitter, Manager};
 
@@ -110,7 +112,19 @@ fn main() {
                 }))
                 .map_err(|error| std::io::Error::other(format!("failed to attach native inbox emitter: {error:?}")))?;
             let app_data_dir = app.path().app_data_dir().map_err(|error| std::io::Error::other(format!("failed to resolve app data dir: {error}")))?;
-            app.manage(localsend::LocalSendState::new(app_data_dir));
+            let local_send = localsend::LocalSendState::new(app_data_dir);
+            let share_queue = share_queue::ShareRegistry::new(
+                app.state::<job_registry::JobRegistry>().inner().clone(),
+                local_send.clone(),
+                app.state::<account::AccountRuntime>().inner().clone(),
+                app.handle().clone(),
+                setup_diagnostics.clone(),
+            );
+            let share_queue_for_events = share_queue.clone();
+            local_send.register_outgoing_event_sink(std::sync::Arc::new(move |event| share_queue_for_events.on_localsend_event(event)));
+            local_send.start_event_pump(app.handle().clone(), app.state::<job_registry::JobRegistry>().inner().clone());
+            app.manage(local_send);
+            app.manage(share_queue);
             if let Some(window) = app.get_webview_window("main") {
                 platform::configure_main_window(&window)?;
             }
@@ -187,8 +201,13 @@ fn main() {
             commands::resume_job,
             commands::dismiss_job,
             localsend::localsend_discover,
-            localsend::localsend_send_file,
-            localsend::localsend_cancel_send,
+            share_queue::enqueue_share,
+            share_queue::set_share_receiver,
+            share_queue::start_share,
+            share_queue::get_share_queue,
+            share_queue::skip_share,
+            share_queue::cancel_share,
+            share_queue::remove_share,
             localsend::localsend_respond_to_transfer,
             localsend::localsend_start_receiver,
             localsend::localsend_stop_receiver,
@@ -204,6 +223,7 @@ fn main() {
             let _ = exit_diagnostics.record("process", "exit", diagnostics::fields([]));
             exit_inbox.shutdown();
             native_drag_sessions.shutdown();
+            app_handle.state::<share_queue::ShareRegistry>().shutdown();
             app_handle.state::<localsend::LocalSendState>().shutdown();
             platform::shutdown();
         }

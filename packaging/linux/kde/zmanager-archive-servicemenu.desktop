@@ -3,7 +3,7 @@ Type=Service
 Name=ZManager
 X-KDE-ServiceTypes=KonqPopupMenu/Plugin
 MimeType=application/zip;application/x-7z-compressed;application/vnd.rar;application/x-rar-compressed;application/x-tar;application/gzip;application/x-compressed-tar;application/x-xz;application/x-xz-compressed-tar;application/zstd;application/x-zmanager-tzst;application/x-zmanager-tzap;
-Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;
+Actions=ExtractHere;ExtractToFolder;OpenArchive;AddToArchive;AddToTzap;AddToZip;AddToSevenZ;AddToTzst;AddToTgz;CompressShareOnLan;ShareOnLan;
 X-KDE-Priority=TopLevel
 X-KDE-Submenu=ZManager
 
@@ -51,3 +51,13 @@ Exec=zmanager-desktop --quick-action compress-tzst --path %F
 Name=Add to .tgz
 Icon=zmanager-desktop
 Exec=zmanager-desktop --quick-action compress-tgz --path %F
+
+[Desktop Action CompressShareOnLan]
+Name=Compress and Share on LAN
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action compress-share-on-lan --path %F
+
+[Desktop Action ShareOnLan]
+Name=Share on LAN
+Icon=zmanager-desktop
+Exec=zmanager-desktop --quick-action share-lan --path %f

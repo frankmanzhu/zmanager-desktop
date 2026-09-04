@@ -430,6 +430,62 @@ export type StartCreateRequest = {
   preserveMetadata: boolean;
 };
 
+export type ShareMode = "compressAndShare" | "directShare";
+export type CompressionState = "notRequired" | "compressing" | "complete" | "failed" | "cancelled";
+export type TransferState = "notStarted" | "waiting" | "sending" | "sent" | "failed" | "cancelled";
+export type SharingIntent = "pending" | "skipped";
+export type ShareLifecycle = "active" | "cancelled";
+
+export type CompressionProgressSummary = {
+  processedBytes: number;
+  totalBytes: number | null;
+  processedEntries: number;
+  totalEntries: number | null;
+};
+
+export type ShareErrorSummary = {
+  code: string;
+  message: string;
+  hint: string | null;
+};
+
+export type ShareRecordSnapshot = {
+  shareId: string;
+  clientRequestId: string;
+  enqueueSequence: string;
+  mode: ShareMode;
+  sourcePaths: string[];
+  senderAlias: string;
+  compressionJobId: string | null;
+  artifactPath: string | null;
+  receiver: LocalSendDeviceInfoDto | null;
+  receiverGeneration: string;
+  sendId: string | null;
+  compressionState: CompressionState;
+  compressionProgress: CompressionProgressSummary | null;
+  transferState: TransferState;
+  sharingIntent: SharingIntent;
+  lifecycle: ShareLifecycle;
+  attempt: number;
+  bytesSent: number;
+  totalBytes: number | null;
+  deliveryUncertain: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastError: ShareErrorSummary | null;
+};
+
+export type ShareRegistrySnapshot = {
+  queueRevision: string;
+  items: ShareRecordSnapshot[];
+};
+
+export type EnqueueShareRequest =
+  | { mode: "compressAndShare"; clientRequestId: string; senderAlias: string; createRequest: StartCreateRequest; receiver: LocalSendDeviceInfoDto | null }
+  | { mode: "directShare"; clientRequestId: string; senderAlias: string; artifactPath: string; receiver: LocalSendDeviceInfoDto | null };
+
+export type EnqueueShareResponse = { item: ShareRecordSnapshot; deduplicated: boolean };
+
 export type TzapCertificateOptions = {
   signingSelection?: TzapSigningSelection;
   recipientSelection?: TzapRecipientSelection;

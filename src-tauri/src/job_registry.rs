@@ -361,8 +361,7 @@ impl JobRegistry {
         })
     }
 
-    #[cfg(test)]
-    pub fn subscribe_job_snapshot(&self, job_id: &str) -> Option<watch::Receiver<Arc<DesktopJobSnapshotDto>>> {
+    pub(crate) fn subscribe_job_snapshot(&self, job_id: &str) -> Option<watch::Receiver<Arc<DesktopJobSnapshotDto>>> {
         self.with_lock(|state| state.jobs.get(job_id).map(|record| record.snapshot_sender.subscribe()))
     }
 

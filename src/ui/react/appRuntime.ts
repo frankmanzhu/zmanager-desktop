@@ -58,8 +58,8 @@ import {
 } from "../../app/workspaces/accountWorkspace";
 import type { DefaultHandlerSnapshot } from "../../app/controllers/defaultHandlerController";
 import type { LocalSendTrustSnapshot } from "../../app/controllers/localSendTrustController";
-import type { LocalSendShareSnapshot } from "../../app/controllers/localSendShareController";
 import type { LocalSendIncomingTransferSnapshot } from "../../app/controllers/localSendIncomingTransfer";
+import type { ShareRegistrySnapshot } from "../../api/types";
 
 export type {
   ZManagerDialogAction,
@@ -103,7 +103,7 @@ export type ZManagerReactSnapshot = Readonly<{
   account: AccountWorkspaceSnapshot;
   defaultHandlers: DefaultHandlerSnapshot;
   localSendTrustedDevices: LocalSendTrustSnapshot;
-  localSendShare: LocalSendShareSnapshot | null;
+  shareQueue: ShareRegistrySnapshot;
   localSendIncomingTransfers: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
@@ -335,11 +335,11 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "preferencesChooseLanShareReceiveFolder" }>
   | Readonly<{ type: "localSendTrustRefresh" }>
   | Readonly<{ type: "localSendTrustForget"; fingerprint: string }>
-  | Readonly<{ type: "localSendShareClose" }>
-  | Readonly<{ type: "localSendShareDiscover" }>
-  | Readonly<{ type: "localSendShareSelectTarget"; fingerprint: string }>
-  | Readonly<{ type: "localSendShareSend" }>
-  | Readonly<{ type: "localSendShareCancelSend" }>
+  | Readonly<{ type: "shareQueueSetReceiver"; shareId: string; receiver: import("../../api/types").LocalSendDeviceInfoDto }>
+  | Readonly<{ type: "shareQueueStart"; shareId: string; acknowledgeDeliveryUncertainty?: boolean }>
+  | Readonly<{ type: "shareQueueSkip"; shareId: string }>
+  | Readonly<{ type: "shareQueueCancel"; shareId: string }>
+  | Readonly<{ type: "shareQueueRemove"; shareId: string }>
   | Readonly<{
       type: "localSendIncomingRespond";
       requestId: string;
@@ -436,7 +436,7 @@ export type CreateZManagerReactSnapshotInput = Readonly<{
   account?: AccountWorkspaceSnapshot;
   defaultHandlers?: DefaultHandlerSnapshot;
   localSendTrustedDevices?: LocalSendTrustSnapshot;
-  localSendShare?: LocalSendShareSnapshot | null;
+  shareQueue?: ShareRegistrySnapshot;
   localSendIncomingTransfers?: readonly LocalSendIncomingTransferSnapshot[];
   shell: ShellWorkspaceSnapshot;
   archive: ArchiveWorkspaceSnapshot;
@@ -503,7 +503,7 @@ export function createZManagerReactSnapshot(
       fingerprints: [],
       error: null,
     },
-    localSendShare: input.localSendShare ?? null,
+    shareQueue: input.shareQueue ?? { queueRevision: "0", items: [] },
     localSendIncomingTransfers: [...(input.localSendIncomingTransfers ?? [])],
     shell: input.shell,
     archive: input.archive,

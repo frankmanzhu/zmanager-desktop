@@ -9,6 +9,8 @@ pub(crate) const ADD_TO_TZAP_CLSID: GUID = GUID::from_u128(0xbeeb01f9_5243_4f96_
 pub(crate) const ADD_TO_SEVEN_Z_CLSID: GUID = GUID::from_u128(0xc910bf28_3121_48f7_a8a1_2f4d8f587ce8);
 pub(crate) const ADD_TO_TZST_CLSID: GUID = GUID::from_u128(0x9838e6cb_f43e_4fc9_96f1_7f0f4bdbb728);
 pub(crate) const ADD_TO_TGZ_CLSID: GUID = GUID::from_u128(0x7f3e8a1b_2c4d_45f6_9a7b_8c9d0e1f2a3b);
+pub(crate) const COMPRESS_SHARE_ON_LAN_CLSID: GUID = GUID::from_u128(0x3d7bf1e6_cdd8_4654_a879_0e2f6cf7d4b1);
+pub(crate) const SHARE_ON_LAN_CLSID: GUID = GUID::from_u128(0xd9c643a7_4af6_4052_96f5_e5cefd7a914a);
 pub(crate) const EXTRACT_HERE_CLSID: GUID = GUID::from_u128(0x5e7c0abe_ac4c_4d4b_bedd_a9133d7f80d4);
 pub(crate) const EXTRACT_TO_FOLDER_CLSID: GUID = GUID::from_u128(0xae04555b_2c6b_42c1_870a_9b15e1e0b82b);
 
@@ -21,6 +23,8 @@ pub(crate) enum ExplorerAction {
     CompressSevenZ,
     CompressTarZst,
     CompressTarGz,
+    CompressShareOnLan,
+    ShareOnLan,
     ExtractHere,
     ExtractToFolder,
 }
@@ -34,6 +38,8 @@ pub(crate) const ALL_EXPLORER_ACTIONS: &[ExplorerAction] = &[
     ExplorerAction::CompressSevenZ,
     ExplorerAction::CompressTarZst,
     ExplorerAction::CompressTarGz,
+    ExplorerAction::CompressShareOnLan,
+    ExplorerAction::ShareOnLan,
     ExplorerAction::ExtractHere,
     ExplorerAction::ExtractToFolder,
 ];
@@ -48,6 +54,8 @@ impl ExplorerAction {
             ADD_TO_SEVEN_Z_CLSID => Some(Self::CompressSevenZ),
             ADD_TO_TZST_CLSID => Some(Self::CompressTarZst),
             ADD_TO_TGZ_CLSID => Some(Self::CompressTarGz),
+            COMPRESS_SHARE_ON_LAN_CLSID => Some(Self::CompressShareOnLan),
+            SHARE_ON_LAN_CLSID => Some(Self::ShareOnLan),
             EXTRACT_HERE_CLSID => Some(Self::ExtractHere),
             EXTRACT_TO_FOLDER_CLSID => Some(Self::ExtractToFolder),
             _ => None,
@@ -63,6 +71,8 @@ impl ExplorerAction {
             Self::CompressSevenZ => ADD_TO_SEVEN_Z_CLSID,
             Self::CompressTarZst => ADD_TO_TZST_CLSID,
             Self::CompressTarGz => ADD_TO_TGZ_CLSID,
+            Self::CompressShareOnLan => COMPRESS_SHARE_ON_LAN_CLSID,
+            Self::ShareOnLan => SHARE_ON_LAN_CLSID,
             Self::ExtractHere => EXTRACT_HERE_CLSID,
             Self::ExtractToFolder => EXTRACT_TO_FOLDER_CLSID,
         }
@@ -77,6 +87,8 @@ impl ExplorerAction {
             Self::CompressSevenZ => w!("Add to .7z"),
             Self::CompressTarZst => w!("Add to .tzst"),
             Self::CompressTarGz => w!("Add to .tgz"),
+            Self::CompressShareOnLan => w!("Compress and Share on LAN"),
+            Self::ShareOnLan => w!("Share on LAN"),
             Self::ExtractHere => w!("Extract Here"),
             Self::ExtractToFolder => w!("Extract to Archive Folder"),
         }
@@ -91,6 +103,8 @@ impl ExplorerAction {
             Self::CompressSevenZ => ShellActionKind::CompressSevenZ,
             Self::CompressTarZst => ShellActionKind::CompressTarZst,
             Self::CompressTarGz => ShellActionKind::CompressTarGz,
+            Self::CompressShareOnLan => ShellActionKind::CompressShareOnLan,
+            Self::ShareOnLan => ShellActionKind::ShareOnLan,
             Self::ExtractHere => ShellActionKind::ExtractHere,
             Self::ExtractToFolder => ShellActionKind::ExtractToFolder,
         }
@@ -102,6 +116,7 @@ impl ExplorerAction {
         }
         match self {
             Self::Open => count == 1,
+            Self::ShareOnLan => count == 1,
             Self::ExtractToFolder => count == 1,
             _ => true,
         }
