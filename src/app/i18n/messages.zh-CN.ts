@@ -79,6 +79,7 @@ export const zhCnMessages = {
   "shareQueue.receiver": "局域网接收设备",
   "shareQueue.selectReceiver": "选择接收设备",
   "shareQueue.compressing": "正在压缩",
+  "shareQueue.cancelling": "正在取消",
   "shareQueue.sending": "正在发送",
   "shareQueue.ready": "准备发送",
   "shareQueue.shared": "已共享",

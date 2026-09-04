@@ -431,8 +431,8 @@ export type StartCreateRequest = {
 };
 
 export type ShareMode = "compressAndShare" | "directShare";
-export type CompressionState = "notRequired" | "compressing" | "complete" | "failed" | "cancelled";
-export type TransferState = "notStarted" | "waiting" | "sending" | "sent" | "failed" | "cancelled";
+export type CompressionState = "notRequired" | "compressing" | "cancelling" | "complete" | "failed" | "cancelled";
+export type TransferState = "notStarted" | "waiting" | "sending" | "cancelling" | "sent" | "failed" | "cancelled";
 export type SharingIntent = "pending" | "skipped";
 export type ShareLifecycle = "active" | "cancelled";
 

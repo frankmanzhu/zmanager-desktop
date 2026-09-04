@@ -85,6 +85,7 @@ export const enMessages = {
   "shareQueue.receiver": "LAN receiver",
   "shareQueue.selectReceiver": "Select receiver",
   "shareQueue.compressing": "Compressing",
+  "shareQueue.cancelling": "Cancelling",
   "shareQueue.sending": "Sending",
   "shareQueue.ready": "Ready to send",
   "shareQueue.shared": "Shared",

@@ -44,6 +44,7 @@ pub enum ShareMode {
 pub enum CompressionState {
     NotRequired,
     Compressing,
+    Cancelling,
     Complete,
     Failed,
     Cancelled,
@@ -55,6 +56,7 @@ pub enum TransferState {
     NotStarted,
     Waiting,
     Sending,
+    Cancelling,
     Sent,
     Failed,
     Cancelled,
@@ -418,7 +420,7 @@ impl ShareRegistry {
             return Err(error("share_busy", "The transfer is already sending", true));
         }
         let item = find_item_mut(&mut state, share_id)?;
-        if item.transfer_state == TransferState::Sending {
+        if matches!(item.transfer_state, TransferState::Sending | TransferState::Cancelling) {
             return Err(error("share_busy", "The transfer is already sending", true));
         }
         item.receiver = Some(receiver);
@@ -479,7 +481,7 @@ impl ShareRegistry {
             item.sharing_intent = SharingIntent::Skipped;
             let send_id = active_send_id.or_else(|| item.send_id.clone().filter(|_| item.transfer_state == TransferState::Sending));
             if send_id.is_some() {
-                item.transfer_state = TransferState::Cancelled;
+                item.transfer_state = TransferState::Cancelling;
                 item.delivery_uncertain = true;
             } else if item.transfer_state == TransferState::Waiting {
                 item.transfer_state = TransferState::NotStarted;
@@ -508,12 +510,16 @@ impl ShareRegistry {
             item.lifecycle = ShareLifecycle::Cancelled;
             let send_id = active_send_id.or_else(|| item.send_id.clone().filter(|_| item.transfer_state == TransferState::Sending));
             let job_id = item.compression_job_id.clone().filter(|_| !item.compression_state_is_terminal());
-            item.transfer_state = TransferState::Cancelled;
+            if send_id.is_some() {
+                item.transfer_state = TransferState::Cancelling;
+            } else {
+                item.transfer_state = TransferState::Cancelled;
+            }
             if send_id.is_some() {
                 item.delivery_uncertain = true;
             }
             item.compression_state = if item.mode == ShareMode::CompressAndShare && !item.compression_state_is_terminal() {
-                CompressionState::Cancelled
+                CompressionState::Cancelling
             } else {
                 item.compression_state
             };
@@ -537,8 +543,9 @@ impl ShareRegistry {
         let index = state.items.iter().position(|item| item.share_id == share_id).ok_or_else(|| error("share_not_found", "Share was not found", false))?;
         let item = &state.items[index];
         if item.transfer_state == TransferState::Sending
+            || item.transfer_state == TransferState::Cancelling
             || state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id)
-            || item.compression_state == CompressionState::Compressing
+            || matches!(item.compression_state, CompressionState::Compressing | CompressionState::Cancelling)
         {
             return Err(error("share_busy", "The share is still active", true));
         }
@@ -599,7 +606,8 @@ impl ShareRegistry {
         let Some(item) = state.items.iter_mut().find(|item| item.share_id == share_id && item.compression_job_id.as_deref() == Some(job_id)) else {
             return;
         };
-        if item.lifecycle == ShareLifecycle::Cancelled {
+        let cancellation_requested = item.lifecycle == ShareLifecycle::Cancelled && item.compression_state == CompressionState::Cancelling;
+        if item.lifecycle == ShareLifecycle::Cancelled && !cancellation_requested {
             return;
         }
         item.compression_progress = Some(CompressionProgressSummary {
@@ -609,6 +617,9 @@ impl ShareRegistry {
             total_entries: snapshot.progress_facts.total_entries,
         });
         match snapshot.status {
+            JobStatusDto::Completed if cancellation_requested => {
+                item.compression_state = CompressionState::Cancelled;
+            }
             JobStatusDto::Completed => {
                 let Some(artifact) = snapshot
                     .output_artifacts
@@ -635,6 +646,9 @@ impl ShareRegistry {
                     item.compression_state = CompressionState::Complete;
                 }
             }
+            JobStatusDto::Failed if cancellation_requested => {
+                item.compression_state = CompressionState::Cancelled;
+            }
             JobStatusDto::Failed => {
                 item.compression_state = CompressionState::Failed;
                 item.last_error = snapshot
@@ -642,6 +656,9 @@ impl ShareRegistry {
                     .as_ref()
                     .map(job_error_summary)
                     .or_else(|| Some(ShareErrorSummary { code: "create_failed".into(), message: "Archive creation failed".into(), hint: None }));
+            }
+            JobStatusDto::Cancelled if cancellation_requested => {
+                item.compression_state = CompressionState::Cancelled;
             }
             JobStatusDto::Cancelled => {
                 item.compression_state = CompressionState::Cancelled;
@@ -721,11 +738,12 @@ impl ShareRegistry {
         else {
             return;
         };
-        let was_cancelled = item.transfer_state == TransferState::Cancelled;
+        let was_cancelled = matches!(item.transfer_state, TransferState::Cancelling | TransferState::Cancelled);
         let completed = result.is_ok();
         let cancelled = result.as_ref().is_err_and(|error| error.code == "cancelled");
         let (next_state, uncertain) = resolve_transfer_result(was_cancelled, completed, cancelled);
         if was_cancelled {
+            item.transfer_state = next_state;
             item.delivery_uncertain = true;
             if let Err(error) = result {
                 item.last_error = Some(ShareErrorSummary { code: error.code.to_string(), message: error.message, hint: error.hint });
@@ -959,6 +977,21 @@ mod tests {
         assert_eq!(resolve_transfer_result(true, false, true), (TransferState::Cancelled, true));
         assert_eq!(resolve_transfer_result(false, true, false), (TransferState::Sent, false));
         assert_eq!(resolve_transfer_result(false, false, false), (TransferState::Failed, true));
+    }
+
+    #[test]
+    fn cancellation_states_are_not_terminal_until_the_worker_finishes() {
+        assert!(!matches!(
+            CompressionState::Cancelling,
+            CompressionState::Complete | CompressionState::Failed | CompressionState::Cancelled | CompressionState::NotRequired
+        ));
+        assert!(!matches!(TransferState::Cancelling, TransferState::Sent | TransferState::Failed | TransferState::Cancelled));
+    }
+
+    #[test]
+    fn cancellation_requested_transfer_finishes_as_cancelled() {
+        assert_eq!(resolve_transfer_result(true, true, false), (TransferState::Cancelled, true));
+        assert_eq!(resolve_transfer_result(true, false, true), (TransferState::Cancelled, true));
     }
 
     #[test]

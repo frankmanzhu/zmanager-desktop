@@ -46,7 +46,7 @@ export function ShareQueuePanel() {
 }
 
 function ShareQueueRow({ item, devices, i18n, onIntent }: Readonly<{ item: ShareRecordSnapshot; devices: readonly LocalSendDeviceInfoDto[]; i18n: ReturnType<typeof translatorForSnapshot>; onIntent: (intent: ZManagerDialogIntent) => void }>) {
-  const status = item.compressionState === "compressing" ? i18n.t("shareQueue.compressing") : item.transferState === "sending" ? i18n.t("shareQueue.sending") : item.transferState === "waiting" ? i18n.t("shareQueue.ready") : item.transferState === "sent" ? i18n.t("shareQueue.shared") : item.compressionState === "failed" || item.transferState === "failed" ? i18n.t("shareQueue.failed") : item.sharingIntent === "skipped" ? i18n.t("shareQueue.compressed") : item.artifactPath && item.receiver ? i18n.t("shareQueue.ready") : item.artifactPath ? i18n.t("shareQueue.selectReceiverStatus") : i18n.t("shareQueue.queued");
+  const status = item.compressionState === "cancelling" ? i18n.t("shareQueue.cancelling") : item.compressionState === "compressing" ? i18n.t("shareQueue.compressing") : item.transferState === "cancelling" ? i18n.t("shareQueue.cancelling") : item.transferState === "sending" ? i18n.t("shareQueue.sending") : item.transferState === "waiting" ? i18n.t("shareQueue.ready") : item.transferState === "sent" ? i18n.t("shareQueue.shared") : item.compressionState === "failed" || item.transferState === "failed" ? i18n.t("shareQueue.failed") : item.sharingIntent === "skipped" ? i18n.t("shareQueue.compressed") : item.artifactPath && item.receiver ? i18n.t("shareQueue.ready") : item.artifactPath ? i18n.t("shareQueue.selectReceiverStatus") : i18n.t("shareQueue.queued");
   const progress = item.compressionProgress;
   const progressText = progress?.totalBytes ? `${formatVolumeSize(progress.processedBytes)} / ${formatVolumeSize(progress.totalBytes)}` : item.totalBytes ? `${formatVolumeSize(item.bytesSent)} / ${formatVolumeSize(item.totalBytes)}` : "";
   const label = item.artifactPath?.split(/[\\/]/).pop() ?? item.sourcePaths[0]?.split(/[\\/]/).pop() ?? item.shareId;
@@ -65,7 +65,7 @@ function ShareQueueRow({ item, devices, i18n, onIntent }: Readonly<{ item: Share
             const receiver = devices.find((device) => device.fingerprint === fingerprint);
             if (receiver) onIntent({ type: "shareQueueSetReceiver", shareId: item.shareId, receiver });
           }}
-          disabled={item.transferState === "sending"}
+          disabled={item.transferState === "sending" || item.transferState === "cancelling" || item.lifecycle === "cancelled"}
         >
           <SelectTrigger className="w-36" aria-label={i18n.t("shareQueue.receiver")}>
             <SelectValue placeholder={i18n.t("shareQueue.selectReceiver")} />
@@ -75,9 +75,9 @@ function ShareQueueRow({ item, devices, i18n, onIntent }: Readonly<{ item: Share
             {devices.map((device) => <SelectItem key={device.fingerprint} value={device.fingerprint}>{device.alias}</SelectItem>)}
           </SelectContent>
         </Select>
-        {item.transferState === "sent" || item.sharingIntent === "skipped" ? null : <Button type="button" variant="secondary" size={item.transferState === "sending" ? "icon" : "sm"} title={i18n.t("shareQueue.skip")} aria-label={i18n.t("shareQueue.skip")} onClick={() => onIntent({ type: "shareQueueSkip", shareId: item.shareId })}>{item.transferState === "sending" ? <X className="size-4" /> : i18n.t("shareQueue.skip")}</Button>}
-        {item.transferState !== "sent" && item.transferState !== "sending" && item.artifactPath && item.receiver ? <Button type="button" variant="dialogPrimary" size="sm" onClick={() => onIntent({ type: "shareQueueStart", shareId: item.shareId })}>{item.transferState === "failed" ? i18n.t("shareQueue.retry") : i18n.t("shareQueue.share")}</Button> : null}
-        {item.transferState === "sent" ? null : <Button type="button" variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueCancel", shareId: item.shareId })}>{i18n.t("shareQueue.cancel")}</Button>}
+        {item.transferState === "sent" || item.transferState === "cancelling" || item.sharingIntent === "skipped" || item.lifecycle === "cancelled" ? null : <Button type="button" variant="secondary" size={item.transferState === "sending" ? "icon" : "sm"} title={i18n.t("shareQueue.skip")} aria-label={i18n.t("shareQueue.skip")} onClick={() => onIntent({ type: "shareQueueSkip", shareId: item.shareId })}>{item.transferState === "sending" ? <X className="size-4" /> : i18n.t("shareQueue.skip")}</Button>}
+        {item.transferState !== "sent" && item.transferState !== "sending" && item.transferState !== "cancelling" && item.artifactPath && item.receiver && item.lifecycle !== "cancelled" ? <Button type="button" variant="dialogPrimary" size="sm" onClick={() => onIntent({ type: "shareQueueStart", shareId: item.shareId })}>{item.transferState === "failed" ? i18n.t("shareQueue.retry") : i18n.t("shareQueue.share")}</Button> : null}
+        {item.transferState === "sent" || item.transferState === "cancelling" || item.lifecycle === "cancelled" ? null : <Button type="button" variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueCancel", shareId: item.shareId })}>{i18n.t("shareQueue.cancel")}</Button>}
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueRemove", shareId: item.shareId })}>{i18n.t("common.close")}</Button>
     </div>
