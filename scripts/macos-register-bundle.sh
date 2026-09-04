@@ -50,43 +50,36 @@ optional() {
   if ((dry_run)); then run "$@"; else "$@" || true; fi
 }
 
-# Remove ALL registered instances of each ZManager extension bundle ID from
-# pluginkit, regardless of whether the underlying bundle still exists on disk.
-# This is the self-healing step that prevents duplicate context menu entries
-# from accumulated stale builds at different paths (staged, versioned, etc.).
-remove_all_registrations() {
-  for bundle_id in "$finder_id" "$preview_id" "$thumbnail_id"; do
+# Retire old bundle locations only after the current extensions have been added.
+# Never remove the current paths: doing so creates a Finder discovery gap.
+remove_stale_registrations() {
+  while IFS='|' read -r bundle_id current_path; do
     while IFS= read -r registered_path; do
       [[ -n "$registered_path" ]] || continue
+      [[ $registered_path != "$current_path" ]] || continue
       optional "$pluginkit" -r "$registered_path"
     done < <(
       "$pluginkit" -m -A -D -vvv -i "$bundle_id" 2>/dev/null |
         sed -n 's/^[[:space:]]*Path = //p'
     )
-  done
+  done <<EOF
+$finder_id|$finder
+$preview_id|$preview
+$thumbnail_id|$thumbnail
+EOF
 }
 
 if [[ $action == register ]]; then
-  # Self-healing: remove ALL registered instances of our ZManager extension
-  # bundle IDs, not just the one at the current app path. This prevents
-  # duplicate context menu entries from staged-path extensions accumulated
-  # across rebuilds with different version numbers or build directories.
-  remove_all_registrations
-  # Remove only registrations for this exact bundle path before registering the
-  # same path. Never reset another application or the user's whole LS database.
-  optional "$lsregister" -u "$app"
-  for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
+  # Announce the replacement before retiring old locations. PluginKit owns the
+  # user's enabled/disabled preference, so registration never toggles it.
   run "$lsregister" -f "$app"
   for extension in "$finder" "$preview" "$thumbnail"; do run "$pluginkit" -a "$extension"; done
-  run "$pluginkit" -e use -i "$finder_id"
-  run "$pluginkit" -e use -i "$preview_id"
-  run "$pluginkit" -e use -i "$thumbnail_id"
+  remove_stale_registrations
   run "$qlmanage" -r cache
   run "$mdimport" -r "$spotlight"
 else
-  run "$pluginkit" -e ignore -i "$finder_id"
-  run "$pluginkit" -e ignore -i "$preview_id"
-  run "$pluginkit" -e ignore -i "$thumbnail_id"
+  # Uninstall the exact bundle without persisting a disabled preference that
+  # would unexpectedly carry over to a future reinstall.
   for extension in "$finder" "$preview" "$thumbnail"; do optional "$pluginkit" -r "$extension"; done
   optional "$lsregister" -u "$app"
   run "$qlmanage" -r cache

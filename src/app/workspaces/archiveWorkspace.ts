@@ -325,7 +325,7 @@ export type ArchiveWorkspace = {
   acceptPage(page: ArchiveWorkspacePage): ArchiveWorkspaceSnapshot;
   acceptTreePage(entries: readonly ArchiveEntryDto[]): ArchiveWorkspaceSnapshot;
   loadFailed(error: CommandErrorDto | ArchiveWorkspaceUnknownLoadFailure): ArchiveWorkspaceSnapshot;
-  setBrowseState(browseState: BrowseState): ArchiveWorkspaceSnapshot;
+  setBrowseState(browseState: BrowseState, fallbackText?: string): ArchiveWorkspaceSnapshot;
   navigateToFolder(folderPath: string): ArchiveWorkspaceSnapshot;
   navigateBack(): ArchiveWorkspaceSnapshot;
   navigateUp(): ArchiveWorkspaceSnapshot;
@@ -516,11 +516,13 @@ export function createArchiveWorkspace(options: CreateArchiveWorkspaceOptions = 
       return snapshotFromState(state);
     },
 
-    setBrowseState(browseState) {
+    setBrowseState(browseState, fallbackText) {
       state = {
         ...state,
         browseState,
-        status: statusForBrowseState(state, browseState),
+        status: browseState === "error" && fallbackText
+          ? { key: "browse.failedList", fallbackText }
+          : statusForBrowseState(state, browseState),
         error: browseState === "error" ? state.error : null,
         passwordRetry: browseState === "error" ? null : state.passwordRetry,
       };

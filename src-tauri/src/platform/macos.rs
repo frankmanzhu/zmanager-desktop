@@ -80,15 +80,16 @@ fn probe_extension_status() -> &'static MacOsExtensionProbes {
 }
 
 fn probe_plugin_kit(bundle_id: &str) -> MacOsExtensionProbe {
+    probe_plugin_kit_with("/usr/bin/pluginkit", bundle_id)
+}
+
+fn probe_plugin_kit_with(pluginkit: &str, bundle_id: &str) -> MacOsExtensionProbe {
     // Use absolute path — GUI app PATH may not include /usr/bin.
-    let installed = Command::new("/usr/bin/pluginkit").args(["-m", "-A", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false);
+    let installed = Command::new(pluginkit).args(["-m", "-A", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false);
 
     // Check if user-enabled (without -A, only shows enabled extensions)
-    let enabled = if installed {
-        Command::new("/usr/bin/pluginkit").args(["-m", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false)
-    } else {
-        false
-    };
+    let enabled =
+        if installed { Command::new(pluginkit).args(["-m", "-i", bundle_id]).output().map(|output| !output.stdout.is_empty()).unwrap_or(false) } else { false };
 
     MacOsExtensionProbe { is_installed: installed, is_enabled: enabled }
 }
@@ -410,6 +411,20 @@ pub(super) fn wait_for_app_group(timeout: Duration) -> bool {
     app_group_is_available()
 }
 
+pub(super) fn postinstall_diagnostic_log_directory() -> Option<PathBuf> {
+    current_user_home_directory().map(|home| home.join("Library").join("Logs").join("org.tzap-org.zmanager"))
+}
+
+fn current_user_home_directory() -> Option<PathBuf> {
+    let password = unsafe { libc::getpwuid(libc::getuid()) };
+    if password.is_null() {
+        return std::env::var_os("HOME").filter(|value| !value.is_empty()).map(PathBuf::from);
+    }
+    let directory = unsafe { std::ffi::CStr::from_ptr((*password).pw_dir) };
+    let path = directory.to_str().ok()?;
+    (!path.is_empty()).then(|| PathBuf::from(path))
+}
+
 /// Resolve extension paths relative to the running application bundle.
 /// Returns `None` if `current_exe` is not inside a standard `.app` layout.
 fn resolve_bundle_paths() -> Option<MacOsBundlePaths> {
@@ -448,28 +463,29 @@ fn run_registration_cmd(exe: &str, args: &[&str]) -> (bool, String, String) {
     }
 }
 
-/// Remove ALL registered instances of each ZManager extension bundle ID from
-/// pluginkit. This eliminates duplicate context menu entries from accumulated
-/// stale builds at different paths.
-fn remove_stale_plugin_registrations(pluginkit: &str) {
-    for bundle_id in [FINDER_EXTENSION_BUNDLE_ID, QUICKLOOK_PREVIEW_BUNDLE_ID, QUICKLOOK_THUMBNAIL_BUNDLE_ID] {
+/// Retire registrations from old bundle locations after the current bundle has
+/// been announced. The current paths are never removed, so Finder never sees a
+/// deliberate registration gap during an upgrade.
+fn remove_stale_plugin_registrations(pluginkit: &str, current_extensions: &[(&str, &Path)]) {
+    for (bundle_id, current_extension) in current_extensions {
         let (ok, stdout, _) = run_registration_cmd(pluginkit, &["-m", "-A", "-D", "-vvv", "-i", bundle_id]);
         if !ok {
             continue;
         }
-        for line in stdout.lines() {
-            let trimmed = line.trim();
-            if let Some(path) = trimmed.strip_prefix("Path = ") {
-                let _ = run_registration_cmd(pluginkit, &["-r", path]);
-            }
+        for path in stale_plugin_registration_paths(&stdout, current_extension) {
+            let _ = run_registration_cmd(pluginkit, &["-r", path]);
         }
     }
 }
 
-/// Ensure macOS extensions are registered and enabled. All commands are
-/// idempotent — safe to call on every launch. Runs best-effort: individual
-/// failures are recorded through the diagnostic log but never propagated.
-pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog) {
+fn stale_plugin_registration_paths<'a>(output: &'a str, current_extension: &Path) -> Vec<&'a str> {
+    output.lines().filter_map(|line| line.trim().strip_prefix("Path = ")).filter(|path| Path::new(path) != current_extension).collect()
+}
+
+/// Announce a newly installed macOS bundle to Launch Services and PluginKit.
+/// This is installer-only work: ordinary application startup must never mutate
+/// shell registration or the user's extension enablement preferences.
+pub(super) fn register_bundle_after_install(diagnostics: &crate::diagnostics::DiagnosticLog) {
     let Some(paths) = resolve_bundle_paths() else {
         let _ = diagnostics.record("macosRegistration", "bundleResolveFailed", std::collections::BTreeMap::new());
         return;
@@ -481,12 +497,14 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
     let mdimport = resolve_tool_path(MDIMPORT_PATH, "ZMANAGER_MDIMPORT");
 
     let bundle_root_str = paths.bundle_root.to_string_lossy().to_string();
+    let extensions = [
+        (FINDER_EXTENSION_BUNDLE_ID, paths.finder.as_path()),
+        (QUICKLOOK_PREVIEW_BUNDLE_ID, paths.preview.as_path()),
+        (QUICKLOOK_THUMBNAIL_BUNDLE_ID, paths.thumbnail.as_path()),
+    ];
 
-    // Self-healing: remove stale registrations from any previous build paths.
-    remove_stale_plugin_registrations(&pluginkit);
-
-    // Unregister old Launch Services entry (best-effort), then re-register.
-    let _ = run_registration_cmd(&lsregister, &["-u", &bundle_root_str]);
+    // Register the replacement first. Never unregister the currently running
+    // bundle, because that creates an observable gap in Finder discovery.
     let (ls_ok, _, ls_err) = run_registration_cmd(&lsregister, &["-f", &bundle_root_str]);
     let _ = diagnostics.record(
         "macosRegistration",
@@ -499,7 +517,7 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
     );
 
     // Add each extension to pluginkit.
-    for ext in [&paths.finder, &paths.preview, &paths.thumbnail] {
+    for (_, ext) in extensions {
         let path_str = ext.to_string_lossy();
         let present = ext.exists();
         let (ok, _, err) = run_registration_cmd(&pluginkit, &["-a", &path_str]);
@@ -516,20 +534,9 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
         );
     }
 
-    // Enable each extension.
-    for bundle_id in [FINDER_EXTENSION_BUNDLE_ID, QUICKLOOK_PREVIEW_BUNDLE_ID, QUICKLOOK_THUMBNAIL_BUNDLE_ID] {
-        let (ok, _, err) = run_registration_cmd(&pluginkit, &["-e", "use", "-i", bundle_id]);
-        let _ = diagnostics.record(
-            "macosRegistration",
-            "step",
-            crate::diagnostics::fields([
-                ("command", serde_json::Value::String("pluginkitEnable".into())),
-                ("bundleId", serde_json::Value::String(bundle_id.to_string())),
-                ("ok", serde_json::Value::Bool(ok)),
-                ("error", serde_json::Value::String(err)),
-            ]),
-        );
-    }
+    // PluginKit owns the user's enabled/disabled selection. An installer must
+    // not overwrite that preference. Only stale paths are retired.
+    remove_stale_plugin_registrations(&pluginkit, &extensions);
 
     // Reset QuickLook cache so new generators are loaded.
     let (ql_ok, _, ql_err) = run_registration_cmd(&qlmanage, &["-r", "cache"]);
@@ -556,11 +563,18 @@ pub(super) fn ensure_macos_registration(diagnostics: &crate::diagnostics::Diagno
         ]),
     );
 
-    // Probe final state (directly — not via OnceLock, since the cached probe
-    // may have been initialized before registration was called).
-    let finder = probe_plugin_kit(FINDER_EXTENSION_BUNDLE_ID);
-    let preview = probe_plugin_kit(QUICKLOOK_PREVIEW_BUNDLE_ID);
-    let thumbnail = probe_plugin_kit(QUICKLOOK_THUMBNAIL_BUNDLE_ID);
+    // Plugin discovery is asynchronous. Poll only for registration; enabled
+    // state remains a user-owned setting and is never changed here.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let (finder, preview, thumbnail) = loop {
+        let finder = probe_plugin_kit_with(&pluginkit, FINDER_EXTENSION_BUNDLE_ID);
+        let preview = probe_plugin_kit_with(&pluginkit, QUICKLOOK_PREVIEW_BUNDLE_ID);
+        let thumbnail = probe_plugin_kit_with(&pluginkit, QUICKLOOK_THUMBNAIL_BUNDLE_ID);
+        if (finder.is_installed && preview.is_installed && thumbnail.is_installed) || std::time::Instant::now() >= deadline {
+            break (finder, preview, thumbnail);
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    };
     let spotlight = probe_spotlight();
 
     let _ = diagnostics.record(
@@ -859,6 +873,17 @@ mod tests {
 
     fn candidate(path: &str) -> NativeFileDragCandidate {
         NativeFileDragCandidate { entry_path: path.to_string(), size: Some(1), modified_unix_seconds: None }
+    }
+
+    #[test]
+    fn stale_registration_cleanup_never_selects_the_current_extension() {
+        let current = Path::new("/Applications/ZManager.app/Contents/PlugIns/ZManagerFinderExtension.appex");
+        let output = format!(
+            "+ org.tzap-org.zmanager.finder-extension\n    Path = {}\n- org.tzap-org.zmanager.finder-extension\n    Path = /tmp/Old ZManager.app/Contents/PlugIns/ZManagerFinderExtension.appex\n",
+            current.display()
+        );
+
+        assert_eq!(stale_plugin_registration_paths(&output, current), ["/tmp/Old ZManager.app/Contents/PlugIns/ZManagerFinderExtension.appex"]);
     }
 
     #[test]

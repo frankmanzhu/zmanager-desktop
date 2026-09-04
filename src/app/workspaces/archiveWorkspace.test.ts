@@ -763,6 +763,23 @@ describe("archive workspace load state", () => {
     expect(recoveredCommandState.refresh.enabled).toBe(true);
   });
 
+  it("keeps an operation failure message visible in the browse status", () => {
+    const workspace = createArchiveWorkspace();
+    workspace.loadSucceeded({
+      archivePath: "C:/tmp/project.zip",
+      entries,
+      entryCount: entries.length,
+      totalSize: 62,
+    });
+
+    const snapshot = workspace.setBrowseState("error", "Unable to preview entry.");
+
+    expect(snapshot.status).toEqual({
+      key: "browse.failedList",
+      fallbackText: "Unable to preview entry.",
+    });
+  });
+
   it("builds extract archive requests from workspace state", () => {
     const workspace = createArchiveWorkspace();
     workspace.loadSucceeded({

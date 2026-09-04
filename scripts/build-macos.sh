@@ -478,6 +478,7 @@ if ((install_application)); then
   # Use open -W (wait) to block until the app exits after postinstall completes.
   echo "Running postinstall registration for $destination"
   open -W -a "$destination" --args --postinstall
+  codesign --verify --deep --strict "$destination"
   echo "Postinstall completed for $destination"
 else
   echo "Skipping application install because --no-install was set."

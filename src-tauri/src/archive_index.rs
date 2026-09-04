@@ -320,6 +320,27 @@ impl ArchiveIndexRegistry {
         })
     }
 
+    /// Returns the password retained by the newest live session for an archive.
+    ///
+    /// The password stays backend-only and is used to continue operations such
+    /// as preview after the archive was opened with a password. Failed and
+    /// cancelled sessions are excluded so a superseded attempt cannot provide
+    /// stale credentials to a later command.
+    pub fn password_for_archive(&self, archive_path: &str) -> Option<String> {
+        let normalized_archive_path = archive_path.trim();
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state
+            .sessions
+            .values()
+            .filter(|record| {
+                record.snapshot.archive_path == normalized_archive_path
+                    && record.snapshot.status != ArchiveIndexStatusDto::Failed
+                    && record.snapshot.status != ArchiveIndexStatusDto::Cancelled
+            })
+            .max_by_key(|record| archive_session_sequence(&record.snapshot.session_id))
+            .and_then(|record| record.password.clone())
+    }
+
     pub fn drag_entries(&self, archive_path: &str, entry_paths: &[String]) -> Result<Option<Vec<ArchiveEntryDto>>, CommandErrorDto> {
         let normalized_archive_path = archive_path.trim();
         let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
@@ -1217,6 +1238,61 @@ mod tests {
             .expect("cached drag selection")
             .expect("ready session should answer");
         assert_eq!(files.iter().map(|entry| entry.path.as_str()).collect::<Vec<_>>(), ["docs/a.txt", "docs/nested/b.txt", "other.txt"]);
+    }
+
+    #[test]
+    fn password_for_archive_uses_the_newest_live_session() {
+        let registry = ArchiveIndexRegistry::new();
+        let stale_snapshot = Arc::new(ArchiveIndexSnapshotDto {
+            revision: "2".to_string(),
+            session_id: "archive-1".to_string(),
+            archive_path: "C:/archives/passworded.rar".to_string(),
+            status: ArchiveIndexStatusDto::Failed,
+            discovered_entries: 0,
+            discovered_bytes: None,
+            final_entry_count: None,
+            final_total_bytes: None,
+            latest_failure: Some(CommandErrorDto::operation_failed("listing failed")),
+            format: Some(crate::dto::ArchiveFormatKindDto::Rar),
+        });
+        let (stale_sender, _) = watch::channel(stale_snapshot.clone());
+        registry.state.lock().expect("registry lock").sessions.insert(
+            "archive-1".to_string(),
+            SessionRecord {
+                password: Some("stale-password".to_string()),
+                snapshot: stale_snapshot,
+                sender: stale_sender,
+                index: Arc::new(Mutex::new(ArchiveIndex::new())),
+                cancelled: Arc::new(AtomicBool::new(false)),
+            },
+        );
+
+        let live_snapshot = Arc::new(ArchiveIndexSnapshotDto {
+            revision: "2".to_string(),
+            session_id: "archive-2".to_string(),
+            archive_path: "C:/archives/passworded.rar".to_string(),
+            status: ArchiveIndexStatusDto::Ready,
+            discovered_entries: 1,
+            discovered_bytes: Some(1),
+            final_entry_count: Some(1),
+            final_total_bytes: Some(1),
+            latest_failure: None,
+            format: Some(crate::dto::ArchiveFormatKindDto::Rar),
+        });
+        let (live_sender, _) = watch::channel(live_snapshot.clone());
+        registry.state.lock().expect("registry lock").sessions.insert(
+            "archive-2".to_string(),
+            SessionRecord {
+                password: Some("live-password".to_string()),
+                snapshot: live_snapshot,
+                sender: live_sender,
+                index: Arc::new(Mutex::new(ArchiveIndex::new())),
+                cancelled: Arc::new(AtomicBool::new(false)),
+            },
+        );
+
+        assert_eq!(registry.password_for_archive(" C:/archives/passworded.rar ").as_deref(), Some("live-password"));
+        assert_eq!(registry.password_for_archive("C:/archives/other.rar"), None);
     }
 
     #[tokio::test]

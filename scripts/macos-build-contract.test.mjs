@@ -82,3 +82,52 @@ test("release packaging scripts validate Rust in the release profile", () => {
     }
   }
 });
+
+test("ordinary application startup never rewrites operating-system shell registration", () => {
+  const main = readFileSync(resolve(root, "src-tauri/src/main.rs"), "utf8");
+  const setupStart = main.indexOf(".setup(");
+  const setupEnd = main.indexOf(".on_window_event", setupStart);
+
+  assert.notEqual(setupStart, -1, "Tauri setup block must be present");
+  assert.notEqual(setupEnd, -1, "Tauri setup block must have a detectable end");
+  assert.doesNotMatch(
+    main.slice(setupStart, setupEnd),
+    /ensure_macos_registration|register_macos_bundle_after_install/,
+    "normal app launch must observe shell integration without registering it",
+  );
+
+  const windowsInstaller = readFileSync(
+    resolve(root, "packaging/windows/nsis-context-menu.nsh"),
+    "utf8",
+  );
+  const linuxInstaller = readFileSync(
+    resolve(root, "packaging/linux/postinstall.sh"),
+    "utf8",
+  );
+  assert.match(windowsInstaller, /!macro NSIS_HOOK_POSTINSTALL/);
+  assert.match(linuxInstaller, /update-mime-database/);
+  assert.match(linuxInstaller, /reload_nautilus_extensions/);
+});
+
+test("macOS postinstall diagnostics cannot write into the signed application bundle", () => {
+  const main = readFileSync(resolve(root, "src-tauri/src/main.rs"), "utf8");
+  const postinstallStart = main.indexOf('Some("--postinstall")');
+  const postinstallEnd = main.indexOf("\n    let diagnostics = diagnostics::DiagnosticLog::new();", postinstallStart);
+  const postinstall = main.slice(postinstallStart, postinstallEnd);
+
+  assert.notEqual(postinstallStart, -1, "postinstall branch must be present");
+  assert.match(
+    postinstall,
+    /diagnostics\.initialize\(platform::postinstall_diagnostic_log_directory\(\), true\)/,
+    "postinstall must use the user-only diagnostic location policy",
+  );
+});
+
+test("macOS packaging verifies the installed signature after postinstall exits", () => {
+  const build = readFileSync(resolve(root, "scripts/build-macos.sh"), "utf8");
+  const postinstall = build.indexOf('open -W -a "$destination" --args --postinstall');
+  const verifyInstalled = build.indexOf('codesign --verify --deep --strict "$destination"', postinstall);
+
+  assert.notEqual(postinstall, -1, "installed app postinstall launch must be present");
+  assert.ok(verifyInstalled > postinstall, "installed bundle signature must be verified after postinstall");
+});

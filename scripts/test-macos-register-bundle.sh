@@ -4,6 +4,7 @@ set -euo pipefail
 if [[ $# != 1 ]]; then echo "usage: $0 APPLICATION_BUNDLE" >&2; exit 2; fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 app=$1
+readonly lsregister=${ZMANAGER_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}
 register_plan=$("$repo_root/scripts/macos-register-bundle.sh" register "$app" --dry-run)
 unregister_plan=$("$repo_root/scripts/macos-register-bundle.sh" unregister "$app" --dry-run)
 
@@ -21,6 +22,10 @@ for exact_path in \
 done
 if grep -Eq -- '(-kill|-seed|-reset)[[:space:]]' <<<"$register_plan$unregister_plan"; then
   echo "registration plan contains a destructive global reset" >&2
+  exit 1
+fi
+if grep -Eq -- '-e[[:space:]]+(use|ignore)' <<<"$register_plan$unregister_plan"; then
+  echo "registration plan must preserve the user's extension enablement preference" >&2
   exit 1
 fi
 grep -Fq 'register completed for exact bundle path:' <<<"$register_plan"
@@ -72,4 +77,21 @@ for stale_path in \
     exit 1
   }
 done
+
+quoted_finder=$(printf '%q' "$app/Contents/PlugIns/ZManagerFinderExtension.appex")
+current_add_line=$(grep -nF "$quoted_fake_pluginkit -a $quoted_finder" <<<"$stale_plan" | head -n 1 | cut -d: -f1)
+first_stale_remove_line=$(grep -nF "$quoted_fake_pluginkit -r " <<<"$stale_plan" | head -n 1 | cut -d: -f1)
+if [[ -z $current_add_line || -z $first_stale_remove_line || $current_add_line -ge $first_stale_remove_line ]]; then
+  echo "registration plan must add the current extensions before removing stale copies" >&2
+  exit 1
+fi
+if grep -Fq "$quoted_fake_pluginkit -r $quoted_finder" <<<"$stale_plan"; then
+  echo "registration plan must never remove the current Finder extension" >&2
+  exit 1
+fi
+quoted_app=$(printf '%q' "$app")
+if grep -Fq "$(printf '%q' "$lsregister") -u $quoted_app" <<<"$register_plan"; then
+  echo "registration plan must not unregister the current application before re-registering it" >&2
+  exit 1
+fi
 echo "self-healing registration plan verified"

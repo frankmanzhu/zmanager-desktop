@@ -980,15 +980,26 @@ fn remove_created_source_paths(sources: &[PathBuf], destination: &str) -> Result
 }
 
 #[tauri::command]
-pub fn preview_entry(request: PreviewEntryRequest, registry: State<'_, JobRegistry>) -> Result<PreviewEntryResponse, CommandErrorDto> {
+pub fn preview_entry(
+    request: PreviewEntryRequest,
+    registry: State<'_, JobRegistry>,
+    archive_index_registry: State<'_, ArchiveIndexRegistry>,
+) -> Result<PreviewEntryResponse, CommandErrorDto> {
     let archive_path = ensure_non_empty_path(request.archive_path, "archivePath")?;
     let entry_path = ensure_non_empty_path(request.entry_path, "entryPath")?;
+    let password = request
+        .password
+        .and_then(|value| {
+            let trimmed = value.trim().to_owned();
+            (!trimmed.is_empty()).then_some(trimmed)
+        })
+        .or_else(|| archive_index_registry.password_for_archive(&archive_path));
 
     let report = archive_browser::preview_entry_with_options(
         archive_path,
         &entry_path,
         BrowserExtractOptions {
-            password: request.password.as_deref(),
+            password: password.as_deref(),
             overwrite: map_overwrite_policy(request.overwrite),
             strip_components: request.strip_components,
             ..BrowserExtractOptions::default()

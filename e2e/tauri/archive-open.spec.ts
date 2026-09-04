@@ -11,6 +11,7 @@ import {
   detectArchiveFormat,
   getArchiveChildren,
   invokeExpectingError,
+  invokeOk,
   openArchiveIndex,
 } from "./helpers/archiveCommands.ts";
 import {
@@ -209,6 +210,56 @@ if (!hasFixtureCorpus()) {
           const spanning = [...entries.values()].filter((entry) => entry.kind === "file" && (entry.size ?? 0) >= 192 * 1024);
           assert.ok(spanning.length > 0, `expected a file spanning volumes, saw ${JSON.stringify([...entries.keys()])}`);
         } finally {
+          await closeArchiveIndex(sessionId);
+        }
+      },
+      SINGLE_ARCHIVE_TIMEOUT_MS,
+    );
+
+    it(
+      "previews a passworded RAR through the already-open archive session",
+      async () => {
+        const archivePath = fixturePath("rar5-passworded-multipart.part1.rar");
+        const { sessionId, snapshot } = await openArchiveIndex(archivePath, {
+          password: "zmanager-rar-fixture-password",
+        });
+        try {
+          assert.equal(snapshot.status, "ready");
+          const preview = await invokeOk<{ previewPath: string }>("preview_entry", {
+            request: {
+              archivePath,
+              entryPath: "rar-fixture/docs/readme.txt",
+              overwrite: "replace",
+              stripComponents: 1,
+            },
+          });
+          assert.match(preview.previewPath.replaceAll("\\", "/"), /\/readme\.txt$/);
+        } finally {
+          await invokeOk("cleanup_preview_roots");
+          await closeArchiveIndex(sessionId);
+        }
+      },
+      SINGLE_ARCHIVE_TIMEOUT_MS,
+    );
+
+    it(
+      "previews an unencrypted archive entry through the already-open archive session",
+      async () => {
+        const archivePath = fixturePath("basic.zip");
+        const { sessionId, snapshot } = await openArchiveIndex(archivePath);
+        try {
+          assert.equal(snapshot.status, "ready");
+          const preview = await invokeOk<{ previewPath: string }>("preview_entry", {
+            request: {
+              archivePath,
+              entryPath: "payload/README.txt",
+              overwrite: "replace",
+              stripComponents: 1,
+            },
+          });
+          assert.match(preview.previewPath.replaceAll("\\", "/"), /\/README\.txt$/);
+        } finally {
+          await invokeOk("cleanup_preview_roots");
           await closeArchiveIndex(sessionId);
         }
       },

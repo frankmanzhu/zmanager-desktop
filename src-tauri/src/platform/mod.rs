@@ -284,6 +284,13 @@ pub fn prefer_user_diagnostic_log_directory() -> bool {
     ActivePlatform::prefer_user_log_directory()
 }
 
+pub fn postinstall_diagnostic_log_directory() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "macos")]
+    return macos::postinstall_diagnostic_log_directory();
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
 pub fn prepare_native_file_drag(candidates: &[NativeFileDragCandidate], strip_components: usize) -> Result<Vec<NativeFileDragItem>, NativeFileDragError> {
     ActivePlatform::prepare_native_file_drag(candidates, strip_components)
 }
@@ -328,9 +335,9 @@ pub fn wait_for_app_group(timeout: std::time::Duration) -> bool {
     false
 }
 
-pub fn ensure_macos_registration(diagnostics: &crate::diagnostics::DiagnosticLog) {
+pub fn register_macos_bundle_after_install(diagnostics: &crate::diagnostics::DiagnosticLog) {
     #[cfg(target_os = "macos")]
-    macos::ensure_macos_registration(diagnostics);
+    macos::register_bundle_after_install(diagnostics);
     #[cfg(not(target_os = "macos"))]
     let _ = diagnostics;
 }

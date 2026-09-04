@@ -1928,7 +1928,7 @@ function setOperationalStatus(message: string) {
 }
 
 function setBrowseState(next: BrowseState, message = "") {
-  const snapshot = archiveWorkspace.setBrowseState(next);
+  const snapshot = archiveWorkspace.setBrowseState(next, next === "error" ? message : undefined);
   publishArchiveSnapshot(snapshot);
 
   if (message) {

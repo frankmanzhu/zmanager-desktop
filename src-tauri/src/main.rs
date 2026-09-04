@@ -34,14 +34,14 @@ fn main() {
     if std::env::args_os().any(|arg| arg.to_str() == Some("--postinstall")) {
         eprintln!("ZMANAGER_POSTINSTALL: begin");
         let diagnostics = diagnostics::DiagnosticLog::new();
-        let _ = diagnostics.initialize(std::env::var("ZMANAGER_DIAGNOSTICS_DIR").ok().map(std::path::PathBuf::from), false);
+        let _ = diagnostics.initialize(platform::postinstall_diagnostic_log_directory(), true);
         let inbox = native_launch_inbox::NativeLaunchInbox::new();
         if let Err(e) = platform::initialize_native_host(inbox, diagnostics.clone()) {
             let _ = diagnostics.record("postinstall", "nativeHostFailed", diagnostics::fields([("error", serde_json::Value::String(e))]));
         }
         let group_ready = platform::wait_for_app_group(std::time::Duration::from_secs(30));
         let _ = diagnostics.record("postinstall", "appGroupReady", diagnostics::fields([("available", serde_json::Value::Bool(group_ready))]));
-        platform::ensure_macos_registration(&diagnostics);
+        platform::register_macos_bundle_after_install(&diagnostics);
         platform::shutdown();
         let _ = diagnostics.record("postinstall", "complete", diagnostics::fields([]));
         eprintln!("ZMANAGER_POSTINSTALL: complete");
@@ -96,15 +96,6 @@ fn main() {
     let app = builder
         .setup(move |app| {
             let _ = setup_diagnostics.initialize(app.path().app_log_dir().ok(), platform::prefer_user_diagnostic_log_directory());
-            // On macOS, ensure extensions are registered on every launch.
-            // All commands are idempotent — safe to run repeatedly.
-            // Run on a background thread so startup is not blocked.
-            {
-                let diag = setup_diagnostics.clone();
-                std::thread::spawn(move || {
-                    platform::ensure_macos_registration(&diag);
-                });
-            }
             let emitter_app = app.handle().clone();
             setup_inbox
                 .attach_emitter(std::sync::Arc::new(move |window, event| {
