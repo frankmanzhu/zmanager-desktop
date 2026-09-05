@@ -1,12 +1,3 @@
-import {
-  cancelShare,
-  enqueueShare,
-  getShareQueue,
-  removeShare,
-  setShareReceiver,
-  skipShare,
-  startShare,
-} from "../../api/commands";
 import type {
   EnqueueShareRequest,
   EnqueueShareResponse,
@@ -30,6 +21,16 @@ export type ShareQueueController = Readonly<{
 }>;
 
 type Options = Readonly<{
+  api: Readonly<{
+    enqueueShare(request: EnqueueShareRequest): Promise<EnqueueShareResponse>;
+    getShareQueue(): Promise<ShareRegistrySnapshot>;
+    setShareReceiver(request: { shareId: string; receiver: LocalSendDeviceInfoDto }): Promise<ShareRecordSnapshot>;
+    startShare(request: { shareId: string; acknowledgeDeliveryUncertainty: boolean }): Promise<ShareRecordSnapshot>;
+    skipShare(request: { shareId: string }): Promise<ShareRecordSnapshot>;
+    cancelShare(request: { shareId: string }): Promise<ShareRecordSnapshot>;
+    removeShare(request: { shareId: string }): Promise<void>;
+  }>;
+  reveal(): Promise<void>;
   listen(listener: () => void): Promise<() => void>;
   publish(): void;
   reportError(error: unknown): void;
@@ -39,8 +40,9 @@ const EMPTY_SNAPSHOT: ShareRegistrySnapshot = { queueRevision: "0", items: [] };
 
 export function createShareQueueController(options: Options): ShareQueueController {
   let snapshot = EMPTY_SNAPSHOT;
-  let disposed = false;
+
   let loadChain = Promise.resolve();
+  const mutations = new Map<string, Promise<void>>();
 
   function revision(value: string): bigint {
     try {
@@ -63,8 +65,8 @@ export function createShareQueueController(options: Options): ShareQueueControll
 
   function load(): Promise<void> {
     loadChain = loadChain.then(async () => {
-      const next = await getShareQueue();
-      if (!disposed) apply(next);
+      const next = await options.api.getShareQueue();
+      apply(next);
     }).catch(options.reportError);
     return loadChain;
   }
@@ -78,9 +80,19 @@ export function createShareQueueController(options: Options): ShareQueueControll
     void load();
   }
 
-  async function runMutation(operation: () => Promise<ShareRecordSnapshot | void>): Promise<void> {
-    await operation();
-    await load();
+  function runMutation(key: string, operation: () => Promise<ShareRecordSnapshot | void>): Promise<void> {
+    const pending = mutations.get(key);
+    if (pending) return pending;
+    const task = (async () => {
+      try {
+        await operation();
+      } finally {
+        await load();
+        mutations.delete(key);
+      }
+    })();
+    mutations.set(key, task);
+    return task;
   }
 
   return {
@@ -88,14 +100,15 @@ export function createShareQueueController(options: Options): ShareQueueControll
     initialize,
     handleQueueHint,
     enqueue: async (request) => {
-      const response = await enqueueShare(request);
+      const response = await options.api.enqueueShare(request);
       await load();
+      await options.reveal();
       return response;
     },
-    setReceiver: (shareId, receiver) => runMutation(() => setShareReceiver({ shareId, receiver })),
-    start: (shareId, acknowledgeDeliveryUncertainty = false) => runMutation(() => startShare({ shareId, acknowledgeDeliveryUncertainty })),
-    skip: (shareId) => runMutation(() => skipShare({ shareId })),
-    cancel: (shareId) => runMutation(() => cancelShare({ shareId })),
-    remove: (shareId) => runMutation(() => removeShare({ shareId })),
+    setReceiver: (shareId, receiver) => runMutation(`setReceiver:${shareId}`, () => options.api.setShareReceiver({ shareId, receiver })),
+    start: (shareId, acknowledgeDeliveryUncertainty = false) => runMutation(`start:${shareId}`, () => options.api.startShare({ shareId, acknowledgeDeliveryUncertainty })),
+    skip: (shareId) => runMutation(`skip:${shareId}`, () => options.api.skipShare({ shareId })),
+    cancel: (shareId) => runMutation(`cancel:${shareId}`, () => options.api.cancelShare({ shareId })),
+    remove: (shareId) => runMutation(`remove:${shareId}`, () => options.api.removeShare({ shareId })),
   };
 }

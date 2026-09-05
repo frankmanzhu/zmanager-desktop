@@ -114,7 +114,7 @@ describe("desktop startup window", () => {
     );
 
     expect(runtimeAdapterTs).toContain(
-      "await appWindowController.revealNormalWindow();",
+      "await appWindowController.revealNormalWindow({ userInitiated, alreadyShown: shellWorkspace.getSnapshot().quickActionWindow.shown });",
     );
     expect(windowControllerTs).toContain(
       "async function restoreNormalWindowGeometryOrCenter()",
@@ -129,7 +129,7 @@ describe("desktop startup window", () => {
       "await restoreNormalWindowGeometryOrCenter();",
     );
     expect(windowControllerTs).toContain(
-      "await dependencies.getCurrentWindow().show();",
+      "await window.show();",
     );
   });
 

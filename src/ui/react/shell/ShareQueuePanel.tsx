@@ -1,85 +1,106 @@
-import { RefreshCw, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, LoaderCircle } from "lucide-react";
 
-import type { LocalSendDeviceInfoDto, ShareRecordSnapshot } from "../../../app/controllers/shareQueueController";
-import { formatVolumeSize } from "../../../app/volumeSizePresets";
+import type { ShareRecordSnapshot } from "../../../app/controllers/shareQueueController";
+import type { LocalSendDiscoverySnapshot } from "../../../app/controllers/localSendDiscoveryController";
+import { presentShare } from "../../../app/shareQueuePresentation";
+import { formatBytes } from "../../../app/formatting";
 import { Button } from "../../components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { useZManagerActions, useZManagerSnapshot } from "../AppProviders";
 import type { ZManagerDialogIntent } from "../appRuntime";
 import { translatorForSnapshot } from "./shellHelpers";
+
+type RowProps = Readonly<{
+  item: ShareRecordSnapshot;
+  discovery: LocalSendDiscoverySnapshot;
+  i18n: ReturnType<typeof translatorForSnapshot>;
+  onIntent: (intent: ZManagerDialogIntent) => void;
+  newest: boolean;
+}>;
 
 export function ShareQueuePanel() {
   const snapshot = useZManagerSnapshot();
   const actions = useZManagerActions();
   const i18n = translatorForSnapshot(snapshot);
-  const devices = snapshot.localSendDiscovery.devices;
-  const discovering = snapshot.localSendDiscovery.status === "loading";
-
-  if (snapshot.shareQueue.items.length === 0) {
-    return null;
-  }
+  const items = snapshot.shareQueue.items;
+  if (!items.length) return null;
 
   return (
-    <section className="shrink-0 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950" aria-label={i18n.t("shareQueue.title")}>
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2 dark:border-slate-800">
-        <div>
-          <h2 className="text-sm font-semibold">{i18n.t("shareQueue.title")}</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{i18n.t("shareQueue.description")}</p>
-        </div>
-        <Button type="button" variant="secondary" size="icon" onClick={() => actions.handleDialogIntent({ type: "shareQueueRefreshReceivers" })} disabled={discovering} title={i18n.t("shareQueue.refreshReceivers")} aria-label={i18n.t("shareQueue.refreshReceivers")}>
-          <RefreshCw className={`size-4 ${discovering ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
-      <div className="max-h-52 overflow-auto">
-        {snapshot.shareQueue.items.map((item) => (
-          <ShareQueueRow key={item.shareId} item={item} devices={devices} i18n={i18n} onIntent={actions.handleDialogIntent} />
-        ))}
-      </div>
+    <section className="max-h-[45vh] shrink-0 overflow-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950" aria-label={i18n.t("shareQueue.title")}>
+      <header className="border-b border-slate-200 px-3 py-2 dark:border-slate-800">
+        <h2 className="text-sm font-semibold">{i18n.t("shareQueue.title")}</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{i18n.t("shareQueue.description")}</p>
+      </header>
+      {items.map((item, index) => <ShareQueueRow key={item.shareId} item={item} newest={index === items.length - 1} discovery={snapshot.localSendDiscovery} i18n={i18n} onIntent={actions.handleDialogIntent} />)}
     </section>
   );
 }
 
-function ShareQueueRow({ item, devices, i18n, onIntent }: Readonly<{ item: ShareRecordSnapshot; devices: readonly LocalSendDeviceInfoDto[]; i18n: ReturnType<typeof translatorForSnapshot>; onIntent: (intent: ZManagerDialogIntent) => void }>) {
-  const status = item.compressionState === "cancelling" ? i18n.t("shareQueue.cancelling") : item.compressionState === "compressing" ? i18n.t("shareQueue.compressing") : item.transferState === "cancelling" ? i18n.t("shareQueue.cancelling") : item.transferState === "sending" ? i18n.t("shareQueue.sending") : item.transferState === "waiting" ? i18n.t("shareQueue.ready") : item.transferState === "sent" ? i18n.t("shareQueue.shared") : item.compressionState === "failed" || item.transferState === "failed" ? i18n.t("shareQueue.failed") : item.sharingIntent === "skipped" ? i18n.t("shareQueue.compressed") : item.artifactPath && item.receiver ? i18n.t("shareQueue.ready") : item.artifactPath ? i18n.t("shareQueue.selectReceiverStatus") : i18n.t("shareQueue.queued");
-  const progress = item.compressionProgress;
-  const progressText = progress?.totalBytes ? `${formatVolumeSize(progress.processedBytes)} / ${formatVolumeSize(progress.totalBytes)}` : item.totalBytes ? `${formatVolumeSize(item.bytesSent)} / ${formatVolumeSize(item.totalBytes)}` : "";
+function ShareQueueRow({ item, discovery, i18n, onIntent, newest }: RowProps) {
+  const view = presentShare(item);
+  const row = useRef<HTMLDivElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmRetry, setConfirmRetry] = useState(false);
+  // Scroll only on admission; progress snapshots never move the user's viewport or focus.
+  useEffect(() => { if (newest) row.current?.scrollIntoView?.({ block: "nearest" }); }, [item.shareId]);
   const label = item.artifactPath?.split(/[\\/]/).pop() ?? item.sourcePaths[0]?.split(/[\\/]/).pop() ?? item.shareId;
-  const selected = item.receiver?.fingerprint;
+  const devices = discovery.devices;
+  const discovering = discovery.status === "loading";
+  const status = i18n.t(`shareQueue.${view.status}`);
+  const progressText = view.progress ? [
+    view.progress.percent === null ? null : `${Math.floor(view.progress.percent)}%`,
+    view.status === "shared" && view.progress.total === null ? null : [
+      formatBytes(view.progress.processed, { locale: i18n.locale }),
+      view.progress.total === null ? null : formatBytes(view.progress.total, { locale: i18n.locale }),
+    ].filter(value => value !== null).join(" / "),
+  ].filter(value => value !== null).join(" · ") : null;
+
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 dark:border-slate-900">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2"><span className="truncate font-medium" title={item.artifactPath ?? label}>{label}</span><span className="shrink-0 text-xs text-slate-500">{status}</span></div>
-        {progressText ? <div className="text-xs text-slate-500 dark:text-slate-400">{progressText}</div> : null}
-        {item.lastError ? <div className="truncate text-xs text-red-600 dark:text-red-300" title={item.lastError.message}>{item.lastError.message}</div> : null}
+    <div ref={row} data-share-id={item.shareId} className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm last:border-b-0 dark:border-slate-900">
+      <div className="min-w-0 flex-1 basis-52">
+        <div className="truncate font-medium" title={item.artifactPath ?? label}>{label}</div>
+        <div role="status" className="text-xs text-slate-600 dark:text-slate-400">{status}{item.receiver ? ` · ${item.receiver.alias}` : ""}</div>
+        {view.progress ? <div className="mt-2 space-y-1">
+          <progress className="h-2 w-full accent-blue-600" aria-label={`${label}: ${status}`} max={100} value={view.progress.percent ?? undefined} />
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            {progressText}
+          </div>
+        </div> : null}
+        {item.lastError ? <div role="alert" className="mt-1 break-words text-xs text-red-600 dark:text-red-300">{item.lastError.message}{item.lastError.hint ? ` ${item.lastError.hint}` : ""}</div> : null}
+        {confirmRetry && view.canRetry ? <div className="mt-2 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950 dark:bg-amber-950 dark:text-amber-100">
+          <p>{i18n.t("shareQueue.deliveryUncertain")}</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => { setConfirmRetry(false); onIntent({ type: "shareQueueStart", shareId: item.shareId, acknowledgeDeliveryUncertainty: true }); }}>{i18n.t("shareQueue.retryAnyway")}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmRetry(false)}>{i18n.t("common.cancel")}</Button>
+          </div>
+        </div> : null}
       </div>
-      <div className="flex items-center gap-1">
-        <Select
-          value={selected}
-          onValueChange={(fingerprint) => {
-            const receiver = devices.find((device) => device.fingerprint === fingerprint);
-            if (receiver) onIntent({ type: "shareQueueSetReceiver", shareId: item.shareId, receiver });
-          }}
-          disabled={item.transferState === "sending" || item.transferState === "cancelling" || item.lifecycle === "cancelled"}
-        >
-          <SelectTrigger className="w-36" aria-label={i18n.t("shareQueue.receiver")}>
-            <SelectValue placeholder={i18n.t("shareQueue.selectReceiver")} />
-          </SelectTrigger>
-          <SelectContent>
-            {item.receiver && !devices.some((device) => device.fingerprint === item.receiver?.fingerprint) ? <SelectItem value={item.receiver.fingerprint}>{item.receiver.alias}</SelectItem> : null}
-            {devices.map((device) => <SelectItem key={device.fingerprint} value={device.fingerprint}>{device.alias}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {item.transferState === "sent" || item.transferState === "cancelling" || item.sharingIntent === "skipped" || item.lifecycle === "cancelled" ? null : <Button type="button" variant="secondary" size={item.transferState === "sending" ? "icon" : "sm"} title={i18n.t("shareQueue.skip")} aria-label={i18n.t("shareQueue.skip")} onClick={() => onIntent({ type: "shareQueueSkip", shareId: item.shareId })}>{item.transferState === "sending" ? <X className="size-4" /> : i18n.t("shareQueue.skip")}</Button>}
-        {item.transferState !== "sent" && item.transferState !== "sending" && item.transferState !== "cancelling" && item.artifactPath && item.receiver && item.lifecycle !== "cancelled" ? <Button type="button" variant="dialogPrimary" size="sm" onClick={() => onIntent({ type: "shareQueueStart", shareId: item.shareId })}>{item.transferState === "failed" ? i18n.t("shareQueue.retry") : i18n.t("shareQueue.share")}</Button> : null}
-        {item.transferState === "sent" || item.transferState === "cancelling" || item.lifecycle === "cancelled" ? null : <Button type="button" variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueCancel", shareId: item.shareId })}>{i18n.t("shareQueue.cancel")}</Button>}
+      <div className="flex flex-wrap items-center gap-2">
+        {view.canSelectReceiver ? <Popover open={pickerOpen} onOpenChange={(open) => { setPickerOpen(open); if (open) onIntent({ type: "shareQueueOpenReceivers" }); }}>
+          <PopoverTrigger asChild><Button variant="secondary" size="sm" aria-label={i18n.t("shareQueue.receiver")}>
+            {i18n.t("shareQueue.selectReceiver")}<ChevronDown className="ml-2 size-4" />
+          </Button></PopoverTrigger>
+          <PopoverContent align="end" className="max-h-80 w-80 overflow-auto p-2">
+            <p className="px-2 py-1 text-xs text-slate-500">{i18n.t("shareQueue.selectHint")}</p>
+            {discovering ? <p role="status" className="flex items-center gap-2 p-2 text-sm"><LoaderCircle className="size-4 animate-spin" />{i18n.t("shareOnLan.discovering")}</p> : null}
+            {discovery.error ? <p role="alert" className="p-2 text-sm text-red-600 dark:text-red-300">{discovery.error}</p> : null}
+            {!discovering && !devices.length ? <p className="p-2 text-sm">{i18n.t("shareOnLan.noDevices")}</p> : null}
+            <div role="group" aria-label={i18n.t("shareOnLan.deviceListLabel")}>
+              {devices.map(device => <Button key={device.fingerprint} variant="ghost" className="h-auto w-full justify-start py-2 text-left" onClick={() => { setPickerOpen(false); onIntent({ type: "shareQueueSetReceiver", shareId: item.shareId, receiver: device }); }}>
+                <span className="min-w-0"><span className="block truncate">{device.alias}</span><span className="block truncate text-xs font-normal text-slate-500">{[device.deviceModel, device.ip ?? device.fingerprint.slice(0, 12)].filter(Boolean).join(" · ")}</span></span>
+              </Button>)}
+            </div>
+            <Button variant="ghost" size="sm" disabled={discovering} onClick={() => onIntent({ type: "shareQueueRefreshReceivers" })}>{i18n.t("shareQueue.searchAgain")}</Button>
+          </PopoverContent>
+        </Popover> : item.receiver ? <span className="flex max-w-52 items-center gap-1 text-xs text-slate-600 dark:text-slate-400" title={[item.receiver.alias, item.receiver.ip].filter(Boolean).join(" · ")}>
+          {item.transferState === "sent" ? <Check className="size-4 text-green-600" /> : null}<span className="truncate">{item.receiver.alias}</span>
+        </span> : null}
+        {view.canSkip ? <Button variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueSkip", shareId: item.shareId })}>{i18n.t("shareQueue.skip")}</Button> : null}
+        {view.canRetry && !confirmRetry ? <Button variant="secondary" size="sm" onClick={() => { if (item.deliveryUncertain) setConfirmRetry(true); else onIntent({ type: "shareQueueStart", shareId: item.shareId }); }}>{i18n.t("shareQueue.retry")}</Button> : null}
+        {view.canCancel ? <Button variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueCancel", shareId: item.shareId })}>{i18n.t(item.transferState === "sending" ? "shareQueue.cancelTransfer" : "shareQueue.cancel")}</Button> : null}
+        {view.canDismiss ? <Button variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueRemove", shareId: item.shareId })}>{i18n.t("shareQueue.dismiss")}</Button> : null}
       </div>
-      <Button type="button" variant="ghost" size="sm" onClick={() => onIntent({ type: "shareQueueRemove", shareId: item.shareId })}>{i18n.t("common.close")}</Button>
     </div>
   );
 }

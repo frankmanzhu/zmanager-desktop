@@ -4,6 +4,31 @@ import type { LocalSendDeviceInfoDto } from "../../api/types";
 import { createLocalSendDiscoveryController } from "./localSendDiscoveryController";
 
 describe("local send discovery controller", () => {
+  it("deduplicates picker scans and refreshes expired results", async () => {
+    let now = 0;
+    const device = { alias: "Peer", fingerprint: "peer", port: 53317, protocol: "https", ip: null, deviceModel: null };
+    const discover = vi.fn(async () => [device]);
+    const controller = createLocalSendDiscoveryController({ discover, publish: () => {}, errorMessage: String, now: () => now });
+    await Promise.all([controller.openPicker("self"), controller.openPicker("self")]);
+    expect(discover).toHaveBeenCalledTimes(1);
+    await controller.openPicker("self");
+    expect(discover).toHaveBeenCalledTimes(1);
+    now = 30_001;
+    await controller.openPicker("self");
+    expect(discover).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries empty and failed results on the next opening without an automatic loop", async () => {
+    const discover = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new Error("offline")).mockResolvedValue([]);
+    const controller = createLocalSendDiscoveryController({ discover, publish: () => {}, errorMessage: String });
+    await controller.openPicker("self");
+    expect(discover).toHaveBeenCalledTimes(1);
+    await controller.openPicker("self");
+    expect(controller.getSnapshot().status).toBe("error");
+    await controller.openPicker("self");
+    expect(discover).toHaveBeenCalledTimes(3);
+  });
+
   it("publishes discovered receivers without exposing the desktop adapter to React", async () => {
     const publish = vi.fn();
     const controller = createLocalSendDiscoveryController({

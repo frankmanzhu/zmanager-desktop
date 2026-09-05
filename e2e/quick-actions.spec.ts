@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { ShareRecordSnapshot, LocalSendDeviceInfoDto } from "../src/api/types";
+import { shareFixture } from "../src/app/shareQueueTestFixtures";
 
 type IpcCall = {
   cmd: string;
@@ -22,6 +24,8 @@ type NativeInboundEvent = {
 };
 
 type QuickActionStubOptions = {
+  shareItems?: ShareRecordSnapshot[];
+  discoveries?: LocalSendDeviceInfoDto[][];
   rejectWindowCommands?: string[];
   completeOnPoll?: boolean;
   startupStateDelayMs?: number;
@@ -193,6 +197,14 @@ async function installQuickActionTauriStub(
     let startupDelayConsumed = false;
     let subscriptionCount = 0;
     let nativeInboundHandlerId: number | null = null;
+    let shareHandler: number | null = null;
+    let shareItems = payload.options.shareItems ?? [];
+    let shareRevision = 1;
+    const discoveries = [...(payload.options.discoveries ?? [[]])];
+    const shareChanged = () => {
+      shareRevision++;
+      if (shareHandler !== null) window.__TAURI_INTERNALS__?.runCallback(shareHandler, { event: "zmanager-share-queue-changed", id: 1, payload: String(shareRevision) });
+    };
     const jobChannels = new Map<string, { callbackId: number; subscriptionId: string; revision: number }>();
     const catalogJobs = payload.options.catalogJobs ?? [];
     for (const job of catalogJobs) {
@@ -240,6 +252,25 @@ async function installQuickActionTauriStub(
         throw new Error(`Rejected ${cmd}`);
       }
 
+      if (cmd === "get_share_queue") return { queueRevision: String(shareRevision), items: structuredClone(shareItems) };
+      if (cmd === "enqueue_share") return { item: shareItems[0], deduplicated: false };
+      if (cmd === "localsend_discover") {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        return discoveries.shift() ?? [];
+      }
+      if (cmd === "set_share_receiver") {
+        const request = args.request as { shareId: string; receiver: LocalSendDeviceInfoDto };
+        const item = shareItems.find(item => item.shareId === request.shareId)!;
+        item.receiver = request.receiver; item.transferState = "sending"; item.bytesSent = 20; item.totalBytes = 100;
+        shareChanged();
+        window.setTimeout(() => { item.bytesSent = 100; shareChanged(); }, 600);
+        window.setTimeout(() => { item.transferState = "sent"; shareChanged(); }, 2000);
+        return item;
+      }
+      if (cmd === "remove_share") {
+        shareItems = shareItems.filter(item => item.shareId !== (args.request as { shareId: string }).shareId);
+        shareChanged(); return;
+      }
       if (cmd === "healthcheck") {
         return {
           engine: "zmanager-core",
@@ -461,6 +492,7 @@ async function installQuickActionTauriStub(
       }
 
       if (cmd === "plugin:event|listen") {
+        if (args.event === "zmanager-share-queue-changed") shareHandler = channelCallbackId(args.handler);
         if (args.event === "zmanager-native-inbound-event") {
           nativeInboundHandlerId = channelCallbackId(args.handler);
         }
@@ -528,3 +560,33 @@ async function expectWindowCommand(page: Page, command: string) {
     return calls.some((call) => call.cmd === command);
   }, { timeout: 3_000 }).toBe(true);
 }
+
+
+test("LAN share discovers from picker, shows progress, and locks completed receiver", async ({ page }) => {
+  const peer = { alias: "Same name", fingerprint: "peer", port: 53317, protocol: "https", ip: "192.168.1.5", deviceModel: "Windows" };
+  await installQuickActionTauriStub(page, [notRequestedState], { shareItems: [shareFixture()], discoveries: [[], [peer, { ...peer, fingerprint: "other", ip: "192.168.1.6" }]] });
+  await page.goto("/");
+  const panel = page.getByRole("region", { name: "Share queue" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Refresh receivers" })).toHaveCount(0);
+  await panel.getByRole("button", { name: "LAN receiver" }).click();
+  await expect(page.getByText(/No devices found/)).toBeVisible();
+  await page.getByRole("button", { name: "Search again" }).click();
+  await page.getByRole("button", { name: "Same name Windows · 192.168.1.5", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "LAN receiver" })).toHaveCount(0);
+  await expect(panel.getByRole("progressbar")).toBeVisible();
+  await expect(panel.getByRole("status")).toContainText("Finishing");
+  await expect(panel.getByRole("status")).toContainText("Shared");
+  await page.screenshot({ path: "test-results/sharing-completed.png" });
+  await expect(panel.getByRole("button", { name: "Cancel transfer" })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Dismiss" }).click();
+  await expect(panel).toHaveCount(0);
+});
+
+test("direct LAN request explicitly restores and focuses the main window", async ({ page }) => {
+  await installQuickActionTauriStub(page, [notRequestedState], { shareItems: [shareFixture()], nativeInboundEvents: [shellActionEvent("share-native", "shareOnLan", ["/tmp/fixture.txt"])] });
+  await page.goto("/");
+  await expectWindowCommand(page, "plugin:window|unminimize");
+  await expectWindowCommand(page, "plugin:window|set_focus");
+  await expect(page.getByRole("region", { name: "Share queue" })).toBeVisible();
+});

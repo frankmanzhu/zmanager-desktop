@@ -1267,6 +1267,8 @@ const localSendDiscoveryController = createLocalSendDiscoveryController({
 });
 
 const shareQueueController = createShareQueueController({
+  api: { enqueueShare, getShareQueue, setShareReceiver, startShare, skipShare, cancelShare, removeShare },
+  reveal: () => revealNormalAppWindow(true),
   listen: listenShareQueueChanged,
   publish: publishReactSnapshot,
   reportError: (error) => setOperationalStatus(unknownErrorMessage(error, "Unable to load the LAN share queue.")),
@@ -1485,7 +1487,7 @@ function renderNormalWorkspaceOnce() {
   publishReactSnapshot();
 }
 
-async function revealNormalAppWindow() {
+async function revealNormalAppWindow(userInitiated = false) {
   diagnostics.record({
     scope: "mainWindow",
     name: "normalRevealRequested",
@@ -1493,14 +1495,16 @@ async function revealNormalAppWindow() {
   });
   disposableTaskLifecycle.observeNormalLaunch();
   renderNormalWorkspaceOnce();
-  if (!isDesktopRuntime() || shellWorkspace.getSnapshot().quickActionWindow.shown) {
+  if (!isDesktopRuntime() || (!userInitiated && shellWorkspace.getSnapshot().quickActionWindow.shown)) {
     return;
   }
 
   try {
-    await appWindowController.revealNormalWindow();
+    await appWindowController.revealNormalWindow({ userInitiated, alreadyShown: shellWorkspace.getSnapshot().quickActionWindow.shown });
+    diagnostics.record({ scope: "mainWindow", name: "normalRevealCompleted", fields: { userInitiated } });
   } catch {
-    // Window APIs are best-effort; the app is still usable if the window was already shown.
+    diagnostics.record({ scope: "mainWindow", name: "normalRevealFailed", fields: { userInitiated } });
+    return;
   }
   shellWorkspace.setQuickActionWindowShown(true);
 }
@@ -2276,6 +2280,9 @@ function handleReactDialogIntent(intent: ZManagerDialogIntent) {
       break;
     case "localSendTrustRefresh":
       void localSendTrustController.refresh();
+      break;
+    case "shareQueueOpenReceivers":
+      void localSendDiscoveryController.openPicker(localSendAliasOrDefault());
       break;
     case "shareQueueRefreshReceivers":
       void localSendDiscoveryController.refresh(localSendAliasOrDefault());

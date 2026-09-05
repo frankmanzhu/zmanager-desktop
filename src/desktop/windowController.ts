@@ -58,6 +58,7 @@ export type AppWindowHandle = {
   minimize(): Promise<void>;
   toggleMaximize(): Promise<void>;
   show(): Promise<void>;
+  setFocus(): Promise<void>;
   unminimize(): Promise<void>;
   setMinSize(size: unknown): Promise<void>;
   setSize(size: unknown): Promise<void>;
@@ -220,10 +221,15 @@ export function createWindowController(options: WindowControllerOptions = {}) {
     toggleMaximizeCurrentWindow(): Promise<void> {
       return dependencies.getCurrentWindow().toggleMaximize();
     },
-    async revealNormalWindow(): Promise<void> {
-      await restoreNormalWindowGeometryOrCenter();
+    async revealNormalWindow({ userInitiated = false, alreadyShown = false }: { userInitiated?: boolean; alreadyShown?: boolean } = {}): Promise<void> {
+      if (!alreadyShown) await restoreNormalWindowGeometryOrCenter();
       if (dependencies.isDesktopRuntime()) {
-        await dependencies.getCurrentWindow().show();
+        const window = dependencies.getCurrentWindow();
+        await window.show();
+        if (userInitiated) {
+          await window.unminimize();
+          await window.setFocus();
+        }
       }
     },
     restoreNormalWindowGeometry,

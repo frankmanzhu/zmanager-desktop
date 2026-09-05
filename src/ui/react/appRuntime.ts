@@ -337,6 +337,7 @@ export type ZManagerDialogIntent =
   | Readonly<{ type: "preferencesChooseLanShareReceiveFolder" }>
   | Readonly<{ type: "localSendTrustRefresh" }>
   | Readonly<{ type: "shareQueueRefreshReceivers" }>
+  | Readonly<{ type: "shareQueueOpenReceivers" }>
   | Readonly<{ type: "localSendTrustForget"; fingerprint: string }>
   | Readonly<{ type: "shareQueueSetReceiver"; shareId: string; receiver: LocalSendDeviceInfoDto }>
   | Readonly<{ type: "shareQueueStart"; shareId: string; acknowledgeDeliveryUncertainty?: boolean }>

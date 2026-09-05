@@ -63,6 +63,7 @@ function createFakeWindow(): AppWindowHandle & {
     show: vi.fn(async () => {
       record("show");
     }),
+    setFocus: vi.fn(async () => { record("setFocus"); }),
     unminimize: vi.fn(async () => {
       record("unminimize");
     }),
@@ -118,6 +119,16 @@ function createController({
 }
 
 describe("desktop window controller", () => {
+  it("restores and focuses explicit requests repeatedly without resetting geometry", async () => {
+    const fakeWindow = createFakeWindow();
+    const { controller } = createController({ fakeWindow });
+    await controller.revealNormalWindow();
+    fakeWindow.calls.length = 0;
+    await controller.revealNormalWindow({ userInitiated: true, alreadyShown: true });
+    await controller.revealNormalWindow({ userInitiated: true, alreadyShown: true });
+    expect(fakeWindow.calls).toEqual(["show", "unminimize", "setFocus", "show", "unminimize", "setFocus"]);
+  });
+
   it("restores saved geometry before showing the normal window", async () => {
     const fakeWindow = createFakeWindow();
     const { controller } = createController({

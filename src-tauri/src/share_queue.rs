@@ -155,6 +155,43 @@ struct ShareRecord {
 }
 
 impl ShareRecord {
+    // This transition is shared by the command path and state-machine tests.
+    // Selection commits a destination even while compression or another send is pending.
+    fn select_receiver(&mut self, receiver: LocalSendDeviceInfoDto) -> Result<(), CommandErrorDto> {
+        if self.receiver.is_some() {
+            return Err(error("share_receiver_locked", "The receiver is fixed for this share. Create a new share to send elsewhere.", false));
+        }
+        if self.lifecycle != ShareLifecycle::Active
+            || self.sharing_intent != SharingIntent::Pending
+            || !matches!(self.transfer_state, TransferState::NotStarted | TransferState::Waiting)
+            || matches!(self.compression_state, CompressionState::Cancelling | CompressionState::Cancelled | CompressionState::Failed)
+        {
+            return Err(error("share_invalid_state", "This share no longer accepts a receiver", false));
+        }
+        self.receiver = Some(receiver);
+        self.receiver_generation = self.receiver_generation.saturating_add(1).max(1);
+        self.last_error = None;
+        self.updated_at = timestamp();
+        Ok(())
+    }
+
+    fn ensure_cancellable(&self) -> Result<(), CommandErrorDto> {
+        if self.transfer_state == TransferState::Sent {
+            return Err(error("share_already_completed", "This share has already completed", false));
+        }
+        Ok(())
+    }
+
+    fn ensure_removable(&self) -> Result<(), CommandErrorDto> {
+        if matches!(self.transfer_state, TransferState::Sending | TransferState::Cancelling)
+            || matches!(self.compression_state, CompressionState::Compressing | CompressionState::Cancelling)
+            || is_send_eligible(self)
+        {
+            return Err(error("share_busy", "Cancel the active share before dismissing it", true));
+        }
+        Ok(())
+    }
+
     fn snapshot(&self) -> ShareRecordSnapshot {
         ShareRecordSnapshot {
             share_id: self.share_id.clone(),
@@ -424,10 +461,7 @@ impl ShareRegistry {
         if matches!(item.transfer_state, TransferState::Sending | TransferState::Cancelling) {
             return Err(error("share_busy", "The transfer is already sending", true));
         }
-        item.receiver = Some(receiver);
-        item.receiver_generation = item.receiver_generation.saturating_add(1).max(1);
-        item.last_error = None;
-        item.updated_at = timestamp();
+        item.select_receiver(receiver)?;
         let snapshot = item.snapshot();
         self.bump_and_publish_locked(&mut state, true);
         drop(state);
@@ -505,6 +539,7 @@ impl ShareRegistry {
             let active_send_id =
                 state.active_send.as_ref().and_then(|(active_share_id, active_send_id, _)| (active_share_id == share_id).then_some(active_send_id.clone()));
             let item = find_item_mut(&mut state, share_id)?;
+            item.ensure_cancellable()?;
             if item.lifecycle == ShareLifecycle::Cancelled {
                 return Ok(item.snapshot());
             }
@@ -543,11 +578,8 @@ impl ShareRegistry {
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
         let index = state.items.iter().position(|item| item.share_id == share_id).ok_or_else(|| error("share_not_found", "Share was not found", false))?;
         let item = &state.items[index];
-        if item.transfer_state == TransferState::Sending
-            || item.transfer_state == TransferState::Cancelling
-            || state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id)
-            || matches!(item.compression_state, CompressionState::Compressing | CompressionState::Cancelling)
-        {
+        item.ensure_removable()?;
+        if state.active_send.as_ref().is_some_and(|(active_share_id, _, _)| active_share_id == share_id) {
             return Err(error("share_busy", "The share is still active", true));
         }
         state.items.remove(index);
@@ -940,6 +972,57 @@ mod tests {
             updated_at: "0".into(),
             last_error: None,
         }
+    }
+
+    #[test]
+    fn receiver_selection_commits_identity_before_sending_and_after_completion() {
+        let mut item = record(1, TransferState::NotStarted, false, false);
+        item.compression_state = CompressionState::Compressing;
+        item.select_receiver(receiver()).unwrap();
+        for state in [
+            TransferState::NotStarted,
+            TransferState::Waiting,
+            TransferState::Sending,
+            TransferState::Cancelling,
+            TransferState::Sent,
+            TransferState::Failed,
+            TransferState::Cancelled,
+        ] {
+            item.transfer_state = state;
+            let mut other = receiver();
+            other.fingerprint = "other".into();
+            assert_eq!(item.select_receiver(other).unwrap_err().code, "share_receiver_locked");
+            assert_eq!(item.receiver.as_ref().unwrap().fingerprint, "fingerprint");
+            assert_eq!(item.receiver_generation, 1);
+        }
+    }
+
+    #[test]
+    fn stale_selection_cannot_revive_cancelled_skipped_or_failed_work() {
+        let mut item = record(1, TransferState::NotStarted, false, true);
+        item.lifecycle = ShareLifecycle::Cancelled;
+        assert!(item.select_receiver(receiver()).is_err());
+        item.lifecycle = ShareLifecycle::Active;
+        item.sharing_intent = SharingIntent::Skipped;
+        assert!(item.select_receiver(receiver()).is_err());
+        item.sharing_intent = SharingIntent::Pending;
+        item.compression_state = CompressionState::Failed;
+        assert!(item.select_receiver(receiver()).is_err());
+        assert!(item.receiver.is_none());
+    }
+
+    #[test]
+    fn completed_result_rejects_late_cancel_and_waiting_work_cannot_be_dismissed() {
+        let mut item = record(1, TransferState::Sent, true, true);
+        assert_eq!(item.ensure_cancellable().unwrap_err().code, "share_already_completed");
+        assert!(item.ensure_removable().is_ok());
+        item.transfer_state = TransferState::Waiting;
+        assert_eq!(item.ensure_removable().unwrap_err().code, "share_busy");
+        item.transfer_state = TransferState::Cancelled;
+        item.lifecycle = ShareLifecycle::Cancelled;
+        assert!(item.ensure_removable().is_ok());
+        item.compression_state = CompressionState::Cancelling;
+        assert!(item.ensure_removable().is_err());
     }
 
     #[test]
