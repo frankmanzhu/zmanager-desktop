@@ -36,6 +36,7 @@ fn main() {
         "account_remove_contact",
         "account_inspect_contact_card",
         "account_accept_contact_card",
+        "account_sync_contacts",
         "start_archive_index",
         "wait_archive_index",
         "get_archive_children",

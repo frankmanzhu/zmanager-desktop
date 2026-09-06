@@ -8775,6 +8775,7 @@ name = "zmanager-core"
 version = "2.1.2"
 dependencies = [
  "adler2",
+ "argon2",
  "backhand",
  "base64 0.22.1",
  "brotli",

@@ -297,6 +297,7 @@ import {
   removeAccountSigningIdentity,
   inspectAccountContactCard,
   acceptAccountContactCard,
+  syncAccountContacts,
   removeAccountRecipientKey,
   setDefaultAccountSigningIdentity,
   runLocalSendRespondToTransfer,
@@ -1242,6 +1243,7 @@ const accountController = createAccountController({
   removeContact: removeAccountContact,
   inspectContactCard: inspectAccountContactCard,
   acceptContactCard: acceptAccountContactCard,
+  syncContacts: syncAccountContacts,
   openUrl: openDesktopPath,
   publish: publishReactSnapshot,
   errorMessage: (error) => unknownErrorMessage(error, "Account operation failed."),
@@ -2212,6 +2214,7 @@ function handleReactAccountIntent(intent: ZManagerAccountIntent) {
     }
     case "exportContactCard": void accountController.handleExportContactCard(); break;
     case "retireDevice": void accountController.handleDeviceRetire(); break;
+    case "syncContacts": void accountController.syncContacts(); break;
   }
 }
 

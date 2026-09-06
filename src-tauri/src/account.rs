@@ -18,10 +18,12 @@ use zmanager_core::identity_catalog::{
     FileTzapIdentityCatalogStore, TzapIdentityCatalog, TzapIdentityCatalogStore, TzapPublicContactRecord, TzapPublicRecipientKeyRecord,
     TzapPublicSigningIdentityRecord, TzapSecretMaterialStore, TzapSecretPurpose, TzapSecretRef, TzapSecretStoreError,
 };
+use zmanager_core::contact_snapshot::{CONTACT_SNAPSHOT_FORMAT_PLAIN, TOMBSTONE_RETENTION_SECONDS, TzapContactSnapshot, TzapContactTombstone};
 use zmanager_tzap_hosted::auth_client::{
     AUTH_HANDOFF_LIFETIME_SECONDS, TzapCurrentUser, TzapHostedAuthCallback, TzapHostedAuthEnvironment, TzapHostedAuthLaunchConfig, TzapOAuthStateTracker,
     TzapPendingAuthState, TzapSessionRecord, TzapSessionStore, complete_hosted_auth_handoff,
 };
+use zmanager_tzap_hosted::backup_client::{TzapBackupClient, TzapBackupError};
 
 use crate::error::{CommandErrorDto, ErrorSeverityDto};
 use crate::secure_store::NativeTzapSecretStore;
@@ -87,6 +89,7 @@ pub struct AccountContactDto {
     pub recipient_public_key_fingerprint: String,
     pub verification_state: String,
     pub missing_status_caveat: bool,
+    pub phone_sourced: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -292,7 +295,7 @@ pub fn account_complete_hosted_auth(
 }
 
 #[tauri::command]
-pub fn account_fetch_current_user(runtime: State<'_, AccountRuntime>) -> Result<AccountCurrentUserDto, CommandErrorDto> {
+pub fn account_fetch_current_user(app: AppHandle, runtime: State<'_, AccountRuntime>) -> Result<AccountCurrentUserDto, CommandErrorDto> {
     let (session, environment_str) = {
         let state = runtime.0.lock().expect("account runtime lock poisoned");
         let session = state.session.clone().ok_or_else(|| CommandErrorDto::invalid_request("No active session"))?;
@@ -313,8 +316,13 @@ pub fn account_fetch_current_user(runtime: State<'_, AccountRuntime>) -> Result<
 
     match user_result {
         Ok(user) => {
-            let mut state = runtime.0.lock().expect("account runtime lock poisoned");
-            state.cached_user = Some(user.clone());
+            {
+                let mut state = runtime.0.lock().expect("account runtime lock poisoned");
+                state.cached_user = Some(user.clone());
+            }
+            if let Ok(root) = account_state_dir(&app) {
+                let _ = sync_contact_snapshot(&root, &runtime);
+            }
             Ok(AccountCurrentUserDto {
                 display_name: user.display_name,
                 public_signer_id: user.public_signer_id,
@@ -732,7 +740,13 @@ pub fn account_remove_contact(request: AccountIdRequest, app: AppHandle, runtime
     let root = account_state_dir(&app)?;
     let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
     let mut catalog = ensure_catalog(&root, &runtime)?;
+    let now = current_unix_seconds();
     catalog.contacts.retain(|contact| contact.contact_id != request.id);
+    catalog.removed_contacts.retain(|tombstone| tombstone.contact_id != request.id);
+    catalog.removed_contacts.push(zmanager_core::contact_snapshot::TzapContactTombstone {
+        contact_id: request.id,
+        removed_at: now,
+    });
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
     catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
@@ -775,11 +789,183 @@ pub fn account_accept_contact_card(
         contact_card_payload: verified.payload,
         accepted_at_unix_seconds: current_unix_seconds(),
         local_alias: None,
+        card: Some(request.contact_card),
     });
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);
     catalog_store.save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog).map_err(|error| account_error("account_catalog_save_failed", error))?;
     snapshot_at(&root, &runtime)
+}
+
+#[tauri::command]
+pub fn account_sync_contacts(app: AppHandle, runtime: State<'_, AccountRuntime>) -> Result<AccountSnapshotDto, CommandErrorDto> {
+    let root = account_state_dir(&app)?;
+    sync_contact_snapshot(&root, &runtime)?;
+    snapshot_at(&root, &runtime)
+}
+
+pub fn sync_contact_snapshot(root: &Path, runtime: &AccountRuntime) -> Result<(), CommandErrorDto> {
+    let (session, environment_str) = {
+        let state = runtime.0.lock().expect("account runtime lock poisoned");
+        let Some(session) = state.session.clone() else {
+            return Ok(());
+        };
+        let environment_str = state.environment.clone();
+        (session, environment_str)
+    };
+
+    let transport = crate::hosted_transport::HostedHttpTransport::new().map_err(|e| account_error("account_http_client_failed", e))?;
+
+    let environment = match environment_str.as_str() {
+        "local" => TzapHostedAuthEnvironment::Local,
+        "staging" => TzapHostedAuthEnvironment::Staging,
+        _ => TzapHostedAuthEnvironment::Prod,
+    };
+    let config = TzapHostedAuthLaunchConfig::for_environment(environment, CLIENT_ID, REDIRECT_URI);
+    let backup_client = TzapBackupClient::new(&config.hosted_account_base_url, &transport);
+
+    let backup_record = match backup_client.fetch_contact_backup(&session) {
+        Ok(record) => record,
+        Err(TzapBackupError::NotFound) => {
+            let mut catalog_store = FileTzapIdentityCatalogStore::new(root);
+            let mut catalog = ensure_catalog(root, runtime)?;
+            let had_phone_contacts = catalog.contacts.iter().any(|c| c.trust_source == "phone_sync");
+            if had_phone_contacts {
+                catalog.contacts.retain(|c| c.trust_source != "phone_sync");
+                let expected_revision = catalog.revision;
+                catalog.revision = catalog.revision.saturating_add(1);
+                catalog_store
+                    .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
+                    .map_err(|error| account_error("account_catalog_save_failed", error))?;
+            }
+            return Ok(());
+        }
+        Err(TzapBackupError::Auth(zmanager_tzap_hosted::auth_client::TzapAuthError::HttpStatus { status_code: 401 })) => {
+            return Ok(());
+        }
+        Err(e) => {
+            return Err(account_error("account_contact_sync_failed", e));
+        }
+    };
+
+    let snapshot: TzapContactSnapshot = serde_json::from_value(backup_record.payload)
+        .map_err(|e| account_error("account_contact_snapshot_invalid", e))?;
+    if snapshot.format != CONTACT_SNAPSHOT_FORMAT_PLAIN {
+        return Err(account_error("account_contact_snapshot_invalid", format!("Unsupported snapshot format: {}", snapshot.format)));
+    }
+
+    let now = current_unix_seconds();
+    let mut catalog_store = FileTzapIdentityCatalogStore::new(root);
+    let mut catalog = ensure_catalog(root, runtime)?;
+
+    apply_contact_snapshot_to_catalog(&mut catalog, &snapshot, now);
+
+    let expected_revision = catalog.revision;
+    catalog.revision = catalog.revision.saturating_add(1);
+    catalog_store
+        .save_catalog(ACCOUNT_KEY, Some(expected_revision), catalog)
+        .map_err(|error| account_error("account_catalog_save_failed", error))?;
+
+    Ok(())
+}
+
+pub fn apply_contact_snapshot_to_catalog(
+    catalog: &mut TzapIdentityCatalog,
+    snapshot: &zmanager_core::contact_snapshot::TzapContactSnapshot,
+    now: u64,
+) {
+    // 1. Merge and prune tombstones (365 days retention)
+    let mut tombstone_map = std::collections::BTreeMap::<String, u64>::new();
+    for t in catalog.removed_contacts.iter().chain(snapshot.removed.iter()) {
+        if now.saturating_sub(t.removed_at) <= TOMBSTONE_RETENTION_SECONDS {
+            tombstone_map
+                .entry(t.contact_id.clone())
+                .and_modify(|existing| *existing = (*existing).max(t.removed_at))
+                .or_insert(t.removed_at);
+        }
+    }
+    catalog.removed_contacts = tombstone_map
+        .iter()
+        .map(|(id, &removed_at)| zmanager_core::contact_snapshot::TzapContactTombstone {
+            contact_id: id.clone(),
+            removed_at,
+        })
+        .collect();
+
+    // Remove any local contact whose accepted_at <= removed_at
+    catalog.contacts.retain(|c| {
+        if let Some(&removed_at) = tombstone_map.get(&c.contact_id) {
+            c.accepted_at_unix_seconds > removed_at
+        } else {
+            true
+        }
+    });
+
+    // 2. Process snapshot contacts: re-verify and merge
+    let options = zmanager_core::contact_card::TzapContactCardImportOptions {
+        verifier_time_unix_seconds: i64::try_from(now).unwrap_or(i64::MAX),
+        official_root_pins: &zmanager_core::trust::OFFICIAL_TZAP_ROOT_PINS,
+        official_root_certificates_der: Vec::new(),
+        custom_trust_root_sha256: Vec::new(),
+        custom_trust_root_certificates_der: Vec::new(),
+        certificate_profile_options: zmanager_core::trust::TzapCertificateProfileOptions::default(),
+        intermediate_resolver: None,
+    };
+
+    let mut incoming_ids = std::collections::HashSet::new();
+    for entry in &snapshot.contacts {
+        let contact_id = match entry.resolved_contact_id() {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        incoming_ids.insert(contact_id.clone());
+
+        if let Some(&removed_at) = tombstone_map.get(&contact_id) {
+            if removed_at >= entry.accepted_at {
+                continue;
+            }
+        }
+
+        let Ok(verified) = zmanager_core::contact_card::verify_tzap_contact_card(&entry.card, &options) else {
+            continue;
+        };
+        let recipient_public_key_der = match verified
+            .payload
+            .get("recipient_public_key")
+            .and_then(Value::as_str)
+            .and_then(|value| URL_SAFE_NO_PAD.decode(value).ok())
+        {
+            Some(der) => der,
+            None => continue,
+        };
+
+        let record = TzapPublicContactRecord {
+            contact_id: contact_id.clone(),
+            display_name: verified.display_name,
+            signing_certificate_sha256: verified.signing_certificate_sha256,
+            recipient_public_key_fingerprint: verified.recipient_public_key_fingerprint,
+            recipient_public_key_der,
+            trust_source: "phone_sync".to_owned(),
+            verification_state: verified.verification_state.as_str().to_owned(),
+            missing_status_caveat: verified.missing_status_caveat,
+            contact_card_payload: verified.payload,
+            accepted_at_unix_seconds: entry.accepted_at,
+            local_alias: entry.local_alias.clone(),
+            card: Some(entry.card.clone()),
+        };
+
+        catalog.contacts.retain(|c| c.contact_id != contact_id);
+        catalog.contacts.push(record);
+    }
+
+    // 3. Previously-synced phone contacts that disappeared from the snapshot are removed
+    catalog.contacts.retain(|c| {
+        if c.trust_source == "phone_sync" {
+            incoming_ids.contains(&c.contact_id)
+        } else {
+            true
+        }
+    });
 }
 
 #[derive(Debug)]
@@ -953,6 +1139,7 @@ fn verify_contact_card(card: &Value) -> Result<zmanager_core::contact_card::Tzap
         custom_trust_root_sha256: Vec::new(),
         custom_trust_root_certificates_der: Vec::new(),
         certificate_profile_options: zmanager_core::trust::TzapCertificateProfileOptions::default(),
+        intermediate_resolver: None,
     };
     zmanager_core::contact_card::verify_tzap_contact_card(card, &options)
 }
@@ -1042,6 +1229,7 @@ fn snapshot_from_catalog(runtime: &AccountRuntime, catalog: TzapIdentityCatalog)
                 recipient_public_key_fingerprint: contact.recipient_public_key_fingerprint,
                 verification_state: contact.verification_state,
                 missing_status_caveat: contact.missing_status_caveat,
+                phone_sourced: contact.trust_source == "phone_sync",
             })
             .collect(),
     })
@@ -1219,5 +1407,116 @@ mod tests {
         let snapshot = snapshot_at(&root, &runtime).unwrap();
         assert!(snapshot.recipient_keys.is_empty());
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn contact_removal_records_local_tombstone() {
+        let root = std::env::temp_dir().join(format!("zmanager-contact-tombstone-test-{}", current_unix_seconds()));
+        let mut catalog_store = FileTzapIdentityCatalogStore::new(&root);
+        let mut catalog = TzapIdentityCatalog::empty();
+        catalog.contacts.push(TzapPublicContactRecord {
+            contact_id: "contact-1".to_owned(),
+            display_name: "Alice".to_owned(),
+            signing_certificate_sha256: "sha256:cert".to_owned(),
+            recipient_public_key_fingerprint: "sha256:fp".to_owned(),
+            recipient_public_key_der: vec![1, 2, 3],
+            trust_source: "phone_sync".to_owned(),
+            verification_state: "valid_now".to_owned(),
+            missing_status_caveat: false,
+            contact_card_payload: serde_json::json!({}),
+            accepted_at_unix_seconds: 100,
+            local_alias: None,
+            card: None,
+        });
+        catalog_store.save_catalog(ACCOUNT_KEY, None, catalog).unwrap();
+
+        let runtime = AccountRuntime::new();
+        let mut catalog = ensure_catalog(&root, &runtime).unwrap();
+        let now = 200;
+        catalog.contacts.retain(|c| c.contact_id != "contact-1");
+        catalog.removed_contacts.retain(|t| t.contact_id != "contact-1");
+        catalog.removed_contacts.push(TzapContactTombstone {
+            contact_id: "contact-1".to_owned(),
+            removed_at: now,
+        });
+        let rev = catalog.revision;
+        catalog.revision += 1;
+        catalog_store.save_catalog(ACCOUNT_KEY, Some(rev), catalog).unwrap();
+
+        let loaded = catalog_store.load_catalog(ACCOUNT_KEY).unwrap().unwrap();
+        assert!(loaded.contacts.is_empty());
+        assert_eq!(loaded.removed_contacts.len(), 1);
+        assert_eq!(loaded.removed_contacts[0].contact_id, "contact-1");
+        assert_eq!(loaded.removed_contacts[0].removed_at, 200);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn apply_contact_snapshot_honors_local_tombstones_and_prunes_disappeared_phone_contacts() {
+        let mut catalog = TzapIdentityCatalog::empty();
+        // Locally deleted contact-1 at t=200
+        catalog.removed_contacts.push(TzapContactTombstone {
+            contact_id: "contact-1".to_owned(),
+            removed_at: 200,
+        });
+        // Disappeared phone contact (previously synced, not in incoming snapshot)
+        catalog.contacts.push(TzapPublicContactRecord {
+            contact_id: "contact-disappeared".to_owned(),
+            display_name: "Disappeared".to_owned(),
+            signing_certificate_sha256: "sha256:cert".to_owned(),
+            recipient_public_key_fingerprint: "sha256:fp-old".to_owned(),
+            recipient_public_key_der: vec![1, 2, 3],
+            trust_source: "phone_sync".to_owned(),
+            verification_state: "valid_now".to_owned(),
+            missing_status_caveat: false,
+            contact_card_payload: serde_json::json!({}),
+            accepted_at_unix_seconds: 50,
+            local_alias: None,
+            card: None,
+        });
+        // Locally imported contact (not phone-sourced)
+        catalog.contacts.push(TzapPublicContactRecord {
+            contact_id: "contact-local".to_owned(),
+            display_name: "Local Contact".to_owned(),
+            signing_certificate_sha256: "sha256:cert2".to_owned(),
+            recipient_public_key_fingerprint: "sha256:fp-local".to_owned(),
+            recipient_public_key_der: vec![4, 5, 6],
+            trust_source: "personal".to_owned(),
+            verification_state: "valid_now".to_owned(),
+            missing_status_caveat: false,
+            contact_card_payload: serde_json::json!({}),
+            accepted_at_unix_seconds: 50,
+            local_alias: None,
+            card: None,
+        });
+
+        // Snapshot contains contact-1 with accepted_at = 150 (older than local tombstone 200)
+        let snapshot = TzapContactSnapshot::new(
+            vec![
+                zmanager_core::contact_snapshot::TzapContactSnapshotEntry {
+                    contact_id: Some("contact-1".to_owned()),
+                    card: serde_json::json!({
+                        "envelope_version": 1,
+                        "recipient_public_key_fingerprint": "contact-1",
+                        "payload": {
+                            "display_name": "Contact 1",
+                        }
+                    }),
+                    local_alias: None,
+                    accepted_at: 150,
+                },
+            ],
+            vec![],
+        );
+
+        apply_contact_snapshot_to_catalog(&mut catalog, &snapshot, 300);
+
+        // contact-1 should NOT be restored because local tombstone (200) > accepted_at (150)
+        assert!(!catalog.contacts.iter().any(|c| c.contact_id == "contact-1"));
+        // contact-disappeared (phone_sync) should be pruned because it's not in the snapshot
+        assert!(!catalog.contacts.iter().any(|c| c.contact_id == "contact-disappeared"));
+        // contact-local (not phone_sync) should be preserved
+        assert!(catalog.contacts.iter().any(|c| c.contact_id == "contact-local"));
     }
 }

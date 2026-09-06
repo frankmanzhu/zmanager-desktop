@@ -34,6 +34,7 @@ export type AccountControllerOptions = Readonly<{
   removeContact(id: string): Promise<AccountSnapshotDto>;
   inspectContactCard(contactCard: Record<string, unknown>): Promise<AccountContactCardPreviewDto>;
   acceptContactCard(contactCard: Record<string, unknown>): Promise<AccountSnapshotDto>;
+  syncContacts(): Promise<AccountSnapshotDto>;
   openUrl(url: string): Promise<void>;
   publish(): void;
   errorMessage(error: unknown): string;
@@ -161,5 +162,6 @@ export function createAccountController(options: AccountControllerOptions) {
       options.workspace.setContactCardPreview(null);
       options.publish();
     },
+    syncContacts: () => run(options.syncContacts, "syncContacts"),
   };
 }

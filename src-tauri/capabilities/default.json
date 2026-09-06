@@ -33,6 +33,7 @@
     "allow-account-remove-contact",
     "allow-account-inspect-contact-card",
     "allow-account-accept-contact-card",
+    "allow-account-sync-contacts",
     "allow-start-archive-index",
     "allow-wait-archive-index",
     "allow-get-archive-children",

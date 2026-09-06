@@ -1,4 +1,4 @@
-import { UserRound, Trash2, ShieldCheck, KeyRound, Plus, Download, UserCheck } from "lucide-react";
+import { UserRound, Trash2, ShieldCheck, KeyRound, Plus, Download, UserCheck, RefreshCw, Smartphone } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Textarea } from "../../components/ui/textarea";
@@ -137,7 +137,27 @@ export function ContactsTab() {
         icon={<UserCheck className="size-4 text-blue-600 dark:text-blue-400" />}
         empty="No trusted contacts added yet."
       >
-        <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Contacts synced from your phone or verified via contact card.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-8 text-xs shadow-sm"
+            disabled={snapshot.busy}
+            onClick={() =>
+              actions.handleAccountIntent({
+                type: "syncContacts",
+              })
+            }
+          >
+            <RefreshCw className={`mr-1.5 size-3.5 ${snapshot.busy ? "animate-spin" : ""}`} />
+            Sync with Phone
+          </Button>
+        </div>
+
+        <div className="mt-3 space-y-3">
           {snapshot.contacts.map((contact) => (
             <article
               className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950"
@@ -147,20 +167,43 @@ export function ContactsTab() {
                 <div className="grid size-8 place-items-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
                   <UserRound className="size-4" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <strong className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                    {contact.displayName}
-                  </strong>
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <strong className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                      {contact.displayName}
+                    </strong>
+                    {contact.phoneSourced ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-950/80 dark:text-blue-300">
+                        <Smartphone className="size-2.5" />
+                        From Phone
+                      </span>
+                    ) : null}
+                  </div>
                   <code className="block truncate font-mono text-[11px] text-slate-500 dark:text-slate-400">
                     {contact.recipientPublicKeyFingerprint}
                   </code>
+                  {contact.phoneSourced ? (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                      Removed here; remove it on your phone to remove it everywhere.
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 className="size-8 text-slate-500 hover:bg-red-50 hover:text-red-700 dark:text-slate-400 dark:hover:bg-red-950/50 dark:hover:text-red-300"
-                aria-label={`Remove ${contact.displayName}`}
+                aria-label={
+                  contact.phoneSourced
+                    ? `Remove ${contact.displayName} (removed here; remove it on your phone to remove it everywhere)`
+                    : `Remove ${contact.displayName}`
+                }
+                title={
+                  contact.phoneSourced
+                    ? "Removed here; remove it on your phone to remove it everywhere."
+                    : `Remove ${contact.displayName}`
+                }
+                disabled={snapshot.busy}
                 onClick={() =>
                   actions.handleAccountIntent({
                     type: "removeContact",

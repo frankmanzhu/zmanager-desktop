@@ -29,9 +29,15 @@ impl TzapAuthHttpTransport for HostedHttpTransport {
         let method = match request.method {
             TzapAuthHttpMethod::Get => reqwest::Method::GET,
             TzapAuthHttpMethod::Post => reqwest::Method::POST,
+            TzapAuthHttpMethod::Put => reqwest::Method::PUT,
+            TzapAuthHttpMethod::Delete => reqwest::Method::DELETE,
         };
 
         let mut req = self.client.request(method, &request.url);
+
+        for (name, value) in &request.headers {
+            req = req.header(name, value);
+        }
 
         if let Some(token) = &request.bearer_token {
             req = req.bearer_auth(token.expose());
@@ -44,8 +50,14 @@ impl TzapAuthHttpTransport for HostedHttpTransport {
         let response = req.send().map_err(|e| TzapAuthError::Transport { message: format!("HTTP request failed: {}", e) })?;
 
         let status_code = response.status().as_u16();
+        let mut headers = Vec::new();
+        for (name, value) in response.headers() {
+            if let Ok(value_str) = value.to_str() {
+                headers.push((name.as_str().to_owned(), value_str.to_owned()));
+            }
+        }
         let body = response.bytes().map_err(|e| TzapAuthError::Transport { message: format!("Failed to read HTTP response body: {}", e) })?.to_vec();
 
-        Ok(TzapAuthHttpResponse { status_code, body })
+        Ok(TzapAuthHttpResponse { status_code, headers, body })
     }
 }

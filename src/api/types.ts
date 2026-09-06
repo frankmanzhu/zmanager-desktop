@@ -119,6 +119,7 @@ export type AccountContactDto = {
   recipientPublicKeyFingerprint: string;
   verificationState: string;
   missingStatusCaveat: boolean;
+  phoneSourced?: boolean;
 };
 
 export type AccountSnapshotDto = {

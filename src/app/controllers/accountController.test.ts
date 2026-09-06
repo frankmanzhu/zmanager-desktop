@@ -34,6 +34,7 @@ describe("account controller", () => {
       removeContact: async () => empty,
       inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
       acceptContactCard: async () => empty,
+      syncContacts: async () => empty,
       openUrl: async () => {},
       publish,
       errorMessage: String,
@@ -72,6 +73,7 @@ describe("account controller", () => {
       removeContact: async () => empty,
       inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
       acceptContactCard: async () => empty,
+      syncContacts: async () => empty,
       openUrl: async () => {},
       publish: () => {},
       errorMessage: (error) => error instanceof Error ? error.message : "unknown",
@@ -107,6 +109,7 @@ describe("account controller", () => {
       removeContact: async () => empty,
       inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
       acceptContactCard: async () => empty,
+      syncContacts: async () => empty,
       openUrl: async () => {},
       publish: () => {},
       errorMessage: String,
@@ -145,6 +148,7 @@ describe("account controller", () => {
       removeContact: async () => empty,
       inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "sha256:test", recipientPublicKeyFingerprint: "sha256:key", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
       acceptContactCard: async () => empty,
+      syncContacts: async () => empty,
       openUrl: async () => {},
       publish: () => {},
       errorMessage: String,
@@ -185,6 +189,7 @@ describe("account controller", () => {
       removeContact: async () => empty,
       inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "", recipientPublicKeyFingerprint: "", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
       acceptContactCard: async () => empty,
+      syncContacts: async () => empty,
       openUrl: async () => {},
       publish: () => {},
       errorMessage: (error) => error instanceof Error ? error.message : String(error),
@@ -195,5 +200,59 @@ describe("account controller", () => {
 
     await controller.handleDeviceRetire();
     expect(retire).toHaveBeenCalled();
+  });
+
+  it("syncs contacts from phone snapshot and updates workspace state", async () => {
+    const workspace = createAccountWorkspace();
+    const syncedSnapshot = {
+      ...empty,
+      contacts: [
+        {
+          contactId: "contact-phone-1",
+          displayName: "Alice",
+          recipientPublicKeyFingerprint: "sha256:alice",
+          signingCertificateSha256: "sha256:alicecert",
+          trustSource: "phone_sync",
+          verificationState: "verified",
+          missingStatusCaveat: false,
+          phoneSourced: true,
+        },
+      ],
+    };
+    const syncContacts = vi.fn(async () => syncedSnapshot);
+    const controller = createAccountController({
+      workspace,
+      fetchSnapshot: async () => empty,
+      beginHostedAuth: async () => ({ launchUrl: "", state: "", expiresAtUnixSeconds: 0 }),
+      applyHostedCallback: async () => {},
+      completeHostedAuth: async () => empty,
+      fetchCurrentUser: async () => ({ displayName: "Test", assuranceLevel: "basic" }),
+      enrollDeviceCertificate: async () => empty,
+      renewCertificate: async () => empty,
+      revokeCertificate: async () => empty,
+      exportContactCard: async () => {},
+      retireDevice: async () => empty,
+      forget: async () => empty,
+      generateRecipientKey: async () => empty,
+      generateSigningIdentity: async () => empty,
+      importSigningIdentity: async () => empty,
+      installSigningCertificate: async () => empty,
+      createSelfSignedCertificateStore: async () => empty,
+      removeSigningIdentity: async () => empty,
+      removeRecipientKey: async () => empty,
+      setDefaultSigningIdentity: async () => empty,
+      removeContact: async () => empty,
+      inspectContactCard: async () => ({ displayName: "Test", signingCertificateSha256: "", recipientPublicKeyFingerprint: "", trustSource: "official_pinned_root", verificationState: "verified", missingStatusCaveat: false }),
+      acceptContactCard: async () => empty,
+      syncContacts,
+      openUrl: async () => {},
+      publish: () => {},
+      errorMessage: String,
+    });
+
+    await controller.syncContacts();
+    expect(syncContacts).toHaveBeenCalled();
+    expect(workspace.getSnapshot().contacts).toHaveLength(1);
+    expect(workspace.getSnapshot().contacts[0]?.phoneSourced).toBe(true);
   });
 });

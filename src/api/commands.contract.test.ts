@@ -151,6 +151,7 @@ const COMMAND_WRAPPERS = [
     request: { contactCard: { version: 1 } },
     call: () => api.acceptAccountContactCard({ version: 1 }),
   },
+  { command: "account_sync_contacts", call: () => api.syncAccountContacts() },
   {
     command: "start_archive_index",
     request: { archivePath: "C:/archives/demo.zip" },

@@ -167,6 +167,7 @@ fn main() {
             account::account_remove_contact,
             account::account_inspect_contact_card,
             account::account_accept_contact_card,
+            account::account_sync_contacts,
             commands::start_archive_index,
             commands::wait_archive_index,
             commands::get_archive_children,

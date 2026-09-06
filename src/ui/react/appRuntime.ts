@@ -405,7 +405,8 @@ export type ZManagerAccountIntent =
   | Readonly<{ type: "inspectContactCard"; contactCard: string }>
   | Readonly<{ type: "acceptContactCard"; contactCard: string }>
   | Readonly<{ type: "exportContactCard" }>
-  | Readonly<{ type: "retireDevice" }>;
+  | Readonly<{ type: "retireDevice" }>
+  | Readonly<{ type: "syncContacts" }>;
 
 export type ZManagerContextMenuIntent =
   | Readonly<{ type: "action"; payload: ZManagerContextMenuActionPayload }>

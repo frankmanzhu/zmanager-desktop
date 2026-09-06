@@ -151,6 +151,10 @@ export async function acceptAccountContactCard(
   });
 }
 
+export async function syncAccountContacts(): Promise<AccountSnapshotDto> {
+  return invoke<AccountSnapshotDto>("account_sync_contacts");
+}
+
 export async function fetchHealthcheck(): Promise<HealthcheckResponse> {
   return invoke<HealthcheckResponse>("healthcheck");
 }
