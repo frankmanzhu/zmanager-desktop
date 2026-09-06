@@ -1118,6 +1118,7 @@ mod tests {
             &TzapCreateOptions {
                 level: 1,
                 volume_size: None,
+                volume_count: None,
                 recovery_percentage: 0,
                 volume_loss_tolerance: 0,
                 preserve_metadata: true,

@@ -592,6 +592,7 @@ fn start_create_internal_with_resolver(
                         preserve_metadata,
                         replace_existing,
                         volume_size,
+                        volume_count: None,
                         recovery_percentage: tzap_recovery_percentage,
                         volume_loss_tolerance: tzap_volume_loss_tolerance,
                         x509_signing,
@@ -1186,7 +1187,13 @@ fn start_test_archive_internal(request: TestArchiveRequest, registry: &JobRegist
                 .map_err(crate::platform::archive_error::map_engine_error)?;
             let selected_paths = selected_entry_keys.iter().cloned().collect::<Vec<_>>();
             let report = handle
-                .test(&zmanager_core::engine::TestOptions { selected_paths, recipient_key: None, tzap_x509_trust: None, cancellation: None })
+                .test(&zmanager_core::engine::TestOptions {
+                    selected_paths,
+                    recipient_key: None,
+                    recipient_key_bytes: None,
+                    tzap_x509_trust: None,
+                    cancellation: None,
+                })
                 .map_err(crate::platform::archive_error::map_engine_error)?;
             Ok(JobTerminalSummaryDto {
                 written_entries: usize::try_from(report.tested_entries).unwrap_or(usize::MAX),
