@@ -1210,7 +1210,7 @@ const nativeInboundController = createNativeInboundController({
   acknowledge: acknowledgeNativeEvent,
   handleQuickAction: routeQuickActionRequest,
   handleHostedAuthCallback,
-  revealApplication: revealNormalAppWindow,
+  revealApplication: () => revealNormalAppWindow(true),
   reportFailure: (error) => setOperationalStatus(unknownErrorMessage(
     error,
     message("desktopIntegration.initFailed"),
@@ -4045,7 +4045,7 @@ async function routeQuickActionRequest(request: QuickActionRequestDto, identity?
     observeDisposableTaskLaunch: disposableTaskLifecycle.observeQuickActionLaunch,
     beginDisposableTaskRequest: disposableTaskLifecycle.beginQuickActionRequest,
     endDisposableTaskRequest: disposableTaskLifecycle.endQuickActionRequest,
-    revealMainWindow: revealNormalAppWindow,
+    revealMainWindow: () => revealNormalAppWindow(true),
     onDispositionApplied: (disposition) => {
       const lifecycle = disposableTaskLifecycle.getSnapshot();
       diagnostics.record({

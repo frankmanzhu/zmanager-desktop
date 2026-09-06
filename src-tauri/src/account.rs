@@ -774,6 +774,7 @@ pub fn account_accept_contact_card(
         missing_status_caveat: verified.missing_status_caveat,
         contact_card_payload: verified.payload,
         accepted_at_unix_seconds: current_unix_seconds(),
+        local_alias: None,
     });
     let expected_revision = catalog.revision;
     catalog.revision = catalog.revision.saturating_add(1);

@@ -891,7 +891,7 @@ fn start_extract_internal_with_recipient_key_and_spawner(
             let mut options = zmanager_core::engine::ExtractOptions {
                 destination: PathBuf::from(&destination_path),
                 policy,
-                recipient_key_bytes: recipient_private_key.as_ref().map(|k| k.expose_secret().to_vec()),
+                recipient_key_bytes: recipient_private_key.as_ref().map(|k| vec![k.expose_secret().to_vec()]),
                 tzap_password: password.clone(),
                 tzap_restore_options: Some(tzap_restore_options),
                 cancellation: Some(token.clone()),

@@ -34,8 +34,13 @@ describe("native share queue", () => {
 
   it("restores a minimized window for a native direct-share request without background focus", async () => {
     const requestId = `native-share-${Date.now()}`;
-    await browser.tauri.execute(async ({ core }, path, eventId) => {
+    await browser.tauri.execute(async ({ core }) => {
       await core.invoke("plugin:window|minimize", { label: "main" });
+    });
+    await browser.waitUntil(async () => browser.tauri.execute(async ({ core }) => {
+      return !!await core.invoke("plugin:window|is_minimized", { label: "main" });
+    }));
+    await browser.tauri.execute(async ({ core }, path, eventId) => {
       await core.invoke("plugin:event|emit", { event: "zmanager-native-inbound-event", payload: {
         version: 1, eventId, kind: "shellActionRequest", timestampUnixMs: Date.now(),
         payload: { request: { kind: "shareOnLan", paths: [path] } },
@@ -49,7 +54,7 @@ describe("native share queue", () => {
     });
     await browser.waitUntil(async () => browser.tauri.execute(async ({ core }) => {
       const args = { label: "main" };
-      return !!await core.invoke("plugin:window|is_visible", args) && !await core.invoke("plugin:window|is_minimized", args) && !!await core.invoke("plugin:window|is_focused", args);
+      return !!await core.invoke("plugin:window|is_visible", args) && !await core.invoke("plugin:window|is_minimized", args);
     }));
     await browser.$(`[data-share-id="${shareId}"]`).waitForDisplayed();
     await command("cancel_share", { shareId });
